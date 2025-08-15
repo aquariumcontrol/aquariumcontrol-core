@@ -1005,11 +1005,13 @@ pub mod tests {
         );
 
         // *** check if required tables are existing - *********************************************
-        assert!(matches!(
-            sql_interface.check_required_tables_existing(),
-            Ok(())
-        ));
-        println!("* checking required tables succeeded.");
+        let result_check_required_tables_existing = sql_interface.check_required_tables_existing();
+        if let Err(e) = result_check_required_tables_existing {
+            panic!("* checking required tables failed: {e:?}")
+        }
+        else {
+            println!("* checking required tables succeeded.");
+        }
         // *****************************************************************************************
 
         // *** check if required tables are existing - *********************************************
