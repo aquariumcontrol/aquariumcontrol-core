@@ -11,12 +11,14 @@ use log::debug;
 
 cfg_if::cfg_if! {
     if #[cfg(target_os = "linux")] {
+        #[cfg(not(test))]
         use log::info;
 
         use log::{error, warn};
         use posixmq::PosixMq;
         use std::time::Duration;
         use spin_sleep::SpinSleeper;
+        #[cfg(not(test))]
         use nix::unistd::gettid;
     }
 }

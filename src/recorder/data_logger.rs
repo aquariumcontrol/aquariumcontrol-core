@@ -9,14 +9,14 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 
 #![allow(non_snake_case)]
 use chrono::{Local, NaiveDateTime};
-#[cfg(target_os = "linux")]
+#[cfg(all(not(test),target_os = "linux"))]
 use log::info;
 use log::{error, warn};
 
 #[cfg(feature = "debug_data_logger")]
 use log::debug;
 
-#[cfg(target_os = "linux")]
+#[cfg(all(not(test),target_os = "linux"))]
 use nix::unistd::gettid;
 
 use mysql::PooledConn;

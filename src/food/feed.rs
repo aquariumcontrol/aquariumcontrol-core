@@ -18,7 +18,7 @@ use log::debug;
 #[cfg(all(feature = "debug_signal_handler", not(test)))]
 use log::debug;
 
-#[cfg(target_os = "linux")]
+#[cfg(all(target_os = "linux", not(test)))]
 use nix::unistd::gettid;
 
 use serde_derive::Deserialize;

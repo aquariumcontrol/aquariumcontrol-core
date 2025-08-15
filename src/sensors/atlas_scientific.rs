@@ -8,11 +8,11 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 */
 #![allow(non_snake_case)]
 
-#[cfg(target_os = "linux")]
+#[cfg(all(not(test),target_os = "linux"))]
 use log::info;
 use log::{error, warn};
 
-#[cfg(target_os = "linux")]
+#[cfg(all(not(test),target_os = "linux"))]
 use nix::unistd::gettid;
 use serde_derive::Deserialize;
 use spin_sleep::SpinSleeper;

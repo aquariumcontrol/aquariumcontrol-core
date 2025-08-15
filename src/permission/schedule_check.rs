@@ -9,7 +9,7 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 #[cfg(feature = "debug_schedule_check")]
 use log::debug;
 
-#[cfg(target_os = "linux")]
+#[cfg(all(not(test),target_os = "linux"))]
 use log::info;
 use log::warn;
 

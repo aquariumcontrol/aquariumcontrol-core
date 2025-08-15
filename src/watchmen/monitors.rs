@@ -12,7 +12,7 @@ use log::{error, info};
 #[cfg(test)]
 use log::debug;
 
-#[cfg(target_os = "linux")]
+#[cfg(all(not(test),target_os = "linux"))]
 use nix::unistd::gettid;
 
 use serde_derive::Deserialize;
