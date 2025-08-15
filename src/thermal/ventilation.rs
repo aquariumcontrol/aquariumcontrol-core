@@ -372,7 +372,7 @@ impl Ventilation {
         mutex_sensor_manager_signals: Arc<Mutex<SensorManagerSignals>>,
         mutex_ventilation_status: Arc<Mutex<bool>>,
     ) {
-        #[cfg(target_os = "linux")]
+        #[cfg(all(target_os = "linux", not(test)))]
         info!(target: module_path!(), "Thread started with TID: {}", gettid());
 
         let max_mutex_access_duration = Duration::from_millis(MAX_MUTEX_ACCESS_DURATION_MILLIS);

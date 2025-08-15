@@ -287,7 +287,7 @@ impl RelayManager {
         relay_manager_channels: RelayManagerChannels,
         actuator: &mut impl RelayActuationTrait,
     ) {
-        #[cfg(target_os = "linux")]
+        #[cfg(all(target_os = "linux", not(test)))]
         info!(target: module_path!(), "Thread started with TID: {}", gettid());
 
         let mut last_heartbeat_time = Instant::now();

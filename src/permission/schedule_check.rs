@@ -305,7 +305,7 @@ impl ScheduleCheck {
     ///   necessary `mpsc` sender and receiver channels for communication with
     ///   other application modules and the signal handler.
     pub fn execute(&mut self, schedule_check_channels: ScheduleCheckChannels) {
-        #[cfg(target_os = "linux")]
+        #[cfg(all(target_os = "linux", not(test)))]
         info!(target: module_path!(), "Thread started with TID: {}", gettid());
 
         let sleep_duration_hundred_millis = Duration::from_millis(100);

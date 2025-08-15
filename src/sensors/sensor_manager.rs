@@ -401,7 +401,7 @@ impl SensorManager {
         sensor_manager_channels: SensorManagerChannels,
         mutexes: SensorManagerMutexes,
     ) {
-        #[cfg(target_os = "linux")]
+        #[cfg(all(target_os = "linux", not(test)))]
         info!(target: module_path!(), "Thread started with TID: {}", gettid());
 
         let max_mutex_access_duration =

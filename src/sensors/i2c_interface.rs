@@ -264,6 +264,7 @@ impl I2cInterface {
         rx_from_atlas_scientific: Receiver<I2cRequest>,
         rx_from_signal_handler: Receiver<InternalCommand>,
     ) {
+        #[cfg(not(test))]
         info!(target: module_path!(), "Thread started with TID: {}", gettid());
 
         let mut lock_error_receive_atlas_scientific = false;

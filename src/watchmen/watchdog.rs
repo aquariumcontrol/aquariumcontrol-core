@@ -141,7 +141,7 @@ impl Watchdog {
         rx_from_messaging_opt: Option<Receiver<InternalCommand>>,
         petting: &mut impl PettingTrait,
     ) {
-        #[cfg(target_os = "linux")]
+        #[cfg(all(target_os = "linux", not(test)))]
         info!(target: module_path!(), "Thread started with TID: {}", gettid());
 
         let spin_sleeper = SpinSleeper::default();

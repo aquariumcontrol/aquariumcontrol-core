@@ -738,7 +738,7 @@ impl AtlasScientific {
         mutex_atlas_scientific_ph: Arc<Mutex<AtlasScientificResultData>>,
         mutex_atlas_scientific_conductivity: Arc<Mutex<AtlasScientificResultData>>,
     ) {
-        #[cfg(target_os = "linux")]
+        #[cfg(all(target_os = "linux", not(test)))]
         info!(target: module_path!(), "Thread started with TID: {}", gettid());
 
         let sleep_duration_ten_millis = Duration::from_millis(10);

@@ -311,6 +311,7 @@ impl Messaging {
     /// - It encounters a fatal error while receiving from the POSIX message queue (other than a timeout).
     /// - It fails to receive the `Terminate` command from the signal handler during shutdown.
     pub fn execute(&mut self, messaging_channels: MessagingChannels) {
+        #[cfg(not(test))]
         info!(target: module_path!(), "Thread started with TID: {}", gettid());
         let duration_timeout = Duration::from_millis(self.config.timeout_millis);
 

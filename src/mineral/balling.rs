@@ -612,7 +612,7 @@ impl Balling {
         balling_channels: BallingChannels,
         mineral_injection: &mut impl MineralInjectionTrait,
     ) {
-        #[cfg(target_os = "linux")]
+        #[cfg(all(target_os = "linux", not(test)))]
         info!(target: module_path!(), "Thread started with TID: {}", gettid());
 
         let sleep_duration_hundred_millis = Duration::from_millis(100); // used to reduce the frequency of channel polling

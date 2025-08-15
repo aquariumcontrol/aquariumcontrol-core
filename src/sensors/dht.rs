@@ -744,7 +744,7 @@ impl Dht {
         mutex_dht: Arc<Mutex<DhtResult>>,
         rx_from_signal_handler: Receiver<InternalCommand>,
     ) {
-        #[cfg(target_os = "linux")]
+        #[cfg(all(target_os = "linux", not(test)))]
         info!(target: module_path!(), "Thread started with TID: {}", gettid());
 
         let max_mutex_access_duration =

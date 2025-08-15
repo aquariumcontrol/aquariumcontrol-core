@@ -452,7 +452,7 @@ impl Feed {
         feed_channels: FeedChannels,
         food_injection: &mut impl FoodInjectionTrait,
     ) {
-        #[cfg(target_os = "linux")]
+        #[cfg(all(target_os = "linux", not(test)))]
         info!(target: module_path!(), "Thread started with TID: {}", gettid());
 
         let sleep_duration_hundred_millis = Duration::from_millis(100);

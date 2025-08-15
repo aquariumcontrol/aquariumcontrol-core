@@ -494,7 +494,7 @@ impl TcpCommunication {
     /// - Underlying functions called (like `get_signal` or `change_relay`) panic due to
     ///   TCP communication errors or invalid requests.
     pub fn execute(&mut self, tcp_communication_channels: TcpCommunicationChannels) {
-        #[cfg(target_os = "linux")]
+        #[cfg(all(target_os = "linux", not(test)))]
         info!(target: module_path!(), "Thread started with TID: {}", gettid());
 
         let spin_sleeper = SpinSleeper::default();

@@ -424,7 +424,7 @@ impl Heating {
         heating_set_val_updater: &mut impl HeatingSetValueUpdaterTrait,
         heating_mutexes: HeatingMutexes,
     ) {
-        #[cfg(target_os = "linux")]
+        #[cfg(all(target_os = "linux", not(test)))]
         info!(target: module_path!(), "Thread started with TID: {}", gettid());
 
         let max_mutex_access_duration = Duration::from_millis(MAX_MUTEX_ACCESS_DURATION_MILLIS);

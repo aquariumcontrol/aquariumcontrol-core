@@ -275,7 +275,7 @@ impl Ds18b20 {
         mutex_water_temperature: Arc<Mutex<Ds18b20Result>>,
         mutex_ambient_temperature: Arc<Mutex<Ds18b20Result>>,
     ) {
-        #[cfg(target_os = "linux")]
+        #[cfg(all(target_os = "linux", not(test)))]
         info!(target: module_path!(), "Thread started with TID: {}", gettid());
 
         let sleep_duration_hundred_millis = Duration::from_millis(100);

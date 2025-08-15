@@ -1051,7 +1051,7 @@ impl DataLogger {
         data_logger_channels: DataLoggerChannels,
         data_logger_mutexes: DataLoggerMutexes,
     ) {
-        #[cfg(target_os = "linux")]
+        #[cfg(all(target_os = "linux", not(test)))]
         info!(target: module_path!(), "Thread started with TID: {}", gettid());
 
         let cycle_time_duration =
