@@ -10,7 +10,7 @@ use crate::sensors::gpio_handler::GpioHandlerError;
 use crate::sensors::i2c_error::I2cError;
 use crate::sensors::sensor_manager::SensorManagerError;
 use crate::sensors::tank_level_switch::TankLevelSwitchError;
-use crate::simulator::tcp_communication::TcpCommunicationError;
+use crate::simulator::tcp_communication_error::TcpCommunicationError;
 use crate::utilities::config_error::ConfigError;
 use crate::utilities::config_file_definition_error::ConfigFileDefinitionError;
 use crate::utilities::logger::LoggerSetupError;

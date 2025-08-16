@@ -107,7 +107,10 @@ use crate::sensors::sensor_manager::{
     SensorManager, SensorManagerChannels, SensorManagerMutexes, SensorManagerSignals,
 };
 use crate::sensors::tank_level_switch::{TankLevelSwitch, TankLevelSwitchSignals};
-use crate::simulator::tcp_communication::{TcpCommunication, TcpCommunicationChannels};
+use crate::simulator::tcp_communication::{
+    TcpCommunication, TcpCommunicationChannelPair, TcpCommunicationChannels,
+};
+use crate::simulator::tcp_communication_error::TcpCommunicationError;
 use crate::thermal::distinct_interval_check::distinct_thermal_control_interval_check;
 use crate::thermal::heating::{Heating, HeatingChannels, HeatingMutexes};
 use crate::thermal::ventilation::{Ventilation, VentilationChannels};
@@ -130,6 +133,7 @@ use spin_sleep::SpinSleeper;
 use std::sync::mpsc::{self, Receiver, Sender};
 use std::sync::{atomic::AtomicBool, Arc, Mutex};
 use std::{env, panic, path::Path, thread::scope, time::Duration};
+
 cfg_if::cfg_if! {
     if #[cfg(all(target_os = "linux", feature = "target_hw"))] {
         use crate::sensors::gpio_handler::GpioHandler;
@@ -958,10 +962,7 @@ fn run() -> Result<(), StartupError> {
         Sender<InternalCommand>,
         Receiver<InternalCommand>,
     ) = mpsc::channel();
-    let (tx_tcp_communication_to_sensor_manager, rx_sensor_manager_from_tcp): (
-        Sender<f32>,
-        Receiver<f32>,
-    ) = mpsc::channel();
+    let (tx_tcp_communication_to_sensor_manager, rx_sensor_manager_from_tcp): TcpCommunicationChannelPair = mpsc::channel();
     // **********************
 
     // *** tank_level_switch <=> tcp ***
@@ -969,10 +970,7 @@ fn run() -> Result<(), StartupError> {
         Sender<InternalCommand>,
         Receiver<InternalCommand>,
     ) = mpsc::channel();
-    let (tx_tcp_communication_to_tank_level_switch, rx_tank_level_switch_from_tcp): (
-        Sender<f32>,
-        Receiver<f32>,
-    ) = mpsc::channel();
+    let (tx_tcp_communication_to_tank_level_switch, rx_tank_level_switch_from_tcp): TcpCommunicationChannelPair = mpsc::channel();
     // **********************
 
     // wrapping sender/receiver for communication with TCP thread
@@ -1010,13 +1008,14 @@ fn run() -> Result<(), StartupError> {
             false => None,
         };
 
-    let tx_tcp_communication_to_tank_level_switch_opt: Option<Sender<f32>> =
-        match config.tank_level_switch.use_simulator {
-            true => Some(tx_tcp_communication_to_tank_level_switch),
-            false => None,
-        };
+    let tx_tcp_communication_to_tank_level_switch_opt: Option<
+        Sender<Result<f32, TcpCommunicationError>>,
+    > = match config.tank_level_switch.use_simulator {
+        true => Some(tx_tcp_communication_to_tank_level_switch),
+        false => None,
+    };
 
-    let rx_tank_level_switch_from_tcp_opt: Option<Receiver<f32>> =
+    let rx_tank_level_switch_from_tcp_opt: Option<Receiver<Result<f32, TcpCommunicationError>>> =
         match config.tank_level_switch.use_simulator {
             true => Some(rx_tank_level_switch_from_tcp),
             false => None,
@@ -1034,13 +1033,14 @@ fn run() -> Result<(), StartupError> {
             false => None,
         };
 
-    let tx_tcp_communication_to_sensor_manager_opt: Option<Sender<f32>> =
-        match config.sensor_manager.use_simulator {
-            true => Some(tx_tcp_communication_to_sensor_manager),
-            false => None,
-        };
+    let tx_tcp_communication_to_sensor_manager_opt: Option<
+        Sender<Result<f32, TcpCommunicationError>>,
+    > = match config.sensor_manager.use_simulator {
+        true => Some(tx_tcp_communication_to_sensor_manager),
+        false => None,
+    };
 
-    let rx_sensor_manager_from_tcp_opt: Option<Receiver<f32>> =
+    let rx_sensor_manager_from_tcp_opt: Option<Receiver<Result<f32, TcpCommunicationError>>> =
         match config.sensor_manager.use_simulator {
             true => Some(rx_sensor_manager_from_tcp),
             false => None,

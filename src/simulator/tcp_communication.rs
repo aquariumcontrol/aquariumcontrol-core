@@ -13,21 +13,21 @@ use log::{debug, error, warn};
 
 use serde_derive::Deserialize;
 use spin_sleep::SpinSleeper;
+use std::fmt;
 use std::sync::mpsc::{Receiver, Sender, TryRecvError};
-use std::{fmt, io};
 use std::{
     io::{prelude::*, BufReader},
     net::TcpStream,
     time::Duration,
 };
-use thiserror::Error;
 
-#[cfg(all(not(test), target_os = "linux"))]
-use nix::unistd::gettid;
-
+pub(crate) use crate::simulator::tcp_communication_error::TcpCommunicationError;
 use crate::simulator::tcp_data::*;
 use crate::utilities::channel_content::{AquariumSignal, InternalCommand};
+use crate::utilities::logger::log_error_chain;
 use crate::utilities::proc_ext_req::ProcessExternalRequestTrait;
+#[cfg(all(not(test), target_os = "linux"))]
+use nix::unistd::gettid;
 
 /// Holds the configuration data for the TCP connection.
 /// The configuration is loaded from the .toml configuration file.
@@ -41,21 +41,6 @@ pub struct TcpConnectionConfig {
     port: u16,
 }
 
-/// Contains the error values for unsuccessful attempts of opening a TCP channel.
-#[derive(Debug, Error)]
-pub enum TcpCommunicationError {
-    /// value indicates that an error has occurred during TCP communication
-    #[allow(unused)]
-    #[error("[{location}] Failed to connect to simulator at {ip_address}:{port}")]
-    ConnectionFailed {
-        location: String,
-        ip_address: String,
-        port: u16,
-        #[source]
-        source: io::Error,
-    },
-}
-
 /// Struct collects the channels for communication with other threads.
 pub struct TcpCommunicationChannels {
     /// Receiver part of the channel for communication from the relay manager wrapped in Option type
@@ -65,13 +50,15 @@ pub struct TcpCommunicationChannels {
     pub rx_tcp_communication_from_sensor_manager_opt: Option<Receiver<InternalCommand>>,
 
     /// Sender part of the channel for communication to sensor manager wrapped in Option type
-    pub tx_tcp_communication_to_sensor_manager_opt: Option<Sender<f32>>,
+    pub tx_tcp_communication_to_sensor_manager_opt:
+        Option<Sender<Result<f32, TcpCommunicationError>>>,
 
     /// Receiver part of the channel for communication from tank level switch wrapped in Option type
     pub rx_tcp_communication_from_tank_level_switch_opt: Option<Receiver<InternalCommand>>,
 
     /// Sender part of the channel for communication to tank level switch wrapped in Option type       
-    pub tx_tcp_communication_to_tank_level_switch_opt: Option<Sender<f32>>,
+    pub tx_tcp_communication_to_tank_level_switch_opt:
+        Option<Sender<Result<f32, TcpCommunicationError>>>,
 
     /// Sender part of the channel for communication to the signal handler       
     pub tx_tcp_communication_to_signal_handler: Sender<bool>,
@@ -143,6 +130,15 @@ impl fmt::Display for TcpCommunicationChannels {
     }
 }
 
+/// A type alias for a sender/receiver pair used in TCP communication.
+///
+/// This channel is used to send sensor values (`f32`) or communication errors
+/// between a module and the TCP simulator thread.
+pub type TcpCommunicationChannelPair = (
+    Sender<Result<f32, TcpCommunicationError>>,
+    Receiver<Result<f32, TcpCommunicationError>>,
+);
+
 #[cfg_attr(doc, aquamarine::aquamarine)]
 /// Contains configuration of implementation for opening, reading, and closing TCP channel.
 /// Thread communication is as follows:
@@ -179,13 +175,7 @@ impl TcpCommunication {
     /// A `Result` which is:
     /// - `Ok(TcpCommunication)`: A new `TcpCommunication` struct with an established
     ///   TCP connection.
-    /// - `Err(TcpCommunicationError::ConnectionFailed)`: If the connection attempt fails
-    ///   (e.g., the simulator is not running or is unreachable).
-    ///
-    /// # Panics
-    /// This function will panic if:
-    /// - The `TcpStream` cannot be successfully cloned. This indicates a severe
-    ///   system-level issue with stream duplication.
+    /// - `Err(TcpCommunicationError:)`: in case of failure
     pub fn new(
         tcp_connection: &TcpConnectionConfig,
     ) -> Result<TcpCommunication, TcpCommunicationError> {
@@ -207,8 +197,15 @@ impl TcpCommunication {
                 });
             }
         };
+        let write_stream =
+            stream
+                .try_clone()
+                .map_err(|e| TcpCommunicationError::StreamCloneFailed {
+                    location: module_path!().to_string(),
+                    source: e,
+                });
         Ok(TcpCommunication {
-            write_stream: stream.try_clone().unwrap(),
+            write_stream: write_stream?,
             buf_reader: BufReader::new(stream),
         })
     }
@@ -261,10 +258,14 @@ impl TcpCommunication {
     /// # Arguments
     /// * `request` - The `String` containing the data to be written to the TCP stream.
     ///
-    /// # Panics
-    /// This function will panic if an `io::Error` occurs during the write operation
-    /// to the TCP stream (e.g., connection lost).    
-    fn write_stream_check_for_error(&mut self, request: String) {
+    /// # Returns
+    /// A `Result` which is:
+    /// - `Ok()`: In the case of success
+    /// - `Err(TcpCommunicationError:)`: in case of failure
+    fn write_stream_check_for_error(
+        &mut self,
+        request: String,
+    ) -> Result<(), TcpCommunicationError> {
         match self.write_stream.write(request.as_bytes()) {
             Ok(amount_of_bytes_written) => {
                 if amount_of_bytes_written != request.len() {
@@ -277,10 +278,18 @@ impl TcpCommunication {
                 }
             }
             Err(e) => {
-                panic!("{}: Writing to TCP stream failed ({e:?})", module_path!(),);
+                return Err(TcpCommunicationError::WritingToStreamFailed {
+                    location: module_path!().to_string(),
+                    source: e,
+                });
             }
         };
-        let _ = self.write_stream.flush();
+        self.write_stream
+            .flush()
+            .map_err(|e| TcpCommunicationError::FlushFailed {
+                location: module_path!().to_string(),
+                source: e,
+            })
     }
 
     /// Communicates with the simulator to change the state of a specific relay.
@@ -293,11 +302,11 @@ impl TcpCommunication {
     /// * `relay_id` - The numeric ID of the relay whose state is to be changed.
     /// * `state` - A boolean value indicating the desired state: `true` for ON, `false` for OFF.
     ///
-    /// # Panics
-    /// This function will panic if:
-    /// - Writing the command to the TCP stream fails.
-    /// - Reading the response from the TCP stream fails.
-    fn change_relay(&mut self, relay_id: u16, state: bool) {
+    /// # Returns
+    /// A `Result` which is:
+    /// - `Ok()`: In the case of success
+    /// - `Err(TcpCommunicationError:)`: in case of failure
+    fn change_relay(&mut self, relay_id: u16, state: bool) -> Result<(), TcpCommunicationError> {
         let relay_id_string = relay_id.to_string();
         let request: String = if state {
             debug!(
@@ -322,16 +331,17 @@ impl TcpCommunication {
                 + &relay_id_string
                 + "\n"
         };
-        self.write_stream_check_for_error(request);
+        self.write_stream_check_for_error(request)?;
 
         let mut response = String::new();
         response.clear();
-        match self.buf_reader.read_line(&mut response) {
-            Ok(_) => {}
-            Err(e) => {
-                panic!("{}: Reading from TCP stream failed ({e:?})", module_path!(),);
+        self.buf_reader.read_line(&mut response).map_err(|e| {
+            TcpCommunicationError::ReadingFromStreamFailed {
+                location: module_path!().to_string(),
+                source: e,
             }
-        };
+        })?;
+        Ok(())
     }
 
     /// Communicates with the simulator to request and retrieve a sensor signal value.
@@ -348,14 +358,14 @@ impl TcpCommunication {
     /// # Returns
     /// The retrieved sensor value as an `f32`.
     ///
-    /// # Panics
-    /// This function will panic in several error scenarios:
-    /// - If an **illegal or unsupported `aquarium_signal`** is requested.
-    /// - If **writing the command** to the TCP stream fails.
-    /// - If **reading the response** from the TCP stream fails.
-    /// - If the TCP response format is unexpected (e.g., **empty response, no words, or non-numeric content**).
-    /// - If the extracted numeric string **cannot be parsed into an `f32`**.
-    fn get_signal(&mut self, aquarium_signal: AquariumSignal) -> f32 {
+    /// # Returns
+    /// A `Result` which is:
+    /// - `Ok(f32)`: In the case of success
+    /// - `Err(TcpCommunicationError:)`: in case of failure
+    fn get_signal(
+        &mut self,
+        aquarium_signal: AquariumSignal,
+    ) -> Result<f32, TcpCommunicationError> {
         let category = match aquarium_signal {
             AquariumSignal::WaterTemperature => category::ATLASSCIENTIFIC,
             AquariumSignal::pH => category::ATLASSCIENTIFIC,
@@ -365,11 +375,10 @@ impl TcpCommunication {
             AquariumSignal::TankLevelSwitchPosition => category::TANKLEVELSWITCH,
             AquariumSignal::TankLevelSwitchInvalid => category::TANKLEVELSWITCH,
             _ => {
-                panic!(
-                    "{}: Internal error - illegal signal request {} to simulator",
-                    module_path!(),
-                    aquarium_signal
-                );
+                return Err(TcpCommunicationError::IllegalSignalRequestToSimulator(
+                    module_path!().to_string(),
+                    aquarium_signal,
+                ));
             }
         };
         let tcp_signal_identifier = match aquarium_signal {
@@ -381,47 +390,49 @@ impl TcpCommunication {
             AquariumSignal::TankLevelSwitchPosition => signal::TANKLEVELSWITCHPOSITION,
             AquariumSignal::TankLevelSwitchInvalid => signal::TANKLEVELSWITCHINVALID,
             _ => {
-                panic!(
-                    "{}: Internal error - illegal signal request {} to simulator",
-                    module_path!(),
-                    aquarium_signal
-                );
+                return Err(TcpCommunicationError::IllegalSignalRequestToSimulator(
+                    module_path!().to_string(),
+                    aquarium_signal,
+                ));
             }
         };
         let request =
             category.to_string() + " " + command::READ + " " + tcp_signal_identifier + "\n";
 
-        self.write_stream_check_for_error(request);
+        self.write_stream_check_for_error(request)?;
 
         let mut response = String::new();
         response.clear();
-        match self.buf_reader.read_line(&mut response) {
-            Ok(_) => {}
-            Err(e) => {
-                panic!("{}: Reading from TCP stream failed ({e:?})", module_path!());
+
+        self.buf_reader.read_line(&mut response).map_err(|e| {
+            TcpCommunicationError::ReadingFromStreamFailed {
+                location: module_path!().to_string(),
+                source: e,
             }
-        };
+        })?;
+
         match Self::get_last_word(&response) {
             Some(last_word) => {
                 if !last_word.is_empty() {
                     let mut last_word_string = last_word.to_string();
                     Self::trim_newline(&mut last_word_string);
                     match last_word_string.parse::<f32>() {
-                        Ok(c) => c,
-                        Err(e) => {
-                            panic!(
-                                "{}: Failed to convert response ({last_word}) to f32: ({e:?})",
-                                module_path!()
-                            );
-                        }
+                        Ok(c) => Ok(c),
+                        Err(e) => Err(TcpCommunicationError::ResponseConversionError {
+                            location: module_path!().to_string(),
+                            last_word: last_word_string,
+                            source: e,
+                        }),
                     }
                 } else {
-                    panic!("{}: Last word of response is empty.", module_path!());
+                    Err(TcpCommunicationError::LastWordOfResponseEmpty(
+                        module_path!().to_string(),
+                    ))
                 }
             }
-            None => {
-                panic!("{}: Response does not contain any words.", module_path!());
-            }
+            None => Err(TcpCommunicationError::ResponseContainsNoWords(
+                module_path!().to_string(),
+            )),
         }
     }
 
@@ -437,23 +448,38 @@ impl TcpCommunication {
     /// * `rx` - A reference to the receiver channel from which `InternalCommand` requests are received.
     /// * `tx` - A reference to the sender channel through which the `f32` sensor response is sent back.
     ///
-    /// # Panics
-    /// This function will panic if:
-    /// - Receiving from `rx` fails due to a channel disconnection.
-    /// - Sending the response via `tx` fails due to a channel disconnection.
-    /// - `self.get_signal()` panics due to an invalid signal request to the simulator or parsing issues.
-    fn receive_and_answer(&mut self, rx: &Receiver<InternalCommand>, tx: &Sender<f32>) {
+    /// # Returns
+    /// A `Result` which is:
+    /// - `Ok(f32)`: In the case of success
+    /// - `Err(TcpCommunicationError:)`: in case of failure
+    fn receive_and_answer(
+        &mut self,
+        rx: &Receiver<InternalCommand>,
+        tx: &Sender<Result<f32, TcpCommunicationError>>,
+    ) -> Result<(), Vec<TcpCommunicationError>> {
+        let response_to_calling_thread: Result<f32, TcpCommunicationError>;
+        let mut error_vector: Vec<TcpCommunicationError> = vec![];
         match rx.try_recv() {
             Ok(c) => {
                 match c {
                     InternalCommand::RequestSignal(s) => {
-                        let response_value = self.get_signal(s);
-                        match tx.send(response_value) {
+                        let simulator_response = self.get_signal(s);
+                        if simulator_response.is_err() {
+                            response_to_calling_thread =
+                                Err(TcpCommunicationError::InvalidResponseFromSimulator(
+                                    module_path!().to_string(),
+                                ));
+                            error_vector.push(simulator_response.unwrap_err());
+                        } else {
+                            response_to_calling_thread = simulator_response;
+                        }
+                        match tx.send(response_to_calling_thread) {
                             Ok(()) => { /* do nothing */ }
-                            Err(e) => {
-                                panic!(
-                                    "{}: sending response value via channel failed ({e:?})",
-                                    module_path!(),
+                            Err(_) => {
+                                error_vector.push(
+                                    TcpCommunicationError::SendingResponseViaChannelFailure(
+                                        module_path!().to_string(),
+                                    ),
                                 );
                             }
                         }
@@ -464,14 +490,16 @@ impl TcpCommunication {
             Err(e) => {
                 match e {
                     TryRecvError::Empty => { /* empty buffer - no action required */ }
-                    TryRecvError::Disconnected => {
-                        panic!(
-                            "{}: Error in trying to receive command from data logger: {e:?}",
-                            module_path!()
-                        );
-                    }
+                    TryRecvError::Disconnected => error_vector.push(
+                        TcpCommunicationError::ChannelDisconnected(module_path!().to_string()),
+                    ),
                 }
             }
+        }
+        if error_vector.is_empty() {
+            Ok(())
+        } else {
+            Err(error_vector)
         }
     }
 
@@ -488,13 +516,6 @@ impl TcpCommunication {
     /// * `tcp_communication_channels` - Channels for communication with other threads,
     ///   including senders/receivers for Ambient, Atlas Scientific, Tank Level Switch,
     ///   Relay Manager, and the Signal Handler.
-    ///
-    /// # Panics
-    /// This function will panic if:
-    /// - A channel becomes disconnected unexpectedly during communication with client threads.
-    /// - An error occurs while sending a confirmation back to the signal handler during shutdown.
-    /// - Underlying functions called (like `get_signal` or `change_relay`) panic due to
-    ///   TCP communication errors or invalid requests.
     pub fn execute(&mut self, tcp_communication_channels: TcpCommunicationChannels) {
         #[cfg(all(target_os = "linux", not(test)))]
         info!(target: module_path!(), "Thread started with TID: {}", gettid());
@@ -502,6 +523,7 @@ impl TcpCommunication {
         let spin_sleeper = SpinSleeper::default();
         let sleep_interval_millis = 10;
         let sleep_duration_ten_milli_sec = Duration::from_millis(sleep_interval_millis);
+        let mut lock_relay_manager_channel_disconnected = false;
 
         println!("{tcp_communication_channels}");
 
@@ -521,10 +543,19 @@ impl TcpCommunication {
                 if let Some(ref tx_tcp_communication_to_ambient) =
                     tcp_communication_channels.tx_tcp_communication_to_sensor_manager_opt
                 {
-                    self.receive_and_answer(
+                    let result = self.receive_and_answer(
                         rx_tcp_communication_from_ambient,
                         tx_tcp_communication_to_ambient,
                     );
+                    if result.is_err() {
+                        for e in result.unwrap_err() {
+                            log_error_chain(
+                                module_path!(),
+                                "Error in communication with simulator for ambient signals",
+                                e,
+                            );
+                        }
+                    }
                 }
             }
 
@@ -535,36 +566,68 @@ impl TcpCommunication {
                 if let Some(ref tx_tcp_communication_to_tank_level_switch) =
                     tcp_communication_channels.tx_tcp_communication_to_tank_level_switch_opt
                 {
-                    self.receive_and_answer(
+                    let result = self.receive_and_answer(
                         rx_tcp_communication_from_tank_level_switch,
                         tx_tcp_communication_to_tank_level_switch,
                     );
+                    if result.is_err() {
+                        for e in result.unwrap_err() {
+                            log_error_chain(
+                                module_path!(),
+                                "Error in communication with simulator for ambient signals",
+                                e,
+                            );
+                        }
+                    }
                 }
             }
 
             // *** communication with relay manager - no response required ***
-            match tcp_communication_channels.rx_tcp_communication_from_relay_manager_opt {
-                Some(ref rx_tcp_communication_from_relay_manager) => {
-                    match rx_tcp_communication_from_relay_manager.try_recv() {
-                        Ok(c) => match c {
-                            InternalCommand::SetRelay(c) => self.change_relay(c, true),
-                            InternalCommand::UnsetRelay(c) => self.change_relay(c, false),
-                            _ => { /* ignore all other commands */ }
-                        },
-                        Err(e) => {
-                            match e {
-                                TryRecvError::Empty => { /* empty buffer - no action required */ }
-                                TryRecvError::Disconnected => {
-                                    panic!(
-                                        "TcpCommunication: Error in trying to receive command from data logger: {e:?}"
-                                    );
+            if !lock_relay_manager_channel_disconnected {
+                match tcp_communication_channels.rx_tcp_communication_from_relay_manager_opt {
+                    Some(ref rx_tcp_communication_from_relay_manager) => {
+                        match rx_tcp_communication_from_relay_manager.try_recv() {
+                            Ok(c) => match c {
+                                InternalCommand::SetRelay(c) => {
+                                    let response = self.change_relay(c, true);
+                                    if let Err(response_err) = response {
+                                        log_error_chain(
+                                            module_path!(),
+                                            "Error in communication with relay manager",
+                                            response_err,
+                                        );
+                                    }
+                                }
+                                InternalCommand::UnsetRelay(c) => {
+                                    let response = self.change_relay(c, false);
+                                    if let Err(response_err) = response {
+                                        log_error_chain(
+                                            module_path!(),
+                                            "Error in communication with relay manager",
+                                            response_err,
+                                        );
+                                    }
+                                }
+                                _ => { /* ignore all other commands */ }
+                            },
+                            Err(e) => {
+                                match e {
+                                    TryRecvError::Empty => { /* empty buffer - no action required */
+                                    }
+                                    TryRecvError::Disconnected => {
+                                        lock_relay_manager_channel_disconnected = true;
+                                        error!(
+                                            target: module_path!(),
+                                            "Error in trying to receive command from relay manager: {e:?}"
+                                        );
+                                    }
                                 }
                             }
                         }
                     }
-                }
-                None => {
-                    // no value provided - do nothing
+                    None => {
+                        // no value provided - do nothing
+                    }
                 }
             }
             // **********************************

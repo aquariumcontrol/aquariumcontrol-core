@@ -15,10 +15,11 @@ pub mod tests {
 
     use crate::mocks::mock_signal::tests::MockSignal;
     use crate::mocks::test_command::tests::TestCommand;
+    use crate::simulator::tcp_communication::TcpCommunicationError;
     use crate::utilities::channel_content::{AquariumSignal, InternalCommand};
 
     pub fn mock_tcp_for_tank_level_switch(
-        tx_tcp_to_test_object: &Sender<f32>,
+        tx_tcp_to_test_object: &Sender<Result<f32, TcpCommunicationError>>,
         rx_tcp_from_test_object: &Receiver<InternalCommand>,
         rx_tcp_from_test_environment_opt: Option<&Receiver<TestCommand>>,
         initial_mock_value_position: bool,
@@ -59,7 +60,7 @@ pub mod tests {
                             panic!("{}: invalid command to mock TCP handler", module_path!());
                         }
                     };
-                    match tx_tcp_to_test_object.send(response_value) {
+                    match tx_tcp_to_test_object.send(Ok(response_value)) {
                         Ok(()) => {
                             if command_received.is_some() && signal_received.is_some() {
                                 println!(

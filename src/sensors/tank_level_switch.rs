@@ -30,6 +30,7 @@ cfg_if::cfg_if! {
 }
 
 use crate::simulator::get_resp_sim::GetResponseFromSimulatorTrait;
+use crate::simulator::tcp_communication_error::TcpCommunicationError;
 use crate::utilities::channel_content::{AquariumSignal, InternalCommand};
 use crate::utilities::proc_ext_req::ProcessExternalRequestTrait;
 
@@ -128,6 +129,16 @@ pub enum TankLevelSwitchError {
     #[allow(unused)] // variant is constructed in platform-specific code and evaluated in generic code.
     #[error("[{0}] Input pin has not been provided. This is a configuration error.")]
     InputPinNotProvided(String),
+
+    /// Communication with the simulator failed.
+    #[error("[{location}] Communication with simulator for {signal} failed")]
+    SimulatorCommunicationError {
+        location: String,
+        signal: AquariumSignal,
+
+        #[source]
+        source: TcpCommunicationError,
+    },
 }
 
 /// Contains the measurement of tank level position and calculation of stabilized tank level position signal.
@@ -251,9 +262,12 @@ impl TankLevelSwitch {
     /// * `gpio_tank_level` - The **GPIO pin** (as `u8`) connected to the tank level switch sensor.
     ///
     /// # Returns
-    /// In case of success, a new `TankLevelSwitch` struct wrapped in Ok,
-    /// configured for hardware-based operation.
-    /// Otherwise, an error of type `TankLevelSwitchError`.
+    /// A `Result` containing a new `TankLevelSwitch` instance on success.
+    ///
+    /// # Errors
+    /// This function will return a `TankLevelSwitchError` if:
+    /// - `use_simulator` is `false` but no `Gpio` handle is provided (`GPIOInterfaceNotProvided`).
+    /// - The specified GPIO pin cannot be retrieved from the GPIO interface (`GpioPinRetrievalError`).
     pub fn new(
         config: TankLevelSwitchConfig,
         initial_position_stabilized: bool,
@@ -300,8 +314,6 @@ impl TankLevelSwitch {
     ///   from a TCP-based simulator via channels.
     /// - In **hardware mode** (Linux with `target_hw` feature), it directly reads the state of the configured GPIO input pin.
     ///
-    /// Errors encountered during hardware interaction (e.g., if the GPIO pin is unavailable) are logged.
-    ///
     /// # Arguments
     /// * `tx_to_tcp_opt` - An `Option` containing the sender channel for communication with the TCP simulator.
     ///   This is used in simulator mode to request sensor data.
@@ -309,12 +321,16 @@ impl TankLevelSwitch {
     ///   This is used in simulator mode to receive sensor data.
     ///
     /// # Returns
-    /// * `Ok(())` in case of success.
-    /// * `TankLevelSwitchError::InputPinNotProvided` in case configuration of struct is faulty.
+    /// An empty `Result` on success.
+    ///
+    /// # Errors
+    /// This function will return a `TankLevelSwitchError` if:
+    /// - Communication with the simulator fails (`SimulatorCommunicationError`).
+    /// - It's running in hardware mode but the GPIO input pin is not available (`InputPinNotProvided`).
     pub fn update_tank_level_switch_signals(
         &mut self,
         tx_to_tcp_opt: &Option<Sender<InternalCommand>>,
-        rx_from_tcp_opt: &Option<Receiver<f32>>,
+        rx_from_tcp_opt: &Option<Receiver<Result<f32, TcpCommunicationError>>>,
     ) -> Result<(), TankLevelSwitchError> {
         if self.config.use_simulator {
             let tx_to_tcp = tx_to_tcp_opt.as_ref().unwrap();
@@ -324,13 +340,23 @@ impl TankLevelSwitch {
                 tx_to_tcp,
                 rx_from_tcp,
                 InternalCommand::RequestSignal(AquariumSignal::TankLevelSwitchPosition),
-            ) > 0.0;
+            )
+            .map_err(|e| TankLevelSwitchError::SimulatorCommunicationError {
+                location: module_path!().to_string(),
+                signal: AquariumSignal::TankLevelSwitchPosition,
+                source: e,
+            })? > 0.0;
             self.tank_level_switch_invalid = Self::get_response_from_simulator(
                 module_path!().to_string(),
                 tx_to_tcp,
                 rx_from_tcp,
                 InternalCommand::RequestSignal(AquariumSignal::TankLevelSwitchInvalid),
-            ) > 0.0;
+            )
+            .map_err(|e| TankLevelSwitchError::SimulatorCommunicationError {
+                location: module_path!().to_string(),
+                signal: AquariumSignal::TankLevelSwitchInvalid,
+                source: e,
+            })? > 0.0;
         } else {
             #[cfg(all(target_os = "linux", feature = "target_hw"))]
             {
@@ -425,10 +451,18 @@ impl TankLevelSwitch {
     /// * `mutex_tank_level_switch_signals` - An `Arc<Mutex<TankLevelSwitchSignals>>` into
     ///   which the latest tank level switch signals (raw and stabilized) will be written,
     ///   ensuring thread-safe access for other modules.
+    ///
+    /// # Returns
+    /// An empty `Result` on successful shutdown.
+    ///
+    /// # Errors
+    /// This function will return a `TankLevelSwitchError::SimulatorChannelNotProvided` if
+    /// the module is configured to use the simulator but the required TCP communication
+    /// channels are not provided.
     pub fn execute(
         &mut self,
         tx_to_tcp_opt: &Option<Sender<InternalCommand>>,
-        rx_from_tcp_opt: &Option<Receiver<f32>>,
+        rx_from_tcp_opt: &Option<Receiver<Result<f32, TcpCommunicationError>>>,
         tx_to_signal_handler: &Sender<bool>,
         rx_from_signal_handler: &Receiver<InternalCommand>,
         mutex_tank_level_switch_signals: Arc<Mutex<TankLevelSwitchSignals>>,
@@ -622,6 +656,7 @@ pub mod tests {
 
     #[cfg(all(target_os = "linux", feature = "target_hw"))]
     use crate::relays::actuate_gpio;
+    use crate::simulator::tcp_communication_error::TcpCommunicationError;
 
     #[test]
     pub fn test_refill_calc_tank_level_switch_position_stabilized_false_when_invalid() {
@@ -733,7 +768,7 @@ pub mod tests {
     // helper function for creating the test object
     fn create_test_object(
         tx_tank_level_switch_to_tcp: Sender<InternalCommand>,
-        rx_tank_level_switch_from_tcp: Receiver<f32>,
+        rx_tank_level_switch_from_tcp: Receiver<Result<f32, TcpCommunicationError>>,
         mut tank_level_switch: TankLevelSwitch,
         tx_tank_level_switch_to_signal_handler: Sender<bool>,
         rx_tank_level_switch_from_signal_handler: Receiver<InternalCommand>,

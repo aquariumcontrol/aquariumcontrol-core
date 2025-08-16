@@ -7,10 +7,10 @@ The above copyright notice and this permission notice shall be included in all c
 THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
+use crate::simulator::tcp_communication_error::TcpCommunicationError;
+use crate::utilities::channel_content::InternalCommand;
 use log::warn;
 use std::sync::mpsc::{Receiver, Sender};
-
-use crate::utilities::channel_content::InternalCommand;
 
 /// The trait implements communication with the simulator instead of real HW.
 pub trait GetResponseFromSimulatorTrait {
@@ -19,54 +19,52 @@ pub trait GetResponseFromSimulatorTrait {
     ///
     /// This function is used **solely for development and testing purposes**.
     /// It sends a `RequestSignal` command to the TCP communication thread (which
-    /// acts as a simulator) and then synchronously waits for an `f32` response.
-    /// Inapplicable commands are logged as warnings and return a default value.
+    /// acts as a simulator) and then synchronously waits for a response.
+    /// Inapplicable commands are logged as warnings and return a default success value.
     ///
     /// # Arguments
     /// * `requester` - For debugging purposes: identify the thread which is requesting the response.
     /// * `tx_to_tcp` - A reference to the sender channel for sending commands to the TCP communication thread.
-    /// * `rx_from_tcp` - A reference to the receiver channel for receiving `f32` data from the TCP communication thread.
+    /// * `rx_from_tcp` - A reference to the receiver channel for receiving `Result<f32, TcpCommunicationError>` data from the TCP communication thread.
     /// * `internal_command` - The `InternalCommand` to send, expected to be a `RequestSignal` for sensor data.
     ///
     /// # Returns
-    /// An `f32` value representing the simulated sensor response. Returns `0.0` for inapplicable commands.
+    /// A `Result` which is:
+    /// - `Ok(f32)`: Containing the simulated sensor value on success.
+    /// - `Ok(0.0)`: For inapplicable commands that are ignored.
+    /// - `Err(TcpCommunicationError)`: If sending the request or receiving the response fails.
     ///
-    /// # Panics
-    /// This function will panic if:
-    /// - The `internal_command` is a `RequestSignal`, but sending the request fails (e.g., the channel disconnected).
-    /// - The `internal_command` is a `RequestSignal`, but receiving the response fails (e.g., the channel disconnected).
+    /// # Errors
+    /// This function will return an error if:
+    /// - Sending the `internal_command` to the TCP thread fails (e.g., the channel is disconnected).
+    /// - Receiving the response from the TCP thread fails (e.g., the channel is disconnected).
     fn get_response_from_simulator(
         requester: String,
         tx_to_tcp: &Sender<InternalCommand>,
-        rx_from_tcp: &Receiver<f32>,
+        rx_from_tcp: &Receiver<Result<f32, TcpCommunicationError>>,
         internal_command: InternalCommand,
-    ) -> f32 {
+    ) -> Result<f32, TcpCommunicationError> {
         match internal_command {
             InternalCommand::RequestSignal(_) => match tx_to_tcp.send(internal_command) {
-                Ok(()) => match rx_from_tcp.recv() {
-                    Ok(c) => c,
-                    Err(e) => {
-                        panic!(
-                                "{}: Error occurred when trying to receive response from TCP thread for {} ({e:?})",
-                                module_path!(),
-                                requester
-                        );
-                    }
-                },
-                Err(e) => {
-                    panic!(
-                        "{}: Error occurred when trying to send request from {} to TCP thread ({e:?})",
-                        module_path!(),
-                        requester
-                    );
-                }
+                Ok(()) => rx_from_tcp.recv().unwrap_or_else(|e| {
+                    Err(TcpCommunicationError::ReceivingFromTCPThreadFailed {
+                        location: module_path!().to_string(),
+                        requester,
+                        source: e,
+                    })
+                }),
+                Err(e) => Err(TcpCommunicationError::SendingToTCPThreadFailed {
+                    location: module_path!().to_string(),
+                    requester,
+                    source: e,
+                }),
             },
             _ => {
                 warn!(
                     target: module_path!(),
                     "ignoring not applicable internal command ({internal_command}) from {requester}"
                 );
-                0.0
+                Ok(0.0)
             }
         }
     }

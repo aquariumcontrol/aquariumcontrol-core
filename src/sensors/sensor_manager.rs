@@ -28,7 +28,9 @@ use crate::sensors::atlas_scientific::AtlasScientificResultData;
 use crate::sensors::dht::DhtResult;
 use crate::sensors::ds18b20::Ds18b20Result;
 use crate::simulator::get_resp_sim::GetResponseFromSimulatorTrait;
+use crate::simulator::tcp_communication_error::TcpCommunicationError;
 use crate::utilities::channel_content::{AquariumSignal, InternalCommand};
+use crate::utilities::logger::log_error_chain;
 use crate::utilities::proc_ext_req::ProcessExternalRequestTrait;
 use std::time::{Duration, Instant};
 use thiserror::Error;
@@ -86,7 +88,7 @@ pub struct SensorManagerChannels<'a> {
     pub tx_sensor_manager_to_tcp_opt: &'a Option<Sender<InternalCommand>>,
 
     /// Receiver part of the channel for communication via TCP wrapped as optional
-    pub rx_sensor_manager_from_tcp_opt: &'a Option<Receiver<f32>>,
+    pub rx_sensor_manager_from_tcp_opt: &'a Option<Receiver<Result<f32, TcpCommunicationError>>>,
 
     /// Sender part of the channel for communication to the signal handler
     pub tx_sensor_manager_to_signal_handler: Sender<bool>,
@@ -167,6 +169,16 @@ pub enum SensorManagerError {
     /// Invalid configuration of water temperature measurement.
     #[error("[{0}]: invalid configuration of water temperature. source_ambient_temperature may only have values ({1}, {2}) configured value is {3}")]
     InvalidWaterTemperatureConfiguration(String, String, String, String),
+
+    /// Communication with the simulator failed.
+    #[error("[{location}] Communication with simulator for {signal} failed")]
+    SimulatorCommunicationError {
+        location: String,
+        signal: AquariumSignal,
+
+        #[source]
+        source: TcpCommunicationError,
+    },
 }
 
 /// Contains the communication with DHT ambient temperature and humidity sensor.
@@ -253,12 +265,14 @@ impl SensorManager {
     /// and initializes all internal "lock" flags to `false`. These flags help prevent
     /// log flooding from recurring errors or warnings during operation.
     ///
-    /// # Arguments
-    /// * `config` - Configuration data for the SensorManager module, specifying the data source for
-    ///   certain sensor signals, and replacement values for sensor readings.
-    ///
     /// # Returns
-    /// A new `Ambient` struct, ready to collect and provide ambient sensor data.
+    /// A `Result` containing a new `SensorManager` instance on success, or a
+    /// `SensorManagerError` if the configuration is invalid.
+    ///
+    /// # Errors
+    /// This function will return an error if:
+    /// - `source_ambient_temperature` in the config is not a valid, known source.
+    /// - `source_water_temperature` in the config is not a valid, known source.
     pub fn new(config: SensorManagerConfig) -> Result<SensorManager, SensorManagerError> {
         // Check if the configuration of the ambient temperature source is valid.
         if config.source_ambient_temperature
@@ -331,8 +345,15 @@ impl SensorManager {
     /// # Arguments
     /// * `tx_sensor_manager_to_tcp_opt` - A reference to an `Option<Sender<InternalCommand>>` used
     ///   for sending commands to the `TcpCommunication` thread (which acts as the simulator interface).
-    /// * `rx_sensor_manager_from_tcp_opt` - A reference to an `Option<Receiver<f32>>` used for
-    ///   receiving simulated sensor data from the `TcpCommunication` thread.
+    /// * `rx_sensor_manager_from_tcp_opt` - A reference to an `Option<Receiver<Result<f32, TcpCommunicationError>>>`
+    ///   used for receiving simulated sensor data from the `TcpCommunication` thread.
+    ///
+    /// # Returns
+    /// An empty `Result` on success, or a `SensorManagerError` if communication fails.
+    ///
+    /// # Errors
+    /// This function will return a `SensorManagerError::SimulatorCommunicationError` if sending a
+    /// request or receiving a response over the channels fails.
     ///
     /// # Panics
     /// This function will **panic** if either `tx_sensor_manager_to_tcp_opt` or `rx_sensor_manager_from_tcp_opt`
@@ -341,8 +362,8 @@ impl SensorManager {
     fn communicate_with_simulator(
         &mut self,
         tx_sensor_manager_to_tcp_opt: &Option<Sender<InternalCommand>>,
-        rx_sensor_manager_from_tcp_opt: &Option<Receiver<f32>>,
-    ) {
+        rx_sensor_manager_from_tcp_opt: &Option<Receiver<Result<f32, TcpCommunicationError>>>,
+    ) -> Result<(), SensorManagerError> {
         // unwrap is safe because tested beforehand
         let tx_sensor_manager_to_simulator = tx_sensor_manager_to_tcp_opt.as_ref().unwrap();
         let rx_sensor_manager_from_simulator = rx_sensor_manager_from_tcp_opt.as_ref().unwrap();
@@ -352,52 +373,79 @@ impl SensorManager {
             tx_sensor_manager_to_simulator,
             rx_sensor_manager_from_simulator,
             InternalCommand::RequestSignal(AquariumSignal::AmbientTemperature),
-        );
+        )
+        .map_err(|e| SensorManagerError::SimulatorCommunicationError {
+            location: module_path!().to_string(),
+            signal: AquariumSignal::AmbientTemperature,
+            source: e,
+        })?;
         self.ambient_humidity = Self::get_response_from_simulator(
             module_path!().to_string(),
             tx_sensor_manager_to_simulator,
             rx_sensor_manager_from_simulator,
             InternalCommand::RequestSignal(AquariumSignal::AmbientHumidity),
-        );
+        )
+        .map_err(|e| SensorManagerError::SimulatorCommunicationError {
+            location: module_path!().to_string(),
+            signal: AquariumSignal::AmbientHumidity,
+            source: e,
+        })?;
         self.water_temperature = Self::get_response_from_simulator(
             module_path!().to_string(),
             tx_sensor_manager_to_simulator,
             rx_sensor_manager_from_simulator,
             InternalCommand::RequestSignal(AquariumSignal::WaterTemperature),
-        );
+        )
+        .map_err(|e| SensorManagerError::SimulatorCommunicationError {
+            location: module_path!().to_string(),
+            signal: AquariumSignal::WaterTemperature,
+            source: e,
+        })?;
         self.conductivity = Self::get_response_from_simulator(
             module_path!().to_string(),
             tx_sensor_manager_to_simulator,
             rx_sensor_manager_from_simulator,
             InternalCommand::RequestSignal(AquariumSignal::Conductivity),
-        );
+        )
+        .map_err(|e| SensorManagerError::SimulatorCommunicationError {
+            location: module_path!().to_string(),
+            signal: AquariumSignal::Conductivity,
+            source: e,
+        })?;
         self.pH = Self::get_response_from_simulator(
             module_path!().to_string(),
             tx_sensor_manager_to_simulator,
             rx_sensor_manager_from_simulator,
             InternalCommand::RequestSignal(AquariumSignal::pH),
-        );
+        )
+        .map_err(|e| SensorManagerError::SimulatorCommunicationError {
+            location: module_path!().to_string(),
+            signal: AquariumSignal::pH,
+            source: e,
+        })?;
+
+        Ok(())
     }
 
     /// Executes the main control loop for the sensor manager.
     ///
-    /// This function runs continuously, managing the periodic measurement and routing of measurement data.
+    /// This function runs continuously, managing the periodic consolidation of sensor data.
     /// It operates in two main modes:
-    /// - **Simulator Mode**: Fetches simulated sensor data via a TCP communication channel.
-    /// - **Hardware Mode (Linux with `target_hw` feature)**: Interacts directly with a DHT sensor
-    ///   thread, sending requests and receiving actual sensor readings.
+    /// - **Simulator Mode**: Fetches simulated sensor data for all signals via a TCP communication channel.
+    /// - **Hardware Mode**: Reads the latest sensor data from various shared mutexes that are
+    ///   populated by other dedicated sensor threads (like `Ds18b20`, `Dht`, `AtlasScientific`).
     ///
-    /// The collected data is then written to a shared mutex, making it available to other
-    /// application threads. The loop maintains a measurement interval and remains
-    /// responsive to `Quit` and `Terminate` commands from the signal handler for graceful shutdown.
+    /// Based on the configuration, it selects the appropriate data source (e.g., Ds18b20 vs.
+    /// Atlas Scientific for water temperature). The consolidated data is then written to the
+    /// `mutex_sensor_manager_signals` mutex, making it available to other application threads.
+    /// The loop maintains a measurement interval and remains responsive to `Quit` and `Terminate`
+    /// commands from the signal handler for graceful shutdown.
     ///
     /// # Arguments
     /// * `sensor_manager_channels` - A struct containing all `mpsc` channels necessary for inter-thread
     ///   communication with the `TcpCommunication` (if in simulator mode) and the `SignalHandler`.
-    /// * `mutex_dht` - An `Arc<Mutex<DhtResult>>` into which the latest recording
-    ///   from Dht sensor is written. Ambient only reads it.
-    /// * `mutex_sensor_manager_signals` - An `Arc<Mutex<SensorManagerSignals>>` into which the
-    ///   measurement data is written, ensuring thread-safe access for other modules.
+    /// * `mutexes` - A struct containing `Arc<Mutex<...>>` handles to all required sensor data
+    ///   sources and the final output signals struct.
     ///
     /// # Panics
     /// This function will panic if:
@@ -454,10 +502,17 @@ impl SensorManager {
                 > self.measurement_interval
             {
                 if self.config.use_simulator {
-                    self.communicate_with_simulator(
+                    let result = self.communicate_with_simulator(
                         sensor_manager_channels.tx_sensor_manager_to_tcp_opt,
                         sensor_manager_channels.rx_sensor_manager_from_tcp_opt,
                     );
+                    if result.is_err() {
+                        log_error_chain(
+                            module_path!(),
+                            "error when communicating with simulator",
+                            result.err().unwrap(),
+                        );
+                    }
                 } else {
                     //*** Ds18b20 ******************************************************************
                     if self.config.source_water_temperature
