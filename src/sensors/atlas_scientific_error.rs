@@ -18,53 +18,63 @@ use thiserror::Error;
 #[derive(Debug, Error)]
 pub enum AtlasScientificError {
     /// The first character in the message sent from the sensor does not match the required magic number.
-    #[error("The first character in the message sent from the sensor ({1}) does not match the required magic number ({0}).")]
-    FirstCharacterNotMagic(u8, u8),
+    #[error("[{0}] The first character in the message sent from the sensor ({2}) does not match the required magic number ({1}).")]
+    FirstCharacterNotMagic(String, u8, u8),
 
     /// The last character in the message sent from the sensor does not match the required magic number.
-    #[error("The last character in the message sent from the sensor ({1}) does not match the required magic number ({0})")]
-    LastCharacterNotMagic(u8, u8),
+    #[error("[{0}] The last character in the message sent from the sensor ({2}) does not match the required magic number ({1})")]
+    LastCharacterNotMagic(String, u8, u8),
 
     /// The message sent from the sensor unit contains non-numeric characters in the data section
-    #[error("The message sent from the sensor unit contains non-numeric character with ASCII value ('{0}') in the data section.")]
-    ContainsInvalidCharacter(u8),
+    #[error("[{0}] The message sent from the sensor unit contains non-numeric character with ASCII value ('{1}') in the data section.")]
+    ContainsInvalidCharacter(String, u8),
 
     /// The error is masked by other checks. Still, the signature of the function to convert from u8 array slice to String throws an error.
-    #[error("An invalid UTF8 sequence occurred.")]
+    #[error("[{location}] An invalid UTF8 sequence occurred.")]
     InvalidUtf8Sequence {
+        location: String,
+
         #[source]
         source: Utf8Error,
     },
 
     /// Conversion from String to f32 failed.
-    #[error("Conversion from String to f32 failed.")]
+    #[error("[{location}] Conversion from String to f32 failed.")]
     ConversionFailure {
+        location: String,
+
         #[source]
         source: ParseFloatError,
     },
 
     /// Incorrect buffer length
-    #[error("The response from {0} has incorrect length ({1}).")]
-    IncorrectBufferLength(AquariumSignal, usize),
+    #[error("[{0}] The response from {1} has incorrect length ({2}).")]
+    IncorrectBufferLength(String, AquariumSignal, usize),
 
     /// Mutex poisoned
-    #[error("Could not lock mutex for {signal}")]
-    CouldNotLockMutex { signal: AquariumSignal },
+    #[error("[{location}] Could not lock mutex for {signal}")]
+    CouldNotLockMutex {
+        location: String,
+        signal: AquariumSignal,
+    },
 
-    #[error("Error in sensor unit response for {signal}.")]
+    /// Error in sensor unit response for a specific signal.
+    #[error("[{location}] Error in sensor unit response for {signal}.")]
     ResponseCheckFailed {
+        location: String,
         signal: AquariumSignal,
         #[source]
         source: Box<AtlasScientificError>,
     },
 
     /// Initial value, is overwritten
-    #[error("Initial value")]
+    #[error("Initialization value - result has not been set yet")]
     Initial,
 
     /// Error in I2C communication for a specific signal.
-    #[error("Error in I2C communication for {signal}.")]
+    #[error("[{location}] Error in I2C communication for {signal}.")]
     I2cCommunicationFailure {
+        location: String,
         signal: AquariumSignal,
 
         #[source]
@@ -72,16 +82,14 @@ pub enum AtlasScientificError {
     },
 
     /// Error is used to communicate to caller that receiving needs to be repeated.
-    #[error("Channel for receiving from I2CInterface thread is empty.")]
-    ChannelIsEmpty,
+    #[error("[{0}] Channel for receiving from I2CInterface thread is empty.")]
+    ChannelIsEmpty(String),
 
     /// The channel is disconnected.
-    #[error("Channel for receiving from I2CInterface is disconnected.")]
+    #[error("[{location}] Channel for receiving from I2CInterface is disconnected.")]
     ChannelIsDisconnected {
+        location: String,
         #[source]
         source: TryRecvError,
     },
-
-    #[error("Initialization value - result has not been set yet")]
-    NotInitialized,
 }

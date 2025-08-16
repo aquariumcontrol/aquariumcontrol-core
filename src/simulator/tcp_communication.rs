@@ -46,8 +46,9 @@ pub struct TcpConnectionConfig {
 pub enum TcpCommunicationError {
     /// value indicates that an error has occurred during TCP communication
     #[allow(unused)]
-    #[error("Failed to connect to simulator at {ip_address}:{port}")]
+    #[error("[{location}] Failed to connect to simulator at {ip_address}:{port}")]
     ConnectionFailed {
+        location: String,
         ip_address: String,
         port: u16,
         #[source]
@@ -199,6 +200,7 @@ impl TcpCommunication {
                     tcp_connection.ip_address, tcp_connection.port
                 );
                 return Err(TcpCommunicationError::ConnectionFailed {
+                    location: module_path!().to_string(),
                     ip_address: tcp_connection.ip_address.clone(),
                     port: tcp_connection.port,
                     source: e,

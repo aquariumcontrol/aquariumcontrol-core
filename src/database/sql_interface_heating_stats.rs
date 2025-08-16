@@ -242,6 +242,7 @@ impl SqlInterfaceHeatingStats {
             SQL_QUERY_CHECK_HEATING_STATS_NULL,
         )
         .map_err(|e| SqlInterfaceError::DatabaseCheckHeatingStatsFailure {
+            location: module_path!().to_string(),
             source: Box::new(e),
         })?;
         let count_rows = SqlInterface::get_single_integer_from_database(
@@ -249,12 +250,14 @@ impl SqlInterfaceHeatingStats {
             SQL_QUERY_CHECK_HEATING_STATS_COUNT,
         )
         .map_err(|e| SqlInterfaceError::DatabaseCheckHeatingStatsFailure {
+            location: module_path!().to_string(),
             source: Box::new(e),
         })?;
 
         // check the query results
         if count_null_values < 0 || count_rows < 0 {
             return Err(SqlInterfaceError::DatabaseHeatingStatsTableNegativeValue(
+                module_path!().to_string(),
                 count_null_values,
                 count_rows,
             ));
@@ -262,6 +265,7 @@ impl SqlInterfaceHeatingStats {
 
         if count_null_values > 0 {
             return Err(SqlInterfaceError::DatabaseHeatingStatsTableContainsNull(
+                module_path!().to_string(),
                 count_null_values,
             ));
         }
@@ -271,6 +275,7 @@ impl SqlInterfaceHeatingStats {
             if count_rows > max_rows_heating_stats.cast_signed() {
                 return Err(
                     SqlInterfaceError::DatabaseHeatingStatsTableContainsTooManyRows(
+                        module_path!().to_string(),
                         count_rows.cast_unsigned(),
                         max_rows_heating_stats,
                     ),
@@ -341,6 +346,7 @@ impl SqlInterfaceHeatingStats {
             Ok(c) => c,
             Err(_) => {
                 return Err(SqlInterfaceError::SingleHeatingStatsRequestFailure(
+                    module_path!().to_string(),
                     sql_query_strings::SQL_QUERY_READ_HEATING_STATS.to_string(),
                 ));
             }
@@ -349,6 +355,7 @@ impl SqlInterfaceHeatingStats {
         // check the error case if there is no response
         if single_heating_stats_entry_array.is_empty() {
             return Err(SqlInterfaceError::SingleHeatingStatsRequestEmptyResponse(
+                module_path!().to_string(),
                 sql_query_strings::SQL_QUERY_READ_HEATING_STATS.to_string(),
             ));
         }
@@ -356,6 +363,7 @@ impl SqlInterfaceHeatingStats {
         if single_heating_stats_entry_array.len() > 1 {
             return Err(
                 SqlInterfaceError::SingleHeatingStatsRequestNoSingleResponse(
+                    module_path!().to_string(),
                     sql_query_strings::SQL_QUERY_READ_HEATING_STATS.to_string(),
                 ),
             );
@@ -366,6 +374,7 @@ impl SqlInterfaceHeatingStats {
         let date =
             NaiveDate::parse_from_str(single_heating_stats_string_entry.date.as_str(), "%Y-%m-%d")
                 .map_err(|e| SqlInterfaceError::TimestampConversionFailure {
+                    location: module_path!().to_string(),
                     timestamp_string: single_heating_stats_string_entry.date.clone(),
                     source: e,
                 })?;
@@ -476,6 +485,7 @@ impl SqlInterfaceHeatingStats {
             Ok(_) => Ok(()),
             Err(e) => {
                 Err(SqlInterfaceError::InsertHeatingStatsEntryFailure {
+                    location: module_path!().to_string(),
                     sql_query_string,
                     source: e,
                 })
@@ -555,7 +565,7 @@ pub mod tests {
             Err(e) => {
                 assert!(matches!(
                     e,
-                    SqlInterfaceError::SingleHeatingStatsRequestEmptyResponse(_)
+                    SqlInterfaceError::SingleHeatingStatsRequestEmptyResponse(_, _)
                 ));
             }
         }
@@ -674,7 +684,7 @@ pub mod tests {
         );
         assert!(matches!(
             test_result,
-            Err(SqlInterfaceError::DatabaseHeatingStatsTableContainsTooManyRows(_, _))
+            Err(SqlInterfaceError::DatabaseHeatingStatsTableContainsTooManyRows(_, _, _))
         ));
         // *****************************************************************************************
     }

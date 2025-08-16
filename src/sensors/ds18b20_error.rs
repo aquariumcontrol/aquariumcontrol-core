@@ -11,28 +11,38 @@ use thiserror::Error;
 
 #[derive(Error, Debug, Clone)]
 pub enum Ds18b20Error {
-    /// DS18B20 sensor with matching ID has not been found.
-    #[error("DS18B20 sensor with ID {0} not found.")]
-    SensorIdNotFound(String),
+    /// Indicates that a DS18B20 sensor with the specified ID could not be found on the 1-Wire bus.
+    #[error("[{0}] DS18B20 sensor with ID {1} not found.")]
+    SensorIdNotFound(String, String),
 
-    #[error("Failed to read content from the device file.")]
-    ReadToStringFailure,
+    /// Represents a failure to read the entire content of the sensor's device file into a string.
+    #[error("[{0}] Failed to read content from the device file.")]
+    ReadToStringFailure(String),
 
-    #[error("Device file contains insufficient lines (expected at least 2).")]
-    InsufficientLinesInFile,
+    /// Occurs when the sensor's device file does not contain the expected two lines of data.
+    #[error("[{0}] Device file contains insufficient lines (expected at least 2).")]
+    InsufficientLinesInFile(String),
 
-    #[error("The first line of the device file does not end with ' YES', indicating a CRC error or incomplete reading.")]
-    Line0NotEndingWithYes,
+    /// The first line from the sensor file must end with ' YES' to confirm a successful CRC check.
+    /// This error means the check failed, indicating a data transmission error.
+    #[error("[{0}] The first line of the device file does not end with ' YES', indicating a CRC error or incomplete reading.")]
+    Line0NotEndingWithYes(String),
 
-    #[error("Temperature entry (t=) not found in the second line of the device file.")]
-    TemperatureEntryNotFound,
+    /// The second line of the sensor file is expected to contain a temperature value prefixed with 't='.
+    /// This error indicates the prefix was not found.
+    #[error("[{0}] Temperature entry (t=) not found in the second line of the device file.")]
+    TemperatureEntryNotFound(String),
 
-    #[error("An unidentified error occurred.")]
-    UnidentifiedError,
+    /// A generic error for cases that do not fit any other specific error variant.
+    #[error("[{0}] An unidentified error occurred.")]
+    UnidentifiedError(String),
 
-    #[error("Failed to parse temperature value as a floating-point number.")]
-    TemperatureParseError,
+    /// The temperature value found in the sensor file could not be successfully parsed into a numeric type.
+    #[error("[{0}] Failed to parse temperature value as a floating-point number.")]
+    TemperatureParseError(String),
 
-    #[error("Temperature value read from sensor is outside the expected range.")]
-    TemperatureOutOfRange,
+    /// The parsed temperature value is outside the plausible range for an aquarium,
+    /// suggesting a sensor malfunction or reading error.
+    #[error("[{0}] Temperature value read from sensor is outside the expected range.")]
+    TemperatureOutOfRange(String),
 }

@@ -19,7 +19,7 @@ use crate::sensors::tank_level_switch::TankLevelSwitchSignals;
 use crate::utilities::channel_content::{AquariumDevice, InternalCommand};
 use crate::utilities::proc_ext_req::ProcessExternalRequestTrait;
 use crate::water::refill::RefillConfig;
-use crate::water::refill_errors::RefillErrorStates;
+use crate::water::refill_error_states::RefillErrorStates;
 
 pub struct WaterInjectionChannels<'a> {
     /// Collects the communication channels required by the `WaterInjection` module.

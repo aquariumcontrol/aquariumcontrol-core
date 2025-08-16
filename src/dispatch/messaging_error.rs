@@ -13,8 +13,9 @@ use thiserror::Error;
 pub enum MessagingError {
     /// Error occurred when trying to open POSIX message queue.
     #[cfg(target_os = "linux")]
-    #[error("Error occurred when trying to open POSIX message queue using message queue name {mq_name}.")]
+    #[error("[{location}] Error occurred when trying to open POSIX message queue using message queue name {mq_name}.")]
     PosixMessageQueueOpeningError {
+        location: String,
         mq_name: String,
         #[source]
         source: std::io::Error,
@@ -22,8 +23,9 @@ pub enum MessagingError {
 
     /// Error occurred when trying to access POSIX message queue attributes.
     #[cfg(target_os = "linux")]
-    #[error("Error occurred when trying to access POSIX message queue attributes.")]
+    #[error("[{location}] Error occurred when trying to access POSIX message queue attributes.")]
     PosixMessageQueueAttributesError {
+        location: String,
         #[source]
         source: std::io::Error,
     },

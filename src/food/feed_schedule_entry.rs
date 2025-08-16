@@ -48,7 +48,10 @@ impl FeedScheduleEntry {
             "%Y-%m-%d %H:%M:%S",
         )
         .map_err(
-            |e| SqlInterfaceError::FeedScheduleEntryTimeStampConversionFailure { source: e },
+            |e| SqlInterfaceError::FeedScheduleEntryTimeStampConversionFailure {
+                location: module_path!().to_string(),
+                source: e,
+            },
         )?;
 
         Ok(FeedScheduleEntry {

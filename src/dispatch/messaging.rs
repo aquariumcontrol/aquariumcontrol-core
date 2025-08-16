@@ -271,6 +271,7 @@ impl Messaging {
 
         let mq = PosixMq::open(&config.mq_filename).map_err(|e| {
             MessagingError::PosixMessageQueueOpeningError {
+                location: module_path!().to_string(),
                 mq_name: mq_file_name_clone_for_error,
                 source: e,
             }
@@ -281,7 +282,10 @@ impl Messaging {
         let mq_max_msg_len = match mq.attributes() {
             Ok(c) => c.max_msg_len,
             Err(e) => {
-                return Err(MessagingError::PosixMessageQueueAttributesError { source: e });
+                return Err(MessagingError::PosixMessageQueueAttributesError {
+                    location: module_path!().to_string(),
+                    source: e,
+                });
             }
         };
         #[cfg(not(target_os = "linux"))]

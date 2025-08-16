@@ -73,6 +73,7 @@ impl SqlInterfaceBalling {
             SQL_QUERY_CHECK_BALLING_SETVALS_NULL,
         )
         .map_err(|e| SqlInterfaceError::DatabaseCheckBallingSetValsFailure {
+            location: module_path!().to_string(),
             source: Box::new(e),
         })?;
         let count_rows_setvals = SqlInterface::get_single_integer_from_database(
@@ -80,27 +81,31 @@ impl SqlInterfaceBalling {
             SQL_QUERY_CHECK_BALLING_SETVALS_COUNT,
         )
         .map_err(|e| SqlInterfaceError::DatabaseCheckBallingSetValsFailure {
+            location: module_path!().to_string(),
             source: Box::new(e),
         })?;
-        let count_rows_dosinglog = SqlInterface::get_single_integer_from_database(
+        let count_rows_dosing_log = SqlInterface::get_single_integer_from_database(
             &mut conn,
             SQL_QUERY_CHECK_BALLING_DOSING_LOG_COUNT,
         )
         .map_err(|e| SqlInterfaceError::DatabaseCheckBallingSetValsFailure {
+            location: module_path!().to_string(),
             source: Box::new(e),
         })?;
 
         // check the query results
-        if count_null_values < 0 || count_rows_setvals < 0 || count_rows_dosinglog < 0 {
+        if count_null_values < 0 || count_rows_setvals < 0 || count_rows_dosing_log < 0 {
             return Err(SqlInterfaceError::DatabaseBallingSetValTableNegativeValue(
+                module_path!().to_string(),
                 count_null_values,
                 count_rows_setvals,
-                count_rows_dosinglog,
+                count_rows_dosing_log,
             ));
         }
 
         if count_null_values > 0 {
             return Err(SqlInterfaceError::DatabaseBallingSetValTableContainsNull(
+                module_path!().to_string(),
                 count_null_values,
             ));
         }
@@ -110,6 +115,7 @@ impl SqlInterfaceBalling {
             if count_rows_setvals > max_rows_balling_set_values.cast_signed() {
                 return Err(
                     SqlInterfaceError::DatabaseBallingSetValTableContainsTooManyRows(
+                        module_path!().to_string(),
                         count_rows_setvals.cast_unsigned(),
                         max_rows_balling_set_values,
                     ),
@@ -119,10 +125,11 @@ impl SqlInterfaceBalling {
 
         if max_rows_balling_dosing_log > 0 {
             // execute the check only when the limit is greater than zero
-            if count_rows_dosinglog > max_rows_balling_dosing_log.cast_signed() {
+            if count_rows_dosing_log > max_rows_balling_dosing_log.cast_signed() {
                 return Err(
                     SqlInterfaceError::DatabaseBallingDosingLogTableContainsTooManyRows(
-                        count_rows_dosinglog.cast_unsigned(),
+                        module_path!().to_string(),
+                        count_rows_dosing_log.cast_unsigned(),
                         max_rows_balling_dosing_log,
                     ),
                 );
@@ -235,7 +242,10 @@ impl SqlInterfaceBalling {
             },
         ) {
             Ok(_) => Ok(()),
-            Err(e) => Err(SqlInterfaceError::InsertBallingEventFailure { source: e }),
+            Err(e) => Err(SqlInterfaceError::InsertBallingEventFailure {
+                location: module_path!().to_string(),
+                source: e,
+            }),
         }
     }
 
@@ -276,6 +286,7 @@ impl SqlInterfaceBalling {
             Ok(c) => c,
             Err(_) => {
                 return Err(SqlInterfaceError::SingleBallingSetValRequestFailure(
+                    module_path!().to_string(),
                     sql_query_string,
                 ));
             }
@@ -284,6 +295,7 @@ impl SqlInterfaceBalling {
         // check the error case if there is no response
         if single_balling_setval_array.is_empty() {
             return Err(SqlInterfaceError::SingleBallingSetValEmptyResponse(
+                module_path!().to_string(),
                 sql_query_string,
             ));
         }
@@ -291,6 +303,7 @@ impl SqlInterfaceBalling {
         // check the error case if there is more than one response
         if single_balling_setval_array.len() > 1 {
             return Err(SqlInterfaceError::SingleBallingSetValNoSingleResponse(
+                module_path!().to_string(),
                 sql_query_string,
             ));
         }
@@ -340,6 +353,7 @@ impl SqlInterfaceBalling {
                     "could not insert Balling pump configuration into database ({e:?})"
                 );
                 Err(SqlInterfaceError::InsertBallingPumpConfigurationFailure(
+                    module_path!().to_string(),
                     sql_query_string_for_error,
                 ))
             }
@@ -521,7 +535,7 @@ pub mod tests {
             Err(e) => {
                 assert!(matches!(
                     e,
-                    SqlInterfaceError::SingleBallingSetValEmptyResponse(_)
+                    SqlInterfaceError::SingleBallingSetValEmptyResponse(_, _)
                 ));
             }
         }
@@ -577,7 +591,7 @@ pub mod tests {
         let test_result = SqlInterfaceBalling::new(sql_interface.get_connection(), 1, 0);
         assert!(matches!(
             test_result,
-            Err(SqlInterfaceError::DatabaseBallingSetValTableContainsTooManyRows(_, _))
+            Err(SqlInterfaceError::DatabaseBallingSetValTableContainsTooManyRows(_, _, _))
         ));
 
         // **************************************************************************************

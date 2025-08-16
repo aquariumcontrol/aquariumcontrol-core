@@ -13,30 +13,56 @@ use thiserror::Error;
 
 #[derive(Error, Debug, Clone)]
 pub enum FoodInjectionError {
-    #[error("Failed to send command to relay manager for device: {0}")]
-    RelayManagerSend(
-        AquariumDevice,
-        #[source] std::sync::mpsc::SendError<InternalCommand>,
-    ),
+    /// Occurs when sending a command to the relay manager via an MPSC channel fails.
+    /// This typically happens if the receiving end (the relay manager) has been dropped.
+    #[error("[{location}] Failed to send command to relay manager for device: {device}")]
+    RelayManagerSend {
+        location: String,
+        device: AquariumDevice,
 
-    #[error("Failed to receive confirmation from relay manager for device: {0}")]
-    RelayManagerReceive(AquariumDevice, #[source] std::sync::mpsc::RecvError),
+        #[source]
+        source: std::sync::mpsc::SendError<InternalCommand>,
+    },
 
-    #[error("Received undefined state as target state for skimmer.")]
-    UndefinedTargetStateSkimmer,
+    /// Occurs when waiting for a confirmation message from the relay manager fails.
+    /// This usually indicates that the relay manager's sending channel was dropped,
+    /// preventing a response from ever being sent.
+    #[error("[{location}] Failed to receive confirmation from relay manager for device: {device}")]
+    RelayManagerReceive {
+        location: String,
+        device: AquariumDevice,
 
-    #[error("Received undefined target state for Feeder.")]
-    UndefinedTargetStateFeeder,
+        #[source]
+        source: std::sync::mpsc::RecvError,
+    },
 
-    #[error("Received undefined target state for Main Pump 1.")]
-    UndefinedTargetStateMainPump1,
+    /// An invalid or unexpected target state was requested for the skimmer.
+    /// The skimmer should only be turned ON or OFF.
+    #[error("[{0}] Received undefined state as target state for skimmer.")]
+    UndefinedTargetStateSkimmer(String),
 
-    #[error("Received undefined target state for Main Pump 2.")]
-    UndefinedTargetStateMainPump2,
+    /// An invalid or unexpected target state was requested for the feeder.
+    /// The feeder should only be turned ON or OFF.
+    #[error("[{0}] Received undefined target state for Feeder.")]
+    UndefinedTargetStateFeeder(String),
 
-    #[error("Received undefined target state for aux. pump.")]
-    UndefinedTargetStateAuxPump1,
+    /// An invalid or unexpected target state was requested for the first main pump.
+    /// The pump should only be turned ON or OFF.
+    #[error("[{0}] Received undefined target state for Main Pump 1.")]
+    UndefinedTargetStateMainPump1(String),
 
-    #[error("Received undefined target state for aux. pump.")]
-    UndefinedTargetStateAuxPump2,
+    /// An invalid or unexpected target state was requested for the second main pump.
+    /// The pump should only be turned ON or OFF.
+    #[error("[{0}] Received undefined target state for Main Pump 2.")]
+    UndefinedTargetStateMainPump2(String),
+
+    /// An invalid or unexpected target state was requested for the first auxiliary pump.
+    /// The pump should only be turned ON or OFF.
+    #[error("[{0}] Received undefined target state for aux. pump.")]
+    UndefinedTargetStateAuxPump1(String),
+
+    /// An invalid or unexpected target state was requested for the second auxiliary pump.
+    /// The pump should only be turned ON or OFF.
+    #[error("[{0}] Received undefined target state for aux. pump.")]
+    UndefinedTargetStateAuxPump2(String),
 }

@@ -15,97 +15,100 @@ use thiserror::Error;
 pub enum SqlInterfaceError {
     /// Could not get a connection from the pool. The database may be down or the pool exhausted.
     #[error(
-        "Could not get a connection from the pool. The database may be down or the pool exhausted."
+        "[{0}] Could not get a connection from the pool. The database may be down or the pool exhausted."
     )]
-    ConnectionFromPool,
+    ConnectionFromPool(String),
 
     /// The database wait_timeout is less than the required minimum.
-    #[error("The database wait_timeout ({0}s) is less than the required minimum ({1}s).")]
-    WaitTimeoutTooLow(u64, u64),
+    #[error("[{0}] The database wait_timeout ({1}s) is less than the required minimum ({2}s).")]
+    WaitTimeoutTooLow(String, u64, u64),
 
     /// Could not parse wait_timeout value from the database
-    #[error("Could not parse wait_timeout value from the database: {0}")]
-    WaitTimeoutInvalid(i64),
+    #[error("[{0}] Could not parse wait_timeout value from the database: {0}")]
+    WaitTimeoutInvalid(String, i64),
 
     /// Could not establish database connection pool
-    #[error("Could not establish database connection pool with {0}")]
-    ConnectionPoolFailure(String),
+    #[error("[{0}] Could not establish database connection pool with {1}")]
+    ConnectionPoolFailure(String, String),
 
     /// Required tables are not existing in the database.
-    #[error("Required tables ({0}) are not existing in the database ({1}).")]
-    RequiredTablesNotExisting(String, String),
+    #[error("[{0}] Required tables ({1}) are not existing in the database ({2}).")]
+    RequiredTablesNotExisting(String, String, String),
 
     /// Error when reading tables from the database, expected more than one result.
-    #[error("Error when reading tables from the database, expected more than one result.")]
-    ShowTablesWithoutProperResult,
+    #[error("[{0}] Error when reading tables from the database, expected more than one result.")]
+    ShowTablesWithoutProperResult(String),
 
     /// Could not get a single string from the database.
-    #[error("Could not get a single string from the database using query: {0}")]
-    SingleVersionRequestFailure(String),
+    #[error("[{0}] Could not get a single string from the database using query: {1}")]
+    SingleVersionRequestFailure(String, String),
 
     /// Database responded with empty response.
-    #[error("database responded with empty response to query: {0}")]
-    SingleVersionRequestNotListed(String),
+    #[error("[{0}] Database responded with empty response to query: {1}")]
+    SingleVersionRequestNotListed(String, String),
 
     /// The database responded with multiple responses to request.
-    #[error("database responded with multiple responses to request to query: {0}")]
-    SingleVersionRequestMultipleResults(String),
+    #[error("[{0}] Database responded with multiple responses to request to query: {1}")]
+    SingleVersionRequestMultipleResults(String, String),
 
     /// Could not get a string array from the database.
-    #[error("Could not get a string array from the database using query: {0}")]
-    SingleStringRequestFailure(String),
+    #[error("[{0}] Could not get a string array from the database using query: {1}")]
+    SingleStringRequestFailure(String, String),
 
     /// database responded with multiple responses to request.
-    #[error("database responded with multiple responses to request to query: {0}")]
-    SingleStringRequestNoSingleResponse(String),
+    #[error("[{0}] database responded with multiple responses to request to query: {1}")]
+    SingleStringRequestNoSingleResponse(String, String),
 
     /// database responded with empty response to request.
-    #[error("database responded with empty response to request to query: {0}")]
-    SingleStringRequestEmptyResponse(String),
+    #[error("[{0}] database responded with empty response to request to query: {1}")]
+    SingleStringRequestEmptyResponse(String, String),
 
     /// database responded with empty response.
-    #[error("database responded with empty response to query: {0}")]
-    MultipleStringRequestEmptyResponse(String),
+    #[error("[{0}] Database responded with empty response to query: {1}")]
+    MultipleStringRequestEmptyResponse(String, String),
 
     /// The database responded with single row response.
-    #[error("database responded with single row response to query: {0}")]
-    MultipleStringRequestSingleResponse(String),
+    #[error("[{0}] Database responded with single row response to query: {1}")]
+    MultipleStringRequestSingleResponse(String, String),
 
     /// Could not get a single integer from the database.
-    #[error("Could not get a single integer from the database using query: {0}")]
-    SingleIntegerRequestFailure(String),
+    #[error("[{0}] Could not get a single integer from the database using query: {1}")]
+    SingleIntegerRequestFailure(String, String),
 
     /// The database responded with multiple responses.
-    #[error("database responded with multiple responses to request to query: {0}")]
-    SingleIntegerRequestNoSingleResponse(String),
+    #[error("[{0}] Database responded with multiple responses to request to query: {1}")]
+    SingleIntegerRequestNoSingleResponse(String, String),
 
     /// Could not get a single float value from the database.
-    #[error("Could not get single float value from the database using query: {0}")]
-    SingleFloatRequestFailure(String),
+    #[error("[{0}] Could not get single float value from the database using query: {1}")]
+    SingleFloatRequestFailure(String, String),
 
     /// database responded with empty response.
-    #[error("database responded with empty response to query: {0}")]
-    SingleFloatRequestEmptyResponse(String),
+    #[error("[{0}] Database responded with empty response to query: {1}")]
+    SingleFloatRequestEmptyResponse(String, String),
 
     /// database responded with multiple responses to request.
-    #[error("database responded with multiple responses to request to query: {0}")]
-    SingleFloatRequestNoSingleResponse(String),
+    #[error("[{0}] Database responded with multiple responses to request to query: {1}")]
+    SingleFloatRequestNoSingleResponse(String, String),
 
     /// Could not get single heating stats entry from the database.
-    #[error("Could not get single heating stats entry from database using query: {0}")]
-    SingleHeatingStatsRequestFailure(String),
+    #[error("[{0}] Could not get single heating stats entry from database using query: {1}")]
+    SingleHeatingStatsRequestFailure(String, String),
 
     /// database responded with empty response.
-    #[error("database responded with empty response to query: {0}")]
-    SingleHeatingStatsRequestEmptyResponse(String),
+    #[error("[{0}] Database responded with empty response to query: {1}")]
+    SingleHeatingStatsRequestEmptyResponse(String, String),
 
     /// database responded with multiple responses to request.
-    #[error("database responded with multiple responses to request to query: {0}")]
-    SingleHeatingStatsRequestNoSingleResponse(String),
+    #[error("[{0}] Database responded with multiple responses to request to query: {1}")]
+    SingleHeatingStatsRequestNoSingleResponse(String, String),
 
     /// Could not get feed pattern header from the database
-    #[error("Could not get feed pattern header from the database with query: {query}")]
+    #[error(
+        "[{location}] Could not get feed pattern header from the database with query: {query}"
+    )]
     SingleFeedpatternRequestFailure {
+        location: String,
         query: String,
 
         #[source]
@@ -113,47 +116,51 @@ pub enum SqlInterfaceError {
     },
 
     /// database responded with empty response.
-    #[error("database responded with empty response to query: {0}")]
-    SingleFeedpatternRequestEmptyResponse(String),
+    #[error("[{0}] Database responded with empty response to query: {1}")]
+    SingleFeedpatternRequestEmptyResponse(String, String),
 
     /// The database responded with multiple responses.
-    #[error("database responded with multiple responses to request to query: {0}")]
-    SingleFeedpatternRequestNoSingleResponse(String),
+    #[error("[{0}] Database responded with multiple responses to request to query: {1}")]
+    SingleFeedpatternRequestNoSingleResponse(String, String),
 
     /// Could not get schedule entries from the database.
-    #[error("Could not get schedule entries from database using query: {query}")]
+    #[error("[{location}] Could not get schedule entries from database using query: {query}")]
     ScheduleRequestFailure {
+        location: String,
         query: String,
         #[source]
         source: MySqlError,
     },
 
     /// Could not process the results obtained from the database.
-    #[error("Could not process the results obtained from database.")]
+    #[error("[{location}] Could not process the results obtained from database.")]
     ScheduleProcessingFailure {
+        location: String,
+
         #[source]
         source: Box<SqlInterfaceError>,
     },
 
     /// Error in conversion of the database result to schedule entry.
-    #[error("Error in conversion of database result to schedule entry ({0}).")]
-    ScheduleTypeConversionFailure(String),
+    #[error("[{0}] Error in conversion of database result to schedule entry ({1}).")]
+    ScheduleTypeConversionFailure(String, String),
 
     /// Could not convert start time string read from the database.
-    #[error("Could not convert start time string read from database ({0}).")]
-    ScheduleStartTimeConversionFailure(String),
+    #[error("[{0}] Could not convert start time string read from database ({1}).")]
+    ScheduleStartTimeConversionFailure(String, String),
 
     /// Could not convert stop time string read from the database
-    #[error("Could not convert stop time string read from database ({0}).")]
-    ScheduleStopTimeConversionFailure(String),
+    #[error("[{0}] Could not convert stop time string read from database ({1}).")]
+    ScheduleStopTimeConversionFailure(String, String),
 
     /// Type-specific schedule could not be found in the database.
-    #[error("Schedule of type {0} could not be found in database.")]
-    ScheduleTypeNotFound(String),
+    #[error("[{0}] Schedule of type {1} could not be found in database.")]
+    ScheduleTypeNotFound(String, String),
 
     /// Error when trying to convert string to timestamp.
-    #[error("Error when trying to convert string to timestamp: {timestamp_string}")]
+    #[error("[{location}] Error when trying to convert string to timestamp: {timestamp_string}")]
     TimestampConversionFailure {
+        location: String,
         timestamp_string: String,
         #[source]
         source: ParseError,
@@ -161,39 +168,47 @@ pub enum SqlInterfaceError {
 
     /// Error when inserting heating stats into the database.
     #[error(
-        "Error when inserting heating stats into the database using query: {sql_query_string}"
+        "[{location}] Error when inserting heating stats into the database using query: {sql_query_string}"
     )]
     InsertHeatingStatsEntryFailure {
+        location: String,
         sql_query_string: String,
         #[source]
         source: MySqlError,
     },
 
     /// Error occurred when trying to insert a feed event into the database.
-    #[error("Error occurred when trying to insert a feed event into the database: {source}")]
+    #[error("[{location}] Error occurred when trying to insert a feed event into the database: {source}")]
     InsertFeedEventFailure {
+        location: String,
+
         #[source]
         source: MySqlError,
     },
 
     /// Error occurred when trying to insert a refill event into the database.
-    #[error("Error occurred when trying to insert a refill event into the database using query: {sql_query_string}.")]
+    #[error("[{location}] Error occurred when trying to insert a refill event into the database using query: {sql_query_string}.")]
     InsertRefillEventFailure {
+        location: String,
         sql_query_string: String,
         #[source]
         source: MySqlError,
     },
 
     /// Error occurred when trying to insert a Balling dosing event into the database.
-    #[error("Error occurred when trying to insert a Balling dosing event into database.")]
+    #[error(
+        "[{location}] Error occurred when trying to insert a Balling dosing event into database."
+    )]
     InsertBallingEventFailure {
+        location: String,
         #[source]
         source: MySqlError,
     },
 
     /// Database request for retrieving the refill history failed.
-    #[error("Database request for retrieving the refill {category} of last {interval} failed.")]
+    #[error("[{location}] Database request for retrieving the refill {category} of last {interval} failed.")]
     RefillPastDataRetrievalFailed {
+        location: String,
         category: String,
         interval: String,
         #[source]
@@ -201,59 +216,68 @@ pub enum SqlInterfaceError {
     },
 
     /// Could not get feed schedule entry from the database.
-    #[error("Could not get feed schedule entry from the database using query: {0}")]
-    FeedScheduleEntryRequestFailure(String),
+    #[error("[{0}] Could not get feed schedule entry from the database using query: {1}")]
+    FeedScheduleEntryRequestFailure(String, String),
 
     /// Could not convert feedschedule entry string(s) read from the database to timestamp.
-    #[error("Could not convert feedschedule entry string(s) read from the database to timestamp.")]
+    #[error("[{location}] Could not convert feedschedule entry string(s) read from the database to timestamp.")]
     FeedScheduleEntryTimeStampConversionFailure {
+        location: String,
         #[source]
         source: ParseError,
     },
 
     /// Error occurred when processing time stamp results from the database.
-    #[error("Error occurred when processing {number_entries} results from the database.")]
+    #[error(
+        "[{location}] Error occurred when processing {number_entries} results from the database."
+    )]
     FeedScheduleEntryTimeStampProcessingFailure {
+        location: String,
         number_entries: usize,
         #[source]
         source: Box<SqlInterfaceError>,
     },
 
     /// Error occurred when trying to calculate update of feed schedule entry.
-    #[error("Error occurred when trying to calculate update of feed schedule entry.")]
+    #[error("[{location}] Error occurred when trying to calculate update of feed schedule entry.")]
     FeedScheduleUpdateFailure {
+        location: String,
         #[source]
         source: Box<SqlInterfaceError>,
     },
 
     /// Error occurred when trying to drop a feed schedule entry from the database.
-    #[error("Error occurred when trying to drop a feed schedule entry from the database.")]
+    #[error(
+        "[{location}] Error occurred when trying to drop a feed schedule entry from the database."
+    )]
     FeedScheduleDropFailure {
+        location: String,
         #[source]
         source: MySqlError,
     },
 
     // The database responded with one or even two negative values for feed phase/feed pause duration.
     #[error(
-        "Database responded with negative value(s) for feed phase/feed pause duration: {0} {1}"
+        "[{0}] Database responded with negative value(s) for feed phase/feed pause duration: {1} {2}"
     )]
-    DatabaseFeedPhaseDurationNegative(i16, i16),
+    DatabaseFeedPhaseDurationNegative(String, i16, i16),
 
     /// Could not get a single Balling set value from the database.
-    #[error("Could not get a single Balling set value from the database using query: {0}")]
-    SingleBallingSetValRequestFailure(String),
+    #[error("[{0}] Could not get a single Balling set value from the database using query: {1}")]
+    SingleBallingSetValRequestFailure(String, String),
 
     /// database responded with empty response.
-    #[error("database responded with empty response to query: {0}")]
-    SingleBallingSetValEmptyResponse(String),
+    #[error("[{0}] Database responded with empty response to query: {1}")]
+    SingleBallingSetValEmptyResponse(String, String),
 
     /// The database responded with multiple responses.
-    #[error("database responded with multiple responses to request to query: {0}")]
-    SingleBallingSetValNoSingleResponse(String),
+    #[error("[{0}] Database responded with multiple responses to request to query: {1}")]
+    SingleBallingSetValNoSingleResponse(String, String),
 
     /// Error occurred when inserting data frame into the database.
-    #[error("Error occurred when inserting data frame into the database using query: {sql_query_string}")]
+    #[error("[{location}] Error occurred when inserting data frame into the database using query: {sql_query_string}")]
     InsertDataFrameFailure {
+        location: String,
         sql_query_string: String,
 
         #[source]
@@ -261,264 +285,317 @@ pub enum SqlInterfaceError {
     },
 
     /// The database responded with a timestamp in the future.
-    #[error("Database responded with a timestamp in the future (delta of {0} seconds).")]
-    NegativeTimeDeltaSeconds(i64),
+    #[error("[{0}] Database responded with a timestamp in the future (delta of {1} seconds).")]
+    NegativeTimeDeltaSeconds(String, i64),
 
     /// The database responded with a negative value ({0}) where a positive value was expected
-    #[error("Database responded with a negative value ({0}) where a positive value was expected.")]
-    NegativeInteger(i64),
+    #[error(
+        "[{0}] Database responded with a negative value ({1}) where a positive value was expected."
+    )]
+    NegativeInteger(String, i64),
 
     /// Could not get heating set values from the database.
-    #[error("Could not get heating set values from the database with query: {0}")]
-    HeatingSetValsRequestFailure(String),
+    #[error("[{0}] Could not get heating set values from the database with query: {1}")]
+    HeatingSetValsRequestFailure(String, String),
 
     /// The database returned more than one heating set value entry.
-    #[error("The database returned more than one heating set value entry with query: {0}")]
-    HeatingSetValsNoSingleResponse(String),
+    #[error("[{0}] The database returned more than one heating set value entry with query: {1}")]
+    HeatingSetValsNoSingleResponse(String, String),
 
     /// Updating the heating set values failed.
-    #[error("Updating the heating set values failed.")]
+    #[error("[{location}] Updating the heating set values failed.")]
     HeatingSetValsUpdateFailure {
+        location: String,
+
         #[source]
         source: Box<SqlInterfaceError>,
     },
 
     /// Updating the ventilation set values failed.
-    #[error("Updating the ventilation set values failed.")]
+    #[error("[{location}] Updating the ventilation set values failed.")]
     VentilationSetValsUpdateFailure {
+        location: String,
+
         #[source]
         source: Box<SqlInterfaceError>,
     },
 
     /// The heating switch on temperature is higher than the heating switch-off temperature.
-    #[error("The heating switch on temperature ({0}) is higher than the heating switch-off temperature ({1}).")]
-    HeatingSetValsInvalid(f32, f32),
+    #[error("[{0}] The heating switch on temperature ({1}) is higher than the heating switch-off temperature ({2}).")]
+    HeatingSetValsInvalid(String, f32, f32),
 
     /// Could not get ventilation set values from the database.
-    #[error("Could not get ventilation set values from the database with query: {0}")]
-    VentilationSetValsRequestFailure(String),
+    #[error("[{0}] Could not get ventilation set values from the database with query: {1}")]
+    VentilationSetValsRequestFailure(String, String),
 
     /// The database returned more than one ventilation set value entry.
-    #[error("The database returned more than one ventilation set value entry with query: {0}")]
-    VentilationSetValsNoSingleResponse(String),
+    #[error(
+        "[{0}] The database returned more than one ventilation set value entry with query: {1}"
+    )]
+    VentilationSetValsNoSingleResponse(String, String),
 
     /// The ventilation switch on temperature is lower than the ventilation switch-off temperature.
-    #[error("The ventilation switch on temperature ({0}) is lower than the ventilation switch-off temperature ({1}).")]
-    VentilationSetValsInvalid(f32, f32),
+    #[error("[{0}] The ventilation switch on temperature ({1}) is lower than the ventilation switch-off temperature ({2}).")]
+    VentilationSetValsInvalid(String, f32, f32),
 
     /// Could not retrieve database name.
-    #[error("Could not retrieve database name.")]
+    #[error("[{location}] Could not retrieve database name.")]
     DatabaseNameRequestFailure {
+        location: String,
+
         #[source]
         source: Box<SqlInterfaceError>,
     },
 
     /// Could not retrieve date from the database.
-    #[error("Could not retrieve date from the database.")]
+    #[error("[{location}] Could not retrieve date from the database.")]
     DateRequestFailure {
+        location: String,
+
         #[source]
         source: Box<SqlInterfaceError>,
     },
 
     /// Could not retrieve timestamp from the database.
-    #[error("Could not retrieve timestamp from database.")]
+    #[error("[{location}] Could not retrieve timestamp from database.")]
     TimestampRequestFailure {
+        location: String,
+
         #[source]
         source: Box<SqlInterfaceError>,
     },
 
     /// Could not retrieve optional timestamp from the database.
-    #[error("Could not retrieve optional timestamp from database.")]
+    #[error("[{location}] Could not retrieve optional timestamp from database.")]
     OptionalTimestampRequestFailure {
+        location: String,
+
         #[source]
         source: Box<SqlInterfaceError>,
     },
 
     /// Could not ping database.
-    #[error("Could not ping database.")]
+    #[error("[{location}] Could not ping database.")]
     DatabasePingFailure {
+        location: String,
+
         #[source]
         source: Box<SqlInterfaceError>,
     },
 
     /// Balling set value table may be inconsistent - it contains NULL values.
-    #[error("Balling set value table may be inconsistent - it contains {0} NULL values.")]
-    DatabaseBallingSetValTableContainsNull(i64),
+    #[error("[{0}] Balling set value table may be inconsistent - it contains {1} NULL values.")]
+    DatabaseBallingSetValTableContainsNull(String, i64),
 
     /// Balling set value table may be inconsistent - invalid answer from database to query.
-    #[error("Balling set value table may be inconsistent - database responded with negative value(s) ({0}, {1}, {2}).")]
-    DatabaseBallingSetValTableNegativeValue(i64, i64, i64),
+    #[error("[{0}] Balling set value table may be inconsistent - database responded with negative value(s) ({1}, {2}, {3}).")]
+    DatabaseBallingSetValTableNegativeValue(String, i64, i64, i64),
 
     /// Balling set value table contains too many rows.
-    #[error("Balling set value table contains too many rows ({0}). Permissible maximum is {1}.")]
-    DatabaseBallingSetValTableContainsTooManyRows(u64, u64),
+    #[error(
+        "[{0}] Balling set value table contains too many rows ({1}). Permissible maximum is {2}."
+    )]
+    DatabaseBallingSetValTableContainsTooManyRows(String, u64, u64),
 
     /// Balling dosing log table contains too many rows.
-    #[error("Balling dosing log table contains too many rows ({0}). Permissible maximum is {1}.")]
-    DatabaseBallingDosingLogTableContainsTooManyRows(u64, u64),
+    #[error(
+        "[{0}] Balling dosing log table contains too many rows ({1}). Permissible maximum is {2}."
+    )]
+    DatabaseBallingDosingLogTableContainsTooManyRows(String, u64, u64),
 
     /// Schedule table may be inconsistent - it contains NULL values.
-    #[error("Schedule table may be inconsistent - it contains {0} NULL values.")]
-    DatabaseScheduleTableContainsNull(i64),
+    #[error("[{0}] Schedule table may be inconsistent - it contains {1} NULL values.")]
+    DatabaseScheduleTableContainsNull(String, i64),
 
     /// Schedule table may be inconsistent - invalid answer from database to query.
-    #[error("Schedule table may be inconsistent - database responded with negative value(s) ({0}, {1}).")]
-    DatabaseScheduleTableNegativeValue(i64, i64),
+    #[error("[{0}] Schedule table may be inconsistent - database responded with negative value(s) ({1}, {2}).")]
+    DatabaseScheduleTableNegativeValue(String, i64, i64),
 
     /// The schedule table contains too many rows.
-    #[error("Schedule table contains too many rows ({0}). Permissible maximum is {1}.")]
-    DatabaseScheduleTableContainsTooManyRows(u64, u64),
+    #[error("[{0}] Schedule table contains too many rows ({1}). Permissible maximum is {2}.")]
+    DatabaseScheduleTableContainsTooManyRows(String, u64, u64),
 
     /// Data table may be inconsistent - invalid answer from database to query.
-    #[error("Could not check data table for number of rows.")]
+    #[error("[{location}] Could not check data table for number of rows.")]
     DatabaseCheckDataFailure {
+        location: String,
+
         #[source]
         source: Box<SqlInterfaceError>,
     },
 
     /// Data table may be inconsistent - invalid answer from database to query.
-    #[error("Data table may be inconsistent - database responded with negative value ({0}).")]
-    DatabaseDataTableNegativeValue(i64),
+    #[error(
+        "[{0}] Data table may be inconsistent - database responded with negative value ({1})."
+    )]
+    DatabaseDataTableNegativeValue(String, i64),
 
     /// The data table contains too many rows.
-    #[error("Data table contains too many rows ({0}). Permissible maximum is {1}.")]
-    DatabaseDataTableContainsTooManyRows(u64, u64),
+    #[error("[{0}] Data table contains too many rows ({1}). Permissible maximum is {2}.")]
+    DatabaseDataTableContainsTooManyRows(String, u64, u64),
 
     /// Heating set value table may be inconsistent - it contains NULL values.
-    #[error("Heating set value table may be inconsistent - it contains {0} NULL values.")]
-    DatabaseHeatingSetValTableContainsNull(i64),
+    #[error("[{0}] Heating set value table may be inconsistent - it contains {1} NULL values.")]
+    DatabaseHeatingSetValTableContainsNull(String, i64),
 
     /// Heating set value table may be inconsistent - invalid answer from database to query.
-    #[error("Heating set value table may be inconsistent - database responded with negative value(s) ({0}, {1}).")]
-    DatabaseHeatingSetValTableNegativeValue(i64, i64),
+    #[error("[{0}] Heating set value table may be inconsistent - database responded with negative value(s) ({1}, {2}).")]
+    DatabaseHeatingSetValTableNegativeValue(String, i64, i64),
 
     /// Heating set value table contains too many rows.
-    #[error("Heating set value table contains too many rows ({0}). Permissible maximum is 1.")]
-    DatabaseHeatingSetValTableContainsTooManyRows(u64),
+    #[error(
+        "[{0}] Heating set value table contains too many rows ({1}). Permissible maximum is 1."
+    )]
+    DatabaseHeatingSetValTableContainsTooManyRows(String, u64),
 
     /// Heating stats table may be inconsistent - it contains NULL values.
-    #[error("Heating stats table may be inconsistent - it contains {0} NULL values.")]
-    DatabaseHeatingStatsTableContainsNull(i64),
+    #[error("[{0}] Heating stats table may be inconsistent - it contains {1} NULL values.")]
+    DatabaseHeatingStatsTableContainsNull(String, i64),
 
     /// Heating statistics table may be inconsistent - invalid answer from database to query.
-    #[error("Heating set value table may be inconsistent - database responded with negative value(s) ({0}, {1}).")]
-    DatabaseHeatingStatsTableNegativeValue(i64, i64),
+    #[error("[{0}] Heating set value table may be inconsistent - database responded with negative value(s) ({1}, {2}).")]
+    DatabaseHeatingStatsTableNegativeValue(String, i64, i64),
 
     /// Heating stats table contains too many rows.
-    #[error("Heating statistics table contains too many rows ({0}). Permissible maximum is {1}.")]
-    DatabaseHeatingStatsTableContainsTooManyRows(u64, u64),
+    #[error(
+        "[{0}] Heating statistics table contains too many rows ({1}). Permissible maximum is {2}."
+    )]
+    DatabaseHeatingStatsTableContainsTooManyRows(String, u64, u64),
 
     /// Ventilation set value table may be inconsistent - it contains NULL values.
-    #[error("Ventilation set value table may be inconsistent - it contains {0} NULL values.")]
-    DatabaseVentilationSetValTableContainsNull(i64),
+    #[error(
+        "[{0}] Ventilation set value table may be inconsistent - it contains {1} NULL values."
+    )]
+    DatabaseVentilationSetValTableContainsNull(String, i64),
 
     /// Ventilation set value table may be inconsistent - invalid answer from database to query.
-    #[error("Ventilation set value table may be inconsistent - database responded with negative value(s) ({0}, {1}).")]
-    DatabaseVentilationSetValTableNegativeValue(i64, i64),
+    #[error("[{0}] Ventilation set value table may be inconsistent - database responded with negative value(s) ({1}, {2}).")]
+    DatabaseVentilationSetValTableNegativeValue(String, i64, i64),
 
     /// Ventilation set value table contains too many rows.
-    #[error("Ventilation set value table contains too many rows ({0}). Permissible maximum is 1.")]
-    DatabaseVentilationSetValTableContainsTooManyRows(u64),
+    #[error(
+        "[{0}] Ventilation set value table contains too many rows ({1}). Permissible maximum is 1."
+    )]
+    DatabaseVentilationSetValTableContainsTooManyRows(String, u64),
 
     /// Refill table may be inconsistent - invalid answer from database to query.
-    #[error("Refill table may be inconsistent - database responded with negative value ({0}).")]
-    DatabaseRefillTableNegativeValue(i64),
+    #[error(
+        "[{0}] Refill table may be inconsistent - database responded with negative value ({1})."
+    )]
+    DatabaseRefillTableNegativeValue(String, i64),
 
     /// Refill table contains too many rows.
-    #[error("Refill table contains too many rows ({0}). Permissible maximum is {1}.")]
-    DatabaseRefillTableContainsTooManyRows(u64, u64),
+    #[error("[{0}] Refill table contains too many rows ({1}). Permissible maximum is {2}.")]
+    DatabaseRefillTableContainsTooManyRows(String, u64, u64),
 
     /// Feed set value table may be inconsistent - it contains NULL values.
-    #[error("Feed set value table {0} may be inconsistent - it contains {1} NULL values.")]
-    DatabaseFeedSetValTableContainsNull(String, i64),
+    #[error("[{0}] Feed set value table {1} may be inconsistent - it contains {2} NULL values.")]
+    DatabaseFeedSetValTableContainsNull(String, String, i64),
 
     /// Feed set value table contains too many rows.
-    #[error("Feed table {0} contains too many rows ({1}). Permissible maximum is {2}.")]
-    DatabaseFeedTableContainsTooManyRows(String, u64, u64),
+    #[error("[{0}] Feed table {1} contains too many rows ({2}). Permissible maximum is {3}.")]
+    DatabaseFeedTableContainsTooManyRows(String, String, u64, u64),
 
     /// Could not check balling set value table for NULL values or number of rows.
     #[error(
-        "Could not check balling set value table (existence of NULL values and number of rows)."
+        "[{location}] Could not check balling set value table (existence of NULL values and number of rows)."
     )]
     DatabaseCheckBallingSetValsFailure {
+        location: String,
+
         #[source]
         source: Box<SqlInterfaceError>,
     },
 
     /// Could not check schedule table for NULL values or number of rows.
-    #[error("Could not check schedule table for NULL values or number of rows.")]
+    #[error("[{location}] Could not check schedule table for NULL values or number of rows.")]
     DatabaseCheckScheduleFailure {
+        location: String,
+
         #[source]
         source: Box<SqlInterfaceError>,
     },
 
     /// Could not check heating set value table for NULL values or number of rows.
-    #[error("Could not check heating set value table for NULL values or number of rows.")]
+    #[error(
+        "[{location}] Could not check heating set value table for NULL values or number of rows."
+    )]
     DatabaseCheckHeatingSetValsFailure {
+        location: String,
+
         #[source]
         source: Box<SqlInterfaceError>,
     },
 
     /// Could not check heating stats table for NULL values or number of rows.
-    #[error("Could not check heating stats table for NULL values or number of rows.")]
+    #[error("[{location}] Could not check heating stats table for NULL values or number of rows.")]
     DatabaseCheckHeatingStatsFailure {
+        location: String,
+
         #[source]
         source: Box<SqlInterfaceError>,
     },
 
     /// Could not check ventilation set value table for NULL values or number of rows.
-    #[error("Could not check ventilation set value table for NULL values or number of rows.")]
+    #[error("[{location}] Could not check ventilation set value table for NULL values or number of rows.")]
     DatabaseCheckVentilationSetValsFailure {
+        location: String,
+
         #[source]
         source: Box<SqlInterfaceError>,
     },
 
     /// Could not check refill table for number of rows.
-    #[error("Could not check refill table for number of rows.")]
+    #[error("[{location}] Could not check refill table for number of rows.")]
     DatabaseCheckRefillFailure {
+        location: String,
+
         #[source]
         source: Box<SqlInterfaceError>,
     },
 
     /// Could not check feed set value table for NULL values or number of rows.
     #[error(
-        "Could not check feed set value table {table_name} for NULL values or number of rows."
+        "[{location}] Could not check feed set value table {table_name} for NULL values or number of rows."
     )]
     DatabaseCheckFeedSetValsFailure {
+        location: String,
         table_name: String,
         #[source]
         source: Box<SqlInterfaceError>,
     },
 
     /// A feed set value table may be inconsistent - invalid answer from database to query.
-    #[error("Feed set value table {0} may be inconsistent - database responded with negative value(s) ({1}, {2}).")]
-    DatabaseFeedTableNegativeValue(String, i64, i64),
+    #[error("[{0}] Feed set value table {1} may be inconsistent - database responded with negative value(s) ({2}, {3}).")]
+    DatabaseFeedTableNegativeValue(String, String, i64, i64),
 
     #[cfg(test)]
-    #[error("Error when inserting heating set values into database using query: {0}")]
-    InsertHeatingSetValuesFailure(String),
+    #[error("[{0}] Error when inserting heating set values into database using query: {1}")]
+    InsertHeatingSetValuesFailure(String, String),
 
     #[cfg(test)]
-    #[error("Error when inserting ventilation set values into database using query: {0}")]
-    InsertVentilationSetValuesFailure(String),
+    #[error("[{0}] Error when inserting ventilation set values into database using query: {1}")]
+    InsertVentilationSetValuesFailure(String, String),
 
     #[cfg(test)]
-    #[error("Error occurred when trying to truncate table {0} of database.")]
-    TruncateTableFailure(String),
+    #[error("[{0}] Error occurred when trying to truncate table {1} of database.")]
+    TruncateTableFailure(String, String),
 
     #[cfg(test)]
-    #[error("This is a mock error generated for testing purposes in {0}.")]
+    #[error("[{0}] This is a mock error generated for testing purposes.")]
     MockError(String),
 
     #[cfg(test)]
-    #[error("Error when inserting Balling pump configuration into database using query: {0}")]
-    InsertBallingPumpConfigurationFailure(String),
+    #[error(
+        "[{0}] Error when inserting Balling pump configuration into database using query: {1}"
+    )]
+    InsertBallingPumpConfigurationFailure(String, String),
 
     #[cfg(test)]
-    #[error("Database responded with empty response to queries: {0} {1}")]
-    SingleDataFrameRequestEmptyResponse(String, String),
+    #[error("[{0}] Database responded with empty response to queries: {1} {2}")]
+    SingleDataFrameRequestEmptyResponse(String, String, String),
 
     #[cfg(test)]
-    #[error("Database responded with multiple responses to queries: {0} {1}")]
-    SingleDataFrameRequestNoSingleResponse(String, String),
+    #[error("[{0}] Database responded with multiple responses to queries: {1} {2}")]
+    SingleDataFrameRequestNoSingleResponse(String, String, String),
 }

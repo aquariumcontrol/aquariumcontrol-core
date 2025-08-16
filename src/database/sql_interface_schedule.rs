@@ -134,6 +134,7 @@ impl ScheduleEntry {
             Ok(c) => c,
             Err(_) => {
                 return Err(SqlInterfaceError::ScheduleTypeConversionFailure(
+                    module_path!().to_string(),
                     sql_schedule_entry.schedule_type,
                 ));
             }
@@ -144,6 +145,7 @@ impl ScheduleEntry {
                 Ok(c) => c,
                 Err(_) => {
                     return Err(SqlInterfaceError::ScheduleStartTimeConversionFailure(
+                        module_path!().to_string(),
                         sql_schedule_entry.start_time,
                     ));
                 }
@@ -154,6 +156,7 @@ impl ScheduleEntry {
                 Ok(c) => c,
                 Err(_) => {
                     return Err(SqlInterfaceError::ScheduleStopTimeConversionFailure(
+                        module_path!().to_string(),
                         sql_schedule_entry.stop_time,
                     ));
                 }
@@ -214,6 +217,7 @@ impl SqlInterfaceSchedule {
             SQL_QUERY_CHECK_SCHEDULE_NULL,
         )
         .map_err(|e| SqlInterfaceError::DatabaseCheckScheduleFailure {
+            location: module_path!().to_string(),
             source: Box::new(e),
         })?;
         let count_rows = SqlInterface::get_single_integer_from_database(
@@ -221,12 +225,14 @@ impl SqlInterfaceSchedule {
             SQL_QUERY_CHECK_SCHEDULE_COUNT,
         )
         .map_err(|e| SqlInterfaceError::DatabaseCheckScheduleFailure {
+            location: module_path!().to_string(),
             source: Box::new(e),
         })?;
 
         // check the query results
         if count_null_values < 0 || count_rows < 0 {
             return Err(SqlInterfaceError::DatabaseScheduleTableNegativeValue(
+                module_path!().to_string(),
                 count_null_values,
                 count_rows,
             ));
@@ -234,6 +240,7 @@ impl SqlInterfaceSchedule {
 
         if count_null_values > 0 {
             return Err(SqlInterfaceError::DatabaseScheduleTableContainsNull(
+                module_path!().to_string(),
                 count_null_values,
             ));
         }
@@ -242,6 +249,7 @@ impl SqlInterfaceSchedule {
             // execute the check only when the limit is greater than zero
             if count_rows > max_rows_schedule.cast_signed() {
                 return Err(SqlInterfaceError::DatabaseScheduleTableContainsTooManyRows(
+                    module_path!().to_string(),
                     count_rows.cast_unsigned(),
                     max_rows_schedule,
                 ));
@@ -281,6 +289,7 @@ impl SqlInterfaceSchedule {
             Ok(c) => c,
             Err(e) => {
                 return Err(vec![SqlInterfaceError::ScheduleRequestFailure {
+                    location: module_path!().to_string(),
                     query: sql_query_strings::SQL_QUERY_READ_SCHEDULE.to_string(),
                     source: e,
                 }]);
@@ -299,6 +308,7 @@ impl SqlInterfaceSchedule {
                     errors.push(
                         // collect the error
                         SqlInterfaceError::ScheduleProcessingFailure {
+                            location: module_path!().to_string(),
                             source: Box::new(e),
                         },
                     );
@@ -330,6 +340,7 @@ impl SqlInterfaceSchedule {
             }
         }
         Err(SqlInterfaceError::ScheduleTypeNotFound(
+            module_path!().to_string(),
             schedule_type.to_string(),
         ))
     }
@@ -467,6 +478,7 @@ pub mod tests {
         assert!(matches!(
             test_result,
             Err(SqlInterfaceError::DatabaseScheduleTableContainsTooManyRows(
+                _,
                 _,
                 _
             ))

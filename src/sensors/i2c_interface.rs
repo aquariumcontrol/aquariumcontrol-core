@@ -161,9 +161,15 @@ impl I2cInterface {
     /// In case of success, a new `I2cInterface` struct, ready to communicate with the I2C bus participants.
     /// An `I2cError` otherwise.
     pub fn new(config: I2cInterfaceConfig) -> Result<I2cInterface, I2cError> {
-        let i2c = I2c::new().map_err(|e| InitializationFailure { source: e })?;
+        let i2c = I2c::new().map_err(|e| InitializationFailure {
+            location: module_path!().to_string(),
+            source: e,
+        })?;
         i2c.set_timeout(config.timeout_transaction)
-            .map_err(|e| SetTimeoutError { source: e })?;
+            .map_err(|e| SetTimeoutError {
+                location: module_path!().to_string(),
+                source: e,
+            })?;
 
         Ok(I2cInterface {
             i2c,
@@ -202,14 +208,18 @@ impl I2cInterface {
         self.i2c
             .set_slave_address(i2c_request.i2c_address)
             .map_err(|e| I2cError::SetAddressError {
+                location: module_path!().to_string(),
                 address: i2c_request.i2c_address,
                 source: e,
             })?;
 
-        let realized_write_len = self
-            .i2c
-            .write(&i2c_request.send_buf)
-            .map_err(|e| I2cError::WriteFailure { source: e })?;
+        let realized_write_len =
+            self.i2c
+                .write(&i2c_request.send_buf)
+                .map_err(|e| I2cError::WriteFailure {
+                    location: module_path!().to_string(),
+                    source: e,
+                })?;
         if realized_write_len != i2c_request.send_buf.len() {
             return Err(I2cError::InsufficientWrite(
                 i2c_request.send_buf.len(),
@@ -222,10 +232,13 @@ impl I2cInterface {
 
         let mut read_buffer = vec![0u8; i2c_request.expected_response_length];
 
-        let received_message_length = self
-            .i2c
-            .read(&mut read_buffer)
-            .map_err(|e| I2cError::InsufficientRead { source: e })?;
+        let received_message_length =
+            self.i2c
+                .read(&mut read_buffer)
+                .map_err(|e| I2cError::InsufficientRead {
+                    location: module_path!().to_string(),
+                    source: e,
+                })?;
         if received_message_length != i2c_request.expected_response_length {
             Err(I2cError::IncorrectResponseLength(
                 i2c_request.expected_response_length,

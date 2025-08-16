@@ -161,12 +161,20 @@ impl FoodInjection {
                             target_actuator_states.target_skimmer_state,
                             AquariumDevice::Skimmer
                         );
-                        errors.push(FoodInjectionError::RelayManagerSend(device.clone(), e));
+                        errors.push(FoodInjectionError::RelayManagerSend {
+                            location: module_path!().to_string(),
+                            device: device.clone(),
+                            source: e,
+                        });
                     } else if let Err(e) = rx_from_relay_manager.recv() {
                         println!(
                             "Encountered error when receiving command to relay manager: {e:?}"
                         );
-                        errors.push(FoodInjectionError::RelayManagerReceive(device.clone(), e));
+                        errors.push(FoodInjectionError::RelayManagerReceive {
+                            location: module_path!().to_string(),
+                            device: device.clone(),
+                            source: e,
+                        });
                     } else {
                         // Only update state on success
                         println!(
@@ -177,7 +185,9 @@ impl FoodInjection {
                     }
                 }
                 // Handle undefined state by pushing a specific error.
-                _ => errors.push(FoodInjectionError::UndefinedTargetStateSkimmer),
+                _ => errors.push(FoodInjectionError::UndefinedTargetStateSkimmer(
+                    module_path!().to_string(),
+                )),
             }
         }
 
@@ -202,16 +212,26 @@ impl FoodInjection {
                             target_actuator_states.target_main_pump1_state,
                             AquariumDevice::MainPump1
                         );
-                        errors.push(FoodInjectionError::RelayManagerSend(device.clone(), e));
+                        errors.push(FoodInjectionError::RelayManagerSend {
+                            location: module_path!().to_string(),
+                            device: device.clone(),
+                            source: e,
+                        });
                     } else if let Err(e) = rx_from_relay_manager.recv() {
-                        errors.push(FoodInjectionError::RelayManagerReceive(device.clone(), e));
+                        errors.push(FoodInjectionError::RelayManagerReceive {
+                            location: module_path!().to_string(),
+                            device: device.clone(),
+                            source: e,
+                        });
                     } else {
                         // Only update state on success
                         self.main_pump1_state = target_actuator_states.target_main_pump1_state;
                     }
                 }
                 // Handle undefined state by pushing a specific error.
-                _ => errors.push(FoodInjectionError::UndefinedTargetStateMainPump1),
+                _ => errors.push(FoodInjectionError::UndefinedTargetStateMainPump1(
+                    module_path!().to_string(),
+                )),
             }
         }
 
@@ -236,16 +256,26 @@ impl FoodInjection {
                             target_actuator_states.target_main_pump2_state,
                             AquariumDevice::MainPump2
                         );
-                        errors.push(FoodInjectionError::RelayManagerSend(device.clone(), e));
+                        errors.push(FoodInjectionError::RelayManagerSend {
+                            location: module_path!().to_string(),
+                            device: device.clone(),
+                            source: e,
+                        });
                     } else if let Err(e) = rx_from_relay_manager.recv() {
-                        errors.push(FoodInjectionError::RelayManagerReceive(device.clone(), e));
+                        errors.push(FoodInjectionError::RelayManagerReceive {
+                            location: module_path!().to_string(),
+                            device: device.clone(),
+                            source: e,
+                        });
                     } else {
                         // Only update state on success
                         self.main_pump2_state = target_actuator_states.target_main_pump2_state;
                     }
                 }
                 // Handle undefined state by pushing a specific error.
-                _ => errors.push(FoodInjectionError::UndefinedTargetStateMainPump2),
+                _ => errors.push(FoodInjectionError::UndefinedTargetStateMainPump2(
+                    module_path!().to_string(),
+                )),
             }
         }
 
@@ -270,16 +300,26 @@ impl FoodInjection {
                             target_actuator_states.target_aux_pump1_state,
                             AquariumDevice::AuxPump1
                         );
-                        errors.push(FoodInjectionError::RelayManagerSend(device.clone(), e));
+                        errors.push(FoodInjectionError::RelayManagerSend {
+                            location: module_path!().to_string(),
+                            device: device.clone(),
+                            source: e,
+                        });
                     } else if let Err(e) = rx_from_relay_manager.recv() {
-                        errors.push(FoodInjectionError::RelayManagerReceive(device.clone(), e));
+                        errors.push(FoodInjectionError::RelayManagerReceive {
+                            location: module_path!().to_string(),
+                            device: device.clone(),
+                            source: e,
+                        });
                     } else {
                         // Only update state on success
                         self.aux_pump1_state = target_actuator_states.target_aux_pump1_state;
                     }
                 }
                 // Handle undefined state by pushing a specific error.
-                _ => errors.push(FoodInjectionError::UndefinedTargetStateAuxPump1),
+                _ => errors.push(FoodInjectionError::UndefinedTargetStateAuxPump1(
+                    module_path!().to_string(),
+                )),
             }
         }
 
@@ -304,16 +344,26 @@ impl FoodInjection {
                             target_actuator_states.target_aux_pump2_state,
                             AquariumDevice::AuxPump2
                         );
-                        errors.push(FoodInjectionError::RelayManagerSend(device.clone(), e));
+                        errors.push(FoodInjectionError::RelayManagerSend {
+                            location: module_path!().to_string(),
+                            device: device.clone(),
+                            source: e,
+                        });
                     } else if let Err(e) = rx_from_relay_manager.recv() {
-                        errors.push(FoodInjectionError::RelayManagerReceive(device.clone(), e));
+                        errors.push(FoodInjectionError::RelayManagerReceive {
+                            location: module_path!().to_string(),
+                            device: device.clone(),
+                            source: e,
+                        });
                     } else {
                         // Only update state on success
                         self.aux_pump2_state = target_actuator_states.target_aux_pump2_state;
                     }
                 }
                 // Handle undefined state by pushing a specific error.
-                _ => errors.push(FoodInjectionError::UndefinedTargetStateAuxPump2),
+                _ => errors.push(FoodInjectionError::UndefinedTargetStateAuxPump2(
+                    module_path!().to_string(),
+                )),
             }
         }
 
@@ -338,16 +388,26 @@ impl FoodInjection {
                             target_actuator_states.target_feeder_state,
                             AquariumDevice::Feeder
                         );
-                        errors.push(FoodInjectionError::RelayManagerSend(device.clone(), e));
+                        errors.push(FoodInjectionError::RelayManagerSend {
+                            location: module_path!().to_string(),
+                            device: device.clone(),
+                            source: e,
+                        });
                     } else if let Err(e) = rx_from_relay_manager.recv() {
-                        errors.push(FoodInjectionError::RelayManagerReceive(device.clone(), e));
+                        errors.push(FoodInjectionError::RelayManagerReceive {
+                            location: module_path!().to_string(),
+                            device: device.clone(),
+                            source: e,
+                        });
                     } else {
                         // Only update state on success
                         self.feeder_state = target_actuator_states.target_feeder_state;
                     }
                 }
                 // Handle undefined state by pushing a specific error.
-                _ => errors.push(FoodInjectionError::UndefinedTargetStateFeeder),
+                _ => errors.push(FoodInjectionError::UndefinedTargetStateFeeder(
+                    module_path!().to_string(),
+                )),
             }
         }
 

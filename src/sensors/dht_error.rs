@@ -12,8 +12,11 @@ use thiserror::Error;
 pub enum DhtError {
     /// Vcc pin acquisition failed
     #[cfg(all(target_os = "linux", feature = "target_hw"))]
-    #[error("Could not get pin {vcc_pin_nr} from GPIO interface for DHT power supply.")]
+    #[error(
+        "[{location}] Could not get pin {vcc_pin_nr} from GPIO interface for DHT power supply."
+    )]
     VccPinAcquisitionFailed {
+        location: String,
         vcc_pin_nr: u8,
 
         #[source]
@@ -22,8 +25,9 @@ pub enum DhtError {
 
     /// Data pin acquisition for output failed
     #[cfg(all(target_os = "linux", feature = "target_hw"))]
-    #[error("Failure to acquire pin {data_pin_nr} for triggering DHT sensor")]
+    #[error("[{location}] Failure to acquire pin {data_pin_nr} for triggering DHT sensor")]
     DataPinOutputAcquisitionFailed {
+        location: String,
         data_pin_nr: u8,
 
         #[source]
@@ -32,8 +36,9 @@ pub enum DhtError {
 
     /// Data pin acquisition for input failed
     #[cfg(all(target_os = "linux", feature = "target_hw"))]
-    #[error("Failure to acquire pin {input_pin_nr} for reading from DHT sensor")]
+    #[error("[{location}] Failure to acquire pin {input_pin_nr} for reading from DHT sensor")]
     DataPinInputAcquisitionFailed {
+        location: String,
         input_pin_nr: u8,
 
         #[source]
@@ -42,52 +47,53 @@ pub enum DhtError {
 
     /// Could not set interrupt
     #[cfg(all(target_os = "linux", feature = "target_hw"))]
-    #[error("Could not set interrupt")]
-    CouldNotSetInterrupt,
+    #[error("[{0}] Could not set interrupt")]
+    CouldNotSetInterrupt(String),
 
     /// Could not clear the interrupt
     #[cfg(all(target_os = "linux", feature = "target_hw"))]
-    #[error("Could not clear the interrupt")]
-    CouldNotClearInterrupt,
+    #[error("[{0}] Could not clear the interrupt")]
+    CouldNotClearInterrupt(String),
 
     // execution of interrupt failed
     #[cfg(all(target_os = "linux", feature = "target_hw"))]
-    #[error("Execution of interrupt failed")]
-    InterruptFailed,
+    #[error("[{0}] Execution of interrupt failed")]
+    InterruptFailed(String),
 
     // transmission yields a wrong number of valid bits
     #[cfg(all(target_os = "linux", feature = "target_hw"))]
-    #[error("Incorrect number of valid ticks received: target={0}, measured={1}.")]
-    WrongNumberOfValidTicks(usize, usize),
+    #[error("[{0}] Incorrect number of valid ticks received: target={1}, measured={2}.")]
+    WrongNumberOfValidTicks(String, usize, usize),
 
     /// the error occurred during the calculation of the checksum
-    #[error("An error occurred during the calculation of the checksum")]
-    ChecksumCalculationError,
+    #[error("[{0}] An error occurred during the calculation of the checksum")]
+    ChecksumCalculationError(String),
 
     /// calculated checksum does not match the received value
-    #[error("Calculated checksum ({0}) does not match the received value ({1})")]
-    ChecksumError(u8, u8),
+    #[error("[{0}] Calculated checksum ({1}) does not match the received value ({2})")]
+    ChecksumError(String, u8, u8),
 
     /// timeout during transmission of data
     #[allow(unused)]
-    #[error("Timeout during transmission of data")]
-    Timeout,
+    #[error("[{0}] Timeout during transmission of data")]
+    Timeout(String),
 
     /// the temperature value is out of range
-    #[error("The temperature value is out of range (measured {0}, limits are {1}, {2})")]
-    TemperatureOutOfRange(f32, f32, f32),
+    #[error("[{0}] The temperature value is out of range (measured {1}, limits are {2}, {3})")]
+    TemperatureOutOfRange(String, f32, f32, f32),
 
     /// humidity value is out of range
-    #[error("The humidity is out of range (measured {0}, limits are {1}, {2})")]
-    HumidityOutOfRange(f32, f32, f32),
+    #[error("[{0}] The humidity is out of range (measured {1}, limits are {2}, {3})")]
+    HumidityOutOfRange(String, f32, f32, f32),
 
     /// reported from low-level reading when called without gpio lib handle available
-    #[error("This SW is not compiled for this platform.")]
-    IncorrectPlatform,
+    #[error("[{0}] This SW is not compiled for this platform.")]
+    IncorrectPlatform(String),
 
     /// The measurement has been repeated several times without success.
-    #[error("failed to read from DHT sensor (after {retry_counter} retries")]
+    #[error("[{location}] Failed to read from DHT sensor (after {retry_counter} retries")]
     FailedAfterRetries {
+        location: String,
         retry_counter: u64,
 
         #[source]

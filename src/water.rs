@@ -14,6 +14,6 @@ pub mod refill;
 pub mod water_injection;
 
 /// Contains data definition between the main thread and trait implementation
-pub mod refill_errors;
+pub mod refill_error_states;
 pub mod refill_monitor_view;
 pub mod refill_stats_data;

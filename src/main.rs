@@ -463,23 +463,33 @@ fn run() -> Result<(), StartupError> {
     }
 
     // connect to SQL database, subsequently set up component-specific interfaces
-    let mut sql_interface = SqlInterface::new(config.sql_interface)
-        .map_err(|e| StartupError::Database { source: e })?;
+    let mut sql_interface =
+        SqlInterface::new(config.sql_interface).map_err(|e| StartupError::Database {
+            source: Box::new(e),
+        })?;
 
     let sql_interface_schedule =
-        SqlInterfaceSchedule::new(sql_interface.get_connection(), max_rows_schedule)
-            .map_err(|e| StartupError::Database { source: e })?;
+        SqlInterfaceSchedule::new(sql_interface.get_connection(), max_rows_schedule).map_err(
+            |e| StartupError::Database {
+                source: Box::new(e),
+            },
+        )?;
 
     let sql_interface_balling = SqlInterfaceBalling::new(
         sql_interface.get_connection(),
         max_rows_balling_set_values,
         max_rows_balling_dosing_log,
     )
-    .map_err(|e| StartupError::Database { source: e })?;
+    .map_err(|e| StartupError::Database {
+        source: Box::new(e),
+    })?;
 
     let sql_interface_refill: Box<dyn DatabaseInterfaceRefillTrait + Sync + Send> = Box::new(
-        SqlInterfaceRefill::new(sql_interface.get_connection(), max_rows_refill)
-            .map_err(|e| StartupError::Database { source: e })?,
+        SqlInterfaceRefill::new(sql_interface.get_connection(), max_rows_refill).map_err(|e| {
+            StartupError::Database {
+                source: Box::new(e),
+            }
+        })?,
     );
 
     let sql_interface_midnight_calculator =
@@ -490,7 +500,9 @@ fn run() -> Result<(), StartupError> {
         max_rows_heating_stats,
         Box::new(sql_interface_midnight_calculator),
     )
-    .map_err(|e| StartupError::Database { source: e })?;
+    .map_err(|e| StartupError::Database {
+        source: Box::new(e),
+    })?;
 
     let sql_interface_feed: Box<dyn DatabaseInterfaceFeedTrait + Sync + Send> = Box::new(
         SqlInterfaceFeed::new(
@@ -499,15 +511,21 @@ fn run() -> Result<(), StartupError> {
             max_rows_feed_schedule,
             max_rows_feed_log,
         )
-        .map_err(|e| StartupError::Database { source: e })?,
+        .map_err(|e| StartupError::Database {
+            source: Box::new(e),
+        })?,
     );
 
     let sql_interface_data = SqlInterfaceData::new(sql_interface.get_connection(), max_rows_data)
-        .map_err(|e| StartupError::Database { source: e })?;
+        .map_err(|e| StartupError::Database {
+        source: Box::new(e),
+    })?;
 
     let tables = sql_interface
         .get_tables()
-        .map_err(|e| StartupError::Database { source: e })?;
+        .map_err(|e| StartupError::Database {
+            source: Box::new(e),
+        })?;
 
     match sql_interface.get_hash_from_database(&version_information) {
         Ok(c) => {
@@ -522,24 +540,33 @@ fn run() -> Result<(), StartupError> {
             }
         }
         Err(e) => {
-            if matches!(e, SqlInterfaceError::SingleVersionRequestMultipleResults(_)) {
+            if matches!(
+                e,
+                SqlInterfaceError::SingleVersionRequestMultipleResults(_, _)
+            ) {
                 warn!(
                     target: module_path!(),
                     "main: Found multiple hash values for version in database. Proceed with caution.");
             } else {
-                return Err(StartupError::Database { source: e });
+                return Err(StartupError::Database {
+                    source: Box::new(e),
+                });
             }
         }
     }
 
     let database = sql_interface
         .get_database()
-        .map_err(|e| StartupError::Database { source: e })?;
+        .map_err(|e| StartupError::Database {
+            source: Box::new(e),
+        })?;
     info!(target: module_path!(), "current database name is {database}");
 
     sql_interface
         .check_required_tables_existing()
-        .map_err(|e| StartupError::Database { source: e })?;
+        .map_err(|e| StartupError::Database {
+            source: Box::new(e),
+        })?;
     info!(target: module_path!(), "required tables are existing in database.");
 
     let mut tables_string: String = "read the following tables from database:".to_string();
@@ -1199,8 +1226,11 @@ fn run() -> Result<(), StartupError> {
     let mut refill = Refill::new(config.refill, sql_interface_refill, database_ping_duration);
 
     let mut heating_set_value_updater =
-        SqlInterfaceHeatingSetVals::new(sql_interface.get_connection(), &config.heating)
-            .map_err(|e| StartupError::Database { source: e })?;
+        SqlInterfaceHeatingSetVals::new(sql_interface.get_connection(), &config.heating).map_err(
+            |e| StartupError::Database {
+                source: Box::new(e),
+            },
+        )?;
 
     let mut heating = Heating::new(
         config.heating,
@@ -1212,7 +1242,9 @@ fn run() -> Result<(), StartupError> {
 
     let mut ventilation_set_value_updater =
         SqlInterfaceVentilationSetVals::new(sql_interface.get_connection(), &config.ventilation)
-            .map_err(|e| StartupError::Database { source: e })?;
+            .map_err(|e| StartupError::Database {
+                source: Box::new(e),
+            })?;
 
     let mut ventilation = Ventilation::new(config.ventilation);
     let mut balling = Balling::new(

@@ -65,6 +65,7 @@ impl SqlInterfaceHeatingSetVals {
             SQL_QUERY_CHECK_HEATING_SETVALS_NULL,
         )
         .map_err(|e| SqlInterfaceError::DatabaseCheckHeatingSetValsFailure {
+            location: module_path!().to_string(),
             source: Box::new(e),
         })?;
         let count_rows = SqlInterface::get_single_integer_from_database(
@@ -72,12 +73,14 @@ impl SqlInterfaceHeatingSetVals {
             SQL_QUERY_CHECK_HEATING_SETVALS_COUNT,
         )
         .map_err(|e| SqlInterfaceError::DatabaseCheckHeatingSetValsFailure {
+            location: module_path!().to_string(),
             source: Box::new(e),
         })?;
 
         // check the query results
         if count_null_values < 0 || count_rows < 0 {
             return Err(SqlInterfaceError::DatabaseHeatingSetValTableNegativeValue(
+                module_path!().to_string(),
                 count_null_values,
                 count_rows,
             ));
@@ -85,6 +88,7 @@ impl SqlInterfaceHeatingSetVals {
 
         if count_null_values > 0 {
             return Err(SqlInterfaceError::DatabaseHeatingSetValTableContainsNull(
+                module_path!().to_string(),
                 count_null_values,
             ));
         }
@@ -92,6 +96,7 @@ impl SqlInterfaceHeatingSetVals {
         if count_rows > 1 {
             return Err(
                 SqlInterfaceError::DatabaseHeatingSetValTableContainsTooManyRows(
+                    module_path!().to_string(),
                     count_rows.cast_unsigned(),
                 ),
             );
@@ -150,6 +155,7 @@ impl SqlInterfaceHeatingSetVals {
             Ok(c) => c,
             Err(_) => {
                 return Err(SqlInterfaceError::HeatingSetValsRequestFailure(
+                    module_path!().to_string(),
                     sql_query_strings::SQL_QUERY_READ_HEATING_SETVALS.to_string(),
                 ));
             }
@@ -163,6 +169,7 @@ impl SqlInterfaceHeatingSetVals {
         // return error if the query result contains more than one entry
         if sql_heating_setvals_array.len() > 1 {
             return Err(SqlInterfaceError::HeatingSetValsNoSingleResponse(
+                module_path!().to_string(),
                 sql_query_strings::SQL_QUERY_READ_HEATING_SETVALS.to_string(),
             ));
         }
@@ -175,6 +182,7 @@ impl SqlInterfaceHeatingSetVals {
             > heating_set_vals.heating_switch_off_temperature
         {
             return Err(SqlInterfaceError::HeatingSetValsInvalid(
+                module_path!().to_string(),
                 heating_set_vals.heating_switch_on_temperature,
                 heating_set_vals.heating_switch_off_temperature,
             ));
@@ -202,6 +210,7 @@ impl SqlInterfaceHeatingSetVals {
             Err(e) => {
                 println!("{e:?}");
                 Err(SqlInterfaceError::InsertHeatingSetValuesFailure(
+                    module_path!().to_string(),
                     sql_query_strings::SQL_QUERY_WRITE_HEATING_SETVALS.to_string(),
                 ))
             }
@@ -233,6 +242,7 @@ impl HeatingSetValueUpdaterTrait for SqlInterfaceHeatingSetVals {
                 Ok(()) // no heating set values found in database - maintain the configured ones
             }
             Err(e) => Err(SqlInterfaceError::HeatingSetValsUpdateFailure {
+                location: module_path!().to_string(),
                 source: Box::new(e),
             }),
         }
@@ -340,7 +350,7 @@ pub mod tests {
         // check if reading an invalid value combination returns an error
         assert!(matches!(
             sql_interface_heating_setvals.get_heating_set_values(),
-            Err(SqlInterfaceError::HeatingSetValsInvalid(_, _))
+            Err(SqlInterfaceError::HeatingSetValsInvalid(_, _, _))
         ));
         println!("* reading invalid heating set values succeeded.");
 
@@ -364,7 +374,7 @@ pub mod tests {
             SqlInterfaceHeatingSetVals::new(sql_interface.get_connection(), &config.heating);
         assert!(matches!(
             test_result,
-            Err(SqlInterfaceError::DatabaseHeatingSetValTableContainsTooManyRows(_))
+            Err(SqlInterfaceError::DatabaseHeatingSetValTableContainsTooManyRows(_, _))
         ));
         println!("* detecting too many rows succeeded.");
 

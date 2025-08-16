@@ -17,6 +17,8 @@ use crate::utilities::memory_config_check::MemoryConfigError;
 use crate::utilities::version_information::VersionInformationError;
 use thiserror::Error;
 
+/// Contains top-level error definitions for errors which may happen at startup.
+/// No additional parameter to identify the module is required here.
 #[derive(Error, Debug)]
 pub enum StartupError {
     /// Invalid command-line arguments
@@ -41,7 +43,7 @@ pub enum StartupError {
     #[error("A database error occurred.")]
     Database {
         #[source]
-        source: SqlInterfaceError,
+        source: Box<SqlInterfaceError>,
     },
 
     /// The Balling dosing configuration is invalid.

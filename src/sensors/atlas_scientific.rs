@@ -321,6 +321,7 @@ impl AtlasScientific {
         let first_character = buffer[atlas_scientific_constants::INDEX_FIRST_CHARACTER];
         if first_character != atlas_scientific_constants::MESSAGE_START_MAGIC {
             return Err(AtlasScientificError::FirstCharacterNotMagic(
+                module_path!().to_string(),
                 atlas_scientific_constants::MESSAGE_START_MAGIC,
                 first_character,
             ));
@@ -329,6 +330,7 @@ impl AtlasScientific {
         let last_character = buffer[atlas_scientific_constants::INDEX_LAST_CHARACTER];
         if last_character != atlas_scientific_constants::MESSAGE_FINISH_MAGIC {
             return Err(AtlasScientificError::LastCharacterNotMagic(
+                module_path!().to_string(),
                 atlas_scientific_constants::MESSAGE_FINISH_MAGIC,
                 last_character,
             ));
@@ -341,20 +343,31 @@ impl AtlasScientific {
         // third check: all characters in between belong to a number
         for character in numeric_content {
             if !Self::is_numeric(*character, !is_ph) {
-                return Err(AtlasScientificError::ContainsInvalidCharacter(*character));
+                return Err(AtlasScientificError::ContainsInvalidCharacter(
+                    module_path!().to_string(),
+                    *character,
+                ));
             }
         }
 
         // conversion to String
         let numeric_string = match str::from_utf8(numeric_content) {
             Ok(c) => c,
-            Err(e) => return Err(AtlasScientificError::InvalidUtf8Sequence { source: e }),
+            Err(e) => {
+                return Err(AtlasScientificError::InvalidUtf8Sequence {
+                    location: module_path!().to_string(),
+                    source: e,
+                })
+            }
         };
 
         // conversion to f32
         match &numeric_string.parse::<f32>() {
             Ok(c) => Ok(*c),
-            Err(e) => Err(AtlasScientificError::ConversionFailure { source: e.clone() }),
+            Err(e) => Err(AtlasScientificError::ConversionFailure {
+                location: module_path!().to_string(),
+                source: e.clone(),
+            }),
         }
     }
 
@@ -573,6 +586,7 @@ impl AtlasScientific {
                 Ok(mut water_temperature) => *water_temperature = result,
                 Err(_) => {
                     return Err(AtlasScientificError::CouldNotLockMutex {
+                        location: module_path!().to_string(),
                         signal: signal.clone(),
                     });
                 }
@@ -581,6 +595,7 @@ impl AtlasScientific {
                 Ok(mut ph) => *ph = result,
                 Err(_) => {
                     return Err(AtlasScientificError::CouldNotLockMutex {
+                        location: module_path!().to_string(),
                         signal: signal.clone(),
                     });
                 }
@@ -589,6 +604,7 @@ impl AtlasScientific {
                 Ok(mut conductivity) => *conductivity = result,
                 Err(_) => {
                     return Err(AtlasScientificError::CouldNotLockMutex {
+                        location: module_path!().to_string(),
                         signal: signal.clone(),
                     });
                 }
@@ -642,7 +658,7 @@ impl AtlasScientific {
         let max_mutex_access_duration =
             Duration::from_millis(atlas_scientific_constants::MAX_MUTEX_ACCESS_DURATION_MILLIS);
         let is_ph = matches!(signal, AquariumSignal::pH);
-        let mut result: AtlasScientificResult = Err(AtlasScientificError::NotInitialized);
+        let mut result: AtlasScientificResult = Err(AtlasScientificError::Initial);
 
         match rx_atlas_scientific_from_i2c_interface.try_recv() {
             Ok(i2c_result) => match i2c_result {
@@ -655,12 +671,14 @@ impl AtlasScientific {
                             match Self::check_response(response_buffer, is_ph) {
                                 Ok(value) => Ok(AtlasScientificResultData::new(value)),
                                 Err(e) => Err(AtlasScientificError::ResponseCheckFailed {
+                                    location: module_path!().to_string(),
                                     signal: signal.clone(),
                                     source: Box::new(e),
                                 }),
                             }
                         }
                         Err(e) => Err(AtlasScientificError::IncorrectBufferLength(
+                            module_path!().to_string(),
                             signal.clone(),
                             e.len(),
                         )),
@@ -696,6 +714,7 @@ impl AtlasScientific {
                 }
                 Err(e) => {
                     result = Err(AtlasScientificError::I2cCommunicationFailure {
+                        location: module_path!().to_string(),
                         signal: signal.clone(),
                         source: e,
                     })
@@ -703,10 +722,15 @@ impl AtlasScientific {
             },
             Err(e) => match e {
                 TryRecvError::Empty => {
-                    result = Err(AtlasScientificError::ChannelIsEmpty);
+                    result = Err(AtlasScientificError::ChannelIsEmpty(
+                        module_path!().to_string(),
+                    ));
                 }
                 TryRecvError::Disconnected => {
-                    result = Err(AtlasScientificError::ChannelIsDisconnected { source: e });
+                    result = Err(AtlasScientificError::ChannelIsDisconnected {
+                        location: module_path!().to_string(),
+                        source: e,
+                    });
                 }
             },
         }
@@ -815,11 +839,14 @@ impl AtlasScientific {
                             state_send_receive = false; // allow sending again
                         }
                         Err(e) => {
-                            if matches!(e, AtlasScientificError::ChannelIsEmpty) {
+                            if matches!(e, AtlasScientificError::ChannelIsEmpty(_)) {
                                 state_send_receive = true; // receive again
                             } else if matches!(
                                 e,
-                                AtlasScientificError::ChannelIsDisconnected { source: _ }
+                                AtlasScientificError::ChannelIsDisconnected {
+                                    location: _,
+                                    source: _
+                                }
                             ) {
                                 channel_is_disconnected = true;
                             } else {
@@ -965,7 +992,7 @@ pub mod tests {
 
         assert!(matches!(
             error_result,
-            AtlasScientificError::ContainsInvalidCharacter(_sign)
+            AtlasScientificError::ContainsInvalidCharacter(_, _sign)
         ));
     }
 
@@ -1042,6 +1069,7 @@ pub mod tests {
         assert!(matches!(
             error_result,
             AtlasScientificError::FirstCharacterNotMagic(
+                _,
                 atlas_scientific_constants::MESSAGE_START_MAGIC,
                 _incorrect_magic_front
             )
@@ -1071,6 +1099,7 @@ pub mod tests {
         assert!(matches!(
             error_result,
             AtlasScientificError::LastCharacterNotMagic(
+                _,
                 atlas_scientific_constants::MESSAGE_FINISH_MAGIC,
                 _incorrect_magic_rear
             )
@@ -1092,7 +1121,10 @@ pub mod tests {
         ];
         assert!(matches!(
             AtlasScientific::check_response(stimuli, false),
-            Err(AtlasScientificError::ConversionFailure { source: _ })
+            Err(AtlasScientificError::ConversionFailure {
+                location: _,
+                source: _
+            })
         ));
     }
 
@@ -1116,7 +1148,7 @@ pub mod tests {
 
         assert!(matches!(
             error_result,
-            AtlasScientificError::ContainsInvalidCharacter(b'A')
+            AtlasScientificError::ContainsInvalidCharacter(_, b'A')
         ));
     }
 
@@ -2141,7 +2173,11 @@ pub mod tests {
             result,
             Err(AtlasScientificError::CouldNotLockMutex { .. })
         ));
-        if let Err(AtlasScientificError::CouldNotLockMutex { signal }) = result {
+        if let Err(AtlasScientificError::CouldNotLockMutex {
+            location: _,
+            signal,
+        }) = result
+        {
             assert_eq!(signal, AquariumSignal::pH);
         }
     }
@@ -2272,7 +2308,9 @@ pub mod tests {
         #[cfg(all(target_os = "linux", not(feature = "target_hw")))]
         let mock_error = I2cError::WriteFailure;
 
-        let _ = tx.send(Err(mock_error)).unwrap();
+        let _ = tx
+            .send(Err(mock_error(module_path!().to_string())))
+            .unwrap();
 
         let result = atlas_scientific.receive_response_from_i2c_interface(
             &AquariumSignal::pH,
@@ -2303,7 +2341,10 @@ pub mod tests {
             &mutex_cond,
         );
 
-        assert!(matches!(result, Err(AtlasScientificError::ChannelIsEmpty)));
+        assert!(matches!(
+            result,
+            Err(AtlasScientificError::ChannelIsEmpty(_))
+        ));
     }
 
     #[test]

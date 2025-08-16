@@ -14,33 +14,37 @@ use thiserror::Error;
 #[derive(Debug, Error)]
 pub enum BallingError {
     /// Balling check interval is zero.
-    #[error("schedule check interval is zero - please assign a value > 0")]
-    ScheduleCheckIntervalZero,
+    #[error("[{0}] schedule check interval is zero - please assign a value > 0")]
+    ScheduleCheckIntervalZero(String),
 
     /// Could not get set values for a pump from database.
-    #[error("Could not get set values for pump {pump_id} from database.")]
+    #[error("[{location}] Could not get set values for pump {pump_id} from database.")]
     SetValueRetrievalError {
+        location: String,
         pump_id: u64,
 
         #[source]
-        source: SqlInterfaceError,
+        source: Box<SqlInterfaceError>,
     },
 
     /// Invalid dosing interval in configuration file
-    #[error("Invalid dosing interval for pump {0} in configuration file: Dosing interval ({1}) is shorter than check interval ({2}).")]
-    DosingIntervalShorterThanCheckInterval(u32, u32, u32),
+    #[error("[{0}] Invalid dosing interval for pump {1} in configuration file: Dosing interval ({2}) is shorter than check interval ({3}).")]
+    DosingIntervalShorterThanCheckInterval(String, u32, u32, u32),
 
     /// Countdown calculation encountered invalid pump id.
-    #[error("Countdown calculation encountered invalid pump id {0}")]
-    CountdownCalculationInvalidPumpId(i64),
+    #[error("[{0}] Countdown calculation encountered invalid pump id {1}")]
+    CountdownCalculationInvalidPumpId(String, i64),
 
     /// Invalid dosing interval in configuration.
-    #[error("Invalid dosing interval for pump #{0} in configuration.")]
-    InvalidDosingInterval(i64),
+    #[error("[{0}] Invalid dosing interval for pump #{1} in configuration.")]
+    InvalidDosingInterval(String, i64),
 
     /// Calculating duration since the last dosing event failed.
-    #[error("Calculating duration since last dosing event for pump {pump_id} failed.")]
+    #[error(
+        "[{location}] Calculating duration since last dosing event for pump {pump_id} failed."
+    )]
     CalculateDurationSinceLastDosingFailure {
+        location: String,
         pump_id: i64,
 
         #[source]
@@ -50,9 +54,10 @@ pub enum BallingError {
     /// Reading duration since the last dosing event from the database failed.
     #[error("Reading duration since last dosing event for pump {pump_id} from database failed.")]
     ReadDurationSinceLastDosingFailure {
+        location: String,
         pump_id: i64,
 
         #[source]
-        source: SqlInterfaceError,
+        source: Box<SqlInterfaceError>,
     },
 }

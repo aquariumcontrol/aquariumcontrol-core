@@ -151,11 +151,12 @@ pub struct DataLoggerMutexes {
 /// Contains the error definition for DataLogger
 #[derive(Error, Debug)]
 pub enum DataLoggerError {
-    #[error("One of the output file names for the data logging to filesystem is empty.")]
-    OutputFilenameEmpty,
+    #[error("[{0}] One of the output file names for the data logging to filesystem is empty.")]
+    OutputFilenameEmpty(String),
 
     #[error("Could not reset content of output file for {signal_name} ({output_file_name})")]
     FileResetFailure {
+        location: String,
         signal_name: String,
         output_file_name: String,
 
@@ -286,10 +287,13 @@ impl DataLogger {
                 || config.output_file_name_humidity.is_empty()
                 || config.output_file_name_refill_in_progress.is_empty()
             {
-                return Err(DataLoggerError::OutputFilenameEmpty);
+                return Err(DataLoggerError::OutputFilenameEmpty(
+                    module_path!().to_string(),
+                ));
             } else {
                 fs::write(config.output_file_name_timestamp.clone(), String::new()).map_err(
                     |e| DataLoggerError::FileResetFailure {
+                        location: module_path!().to_string(),
                         signal_name: "timestamp".to_string(),
                         output_file_name: config.output_file_name_timestamp.clone(),
                         source: e,
@@ -300,6 +304,7 @@ impl DataLogger {
                     String::new(),
                 )
                 .map_err(|e| DataLoggerError::FileResetFailure {
+                    location: module_path!().to_string(),
                     signal_name: "water temperature".to_string(),
                     output_file_name: config.output_file_name_water_temperature.clone(),
                     source: e,
@@ -309,12 +314,14 @@ impl DataLogger {
                     String::new(),
                 )
                 .map_err(|e| DataLoggerError::FileResetFailure {
+                    location: module_path!().to_string(),
                     signal_name: "filtered water temperature".to_string(),
                     output_file_name: config.output_file_name_water_temperature_filtered.clone(),
                     source: e,
                 })?;
                 fs::write(config.output_file_name_pH.clone(), String::new()).map_err(|e| {
                     DataLoggerError::FileResetFailure {
+                        location: module_path!().to_string(),
                         signal_name: "pH value".to_string(),
                         output_file_name: config.output_file_name_pH.clone(),
                         source: e,
@@ -322,6 +329,7 @@ impl DataLogger {
                 })?;
                 fs::write(config.output_file_name_pH_filtered.clone(), String::new()).map_err(
                     |e| DataLoggerError::FileResetFailure {
+                        location: module_path!().to_string(),
                         signal_name: "filtered pH value".to_string(),
                         output_file_name: config.output_file_name_pH_filtered.clone(),
                         source: e,
@@ -329,6 +337,7 @@ impl DataLogger {
                 )?;
                 fs::write(config.output_file_name_conductivity.clone(), String::new()).map_err(
                     |e| DataLoggerError::FileResetFailure {
+                        location: module_path!().to_string(),
                         signal_name: "conductivity".to_string(),
                         output_file_name: config.output_file_name_conductivity.clone(),
                         source: e,
@@ -339,6 +348,7 @@ impl DataLogger {
                     String::new(),
                 )
                 .map_err(|e| DataLoggerError::FileResetFailure {
+                    location: module_path!().to_string(),
                     signal_name: "filtered conductivity".to_string(),
                     output_file_name: config.output_file_name_conductivity_filtered.clone(),
                     source: e,
@@ -348,6 +358,7 @@ impl DataLogger {
                     String::new(),
                 )
                 .map_err(|e| DataLoggerError::FileResetFailure {
+                    location: module_path!().to_string(),
                     signal_name: "tank level switch position".to_string(),
                     output_file_name: config.output_file_name_tank_level_switch_position.clone(),
                     source: e,
@@ -357,6 +368,7 @@ impl DataLogger {
                     String::new(),
                 )
                 .map_err(|e| DataLoggerError::FileResetFailure {
+                    location: module_path!().to_string(),
                     signal_name: "tank level switch invalid".to_string(),
                     output_file_name: config.output_file_name_tank_level_switch_invalid.clone(),
                     source: e,
@@ -368,6 +380,7 @@ impl DataLogger {
                     String::new(),
                 )
                 .map_err(|e| DataLoggerError::FileResetFailure {
+                    location: module_path!().to_string(),
                     signal_name: "tank level switch stabilized".to_string(),
                     output_file_name: config
                         .output_file_name_tank_level_switch_position_stabilized
@@ -379,12 +392,14 @@ impl DataLogger {
                     String::new(),
                 )
                 .map_err(|e| DataLoggerError::FileResetFailure {
+                    location: module_path!().to_string(),
                     signal_name: "ventilation status".to_string(),
                     output_file_name: config.output_file_name_ventilation_is_on.clone(),
                     source: e,
                 })?;
                 fs::write(config.output_file_name_heating_is_on.clone(), String::new()).map_err(
                     |e| DataLoggerError::FileResetFailure {
+                        location: module_path!().to_string(),
                         signal_name: "heating status".to_string(),
                         output_file_name: config.output_file_name_heating_is_on.clone(),
                         source: e,
@@ -395,12 +410,14 @@ impl DataLogger {
                     String::new(),
                 )
                 .map_err(|e| DataLoggerError::FileResetFailure {
+                    location: module_path!().to_string(),
                     signal_name: "ambient temperature".to_string(),
                     output_file_name: config.output_file_name_ambient_temperature.clone(),
                     source: e,
                 })?;
                 fs::write(config.output_file_name_humidity.clone(), String::new()).map_err(
                     |e| DataLoggerError::FileResetFailure {
+                        location: module_path!().to_string(),
                         signal_name: "humidity".to_string(),
                         output_file_name: config.output_file_name_humidity.clone(),
                         source: e,
@@ -411,6 +428,7 @@ impl DataLogger {
                     String::new(),
                 )
                 .map_err(|e| DataLoggerError::FileResetFailure {
+                    location: module_path!().to_string(),
                     signal_name: "refill in progress".to_string(),
                     output_file_name: config.output_file_name_refill_in_progress.clone(),
                     source: e,

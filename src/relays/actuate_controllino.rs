@@ -270,7 +270,10 @@ fn create_command_message(
                     )
                 }
                 _ => {
-                    return Err(RelayError::IrrelevantCommand(internal_command));
+                    return Err(RelayError::IrrelevantCommand(
+                        module_path!().to_string(),
+                        internal_command,
+                    ));
                 }
             };
             let controllino_message_content =
@@ -278,7 +281,10 @@ fn create_command_message(
             let controllino_message = ControllinoMessage::new(controllino_message_content);
             Ok(controllino_message)
         }
-        _ => Err(RelayError::IrrelevantCommand(internal_command)),
+        _ => Err(RelayError::IrrelevantCommand(
+            module_path!().to_string(),
+            internal_command,
+        )),
     }
 }
 
@@ -317,8 +323,14 @@ pub fn get_relay_command(
             InternalCommand::SwitchOff(_) => {
                 Ok(InternalCommand::SetRelay(config.skimmer_id as u16))
             }
-            InternalCommand::Pulse(d, _) => Err(RelayError::PulseNotAllowedForDevice(d.clone())),
-            _ => Err(RelayError::IrrelevantCommand(internal_command.clone())),
+            InternalCommand::Pulse(d, _) => Err(RelayError::PulseNotAllowedForDevice(
+                module_path!().to_string(),
+                d.clone(),
+            )),
+            _ => Err(RelayError::IrrelevantCommand(
+                module_path!().to_string(),
+                internal_command.clone(),
+            )),
         },
         AquariumDevice::MainPump1 => match internal_command {
             InternalCommand::SwitchOn(_) => {
@@ -327,8 +339,14 @@ pub fn get_relay_command(
             InternalCommand::SwitchOff(_) => {
                 Ok(InternalCommand::SetRelay(config.main_pump1_id as u16))
             }
-            InternalCommand::Pulse(d, _) => Err(RelayError::PulseNotAllowedForDevice(d.clone())),
-            _ => Err(RelayError::IrrelevantCommand(internal_command.clone())),
+            InternalCommand::Pulse(d, _) => Err(RelayError::PulseNotAllowedForDevice(
+                module_path!().to_string(),
+                d.clone(),
+            )),
+            _ => Err(RelayError::IrrelevantCommand(
+                module_path!().to_string(),
+                internal_command.clone(),
+            )),
         },
         AquariumDevice::MainPump2 => match internal_command {
             InternalCommand::SwitchOn(_) => {
@@ -337,8 +355,14 @@ pub fn get_relay_command(
             InternalCommand::SwitchOff(_) => {
                 Ok(InternalCommand::SetRelay(config.main_pump2_id as u16))
             }
-            InternalCommand::Pulse(d, _) => Err(RelayError::PulseNotAllowedForDevice(d.clone())),
-            _ => Err(RelayError::IrrelevantCommand(internal_command.clone())),
+            InternalCommand::Pulse(d, _) => Err(RelayError::PulseNotAllowedForDevice(
+                module_path!().to_string(),
+                d.clone(),
+            )),
+            _ => Err(RelayError::IrrelevantCommand(
+                module_path!().to_string(),
+                internal_command.clone(),
+            )),
         },
         AquariumDevice::AuxPump1 => match internal_command {
             InternalCommand::SwitchOn(_) => {
@@ -347,8 +371,14 @@ pub fn get_relay_command(
             InternalCommand::SwitchOff(_) => {
                 Ok(InternalCommand::SetRelay(config.aux_pump1_id as u16))
             }
-            InternalCommand::Pulse(d, _) => Err(RelayError::PulseNotAllowedForDevice(d.clone())),
-            _ => Err(RelayError::IrrelevantCommand(internal_command.clone())),
+            InternalCommand::Pulse(d, _) => Err(RelayError::PulseNotAllowedForDevice(
+                module_path!().to_string(),
+                d.clone(),
+            )),
+            _ => Err(RelayError::IrrelevantCommand(
+                module_path!().to_string(),
+                internal_command.clone(),
+            )),
         },
         AquariumDevice::AuxPump2 => match internal_command {
             InternalCommand::SwitchOn(_) => {
@@ -357,16 +387,28 @@ pub fn get_relay_command(
             InternalCommand::SwitchOff(_) => {
                 Ok(InternalCommand::SetRelay(config.aux_pump2_id as u16))
             }
-            InternalCommand::Pulse(d, _) => Err(RelayError::PulseNotAllowedForDevice(d.clone())),
-            _ => Err(RelayError::IrrelevantCommand(internal_command.clone())),
+            InternalCommand::Pulse(d, _) => Err(RelayError::PulseNotAllowedForDevice(
+                module_path!().to_string(),
+                d.clone(),
+            )),
+            _ => Err(RelayError::IrrelevantCommand(
+                module_path!().to_string(),
+                internal_command.clone(),
+            )),
         },
         AquariumDevice::Heater => match internal_command {
             InternalCommand::SwitchOn(_) => Ok(InternalCommand::SetRelay(config.heater_id as u16)),
             InternalCommand::SwitchOff(_) => {
                 Ok(InternalCommand::UnsetRelay(config.heater_id as u16))
             }
-            InternalCommand::Pulse(d, _) => Err(RelayError::PulseNotAllowedForDevice(d.clone())),
-            _ => Err(RelayError::IrrelevantCommand(internal_command.clone())),
+            InternalCommand::Pulse(d, _) => Err(RelayError::PulseNotAllowedForDevice(
+                module_path!().to_string(),
+                d.clone(),
+            )),
+            _ => Err(RelayError::IrrelevantCommand(
+                module_path!().to_string(),
+                internal_command.clone(),
+            )),
         },
         AquariumDevice::Ventilation => match internal_command {
             InternalCommand::SwitchOn(_) => {
@@ -375,8 +417,14 @@ pub fn get_relay_command(
             InternalCommand::SwitchOff(_) => {
                 Ok(InternalCommand::UnsetRelay(config.ventilation_id as u16))
             }
-            InternalCommand::Pulse(d, _) => Err(RelayError::PulseNotAllowedForDevice(d.clone())),
-            _ => Err(RelayError::IrrelevantCommand(internal_command.clone())),
+            InternalCommand::Pulse(d, _) => Err(RelayError::PulseNotAllowedForDevice(
+                module_path!().to_string(),
+                d.clone(),
+            )),
+            _ => Err(RelayError::IrrelevantCommand(
+                module_path!().to_string(),
+                internal_command.clone(),
+            )),
         },
         AquariumDevice::RefillPump => match internal_command {
             InternalCommand::SwitchOn(_) => {
@@ -385,16 +433,28 @@ pub fn get_relay_command(
             InternalCommand::SwitchOff(_) => {
                 Ok(InternalCommand::UnsetRelay(config.refill_pump_id as u16))
             }
-            InternalCommand::Pulse(d, _) => Err(RelayError::PulseNotAllowedForDevice(d.clone())),
-            _ => Err(RelayError::IrrelevantCommand(internal_command.clone())),
+            InternalCommand::Pulse(d, _) => Err(RelayError::PulseNotAllowedForDevice(
+                module_path!().to_string(),
+                d.clone(),
+            )),
+            _ => Err(RelayError::IrrelevantCommand(
+                module_path!().to_string(),
+                internal_command.clone(),
+            )),
         },
         AquariumDevice::Feeder => match internal_command {
             InternalCommand::SwitchOn(_) => Ok(InternalCommand::SetRelay(config.feeder_id as u16)),
             InternalCommand::SwitchOff(_) => {
                 Ok(InternalCommand::UnsetRelay(config.feeder_id as u16))
             }
-            InternalCommand::Pulse(d, _) => Err(RelayError::PulseNotAllowedForDevice(d.clone())),
-            _ => Err(RelayError::IrrelevantCommand(internal_command.clone())),
+            InternalCommand::Pulse(d, _) => Err(RelayError::PulseNotAllowedForDevice(
+                module_path!().to_string(),
+                d.clone(),
+            )),
+            _ => Err(RelayError::IrrelevantCommand(
+                module_path!().to_string(),
+                internal_command.clone(),
+            )),
         },
         AquariumDevice::PeristalticPump1 => match internal_command {
             InternalCommand::SwitchOn(_) => Ok(InternalCommand::SetRelay(
@@ -407,7 +467,10 @@ pub fn get_relay_command(
                 config.peristaltic_pump1_id as u16,
                 *t,
             )),
-            _ => Err(RelayError::IrrelevantCommand(internal_command.clone())),
+            _ => Err(RelayError::IrrelevantCommand(
+                module_path!().to_string(),
+                internal_command.clone(),
+            )),
         },
         AquariumDevice::PeristalticPump2 => match internal_command {
             InternalCommand::SwitchOn(_) => Ok(InternalCommand::SetRelay(
@@ -420,7 +483,10 @@ pub fn get_relay_command(
                 config.peristaltic_pump2_id as u16,
                 *t,
             )),
-            _ => Err(RelayError::IrrelevantCommand(internal_command.clone())),
+            _ => Err(RelayError::IrrelevantCommand(
+                module_path!().to_string(),
+                internal_command.clone(),
+            )),
         },
         AquariumDevice::PeristalticPump3 => match internal_command {
             InternalCommand::SwitchOn(_) => Ok(InternalCommand::SetRelay(
@@ -433,7 +499,10 @@ pub fn get_relay_command(
                 config.peristaltic_pump3_id as u16,
                 *t,
             )),
-            _ => Err(RelayError::IrrelevantCommand(internal_command.clone())),
+            _ => Err(RelayError::IrrelevantCommand(
+                module_path!().to_string(),
+                internal_command.clone(),
+            )),
         },
         AquariumDevice::PeristalticPump4 => match internal_command {
             InternalCommand::SwitchOn(_) => Ok(InternalCommand::SetRelay(
@@ -446,7 +515,10 @@ pub fn get_relay_command(
                 config.peristaltic_pump4_id as u16,
                 *t,
             )),
-            _ => Err(RelayError::IrrelevantCommand(internal_command.clone())),
+            _ => Err(RelayError::IrrelevantCommand(
+                module_path!().to_string(),
+                internal_command.clone(),
+            )),
         },
     }
 }
@@ -484,7 +556,9 @@ impl RelayActuationTrait for ActuateControllino {
                             target: module_path!(),
                             "preparation of communication failed ({e:?})"
                         );
-                        return Err(RelayError::FailureCommandMessageCreation);
+                        return Err(RelayError::FailureCommandMessageCreation(
+                            module_path!().to_string(),
+                        ));
                     }
                 };
 
@@ -506,7 +580,7 @@ impl RelayActuationTrait for ActuateControllino {
                                 target: module_path!(),
                                 "sending command to Controllino failed ({e:?})"
                             );
-                            return Err(RelayError::WriteError);
+                            return Err(RelayError::WriteError(module_path!().to_string()));
                         }
                     }
 
@@ -534,7 +608,7 @@ impl RelayActuationTrait for ActuateControllino {
                                     target: module_path!(),
                                     "Received response from device with incorrect checksums"
                                 );
-                                Err(RelayError::IncorrectChecksum)
+                                Err(RelayError::IncorrectChecksum(module_path!().to_string()))
                             } else {
                                 Ok(())
                             }
@@ -544,11 +618,13 @@ impl RelayActuationTrait for ActuateControllino {
                                 target: module_path!(),
                                 "receiving response from device failed."
                             );
-                            Err(RelayError::ReadError)
+                            Err(RelayError::ReadError(module_path!().to_string()))
                         }
                     }
                 } else {
-                    Err(RelayError::SerialPortNotConfigured)
+                    Err(RelayError::SerialPortNotConfigured(
+                        module_path!().to_string(),
+                    ))
                 }
             }
             _ => {
@@ -556,7 +632,10 @@ impl RelayActuationTrait for ActuateControllino {
                     target: module_path!(),
                     "ignoring irrelevant internal command {internal_command}."
                 );
-                Err(RelayError::IrrelevantCommand(internal_command.clone()))
+                Err(RelayError::IrrelevantCommand(
+                    module_path!().to_string(),
+                    internal_command.clone(),
+                ))
             }
         }
     }
@@ -591,7 +670,10 @@ impl RelayActuationTrait for ActuateControllino {
                     }
                 }
                 Err(e) => {
-                    return Err(RelayError::SendToSerialPortFailed { source: e });
+                    return Err(RelayError::SendToSerialPortFailed {
+                        location: module_path!().to_string(),
+                        source: e,
+                    });
                 }
             }
 
@@ -612,7 +694,7 @@ impl RelayActuationTrait for ActuateControllino {
     /// # Returns
     /// In case of success, a `Ok(())`
     /// In case of failure, an error of type `RelayError` is returned.
-    fn flush_buffer(&mut self) -> Result <(), RelayError> {
+    fn flush_buffer(&mut self) -> Result<(), RelayError> {
         if let Some(serial_port) = self.serial_port_opt.as_mut() {
             match serial_port.clear(ClearBuffer::All) {
                 Ok(_) => {
@@ -622,7 +704,10 @@ impl RelayActuationTrait for ActuateControllino {
                     );
                 }
                 Err(e) => {
-                    return Err(RelayError::SerialPortFlushFailed { source: e });
+                    return Err(RelayError::SerialPortFlushFailed {
+                        location: module_path!().to_string(),
+                        source: e,
+                    });
                 }
             }
 
@@ -1038,17 +1123,16 @@ pub mod tests {
     pub fn test_create_message_invalid_command() {
         let config: ConfigData =
             read_config_file("/config/aquarium_control_test_simulator.toml".to_string()).unwrap();
-        let test_result = create_command_message(InternalCommand::ResetAllErrors, &config.controllino_relay);
+        let test_result =
+            create_command_message(InternalCommand::ResetAllErrors, &config.controllino_relay);
 
-        assert!(
-            matches!(
-                test_result,
-                Err(RelayError::IrrelevantCommand(
-                        InternalCommand::ResetAllErrors
-                    )
-                ),
-            )
-        );
+        assert!(matches!(
+            test_result,
+            Err(RelayError::IrrelevantCommand(
+                _,
+                InternalCommand::ResetAllErrors
+            )),
+        ));
     }
 
     #[test]
@@ -1359,7 +1443,7 @@ pub mod tests {
         );
         assert!(matches!(
             error_message,
-            Err(RelayError::PulseNotAllowedForDevice(Skimmer))
+            Err(RelayError::PulseNotAllowedForDevice(_, Skimmer))
         ));
 
         error_message = create_command_message(
@@ -1368,7 +1452,7 @@ pub mod tests {
         );
         assert!(matches!(
             error_message,
-            Err(RelayError::PulseNotAllowedForDevice(Ventilation))
+            Err(RelayError::PulseNotAllowedForDevice(_, Ventilation))
         ));
 
         error_message = create_command_message(
@@ -1377,7 +1461,7 @@ pub mod tests {
         );
         assert!(matches!(
             error_message,
-            Err(RelayError::PulseNotAllowedForDevice(Heater))
+            Err(RelayError::PulseNotAllowedForDevice(_, Heater))
         ));
 
         error_message = create_command_message(
@@ -1386,7 +1470,7 @@ pub mod tests {
         );
         assert!(matches!(
             error_message,
-            Err(RelayError::PulseNotAllowedForDevice(MainPump1))
+            Err(RelayError::PulseNotAllowedForDevice(_, MainPump1))
         ));
 
         error_message = create_command_message(
@@ -1395,7 +1479,7 @@ pub mod tests {
         );
         assert!(matches!(
             error_message,
-            Err(RelayError::PulseNotAllowedForDevice(MainPump2))
+            Err(RelayError::PulseNotAllowedForDevice(_, MainPump2))
         ));
 
         error_message = create_command_message(
@@ -1404,7 +1488,7 @@ pub mod tests {
         );
         assert!(matches!(
             error_message,
-            Err(RelayError::PulseNotAllowedForDevice(AuxPump1))
+            Err(RelayError::PulseNotAllowedForDevice(_, AuxPump1))
         ));
 
         error_message = create_command_message(
@@ -1413,7 +1497,7 @@ pub mod tests {
         );
         assert!(matches!(
             error_message,
-            Err(RelayError::PulseNotAllowedForDevice(AuxPump2))
+            Err(RelayError::PulseNotAllowedForDevice(_, AuxPump2))
         ));
 
         let mut message = create_command_message(
@@ -1479,7 +1563,7 @@ pub mod tests {
         );
         assert!(matches!(
             error_message,
-            Err(RelayError::PulseNotAllowedForDevice(Feeder))
+            Err(RelayError::PulseNotAllowedForDevice(_, Feeder))
         ));
     }
 

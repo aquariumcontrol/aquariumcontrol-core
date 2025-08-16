@@ -245,7 +245,7 @@ impl RelayManager {
     ) -> Result<(), RelayError> {
         let mut attempts = 0;
         let max_attempts = 1 + self.config.actuation_retries; // 1 initial attempt + `actuation_retries` retries
-        let mut error_to_be_reported = RelayError::InitialValue;
+        let mut error_to_be_reported = RelayError::InitialValue(module_path!().to_string());
 
         while attempts < max_attempts {
             match actuator.actuate(command) {
@@ -264,7 +264,7 @@ impl RelayManager {
                     return Ok(());
                 }
                 Err(e) => {
-                    if matches!(e, RelayError::IncorrectChecksum) {
+                    if matches!(e, RelayError::IncorrectChecksum(_)) {
                         if let Err(f) = actuator.flush_buffer() {
                             // if we cannot flush the buffer, mission abort
                             error_to_be_reported = f;
@@ -285,6 +285,7 @@ impl RelayManager {
             }
         }
         Err(RelayError::ActuationFailed {
+            location: module_path!().to_string(),
             actuation_name: actuation_name.to_string(),
             last_attempt_number: attempts + 1,
             max_attempt_allowed: max_attempts,
@@ -710,7 +711,7 @@ pub mod tests {
                 if self.permanent_error_result.is_some() {
                     // Workaround: RelayError does not implement the Clone trait.
                     // WriteError is the only error variant used by the test cases.
-                    Err(RelayError::WriteError)
+                    Err(RelayError::WriteError(module_path!().to_string()))
                 } else {
                     Ok(())
                 }
@@ -1081,7 +1082,9 @@ pub mod tests {
                     execution_counter: 0,
                     heartbeat_counter: 0,
                     flush_counter: 0,
-                    onetime_error_result: Some(RelayError::IncorrectChecksum),
+                    onetime_error_result: Some(RelayError::IncorrectChecksum(
+                        module_path!().to_string(),
+                    )),
                     permanent_error_result: None,
                 };
 
@@ -1159,7 +1162,9 @@ pub mod tests {
                     heartbeat_counter: 0,
                     flush_counter: 0,
                     onetime_error_result: None,
-                    permanent_error_result: Some(RelayError::WriteError),
+                    permanent_error_result: Some(RelayError::WriteError(
+                        module_path!().to_string(),
+                    )),
                 };
 
                 let relay_manager_channels = RelayManagerChannels {

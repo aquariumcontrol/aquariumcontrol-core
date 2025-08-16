@@ -581,8 +581,7 @@ impl SensorManager {
                         Ok(mut sensor_manager_signals) => {
                             instant_after_locking_mutex = Instant::now();
                             sensor_manager_signals.ambient_humidity = self.ambient_humidity;
-                            sensor_manager_signals.ambient_temperature =
-                                self.ambient_temperature;
+                            sensor_manager_signals.ambient_temperature = self.ambient_temperature;
                             sensor_manager_signals.water_temperature = self.water_temperature;
                             sensor_manager_signals.conductivity = self.conductivity;
                             sensor_manager_signals.ph = self.pH;

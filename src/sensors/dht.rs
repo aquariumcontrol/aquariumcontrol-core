@@ -407,13 +407,18 @@ impl Dht {
         checksum_intermediate &= 0xFF;
         let checksum_calculated: u8 = match ((checksum_intermediate << 8) >> 8).try_into() {
             Ok(c) => c,
-            Err(_) => return Err(DhtError::ChecksumCalculationError),
+            Err(_) => {
+                return Err(DhtError::ChecksumCalculationError(
+                    module_path!().to_string(),
+                ))
+            }
         };
 
         let checksum_received: u8 = byte_vals[4];
         if checksum_calculated != checksum_received {
             *try_again = true;
             return Err(DhtError::ChecksumError(
+                module_path!().to_string(),
                 checksum_calculated,
                 checksum_received,
             ));
@@ -454,6 +459,7 @@ impl Dht {
         // range check for temperature
         if temp10 > dht22_constants::DHT22_MAXVAL_TEMP10 {
             return Err(DhtError::TemperatureOutOfRange(
+                module_path!().to_string(),
                 (temp10 / 10) as f32,
                 (dht22_constants::DHT22_MINVAL_TEMP10 / 10) as f32,
                 (dht22_constants::DHT22_MAXVAL_TEMP10 / 10) as f32,
@@ -463,6 +469,7 @@ impl Dht {
         // range check for humidity
         if hum10 > dht22_constants::DHT22_MAXVAL_HUM10 {
             return Err(DhtError::HumidityOutOfRange(
+                module_path!().to_string(),
                 (hum10 / 10) as f32,
                 (dht22_constants::DHT22_MINVAL_HUM10 / 10) as f32,
                 (dht22_constants::DHT22_MAXVAL_HUM10 / 10) as f32,
@@ -519,6 +526,7 @@ impl Dht {
             Ok(c) => c.into_output(),
             Err(e) => {
                 return Err(DhtError::VccPinAcquisitionFailed {
+                    location: module_path!().to_string(),
                     vcc_pin_nr: self.gpio_dht22_vcc,
                     source: e,
                 });
@@ -532,6 +540,7 @@ impl Dht {
                 Ok(c) => c.into_output(),
                 Err(e) => {
                     return Err(DhtError::DataPinOutputAcquisitionFailed {
+                        location: module_path!().to_string(),
                         data_pin_nr: self.gpio_dht22_io,
                         source: e,
                     });
@@ -572,6 +581,7 @@ impl Dht {
             Ok(c) => c.into_input_pullup(),
             Err(e) => {
                 return Err(DhtError::DataPinInputAcquisitionFailed {
+                    location: module_path!().to_string(),
                     input_pin_nr: self.gpio_dht22_io,
                     source: e,
                 });
@@ -583,7 +593,7 @@ impl Dht {
         match data_pin.set_interrupt(Trigger::Both, None) {
             Ok(()) => {}
             Err(_) => {
-                return Err(DhtError::CouldNotSetInterrupt);
+                return Err(DhtError::CouldNotSetInterrupt(module_path!().to_string()));
             }
         }
 
@@ -602,7 +612,7 @@ impl Dht {
             let event_opt = match data_pin.poll_interrupt(false, Some(timeout_duration)) {
                 Ok(c) => c,
                 Err(_) => {
-                    return Err(DhtError::InterruptFailed);
+                    return Err(DhtError::InterruptFailed(module_path!().to_string()));
                 }
             };
 
@@ -635,17 +645,18 @@ impl Dht {
         match data_pin.clear_interrupt() {
             Ok(()) => {}
             Err(_) => {
-                return Err(DhtError::CouldNotClearInterrupt);
+                return Err(DhtError::CouldNotClearInterrupt(module_path!().to_string()));
             }
         }
 
         if timeout_occurred {
             *try_again = true;
-            return Err(DhtError::Timeout);
+            return Err(DhtError::Timeout(module_path!().to_string()));
         }
 
         if valid_ticks_received != dht22_constants::DHT22_TRANSMISSION_END_IDX - 1 {
             return Err(DhtError::WrongNumberOfValidTicks(
+                module_path!().to_string(),
                 dht22_constants::DHT22_TRANSMISSION_END_IDX - 1,
                 valid_ticks_received,
             ));
@@ -669,7 +680,7 @@ impl Dht {
     #[cfg(not(all(target_os = "linux", feature = "target_hw")))]
     /// Stub function to allow build on a non-target platform
     pub fn read(&self, _reset_sensor: bool, _try_again: &mut bool) -> DhtResult {
-        Err(DhtError::IncorrectPlatform)
+        Err(DhtError::IncorrectPlatform(module_path!().to_string()))
     }
 
     /// Initiates the reading process from the DHT22 sensor, including retry logic and post-processing of data.
@@ -711,6 +722,7 @@ impl Dht {
                         retry_counter += 1;
                         if retry_counter > dht22_constants::DHT22_MAX_RETRIES {
                             return Err(DhtError::FailedAfterRetries {
+                                location: module_path!().to_string(),
                                 retry_counter,
                                 source: Box::new(e),
                             });
@@ -809,6 +821,7 @@ impl Dht {
                         if matches!(
                             dht_error,
                             DhtError::FailedAfterRetries {
+                                location: _,
                                 retry_counter: _,
                                 source: _
                             }
@@ -959,7 +972,7 @@ pub mod tests {
 
         let result = Dht::calc_checksum(stimuli, &mut try_again);
 
-        assert!(matches!(result, Err(DhtError::ChecksumError(_, _))));
+        assert!(matches!(result, Err(DhtError::ChecksumError(_, _, _))));
         assert!(try_again);
     }
 
@@ -995,7 +1008,7 @@ pub mod tests {
 
         assert!(matches!(
             Dht::calc_signals(stimuli),
-            Err(DhtError::HumidityOutOfRange(_, _, _))
+            Err(DhtError::HumidityOutOfRange(_, _, _, _))
         ));
     }
 
@@ -1010,7 +1023,7 @@ pub mod tests {
 
         assert!(matches!(
             Dht::calc_signals(stimuli),
-            Err(DhtError::TemperatureOutOfRange(_, _, _))
+            Err(DhtError::TemperatureOutOfRange(_, _, _, _))
         ));
     }
 

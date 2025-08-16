@@ -73,6 +73,7 @@ impl SqlInterfaceVentilationSetVals {
         )
         .map_err(
             |e| SqlInterfaceError::DatabaseCheckVentilationSetValsFailure {
+                location: module_path!().to_string(),
                 source: Box::new(e),
             },
         )?;
@@ -83,6 +84,7 @@ impl SqlInterfaceVentilationSetVals {
         )
         .map_err(
             |e| SqlInterfaceError::DatabaseCheckVentilationSetValsFailure {
+                location: module_path!().to_string(),
                 source: Box::new(e),
             },
         )?;
@@ -91,6 +93,7 @@ impl SqlInterfaceVentilationSetVals {
         if count_null_values < 0 || count_rows < 0 {
             return Err(
                 SqlInterfaceError::DatabaseVentilationSetValTableNegativeValue(
+                    module_path!().to_string(),
                     count_null_values,
                     count_rows,
                 ),
@@ -99,13 +102,17 @@ impl SqlInterfaceVentilationSetVals {
 
         if count_null_values > 0 {
             return Err(
-                SqlInterfaceError::DatabaseVentilationSetValTableContainsNull(count_null_values),
+                SqlInterfaceError::DatabaseVentilationSetValTableContainsNull(
+                    module_path!().to_string(),
+                    count_null_values,
+                ),
             );
         }
 
         if count_rows > 1 {
             return Err(
                 SqlInterfaceError::DatabaseVentilationSetValTableContainsTooManyRows(
+                    module_path!().to_string(),
                     count_rows.cast_unsigned(),
                 ),
             );
@@ -164,6 +171,7 @@ impl SqlInterfaceVentilationSetVals {
             Ok(c) => c,
             Err(_) => {
                 return Err(SqlInterfaceError::VentilationSetValsRequestFailure(
+                    module_path!().to_string(),
                     sql_query_strings::SQL_QUERY_READ_VENTILATION_SETVALS.to_string(),
                 ));
             }
@@ -177,6 +185,7 @@ impl SqlInterfaceVentilationSetVals {
         // return error if the query result contains more than one entry
         if sql_ventilation_setvals_array.len() > 1 {
             return Err(SqlInterfaceError::VentilationSetValsNoSingleResponse(
+                module_path!().to_string(),
                 sql_query_strings::SQL_QUERY_READ_VENTILATION_SETVALS.to_string(),
             ));
         }
@@ -189,6 +198,7 @@ impl SqlInterfaceVentilationSetVals {
             < ventilation_set_vals.ventilation_switch_off_temperature
         {
             return Err(SqlInterfaceError::VentilationSetValsInvalid(
+                module_path!().to_string(),
                 ventilation_set_vals.ventilation_switch_on_temperature,
                 ventilation_set_vals.ventilation_switch_off_temperature,
             ));
@@ -217,6 +227,7 @@ impl SqlInterfaceVentilationSetVals {
             Err(e) => {
                 println!("{e:?}");
                 Err(SqlInterfaceError::InsertVentilationSetValuesFailure(
+                    module_path!().to_string(),
                         sql_query_strings::SQL_QUERY_WRITE_VENTILATION_SETVALS.to_string()
                 ))
             }
@@ -248,6 +259,7 @@ impl VentilationSetValueUpdaterTrait for SqlInterfaceVentilationSetVals {
             }
             Ok(None) => Ok(()),
             Err(e) => Err(SqlInterfaceError::VentilationSetValsUpdateFailure {
+                location: module_path!().to_string(),
                 source: Box::new(e),
             }),
         }
@@ -359,7 +371,7 @@ pub mod tests {
         // check if reading an invalid value combination returns an error
         assert!(matches!(
             sql_interface_ventilation_setvals.get_ventilation_set_values(),
-            Err(SqlInterfaceError::VentilationSetValsInvalid(_, _))
+            Err(SqlInterfaceError::VentilationSetValsInvalid(_, _, _))
         ));
         println!("* reading  invalid ventilation set values succeeded.");
 
@@ -387,7 +399,7 @@ pub mod tests {
         );
         assert!(matches!(
             test_result,
-            Err(SqlInterfaceError::DatabaseVentilationSetValTableContainsTooManyRows(_))
+            Err(SqlInterfaceError::DatabaseVentilationSetValTableContainsTooManyRows(_, _))
         ));
         println!("* detecting too many rows succeeded.");
 

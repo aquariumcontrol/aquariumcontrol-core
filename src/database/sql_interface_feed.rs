@@ -196,7 +196,10 @@ impl DatabaseInterfaceFeedTrait for SqlInterfaceFeed {
             },
         ) {
             Ok(_) => Ok(()),
-            Err(e) => Err(SqlInterfaceError::InsertFeedEventFailure { source: e }),
+            Err(e) => Err(SqlInterfaceError::InsertFeedEventFailure {
+                location: module_path!().to_string(),
+                source: e,
+            }),
         }
     }
 
@@ -295,6 +298,7 @@ impl DatabaseInterfaceFeedTrait for SqlInterfaceFeed {
                         Ok(c) => c,
                         Err(e) => {
                             result = Err(SqlInterfaceError::FeedScheduleUpdateFailure {
+                                location: module_path!().to_string(),
                                 source: Box::new(e),
                             });
                             continue;
@@ -314,7 +318,9 @@ impl DatabaseInterfaceFeedTrait for SqlInterfaceFeed {
                 ) {
                     Ok(_) => { /* do nothing */ },
                     Err(e) => {
-                        result = Err(SqlInterfaceError::FeedScheduleDropFailure { source: e });
+                        result = Err(SqlInterfaceError::FeedScheduleDropFailure {
+                            location: module_path!().to_string(),
+                            source: e });
                     }
                 };
             } else {
@@ -329,7 +335,9 @@ impl DatabaseInterfaceFeedTrait for SqlInterfaceFeed {
                 ) {
                     Ok(_) => { /* do nothing */ },
                     Err(e) => {
-                        result = Err(SqlInterfaceError::FeedScheduleDropFailure { source: e });
+                        result = Err(SqlInterfaceError::FeedScheduleDropFailure {
+                            location: module_path!().to_string(),
+                            source: e });
                     }
                 };
             }
@@ -388,7 +396,10 @@ impl DatabaseInterfaceFeedTrait for SqlInterfaceFeed {
                     target: module_path!(),
                     "could not insert feed schedule entry ({e:?})"
                 );
-                Err(SqlInterfaceError::InsertFeedEventFailure { source: e })
+                Err(SqlInterfaceError::InsertFeedEventFailure {
+                    location: module_path!().to_string(),
+                    source: e,
+                })
             }
         }
     }
@@ -420,6 +431,7 @@ impl SqlInterfaceFeed {
             SQL_QUERY_CHECK_FEEDPATTERNS_NULL,
         )
         .map_err(|e| SqlInterfaceError::DatabaseCheckFeedSetValsFailure {
+            location: module_path!().to_string(),
             table_name: SQL_TABLE_FEEDPATTERNS.to_string(),
             source: Box::new(e),
         })?;
@@ -428,6 +440,7 @@ impl SqlInterfaceFeed {
             SQL_QUERY_CHECK_FEEDPATTERN_COUNT,
         )
         .map_err(|e| SqlInterfaceError::DatabaseCheckFeedSetValsFailure {
+            location: module_path!().to_string(),
             table_name: SQL_TABLE_FEEDPATTERNS.to_string(),
             source: Box::new(e),
         })?;
@@ -438,6 +451,7 @@ impl SqlInterfaceFeed {
             SQL_QUERY_CHECK_FEEDSCHEDULE_NULL,
         )
         .map_err(|e| SqlInterfaceError::DatabaseCheckFeedSetValsFailure {
+            location: module_path!().to_string(),
             table_name: SQL_TABLE_FEEDSCHEDULE.to_string(),
             source: Box::new(e),
         })?;
@@ -446,6 +460,7 @@ impl SqlInterfaceFeed {
             SQL_QUERY_CHECK_FEEDSCHEDULE_COUNT,
         )
         .map_err(|e| SqlInterfaceError::DatabaseCheckFeedSetValsFailure {
+            location: module_path!().to_string(),
             table_name: SQL_TABLE_FEEDPATTERNS.to_string(),
             source: Box::new(e),
         })?;
@@ -455,6 +470,7 @@ impl SqlInterfaceFeed {
             SQL_QUERY_CHECK_FEEDLOG_COUNT,
         )
         .map_err(|e| SqlInterfaceError::DatabaseCheckFeedSetValsFailure {
+            location: module_path!().to_string(),
             table_name: SQL_TABLE_FEEDLOG.to_string(),
             source: Box::new(e),
         })?;
@@ -462,6 +478,7 @@ impl SqlInterfaceFeed {
         // check the query results
         if count_null_values_feedpatterns < 0 || count_rows_feedpatterns < 0 {
             return Err(SqlInterfaceError::DatabaseFeedTableNegativeValue(
+                module_path!().to_string(),
                 SQL_TABLE_FEEDPATTERNS.to_string(),
                 count_null_values_feedpatterns,
                 count_rows_feedpatterns,
@@ -469,6 +486,7 @@ impl SqlInterfaceFeed {
         }
         if count_null_values_feedschedule < 0 || count_rows_feedschedule < 0 {
             return Err(SqlInterfaceError::DatabaseFeedTableNegativeValue(
+                module_path!().to_string(),
                 SQL_TABLE_FEEDSCHEDULE.to_string(),
                 count_null_values_feedschedule,
                 count_rows_feedschedule,
@@ -476,6 +494,7 @@ impl SqlInterfaceFeed {
         }
         if count_rows_feedlog < 0 {
             return Err(SqlInterfaceError::DatabaseFeedTableNegativeValue(
+                module_path!().to_string(),
                 SQL_TABLE_FEEDLOG.to_string(),
                 count_null_values_feedschedule,
                 count_rows_feedschedule,
@@ -485,12 +504,14 @@ impl SqlInterfaceFeed {
         // check if there are any NULL values in the feed set value tables
         if count_null_values_feedpatterns > 0 {
             return Err(SqlInterfaceError::DatabaseFeedSetValTableContainsNull(
+                module_path!().to_string(),
                 SQL_QUERY_CHECK_FEEDPATTERNS_NULL.to_string(),
                 count_null_values_feedpatterns,
             ));
         }
         if count_null_values_feedschedule > 0 {
             return Err(SqlInterfaceError::DatabaseFeedSetValTableContainsNull(
+                module_path!().to_string(),
                 SQL_QUERY_CHECK_FEEDSCHEDULE_NULL.to_string(),
                 count_null_values_feedschedule,
             ));
@@ -500,6 +521,7 @@ impl SqlInterfaceFeed {
             // execute the check only when the limit is greater than zero
             if count_rows_feedpatterns > max_rows_feed_pattern.cast_signed() {
                 return Err(SqlInterfaceError::DatabaseFeedTableContainsTooManyRows(
+                    module_path!().to_string(),
                     SQL_TABLE_FEEDPATTERNS.to_string(),
                     count_rows_feedpatterns.cast_unsigned(),
                     max_rows_feed_pattern,
@@ -511,6 +533,7 @@ impl SqlInterfaceFeed {
             // execute the check only when the limit is greater than zero
             if count_rows_feedschedule > max_rows_feed_schedule.cast_signed() {
                 return Err(SqlInterfaceError::DatabaseFeedTableContainsTooManyRows(
+                    module_path!().to_string(),
                     SQL_TABLE_FEEDSCHEDULE.to_string(),
                     count_rows_feedschedule.cast_unsigned(),
                     max_rows_feed_schedule,
@@ -522,6 +545,7 @@ impl SqlInterfaceFeed {
             // execute the check only when the limit is greater than zero
             if count_rows_feedlog > max_rows_feed_log.cast_signed() {
                 return Err(SqlInterfaceError::DatabaseFeedTableContainsTooManyRows(
+                    module_path!().to_string(),
                     SQL_TABLE_FEEDLOG.to_string(),
                     count_rows_feedlog.cast_unsigned(),
                     max_rows_feed_log,
@@ -566,6 +590,7 @@ impl SqlInterfaceFeed {
             Ok(c) => c,
             Err(_) => {
                 return Err(SqlInterfaceError::FeedScheduleEntryRequestFailure(
+                    module_path!().to_string(),
                     sql_query.to_string(),
                 ));
             }
@@ -587,6 +612,7 @@ impl SqlInterfaceFeed {
                     // abort processing and return the error
                     return Err(
                         SqlInterfaceError::FeedScheduleEntryTimeStampProcessingFailure {
+                            location: module_path!().to_string(),
                             number_entries: feedschedule_entries.len(),
                             source: Box::new(e),
                         },
@@ -688,6 +714,7 @@ impl SqlInterfaceFeed {
                 Ok(c) => c,
                 Err(e) => {
                     return Err(SqlInterfaceError::SingleFeedpatternRequestFailure {
+                        location: module_path!().to_string(),
                         query: sql_query.as_str().to_string(),
                         source: e,
                     });
@@ -697,6 +724,7 @@ impl SqlInterfaceFeed {
         // check the error case if there is no response
         if single_feedpattern_entry_array.is_empty() {
             return Err(SqlInterfaceError::SingleFeedpatternRequestEmptyResponse(
+                module_path!().to_string(),
                 sql_query,
             ));
         }
@@ -704,6 +732,7 @@ impl SqlInterfaceFeed {
         // check the error case if there is more than one response
         if single_feedpattern_entry_array.len() > 1 {
             return Err(SqlInterfaceError::SingleFeedpatternRequestNoSingleResponse(
+                module_path!().to_string(),
                 sql_query,
             ));
         }
@@ -775,6 +804,7 @@ impl SqlInterfaceFeed {
             Ok(c) => c,
             Err(e) => {
                 return Err(SqlInterfaceError::SingleFeedpatternRequestFailure {
+                    location: module_path!().to_string(),
                     query: sql_query,
                     source: e,
                 });
@@ -784,6 +814,7 @@ impl SqlInterfaceFeed {
         // check the error case if there is no response
         if single_feedpattern_entry_array.is_empty() {
             return Err(SqlInterfaceError::SingleFeedpatternRequestEmptyResponse(
+                module_path!().to_string(),
                 sql_query,
             ));
         }
@@ -791,6 +822,7 @@ impl SqlInterfaceFeed {
         // check the error case if there is more than one response
         if single_feedpattern_entry_array.len() > 1 {
             return Err(SqlInterfaceError::SingleFeedpatternRequestNoSingleResponse(
+                module_path!().to_string(),
                 sql_query,
             ));
         }
@@ -800,6 +832,7 @@ impl SqlInterfaceFeed {
         // check if pause and feed duration values are positive
         if feed_phase.pause_duration < 0 || feed_phase.feed_duration < 0 {
             return Err(SqlInterfaceError::DatabaseFeedPhaseDurationNegative(
+                module_path!().to_string(),
                 feed_phase.pause_duration,
                 feed_phase.feed_duration,
             ));
@@ -916,7 +949,7 @@ pub mod tests {
             Err(e) => {
                 assert!(matches!(
                     e,
-                    SqlInterfaceError::SingleFeedpatternRequestEmptyResponse(_)
+                    SqlInterfaceError::SingleFeedpatternRequestEmptyResponse(_, _)
                 ));
             }
         }
@@ -1094,6 +1127,7 @@ pub mod tests {
             test_result,
             Err(SqlInterfaceError::DatabaseFeedTableContainsTooManyRows(
                 _,
+                _,
                 2,
                 1
             ))
@@ -1182,6 +1216,7 @@ pub mod tests {
         assert!(matches!(
             test_result,
             Err(SqlInterfaceError::DatabaseFeedTableContainsTooManyRows(
+                _,
                 _,
                 _,
                 _
@@ -1493,6 +1528,7 @@ pub mod tests {
         assert!(matches!(
             test_result,
             Err(SqlInterfaceError::DatabaseFeedTableContainsTooManyRows(
+                _,
                 _,
                 2,
                 1

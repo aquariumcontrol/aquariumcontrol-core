@@ -200,13 +200,16 @@ impl Ds18b20 {
             base_dir.join(self.config.system_driver_sensor_path_prefix.to_string() + sensor_id);
 
         if !device_folder.exists() {
-            return Err(Ds18b20Error::SensorIdNotFound(sensor_id.to_string()));
+            return Err(Ds18b20Error::SensorIdNotFound(
+                module_path!().to_string(),
+                sensor_id.to_string(),
+            ));
         }
 
         let device_file = device_folder.join(self.config.system_driver_file_name.clone());
 
         let mut retries = self.config.max_retries;
-        let mut last_error_recorded = Ds18b20Error::UnidentifiedError;
+        let mut last_error_recorded = Ds18b20Error::UnidentifiedError(module_path!().to_string());
 
         while retries > 0 {
             match fs::read_to_string(&device_file) {
@@ -226,23 +229,32 @@ impl Ds18b20 {
                                         // let fahrenheit = (celsius * 9.0 / 5.0) + 32.0;
                                         return Ok(Ds18b20ResultData::new(celsius));
                                     } else {
-                                        last_error_recorded = Ds18b20Error::TemperatureOutOfRange;
+                                        last_error_recorded = Ds18b20Error::TemperatureOutOfRange(
+                                            module_path!().to_string(),
+                                        );
                                     }
                                 } else {
-                                    last_error_recorded = Ds18b20Error::TemperatureParseError;
+                                    last_error_recorded = Ds18b20Error::TemperatureParseError(
+                                        module_path!().to_string(),
+                                    );
                                 }
                             } else {
-                                last_error_recorded = Ds18b20Error::TemperatureEntryNotFound;
+                                last_error_recorded = Ds18b20Error::TemperatureEntryNotFound(
+                                    module_path!().to_string(),
+                                );
                             }
                         } else {
-                            last_error_recorded = Ds18b20Error::Line0NotEndingWithYes;
+                            last_error_recorded =
+                                Ds18b20Error::Line0NotEndingWithYes(module_path!().to_string());
                         }
                     } else {
-                        last_error_recorded = Ds18b20Error::InsufficientLinesInFile;
+                        last_error_recorded =
+                            Ds18b20Error::InsufficientLinesInFile(module_path!().to_string());
                     }
                 }
                 Err(e) => {
-                    last_error_recorded = Ds18b20Error::ReadToStringFailure;
+                    last_error_recorded =
+                        Ds18b20Error::ReadToStringFailure(module_path!().to_string());
                 }
             }
 
@@ -492,6 +504,7 @@ pub mod tests {
             matches!(
                 ds18b20.read(&invalid_temperature_sensor_id),
                 Err(Ds18b20Error::SensorIdNotFound(
+                    _,
                     _invalid_temperature_sensor_id
                 ))
             ),
@@ -518,7 +531,7 @@ pub mod tests {
         assert_eq!(
             matches!(
                 ds18b20.read(&valid_temperature_sensor_id),
-                Err(Ds18b20Error::ReadToStringFailure)
+                Err(Ds18b20Error::ReadToStringFailure(_))
             ),
             true
         );
@@ -543,7 +556,7 @@ pub mod tests {
         assert_eq!(
             matches!(
                 ds18b20.read(&valid_temperature_sensor_id),
-                Err(Ds18b20Error::InsufficientLinesInFile)
+                Err(Ds18b20Error::InsufficientLinesInFile(_))
             ),
             true
         );
@@ -568,7 +581,7 @@ pub mod tests {
         assert_eq!(
             matches!(
                 ds18b20.read(&valid_temperature_sensor_id),
-                Err(Ds18b20Error::Line0NotEndingWithYes)
+                Err(Ds18b20Error::Line0NotEndingWithYes(_))
             ),
             true
         );
@@ -593,7 +606,7 @@ pub mod tests {
         assert_eq!(
             matches!(
                 ds18b20.read(&valid_temperature_sensor_id),
-                Err(Ds18b20Error::TemperatureEntryNotFound)
+                Err(Ds18b20Error::TemperatureEntryNotFound(_))
             ),
             true
         );
@@ -618,7 +631,7 @@ pub mod tests {
         assert_eq!(
             matches!(
                 ds18b20.read(&valid_temperature_sensor_id),
-                Err(Ds18b20Error::TemperatureParseError)
+                Err(Ds18b20Error::TemperatureParseError(_))
             ),
             true
         );
@@ -643,7 +656,7 @@ pub mod tests {
         assert_eq!(
             matches!(
                 ds18b20.read(&valid_temperature_sensor_id),
-                Err(Ds18b20Error::TemperatureOutOfRange)
+                Err(Ds18b20Error::TemperatureOutOfRange(_))
             ),
             true
         );
@@ -668,7 +681,7 @@ pub mod tests {
         assert_eq!(
             matches!(
                 ds18b20.read(&valid_temperature_sensor_id),
-                Err(Ds18b20Error::TemperatureOutOfRange)
+                Err(Ds18b20Error::TemperatureOutOfRange(_))
             ),
             true
         );

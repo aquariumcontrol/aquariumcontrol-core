@@ -73,12 +73,14 @@ impl SqlInterfaceRefill {
         let count_rows =
             SqlInterface::get_single_integer_from_database(&mut conn, SQL_QUERY_CHECK_REFILL_COUNT)
                 .map_err(|e| SqlInterfaceError::DatabaseCheckRefillFailure {
+                    location: module_path!().to_string(),
                     source: Box::new(e),
                 })?;
 
         // check the query results
         if count_rows < 0 {
             return Err(SqlInterfaceError::DatabaseRefillTableNegativeValue(
+                module_path!().to_string(),
                 count_rows,
             ));
         }
@@ -87,6 +89,7 @@ impl SqlInterfaceRefill {
             // execute the check only when the limit is greater than zero
             if count_rows > max_rows_refill.cast_signed() {
                 return Err(SqlInterfaceError::DatabaseRefillTableContainsTooManyRows(
+                    module_path!().to_string(),
                     count_rows.cast_unsigned(),
                     max_rows_refill,
                 ));
@@ -153,6 +156,7 @@ impl DatabaseInterfaceRefillTrait for SqlInterfaceRefill {
             Ok(delta_time.num_seconds() as u64)
         } else {
             Err(SqlInterfaceError::NegativeTimeDeltaSeconds(
+                module_path!().to_string(),
                 delta_time.num_seconds(),
             ))
         }
@@ -182,7 +186,10 @@ impl DatabaseInterfaceRefillTrait for SqlInterfaceRefill {
                 if c >= 0 {
                     Ok(c as u64)
                 } else {
-                    Err(SqlInterfaceError::NegativeInteger(c))
+                    Err(SqlInterfaceError::NegativeInteger(
+                        module_path!().to_string(),
+                        c,
+                    ))
                 }
             }
             Err(e) => Err(e),
@@ -221,6 +228,7 @@ impl DatabaseInterfaceRefillTrait for SqlInterfaceRefill {
             sql_query_strings::SQL_QUERY_READ_REFILL_COUNT_LAST_HOUR,
         )
         .map_err(|e| SqlInterfaceError::RefillPastDataRetrievalFailed {
+            location: module_path!().to_string(),
             category: "count".to_string(),
             interval: "last hour".to_string(),
             source: Box::new(e),
@@ -242,6 +250,7 @@ impl DatabaseInterfaceRefillTrait for SqlInterfaceRefill {
             sql_query_strings::SQL_QUERY_READ_REFILL_COUNT_LAST_24H,
         )
         .map_err(|e| SqlInterfaceError::RefillPastDataRetrievalFailed {
+            location: module_path!().to_string(),
             category: "count".to_string(),
             interval: "last 24h".to_string(),
             source: Box::new(e),
@@ -264,6 +273,7 @@ impl DatabaseInterfaceRefillTrait for SqlInterfaceRefill {
             sql_query_strings::SQL_QUERY_READ_REFILL_VOLUME_LAST_24H,
         )
         .map_err(|e| SqlInterfaceError::RefillPastDataRetrievalFailed {
+            location: module_path!().to_string(),
             category: "volume".to_string(),
             interval: "last 24h".to_string(),
             source: Box::new(e),
@@ -286,6 +296,7 @@ impl DatabaseInterfaceRefillTrait for SqlInterfaceRefill {
             sql_query_strings::SQL_QUERY_READ_REFILL_VOLUME_LAST_HOUR,
         )
         .map_err(|e| SqlInterfaceError::RefillPastDataRetrievalFailed {
+            location: module_path!().to_string(),
             category: "volume".to_string(),
             interval: "last hour".to_string(),
             source: Box::new(e),
@@ -327,6 +338,7 @@ impl DatabaseInterfaceRefillTrait for SqlInterfaceRefill {
                 },
             )
             .map_err(|e| SqlInterfaceError::InsertRefillEventFailure {
+                location: module_path!().to_string(),
                 sql_query_string,
                 source: e,
             })
@@ -391,7 +403,10 @@ pub mod tests {
         assert!(matches!(sql_interface_refill.check_empty(), Ok(_)));
         assert!(matches!(
             sql_interface_refill.get_last_refill_timestamp(),
-            Err(SqlInterfaceError::TimestampRequestFailure { source: _ })
+            Err(SqlInterfaceError::TimestampRequestFailure {
+                location: _,
+                source: _
+            })
         ));
         println!("* checking timestamp of last refill (FAIL) succeeded.");
         // **************************************************************************************
@@ -564,6 +579,7 @@ pub mod tests {
         assert!(matches!(
             test_result,
             Err(SqlInterfaceError::DatabaseRefillTableContainsTooManyRows(
+                _,
                 _,
                 _
             ))

@@ -27,8 +27,14 @@ fn get_relay_command_normally_open(command: &InternalCommand) -> Result<bool, Re
     match command {
         InternalCommand::SwitchOn(_) => Ok(true),
         InternalCommand::SwitchOff(_) => Ok(false),
-        InternalCommand::Pulse(d, _) => Err(RelayError::PulseNotAllowedForDevice(d.clone())),
-        _ => Err(RelayError::IrrelevantCommand(command.clone())),
+        InternalCommand::Pulse(d, _) => Err(RelayError::PulseNotAllowedForDevice(
+            module_path!().to_string(),
+            d.clone(),
+        )),
+        _ => Err(RelayError::IrrelevantCommand(
+            module_path!().to_string(),
+            command.clone(),
+        )),
     }
 }
 
@@ -50,8 +56,14 @@ fn get_relay_command_normally_closed(command: &InternalCommand) -> Result<bool, 
     match command {
         InternalCommand::SwitchOn(_) => Ok(false),
         InternalCommand::SwitchOff(_) => Ok(true),
-        InternalCommand::Pulse(d, _) => Err(RelayError::PulseNotAllowedForDevice(d.clone())),
-        _ => Err(RelayError::IrrelevantCommand(command.clone())),
+        InternalCommand::Pulse(d, _) => Err(RelayError::PulseNotAllowedForDevice(
+            module_path!().to_string(),
+            d.clone(),
+        )),
+        _ => Err(RelayError::IrrelevantCommand(
+            module_path!().to_string(),
+            command.clone(),
+        )),
     }
 }
 

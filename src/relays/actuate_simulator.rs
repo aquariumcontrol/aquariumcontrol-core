@@ -73,7 +73,10 @@ impl RelayActuationTrait for ActuateSimulator {
                     target: module_path!(),
                     "ignoring irrelevant internal command {internal_command}."
                 );
-                Err(RelayError::IrrelevantCommand(internal_command.clone()))
+                Err(RelayError::IrrelevantCommand(
+                    module_path!().to_string(),
+                    internal_command.clone(),
+                ))
             }
         }
     }

@@ -13,32 +13,35 @@ use thiserror::Error;
 #[derive(Debug, Error)]
 pub enum RelayError {
     /// Received an irrelevant command.
-    #[error("Received an irrelevant command {0}")]
-    IrrelevantCommand(InternalCommand),
+    #[error("[{0}] Received an irrelevant command {1}")]
+    IrrelevantCommand(String, InternalCommand),
 
     /// Failure occurred in command message creation.
-    #[error("Failure occurred in command message creation")]
-    FailureCommandMessageCreation,
+    #[error("[{0}] Failure occurred in command message creation")]
+    FailureCommandMessageCreation(String),
 
     /// Error occurred when writing to relay.
-    #[error("Error occurred when writing to relay")]
-    WriteError,
+    #[error("[{0}] Error occurred when writing to relay")]
+    WriteError(String),
 
     /// Error occurred when reading relay state.
-    #[error("Error occurred when reading relay state")]
-    ReadError,
+    #[error("[{0}] Error occurred when reading relay state")]
+    ReadError(String),
 
     /// Encountered an incorrect checksum in communication with relay provider.
-    #[error("Encountered an incorrect checksum in communication with relay provider")]
-    IncorrectChecksum,
+    #[error("[{0}] Encountered an incorrect checksum in communication with relay provider")]
+    IncorrectChecksum(String),
 
     /// The pulse-command is not allowed for the device.
-    #[error("The pulse-command is not allowed for the device {0}")]
-    PulseNotAllowedForDevice(AquariumDevice),
+    #[error("[{0}] The pulse-command is not allowed for the device {1}")]
+    PulseNotAllowedForDevice(String, AquariumDevice),
 
     /// The actuation failed after several retries.
-    #[error("Actuation failed (attempt {last_attempt_number}/{max_attempt_allowed}).")]
+    #[error(
+        "[{location}] Actuation failed (attempt {last_attempt_number}/{max_attempt_allowed})."
+    )]
     ActuationFailed {
+        location: String,
         actuation_name: String,
         last_attempt_number: u64,
         max_attempt_allowed: u64,
@@ -48,24 +51,28 @@ pub enum RelayError {
     },
 
     /// Used to initialize variable. Value is overwritten with real error.
-    #[error("Initial value")]
-    InitialValue,
+    #[error("[{0}] Initial value")]
+    InitialValue(String),
 
     /// Serial port has not been initialized. This is a configuration error.
-    #[error("Serial port has not been initialized. This is a configuration error.")]
-    SerialPortNotConfigured,
+    #[error("[{0}] Serial port has not been initialized. This is a configuration error.")]
+    SerialPortNotConfigured(String),
 
     /// Sending to the serial port failed
-    #[error("Sending to serial port failed.")]
+    #[error("[{location}] Sending to serial port failed.")]
     SendToSerialPortFailed {
+        location: String,
+
         #[source]
-        source: std::io::Error
+        source: std::io::Error,
     },
 
     /// Flushing the serial port buffer failed.
-    #[error("Flushing serial port buffer failed.")]
+    #[error("[{location}] Flushing serial port buffer failed.")]
     SerialPortFlushFailed {
+        location: String,
+
         #[source]
-        source: serialport::Error
-    }
+        source: serialport::Error,
+    },
 }

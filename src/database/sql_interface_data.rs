@@ -39,12 +39,14 @@ impl SqlInterfaceData {
         let count_rows =
             SqlInterface::get_single_integer_from_database(&mut conn, SQL_QUERY_CHECK_DATA_COUNT)
                 .map_err(|e| SqlInterfaceError::DatabaseCheckDataFailure {
+                location: module_path!().to_string(),
                 source: Box::new(e),
             })?;
 
         // check the query results
         if count_rows < 0 {
             return Err(SqlInterfaceError::DatabaseDataTableNegativeValue(
+                module_path!().to_string(),
                 count_rows,
             ));
         }
@@ -53,6 +55,7 @@ impl SqlInterfaceData {
             // execute the check only when the limit is greater than zero
             if count_rows > max_rows_data.cast_signed() {
                 return Err(SqlInterfaceError::DatabaseDataTableContainsTooManyRows(
+                    module_path!().to_string(),
                     count_rows.cast_unsigned(),
                     max_rows_data,
                 ));
@@ -265,6 +268,7 @@ impl SqlInterfaceData {
         ) {
             Ok(_) => Ok(()),
             Err(e) => Err(SqlInterfaceError::InsertDataFrameFailure {
+                location: module_path!().to_string(),
                 sql_query_string,
                 source: e,
             }),
@@ -435,6 +439,7 @@ pub mod tests {
         // check the error case if there is no response
         if (data_frame_1_array.len() == 0) || (data_frame_2_array.len() == 0) {
             return Err(SqlInterfaceError::SingleDataFrameRequestEmptyResponse(
+                module_path!().to_string(),
                 sql_query_string_1,
                 sql_query_string_2,
             ));
@@ -442,6 +447,7 @@ pub mod tests {
         // check the error case if there is more than one response
         if (data_frame_2_array.len() > 1) || (data_frame_2_array.len() > 1) {
             return Err(SqlInterfaceError::SingleDataFrameRequestNoSingleResponse(
+                module_path!().to_string(),
                 sql_query_string_1,
                 sql_query_string_2,
             ));
@@ -673,6 +679,7 @@ pub mod tests {
         assert!(matches!(
             test_result,
             Err(SqlInterfaceError::DatabaseDataTableContainsTooManyRows(
+                _,
                 _,
                 _
             ))

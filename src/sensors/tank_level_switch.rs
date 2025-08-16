@@ -106,13 +106,14 @@ impl TankLevelSwitchSignals {
 pub enum TankLevelSwitchError {
     /// Application shall use real HW, but GPIO lib interface was not provided.
     #[cfg(all(target_os = "linux", feature = "target_hw"))]
-    #[error("Application shall use real HW, but GPIO lib interface was not provided.")]
-    GPIOInterfaceNotProvided,
+    #[error("[{0}] Application shall use real HW, but GPIO lib interface was not provided.")]
+    GPIOInterfaceNotProvided(String),
 
     /// Could not get pin from GPIO interface for tank level monitoring.
     #[cfg(all(target_os = "linux", feature = "target_hw"))]
-    #[error("Could not get pin {pin_number} from GPIO interface for tank level monitoring.")]
+    #[error("[{location}] Could not get pin {pin_number} from GPIO interface for tank level monitoring.")]
     GpioPinRetrievalError {
+        location: String,
         pin_number: u8,
 
         #[source]
@@ -120,13 +121,13 @@ pub enum TankLevelSwitchError {
     },
 
     /// Application shall use simulator, but the channel to TCP thread was not provided.
-    #[error("Configured to run with simulator, but no channel to TCP thread provided.")]
-    SimulatorChannelNotProvided,
+    #[error("[{0}] Configured to run with simulator, but no channel to TCP thread provided.")]
+    SimulatorChannelNotProvided(String),
 
     /// Input pin has not been provided. This is a configuration error.
     #[allow(unused)] // variant is constructed in platform-specific code and evaluated in generic code.
-    #[error("Input pin has not been provided. This is a configuration error.")]
-    InputPinNotProvided,
+    #[error("[{0}] Input pin has not been provided. This is a configuration error.")]
+    InputPinNotProvided(String),
 }
 
 /// Contains the measurement of tank level position and calculation of stabilized tank level position signal.
@@ -260,7 +261,9 @@ impl TankLevelSwitch {
         gpio_tank_level: u8,
     ) -> Result<TankLevelSwitch, TankLevelSwitchError> {
         if !config.use_simulator && gpio_lib_handle_opt.is_none() {
-            return Err(TankLevelSwitchError::GPIOInterfaceNotProvided);
+            return Err(TankLevelSwitchError::GPIOInterfaceNotProvided(
+                module_path!().to_string(),
+            ));
         }
 
         let gpio_lib_handle = gpio_lib_handle_opt.unwrap();
@@ -268,6 +271,7 @@ impl TankLevelSwitch {
         // get pin for tank level monitoring
         let tank_level_pin = gpio_lib_handle.get(gpio_tank_level).map_err(|e| {
             TankLevelSwitchError::GpioPinRetrievalError {
+                location: module_path!().to_string(),
                 pin_number: gpio_tank_level,
                 source: e,
             }
@@ -438,7 +442,9 @@ impl TankLevelSwitch {
         let cycle_time_duration = Duration::from_millis(CYCLE_TIME_TANK_LEVEL_SWITCH_MILLIS);
 
         if (self.config.use_simulator) && (tx_to_tcp_opt.is_none() | rx_from_tcp_opt.is_none()) {
-            return Err(TankLevelSwitchError::SimulatorChannelNotProvided);
+            return Err(TankLevelSwitchError::SimulatorChannelNotProvided(
+                module_path!().to_string(),
+            ));
         }
 
         let mut start_time = Instant::now();
@@ -458,7 +464,7 @@ impl TankLevelSwitch {
                 if let Err(e) =
                     self.update_tank_level_switch_signals(tx_to_tcp_opt, rx_from_tcp_opt)
                 {
-                    if matches!(e, TankLevelSwitchError::InputPinNotProvided)
+                    if matches!(e, TankLevelSwitchError::InputPinNotProvided(_))
                         && !self.lock_error_input_pin_none
                     {
                         error!(target: module_path!(),"Tank level switch signal could not be read (e:?).");
