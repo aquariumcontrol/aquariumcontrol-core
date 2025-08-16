@@ -89,19 +89,25 @@ pub struct GpioHandlerConfig {
 /// Contains error definition for GpioHandler
 #[derive(Error, Debug)]
 pub enum GpioHandlerError {
+    /// Configuration contains invalid GPIO pin mapping.
     #[error("Configuration contains invalid GPIO pin mapping: {0} is out of range")]
-    GpioOutsideRange(u8),
+    PinOutsideRange(u8),
 
+    /// Found dupplicate GPIO values in configuration.
     #[error("Found duplicate GPIO values in configuration: {0} is not unique.")]
-    GpioDuplicateValue(u8),
+    PinDuplicateValue(u8),
 
+    /// Could not open interface to GPIO.
     #[cfg(all(target_os = "linux", feature = "target_hw"))]
     #[error("Could not open interface to GPIO.")]
-    GpioOpenInterfaceFailed {
+    OpenInterfaceFailed {
         #[source]
         source: rppal::gpio::Error,
     },
 
+    /// This error is triggered, When running either on different OS or without target hardware.
+    /// Defensive programming: This prevents the startup of the application.
+    #[cfg(any(not(target_os = "linux"), not(feature = "target_hw")))]
     #[error("Usage of hardware not supported on this platform.")]
     PlatformNotSupported,
 }
@@ -153,10 +159,10 @@ impl GpioHandler {
 
         for &value in &gpio_values {
             if value <= GPIO_MIN || value >= GPIO_MAX {
-                return Err(GpioHandlerError::GpioOutsideRange(value));
+                return Err(GpioHandlerError::PinOutsideRange(value));
             }
             if !seen_values.insert(value) {
-                return Err(GpioHandlerError::GpioDuplicateValue(value));
+                return Err(GpioHandlerError::PinDuplicateValue(value));
             }
         }
 
@@ -192,7 +198,7 @@ impl GpioHandler {
         if !use_simulator {
             // open interface to the GPIO library
             let gpio_lib_handle =
-                Gpio::new().map_err(|e| GpioHandlerError::GpioOpenInterfaceFailed { source: e })?;
+                Gpio::new().map_err(|e| GpioHandlerError::OpenInterfaceFailed { source: e })?;
 
             Ok(Some(GpioHandler {
                 gpio_lib_handle_opt: Some(gpio_lib_handle),
@@ -259,7 +265,7 @@ pub mod tests {
         let result = GpioHandler::new(config.gpio_handler);
         assert!(result.is_err());
         // Check that we get the specific error we expect.
-        assert!(matches!(result, Err(GpioHandlerError::GpioOutsideRange(3))));
+        assert!(matches!(result, Err(GpioHandlerError::PinOutsideRange(3))));
     }
     #[test]
     pub fn test_invalid_gpio_config_duplicate() {
@@ -274,7 +280,7 @@ pub mod tests {
         assert!(result.is_err());
         assert!(matches!(
             result,
-            Err(GpioHandlerError::GpioDuplicateValue(_))
+            Err(GpioHandlerError::PinDuplicateValue(_))
         ));
     }
 
@@ -288,10 +294,7 @@ pub mod tests {
 
         let result = GpioHandler::new(config.gpio_handler);
         assert!(result.is_err());
-        assert!(matches!(
-            result,
-            Err(GpioHandlerError::GpioOutsideRange(40))
-        ));
+        assert!(matches!(result, Err(GpioHandlerError::PinOutsideRange(40))));
     }
 
     mod commissioning_prep {

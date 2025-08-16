@@ -222,6 +222,7 @@ impl I2cInterface {
                 })?;
         if realized_write_len != i2c_request.send_buf.len() {
             return Err(I2cError::InsufficientWrite(
+                module_path!().to_string(),
                 i2c_request.send_buf.len(),
                 realized_write_len,
             ));
@@ -241,6 +242,7 @@ impl I2cInterface {
                 })?;
         if received_message_length != i2c_request.expected_response_length {
             Err(I2cError::IncorrectResponseLength(
+                module_path!().to_string(),
                 i2c_request.expected_response_length,
                 received_message_length,
             ))

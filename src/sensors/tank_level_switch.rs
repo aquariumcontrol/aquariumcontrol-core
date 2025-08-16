@@ -367,7 +367,9 @@ impl TankLevelSwitch {
                         self.lock_error_input_pin_none = false;
                     }
                     None => {
-                        return Err(TankLevelSwitchError::InputPinNotProvided);
+                        return Err(TankLevelSwitchError::InputPinNotProvided(
+                            module_path!().to_string(),
+                        ));
                     }
                 }
             }

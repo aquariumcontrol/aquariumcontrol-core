@@ -518,7 +518,7 @@ impl Dht {
         let gpio: &mut Gpio = if self.gpio_opt.is_some() {
             self.gpio_opt.as_mut().unwrap()
         } else {
-            return Err(DhtError::IncorrectPlatform);
+            return Err(DhtError::IncorrectPlatform(module_path!().to_string()));
         };
 
         // get pin for providing supply voltage to DHT sensor
