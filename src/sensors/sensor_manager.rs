@@ -31,6 +31,7 @@ use crate::simulator::get_resp_sim::GetResponseFromSimulatorTrait;
 use crate::utilities::channel_content::{AquariumSignal, InternalCommand};
 use crate::utilities::proc_ext_req::ProcessExternalRequestTrait;
 use std::time::{Duration, Instant};
+use thiserror::Error;
 
 #[derive(Deserialize, Debug)]
 /// Holds the configuration data for the measurement of ambient signals from DHT sensor
@@ -157,6 +158,17 @@ impl SensorManagerSignals {
     }
 }
 
+#[derive(Error, Debug)]
+pub enum SensorManagerError {
+    /// Invalid configuration of ambient temperature measurement.
+    #[error("[{0}]: invalid configuration of ambient temperature. source_ambient_temperature may only have values ({1}, {2}) configured value is {3}")]
+    InvalidAmbientTemperatureConfiguration(String, String, String, String),
+
+    /// Invalid configuration of water temperature measurement.
+    #[error("[{0}]: invalid configuration of water temperature. source_ambient_temperature may only have values ({1}, {2}) configured value is {3}")]
+    InvalidWaterTemperatureConfiguration(String, String, String, String),
+}
+
 /// Contains the communication with DHT ambient temperature and humidity sensor.
 /// Alternatively, TCP communication is used when configured to run with the simulator.
 /// Sensor data is read periodically and stored.
@@ -247,22 +259,19 @@ impl SensorManager {
     ///
     /// # Returns
     /// A new `Ambient` struct, ready to collect and provide ambient sensor data.
-    pub fn new(config: SensorManagerConfig) -> SensorManager {
+    pub fn new(config: SensorManagerConfig) -> Result<SensorManager, SensorManagerError> {
         // Check if the configuration of the ambient temperature source is valid.
         if config.source_ambient_temperature
             != sensor_manager_constants::SOURCE_AMBIENT_TEMPERATURE_DHT
             && config.source_ambient_temperature
                 != sensor_manager_constants::SOURCE_AMBIENT_TEMPERATURE_DS18B20
         {
-            panic!(
-                "{}: invalid configuration of sensor manager for ambient temperature.\n \
-                source_ambient_temperature may only have values ({}, {})\n \
-                configured value is {}",
-                module_path!(),
-                sensor_manager_constants::SOURCE_AMBIENT_TEMPERATURE_DHT,
-                sensor_manager_constants::SOURCE_AMBIENT_TEMPERATURE_DS18B20,
-                config.source_ambient_temperature
-            );
+            return Err(SensorManagerError::InvalidAmbientTemperatureConfiguration(
+                module_path!().to_string(),
+                sensor_manager_constants::SOURCE_AMBIENT_TEMPERATURE_DHT.to_string(),
+                sensor_manager_constants::SOURCE_AMBIENT_TEMPERATURE_DS18B20.to_string(),
+                config.source_ambient_temperature,
+            ));
         }
 
         // Check if the configuration of the water temperature source is valid.
@@ -271,15 +280,12 @@ impl SensorManager {
             && config.source_water_temperature
                 != sensor_manager_constants::SOURCE_WATER_TEMPERATURE_DS18B20
         {
-            panic!(
-                "{}: invalid configuration of sensor manager for water temperature.\n \
-                source_water_temperature may only have values ({}, {})\n \
-                configured value is {}",
-                module_path!(),
-                sensor_manager_constants::SOURCE_WATER_TEMPERATURE_ATLAS_SCIENTIFIC,
-                sensor_manager_constants::SOURCE_WATER_TEMPERATURE_DS18B20,
-                config.source_water_temperature
-            );
+            return Err(SensorManagerError::InvalidWaterTemperatureConfiguration(
+                module_path!().to_string(),
+                sensor_manager_constants::SOURCE_WATER_TEMPERATURE_ATLAS_SCIENTIFIC.to_string(),
+                sensor_manager_constants::SOURCE_WATER_TEMPERATURE_DS18B20.to_string(),
+                config.source_water_temperature,
+            ));
         }
 
         let replacement_value_ambient_temperature = config.replacement_value_ambient_temperature;
@@ -292,7 +298,7 @@ impl SensorManager {
             Duration::from_millis(sensor_manager_constants::HW_MEASUREMENT_INTERVAL_MILLIS)
         };
 
-        SensorManager {
+        Ok(SensorManager {
             config,
             ambient_temperature: replacement_value_ambient_temperature,
             ambient_humidity: replacement_value_ambient_humidity,
@@ -312,7 +318,7 @@ impl SensorManager {
             lock_warn_max_mutex_access_duration: false,
             #[cfg(test)]
             mutex_access_duration_exceeded: false,
-        }
+        })
     }
 
     /// Communicates with a simulator thread via channels to retrieve
@@ -678,7 +684,8 @@ pub mod tests {
     use crate::sensors::atlas_scientific::AtlasScientificResultData;
     use crate::sensors::ds18b20::Ds18b20ResultData;
     use crate::sensors::sensor_manager::{
-        SensorManager, SensorManagerChannels, SensorManagerMutexes, SensorManagerSignals,
+        SensorManager, SensorManagerChannels, SensorManagerError, SensorManagerMutexes,
+        SensorManagerSignals,
     };
     use crate::utilities::channel_content::InternalCommand;
     use crate::utilities::config::{read_config_file, ConfigData};
@@ -690,21 +697,37 @@ pub mod tests {
     use std::time::Duration;
 
     #[test]
-    #[should_panic]
-    pub fn test_sensor_manager_panics_when_water_temperature_source_is_invalid() {
+    pub fn test_sensor_manager_error_water_temperature_source_is_invalid() {
         let mut config: ConfigData =
             read_config_file("/config/aquarium_control_test_generic.toml".to_string()).unwrap();
         config.sensor_manager.source_water_temperature = "invalid".to_string();
-        let _ = SensorManager::new(config.sensor_manager);
+        let test_result = SensorManager::new(config.sensor_manager);
+        assert!(matches!(
+            test_result,
+            Err(SensorManagerError::InvalidWaterTemperatureConfiguration(
+                _,
+                _,
+                _,
+                _
+            ))
+        ));
     }
 
     #[test]
-    #[should_panic]
-    pub fn test_sensor_manager_panics_when_ambient_temperature_source_is_invalid() {
+    pub fn test_sensor_manager_error_ambient_temperature_source_is_invalid() {
         let mut config: ConfigData =
             read_config_file("/config/aquarium_control_test_generic.toml".to_string()).unwrap();
         config.sensor_manager.source_ambient_temperature = "invalid".to_string();
-        let _ = SensorManager::new(config.sensor_manager);
+        let test_result = SensorManager::new(config.sensor_manager);
+        assert!(matches!(
+            test_result,
+            Err(SensorManagerError::InvalidAmbientTemperatureConfiguration(
+                _,
+                _,
+                _,
+                _
+            ))
+        ));
     }
 
     fn mock_signal_handler_for_sensor_manager(
@@ -825,7 +848,7 @@ pub mod tests {
         let dht_result = Ok((target_value_ambient_temperature + 1.0, 2.0));
         let mutex_dht = Arc::new(Mutex::new(dht_result));
 
-        let sensor_manager = SensorManager::new(config.sensor_manager);
+        let sensor_manager = SensorManager::new(config.sensor_manager).unwrap();
 
         let mutexes = SensorManagerMutexes {
             mutex_ds18b20_ambient_temperature,
@@ -902,7 +925,7 @@ pub mod tests {
         let dht_result = Ok((target_value_ambient_temperature, 2.0));
         let mutex_dht = Arc::new(Mutex::new(dht_result));
 
-        let sensor_manager = SensorManager::new(config.sensor_manager);
+        let sensor_manager = SensorManager::new(config.sensor_manager).unwrap();
 
         let mutexes = SensorManagerMutexes {
             mutex_ds18b20_ambient_temperature,
@@ -982,7 +1005,7 @@ pub mod tests {
         let dht_result = Ok((target_value_ambient_temperature + 1.0, 2.0));
         let mutex_dht = Arc::new(Mutex::new(dht_result));
 
-        let sensor_manager = SensorManager::new(config.sensor_manager);
+        let sensor_manager = SensorManager::new(config.sensor_manager).unwrap();
 
         let mutexes = SensorManagerMutexes {
             mutex_ds18b20_ambient_temperature,

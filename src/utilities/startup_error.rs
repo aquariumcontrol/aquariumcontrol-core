@@ -8,6 +8,7 @@ use crate::relays::actuate_controllino::ActuateControllinoError;
 use crate::sensors::gpio_handler::GpioHandlerError;
 #[cfg(all(feature = "target_hw", target_os = "linux"))]
 use crate::sensors::i2c_error::I2cError;
+use crate::sensors::sensor_manager::SensorManagerError;
 use crate::sensors::tank_level_switch::TankLevelSwitchError;
 use crate::simulator::tcp_communication::TcpCommunicationError;
 use crate::utilities::config_error::ConfigError;
@@ -126,5 +127,12 @@ pub enum StartupError {
     TankLevelSwitchSetupFailure {
         #[source]
         source: TankLevelSwitchError,
+    },
+
+    /// Could not initialize the sensor manager.
+    #[error("Could not initialize the sensor manager.")]
+    SensorManagerSetupFailure {
+        #[source]
+        source: SensorManagerError,
     },
 }

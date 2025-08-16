@@ -1210,7 +1210,8 @@ fn run() -> Result<(), StartupError> {
 
     let mut atlas_scientific = AtlasScientific::new(config.atlas_scientific);
 
-    let mut sensor_manager = SensorManager::new(config.sensor_manager);
+    let mut sensor_manager = SensorManager::new(config.sensor_manager)
+        .map_err(|e| StartupError::SensorManagerSetupFailure { source: e })?;
 
     let mut relay_manager = RelayManager::new(config.relay_manager.clone());
     let mut schedule_check = ScheduleCheck::new(
