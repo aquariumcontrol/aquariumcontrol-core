@@ -8,7 +8,7 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 */
 use thiserror::Error;
 
-/// Communication of errors occurring in communication via I2C
+/// Contains error definition occurring in communication via I2C
 #[derive(Error, Debug)]
 pub enum I2cError {
     /// Initialization of the I2C interface failed.

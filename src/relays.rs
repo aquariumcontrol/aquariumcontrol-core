@@ -21,5 +21,9 @@ pub mod device_relay_logic;
 
 /// Contains the trait implementation for the relay actuation via GPIO
 pub mod actuate_gpio;
+
+/// Container for message content sent to Controllino
 mod controllino_message;
+
+/// Enum codifies the errors which the program may encounter in preparation or execution of communication with the relay manager
 pub mod relay_error;

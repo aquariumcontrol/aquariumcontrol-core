@@ -13,4 +13,6 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 /// The module processes the input and forwards it to the respective thread via the channel.
 /// The control application does not respond to any request sent to the message queue.
 pub mod messaging;
+
+/// Enum codifies the errors which the program may encounter in communication with the Linux messaging system.
 pub mod messaging_error;

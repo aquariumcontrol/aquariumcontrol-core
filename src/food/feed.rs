@@ -82,7 +82,8 @@ pub struct FeedChannels {
 /// Thread communication is as follows:
 /// ```mermaid
 /// graph LR
-///     feed[Feed Control] --> food_injection[Food Injection] --> relay_manager[Relay Manager]]
+///     feed[Feed Control] --> food_injection[Food Injection]
+///     food_injection[Food Injection] --> relay_manager[Relay Manager]
 ///     relay_manager --> food_injection
 ///     feed --> signal_handler[Signal Handler]
 ///     signal_handler --> feed

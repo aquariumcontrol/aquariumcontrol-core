@@ -10,6 +10,8 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 /// Contains the main functionality for the Balling mineral dosing
 pub mod balling;
 
+/// Contains error definitions for Balling
 pub mod balling_error;
+
 /// Contains the trait implementation for the execution of the dosing
 pub mod mineral_injection;

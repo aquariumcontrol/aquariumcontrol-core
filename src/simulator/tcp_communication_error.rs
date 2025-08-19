@@ -13,7 +13,7 @@ use std::num::ParseFloatError;
 use std::sync::mpsc::{RecvError, SendError};
 use thiserror::Error;
 
-/// Contains the error values for unsuccessful attempts of opening a TCP channel.
+/// Contains the error definition for communication with the simulator via TCP
 #[derive(Debug, Error)]
 pub enum TcpCommunicationError {
     /// value indicates that an error has occurred during TCP communication

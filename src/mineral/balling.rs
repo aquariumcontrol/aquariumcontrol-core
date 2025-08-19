@@ -67,6 +67,7 @@ pub struct BallingConfig {
     pub pump_switch_delay_millis: u32,
 }
 
+/// Container for the channels used by Balling for inter-thread communication
 pub struct BallingChannels {
     /// sender part of the channel for communication to relay manager
     pub tx_balling_to_relay_manager: Sender<InternalCommand>,

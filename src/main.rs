@@ -47,6 +47,7 @@ mod sensors;
 /// This container module features all functionality to communicate with the test server via TCP.
 mod simulator;
 
+#[cfg(test)]
 /// This container module features a set of mock functionality used by test cases.
 mod mocks;
 
@@ -59,7 +60,9 @@ mod utilities;
 /// This container module features all functionality to monitor the control system.
 mod watchmen;
 
+/// This container module features all functionality related to RGB LED.
 mod beacon;
+
 /// This container module features all functionality to replace the evaporated water with fresh water.
 mod water;
 

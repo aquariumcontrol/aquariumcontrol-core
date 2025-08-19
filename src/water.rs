@@ -15,5 +15,9 @@ pub mod water_injection;
 
 /// Contains data definition between the main thread and trait implementation
 pub mod refill_error_states;
+
+/// A data structure for reporting critical refill states, such as excessive triggering, to the monitoring module.
 pub mod refill_monitor_view;
+
+/// Container for communication with SQL database
 pub mod refill_stats_data;

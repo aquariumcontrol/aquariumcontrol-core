@@ -13,6 +13,8 @@ pub mod tcp_communication;
 /// Contains trait implementation for other threads to communicate with the thread defined in tcp_communication
 pub mod get_resp_sim;
 
+/// Contains the error definition for communication with the simulator via TCP
 pub mod tcp_communication_error;
+
 /// Contains definition of data to be exchanged with the test server
 pub mod tcp_data;

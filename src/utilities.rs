@@ -7,17 +7,44 @@ The above copyright notice and this permission notice shall be included in all c
 THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
+/// Defines enums and structs for inter-thread communication via channels.
 pub mod channel_content;
+
+/// Provides common, shared functions and constants used across multiple modules.
 pub mod common;
+
+/// Handles the loading and parsing of the main application configuration from a TOML file.
 pub mod config;
+
+/// Defines error types related to reading and parsing the configuration file.
 pub mod config_error;
+
+/// Defines error types for structural or semantic issues within the configuration file.
 pub mod config_file_definition_error;
+
+/// Implements a simple Infinite Impulse Response (IIR) filter for smoothing sensor data.
 pub mod iir_filter;
+
+/// Contains setup and configuration for the application-wide logging framework.
 pub mod logger;
+
+/// Provides functionality to check for required memory allocation environment variables.
 pub mod memory_config_check;
+
+/// Defines a trait for processing external requests, such as commands from the signal handler.
 pub mod proc_ext_req;
+
+/// Manages the creation of a PID file to make the process ID available to external scripts.
 pub mod publish_pid;
+
+/// Implements a sawtooth wave generator for creating low-frequency PWM-like signals.
 pub mod sawtooth_profile;
+
+/// Manages system signals (e.g., SIGINT, SIGTERM) to ensure graceful application shutdown.
 pub mod signal_handler;
+
+/// Defines a unified error type for failures that can occur during application initialization.
 pub mod startup_error;
+
+/// Provides access to the application's version information from the build environment.
 pub mod version_information;

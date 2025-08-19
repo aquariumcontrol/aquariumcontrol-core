@@ -37,4 +37,5 @@ pub mod dht_error;
 /// Contains error definition for DS18B20 sensor communication
 pub mod ds18b20_error;
 
+/// Contains error definition occurring in communication via I2C
 pub mod i2c_error;

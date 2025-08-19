@@ -150,6 +150,7 @@ pub mod dht22_constants {
     pub const MAX_MUTEX_ACCESS_DURATION_MILLIS: u64 = 10;
 }
 
+#[cfg_attr(doc, aquamarine::aquamarine)]
 /// Represents a Digital Humidity and Temperature (DHT) sensor module, typically a DHT22,
 /// responsible for reading ambient temperature and humidity.
 ///
@@ -162,13 +163,13 @@ pub mod dht22_constants {
 /// precise GPIO manipulation, including setting pin states, managing delays, and
 /// capturing pulse durations via interrupts.
 ///
-/// **Thread Communication: **
+/// Thread Communication:
 /// This module is designed to run in its own dedicated thread, periodically reading sensor data
 /// and making the latest measurements available via a shared `Arc<Mutex<DhtResult>>`.
 /// Other modules (like `Ambient` or `DataLogger`) can then read from this mutex to get the
 /// current temperature and humidity. It also responds to `Quit` commands for graceful shutdown.
 ///
-/// **Platform-Specific Behavior: **
+/// Platform-Specific Behavior:
 /// The core sensor reading logic (`read` function) is conditionally compiled:
 /// - On Linux with the `target_hw` feature enabled, it directly uses `rppal::gpio` for hardware interaction.
 /// - On other platforms or when `target_hw` is disabled, it uses a stub implementation (`Err(DhtError::IncorrectPlatform)`)
