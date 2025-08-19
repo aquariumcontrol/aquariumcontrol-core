@@ -465,8 +465,12 @@ fn run() -> Result<(), StartupError> {
     // instantiate driver for RGB LED
     #[cfg(all(target_os = "linux", feature = "target_hw"))]
     if config.ws2812b.active {
-        let mut ws2812b = Ws2812B::new(config.ws2812b);
-        ws2812b.set_color(RgbLedColor::Red);
+        let mut ws2812b = Ws2812B::new(config.ws2812b).map_err(|e| StartupError::Ws2812BSetupFailure {
+            source: e,
+        });
+        if let Err(e) = ws2812b.set_color(RgbLedColor::Red) {
+            warn!(target: module_path!(), "Failed to set RGB LED color: {e}");
+        }
     }
 
     // connect to SQL database, subsequently set up component-specific interfaces

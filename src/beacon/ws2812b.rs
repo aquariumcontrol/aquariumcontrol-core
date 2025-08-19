@@ -11,8 +11,9 @@ cfg_if::cfg_if! {
         use serde_derive::Deserialize;
         use log::warn;
         use ws2818_rgb_led_spi_driver::adapter_gen::WS28xxAdapter;
-        use ws2818_rgb_led_spi_driver::adapter_spi::WS28xxSpiAdapter;
+        use ws2818_rgb_led_spi_driver::adapter_spi::{WS28xxSpiAdapter, AdapterError};
         use ws2818_rgb_led_spi_driver::encoding::encode_rgb;
+        use thiserror::Error;
     }
 }
 
@@ -28,6 +29,16 @@ pub enum RgbLedColor {
     Blue,
 }
 
+/// Maps an `RgbLedColor` enum to its corresponding GRB byte representation for a WS2812B LED.
+///
+/// WS2812B LEDs typically expect color data in Green-Red-Blue (GRB) order. This function
+/// provides the correct byte array for each primary color.
+///
+/// # Arguments
+/// * `color` - The `RgbLedColor` to convert.
+///
+/// # Returns
+/// A static reference to a 3-byte array `[G, R, B]`.
 #[cfg(all(target_os = "linux", feature = "target_hw"))]
 pub fn get_ws2812b_color_bytes(color: RgbLedColor) -> &'static [u8; 3] {
     match color {
@@ -39,6 +50,18 @@ pub fn get_ws2812b_color_bytes(color: RgbLedColor) -> &'static [u8; 3] {
     }
 }
 
+#[cfg(all(target_os = "linux", feature = "target_hw"))]
+impl fmt::Display for RgbLedColor {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            RgbLedColor::Red => write!(f, "Red"),
+            RgbLedColor::Green => write!(f, "Green"),
+            RgbLedColor::Blue => write!(f, "Blue"),
+        }
+    }
+}
+
+/// Contains configuration data for Ws2812B
 #[derive(Deserialize)]
 #[cfg(all(target_os = "linux", feature = "target_hw"))]
 pub struct Ws2812BConfig {
@@ -52,7 +75,29 @@ pub struct Ws2812BConfig {
     pub active: bool,
 }
 
+/// Defines errors that can occur within the `Ws2812B` module.
 #[cfg(all(target_os = "linux", feature = "target_hw"))]
+#[derive(Error, Debug)]
+pub enum Ws2812BError {
+    /// Failed to set up the adapter for Ws2812B.
+    #[error("Failed to setup adapter for Ws2812B.")]
+    AdapterSetupFailure {
+        #[source]
+        source: AdapterError,
+    },
+
+    /// Failed to set color of Ws2812B
+    #[error("Failed to set color of Ws2812B to {color}.")]
+    AdapterSetColorFailure {
+        color: RgbLedColor,
+
+        #[source]
+        source: AdapterError,
+    }
+}
+
+/// A driver for controlling a strip of WS2812B RGB LEDs via an SPI interface.
+#[cfg(all(target_os = "linux", feature = "target_hw"))]#[cfg(all(target_os = "linux", feature = "target_hw"))]
 pub struct Ws2812B {
     /// SPI-based driver interface
     adapter: WS28xxSpiAdapter,
@@ -63,19 +108,38 @@ pub struct Ws2812B {
 
 #[cfg(all(target_os = "linux", feature = "target_hw"))]
 impl Ws2812B {
-    pub fn new(config: Ws2812BConfig) -> Ws2812B {
-        let adapter = match WS28xxSpiAdapter::new(&config.device_name) {
-            Ok(adapter) => adapter,
-            Err(e) => panic!(
-                "{}: Could not instantiate adapter for RGB LED {e:?}",
-                module_path!()
-            ),
-        };
+    /// Creates a new `Ws2812B` driver instance.
+    ///
+    /// This constructor initializes the connection to the SPI device specified in the
+    /// configuration. It will fail if the SPI device cannot be opened or configured.
+    ///
+    /// # Arguments
+    /// * `config` - The `Ws2812BConfig` containing the device name and number of LEDs.
+    ///
+    /// # Returns
+    /// A `Result` which is:
+    /// - `Ok(Ws2812B)`: A new driver instance on successful initialization.
+    /// - `Err(Ws2812BError::AdapterSetupFailure)`: If the SPI adapter cannot be created.
+    pub fn new(config: Ws2812BConfig) -> Result<Ws2812B, Ws2812BError> {
+        let adapter = WS28xxSpiAdapter::new(&config.device_name).map_err(
+            |e| Ws2812BError::AdapterSetupFailure { source: e })?;
         Ws2812B { adapter, config }
     }
 
+    /// Sets the color of all LEDs on the strip.
+    ///
+    /// This function encodes the desired `RgbLedColor` into the correct byte format
+    /// for the entire LED strip and writes the data to the SPI device.
+    ///
+    /// # Arguments
+    /// * `color` - The `RgbLedColor` to set for all LEDs.
+    ///
+    /// # Returns
+    /// A `Result` which is:
+    /// - `Ok(())`: If the color was successfully written to the SPI device.
+    /// - `Err(Ws2812BError::AdapterSetColorFailure)`: If writing to the SPI device fails.
     #[cfg(all(target_os = "linux", feature = "target_hw"))]
-    pub fn set_color(&mut self, color: RgbLedColor) {
+    pub fn set_color(&mut self, color: RgbLedColor) -> Result<(), Ws2812BError> {
         let raw_color_bytes = get_ws2812b_color_bytes(color); // This is [G, R, B]
 
         // Create a vector to hold the encoded data for all LEDs
@@ -91,12 +155,10 @@ impl Ws2812B {
             ));
         }
 
-        match self.adapter.write_encoded_rgb(&spi_encoded_rgb_bits) {
-            Ok(_) => {}
-            Err(e) => {
-                warn!(target: module_path!(), "Could not set color {e:?}");
-            }
-        }
+        self.adapter.write_encoded_rgb(&spi_encoded_rgb_bits).map_err(
+            |e| Ws2812BError::AdapterSetColorFailure { color, source: e })?;
+
+        Ok(())
     }
 }
 
