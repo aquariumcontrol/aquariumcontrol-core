@@ -139,17 +139,21 @@ impl SqlInterface {
         let pool = match Pool::new(url.as_str()) {
             Ok(c) => c,
             Err(e) => {
-                return Err(SqlInterfaceError::ConnectionPoolFailure(
-                    module_path!().to_string(),
-                    url + ": " + &e.to_string(),
-                ));
+                return Err(SqlInterfaceError::ConnectionPoolFailure {
+                    location: module_path!().to_string(),
+                    url,
+                    source: e
+                });
             }
         };
 
         // Get connection for requests of the main thread.
         let mut conn = pool
             .get_conn()
-            .map_err(|_| SqlInterfaceError::ConnectionFromPool(module_path!().to_string()))?;
+            .map_err(|e| SqlInterfaceError::ConnectionFromPool {
+                location: module_path!().to_string(),
+                source: e
+            })?;
 
         // Call the refactored check_wait_timeout
         Self::check_wait_timeout(&mut conn, config.db_min_wait_timeout)?;

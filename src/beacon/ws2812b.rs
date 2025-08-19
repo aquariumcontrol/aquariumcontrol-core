@@ -9,23 +9,23 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 cfg_if::cfg_if! {
     if #[cfg(all(target_os = "linux", feature = "target_hw"))] {
         use serde_derive::Deserialize;
-        use log::warn;
         use ws2818_rgb_led_spi_driver::adapter_gen::WS28xxAdapter;
         use ws2818_rgb_led_spi_driver::adapter_spi::{WS28xxSpiAdapter, AdapterError};
         use ws2818_rgb_led_spi_driver::encoding::encode_rgb;
         use thiserror::Error;
+        use std::fmt;
     }
 }
 
+/// Represents the primary colors for an RGB LED.
 #[cfg(all(target_os = "linux", feature = "target_hw"))]
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub enum RgbLedColor {
-    #[allow(unused)]
+    /// The color Red.
     Red,
-
-    #[allow(unused)]
+    /// The color Green.
     Green,
-
-    #[allow(unused)]
+    /// The color Blue.
     Blue,
 }
 
@@ -61,17 +61,17 @@ impl fmt::Display for RgbLedColor {
     }
 }
 
-/// Contains configuration data for Ws2812B
+/// Holds the configuration for the WS2812B RGB LED driver.
 #[derive(Deserialize)]
 #[cfg(all(target_os = "linux", feature = "target_hw"))]
 pub struct Ws2812BConfig {
-    /// SPI device name
+    /// The name of the SPI device file (e.g., "/dev/spidev0.0").
     pub device_name: String,
 
-    /// number of LEDs to be switched on/off
+    /// The total number of LEDs on the connected strip.
     pub number_leds: usize,
 
-    /// switch for enabling functionality
+    /// A flag to enable or disable the functionality of this module.
     pub active: bool,
 }
 
@@ -79,30 +79,32 @@ pub struct Ws2812BConfig {
 #[cfg(all(target_os = "linux", feature = "target_hw"))]
 #[derive(Error, Debug)]
 pub enum Ws2812BError {
-    /// Failed to set up the adapter for Ws2812B.
+    /// Failed to set up the underlying SPI adapter for the Ws2812B driver.
     #[error("Failed to setup adapter for Ws2812B.")]
     AdapterSetupFailure {
+        /// The underlying error from the `ws2818-rgb-led-spi-driver` crate.
         #[source]
         source: AdapterError,
     },
 
-    /// Failed to set color of Ws2812B
+    /// Failed to set the color of the Ws2812B LEDs.
     #[error("Failed to set color of Ws2812B to {color}.")]
     AdapterSetColorFailure {
+        /// The color that failed to be set.
         color: RgbLedColor,
-
+        /// The underlying error from the `ws2818-rgb-led-spi-driver` crate.
         #[source]
         source: AdapterError,
-    }
+    },
 }
 
 /// A driver for controlling a strip of WS2812B RGB LEDs via an SPI interface.
-#[cfg(all(target_os = "linux", feature = "target_hw"))]#[cfg(all(target_os = "linux", feature = "target_hw"))]
+#[cfg(all(target_os = "linux", feature = "target_hw"))]
 pub struct Ws2812B {
-    /// SPI-based driver interface
+    /// The underlying SPI adapter from the `ws2818-rgb-led-spi-driver` crate.
     adapter: WS28xxSpiAdapter,
 
-    /// holds configuration data
+    /// The configuration for this driver instance.
     config: Ws2812BConfig,
 }
 
@@ -111,19 +113,24 @@ impl Ws2812B {
     /// Creates a new `Ws2812B` driver instance.
     ///
     /// This constructor initializes the connection to the SPI device specified in the
-    /// configuration. It will fail if the SPI device cannot be opened or configured.
+    /// configuration.
     ///
     /// # Arguments
     /// * `config` - The `Ws2812BConfig` containing the device name and number of LEDs.
     ///
     /// # Returns
-    /// A `Result` which is:
-    /// - `Ok(Ws2812B)`: A new driver instance on successful initialization.
-    /// - `Err(Ws2812BError::AdapterSetupFailure)`: If the SPI adapter cannot be created.
-    pub fn new(config: Ws2812BConfig) -> Result<Ws2812B, Ws2812BError> {
-        let adapter = WS28xxSpiAdapter::new(&config.device_name).map_err(
-            |e| Ws2812BError::AdapterSetupFailure { source: e })?;
-        Ws2812B { adapter, config }
+    /// A `Result` containing a new `Ws2812B` instance on success.
+    ///
+    /// # Errors
+    /// This function will return an `Err(Ws2812BError::AdapterSetupFailure)` if the
+    /// underlying SPI adapter from the `ws2818-rgb-led-spi-driver` crate fails
+    /// to initialize. This can happen if the specified SPI device file does not
+    /// exist or if there are permission issues.
+    pub fn new(config: Ws2812BConfig) -> Result<Self, Ws2812BError> {
+        let adapter =
+            WS28xxSpiAdapter::new(&config.device_name)
+                .map_err(|e| Ws2812BError::AdapterSetupFailure { source: e })?;
+        Ok(Ws2812B { adapter, config })
     }
 
     /// Sets the color of all LEDs on the strip.
@@ -135,10 +142,12 @@ impl Ws2812B {
     /// * `color` - The `RgbLedColor` to set for all LEDs.
     ///
     /// # Returns
-    /// A `Result` which is:
-    /// - `Ok(())`: If the color was successfully written to the SPI device.
-    /// - `Err(Ws2812BError::AdapterSetColorFailure)`: If writing to the SPI device fails.
-    #[cfg(all(target_os = "linux", feature = "target_hw"))]
+    /// An empty `Result` on successful transmission of the color data.
+    ///
+    /// # Errors
+    /// This function will return an `Err(Ws2812BError::AdapterSetColorFailure)` if
+    /// writing the encoded color data to the SPI device fails. This could be due
+    /// to an I/O error with the underlying hardware.
     pub fn set_color(&mut self, color: RgbLedColor) -> Result<(), Ws2812BError> {
         let raw_color_bytes = get_ws2812b_color_bytes(color); // This is [G, R, B]
 
@@ -155,8 +164,9 @@ impl Ws2812B {
             ));
         }
 
-        self.adapter.write_encoded_rgb(&spi_encoded_rgb_bits).map_err(
-            |e| Ws2812BError::AdapterSetColorFailure { color, source: e })?;
+        self.adapter
+            .write_encoded_rgb(&spi_encoded_rgb_bits)
+            .map_err(|e| Ws2812BError::AdapterSetColorFailure { color, source: e })?;
 
         Ok(())
     }
@@ -174,15 +184,25 @@ pub mod tests {
     #[ignore]
     pub fn test_ws2821b_set_colors() {
         let config: ConfigData =
-            read_config_file("/config/aquarium_control_test_generic.toml".to_string());
+            read_config_file("/config/aquarium_control_test_generic.toml".to_string())
+                .expect("Failed to read config in test");
         let spin_sleeper = SpinSleeper::default();
         let sleep_duration = Duration::from_millis(500);
-        let mut ws2812b = Ws2812B::new(config.ws2812b);
+        let mut ws2812b =
+            Ws2812B::new(config.ws2812b).expect("Failed to create Ws2812B in test");
 
-        ws2812b.set_color(RgbLedColor::Green);
+        ws2812b
+            .set_color(RgbLedColor::Green)
+            .expect("Failed to set color to Green");
         spin_sleeper.sleep(sleep_duration);
-        ws2812b.set_color(RgbLedColor::Blue);
+
+        ws2812b
+            .set_color(RgbLedColor::Blue)
+            .expect("Failed to set color to Blue");
         spin_sleeper.sleep(sleep_duration);
-        ws2812b.set_color(RgbLedColor::Red);
+
+        ws2812b
+            .set_color(RgbLedColor::Red)
+            .expect("Failed to set color to Red");
     }
 }

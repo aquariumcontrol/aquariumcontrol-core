@@ -15,9 +15,14 @@ use thiserror::Error;
 pub enum SqlInterfaceError {
     /// Could not get a connection from the pool. The database may be down or the pool exhausted.
     #[error(
-        "[{0}] Could not get a connection from the pool. The database may be down or the pool exhausted."
+        "[{location}] Could not get a connection from the pool. The database may be down or the pool exhausted."
     )]
-    ConnectionFromPool(String),
+    ConnectionFromPool {
+        location: String,
+
+        #[source]
+        source: mysql::Error
+    },
 
     /// The database wait_timeout is less than the required minimum.
     #[error("[{0}] The database wait_timeout ({1}s) is less than the required minimum ({2}s).")]
@@ -28,8 +33,14 @@ pub enum SqlInterfaceError {
     WaitTimeoutInvalid(String, i64),
 
     /// Could not establish database connection pool
-    #[error("[{0}] Could not establish database connection pool with {1}")]
-    ConnectionPoolFailure(String, String),
+    #[error("[{location}] Could not establish database connection pool with {url}")]
+    ConnectionPoolFailure {
+        location: String,
+        url: String,
+
+        #[source]
+        source: mysql::Error
+    },
 
     /// Required tables are not existing in the database.
     #[error("[{0}] Required tables ({1}) are not existing in the database ({2}).")]
