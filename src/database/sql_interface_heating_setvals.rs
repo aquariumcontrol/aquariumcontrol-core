@@ -280,7 +280,7 @@ pub mod tests {
 
         // instantiation of the test object
         let mut sql_interface_heating_setvals =
-            SqlInterfaceHeatingSetVals::new(sql_interface.get_connection(), &config.heating)
+            SqlInterfaceHeatingSetVals::new(sql_interface.get_connection().unwrap(), &config.heating)
                 .unwrap();
 
         // check if reading an empty table returns None
@@ -371,7 +371,7 @@ pub mod tests {
             Ok(())
         ));
         let test_result =
-            SqlInterfaceHeatingSetVals::new(sql_interface.get_connection(), &config.heating);
+            SqlInterfaceHeatingSetVals::new(sql_interface.get_connection().unwrap(), &config.heating);
         assert!(matches!(
             test_result,
             Err(SqlInterfaceError::DatabaseHeatingSetValTableContainsTooManyRows(_, _))

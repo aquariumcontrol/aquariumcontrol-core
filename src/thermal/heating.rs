@@ -1124,7 +1124,7 @@ pub mod tests {
             SqlInterfaceHeatingMockMidnightCalculator::new(seconds_to_midnight),
         );
         let sql_interface_heating_stats = SqlInterfaceHeatingStats::new(
-            sql_interface.get_connection(),
+            sql_interface.get_connection().unwrap(),
             config.sql_interface.max_rows_heating_stats,
             sql_interface_heating_midnight_calculator,
         )
@@ -1266,7 +1266,7 @@ pub mod tests {
                 };
 
                 let mut heating_stats_transfer =
-                    HeatingStatsMockDataTransfer::new(&mut sql_interface.get_connection());
+                    HeatingStatsMockDataTransfer::new(&mut sql_interface.get_connection().unwrap());
                 let mut heating_set_value_updater =
                     MockSqlInterfaceHeatingSetVals::new(false, None, None, None);
 
@@ -1418,7 +1418,7 @@ pub mod tests {
                 };
 
                 let mut heating_stats_transfer =
-                    HeatingStatsMockDataTransfer::new(&mut sql_interface.get_connection());
+                    HeatingStatsMockDataTransfer::new(&mut sql_interface.get_connection().unwrap());
                 let mut heating_set_value_updater =
                     MockSqlInterfaceHeatingSetVals::new(false, None, None, None);
 
@@ -1673,7 +1673,7 @@ pub mod tests {
                     tx_heating_to_relay_manager.clone();
 
                 let mut heating_stats_transfer =
-                    HeatingStatsMockDataTransfer::new(&mut sql_interface.get_connection());
+                    HeatingStatsMockDataTransfer::new(&mut sql_interface.get_connection().unwrap());
                 let mut heating_set_value_updater =
                     MockSqlInterfaceHeatingSetVals::new(false, None, None, None);
 
@@ -1816,7 +1816,7 @@ pub mod tests {
                     tx_heating_to_relay_manager.clone();
 
                 let mut heating_stats_transfer =
-                    HeatingStatsMockDataTransfer::new(&mut sql_interface.get_connection());
+                    HeatingStatsMockDataTransfer::new(&mut sql_interface.get_connection().unwrap());
                 let mut heating_set_value_updater = MockSqlInterfaceHeatingSetVals::new(false, None, None, None);
 
                 let heating_channels = HeatingChannels {
@@ -1966,7 +1966,7 @@ pub mod tests {
                     tx_heating_to_relay_manager.clone();
 
                 let mut heating_stats_transfer =
-                    HeatingStatsMockDataTransfer::new(&mut sql_interface.get_connection());
+                    HeatingStatsMockDataTransfer::new(&mut sql_interface.get_connection().unwrap());
                 let mut heating_set_value_updater = MockSqlInterfaceHeatingSetVals::new(false, None, None, None);
 
                 let heating_channels = HeatingChannels {
@@ -2216,7 +2216,7 @@ pub mod tests {
                     tx_heating_to_relay_manager.clone();
 
                 let mut heating_stats_transfer =
-                    HeatingStatsMockDataTransfer::new(&mut sql_interface.get_connection());
+                    HeatingStatsMockDataTransfer::new(&mut sql_interface.get_connection().unwrap());
                 let mut heating_set_value_updater = MockSqlInterfaceHeatingSetVals::new(false, None, None, None);
 
                 let heating_channels = HeatingChannels {
@@ -2460,7 +2460,7 @@ pub mod tests {
                     tx_heating_to_relay_manager.clone();
 
                 let mut heating_stats_transfer =
-                    HeatingStatsMockDataTransfer::new(&mut sql_interface.get_connection());
+                    HeatingStatsMockDataTransfer::new(&mut sql_interface.get_connection().unwrap());
                 let mut heating_set_value_updater =
                     MockSqlInterfaceHeatingSetVals::new(false, None, None, None);
 
@@ -2603,7 +2603,7 @@ pub mod tests {
                     tx_heating_to_relay_manager.clone();
 
                 let mut heating_stats_transfer =
-                    HeatingStatsMockDataTransfer::new(&mut sql_interface.get_connection());
+                    HeatingStatsMockDataTransfer::new(&mut sql_interface.get_connection().unwrap());
                 let mut heating_set_value_updater =
                     MockSqlInterfaceHeatingSetVals::new(false, None, None, None);
 
@@ -2825,7 +2825,7 @@ pub mod tests {
                     tx_heating_to_relay_manager.clone();
 
                 let mut heating_stats_transfer =
-                    HeatingStatsMockDataTransfer::new(&mut sql_interface.get_connection());
+                    HeatingStatsMockDataTransfer::new(&mut sql_interface.get_connection().unwrap());
                 let mut heating_set_value_updater =
                     MockSqlInterfaceHeatingSetVals::new(false, None, None, None);
 
@@ -3009,7 +3009,7 @@ pub mod tests {
                 };
 
                 let mut heating_stats_transfer =
-                    HeatingStatsMockDataTransfer::new(&mut sql_interface.get_connection());
+                    HeatingStatsMockDataTransfer::new(&mut sql_interface.get_connection().unwrap());
 
                 // set up the set value updater to actively manipulate the set values
                 let mut heating_set_value_updater = MockSqlInterfaceHeatingSetVals::new(
@@ -3186,7 +3186,7 @@ pub mod tests {
                 };
 
                 let mut heating_stats_transfer =
-                    HeatingStatsMockDataTransfer::new(&mut sql_interface.get_connection());
+                    HeatingStatsMockDataTransfer::new(&mut sql_interface.get_connection().unwrap());
                 let mut heating_set_value_updater =
                     MockSqlInterfaceHeatingSetVals::new(false, None, None, None);
 

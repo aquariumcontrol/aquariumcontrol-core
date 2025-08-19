@@ -415,7 +415,7 @@ pub mod tests {
         let mut sql_interface: SqlInterface = SqlInterface::new(config.sql_interface)
             .expect("Initialization of SQL interface for test failed.");
         let mut sql_interface_balling = SqlInterfaceBalling::new(
-            sql_interface.get_connection(),
+            sql_interface.get_connection().unwrap(),
             max_rows_balling_set_values,
             max_rows_balling_dosing_log,
         )
@@ -514,7 +514,7 @@ pub mod tests {
         let mut sql_interface: SqlInterface = SqlInterface::new(config.sql_interface)
             .expect("Initialization of SQL interface for test failed.");
         let mut sql_interface_balling = SqlInterfaceBalling::new(
-            sql_interface.get_connection(),
+            sql_interface.get_connection().unwrap(),
             max_rows_balling_set_values,
             max_rows_balling_dosing_log,
         )
@@ -588,7 +588,7 @@ pub mod tests {
                 panic!("Error when inserting Balling set values into database: {e:?}");
             }
         };
-        let test_result = SqlInterfaceBalling::new(sql_interface.get_connection(), 1, 0);
+        let test_result = SqlInterfaceBalling::new(sql_interface.get_connection().unwrap(), 1, 0);
         assert!(matches!(
             test_result,
             Err(SqlInterfaceError::DatabaseBallingSetValTableContainsTooManyRows(_, _, _))

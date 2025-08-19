@@ -297,7 +297,7 @@ pub mod tests {
 
         // instantiation of the test object
         let mut sql_interface_ventilation_setvals = SqlInterfaceVentilationSetVals::new(
-            sql_interface.get_connection(),
+            sql_interface.get_connection().unwrap(),
             &config.ventilation,
         )
         .unwrap();
@@ -394,7 +394,7 @@ pub mod tests {
             Ok(())
         ));
         let test_result = SqlInterfaceVentilationSetVals::new(
-            sql_interface.get_connection(),
+            sql_interface.get_connection().unwrap(),
             &config.ventilation,
         );
         assert!(matches!(

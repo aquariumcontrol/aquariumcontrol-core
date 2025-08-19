@@ -1217,7 +1217,7 @@ pub mod tests {
             }
         };
         let sql_interface_refill =
-            SqlInterfaceRefill::new(sql_interface.get_connection(), max_rows_refill).unwrap();
+            SqlInterfaceRefill::new(sql_interface.get_connection().unwrap(), max_rows_refill).unwrap();
         let refill_config = config.refill.clone();
         (
             config,

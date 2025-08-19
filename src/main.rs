@@ -479,15 +479,21 @@ fn run() -> Result<(), StartupError> {
             source: Box::new(e),
         })?;
 
+    let database_connection_schedule =
+        sql_interface.get_connection().
+            map_err(|e| StartupError::Database { source: Box::new(e)})?;
     let sql_interface_schedule =
-        SqlInterfaceSchedule::new(sql_interface.get_connection(), max_rows_schedule).map_err(
+        SqlInterfaceSchedule::new(database_connection_schedule, max_rows_schedule).map_err(
             |e| StartupError::Database {
                 source: Box::new(e),
             },
         )?;
 
+    let database_connection_balling =
+        sql_interface.get_connection().
+            map_err(|e| StartupError::Database { source: Box::new(e)})?;
     let sql_interface_balling = SqlInterfaceBalling::new(
-        sql_interface.get_connection(),
+        database_connection_balling,
         max_rows_balling_set_values,
         max_rows_balling_dosing_log,
     )
@@ -495,19 +501,28 @@ fn run() -> Result<(), StartupError> {
         source: Box::new(e),
     })?;
 
+    let database_connection_refill =
+        sql_interface.get_connection().
+            map_err(|e| StartupError::Database { source: Box::new(e)})?;
     let sql_interface_refill: Box<dyn DatabaseInterfaceRefillTrait + Sync + Send> = Box::new(
-        SqlInterfaceRefill::new(sql_interface.get_connection(), max_rows_refill).map_err(|e| {
+        SqlInterfaceRefill::new(database_connection_refill, max_rows_refill).map_err(|e| {
             StartupError::Database {
                 source: Box::new(e),
             }
         })?,
     );
 
+    let database_connection_midnight_calculator =
+        sql_interface.get_connection().
+            map_err(|e| StartupError::Database { source: Box::new(e)})?;
     let sql_interface_midnight_calculator =
-        SqlInterfaceMidnightCalculator::new(sql_interface.get_connection());
+        SqlInterfaceMidnightCalculator::new(database_connection_midnight_calculator);
 
+    let database_connection_heating_stats =
+        sql_interface.get_connection().
+            map_err(|e| StartupError::Database { source: Box::new(e)})?;
     let sql_interface_heating = SqlInterfaceHeatingStats::new(
-        sql_interface.get_connection(),
+        database_connection_heating_stats,
         max_rows_heating_stats,
         Box::new(sql_interface_midnight_calculator),
     )
@@ -515,9 +530,12 @@ fn run() -> Result<(), StartupError> {
         source: Box::new(e),
     })?;
 
+    let database_connection_feed =
+        sql_interface.get_connection().
+            map_err(|e| StartupError::Database { source: Box::new(e)})?;
     let sql_interface_feed: Box<dyn DatabaseInterfaceFeedTrait + Sync + Send> = Box::new(
         SqlInterfaceFeed::new(
-            sql_interface.get_connection(),
+            database_connection_feed,
             max_rows_feed_pattern,
             max_rows_feed_schedule,
             max_rows_feed_log,
@@ -527,7 +545,10 @@ fn run() -> Result<(), StartupError> {
         })?,
     );
 
-    let sql_interface_data = SqlInterfaceData::new(sql_interface.get_connection(), max_rows_data)
+    let database_connection_data =
+        sql_interface.get_connection().
+            map_err(|e| StartupError::Database { source: Box::new(e)})?;
+    let sql_interface_data = SqlInterfaceData::new(database_connection_data, max_rows_data)
         .map_err(|e| StartupError::Database {
         source: Box::new(e),
     })?;
@@ -1233,8 +1254,11 @@ fn run() -> Result<(), StartupError> {
 
     let mut refill = Refill::new(config.refill, sql_interface_refill, database_ping_duration);
 
+    let database_connection_heating_setvals =
+        sql_interface.get_connection().
+            map_err(|e| StartupError::Database { source: Box::new(e)})?;
     let mut heating_set_value_updater =
-        SqlInterfaceHeatingSetVals::new(sql_interface.get_connection(), &config.heating).map_err(
+        SqlInterfaceHeatingSetVals::new(database_connection_heating_setvals, &config.heating).map_err(
             |e| StartupError::Database {
                 source: Box::new(e),
             },
@@ -1248,11 +1272,12 @@ fn run() -> Result<(), StartupError> {
 
     let mut feed = Feed::new(config.feed, sql_interface_feed, database_ping_duration);
 
+    let database_connection_ventilation =
+        sql_interface.get_connection().
+            map_err(|e| StartupError::Database { source: Box::new(e)})?;
     let mut ventilation_set_value_updater =
-        SqlInterfaceVentilationSetVals::new(sql_interface.get_connection(), &config.ventilation)
-            .map_err(|e| StartupError::Database {
-                source: Box::new(e),
-            })?;
+        SqlInterfaceVentilationSetVals::new(database_connection_ventilation, &config.ventilation)
+            .map_err(|e| StartupError::Database { source: Box::new(e) })?;
 
     let mut ventilation = Ventilation::new(config.ventilation);
     let mut balling = Balling::new(

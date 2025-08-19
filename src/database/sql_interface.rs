@@ -115,15 +115,14 @@ impl SqlInterface {
     ///   database user, password, host, port, and name.
     ///
     /// # Returns
-    /// A `Result` which is:
-    /// - `Ok(SqlInterface)` containing the newly created `SqlInterface`
-    ///   with an established connection pool and an initial database connection.
-    /// - `Err(SqlInterfaceError::ConnectionPoolFailure)` if the connection pool
-    ///   cannot be established (e.g., invalid URL, network issues).
+    /// A `Result` containing a new `SqlInterface` instance on success.
     ///
-    /// # Panics
-    /// This function will panic if it successfully creates a connection pool
-    /// but then fails to retrieve an initial connection from that pool.
+    /// # Errors
+    /// This function will return an error if:
+    /// - The connection pool cannot be established (`SqlInterfaceError::ConnectionPoolFailure`), for example,
+    ///   due to an invalid URL, incorrect credentials, or network issues.
+    /// - An initial connection cannot be retrieved from the pool (`SqlInterfaceError::ConnectionFromPool`).
+    /// - The database's `wait_timeout` setting is too low (`SqlInterfaceError::WaitTimeoutTooLow`).
     pub fn new(config: SqlInterfaceConfig) -> Result<SqlInterface, SqlInterfaceError> {
         // Create the connection pool
         let url = "mysql://".to_owned()
@@ -163,43 +162,35 @@ impl SqlInterface {
 
     /// Retrieves a new connection from the internal database connection pool.
     ///
-    /// This function is used to get a fresh connection for executing SQL queries.
-    /// If the connection pool fails to provide a connection, the function will panic.
-    ///
     /// # Returns
-    /// A `PooledConn` object representing an active connection to the SQL database.
+    /// A `Result` containing a `PooledConn` object on success.
     ///
-    /// # Panics
-    /// This function will panic if it fails to retrieve a database connection
-    /// from the established connection pool. This typically indicates a severe
-    /// issue with database availability or configuration that prevents further operation.
-    pub fn get_connection(&self) -> PooledConn {
-        match self.pool.get_conn() {
-            Ok(c) => c,
-            Err(_) => {
-                panic!("Could not open SQL data base connection.");
-            }
-        }
+    /// # Errors
+    /// This function will return an `Err(SqlInterfaceError::ConnectionFromPool)` if it
+    /// fails to retrieve a database connection from the pool. This typically indicates
+    /// a severe issue with database availability, pool exhaustion, or configuration.
+   pub fn get_connection(&self) -> Result<PooledConn, SqlInterfaceError> {
+        self.pool.get_conn().map_err(|e| SqlInterfaceError::ConnectionFromPool {
+            location: module_path!().to_string(),
+            source: e,
+        })
     }
 
     /// Executes a given SQL query and maps the results into a vector of `SingleString` structs.
-    ///
-    /// This private helper function is designed to fetch one or more string values
-    /// from the database based on the provided SQL query. Each row returned
-    /// by the query is expected to contain a single string value, which is then
-    /// encapsulated in a `SingleString` struct.
     ///
     /// # Arguments
     /// * `conn` - A mutable reference to an active database connection.
     /// * `sql_query_string` - The SQL query string to be executed.
     ///
     /// # Returns
-    /// A `Result` which is:
-    /// - `Ok(Vec<SingleString>)` containing a vector of `SingleString` structs,
-    ///   each holding a string value retrieved from the database. This vector
-    ///   may be empty if the query returns no rows.
-    /// - `Err(SqlInterfaceError::SingleStringRequestFailure)` if the database
-    ///   query execution fails for any reason.
+    /// A `Result` containing a vector of `SingleString` structs. The vector
+    /// may be empty if the query returns no rows.
+    ///
+    /// # Errors
+    /// This function will return an `(SqlInterfaceError::SingleStringRequestFailure)`
+    /// if the database query execution fails for any reason, such as a syntax error
+    /// in the SQL or a connection issue.
+
     fn get_string_array_from_database(
         conn: &mut PooledConn,
         sql_query_string: &str,
@@ -217,23 +208,18 @@ impl SqlInterface {
 
     /// Executes an SQL query and strictly expects a single string result.
     ///
-    /// This function is a wrapper around `get_string_array_from_database` that
-    /// enforces a single-row, single-column string response. It will return an
-    /// error if the query yields no results or more than one result.
-    ///
     /// # Arguments
     /// * `conn` - A mutable reference to an active database connection.
     /// * `sql_query_string` - The SQL query designed to return exactly one string value.
     ///
     /// # Returns
-    /// A `Result` which is:
-    /// - `Ok(String)` containing the single string value retrieved from the database.
-    /// - `Err(SqlInterfaceError::SingleStringRequestEmptyResponse)` if the query
-    ///   returns zero rows
-    /// - `Err(SqlInterfaceError::SingleStringRequestNoSingleResponse)` if the query
-    ///   returns more than one row
-    /// - `Err(SqlInterfaceError::SingleStringRequestFailure)` if the underlying
-    ///   database query execution fails.
+    /// A `Result` containing the single `String` value on success.
+    ///
+    /// # Errors
+    /// This function will return an error if:
+    /// - The underlying database query fails.
+    /// - The query returns zero rows (`SqlInterfaceError::SingleStringRequestEmptyResponse`).
+    /// - The query returns more than one row (`SqlInterfaceError::SingleStringRequestNoSingleResponse`).
     fn get_single_string_from_database(
         conn: &mut PooledConn,
         sql_query_string: &str,
@@ -261,23 +247,19 @@ impl SqlInterface {
 
     /// Executes an SQL query and returns an optional single string value.
     ///
-    /// This function is similar to `get_single_string_from_database`, but it
-    /// explicitly permits the query to return no results, in which case it
-    /// provides `Option::None`. It will, however, return an error if the
-    /// query yields more than one result.
-    ///
     /// # Arguments
     /// * `conn` - A mutable reference to an active database connection.
     /// * `sql_query_string` - The SQL query designed to return at most one string value.
     ///
     /// # Returns
-    /// A `Result` which is:
+    /// A `Result` containing an `Option<String>` on success.
     /// - `Ok(Some(String))` if the query returns exactly one string value.
-    /// - `Ok(Option::None)` if the query returns no rows.
-    /// - `Err(SqlInterfaceError::SingleStringRequestNoSingleResponse)` if the query
-    ///   returns more than one row.
-    /// - `Err(SqlInterfaceError::SingleStringRequestFailure)` if the underlying
-    ///   database query execution fails.
+    /// - `Ok(None)` if the query returns no rows.
+    ///
+    /// # Errors
+    /// This function will return an error if:
+    /// - The underlying database query fails.
+    /// - The query returns more than one row (`SqlInterfaceError::SingleStringRequestNoSingleResponse`).
     fn get_single_optional_string_from_database(
         conn: &mut PooledConn,
         sql_query_string: &str,
@@ -302,22 +284,17 @@ impl SqlInterface {
 
     /// Retrieves the stored hash for a specific software version from the database.
     ///
-    /// This function constructs a query using the provided `VersionInformation`
-    /// (major, minor, build numbers) to fetch the corresponding hash.
-    /// It strictly expects exactly one hash to be returned.
-    ///
     /// # Arguments
-    /// * `version_information` - A reference to a `VersionInformation` struct
-    ///   containing the major, minor, and build numbers of the software version.
+    /// * `version_information` - A reference to a `VersionInformation` struct.
     ///
     /// # Returns
-    /// A `Result` which is:
-    /// - `Ok(String)` containing the hash associated with the specified version.
-    /// - `Err(SqlInterfaceError::SingleVersionRequestFailure)` if the database query fails.
-    /// - `Err(SqlInterfaceError::SingleVersionRequestNotListed)` if no hash is found
-    ///   for the given version.
-    /// - `Err(SqlInterfaceError::SingleVersionRequestMultipleResults)` if more than one
-    ///   hash is found for the given version (indicating a potential data inconsistency).
+    /// A `Result` containing the hash `String` associated with the specified version.
+    ///
+    /// # Errors
+    /// This function will return an error if:
+    /// - The database query fails (`SqlInterfaceError::SingleVersionRequestFailure`).
+    /// - No hash is found for the given version (`SqlInterfaceError::SingleVersionRequestNotListed`).
+    /// - More than one hash is found, indicating a data inconsistency (`SqlInterfaceError::SingleVersionRequestMultipleResults`).
     pub fn get_hash_from_database(
         &mut self,
         version_information: &VersionInformation,
@@ -375,19 +352,20 @@ impl SqlInterface {
     /// Executes an SQL query and collects multiple string results into a vector.
     ///
     /// This function is specifically designed for queries expected to return **more than one**
-    /// string value. It will return an error if the query yields zero or only one result.
+    /// string value.
     ///
     /// # Arguments
-    /// * `conn` - A mutable reference to an active database connection.
     /// * `sql_query_string` - The SQL query intended to retrieve multiple string values.
     ///
     /// # Returns
-    /// A `Result` which is:
-    /// - `Ok(Vec<String>)` containing all the string values retrieved from the database.
-    /// - `Err(SqlInterfaceError::SingleStringRequestNoSingleResponse)` if the query
-    ///   returns zero rows or only one row (as it expects *multiple*).
-    /// - `Err(SqlInterfaceError::SingleStringRequestFailure)` if the underlying
-    ///   database query execution fails.
+    /// A `Result` containing a `Vec<String>` with all the string values retrieved from the database on success.
+    ///
+    /// # Errors
+    /// This function will return an error if:
+    /// - The underlying database query execution fails (`SqlInterfaceError::SingleStringRequestFailure`).
+    /// - The query returns zero rows (`SqlInterfaceError::MultipleStringRequestEmptyResponse`).
+    /// - The query returns only one row (`SqlInterfaceError::MultipleStringRequestSingleResponse`), as this function
+    ///   strictly expects multiple results.
     fn get_multiple_strings_from_database(
         &mut self,
         sql_query_string: &str,
@@ -429,6 +407,7 @@ impl SqlInterface {
         Ok(response_array)
     }
 
+
     /// Executes an SQL query and strictly expects a single integer result.
     ///
     /// This function is designed for queries that should return **exactly one**
@@ -440,12 +419,12 @@ impl SqlInterface {
     /// * `sql_query_string` - The SQL query designed to return precisely one integer.
     ///
     /// # Returns
-    /// A `Result` which is:
-    /// - `Ok(i64)`: The unique integer value retrieved from the database.
-    /// - `Err(SqlInterfaceError::SingleIntegerRequestNoSingleResponse)`: If the query
-    ///   returns zero rows or more than one row.
-    /// - `Err(SqlInterfaceError::SingleIntegerRequestFailure)`: If the underlying
-    ///   database query execution fails.
+    /// A `Result` containing `i64`: The unique integer value retrieved from the database.
+    ///
+    /// # Errors
+    /// This function will return an error if:
+    /// - The database query returns zero rows or more than one row (`SqlInterfaceError::SingleIntegerRequestNoSingleResponse)`.
+    /// - The database query execution fails.`(SqlInterfaceError::SingleIntegerRequestFailure)`.
     pub fn get_single_integer_from_database(
         conn: &mut PooledConn,
         sql_query_string: &str,
@@ -492,12 +471,12 @@ impl SqlInterface {
     /// * `sql_query_string` - The SQL query designed to return a single `f64` value.
     ///
     /// # Returns
-    /// A `Result` which is:
-    /// - `Ok(f64)`: The unique floating-point value retrieved from the database.
-    /// - `Err(SqlInterfaceError::SingleFloatRequestNoSingleResponse)`: If the query
-    ///   returns no rows or more than one row.
-    /// - `Err(SqlInterfaceError::SingleFloatRequestFailure)`: If the underlying
-    ///   database query execution encounters an error.
+    /// A `Result` which contains `f64`: The unique floating-point value retrieved from the database.
+    ///
+    /// # Errors
+    /// This function will return an error if:
+    /// - The database query returns no rows or more than one row (`(SqlInterfaceError::SingleFloatRequestNoSingleResponse)`.
+    /// - The database query execution encounters an error `(SqlInterfaceError::SingleFloatRequestFailure`).
     pub fn get_single_float_from_database(
         conn: &mut PooledConn,
         sql_query_string: &str,
@@ -538,10 +517,12 @@ impl SqlInterface {
     /// This function executes an internal SQL query to fetch the database name.
     ///
     /// # Returns
-    /// A `Result` which is:
-    /// - `Ok(String)`: The name of the database as a string.
-    /// - `Err(SqlInterfaceError)`: If there's any issue retrieving the database name,
-    ///   such as a communication error or an unexpected response from the database.
+    /// A `Result` which `String`: The name of the database as a string.
+    ///
+    /// # Errors
+    /// This function will return an error if:
+    /// - If there's any issue retrieving the database name, such as a communication
+    /// error or an unexpected response from the database `(SqlInterfaceError::DatabaseNameRequestFailure)`.
     pub fn get_database(&mut self) -> Result<String, SqlInterfaceError> {
         // trigger SQL call
         Self::get_single_string_from_database(&mut self.conn, sql_query_strings::SQL_QUERY_DATABASE)
@@ -561,13 +542,16 @@ impl SqlInterface {
     /// * `sql_query_string` - The SQL query to retrieve the timestamp as a string.
     ///
     /// # Returns
-    /// A `Result` which is:
-    /// - `Ok(NaiveDateTime)`: The successfully parsed timestamp.
-    /// - `Err(SqlInterfaceError::SingleStringRequestNoSingleResponse)`: If the SQL query
-    ///   returns no result or more than one result.
-    /// - `Err(SqlInterfaceError::TimestampRequestFailure)`: If the SQL query itself fails.
-    /// - `Err(SqlInterfaceError::TimestampConversionFailure)`: If the retrieved string
-    ///   cannot be parsed into a valid `NaiveDateTime`.
+    /// A `Result` containing the successfully parsed `NaiveDateTime` on success.
+    ///
+    /// # Errors
+    /// This function will return an error if:
+    /// - The underlying database query to fetch the string fails (`SqlInterfaceError::TimestampRequestFailure`).
+    ///   This can happen if the query is invalid, the connection is lost, or if the query
+    ///   does not return exactly one row.
+    /// - The retrieved string cannot be parsed into a valid `NaiveDateTime`
+    ///   (`SqlInterfaceError::TimestampConversionFailure`). This indicates the database
+    ///   returned a string in an unexpected format.
     pub fn get_timestamp(
         conn: &mut PooledConn,
         sql_query_string: &str,
@@ -590,32 +574,36 @@ impl SqlInterface {
         Ok(parsed_timestamp)
     }
 
-    /// Executes an SQL query to retrieve an optional timestamp string and converts it to `NaiveDateTime`.
+    // Executes an SQL query to retrieve an optional timestamp and converts it to `NaiveDateTime`.
     ///
-    /// This function is designed for queries that might return a timestamp, but an empty
-    /// result set is also considered a valid scenario (returning `Option::None`).
-    /// This is the case when searching for Balling dosing events.
-    /// It fetches a single string (if present, expected in "YYYY-MM-DD HH:MM:SS" format)
-    /// and attempts to parse it into a `NaiveDateTime`.
+    /// This function is designed for queries that might return a single timestamp, but where an
+    /// empty result is also a valid outcome (e.g., checking for the last event in a log that might be empty).
+    /// It fetches a string (if present, expected in "YYYY-MM-DD HH:MM:SS" format)
+    /// and attempts to parse it.
     ///
     /// # Arguments
     /// * `conn` - A mutable reference to an active database connection.
     /// * `sql_query_string` - The SQL query to retrieve the optional timestamp as a string.
     ///
     /// # Returns
-    /// A `Result` which is:
-    /// - `Ok(Some(NaiveDateTime))`: If the query returns exactly one timestamp string that can be parsed.
-    /// - `Ok(Option::None)`: If the SQL query returns no rows.
-    /// - `Err(SqlInterfaceError::SingleStringRequestNoSingleResponse)`: If the SQL query
-    ///   returns more than one row (indicating a data inconsistency).
-    /// - `Err(SqlInterfaceError::OptionalTimestampRequestFailure)`: If the SQL query itself fails.
-    /// - `Err(SqlInterfaceError::TimestampConversionFailure)`: If the retrieved string
-    ///   cannot be parsed into a valid `NaiveDateTime`.
+    /// A `Result` containing an `Option<NaiveDateTime>` on success:
+    /// - `Ok(Some(NaiveDateTime))`: If the query returns exactly one row with a parsable timestamp string.
+    /// - `Ok(None)`: If the query returns no rows.
+    ///
+    /// # Errors
+    /// This function will return an error if:
+    /// - The underlying database query fails for reasons like a syntax error or connection issue.
+    ///   The original error is wrapped in `SqlInterfaceError::OptionalTimestampRequestFailure`.
+    /// - The query returns more than one row, which is considered a data inconsistency. This is also
+    ///   wrapped in `SqlInterfaceError::OptionalTimestampRequestFailure`.
+    /// - The retrieved string cannot be parsed into a valid `NaiveDateTime`, which returns
+    ///   `SqlInterfaceError::TimestampConversionFailure`. This indicates the database
+    ///   returned a string in an unexpected format.
     pub fn get_optional_timestamp(
         conn: &mut PooledConn,
         sql_query_string: &str,
     ) -> Result<Option<NaiveDateTime>, SqlInterfaceError> {
-        // request (optional) timestamp from database
+        // Request (optional) timestamp from database, wrapping any potential error.
         let timestamp_string_opt =
             Self::get_single_optional_string_from_database(conn, sql_query_string).map_err(
                 |e| SqlInterfaceError::OptionalTimestampRequestFailure {
@@ -624,40 +612,38 @@ impl SqlInterface {
                 },
             )?;
 
-        let result_opt = match timestamp_string_opt {
-            Some(timestamp_string) => {
-                // convert data type
-                match NaiveDateTime::parse_from_str(timestamp_string.as_str(), "%Y-%m-%d %H:%M:%S")
-                {
-                    Ok(c) => Some(c),
-                    Err(e) => {
-                        return Err(SqlInterfaceError::TimestampConversionFailure {
-                            location: module_path!().to_string(),
-                            timestamp_string,
-                            source: e,
-                        });
-                    }
-                }
-            }
-            Option::None => Option::None,
-        };
-
-        Ok(result_opt)
+        // Use `map` to attempt parsing only if the Option is Some, then `transpose`
+        // to convert Option<Result<T, E>> into Result<Option<T>, E>.
+        timestamp_string_opt
+            .map(|timestamp_string| {
+                NaiveDateTime::parse_from_str(timestamp_string.as_str(), "%Y-%m-%d %H:%M:%S")
+                    .map_err(|e| SqlInterfaceError::TimestampConversionFailure {
+                        location: module_path!().to_string(),
+                        timestamp_string,
+                        source: e,
+                    })
+            })
+            .transpose()
     }
 
     /// Fetches the current timestamp directly from the database.
     ///
     /// This function executes a database query to get the database server's current timestamp
-    /// and returns it as a `NaiveDateTime`.    
+    /// and returns it as a `NaiveDateTime`.
     ///
     /// # Arguments
     /// * `conn` - A mutable reference to an active database connection.
     ///
     /// # Returns
-    /// A `Result` which is:
-    /// - `Ok(NaiveDateTime)`: The current timestamp from the database.
-    /// - `Err(SqlInterfaceError)`: If there's an issue retrieving or parsing the timestamp,
-    ///   such as a database communication error, an unexpected response, or a conversion failure.
+    /// A `Result` containing the current `NaiveDateTime` from the database on success.
+    ///
+    /// # Errors
+    /// This function will return an `Err` variant of `SqlInterfaceError` if:
+    /// - The underlying database query to fetch the timestamp string fails. This can be due to
+    ///   a connection issue, an invalid query, or if the query does not return exactly one row.
+    ///   The original error is wrapped in `SqlInterfaceError::TimestampRequestFailure`.
+    /// - The timestamp string returned by the database cannot be parsed into a `NaiveDateTime`.
+    ///   This indicates a data format mismatch and returns `SqlInterfaceError::TimestampConversionFailure`.
     pub fn get_current_timestamp(
         conn: &mut PooledConn,
     ) -> Result<NaiveDateTime, SqlInterfaceError> {
@@ -665,23 +651,28 @@ impl SqlInterface {
     }
 
     #[cfg(test)]
-    // Retrieves a timestamp from the database with a specified future offset.
-    //
-    // This function is exclusively for use in test environments. It queries the database
-    // for the current timestamp and then adds a given number of seconds to it, effectively
-    // simulating a future or past point in time for testing scenarios.
-    //
-    // # Arguments
-    // * `conn` - A mutable reference to an active database connection.
-    // * `offset_seconds` - The number of seconds to add to the current database timestamp.
-    //   A positive value shifts the timestamp into the future.
-    //   A negative value shifts the timestamp into the past.
-    //
-    // # Returns
-    // A `Result` which is:
-    // - `Ok(NaiveDateTime)`: The calculated timestamp, offset by the given seconds.
-    // - `Err(SqlInterfaceError)`: If there's an issue retrieving or parsing the base timestamp
-    //   from the database.
+    /// Retrieves a timestamp from the database with a specified future or past offset.
+    ///
+    /// This function is exclusively for use in test environments. It queries the database
+    /// for its current timestamp and then adds a given number of seconds to it, effectively
+    /// simulating a future or past point in time for testing scenarios.
+    ///
+    /// # Arguments
+    /// * `conn` - A mutable reference to an active database connection.
+    /// * `offset_seconds` - The number of seconds to add to the current database timestamp.
+    ///   A positive value shifts the timestamp into the future, while a negative value
+    ///   shifts it into the past.
+    ///
+    /// # Returns
+    /// A `Result` containing the calculated `NaiveDateTime` (offset by the given seconds) on success.
+    ///
+    /// # Errors
+    /// This function will return an `Err` variant of `SqlInterfaceError` if:
+    /// - The underlying database query to fetch the timestamp string fails. This can be due to
+    ///   a connection issue, an invalid query, or if the query does not return exactly one row.
+    ///   The original error is wrapped in `SqlInterfaceError::TimestampRequestFailure`.
+    /// - The timestamp string returned by the database cannot be parsed into a `NaiveDateTime`.
+    ///   This indicates a data format mismatch and returns `SqlInterfaceError::TimestampConversionFailure`.
     pub fn get_current_timestamp_offset_seconds(
         conn: &mut PooledConn,
         offset_seconds: i32,
@@ -695,19 +686,26 @@ impl SqlInterface {
         Self::get_timestamp(conn, &sql_query_with_offset_resolved)
     }
 
-    /// Executes an SQL statement given as a parameter to get a single String value
-    /// and tries to convert it to timestamp of type NaiveDate.
-    /// Depending on the result of the query and the conversion to NaiveDate,
-    /// the function provides wrapped in a result type either
-    /// - the timestamp as type NaiveDate
-    /// - or an error code from the enum SqlInterfaceError
+    // Executes an SQL query to retrieve a single date string and converts it to `NaiveDate`.
+    ///
+    /// This function fetches a single string from the database, which is expected to be in
+    /// the "YYYY-MM-DD" format, and then attempts to parse it into a `NaiveDate` object.
+    ///
     /// # Arguments
-    /// * `sql_query_string` - SQL query for retrieving timestamp as String
+    /// * `conn` - A mutable reference to an active database connection.
+    /// * `sql_query_string` - The SQL query designed to retrieve the date as a string.
+    ///
     /// # Returns
-    /// A `Result` which is:
-    /// - `Err(SqlInterfaceError::DateRequestFailure)`: If the SQL query itself fails.
-    /// - `Err(SqlInterfaceError::TimestampConversionFailure)`: If the retrieved string
-    ///   cannot be parsed into a valid `NaiveDateTime`.
+    /// A `Result` containing the successfully parsed `NaiveDate` on success.
+    ///
+    /// # Errors
+    /// This function will return an error if:
+    /// - The underlying database query to fetch the string fails (`SqlInterfaceError::DateRequestFailure`).
+    ///   This can happen if the query is invalid, the connection is lost, or if the query
+    ///   does not return exactly one row.
+    /// - The retrieved string cannot be parsed into a valid `NaiveDate`
+    ///   (`SqlInterfaceError::TimestampConversionFailure`). This indicates the database
+    ///   returned a string in an unexpected format.
     fn get_date(
         conn: &mut PooledConn,
         sql_query_string: &str,
@@ -734,34 +732,44 @@ impl SqlInterface {
 
     /// Fetches the current calendar date directly from the database.
     ///
-    /// This function queries the database server for its current date and
-    /// returns it as a `NaiveDate`.
+    /// This function executes a standard SQL query to get the database server's current date
+    /// and returns it as a `NaiveDate`.
     ///
     /// # Arguments
     /// * `conn` - A mutable reference to an active database connection.
     ///
     /// # Returns
-    /// A `Result` which is:
-    /// - `Ok(NaiveDate)`: The current date from the database.
-    /// - `Err(SqlInterfaceError)`: If there's an issue retrieving or parsing the date,
-    ///   such as a database communication error, an unexpected response, or a conversion failure.
+    /// A `Result` containing the current `NaiveDate` from the database on success.
+    ///
+    /// # Errors
+    /// This function will return an `Err` variant of `SqlInterfaceError` if:
+    /// - The underlying database query to fetch the date string fails. This can be due to
+    ///   a connection issue, an invalid query, or if the query does not return exactly one row.
+    ///   The original error is wrapped in `SqlInterfaceError::DateRequestFailure`.
+    /// - The date string returned by the database cannot be parsed into a `NaiveDate`.
+    ///   This indicates a data format mismatch and returns `SqlInterfaceError::TimestampConversionFailure`.
     pub fn get_current_date(conn: &mut PooledConn) -> Result<NaiveDate, SqlInterfaceError> {
         Self::get_date(conn, sql_query_strings::SQL_QUERY_READ_CURRENT_DATE)
     }
 
-    /// Fetches the future calendar date of the following day directly from the database.
+    /// Fetches the calendar date for the following day directly from the database.
     ///
-    /// This function queries the database server for tomorrow's date and
-    /// returns it as a `NaiveDate`.
+    /// This function executes a standard SQL query to get the database server's date for "tomorrow"
+    /// and returns it as a `NaiveDate`.
     ///
     /// # Arguments
     /// * `conn` - A mutable reference to an active database connection.
     ///
     /// # Returns
-    /// A `Result` which is:
-    /// - `Ok(NaiveDate)`: Tomorrow's date from the database.
-    /// - `Err(SqlInterfaceError)`: If there's an issue retrieving or parsing the date,
-    ///   such as a database communication error, an unexpected response, or a conversion failure.
+    /// A `Result` containing tomorrow's `NaiveDate` from the database on success.
+    ///
+    /// # Errors
+    /// This function will return an `Err` variant of `SqlInterfaceError` if:
+    /// - The underlying database query to fetch the date string fails. This can be due to
+    ///   a connection issue, an invalid query, or if the query does not return exactly one row.
+    ///   The original error is wrapped in `SqlInterfaceError::DateRequestFailure`.
+    /// - The date string returned by the database cannot be parsed into a `NaiveDate`.
+    ///   This indicates a data format mismatch and returns `SqlInterfaceError::TimestampConversionFailure`.
     pub fn get_tomorrow_date(conn: &mut PooledConn) -> Result<NaiveDate, SqlInterfaceError> {
         Self::get_date(conn, sql_query_strings::SQL_QUERY_READ_TOMORROW_DATE)
     }
@@ -769,13 +777,16 @@ impl SqlInterface {
     /// Fetches the names of all tables present in the connected SQL database.
     ///
     /// This function executes a standard SQL query to list all tables.
-    /// It expects to retrieve multiple table names.
     ///
     /// # Returns
-    /// A `Result` which is:
-    /// - `Ok(Vec<String>)`: A vector containing the names of all tables found in the database.
-    /// - `Err(SqlInterfaceError::ShowTablesWithoutProperResult)`: If the database
-    ///   query for table names fails or returns an unexpected number of results (e.g., zero or one).
+    /// A `Result` containing a `Vec<String>` with the names of all tables found in the database.
+    /// The vector may be empty if the database contains no tables.
+    ///
+    /// # Errors
+    /// This function will return an `Err` if the underlying database query to list tables
+    /// fails. The specific error will likely be `SqlInterfaceError::SingleStringRequestFailure`,
+    /// which can be caused by a connection issue, lack of permissions, or other
+    /// database-side errors.
     pub fn get_tables(&mut self) -> Result<Vec<String>, SqlInterfaceError> {
         match self.get_multiple_strings_from_database(sql_query_strings::SQL_QUERY_READ_TABLES) {
             Ok(c) => Ok(c),
@@ -818,12 +829,16 @@ impl SqlInterface {
     /// `SqlInterfaceConfig` to ensure all required tables are present.
     ///
     /// # Returns
-    /// A `Result` which is:
-    /// - `Ok(())`: If all tables listed in the configuration are found in the database.
-    /// - `Err(SqlInterfaceError::RequiredTablesNotExisting)`: If one or more
-    ///   required tables are missing from the database.
-    /// - `Err(SqlInterfaceError)`: For any other error that occurs during
-    ///   the process of fetching table names (e.g., database connection issues).
+    /// A `Result` which is `Ok(())` on success, indicating that all tables listed in the
+    /// configuration were found in the database.
+    ///
+    /// # Errors
+    /// This function will return an error if:
+    /// - One or more required tables are missing from the database. This will result in
+    ///   an `SqlInterfaceError::RequiredTablesNotExisting` error, which includes the
+    ///   list of required tables and the list of tables that were actually found.
+    /// - The underlying call to `get_tables` fails. This will propagate the error,
+    ///   which could be due to a database connection issue or insufficient permissions.
     pub fn check_required_tables_existing(&mut self) -> Result<(), SqlInterfaceError> {
         let existing_tables = self.get_tables()?;
 
@@ -852,8 +867,15 @@ impl SqlInterface {
     // * `sql_interface`: A mutable reference to the main SQL interface.
     // * `sql_table_name`: The name of the table to be emptied.
     //
-    // Returns:
-    // `Ok(())` on success, or an `SqlInterfaceError` if the truncation fails.
+    /// # Returns
+    /// An empty `Result` (`Ok(())`) on successful truncation of the table.
+    ///
+    /// # Errors
+    /// This function will return an `Err(SqlInterfaceError::TruncateTableFailure)` if the
+    /// `TRUNCATE TABLE` command fails. This can happen for several reasons, including:
+    /// - The specified table does not exist.
+    /// - The database user lacks the necessary permissions to truncate the table.
+    /// - The database connection has been lost.
     pub fn truncate_table(
         sql_interface: &mut SqlInterface,
         sql_table_name: String,
@@ -942,7 +964,7 @@ impl SqlInterface {
     /// * `min_wait_timeout` - The minimum acceptable `wait_timeout` value (in seconds)
     ///   that the application requires for stable operation.
     ///
-    /// # Panics
+    /// # Errors
     ///
     /// This function will return an error in the following scenarios:
     /// - If it fails to retrieve the `wait_timeout` value from the database (e.g., due to
@@ -996,12 +1018,16 @@ impl SqlInterface {
     ///   database connection obtained from a connection pool.
     ///
     /// # Returns
+    /// An empty `Result` (`Ok(())`) on success, indicating the connection is healthy.
     ///
-    /// - `Ok(())`: If the database was successfully pinged, indicating the connection
-    ///   is healthy and its idle timeout has been reset.
-    /// - `Err(SqlInterfaceError::PingNotSuccessful)`: If the ping query failed for any
-    ///   reason (e.g., network issues, database server unresponsiveness, connection closed).
-    ///   An error message is also logged with the `source_thread` as the target.
+    /// # Errors
+    /// This function will return an `Err(SqlInterfaceError::DatabasePingFailure)` if the
+    /// ping query fails. This typically indicates that the connection is no longer valid,
+    /// which could be caused by:
+    /// - A network interruption between the application and the database server.
+    /// - The database server being shut down or restarted.
+    /// - The connection being explicitly closed by the server due to exceeding the
+    ///   `wait_timeout` or other resource limits.
     pub fn ping_database(conn: &mut PooledConn) -> Result<(), SqlInterfaceError> {
         SqlInterface::get_single_integer_from_database(conn, SQL_QUERY_PING)
             .map_err(|e| SqlInterfaceError::DatabasePingFailure {
@@ -1067,7 +1093,7 @@ pub mod tests {
         // *****************************************************************************************
 
         // *** check if the current date is local date *********************************************
-        let sql_date = match SqlInterface::get_current_date(&mut sql_interface.get_connection()) {
+        let sql_date = match SqlInterface::get_current_date(&mut sql_interface.get_connection().unwrap()) {
             Ok(c) => c,
             Err(_) => panic!("Could not get current date from the database."),
         };
@@ -1230,6 +1256,6 @@ pub mod tests {
         let sql_interface = SqlInterface::new(config.sql_interface)
             .expect("Initialization of SQL interface for test failed");
 
-        SqlInterface::ping_database(&mut sql_interface.get_connection()).unwrap();
+        SqlInterface::ping_database(&mut sql_interface.get_connection().unwrap()).unwrap();
     }
 }

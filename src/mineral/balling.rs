@@ -1007,7 +1007,7 @@ pub mod tests {
             }
         };
         let sql_interface_balling = SqlInterfaceBalling::new(
-            sql_interface.get_connection(),
+            sql_interface.get_connection().unwrap(),
             max_rows_balling_set_values,
             max_rows_balling_dosing_log,
         )
@@ -1050,7 +1050,7 @@ pub mod tests {
             }
         };
         let mut sql_interface_balling = SqlInterfaceBalling::new(
-            sql_interface.get_connection(),
+            sql_interface.get_connection().unwrap(),
             max_rows_balling_set_values,
             max_rows_balling_dosing_log,
         )
@@ -1154,7 +1154,7 @@ pub mod tests {
             }
         };
         let mut sql_interface_balling = SqlInterfaceBalling::new(
-            sql_interface.get_connection(),
+            sql_interface.get_connection().unwrap(),
             max_rows_balling_set_values,
             max_rows_balling_dosing_log,
         )
@@ -1186,7 +1186,7 @@ pub mod tests {
         assert_eq!(balling.countdown_dosing_pump4, 0);
 
         // dosing log has four entries
-        let test_result = SqlInterfaceBalling::new(sql_interface.get_connection(), 0, 1);
+        let test_result = SqlInterfaceBalling::new(sql_interface.get_connection().unwrap(), 0, 1);
         assert!(matches!(
             test_result,
             Err(SqlInterfaceError::DatabaseBallingDosingLogTableContainsTooManyRows(_, _, _))
@@ -1323,7 +1323,7 @@ pub mod tests {
             }
         };
         let mut sql_interface_balling = SqlInterfaceBalling::new(
-            sql_interface.get_connection(),
+            sql_interface.get_connection().unwrap(),
             max_rows_balling_set_values,
             max_rows_balling_dosing_log,
         )
@@ -1687,7 +1687,7 @@ pub mod tests {
             }
         };
         let mut sql_interface_balling = SqlInterfaceBalling::new(
-            sql_interface.get_connection(),
+            sql_interface.get_connection().unwrap(),
             max_rows_balling_set_values,
             max_rows_balling_dosing_log,
         )
@@ -1888,7 +1888,7 @@ pub mod tests {
             }
         };
         let mut sql_interface_balling = SqlInterfaceBalling::new(
-            sql_interface.get_connection(),
+            sql_interface.get_connection().unwrap(),
             max_rows_balling_set_values,
             max_rows_balling_dosing_log,
         )
@@ -1951,7 +1951,7 @@ pub mod tests {
             }
         };
         let mut sql_interface_balling = SqlInterfaceBalling::new(
-            sql_interface.get_connection(),
+            sql_interface.get_connection().unwrap(),
             max_rows_balling_set_values,
             max_rows_balling_dosing_log,
         )
@@ -2104,7 +2104,7 @@ pub mod tests {
             }
         };
         let sql_interface_balling = SqlInterfaceBalling::new(
-            sql_interface.get_connection(),
+            sql_interface.get_connection().unwrap(),
             max_rows_balling_set_values,
             max_rows_balling_dosing_log,
         )
@@ -2144,7 +2144,7 @@ pub mod tests {
         let max_rows_balling_dosing_log = config.sql_interface.max_rows_balling_dosing_log;
         let sql_interface = SqlInterface::new(config.sql_interface).unwrap();
         let sql_interface_balling = SqlInterfaceBalling::new(
-            sql_interface.get_connection(),
+            sql_interface.get_connection().unwrap(),
             max_rows_balling_set_values,
             max_rows_balling_dosing_log,
         )

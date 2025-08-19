@@ -1539,7 +1539,7 @@ pub mod tests {
             }
         };
         let sql_interface_data =
-            SqlInterfaceData::new(sql_interface.get_connection(), max_rows_data).unwrap();
+            SqlInterfaceData::new(sql_interface.get_connection().unwrap(), max_rows_data).unwrap();
         let mut data_logger =
             DataLogger::new(config.data_logger, Duration::from_millis(1000)).unwrap();
 

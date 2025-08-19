@@ -523,7 +523,7 @@ pub mod tests {
         let mut sql_interface: SqlInterface = SqlInterface::new(config.sql_interface)
             .expect("Initialization of SQL interface for test failed.");
         let mut sql_interface_data =
-            SqlInterfaceData::new(sql_interface.get_connection(), max_rows_data).unwrap();
+            SqlInterfaceData::new(sql_interface.get_connection().unwrap(), max_rows_data).unwrap();
 
         // *** insert and load RecorderDataFrame ***************************************************
         match SqlInterface::truncate_table(&mut sql_interface, SQL_TABLE_DATA.to_string()) {
@@ -675,7 +675,7 @@ pub mod tests {
             }
         }
 
-        let test_result = SqlInterfaceData::new(sql_interface.get_connection(), 1);
+        let test_result = SqlInterfaceData::new(sql_interface.get_connection().unwrap(), 1);
         assert!(matches!(
             test_result,
             Err(SqlInterfaceError::DatabaseDataTableContainsTooManyRows(

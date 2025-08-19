@@ -877,7 +877,7 @@ pub mod tests {
         };
 
         let mut sql_interface_feed_unboxed = SqlInterfaceFeed::new(
-            sql_interface.get_connection(),
+            sql_interface.get_connection().unwrap(),
             config.sql_interface.max_rows_feed_pattern,
             config.sql_interface.max_rows_feed_schedule,
             config.sql_interface.max_rows_feed_log,
@@ -1014,7 +1014,7 @@ pub mod tests {
         };
 
         let mut sql_interface_feed_unboxed = SqlInterfaceFeed::new(
-            sql_interface.get_connection(),
+            sql_interface.get_connection().unwrap(),
             config.sql_interface.max_rows_feed_pattern,
             config.sql_interface.max_rows_feed_schedule,
             config.sql_interface.max_rows_feed_log,
@@ -1459,7 +1459,7 @@ pub mod tests {
         };
 
         let mut sql_interface_feed_unboxed = SqlInterfaceFeed::new(
-            sql_interface.get_connection(),
+            sql_interface.get_connection().unwrap(),
             config.sql_interface.max_rows_feed_pattern,
             config.sql_interface.max_rows_feed_schedule,
             config.sql_interface.max_rows_feed_log,
@@ -1594,7 +1594,7 @@ pub mod tests {
         };
 
         let mut sql_interface_feed_unboxed = SqlInterfaceFeed::new(
-            sql_interface.get_connection(),
+            sql_interface.get_connection().unwrap(),
             config.sql_interface.max_rows_feed_pattern,
             config.sql_interface.max_rows_feed_schedule,
             config.sql_interface.max_rows_feed_log,

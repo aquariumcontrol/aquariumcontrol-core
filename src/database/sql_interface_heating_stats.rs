@@ -543,10 +543,10 @@ pub mod tests {
         let mut sql_interface: SqlInterface = SqlInterface::new(config.sql_interface)
             .expect("Initialization of SQL interface for test failed.");
         let sql_interface_heating_midnight_calculator = Box::new(
-            SqlInterfaceMidnightCalculator::new(sql_interface.get_connection()),
+            SqlInterfaceMidnightCalculator::new(sql_interface.get_connection().unwrap()),
         );
         let mut sql_interface_heating = SqlInterfaceHeatingStats::new(
-            sql_interface.get_connection(),
+            sql_interface.get_connection().unwrap(),
             max_rows_heating_stats,
             sql_interface_heating_midnight_calculator,
         )
@@ -574,7 +574,7 @@ pub mod tests {
 
         // *** insert heating stats ****************************************************************
         // prepare data for inserting into the database
-        let today = match SqlInterface::get_current_date(&mut sql_interface.get_connection()) {
+        let today = match SqlInterface::get_current_date(&mut sql_interface.get_connection().unwrap()) {
             Ok(c) => c,
             Err(_) => panic!("Could not get current date."),
         };
@@ -669,16 +669,16 @@ pub mod tests {
         // *** check if too many rows are detected ***
         // insert one more entry with modified date
         heating_stats_entry.date =
-            SqlInterface::get_tomorrow_date(&mut sql_interface.get_connection()).unwrap();
+            SqlInterface::get_tomorrow_date(&mut sql_interface.get_connection().unwrap()).unwrap();
         assert!(matches!(
             sql_interface_heating.insert_heating_stats_entry(&heating_stats_entry),
             Ok(())
         ));
         let sql_interface_heating_midnight_calculator = Box::new(
-            SqlInterfaceMidnightCalculator::new(sql_interface.get_connection()),
+            SqlInterfaceMidnightCalculator::new(sql_interface.get_connection().unwrap()),
         );
         let test_result = SqlInterfaceHeatingStats::new(
-            sql_interface.get_connection(),
+            sql_interface.get_connection().unwrap(),
             1,
             sql_interface_heating_midnight_calculator,
         );

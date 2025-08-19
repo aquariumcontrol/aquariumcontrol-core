@@ -930,7 +930,7 @@ pub mod tests {
         let mut sql_interface: SqlInterface = SqlInterface::new(config.sql_interface)
             .expect("Initialization of SQL interface for test failed.");
         let mut sql_interface_feed = SqlInterfaceFeed::new(
-            sql_interface.get_connection(),
+            sql_interface.get_connection().unwrap(),
             max_rows_feed_pattern,
             max_rows_feed_schedule,
             max_rows_feed_log,
@@ -1122,7 +1122,7 @@ pub mod tests {
             }
         };
         let test_result: Result<SqlInterfaceFeed, SqlInterfaceError> =
-            SqlInterfaceFeed::new(sql_interface.get_connection(), 1, 100, 0);
+            SqlInterfaceFeed::new(sql_interface.get_connection().unwrap(), 1, 100, 0);
         assert!(matches!(
             test_result,
             Err(SqlInterfaceError::DatabaseFeedTableContainsTooManyRows(
@@ -1152,7 +1152,7 @@ pub mod tests {
         let mut sql_interface: SqlInterface = SqlInterface::new(config.sql_interface)
             .expect("Initialization of SQL interface for test failed.");
         let mut sql_interface_feed = SqlInterfaceFeed::new(
-            sql_interface.get_connection(),
+            sql_interface.get_connection().unwrap(),
             max_rows_feed_pattern,
             max_rows_feed_schedule,
             max_rows_feed_log,
@@ -1212,7 +1212,7 @@ pub mod tests {
             Ok(_) => {}
             Err(e) => panic!("Could not insert feed event into database: {e:?}"),
         }
-        let test_result = SqlInterfaceFeed::new(sql_interface.get_connection(), 0, 0, 1);
+        let test_result = SqlInterfaceFeed::new(sql_interface.get_connection().unwrap(), 0, 0, 1);
         assert!(matches!(
             test_result,
             Err(SqlInterfaceError::DatabaseFeedTableContainsTooManyRows(
@@ -1239,7 +1239,7 @@ pub mod tests {
         let mut sql_interface: SqlInterface = SqlInterface::new(config.sql_interface)
             .expect("Initialization of SQL interface for test failed.");
         let mut sql_interface_feed = SqlInterfaceFeed::new(
-            sql_interface.get_connection(),
+            sql_interface.get_connection().unwrap(),
             max_rows_feed_pattern,
             max_rows_feed_schedule,
             max_rows_feed_log,
@@ -1524,7 +1524,7 @@ pub mod tests {
         // **************************************************************************************
 
         let test_result: Result<SqlInterfaceFeed, SqlInterfaceError> =
-            SqlInterfaceFeed::new(sql_interface.get_connection(), 100, 1, 0);
+            SqlInterfaceFeed::new(sql_interface.get_connection().unwrap(), 100, 1, 0);
         assert!(matches!(
             test_result,
             Err(SqlInterfaceError::DatabaseFeedTableContainsTooManyRows(
