@@ -103,8 +103,13 @@ pub enum SqlInterfaceError {
     SingleFloatRequestNoSingleResponse(String, String),
 
     /// Could not get single heating stats entry from the database.
-    #[error("[{0}] Could not get single heating stats entry from database using query: {1}")]
-    SingleHeatingStatsRequestFailure(String, String),
+    #[error("[{location}] Could not get single heating stats entry from database using query: {query}")]
+    SingleHeatingStatsRequestFailure {
+        location: String,
+        query: String,
+        #[source]
+        source: MySqlError,
+    },
 
     /// database responded with empty response.
     #[error("[{0}] Database responded with empty response to query: {1}")]

@@ -211,25 +211,27 @@ pub struct SqlInterfaceHeatingStats {
 impl SqlInterfaceHeatingStats {
     /// Creates a new `SqlInterfaceHeatingStats` instance.
     ///
-    /// This constructor initializes the heating SQL interface with a primary
-    /// database connection and a dedicated calculator for time-until-midnight
-    /// functionality, which allows for dependency injection for testing.
-    ///
-    /// The function also checks if there are any NULL values in the table.
-    /// This is a critical inconsistency and shall abort the startup of the application.
-    /// This function is called before creating any threads.
-    /// If NULL values are detected, the function will panic leading to a stop of the overall
-    /// application.
+    /// This constructor initializes the SQL interface for heating statistics. It performs
+    /// several pre-flight checks to ensure data integrity, such as verifying that the
+    /// `heatingstats` table contains no NULL values and that its row count is within
+    /// the configured limit.
     ///
     /// # Arguments
-    /// * `conn` - An active database connection pool object for general heating-related operations.
+    /// * `conn` - An active, pooled database connection.
+    /// * `max_rows_heating_stats` - The maximum allowed number of rows in the `heatingstats` table.
     /// * `sql_interface_heating_midnight_calculator` - A boxed trait object that provides
-    ///   the implementation for calculating the duration until midnight. This allows
-    ///   for dynamic dispatch and mock implementations in tests.
+    ///   the implementation for calculating the duration until midnight.
     ///
     /// # Returns
-    /// * A new `SqlInterfaceHeatingStats` struct in case of success.
-    /// * An error `SqlInterfaceError` in case of failure.
+    /// A `Result` containing a new `SqlInterfaceHeatingStats` instance on success.
+    ///
+    /// # Errors
+    /// This function will return an error if:
+    /// - Any of the initial database queries to get table counts fail (`DatabaseCheckHeatingStatsFailure`).
+    /// - Any of the retrieved counts are negative, indicating a database issue (`DatabaseHeatingStatsTableNegativeValue`).
+    /// - The `heatingstats` table contains entries with `NULL` values (`DatabaseHeatingStatsTableContainsNull`).
+    /// - The number of rows in the `heatingstats` table exceeds `max_rows_heating_stats` (`DatabaseHeatingStatsTableContainsTooManyRows`).
+
     pub fn new(
         mut conn: PooledConn,
         max_rows_heating_stats: u64,
@@ -291,39 +293,28 @@ impl SqlInterfaceHeatingStats {
 
     /// Retrieves a single `HeatingStatsEntry` for the current date from the database.
     ///
-    /// This function executes an SQL query (`SQL_QUERY_READ_HEATING_STATS`) to fetch
-    /// heating statistical data that corresponds to the **database's current date**
-    /// (`CURRENT_DATE()`). It's designed to retrieve exactly one record for "today."
-    ///
-    /// The process involves:
-    /// 1.  **Query Execution**: Attempts to read data from the `heatingstats` table.
-    /// 2.  **Result Validation**:
-    ///     * If the query returns **no entries**, it indicates that no statistics
-    ///       have been recorded for the current database date yet, and an
-    ///       `SqlInterfaceError::SingleHeatingStatsRequestNoSingleResponse` error is returned.
-    ///     * If the query returns **more than one entry**, it signifies a data
-    ///       inconsistency in the database (as only one daily entry is expected),
-    ///       and an `SqlInterfaceError::SingleHeatingStatsRequestNoSingleResponse` error is returned.
-    /// 3.  **Data Conversion**: The retrieved string-based `date` field is parsed
-    ///     into a `chrono::NaiveDate` object.
-    /// 4.  **Struct Construction**: Finally, a `HeatingStatsEntry` struct is constructed
-    ///     with the retrieved and parsed data.
+    /// This function executes an SQL query to fetch heating statistical data that
+    /// corresponds to the database's current date. It is designed to retrieve
+    /// exactly one record for "today."
     ///
     /// # Returns
+    /// A `Result` containing the `HeatingStatsEntry` for the current date on success.
     ///
-    /// - `Ok(HeatingStatsEntry)`: If a single, valid heating statistics entry for the
-    ///   current date is successfully retrieved and parsed from the database.
-    /// - `Err(SqlInterfaceError)`: If any error occurs during the process, including
-    ///   - `SqlInterfaceError::SingleHeatingStatsRequestFailure`: The database query itself fails.
-    ///   - `SqlInterfaceError::SingleHeatingStatsRequestNoSingleResponse`: The query
-    ///     returns zero or more than one record.
-    ///   - `SqlInterfaceError::TimestampConversionFailure`: The date string retrieved
-    ///     from the database cannot be correctly parsed into a `NaiveDate`.
+    /// # Errors
+    /// This function will return an error if:
+    /// - The underlying database query fails (`SingleHeatingStatsRequestFailure`). This can be
+    ///   due to a connection issue or an invalid query.
+    /// - The query returns zero rows, indicating no statistics have been recorded for
+    ///   the current day (`SingleHeatingStatsRequestEmptyResponse`).
+    /// - The query returns more than one row, which signifies a data inconsistency
+    ///   (`SingleHeatingStatsRequestNoSingleResponse`).
+    /// - The date string retrieved from the database cannot be parsed into a `NaiveDate`
+    ///   (`TimestampConversionFailure`).
     pub fn get_single_heating_stats_from_database(
         &mut self,
     ) -> Result<HeatingStatsEntry, SqlInterfaceError> {
         // Get single heating stats entry from database
-        let single_heating_stats_entry_array = match self.conn.query_map(
+        let single_heating_stats_entry_array = self.conn.query_map(
             sql_query_strings::SQL_QUERY_READ_HEATING_STATS,
             |(
                 date,
@@ -342,15 +333,11 @@ impl SqlInterfaceHeatingStats {
                 water_temperature_average_counter,
                 heating_control_runtime,
             },
-        ) {
-            Ok(c) => c,
-            Err(_) => {
-                return Err(SqlInterfaceError::SingleHeatingStatsRequestFailure(
-                    module_path!().to_string(),
-                    sql_query_strings::SQL_QUERY_READ_HEATING_STATS.to_string(),
-                ));
-            }
-        };
+        ).map_err(|e| SqlInterfaceError::SingleHeatingStatsRequestFailure {
+                    location: module_path!().to_string(),
+                    query: sql_query_strings::SQL_QUERY_READ_HEATING_STATS.to_string(),
+                    source: e,
+                })?;
 
         // check the error case if there is no response
         if single_heating_stats_entry_array.is_empty() {
@@ -422,12 +409,13 @@ impl SqlInterfaceHeatingStats {
     ///   The `date` field is crucial as it identifies the unique daily record.
     ///
     /// # Returns
+    /// An empty `Result` (`Ok(())`) if the data was successfully inserted or updated.
     ///
-    /// - `Ok(())`: If the data was successfully inserted as a new record or if an existing
-    ///   record was successfully updated.
-    /// - `Err(SqlInterfaceError::InsertHeatingStatsEntryFailure)`: If any error occurs during
-    ///   the database operation.    
-    ///
+    /// # Errors
+    /// Returns `SqlInterfaceError::InsertHeatingStatsEntryFailure` if the database
+    /// operation fails. This can be caused by a lost connection, constraint violations,
+    /// incorrect data types, or a malformed SQL query. The original `mysql::Error` is
+    /// included as the source for detailed debugging.
     pub fn insert_heating_stats_entry(
         &mut self,
         heating_stats_entry: &HeatingStatsEntry,
@@ -472,7 +460,7 @@ impl SqlInterfaceHeatingStats {
             &heating_stats_entry.heating_control_runtime.to_string(),
         );
 
-        match self.conn.exec_drop::<_, _>(sql_query_string.clone(), params!{
+        self.conn.exec_drop::<_, _>(sql_query_string.clone(), params!{
                 "date" => heating_stats_entry.date.format("%Y-%m-%d").to_string(),
                 "energy" => heating_stats_entry.energy,
                 "ambient_temperature_average" => heating_stats_entry.ambient_temperature_average_value,
@@ -481,30 +469,28 @@ impl SqlInterfaceHeatingStats {
                 "water_temperature_counter" => heating_stats_entry.water_temperature_average_counter,
                 "heating_control_runtime" => heating_stats_entry.heating_control_runtime,
                 },
-            ) {
-            Ok(_) => Ok(()),
-            Err(e) => {
-                Err(SqlInterfaceError::InsertHeatingStatsEntryFailure {
+            ).map_err(|e| SqlInterfaceError::InsertHeatingStatsEntryFailure {
                     location: module_path!().to_string(),
                     sql_query_string,
                     source: e,
-                })
-            }
-        }
+                })?;
+
+        Ok(())
     }
 
-    /// Delegates the request for the duration until midnight to the configured calculator.
+    /// Calculates the duration in seconds until the next midnight.
     ///
-    /// This function calls the `get_duration_until_midnight` method on the
-    /// `sql_interface_heating_midnight_calculator` trait object, providing an
-    /// abstraction layer for retrieving this specific time calculation.
+    /// This function delegates the calculation to the `sql_interface_heating_midnight_calculator`
+    /// trait object, which was provided during construction. This allows for flexible
+    /// and testable time calculations.
     ///
     /// # Returns
-    /// A `Result` which is:
-    /// - `Ok(i64)`: The number of seconds remaining until the next midnight,
-    ///   as determined by the injected calculator implementation.
-    /// - `Err(SqlInterfaceError)`: If the underlying calculator encounters an error
-    ///   during its operation.
+    /// A `Result` containing the number of seconds until midnight on success.
+    ///
+    /// # Errors
+    /// This function will return an error if the underlying calculator implementation
+    /// fails. This is typically a pass-through of the error from the calculator's
+    /// `get_duration_until_midnight` method.
     pub fn get_duration_until_midnight(&mut self) -> Result<i64, SqlInterfaceError> {
         self.sql_interface_heating_midnight_calculator
             .get_duration_until_midnight()
