@@ -174,10 +174,12 @@ impl DatabaseInterfaceFeedTrait for SqlInterfaceFeed {
     /// * `profile_id` - The unique identifier of the feed profile that was executed.
     ///
     /// # Returns
-    /// A `Result` which is:
-    /// - `Ok(())` if the feed event record was successfully inserted.
-    /// - `Err(SqlInterfaceError::InsertFeedEventFailure)` if an error occurs
-    ///   during the database insertion.
+    /// An empty `Result` (`Ok(())`) if the feed event record was successfully inserted.
+    ///
+    /// # Errors
+    /// Returns `SqlInterfaceError::InsertFeedEventFailure` if the `INSERT` query fails.
+    /// This can happen due to a lost connection, constraint violation (e.g., foreign key),
+    /// or incorrect data types. The original `mysql::Error` is included as the source.
     fn insert_feed_event(
         &mut self,
         timestamp: NaiveDateTime,
@@ -185,58 +187,49 @@ impl DatabaseInterfaceFeedTrait for SqlInterfaceFeed {
         profile_name: String,
         profile_id: i32,
     ) -> Result<(), SqlInterfaceError> {
-        let sql_query_string = sql_query_strings::SQL_QUERY_WRITE_FEED_EVENT.to_owned();
-        match self.conn.exec_drop::<_, _>(
-            sql_query_string,
+        self.conn.exec_drop::<_, _>(
+            sql_query_strings::SQL_QUERY_WRITE_FEED_EVENT.to_owned(),
             params! {
             "timestamp" => timestamp.format("%Y-%m-%d %H:%M:%S").to_string(),
             "feeder_run_time" => feeder_run_time,
             "profile_name" => profile_name,
             "profile_id" => profile_id,
             },
-        ) {
-            Ok(_) => Ok(()),
-            Err(e) => Err(SqlInterfaceError::InsertFeedEventFailure {
+        ).map_err(|e| SqlInterfaceError::InsertFeedEventFailure {
                 location: module_path!().to_string(),
                 source: e,
-            }),
-        }
+            })?;
+
+        Ok(())
     }
 
     /// Retrieves a complete `Feedpattern` from the SQL database, including its header and all associated phases.
     ///
-    /// This function first fetches the basic header information for the specified feed profile ID.
-    /// It then proceeds to retrieve data for each of the 10 expected feed phases (from 1 to 10),
-    /// converting the raw numeric flags from the database into boolean values for the `FeedPhase` structs.
+    /// This function first fetches the header information for the specified `profile_id`.
+    /// It then retrieves data for each of the 10 expected feed phases, converting raw
+    /// database flags into booleans.
     ///
     /// # Arguments
     /// * `profile_id` - The unique identifier of the feed profile to retrieve.
     ///
     /// # Returns
-    /// A `Result` which is:
-    /// - `Ok(Feedpattern)`: A fully constructed `Feedpattern` object containing the
-    ///   header and all its phases if successful.
-    /// - `Err(SqlInterfaceError)`: If an error occurs during the retrieval of the
-    ///   feed pattern header or any of its phases from the database. This includes
-    ///   cases where the profile is not found or database query issues.
+    /// A `Result` containing a fully constructed `Feedpattern` object on success.
+    ///
+    /// # Errors
+    /// This function will return an error if:
+    /// - The query for the feed pattern header fails, the header is not found, or multiple headers are found.
+    /// - The query for any of the 10 feed phases fails, a phase is not found, or multiple phases are found.
+    /// - A retrieved feed phase contains an invalid (negative) duration value.
     fn get_single_feedpattern_from_database(
         &mut self,
         profile_id: i32,
     ) -> Result<Feedpattern, SqlInterfaceError> {
-        let sql_feedpattern_header = match self.get_feedpattern_header_from_database(profile_id) {
-            Ok(c) => c,
-            Err(e) => {
-                return Err(e);
-            }
-        };
+        let sql_feedpattern_header = self.get_feedpattern_header_from_database(profile_id)?;
+
         let mut feed_phases = Vec::new();
         for nr in 1..11 {
-            let sql_feed_phase = match self.get_feed_phase_from_database(profile_id, nr) {
-                Ok(c) => c,
-                Err(e) => {
-                    return Err(e);
-                }
-            };
+            let sql_feed_phase = self.get_feed_phase_from_database(profile_id, nr)?;
+
             let feed_phase = FeedPhase {
                 pause_duration: sql_feed_phase.pause_duration,
                 pause_skimmer: sql_feed_phase.pause_skimmer > 0,
@@ -260,26 +253,24 @@ impl DatabaseInterfaceFeedTrait for SqlInterfaceFeed {
         })
     }
 
-    /// Updates or deletes multiple feed schedule entries in the database based on their repetition setting.
+    /// Updates or deletes multiple feed schedule entries in the database.
     ///
-    /// This function iterates through a provided list of `FeedScheduleEntry` structs.
-    /// For each entry:
-    /// - If `repeat_daily` is `true`, it updates the entry's timestamp in the database to tomorrow's date
-    ///   while preserving the original time of day.
+    /// This function iterates through a list of `FeedScheduleEntry` structs. For each entry:
+    /// - If `repeat_daily` is `true`, it updates the entry's timestamp in the database to tomorrow's date at the same time.
     /// - If `repeat_daily` is `false`, it deletes the entry from the database.
     ///
-    /// The function continues processing all entries even if an individual update or deletion fails,
-    /// but it will return the last encountered error.
+    /// The entire operation is transactional in nature: it will stop and return an error on the first failure.
     ///
     /// # Arguments
-    /// * `feedschedule_entries` - A mutable reference to a vector of `FeedScheduleEntry` structs
-    ///   to be processed. The timestamps of repeated entries will be updated.
+    /// * `feedschedule_entries` - A mutable reference to a vector of `FeedScheduleEntry` structs to be processed.
     ///
     /// # Returns
-    /// A `Result` which is:
-    /// - `Ok(())` if all operations (updates and deletions) were successful.
-    /// - `Err(SqlInterfaceError::FeedScheduleUpdateFailure)` if any update or deletion
-    ///   operation fails for an entry. The function will return the last error encountered.
+    /// An empty `Result` (`Ok(())`) if all update and delete operations were successful.
+    ///
+    /// # Errors
+    /// This function will return an error if an operation fails. This can be:
+    /// - `FeedScheduleUpdateFailure`: If fetching tomorrow's date fails.
+    /// - `FeedScheduleDropFailure`: If a database `UPDATE` or `DELETE` command fails. This can be due to a lost connection or other database-side issues.
     fn update_feedschedule_entries_in_database(
         &mut self,
         feedschedule_entries: &mut Vec<FeedScheduleEntry>,
@@ -366,10 +357,10 @@ impl DatabaseInterfaceFeedTrait for SqlInterfaceFeed {
     // * `is_daily` - A boolean flag indicating if this schedule entry should repeat daily.
     //
     // # Returns
-    // A `Result` which is:
-    // - `Ok(())` if the feed schedule entry was successfully inserted.
-    // - `Err(SqlInterfaceError::InsertFeedEventFailure)` if an error occurs during
-    //   the database insertion.
+    // An empty `Result` (`Ok(())`) if operation was successful.
+    //
+    // # Errors
+    // This function will return an `InsertFeedEventFailure` if the database operation fails.
     #[cfg(test)]
     fn insert_feed_schedule_entry(
         &mut self,
@@ -408,17 +399,27 @@ impl DatabaseInterfaceFeedTrait for SqlInterfaceFeed {
 impl SqlInterfaceFeed {
     /// Creates a new `SqlInterfaceFeed` instance.
     ///
-    /// This constructor initializes the feed management SQL interface
-    /// with an established database connection. Before, it checks whether the feed schedule table
-    /// or the feed pattern table contain any NULL values. If so, it panics, as this indicates a
-    /// data consistency issue.
+    /// This constructor initializes the feed management SQL interface with an
+    /// established database connection. It performs several pre-flight checks to
+    /// ensure data integrity and adherence to configured limits, such as verifying
+    /// that tables contain no NULL values and that row counts are within their
+    /// specified maximums.
     ///
     /// # Arguments
-    /// * `conn` - An active database connection pool object.
+    /// * `conn` - An active, pooled database connection.
+    /// * `max_rows_feed_pattern` - The maximum allowed rows in the `feedpatterns` table.
+    /// * `max_rows_feed_schedule` - The maximum allowed rows in the `feedschedule` table.
+    /// * `max_rows_feed_log` - The maximum allowed rows in the `feedlog` table.
     ///
     /// # Returns
-    /// * A new `SqlInterfaceFeed` struct in case of success.
-    /// * An error `SqlInterfaceError` in case of failure.
+    /// A `Result` containing a new `SqlInterfaceFeed` instance on success.
+    ///
+    /// # Errors
+    /// This function will return an error if:
+    /// - Any of the initial database queries to get table counts or check for NULLs fail (`DatabaseCheckFeedSetValsFailure`).
+    /// - Any of the retrieved counts are negative, indicating a database issue (`DatabaseFeedTableNegativeValue`).
+    /// - The `feedpatterns` or `feedschedule` tables contain entries with `NULL` values (`DatabaseFeedSetValTableContainsNull`).
+    /// - The number of rows in any of the checked tables exceeds its configured maximum (`DatabaseFeedTableContainsTooManyRows`). .
     pub fn new(
         mut conn: PooledConn,
         max_rows_feed_pattern: u64,
@@ -496,8 +497,8 @@ impl SqlInterfaceFeed {
             return Err(SqlInterfaceError::DatabaseFeedTableNegativeValue(
                 module_path!().to_string(),
                 SQL_TABLE_FEEDLOG.to_string(),
-                count_null_values_feedschedule,
-                count_rows_feedschedule,
+                -1,
+                count_rows_feedlog,
             ));
         }
 
@@ -560,20 +561,20 @@ impl SqlInterfaceFeed {
     ///
     /// This private helper function executes the provided `sql_query` to fetch raw schedule data.
     /// It then attempts to convert these raw `SqlScheduleEntry` records into fully typed
-    /// `FeedScheduleEntry` structs. It handles cases where no records are found or where
-    /// conversion of timestamps fails.
+    /// `FeedScheduleEntry` structs.
     ///
     /// # Arguments
     /// * `sql_query` - The SQL query string used to retrieve feed schedule entries.
     ///
     /// # Returns
-    /// A `Result` which is:
-    /// - `Ok(Some(Vec<FeedScheduleEntry>))` if one or more schedule entries are successfully retrieved and converted.
-    /// - `Ok(None)` if the query returns an empty result set.
-    /// - `Err(SqlInterfaceError::FeedScheduleEntryRequestFailure)` if the database query fails.
-    /// - `Err(SqlInterfaceError::FeedScheduleEntryTimeStampConversionFailure)` if the query
-    ///   returns results, but none of the timestamp strings could be successfully parsed
-    ///   into `NaiveDateTime`.
+    /// A `Result` containing an `Option<Vec<FeedScheduleEntry>>`:
+    /// - `Ok(Some(Vec<FeedScheduleEntry>))`: If one or more schedule entries are successfully retrieved and converted.
+    /// - `Ok(None)`: If the query returns no rows.
+    ///
+    /// # Errors
+    /// This function will return an error if:
+    /// - The underlying database query fails (`FeedScheduleEntryRequestFailure`). This can be due to a connection issue or an invalid query.
+    /// - The query returns results, but one of the entries cannot be processed (e.g., due to a malformed timestamp), resulting in `FeedScheduleEntryTimeStampProcessingFailure`.
     fn get_feedschedule_entries_from_database(
         &mut self,
         sql_query: &str,
@@ -588,11 +589,12 @@ impl SqlInterfaceFeed {
             },
         ) {
             Ok(c) => c,
-            Err(_) => {
-                return Err(SqlInterfaceError::FeedScheduleEntryRequestFailure(
-                    module_path!().to_string(),
-                    sql_query.to_string(),
-                ));
+            Err(e) => {
+                return Err(SqlInterfaceError::FeedScheduleEntryRequestFailure {
+                    location: module_path!().to_string(),
+                    query: sql_query.to_string(),
+                    source: e
+                });
             }
         };
 

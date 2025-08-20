@@ -227,8 +227,14 @@ pub enum SqlInterfaceError {
     },
 
     /// Could not get feed schedule entry from the database.
-    #[error("[{0}] Could not get feed schedule entry from the database using query: {1}")]
-    FeedScheduleEntryRequestFailure(String, String),
+    #[error("[{location}] Could not get feed schedule entry from the database using query: {query}")]
+    FeedScheduleEntryRequestFailure {
+        location: String,
+        query: String,
+
+        #[source]
+        source: MySqlError
+    },
 
     /// Could not convert feedschedule entry string(s) read from the database to timestamp.
     #[error("[{location}] Could not convert feedschedule entry string(s) read from the database to timestamp.")]
