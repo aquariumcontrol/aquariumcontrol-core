@@ -147,7 +147,7 @@ pub struct Message {
 impl Message {
     /// Creates a new `Message` instance with all its fields initialized to zero.
     ///
-    /// This constructor provides a default, empty message state, which is
+    /// This constructor provides a default, empty message state, which can then be
     /// populated with specific domain, command, and parameter values.
     ///
     /// # Returns
@@ -259,13 +259,14 @@ impl Messaging {
     ///   the `mq_filename` (the name of the POSIX message queue).
     ///
     /// # Returns
-    /// A new `Messaging` struct, initialized with the configuration, the opened
-    /// message queue handle, and its maximum message length.
+    /// A `Result` containing a new, initialized `Messaging` struct on success.
     ///
-    /// # Panics
-    /// This function will panic in the following scenarios:
-    /// - If it fails to open the message queue with the specified `mq_filename`.
-    /// - If it fails to retrieve the attributes (like max message length) of the opened message queue.
+    /// # Errors
+    /// This function will return an error if:
+    /// - It fails to open the message queue with the specified `mq_filename`. This will
+    ///   be a `MessagingError::PosixMessageQueueOpeningError`.
+    /// - It fails to retrieve the attributes (like max message length) of the opened
+    ///   message queue. This will be a `MessagingError::PosixMessageQueueAttributesError`.
     pub fn new(config: MessagingConfig) -> Result<Messaging, MessagingError> {
         let mq_file_name_clone_for_error = config.mq_filename.clone();
 
@@ -455,7 +456,7 @@ impl Messaging {
                         _ => {
                             error!(
                                 target: module_path!(),
-                                "timeout occurred when reading POSIX message ({e:?})"
+                                "Error occurred when reading POSIX message ({e:?})"
                             );
                         }
                     }
@@ -546,7 +547,8 @@ pub mod tests {
     // An opened `PosixMq` instance.
     //
     // # Panics
-    // This function will panic if it fails to open the specified POSIX message queue.
+    // This function will panic if it fails to open the specified POSIX message queue,
+    // as this is considered a critical failure for the test setup.
     fn open_posixmq_test_file(filename: &str) -> PosixMq {
         match PosixMq::open(filename) {
             Ok(c) => c,
@@ -635,7 +637,6 @@ pub mod tests {
     // # Panics
     // This function will panic if:
     // - The new thread cannot be spawned.
-    // - It fails to open the specified POSIX message queue for sending stimuli.
     fn create_test_environment(
         msg_commands: Vec<Message>,
         tx_environment_to_object: Sender<InternalCommand>,
