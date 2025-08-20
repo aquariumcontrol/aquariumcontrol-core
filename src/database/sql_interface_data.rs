@@ -287,7 +287,12 @@ impl SqlInterfaceData {
         }
     }
 
-    /// Execute a ping to the database to avoid timeout.
+    /// Pings the database to check connection health and prevent timeouts.
+    ///
+    /// This function executes a lightweight query to ensure the connection is still
+    /// active. If the ping fails, it logs an error using `log::error!` but does
+    /// not propagate the error to the caller. This is a "fire-and-forget"
+    /// keep-alive mechanism.
     pub fn ping(&mut self) {
         if let Err(e) = SqlInterface::ping_database(&mut self.conn) {
             error!(target: module_path!(), "Encountered error while pinging database: {e:?}");

@@ -107,7 +107,13 @@ pub trait DatabaseInterfaceFeedTrait {
         &mut self,
         feedschedule_entries: &mut Vec<FeedScheduleEntry>,
     ) -> Result<(), SqlInterfaceError>;
-    /// Execute a ping to the database to avoid timeout.
+    
+    /// Pings the database to check connection health and prevent timeouts.
+    ///
+    /// This function executes a lightweight query to ensure the connection is still
+    /// active. If the ping fails, it logs an error using `log::error!` but does
+    /// not propagate the error to the caller. This is a "fire-and-forget"
+    /// keep-alive mechanism.
     fn ping(&mut self);
 
     #[cfg(test)]

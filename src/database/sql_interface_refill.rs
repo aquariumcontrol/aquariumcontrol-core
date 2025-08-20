@@ -44,7 +44,13 @@ pub trait DatabaseInterfaceRefillTrait {
         volume: f64,
         error_code: i32,
     ) -> Result<(), SqlInterfaceError>;
-    /// Execute a ping to the database to avoid timeout.
+
+    /// Pings the database to check connection health and prevent timeouts.
+    ///
+    /// This function executes a lightweight query to ensure the connection is still
+    /// active. If the ping fails, it logs an error using `log::error!` but does
+    /// not propagate the error to the caller. This is a "fire-and-forget"
+    /// keep-alive mechanism.
     fn ping(&mut self);
 }
 
@@ -55,17 +61,25 @@ pub struct SqlInterfaceRefill {
 }
 
 impl SqlInterfaceRefill {
-    /// Creates a new `SqlInterfaceRefill` instance.
+    // Creates a new `SqlInterfaceRefill` instance.
     ///
     /// This constructor initializes the refill management SQL interface with an established
-    /// database connection.
+    /// database connection. It performs a pre-flight check to ensure the number of rows
+    /// in the `refill` table does not exceed the configured limit.
     ///
     /// # Arguments
-    /// * `conn` - An active database connection pool object.
-    /// * `max_rows_refill` - Maximum allowed number of rows
+    /// * `conn` - An active, pooled database connection.
+    /// * `max_rows_refill` - The maximum allowed number of rows in the `refill` table.
+    ///   If `0`, the check is skipped.
     ///
     /// # Returns
-    /// A new `SqlInterfaceRefill` struct.
+    /// A `Result` containing a new `SqlInterfaceRefill` instance on success.
+    ///
+    /// # Errors
+    /// This function will return an error if:
+    /// - The initial database query to get the table row count fails (`DatabaseCheckRefillFailure`).
+    /// - The retrieved row count is a negative number, indicating a database issue (`DatabaseRefillTableNegativeValue`).
+    /// - The number of rows in the `refill` table exceeds the configured `max_rows_refill` limit (`DatabaseRefillTableContainsTooManyRows`).
     pub fn new(
         mut conn: PooledConn,
         max_rows_refill: u64,
@@ -102,14 +116,17 @@ impl SqlInterfaceRefill {
     /// Fetches the timestamp of the most recent water refill event from the database.
     ///
     /// This private helper function queries the database for the latest recorded
-    /// refill event and converts its timestamp into a `NaiveDateTime` object.
+    /// refill event.
     ///
     /// # Returns
-    /// A `Result` which is:
-    /// - `Ok(NaiveDateTime)`: The timestamp of the last refill event.
-    /// - `Err(SqlInterfaceError)`: If there's an issue retrieving or parsing the timestamp,
-    ///   such as the table being empty, a database communication error, or a timestamp
-    ///   conversion failure.
+    /// A `Result` containing the `NaiveDateTime` of the last refill event on success.
+    ///
+    /// # Errors
+    /// This function will return an `Err` variant of `SqlInterfaceError`, most likely
+    /// `TimestampRequestFailure`, if:
+    /// - The underlying database query fails due to a connection issue or invalid SQL.
+    /// - The `refill` table is empty, and thus no timestamp can be returned.
+    /// - The query unexpectedly returns more than one row.
     fn get_last_refill_timestamp(&mut self) -> Result<NaiveDateTime, SqlInterfaceError> {
         SqlInterface::get_timestamp(
             &mut self.conn,
@@ -122,33 +139,21 @@ impl DatabaseInterfaceRefillTrait for SqlInterfaceRefill {
     /// Calculates the time elapsed in seconds since the most recent water refill event.
     ///
     /// This function determines the duration by comparing the current database timestamp
-    /// with the timestamp of the last recorded refill event. It ensures the result
-    /// is a non-negative duration.
+    /// with the timestamp of the last recorded refill event.
     ///
     /// # Returns
-    /// A `Result` which is:
-    /// - `Ok(u64)`: The number of seconds that have passed since the last refill event.
-    ///   Returns 0 if the last refill was precisely at the current moment or in the future
-    ///   (which would indicate a data anomaly).
-    /// - `Err(SqlInterfaceError::NegativeInteger)`: If the calculated duration is negative
-    ///   (meaning the "last refill" timestamp is in the future relative to the current timestamp,
-    ///   suggesting data corruption).
-    /// - `Err(SqlInterfaceError)`: If any error occurs while retrieving either the
-    ///   current timestamp or the last refill timestamp from the database.
+    /// A `Result` containing the number of seconds (`u64`) that have passed since the last refill event.
+    ///
+    /// # Errors
+    /// This function will return an error if:
+    /// - It fails to retrieve either the current timestamp or the last refill timestamp from the database.
+    ///   The original error from the database call will be propagated.
+    /// - The calculated duration is negative (`NegativeTimeDeltaSeconds`), which suggests a data anomaly
+    ///   where the "last refill" timestamp is in the future.
     fn get_duration_since_last_refill(&mut self) -> Result<u64, SqlInterfaceError> {
-        let current_datetime = match SqlInterface::get_current_timestamp(&mut self.conn) {
-            Ok(c) => c,
-            Err(e) => {
-                return Err(e);
-            }
-        };
+        let current_datetime = SqlInterface::get_current_timestamp(&mut self.conn)?;
 
-        let last_refill_datetime = match self.get_last_refill_timestamp() {
-            Ok(c) => c,
-            Err(e) => {
-                return Err(e);
-            }
-        };
+        let last_refill_datetime = self.get_last_refill_timestamp()?;
 
         let delta_time = current_datetime.signed_duration_since(last_refill_datetime);
 
@@ -162,21 +167,22 @@ impl DatabaseInterfaceRefillTrait for SqlInterfaceRefill {
         }
     }
 
-    /// Executes an SQL query to retrieve a single integer value, validating it as non-negative.
+    /// Executes an SQL query to retrieve a single integer, validating it as non-negative.
     ///
-    /// This private helper function is used for database queries that are expected to return
-    /// a single integer. It further ensures that the retrieved integer is non-negative,
-    /// converting it to `u64` on success, or returning a specific error if it's negative.
+    /// This helper function is used for database queries that are expected to return
+    /// a single, non-negative integer.
     ///
     /// # Arguments
-    /// * `sql_query_string` - The SQL query string to be executed, expected to yield a single integer result.
+    /// * `sql_query_string` - The SQL query to be executed.
     ///
     /// # Returns
-    /// A `Result` which is:
-    /// - `Ok(u64)`: The retrieved integer value, successfully converted to an unsigned 64-bit integer.
-    /// - `Err(SqlInterfaceError::NegativeInteger)`: If the database query returns a negative integer.
-    /// - `Err(SqlInterfaceError)`: If the underlying `get_single_integer_from_database` call fails
-    ///   (e.g., query execution error, no result, or multiple results).
+    /// A `Result` containing the retrieved integer value as a `u64` on success.
+    ///
+    /// # Errors
+    /// This function will return an error if:
+    /// - The underlying database call fails (e.g., query execution error, no result, or multiple results).
+    ///   The original error is propagated.
+    /// - The database query returns a negative integer (`NegativeInteger`), which is not expected.
     fn get_positive_integer_value_from_database(
         &mut self,
         sql_query_string: &str,
@@ -205,8 +211,10 @@ impl DatabaseInterfaceRefillTrait for SqlInterfaceRefill {
     /// A `Result` which is:
     /// - `Ok(0)` if the refill table contains no entries.
     /// - `Ok(1)` if the refill table contains at least one entry.
-    /// - `Err(SqlInterfaceError)` if a database error occurs during the check,
-    ///   or if an unexpected (e.g., negative or multiple) integer result is returned.
+    ///
+    /// # Errors
+    /// This function will return an `Err` if the database query fails or if the query
+    /// returns an unexpected value (e.g., a negative number).
     fn check_empty(&mut self) -> Result<u64, SqlInterfaceError> {
         self.get_positive_integer_value_from_database(
             sql_query_strings::SQL_QUERY_CHECK_REFILL_EMPTY,
@@ -219,10 +227,12 @@ impl DatabaseInterfaceRefillTrait for SqlInterfaceRefill {
     /// fall within the most recent 60-minute period.
     ///
     /// # Returns
-    /// A `Result` which is:
-    /// - `Ok(u64)`: The number of refill events recorded in the last hour.
-    /// - `Err(SqlInterfaceError)`: If a database error occurs during the count retrieval,
-    ///   or if an unexpected (e.g., negative or multiple) integer result is returned.
+    /// A `Result` containing the number of refill events (`u64`) recorded in the last hour.
+    ///
+    /// # Errors
+    /// Returns `SqlInterfaceError::RefillPastDataRetrievalFailed` if the underlying
+    /// database call fails. This can be caused by a connection issue, an invalid query,
+    /// or if the query returns a negative number where a positive count is expected.
     fn get_refill_count_of_last_hour(&mut self) -> Result<u64, SqlInterfaceError> {
         self.get_positive_integer_value_from_database(
             sql_query_strings::SQL_QUERY_READ_REFILL_COUNT_LAST_HOUR,
@@ -241,10 +251,12 @@ impl DatabaseInterfaceRefillTrait for SqlInterfaceRefill {
     /// fall within the most recent 24-hour period.
     ///
     /// # Returns
-    /// A `Result` which is:
-    /// - `Ok(u64)`: The number of refill events recorded in the last 24 hours.
-    /// - `Err(SqlInterfaceError)`: If a database error occurs during the count retrieval,
-    ///   or if an unexpected (e.g., negative or multiple) integer result is returned.
+    /// A `Result` containing the number of refill events (`u64`) recorded in the last 24 hours.
+    ///
+    /// # Errors
+    /// Returns `SqlInterfaceError::RefillPastDataRetrievalFailed` if the underlying
+    /// database call fails. This can be caused by a connection issue, an invalid query,
+    /// or if the query returns a negative number where a positive count is expected.
     fn get_refill_count_of_last_24h(&mut self) -> Result<u64, SqlInterfaceError> {
         self.get_positive_integer_value_from_database(
             sql_query_strings::SQL_QUERY_READ_REFILL_COUNT_LAST_24H,
@@ -263,10 +275,12 @@ impl DatabaseInterfaceRefillTrait for SqlInterfaceRefill {
     /// that occurred within the most recent 24-hour period.
     ///
     /// # Returns
-    /// A `Result` which is:
-    /// - `Ok(f64)`: The total volume of water refilled in the last 24 hours.
-    /// - `Err(SqlInterfaceError)`: If a database error occurs during the volume retrieval,
-    ///   or if an unexpected (e.g., zero or multiple) float result is returned.
+    /// A `Result` containing the total volume (`f64`) of water refilled in the last 24 hours.
+    ///
+    /// # Errors
+    /// Returns `SqlInterfaceError::RefillPastDataRetrievalFailed` if the underlying
+    /// database call fails. This can be caused by a connection issue, an invalid query,
+    /// or if the query does not return a single float value.
     fn get_refill_volume_of_last_24h(&mut self) -> Result<f64, SqlInterfaceError> {
         SqlInterface::get_single_float_from_database(
             &mut self.conn,
@@ -286,10 +300,12 @@ impl DatabaseInterfaceRefillTrait for SqlInterfaceRefill {
     /// that occurred within the most recent 60-minute period.
     ///
     /// # Returns
-    /// A `Result` which is:
-    /// - `Ok(f64)`: The total volume of water refilled in the last hour.
-    /// - `Err(SqlInterfaceError)`: If a database error occurs during the volume retrieval,
-    ///   or if an unexpected (e.g., zero or multiple) float result is returned.
+    /// A `Result` containing the total volume (`f64`) of water refilled in the last hour.
+    ///
+    /// # Errors
+    /// Returns `SqlInterfaceError::RefillPastDataRetrievalFailed` if the underlying
+    /// database call fails. This can be caused by a connection issue, an invalid query,
+    /// or if the query does not return a single float value.
     fn get_refill_volume_of_last_hour(&mut self) -> Result<f64, SqlInterfaceError> {
         SqlInterface::get_single_float_from_database(
             &mut self.conn,
@@ -312,13 +328,15 @@ impl DatabaseInterfaceRefillTrait for SqlInterfaceRefill {
     /// * `timestamp` - The `NaiveDateTime` when the refill event occurred.
     /// * `duration` - The duration (in seconds) of the refill event.
     /// * `volume` - The volume (in liters) of water dispensed during the refill.
-    /// * `error_code` - A numerical error code associated with the refill event (0 for success, non-zero for errors).
+    /// * `error_code` - A numerical code associated with the event (0 for success).
     ///
     /// # Returns
-    /// A `Result` which is:
-    /// - `Ok(())` if the refill event record was successfully inserted.
-    /// - `Err(SqlInterfaceError::InsertRefillEventFailure)` if an error occurs
-    ///   during the database insertion.
+    /// An empty `Result` (`Ok(())`) if the refill event record was successfully inserted.
+    ///
+    /// # Errors
+    /// Returns `SqlInterfaceError::InsertRefillEventFailure` if the `INSERT` query fails.
+    /// This can be caused by a lost connection, constraint violations, or incorrect
+    /// data types. The original `mysql::Error` is included as the source.
     fn insert_refill_event(
         &mut self,
         timestamp: NaiveDateTime,
@@ -344,7 +362,12 @@ impl DatabaseInterfaceRefillTrait for SqlInterfaceRefill {
             })
     }
 
-    /// Execute a ping to the database to avoid timeout.
+    /// Pings the database to check connection health and prevent timeouts.
+    ///
+    /// This function executes a lightweight query to ensure the connection is still
+    /// active. If the ping fails, it logs an error using `log::error!` but does
+    /// not propagate the error to the caller. This is a "fire-and-forget"
+    /// keep-alive mechanism.
     fn ping(&mut self) {
         if let Err(e) = SqlInterface::ping_database(&mut self.conn) {
             error!(target: module_path!(), "Encountered error while pinging database: {e:?}");
