@@ -359,8 +359,14 @@ pub enum SqlInterfaceError {
     HeatingSetValsInvalid(String, f32, f32),
 
     /// Could not get ventilation set values from the database.
-    #[error("[{0}] Could not get ventilation set values from the database with query: {1}")]
-    VentilationSetValsRequestFailure(String, String),
+    #[error("[{location}] Could not get ventilation set values from the database with query: {query}")]
+    VentilationSetValsRequestFailure {
+        location: String,
+        query: String,
+
+        #[source]
+        source: MySqlError
+    },
 
     /// The database returned more than one ventilation set value entry.
     #[error(
@@ -614,8 +620,14 @@ pub enum SqlInterfaceError {
     },
 
     #[cfg(test)]
-    #[error("[{0}] Error when inserting ventilation set values into database using query: {1}")]
-    InsertVentilationSetValuesFailure(String, String),
+    #[error("[{location}] Error when inserting ventilation set values into database using query: {query}")]
+    InsertVentilationSetValuesFailure {
+        location: String,
+        query: String,
+
+        #[source]
+        source: MySqlError,
+    },
 
     #[cfg(test)]
     #[error("[{0}] Error occurred when trying to truncate table {1} of database.")]

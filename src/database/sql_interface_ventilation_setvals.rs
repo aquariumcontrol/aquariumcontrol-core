@@ -55,14 +55,23 @@ pub struct SqlInterfaceVentilationSetVals {
 impl SqlInterfaceVentilationSetVals {
     /// Creates a new `SqlInterfaceVentilationSetVals` instance.
     ///
-    /// This constructor initializes the ventilation SQL interface for ventilation set values with a primary
-    /// database connection. It also checks for NULL values in the set value table.
+    /// This constructor initializes the SQL interface for ventilation set values. It performs
+    /// several pre-flight checks to ensure data integrity, such as verifying that the
+    /// `ventilationsetvals` table contains no NULL values and has at most one row.
     ///
     /// # Arguments
-    /// * `conn` - An active database connection pool object for general ventilation-related operations.
+    /// * `conn` - An active, pooled database connection.
+    /// * `config` - A reference to the ventilation configuration to determine the update interval.
     ///
     /// # Returns
-    /// A new `SqlInterfaceVentilationSetVals` struct.
+    /// A `Result` containing a new `SqlInterfaceVentilationSetVals` instance on success.
+    ///
+    /// # Errors
+    /// This function will return an error if:
+    /// - Any of the initial database queries to get table counts fail (`DatabaseCheckVentilationSetValsFailure`).
+    /// - Any of the retrieved counts are negative, indicating a database issue (`DatabaseVentilationSetValTableNegativeValue`).
+    /// - The `ventilationsetvals` table contains entries with `NULL` values (`DatabaseVentilationSetValTableContainsNull`).
+    /// - The `ventilationsetvals` table contains more than one row (`DatabaseVentilationSetValTableContainsTooManyRows`).
     pub fn new(
         mut conn: PooledConn,
         config: &VentilationConfig,
@@ -160,22 +169,18 @@ impl SqlInterfaceVentilationSetVals {
     ///   `ventilation_switch_off_temperature`, which is a critical configuration inconsistency.
     pub fn get_ventilation_set_values(
         &mut self,
-    ) -> mysql::Result<Option<VentilationSetVals>, SqlInterfaceError> {
-        let sql_ventilation_setvals_array = match self.conn.query_map(
+    ) -> Result<Option<VentilationSetVals>, SqlInterfaceError> {
+        let sql_ventilation_setvals_array = self.conn.query_map(
             sql_query_strings::SQL_QUERY_READ_VENTILATION_SETVALS,
             |(ventilationSwitchOffTemp, ventilationSwitchOnTemp)| VentilationSetVals {
                 ventilation_switch_off_temperature: ventilationSwitchOffTemp,
                 ventilation_switch_on_temperature: ventilationSwitchOnTemp,
             },
-        ) {
-            Ok(c) => c,
-            Err(_) => {
-                return Err(SqlInterfaceError::VentilationSetValsRequestFailure(
-                    module_path!().to_string(),
-                    sql_query_strings::SQL_QUERY_READ_VENTILATION_SETVALS.to_string(),
-                ));
-            }
-        };
+        ).map_err(|e| SqlInterfaceError::VentilationSetValsRequestFailure {
+                    location: module_path!().to_string(),
+                    query: sql_query_strings::SQL_QUERY_READ_VENTILATION_SETVALS.to_string(),
+                    source: e,
+                })?;
 
         // return none if the query result is empty (user may have not set any values yet)
         if sql_ventilation_setvals_array.is_empty() {
@@ -213,10 +218,25 @@ impl SqlInterfaceVentilationSetVals {
     }
 
     #[cfg(test)]
+    // Inserts a set of ventilation values into the database for testing.
+    //
+    // This helper function is used exclusively in test environments to
+    // pre-populate the `ventilationsetvals` table with specific data.
+    //
+    // # Arguments
+    // * `ventilation_set_vals` - A reference to the `VentilationSetVals` to be inserted.
+    //
+    // # Returns
+    // An empty `Result` (`Ok(())`) if the values were successfully inserted.
+    //
+    // # Errors
+    // Returns `SqlInterfaceError::InsertVentilationSetValuesFailure` if the `INSERT`
+    // query fails. This error should be updated to include the source `mysql::Error`
+    // for better diagnostics in test failures.
     pub fn insert_ventilation_set_values(
         &mut self,
         ventilation_set_vals: &VentilationSetVals,
-    ) -> mysql::Result<(), SqlInterfaceError> {
+    ) -> Result<(), SqlInterfaceError> {
         match self.conn.exec_drop::<_, _>(
             sql_query_strings::SQL_QUERY_WRITE_VENTILATION_SETVALS, params!{
                 "ventilation_switch_off_temp" => ventilation_set_vals.ventilation_switch_off_temperature,
@@ -226,29 +246,52 @@ impl SqlInterfaceVentilationSetVals {
             Ok(_) => Ok(()),
             Err(e) => {
                 println!("{e:?}");
-                Err(SqlInterfaceError::InsertVentilationSetValuesFailure(
-                    module_path!().to_string(),
-                        sql_query_strings::SQL_QUERY_WRITE_VENTILATION_SETVALS.to_string()
-                ))
+                Err(SqlInterfaceError::InsertVentilationSetValuesFailure {
+                    location: module_path!().to_string(),
+                    query: sql_query_strings::SQL_QUERY_WRITE_VENTILATION_SETVALS.to_string(),
+                    source: e,
+                })
             }
         }
     }
 }
+
 impl VentilationSetValueUpdaterTrait for SqlInterfaceVentilationSetVals {
+    /// Periodically updates ventilation set point values from the database.
+    ///
+    /// This method checks if a configured interval (`update_duration`) has passed since
+    /// the last database check. If it has, it queries the database for the latest
+    /// `VentilationSetVals` and updates the provided mutable references. If no values are
+    /// found in the database, the existing values are kept unchanged.
+    ///
+    /// # Arguments
+    /// * `ventilation_switch_off_temperature` - A mutable reference to the current switch-off temperature.
+    /// * `ventilation_switch_on_temperature` - A mutable reference to the current switch-on temperature.
+    ///
+    /// # Returns
+    /// An empty `Result` (`Ok(())`) on success. Success includes cases where the update
+    /// was skipped due to the time interval or when no new values were found in the database.
+    ///
+    /// # Errors
+    /// Returns `SqlInterfaceError::VentilationSetValsUpdateFailure` if the underlying call to
+    /// `get_ventilation_set_values` fails. This can happen due to a database connection issue,
+    /// data inconsistency (e.g., multiple rows), or invalid set values.
     fn update_set_value(
         &mut self,
         ventilation_switch_off_temperature: &mut f32,
         ventilation_switch_on_temperature: &mut f32,
     ) -> Result<(), SqlInterfaceError> {
-        if self.update_time.is_some()
-            && Instant::now().duration_since(self.update_time.unwrap()) < self.update_duration
-        {
-            // do not update the values if the last update was less than the configured update duration ago
-            return Ok(());
-        } else {
-            // update the time before reading the values from the database
-            self.update_time = Some(Instant::now());
+        if let Some(last_update) = self.update_time {
+            if last_update.elapsed() < self.update_duration {
+                // Not enough time has passed, so skip the update.
+                return Ok(());
+            }
         }
+
+        // Either enough time has passed or this is the first update.
+        // Update the time before reading the values from the database.
+        self.update_time = Some(Instant::now());
+
         match self.get_ventilation_set_values() {
             Ok(Some(ventilation_set_vals)) => {
                 *ventilation_switch_off_temperature =
