@@ -24,14 +24,23 @@ pub struct SqlInterfaceData {
 impl SqlInterfaceData {
     /// Creates a new `SqlInterfaceData` instance.
     ///
-    /// This constructor initializes the time-based data SQL interface
-    /// with an established database connection.
+    /// This constructor initializes the time-based data SQL interface with an
+    /// established database connection. It performs a pre-flight check to ensure
+    /// the number of rows in the `data` table does not exceed the configured limit.
     ///
     /// # Arguments
-    /// * `conn` - An active database connection pool object.
-    /// * `max_rows_data` - Maximum allowed number of rows in the Balling set value table.
+    /// * `conn` - An active, pooled database connection.
+    /// * `max_rows_data` - The maximum allowed number of rows in the `data` table.
+    ///   If `0`, the check is skipped.
+    ///
     /// # Returns
-    /// A new `SqlInterfaceData` struct.
+    /// A `Result` containing a new `SqlInterfaceData` instance on success.
+    ///
+    /// # Errors
+    /// This function will return an error if:
+    /// - The initial database query to get the table row count fails (`DatabaseCheckDataFailure`).
+    /// - The retrieved row count is a negative number, indicating a database issue (`DatabaseDataTableNegativeValue`).
+    /// - The number of rows in the `data` table exceeds the configured `max_rows_data` limit (`DatabaseDataTableContainsTooManyRows`).
     pub fn new(
         mut conn: PooledConn,
         max_rows_data: u64,
@@ -89,13 +98,13 @@ impl SqlInterfaceData {
         }
     }
 
-    /// Writes a complete `RecorderDataFrame` to the SQL database.
+    // Writes a complete `RecorderDataFrame` to the SQL database.
     ///
     /// This function processes all data points within the provided `RecorderDataFrame`.
     /// It intelligently handles optional (`Option<f32>`) and floating-point values
     /// (`f32`) by converting `None`, `NaN` (Not-a-Number), or infinite values
-    /// (positive and negative infinity) into `NULL` for database insertion. Boolean
-    /// options are similarly converted to `NULL` if `None`.
+    /// into `NULL` for database insertion. Boolean options are similarly converted
+    /// to `NULL` if `None`.
     ///
     /// The data is inserted into the database. If a record with the same timestamp
     /// already exists, the existing record will be updated (this behavior depends
@@ -106,10 +115,13 @@ impl SqlInterfaceData {
     /// * `data` - A reference to the `RecorderDataFrame` containing the data to be written.
     ///
     /// # Returns
-    /// A `Result` which is:
-    /// - `Ok(())` if the data frame was successfully inserted or updated in the database.
-    /// - `Err(SqlInterfaceError::InsertDataFrameFailure)` if any error occurs during
-    ///   the database operation.    
+    /// An empty `Result` (`Ok(())`) if the data frame was successfully inserted or updated in the database.
+    ///
+    /// # Errors
+    /// Returns `SqlInterfaceError::InsertDataFrameFailure` if the database operation fails.
+    /// This can be caused by a lost connection, constraint violations (e.g., foreign keys),
+    /// incorrect data types, or a malformed SQL query. The original `mysql::Error` is
+    /// included as the source for detailed debugging.
     pub fn write_data_frame_to_database(
         &mut self,
         data: &RecorderDataFrame,
@@ -363,14 +375,16 @@ pub mod tests {
     // * `conn`: A mutable reference to an active database connection.
     // * `timestamp`: The `NaiveDateTime` to identify the specific data frame to retrieve.
     //
-    // Returns:
-    // A `Result` which is:
-    // - `Ok(RecorderDataFrame)`: The reconstructed data frame if both queries return
-    //   exactly one row with non-NULL data.
-    // - `Err(SqlInterfaceError::SingleDataFrameRequestNoSingleResponse)`: If either
-    //   query returns zero rows or more than one row.
-    // - `Err(SqlInterfaceError)`: If any other database error occurs during fetching,
-    //   or if the timestamp string from the database cannot be parsed.
+    // # Returns
+    // A `Result` containing the reconstructed `RecorderDataFrame` if both queries succeed
+    // and return exactly one row with non-NULL data.
+    //
+    // # Errors
+    // This function will return an error if:
+    // - Either of the underlying database queries fail.
+    // - Either query returns zero rows (`SingleDataFrameRequestEmptyResponse`).
+    // - Either query returns more than one row (`SingleDataFrameRequestNoSingleResponse`).
+    // - The timestamp string retrieved from the database cannot be parsed into a `NaiveDateTime`.
     pub fn get_single_dataframe_from_database(
         conn: &mut PooledConn,
         timestamp: NaiveDateTime,
