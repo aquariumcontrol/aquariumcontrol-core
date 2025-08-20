@@ -28,15 +28,19 @@ pub struct SqlInterfaceMidnightCalculator {
 impl SqlInterfaceMidnightCalculatorTrait for SqlInterfaceMidnightCalculator {
     /// Queries the database to determine the number of seconds remaining until the next midnight.
     ///
-    /// This function executes an SQL query to retrieve a precise count of seconds
+    /// This function executes a standard SQL query to retrieve a precise count of seconds
     /// from the current database time until 00:00:00 of the upcoming day.
     ///
     /// # Returns
-    /// A `Result` which is:
-    /// - `Ok(i64)`: The number of seconds remaining until midnight. This value is expected to be non-negative.
-    /// - `Err(SqlInterfaceError)`: If there's an issue retrieving the integer from the database,
-    ///   such as a query failure, or if the database returns an unexpected number of results.
-    fn get_duration_until_midnight(&mut self) -> mysql::Result<i64, SqlInterfaceError> {
+    /// A `Result` containing the number of seconds (as an `i64`) remaining until midnight on success.
+    ///
+    /// # Errors
+    /// This function will return an `Err` variant of `SqlInterfaceError` if the underlying
+    /// call to `get_single_integer_from_database` fails. This can happen if:
+    /// - The database connection is lost or invalid.
+    /// - The SQL query fails to execute for other reasons (e.g., syntax error, permissions).
+    /// - The query does not return exactly one row and one column containing an integer.
+    fn get_duration_until_midnight(&mut self) -> Result<i64, SqlInterfaceError> {
         match SqlInterface::get_single_integer_from_database(
             &mut self.conn,
             sql_query_strings::SQL_QUERY_READ_DURATION_UNTIL_MIDNIGHT,
