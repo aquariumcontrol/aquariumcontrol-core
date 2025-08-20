@@ -23,17 +23,28 @@ pub trait FoodInjectionTrait {
     ///
     /// This trait method defines the interface for physically dispensing food based
     /// on a detailed feed pattern. Implementations will control relevant pumps and
-    /// the feeder motor through communication with a hardware manager (e.g., relay manager).
+    /// the feeder motor through communication with a hardware manager (e.g., relay manager),
+    /// while also monitoring for external shutdown commands.
     ///
     /// # Arguments
-    /// * `tx_to_relay_manager` - Reference to sender part of the channel for communication to the relay manager.
-    /// * `rx_from_relay_manager` - Reference to Receiver part of the channel for communication from the relay manager.
-    /// * `rx_from_signal_handler` - Reference to receiver part of the channel for communication from signal handler.
-    /// * `feed_pattern` - Reference to struct holding the description of the feed pattern.
+    /// * `tx_to_relay_manager` - Sender channel for communication to the relay manager.
+    /// * `rx_from_relay_manager` - Receiver channel for communication from the relay manager.
+    /// * `rx_from_signal_handler` - Receiver channel for communication from the signal handler.
+    /// * `feed_pattern` - A reference to the struct holding the description of the feed pattern.
     ///
     /// # Returns
-    /// `true` if a `Quit` command was received from the signal handler during the injection process,
-    /// indicating an early termination request; otherwise `false`.
+    /// A tuple `(bool, Result<(), Vec<FoodInjectionError>>)` where:
+    /// - The first element (`bool`) is `true` if a `Quit` command was received from the
+    ///   signal handler, indicating an early termination request. Otherwise, it is `false`.
+    /// - The second element is a `Result`. It is `Ok(())` if the entire sequence
+    ///   completed without any errors.
+    ///
+    /// # Errors
+    /// The `Result` part of the return tuple will be `Err(Vec<FoodInjectionError>)` if one
+    /// or more errors occurred during the process. The vector will contain all errors
+    /// encountered, which can include:
+    /// - Communication failures with the relay manager (`RelayManagerSend`, `RelayManagerReceive`).
+    /// - An attempt to set a device to an undefined state (e.g., `UndefinedTargetStateSkimmer`).
     fn inject_food(
         &mut self,
         tx_to_relay_manager: &Sender<InternalCommand>,
@@ -98,7 +109,7 @@ impl FoodInjection {
     ///   parameters like `device_switch_delay_millis`.
     ///
     /// # Returns
-    /// A new `FoodInjection` struct to execute food dispensing operations.
+    /// A new `FoodInjection` struct, ready to execute food dispensing operations.
     pub fn new(config: &FeedConfig) -> FoodInjection {
         FoodInjection {
             skimmer_state: ActuatorState::Undefined,
@@ -129,8 +140,16 @@ impl FoodInjection {
     /// * `rx_from_relay_manager` - The receiver channel for acknowledgments from the relay manager.
     ///
     /// # Returns
-    /// * `Ok` - in case of success
-    /// * `FoodInjectionError` - in case of error
+    /// An `Ok(())` if all devices were switched successfully.
+    ///
+    /// # Errors
+    /// Returns an `Err(Vec<FoodInjectionError>)` containing a list of all errors that
+    /// occurred during the switching process. This function attempts to switch all devices
+    /// even if some fail. Possible errors include:
+    /// - `RelayManagerSend`: Failure to send a command to the relay manager's channel.
+    /// - `RelayManagerReceive`: Failure to receive an acknowledgment from the relay manager.
+    /// - `UndefinedTargetState...`: An attempt was made to set a device to a state other
+    ///   than `On` or `Off`.
     fn switch_skimmer_pumps_feeder(
         &mut self,
         target_actuator_states: FoodInjectionTargetActuatorStates,
@@ -420,6 +439,35 @@ impl FoodInjection {
 }
 
 impl FoodInjectionTrait for FoodInjection {
+    
+    /// Actuates the feeder according to the specified feed pattern to inject food.
+    ///
+    /// This implementation executes a sequence of feed phases defined in the `feedpattern`.
+    /// For each phase, it sets the state of various pumps and the feeder, waits for a
+    /// specified duration, and continuously checks for a `Quit` command from the signal
+    /// handler to allow for graceful interruption.
+    ///
+    /// After the sequence is complete or aborted, it performs a cleanup step to ensure all
+    /// pumps are returned to an active state and the feeder is off.
+    ///
+    /// # Arguments
+    /// * `tx_to_relay_manager` - Sender channel for communication to the relay manager.
+    /// * `rx_from_relay_manager` - Receiver channel for communication from the relay manager.
+    /// * `rx_from_signal_handler` - Receiver channel for communication from the signal handler.
+    /// * `feedpattern` - A reference to the struct holding the description of the feed pattern.
+    ///
+    /// # Returns
+    /// A tuple `(bool, Result<(), Vec<FoodInjectionError>>)` where:
+    /// - The first element (`bool`) is `true` if a `Quit` command was received from the
+    ///   signal handler, indicating an early termination request. Otherwise, it is `false`.
+    /// - The second element is a `Result`. It is `Ok(())` if the entire sequence
+    ///   completed without any errors.
+    ///
+    /// # Errors
+    /// The `Result` part of the return tuple will be `Err(Vec<FoodInjectionError>)` if one
+    /// or more errors occurred during the process. The function aborts the feed sequence
+    /// on the first error but still performs the final cleanup step. The vector will
+    /// contain all errors encountered during both the main sequence and the cleanup.
     fn inject_food(
         &mut self,
         tx_to_relay_manager: &Sender<InternalCommand>,
@@ -605,13 +653,16 @@ pub mod tests {
     // `FoodInjection` test object, prints it, sends a confirmation back, and increments
     // counters for the number of on/off commands received.
     //
-    // Arguments:
-    // * `tx_relay_manager_to_feed`: The sender channel for this mock to send acknowledgments back to the `FoodInjection` test object.
-    // * `rx_relay_manager_from_feed`: The receiver channel for this mock to get actuation commands from the `FoodInjection` test object.
-    // * `counter_switch_on`: A mutable counter to track the number of `SwitchOn` commands received.
-    // * `counter_switch_off`: A mutable counter to track the number of `SwitchOff` commands received.
+    // # Arguments
+    // * `tx_relay_manager_to_feed` - The sender channel for this mock to send acknowledgments back.
+    // * `rx_relay_manager_from_feed` - The receiver channel for this mock to get actuation commands.
+    // * `counter_switch_on` - A mutable counter to track the number of `SwitchOn` commands received.
+    // * `counter_switch_off` - A mutable counter to track the number of `SwitchOff` commands received.
     //
-    // Panics:
+    // # Returns
+    // The `InternalCommand` that was received from the test object.
+    //
+    // # Panics
     // This function will panic if:
     // - It fails to receive a command from the `FoodInjection` test object.
     // - It receives an `InternalCommand` that is neither `SwitchOn` nor `SwitchOff`.
@@ -664,7 +715,16 @@ pub mod tests {
         }
         command
     }
-    // Helper function to record the actuation state of the devices.
+
+    // Helper function to record the actuation state of the devices based on a command.
+    //
+    // This test helper takes a command and updates the state of the corresponding
+    // actuator in the provided mutable state variables. This allows tests to track
+    // the expected state of the system.
+    //
+    // # Arguments
+    // * `command` - The `InternalCommand` (`SwitchOn` or `SwitchOff`) to process.
+    // * `..._actuation_state` - Mutable references to the state variables for each device.
     fn update_actuator_states(
         command: InternalCommand,
         skimmer_actuation_state: &mut ActuatorState,

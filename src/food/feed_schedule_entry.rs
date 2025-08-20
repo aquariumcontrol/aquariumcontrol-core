@@ -24,22 +24,25 @@ pub struct FeedScheduleEntry {
 }
 
 impl FeedScheduleEntry {
-    /// Creates a new `FeedScheduleEntry` struct by converting raw data from `SqlFeedScheduleEntry`.
+    /// Creates a new `FeedScheduleEntry` by converting raw data from an `SqlFeedScheduleEntry`.
     ///
     /// This constructor takes a raw database entry (`SqlFeedScheduleEntry`) and
     /// transforms its string-based timestamp into a `NaiveDateTime` and its
-    /// numeric `repeat_daily` flag into a boolean.
+    /// numeric `repeat_daily` flag into a boolean. This is a critical step in
+    /// hydrating application-level structs from database records.
     ///
     /// # Arguments
     /// * `sql_feed_schedule_entry` - A reference to a `SqlFeedScheduleEntry` struct,
     ///   containing data typically read directly from the SQL database.
     ///
     /// # Returns
-    /// A `Result` which is:
-    /// - `Ok(FeedScheduleEntry)`: A new `FeedScheduleEntry` struct with all data successfully converted.
-    /// - `Err(SqlInterfaceError::FeedScheduleEntryTimeStampConversionFailure)`: If the
-    ///   `timestamp` string within `sql_feed_schedule_entry` cannot be parsed into a
-    ///   valid `NaiveDateTime`.
+    /// A `Result` containing a new, fully typed `FeedScheduleEntry` on success.
+    ///
+    /// # Errors
+    /// Returns `SqlInterfaceError::FeedScheduleEntryTimeStampConversionFailure` if the
+    /// `timestamp` string within the `sql_feed_schedule_entry` cannot be parsed into a
+    /// valid `NaiveDateTime`. This typically indicates a data integrity issue in the
+    /// database, such as a malformed or non-standard date string (expected format is `YYYY-MM-DD HH:MM:SS`).
     pub fn new(
         sql_feed_schedule_entry: &SqlFeedScheduleEntry,
     ) -> Result<FeedScheduleEntry, SqlInterfaceError> {
@@ -63,6 +66,24 @@ impl FeedScheduleEntry {
     }
 
     #[cfg(test)]
+    /// Creates a new `FeedScheduleEntry` for use in test environments.
+    ///
+    /// This test-only helper function simplifies the creation of `FeedScheduleEntry`
+    /// instances by accepting primitive types directly.
+    ///
+    /// # Arguments
+    /// * `timestamp_string` - A string slice representing the timestamp in `YYYY-MM-DD HH:MM:SS` format.
+    /// * `profile_id` - The numeric identifier for the feed profile.
+    /// * `profile_name` - A string slice for the name of the feed profile.
+    /// * `repeat_daily` - A boolean indicating if the schedule should repeat daily.
+    ///
+    /// # Returns
+    /// A new `FeedScheduleEntry` instance.
+    ///
+    /// # Panics
+    /// This function will panic if the provided `timestamp_string` cannot be parsed
+    /// into a valid `NaiveDateTime`. This is intentional, as test setup data is
+    /// expected to be valid, and a failure indicates a flaw in the test itself.
     pub fn new_for_test(
         timestamp_string: &str,
         profile_id: i32,
@@ -80,17 +101,23 @@ impl FeedScheduleEntry {
 }
 
 impl fmt::Display for FeedScheduleEntry {
-    /// Formats the `FeedScheduleEntry` struct into a concise, human-readable string.
+    /// Formats the `FeedScheduleEntry` for display.
     ///
-    /// This implementation is designed for development and debugging purposes,
-    /// providing a compact representation of the schedule entry's key details
-    /// (timestamp, profile ID, profile name, and daily repetition status) on a single line.
+    /// This implementation provides a concise, single-line string representation
+    /// of the schedule entry, suitable for logging and debugging. It includes the
+    /// timestamp, profile ID, profile name, and daily repetition status.
     ///
     /// # Arguments
     /// * `f` - A mutable reference to the formatter, as required by the `fmt::Display` trait.
     ///
     /// # Returns
-    /// A `fmt::Result` indicating whether the formatting operation was successful.
+    /// A `fmt::Result` containing `Ok(())` if the formatting was successful.
+    ///
+    /// # Errors
+    /// Returns an `Err` if the `write!` macro fails to write to the underlying
+    /// formatter. This is an uncommon error but can occur if the formatter
+    /// itself is in an error state or if the destination (e.g., a file or buffer)
+    /// reports an I/O error.
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(
             f,

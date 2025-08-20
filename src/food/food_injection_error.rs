@@ -11,6 +11,7 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 use crate::utilities::channel_content::{AquariumDevice, InternalCommand};
 use thiserror::Error;
 
+/// Contains error definition for FoodInjection
 #[derive(Error, Debug, Clone)]
 pub enum FoodInjectionError {
     /// Occurs when sending a command to the relay manager via an MPSC channel fails.

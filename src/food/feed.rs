@@ -202,13 +202,22 @@ impl Feed {
     /// * `rx_feed_from_signal_handler` - The receiver channel for `Feed` to listen for signals (like `Quit`) from the signal handler.
     ///
     /// # Returns
-    /// A tuple `(Result<(), ()>, bool)`:
-    /// - The first element is `Ok(())` if the feed profile was successfully executed and logged;
-    ///   `Err(())` if there was an error reading the feed pattern, getting the current timestamp,
-    ///   or inserting the event into the log.
-    /// - The second element is a `bool`, which is `true` if a `Quit` command was received
-    ///   from the signal handler during the `inject_food` process, indicating that the
-    ///   application should shut down.
+    /// A tuple `(Result<(), ()>, bool)` where:
+    /// - The first element is the overall result of the operation. It is `Ok(())` only if
+    ///   the food injection and the database logging both complete without error.
+    /// - The second element is a `bool` which is `true` if a `Quit` command was received
+    ///   from the signal handler during the `inject_food` process, `false` otherwise. This
+    ///   value is independent of the success or failure of the operation itself.
+    ///
+    /// # Errors
+    /// This function does not return a distinct error type. Instead, it returns `Err(())`
+    /// in the result tuple to signify failure. The function can fail if:
+    /// - It cannot read the specified feed pattern from the database.
+    /// - The `food_injection.inject_food` method reports an error.
+    /// - It cannot retrieve the current timestamp from the database after injection.
+    /// - It fails to insert the feed event log into the database.
+    ///
+    /// In all failure cases, a detailed error message is logged to the console.
     fn execute_feed(
         &mut self,
         profile_id: i32,
@@ -305,22 +314,15 @@ impl Feed {
     /// This function is used when multiple `FeedScheduleEntry` items are found to be
     /// in the past (i.e., overdue for execution). It applies the `strategy_multiple_schedule_entries_in_past`
     /// from the `FeedConfig` to determine which single entry, if any, should be executed.
-    /// Currently, no other strategy is available. If the strategy is not activated in the configuration,
-    /// then no other feed profile will be selected in the scenario when multiple feed schedule entries
-    /// are in the past.
     ///
     /// The strategy is defined as follows:
-    /// - **Negative value**: No entry will be selected for execution (`None` is returned).
+    /// - **Negative value**: No entry will be selected for execution.
     /// - **Positive value (N)**: The N-th entry from the `feedschedule_entries` vector (0-indexed)
     ///   will be selected.
-    ///   - For example, `0` selects the first entry (timestamp closest to current time, if sorted).
-    ///   - For example, `1` selects the second entry.
     ///   - If `N` is greater than or equal to the number of available entries, the *last* entry in the vector is selected.
     ///
     /// # Arguments
-    /// * `feedschedule_entries` - A slice reference to a vector of `FeedScheduleEntry` structs.
-    ///   It's assumed these entries are ordered (e.g., by timestamp, typically from oldest to newest
-    ///   or newest to oldest, depending on the query that populated them).
+    /// * `feedschedule_entries` - A slice of `FeedScheduleEntry` structs, assumed to be ordered.
     ///
     /// # Returns
     /// An `Option<FeedScheduleEntry>`:
@@ -331,25 +333,19 @@ impl Feed {
         &self,
         feedschedule_entries: &[FeedScheduleEntry],
     ) -> Option<FeedScheduleEntry> {
-        if (self.config.strategy_multiple_schedule_entries_in_past >= 0)
-            && (!feedschedule_entries.is_empty())
-        {
-            // user chose strategy to select one element
-            if (self.config.strategy_multiple_schedule_entries_in_past as usize + 1)
-                > feedschedule_entries.len()
-            {
-                // vector has not enough elements - choose the last element
-                feedschedule_entries.last().cloned()
-            } else {
-                // vector has enough elements - choose as per parameter
-                feedschedule_entries
-                    .get(self.config.strategy_multiple_schedule_entries_in_past as usize)
-                    .cloned()
-            }
-        } else {
-            // user chose strategy to select no element
-            None
+        // MODIFIED: Refactored for conciseness and idiomatic Rust.
+        let strategy = self.config.strategy_multiple_schedule_entries_in_past;
+
+        if strategy < 0 || feedschedule_entries.is_empty() {
+            return None;
         }
+
+        // Try to get the entry at the specified index.
+        // If the index is out of bounds (`get` returns None), fall back to the last element.
+        feedschedule_entries
+            .get(strategy as usize)
+            .or_else(|| feedschedule_entries.last())
+            .cloned()
     }
 
     /// Executes a specified feed profile and updates the feed schedule in the database.
