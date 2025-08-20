@@ -318,8 +318,14 @@ pub enum SqlInterfaceError {
     NegativeInteger(String, i64),
 
     /// Could not get heating set values from the database.
-    #[error("[{0}] Could not get heating set values from the database with query: {1}")]
-    HeatingSetValsRequestFailure(String, String),
+    #[error("[{location}] Could not get heating set values from the database with query: {query}")]
+    HeatingSetValsRequestFailure {
+        location: String,
+        query: String,
+
+        #[source]
+        source: MySqlError,
+    },
 
     /// The database returned more than one heating set value entry.
     #[error("[{0}] The database returned more than one heating set value entry with query: {1}")]
@@ -593,8 +599,14 @@ pub enum SqlInterfaceError {
     DatabaseFeedTableNegativeValue(String, String, i64, i64),
 
     #[cfg(test)]
-    #[error("[{0}] Error when inserting heating set values into database using query: {1}")]
-    InsertHeatingSetValuesFailure(String, String),
+    #[error("[{location}] Error when inserting heating set values into database using query: {query}")]
+    InsertHeatingSetValuesFailure {
+        location: String,
+        query: String,
+
+        #[source]
+        source: MySqlError,
+    },
 
     #[cfg(test)]
     #[error("[{0}] Error when inserting ventilation set values into database using query: {1}")]

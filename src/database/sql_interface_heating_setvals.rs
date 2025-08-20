@@ -47,15 +47,23 @@ pub struct SqlInterfaceHeatingSetVals {
 impl SqlInterfaceHeatingSetVals {
     /// Creates a new `SqlInterfaceHeatingSetVals` instance.
     ///
-    /// This constructor initializes the heating SQL interface for heating set values with a primary
-    /// database connection. It also checks for NULL values in the set value table.
+    /// This constructor initializes the SQL interface for heating set values. It performs
+    /// several pre-flight checks to ensure data integrity, such as verifying that the
+    /// `heatingsetvals` table contains no NULL values and has at most one row.
     ///
     /// # Arguments
-    /// * `conn` - An active database connection pool object for general heating-related operations.
+    /// * `conn` - An active, pooled database connection.
+    /// * `config` - A reference to the heating configuration to determine the update interval.
     ///
     /// # Returns
-    /// * A new `SqlInterfaceHeatingSetVals` struct in case of success.
-    /// * An error `SqlInterfaceError` in case of failure.
+    /// A `Result` containing a new `SqlInterfaceHeatingSetVals` instance on success.
+    ///
+    /// # Errors
+    /// This function will return an error if:
+    /// - Any of the initial database queries to get table counts fail (`DatabaseCheckHeatingSetValsFailure`).
+    /// - Any of the retrieved counts are negative, indicating a database issue (`DatabaseHeatingSetValTableNegativeValue`).
+    /// - The `heatingsetvals` table contains entries with `NULL` values (`DatabaseHeatingSetValTableContainsNull`).
+    /// - The `heatingsetvals` table contains more than one row (`DatabaseHeatingSetValTableContainsTooManyRows`).
     pub fn new(
         mut conn: PooledConn,
         config: &HeatingConfig,
@@ -128,23 +136,20 @@ impl SqlInterfaceHeatingSetVals {
     ///    logic consistency is violated, an `Err` is returned.
     ///
     /// # Returns
-    /// - `Ok(Some(HeatingSetVals))`: If a single, consistent set of heating set values
-    ///   is successfully retrieved.
-    /// - `Ok(None)`: If the database query returns no entries, indicating that values
-    ///   have not yet been configured.
-    /// - `Err(SqlInterfaceError::HeatingSetValsReadError)`: If there's an error during
-    ///   database interaction, if multiple entries are found, or if the retrieved values
-    ///   fail the consistency check (e.g., `switch_on_temperature` is higher than `switch_off_temperature`).
+    /// A `Result` containing an `Option<HeatingSetVals>`:
+    /// - `Ok(Some(HeatingSetVals))`: If a single, consistent set of heating values is found.
+    /// - `Ok(None)`: If the query returns no rows, indicating values have not been set.
     ///
     /// # Errors
-    /// This function returns an `SqlInterfaceError::HeatingSetValsReadError` in the following cases:
-    /// - The underlying database query fails.
-    /// - More than one `HeatingSetVals` entry is found in the database.
-    /// - The `heating_switch_on_temperature` is found to be greater than the
-    ///   `heating_switch_off_temperature`, which is a critical configuration inconsistency.
+    /// This function will return an error if:
+    /// - The underlying database query fails. This will be a `HeatingSetValsRequestFailure`
+    ///   that should be updated to include the source `mysql::Error`.
+    /// - The query returns more than one row, indicating a data inconsistency (`HeatingSetValsNoSingleResponse`).
+    /// - The retrieved `heating_switch_on_temperature` is bigger than the `heating_switch_off_temperature`,
+    ///   which is a critical configuration error (`HeatingSetValsInvalid`).
     pub fn get_heating_set_values(
         &mut self,
-    ) -> mysql::Result<Option<HeatingSetVals>, SqlInterfaceError> {
+    ) -> Result<Option<HeatingSetVals>, SqlInterfaceError> {
         let sql_heating_setvals_array = match self.conn.query_map(
             sql_query_strings::SQL_QUERY_READ_HEATING_SETVALS,
             |(heatingSwitchOffTemp, heatingSwitchOnTemp)| HeatingSetVals {
@@ -153,11 +158,12 @@ impl SqlInterfaceHeatingSetVals {
             },
         ) {
             Ok(c) => c,
-            Err(_) => {
-                return Err(SqlInterfaceError::HeatingSetValsRequestFailure(
-                    module_path!().to_string(),
-                    sql_query_strings::SQL_QUERY_READ_HEATING_SETVALS.to_string(),
-                ));
+            Err(e) => {
+                return Err(SqlInterfaceError::HeatingSetValsRequestFailure {
+                    location: module_path!().to_string(),
+                    query: sql_query_strings::SQL_QUERY_READ_HEATING_SETVALS.to_string(),
+                    source: e
+                });
             }
         };
 
@@ -195,43 +201,75 @@ impl SqlInterfaceHeatingSetVals {
     }
 
     #[cfg(test)]
+    // Inserts a set of heating values into the database for testing.
+    //
+    // This helper function is used exclusively in test environments to
+    // pre-populate the `heatingsetvals` table with specific data.
+    //
+    // # Arguments
+    // * `heating_set_vals` - A reference to the `HeatingSetVals` to be inserted.
+    //
+    // # Returns
+    // An empty `Result` (`Ok(())`) if the values were successfully inserted.
+    //
+    // # Errors
+    // Returns `SqlInterfaceError::InsertHeatingSetValuesFailure` if the `INSERT`
+    // query fails. This error should be updated to include the source `mysql::Error`
+    // for better diagnostics in test failures.
     pub fn insert_heating_set_values(
         &mut self,
         heating_set_vals: &HeatingSetVals,
-    ) -> mysql::Result<(), SqlInterfaceError> {
-        match self.conn.exec_drop::<_, _>(
+    ) -> Result<(), SqlInterfaceError> {
+        self.conn.exec_drop::<_, _>(
             sql_query_strings::SQL_QUERY_WRITE_HEATING_SETVALS,
             params! {
                "heating_switch_off_temp" => heating_set_vals.heating_switch_off_temperature,
                "heating_switch_on_temp" => heating_set_vals.heating_switch_on_temperature,
             },
-        ) {
-            Ok(_) => Ok(()),
-            Err(e) => {
-                println!("{e:?}");
-                Err(SqlInterfaceError::InsertHeatingSetValuesFailure(
-                    module_path!().to_string(),
-                    sql_query_strings::SQL_QUERY_WRITE_HEATING_SETVALS.to_string(),
-                ))
-            }
-        }
+        ).map_err(|e| SqlInterfaceError::InsertHeatingSetValuesFailure {
+                    location: module_path!().to_string(),
+                    query: sql_query_strings::SQL_QUERY_WRITE_HEATING_SETVALS.to_string(),
+                    source: e
+                })?;
+        Ok(())
     }
 }
 impl HeatingSetValueUpdaterTrait for SqlInterfaceHeatingSetVals {
+    /// Periodically updates heating set point values from the database.
+    ///
+    /// This method checks if a configured interval (`update_duration`) has passed since
+    /// the last database check. If it has, it queries the database for the latest
+    /// `HeatingSetVals` and updates the provided mutable references. If no values are
+    /// found in the database, the existing values are kept unchanged.
+    ///
+    /// # Arguments
+    /// * `heating_switch_off_temperature` - A mutable reference to the current switch-off temperature.
+    /// * `heating_switch_on_temperature` - A mutable reference to the current switch-on temperature.
+    ///
+    /// # Returns
+    /// An empty `Result` (`Ok(())`) on success. Success includes cases where the update
+    /// was skipped due to the time interval or when no new values were found in the database.
+    ///
+    /// # Errors
+    /// Returns `SqlInterfaceError::HeatingSetValsUpdateFailure` if the underlying call to
+    /// `get_heating_set_values` fails. This can happen due to a database connection issue,
+    /// data inconsistency (e.g., multiple rows), or invalid set values (e.g., on-temp > off-temp).
     fn update_set_value(
         &mut self,
         heating_switch_off_temperature: &mut f32,
         heating_switch_on_temperature: &mut f32,
     ) -> Result<(), SqlInterfaceError> {
-        if self.update_time.is_some()
-            && Instant::now().duration_since(self.update_time.unwrap()) < self.update_duration
-        {
-            // do not update the values if the last update was less than the configured update duration ago
-            return Ok(());
-        } else {
-            // update the time before reading the values from the database
-            self.update_time = Some(Instant::now());
+        if let Some(last_update) = self.update_time {
+            if last_update.elapsed() < self.update_duration {
+                // Not enough time has passed, so skip the update.
+                return Ok(());
+            }
         }
+
+        // Either enough time has passed or this is the first update.
+        // Update the time before reading the values from the database.
+        self.update_time = Some(Instant::now());
+        
         match self.get_heating_set_values() {
             Ok(Some(heating_set_vals)) => {
                 *heating_switch_off_temperature = heating_set_vals.heating_switch_off_temperature;

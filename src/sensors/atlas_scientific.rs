@@ -432,6 +432,7 @@ impl AtlasScientific {
             }
             Err(e) => {
                 if !self.lock_error_channel_send_i2c_interface {
+                    #[cfg(not(test))]
                     error!(
                         target: module_path!(),
                         "sending request to I2cInterface thread failed. ({e:?})"
