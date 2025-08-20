@@ -352,6 +352,8 @@ fn is_running_as_root() -> bool {
 ///     messaging --> watchdog
 /// ```
 fn run() -> Result<(), StartupError> {
+    let spin_sleeper = SpinSleeper::default();
+    
     #[cfg(all(not(target_os = "linux"), feature = "target_hw"))]
     compile_error!("Target hardware is only available with Linux operating system.");
 
@@ -465,10 +467,19 @@ fn run() -> Result<(), StartupError> {
     // instantiate driver for RGB LED
     #[cfg(all(target_os = "linux", feature = "target_hw"))]
     if config.ws2812b.active {
+        let led_duration = Duration::from_millis(300);
         let mut ws2812b = Ws2812B::new(config.ws2812b).map_err(|e| StartupError::Ws2812BSetupFailure {
             source: e,
-        });
+        })?;
         if let Err(e) = ws2812b.set_color(RgbLedColor::Red) {
+            warn!(target: module_path!(), "Failed to set RGB LED color: {e}");
+        }
+        spin_sleeper.sleep(led_duration);
+        if let Err(e) = ws2812b.set_color(RgbLedColor::Blue) {
+            warn!(target: module_path!(), "Failed to set RGB LED color: {e}");
+        }
+        spin_sleeper.sleep(led_duration);
+        if let Err(e) = ws2812b.set_color(RgbLedColor::Green) {
             warn!(target: module_path!(), "Failed to set RGB LED color: {e}");
         }
     }
@@ -1563,7 +1574,6 @@ fn run() -> Result<(), StartupError> {
         });
 
         // give sensor reading components some time so that they can acquire a first data set
-        let spin_sleeper = SpinSleeper::default();
         let duration_one_second = Duration::from_secs(1);
         println!("trying to acquire data before starting control in 3 seconds...");
         spin_sleeper.sleep(duration_one_second);
