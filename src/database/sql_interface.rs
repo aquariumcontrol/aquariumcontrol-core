@@ -190,7 +190,6 @@ impl SqlInterface {
     /// This function will return an `(SqlInterfaceError::SingleStringRequestFailure)`
     /// if the database query execution fails for any reason, such as a syntax error
     /// in the SQL or a connection issue.
-
     fn get_string_array_from_database(
         conn: &mut PooledConn,
         sql_query_string: &str,
@@ -522,7 +521,7 @@ impl SqlInterface {
     /// # Errors
     /// This function will return an error if:
     /// - If there's any issue retrieving the database name, such as a communication
-    /// error or an unexpected response from the database `(SqlInterfaceError::DatabaseNameRequestFailure)`.
+    ///   error or an unexpected response from the database `(SqlInterfaceError::DatabaseNameRequestFailure)`.
     pub fn get_database(&mut self) -> Result<String, SqlInterfaceError> {
         // trigger SQL call
         Self::get_single_string_from_database(&mut self.conn, sql_query_strings::SQL_QUERY_DATABASE)
