@@ -36,16 +36,17 @@ impl FromStr for ScheduleType {
     /// Converts a string slice into a `ScheduleType` enum variant.
     ///
     /// This function attempts to match the input string to one of the predefined
-    /// `ScheduleType` variants (e.g., "Balling", "Refill", "Ventilation", "Heating").
-    /// The comparison is case-sensitive.
+    /// `ScheduleType` variants (e.g., "Balling", "Refill"). The comparison is case-sensitive.
     ///
     /// # Arguments
     /// * `input` - The string slice to be converted.
     ///
     /// # Returns
-    /// A `Result` which is:
-    /// - `Ok(ScheduleType)` if the input string matches a valid `ScheduleType` variant.
-    /// - `Err(())` if the input string does not match any known `ScheduleType` variant.
+    /// A `Result` containing the corresponding `ScheduleType` variant on a successful match.
+    ///
+    /// # Errors
+    /// Returns an empty `Err(())` if the input string does not match any of the known
+    /// `ScheduleType` variants.
     fn from_str(input: &str) -> Result<ScheduleType, Self::Err> {
         match input {
             "Balling" => Ok(ScheduleType::Balling),
@@ -110,25 +111,26 @@ pub struct ScheduleEntry {
 }
 
 impl ScheduleEntry {
-    /// Creates a new `ScheduleEntry` struct by converting raw data from `SqlScheduleEntry`.
+    /// Creates a new `ScheduleEntry` by converting raw data from an `SqlScheduleEntry`.
     ///
-    /// This constructor takes a `SqlScheduleEntry` (typically read directly from the database)
+    /// This constructor takes a `SqlScheduleEntry` (typically read from the database)
     /// and performs necessary type conversions, such as transforming string representations
-    /// of schedule type, start time and stop time into their respective Rust enum and
-    /// `NaiveTime` types. It also converts a numeric `is_active` flag to a boolean.
+    /// of schedule type and times into their respective Rust types.
     ///
     /// # Arguments
-    /// * `sql_schedule_entry` - A `SqlScheduleEntry` struct containing the raw schedule data from the SQL database.
+    /// * `sql_schedule_entry` - A struct containing the raw schedule data from the SQL database.
     ///
     /// # Returns
-    /// A `Result` which is:
-    /// - `Ok(ScheduleEntry)`: A new `ScheduleEntry` struct with all data successfully converted.
-    /// - `Err(SqlInterfaceError::ScheduleTypeConversionFailure)`: If the `schedule_type` string
-    ///   cannot be parsed into a valid `ScheduleType` enum variant.
-    /// - `Err(SqlInterfaceError::ScheduleStartTimeConversionFailure)`: If the `start_time` string
-    ///   cannot be parsed into a valid `NaiveTime`.
-    /// - `Err(SqlInterfaceError::ScheduleStopTimeConversionFailure)`: If the `stop_time` string
-    ///   cannot be parsed into a valid `NaiveTime`.
+    /// A `Result` containing a new, fully typed `ScheduleEntry` on success.
+    ///
+    /// # Errors
+    /// This function will return an `Err` variant of `SqlInterfaceError` if:
+    /// - The `schedule_type` string cannot be parsed into a valid `ScheduleType` enum
+    ///   (`ScheduleTypeConversionFailure`).
+    /// - The `start_time` string cannot be parsed into a valid `NaiveTime`
+    ///   (`ScheduleStartTimeConversionFailure`).
+    /// - The `stop_time` string cannot be parsed into a valid `NaiveTime`
+    ///   (`ScheduleStopTimeConversionFailure`).
     pub fn new(sql_schedule_entry: SqlScheduleEntry) -> Result<ScheduleEntry, SqlInterfaceError> {
         let schedule_type = match ScheduleType::from_str(&sql_schedule_entry.schedule_type) {
             Ok(c) => c,
@@ -178,8 +180,8 @@ impl ScheduleEntry {
     /// against the `start_time` and `stop_time` defined in this `ScheduleEntry`.
     ///
     /// # Returns
-    /// `true` if the current local time is greater than or equal to `start_time`
-    /// AND less than or equal to `stop_time`; otherwise, returns `false`.
+    /// - `true`: If the current local time is on or after `start_time` AND on or before `stop_time`.
+    /// - `false`: If the current local time is outside of this inclusive window.
     pub fn check_if_allowed(&self) -> bool {
         let current_time = Local::now().time();
         (current_time >= self.start_time) & (current_time <= self.stop_time)
@@ -196,18 +198,26 @@ pub struct SqlInterfaceSchedule {
 }
 
 impl SqlInterfaceSchedule {
-    /// Provides a new `SqlInterfaceSchedule` instance.
+    /// Creates a new `SqlInterfaceSchedule` instance.
     ///
-    /// This constructor initializes the interface with a database connection
-    /// and an empty internal list of schedules. Before, it checks whether the schedule table
-    /// contains any NULL values. If so, it panics, as this indicates a data consistency issue.
+    /// This constructor initializes the interface with a database connection. It performs
+    /// several pre-flight checks to ensure data integrity, such as verifying that the
+    /// `schedule` table contains no NULL values and that its row count is within the
+    /// configured limit.
     ///
     /// # Arguments
-    /// * `conn` - The established database connection pool object.
+    /// * `conn` - An active, pooled database connection.
+    /// * `max_rows_schedule` - The maximum allowed number of rows in the `schedule` table.
     ///
     /// # Returns
-    /// * A new `SqlInterfaceSchedule` struct in case of success.
-    /// * An error `SqlInterfaceError` in case of failure.
+    /// A `Result` containing a new `SqlInterfaceSchedule` instance on success.
+    ///
+    /// # Errors
+    /// This function will return an error if:
+    /// - Any of the initial database queries to get table counts fail (`DatabaseCheckScheduleFailure`).
+    /// - Any of the retrieved counts are negative, indicating a database issue (`DatabaseScheduleTableNegativeValue`).
+    /// - The `schedule` table contains entries with `NULL` values (`DatabaseScheduleTableContainsNull`).
+    /// - The number of rows in the `schedule` table exceeds `max_rows_schedule` (`DatabaseScheduleTableContainsTooManyRows`).
     pub fn new(
         mut conn: PooledConn,
         max_rows_schedule: u64,
@@ -262,19 +272,22 @@ impl SqlInterfaceSchedule {
         })
     }
 
-    /// Reads all schedule entries from the SQL database, processes them and updates the internal state.
+    /// Reads all schedule entries from the SQL database, processing and storing them internally.
     ///
     /// This function queries the database for all available schedule configurations.
-    /// Each raw database entry is then converted into a `ScheduleEntry` struct,
-    /// performing necessary type conversions and validations. The internal `schedules`
-    /// vector of this struct is cleared and then populated with the newly processed entries.
+    /// It then attempts to convert each raw database entry into a `ScheduleEntry` struct.
+    /// The internal `schedules` vector is cleared and then populated with only the
+    /// successfully processed entries.
     ///
     /// # Returns
-    /// A `Result` which is:
-    /// - `Ok(())` if all schedule entries were successfully read and processed.
-    /// - `Err(SqlInterfaceError::ScheduleRequestFailure)` if the initial database query fails.
-    /// - `Err(SqlInterfaceError)`: If any error occurs during the conversion of individual
-    ///   raw schedule entries into `ScheduleEntry` structs (e.g., due to invalid data formats).
+    /// - `Ok(())`: If the database query was successful and all retrieved entries were processed without errors.
+    ///
+    /// # Errors
+    /// Returns a `Vec<SqlInterfaceError>` which will contain one or more errors if:
+    /// - The initial database query fails (`ScheduleRequestFailure`).
+    /// - One or more raw schedule entries fail to be converted into a `ScheduleEntry`
+    ///   (`ScheduleProcessingFailure`). This can happen due to invalid data formats
+    ///   (e.g., a malformed time string) in the database.
     pub fn read_schedule(&mut self) -> Result<(), Vec<SqlInterfaceError>> {
         // Get all schedule entries from the database
         let schedule_string_array = match self.conn.query_map(
@@ -322,14 +335,20 @@ impl SqlInterfaceSchedule {
         }
     }
 
-    /// Retrieves the schedule for a given schedule type.
+    /// Finds a specific schedule entry by its type from the internal cache.
+    ///
+    /// This function searches the `schedules` vector, which must be populated by
+    /// a prior call to `read_schedule`, for an entry matching the given `schedule_type`.
+    ///
     /// # Arguments
-    /// * `schedule_type` - information which type of schedule is requested
+    /// * `schedule_type` - The `ScheduleType` to search for.
     ///
     /// # Returns
-    /// A `Result` which is:
-    /// - `Ok(&ScheduleEntry)` in case the schedule could be retrieved successfully.
-    /// - `Err(SqlInterfaceError)` if the schedule could not be retrieved.
+    /// A `Result` containing a reference to the found `ScheduleEntry` on success.
+    ///
+    /// # Errors
+    /// Returns `SqlInterfaceError::ScheduleTypeNotFound` if no schedule entry
+    /// matching the provided `schedule_type` exists in the internal cache.
     pub fn find_schedule(
         &self,
         schedule_type: ScheduleType,
