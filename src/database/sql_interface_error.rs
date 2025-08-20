@@ -274,8 +274,14 @@ pub enum SqlInterfaceError {
     DatabaseFeedPhaseDurationNegative(String, i16, i16),
 
     /// Could not get a single Balling set value from the database.
-    #[error("[{0}] Could not get a single Balling set value from the database using query: {1}")]
-    SingleBallingSetValRequestFailure(String, String),
+    #[error("[{location}] Could not get a single Balling set value from the database using query: {query}")]
+    SingleBallingSetValRequestFailure {
+        location: String,
+        query: String,
+
+        #[source]
+        source: MySqlError
+    },
 
     /// database responded with empty response.
     #[error("[{0}] Database responded with empty response to query: {1}")]

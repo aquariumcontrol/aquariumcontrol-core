@@ -51,17 +51,26 @@ impl SqlInterfaceBalling {
     /// Creates a new `SqlInterfaceBalling` instance.
     ///
     /// This constructor initializes the Balling SQL interface with an established
-    /// database connection. Before, it checks whether the Balling set value table
-    /// contains any NULL values. If so, it panics, as this indicates a data consistency
-    /// issue.
+    /// database connection. It performs several pre-flight checks to ensure data
+    /// integrity and adherence to configured limits, such as verifying that the
+    /// Balling set value table contains no NULL values and that table row counts
+    /// are within their specified maximums.
     ///
     /// # Arguments
-    /// * `conn` - An active database connection pool object.
+    /// * `conn` - An active, pooled database connection.
     /// * `max_rows_balling_set_values` - Maximum allowed number of rows in the Balling set value table.
+    /// * `max_rows_balling_dosing_log` - Maximum allowed number of rows in the Balling dosing log table.
     ///
     /// # Returns
-    /// * A new `SqlInterfaceBalling` struct in case of success.
-    /// * An error `SqlInterfaceError` in case of failure.
+    /// A `Result` containing a new `SqlInterfaceBalling` instance on success.
+    ///
+    /// # Errors
+    /// This function will return an error if:
+    /// - Any of the initial database queries to get table counts fail (`DatabaseCheckBallingSetValsFailure`).
+    /// - Any of the retrieved counts are negative, indicating a database issue (`DatabaseBallingSetValTableNegativeValue`).
+    /// - The `ballingsetvals` table contains entries with `NULL` values (`DatabaseBallingSetValTableContainsNull`).
+    /// - The number of rows in the `ballingsetvals` table exceeds `max_rows_balling_set_values` (`DatabaseBallingSetValTableContainsTooManyRows`).
+    /// - The number of rows in the `ballingdosinglog` table exceeds `max_rows_balling_dosing_log` (`DatabaseBallingDosingLogTableContainsTooManyRows`).
     pub fn new(
         mut conn: PooledConn,
         max_rows_balling_set_values: u64,
@@ -139,20 +148,24 @@ impl SqlInterfaceBalling {
         Ok(SqlInterfaceBalling { conn })
     }
 
-    /// Retrieves the timestamp of the last Balling dosing event for a specific pump.
+    // Retrieves the timestamp of the last Balling dosing event for a specific pump.
     ///
     /// This function queries the database for the most recent dosing timestamp associated
-    /// with the given `pump_id`. Since a pump might not have any previous dosing events,
-    /// the result is wrapped in an `Option`.
+    /// with the given `pump_id`.
     ///
     /// # Arguments
-    /// * `pump_id` - The unique identifier of the pump for which to retrieve the last dosing timestamp.
+    /// * `pump_id` - The unique identifier of the pump.
     ///
     /// # Returns
-    /// A `Result` which is:
+    /// A `Result` containing an `Option<NaiveDateTime>`:
     /// - `Ok(Some(NaiveDateTime))` if a last dosing timestamp is found for the pump.
-    /// - `Ok(None)` if no previous dosing events are found for the specified pump.
-    /// - `Err(SqlInterfaceError)` if there's any issue during the database query or timestamp parsing.
+    /// - `Ok(None)` if no previous dosing events are recorded for the specified pump.
+    ///
+    /// # Errors
+    /// This function will return an error if the underlying database query fails. This
+    /// could be due to a connection issue, a syntax error, or if the query unexpectedly
+    /// returns more than one row. The specific error is propagated from the underlying
+    /// `get_optional_timestamp` call.
     fn get_last_balling_dosing_timestamp(
         &mut self,
         pump_id: i64,
@@ -168,47 +181,35 @@ impl SqlInterfaceBalling {
     /// Calculates the duration in seconds since the last Balling dosing event for a given pump.
     ///
     /// This function retrieves both the current database timestamp and the last dosing
-    /// timestamp for the specified `pump_id`. It then computes the time difference
-    /// between these two points in seconds.
+    /// timestamp for the specified `pump_id`. It then computes the time difference.
     ///
     /// # Arguments
     /// * `pump_id` - The unique identifier of the pump.
     ///
     /// # Returns
-    /// A `Result` which is:
-    /// - `Ok(Some(i64))` containing the number of seconds that have passed since the
-    ///   last Balling dosing event. A positive value indicates time elapsed.
-    /// - `Ok(None)` if there has been no previous Balling dosing event recorded for this pump.
-    /// - `Err(SqlInterfaceError)` if there's an issue retrieving either the current
-    ///   timestamp or the last dosing timestamp from the database.
+    /// A `Result` containing an `Option<i64>`:
+    /// - `Ok(Some(i64))`: The number of seconds that have passed since the last dosing event.
+    /// - `Ok(None)`: If no previous dosing event is recorded for this pump.
+    ///
+    /// # Errors
+    /// This function will return an error if it fails to retrieve either the current
+    /// timestamp or the last dosing timestamp from the database. This could be due to
+    /// a connection loss or other database-side issues.
     pub fn get_duration_since_last_balling_dosing(
         &mut self,
         pump_id: i64,
     ) -> Result<Option<i64>, SqlInterfaceError> {
-        let current_datetime = match SqlInterface::get_current_timestamp(&mut self.conn) {
-            Ok(c) => c,
-            Err(e) => {
-                return Err(e);
-            }
-        };
+        // --- World-Class Suggestion: Refactor for conciseness and clarity ---
+        // The original implementation with `match` statements can be simplified
+        // using the `?` operator for error propagation and `Option::map` for the final calculation.
+        let current_datetime = SqlInterface::get_current_timestamp(&mut self.conn)?;
+        let last_dosing_datetime_opt = self.get_last_balling_dosing_timestamp(pump_id)?;
 
-        let last_balling_dosing_datetime_opt = match self.get_last_balling_dosing_timestamp(pump_id)
-        {
-            Ok(c) => c,
-            Err(e) => {
-                return Err(e);
-            }
-        };
+        let duration_opt = last_dosing_datetime_opt.map(|last_dosing_datetime| {
+            (current_datetime - last_dosing_datetime).num_seconds()
+        });
 
-        let result_opt = match last_balling_dosing_datetime_opt {
-            Some(last_balling_dosing_datetime) => {
-                let delta_time = current_datetime - last_balling_dosing_datetime;
-                Some(delta_time.num_seconds())
-            }
-            None => None,
-        };
-
-        Ok(result_opt)
+        Ok(duration_opt)
     }
 
     /// Inserts a new Balling dosing event record into the SQL database.
@@ -219,13 +220,16 @@ impl SqlInterfaceBalling {
     /// # Arguments
     /// * `timestamp` - The `NaiveDateTime` when the dosing event occurred.
     /// * `pump_id` - The identifier of the pump that performed the dosing.
-    /// * `dosing_volume` - The volume (in milliliters) of fluid dispensed during this event.
+    /// * `dosing_volume` - The volume (in milliliters) of fluid dispensed.
     ///
     /// # Returns
-    /// A `Result` which is:
-    /// - `Ok(())` if the Balling event record was successfully inserted.
-    /// - `Err(SqlInterfaceError::InsertBallingEventFailure)` if an error occurs
-    ///   during the database insertion.
+    /// An empty `Result` (`Ok(())`) if the event record was successfully inserted.
+    ///
+    /// # Errors
+    /// Returns `SqlInterfaceError::InsertBallingEventFailure` if the `INSERT`
+    /// query fails. This can happen due to a lost connection, constraint violation
+    /// (e.g., foreign key), or incorrect data types. The original `mysql::Error`
+    /// is included as the source.
     pub fn insert_balling_event(
         &mut self,
         timestamp: NaiveDateTime,
@@ -233,22 +237,22 @@ impl SqlInterfaceBalling {
         dosing_volume: f64,
     ) -> Result<(), SqlInterfaceError> {
         let sql_query_string = sql_query_strings::SQL_QUERY_WRITE_BALLING_EVENT.to_owned();
-        match self.conn.exec_drop::<_, _>(
-            sql_query_string,
-            params! {
-            "timestamp" => timestamp.format("%Y-%m-%d %H:%M:%S").to_string(),
-            "pump_id" => pump_id,
-            "dosing_volume" => dosing_volume,
-            },
-        ) {
-            Ok(_) => Ok(()),
-            Err(e) => Err(SqlInterfaceError::InsertBallingEventFailure {
+        // --- World-Class Suggestion: Use `map_err` for more idiomatic error handling ---
+        self.conn
+            .exec_drop(
+                sql_query_string,
+                params! {
+                    "timestamp" => timestamp.format("%Y-%m-%d %H:%M:%S").to_string(),
+                    "pump_id" => pump_id,
+                    "dosing_volume" => dosing_volume,
+                },
+            )
+            .map_err(|e| SqlInterfaceError::InsertBallingEventFailure {
                 location: module_path!().to_string(),
                 source: e,
-            }),
-        }
+            })
     }
-
+    
     /// Retrieves a single set of Balling dosing parameters for a specified pump from the database.
     ///
     /// This function queries the database for the Balling set values (e.g., dosing speed, volume, label)
@@ -258,12 +262,14 @@ impl SqlInterfaceBalling {
     /// * `pump_id` - The unique identifier of the pump for which to retrieve the set values.
     ///
     /// # Returns
-    /// A `Result` which is:
-    /// - `Ok(BallingSetVal)` containing the retrieved dosing parameters if exactly one
-    ///   matching record is found.
-    /// - `Err(SqlInterfaceError::SingleBallingSetValRequestFailure)` if the database query
-    ///   fails, or if it returns no records, or if it returns more than one record
-    ///   (indicating a data consistency issue).
+    /// A `Result` containing the `BallingSetVal` for the specified pump on success.
+    ///
+    /// # Errors
+    /// This function will return an error if:
+    /// - The database query fails for any reason (`SingleBallingSetValRequestFailure`).
+    /// - The query returns zero rows (`SingleBallingSetValEmptyResponse`).
+    /// - The query returns more than one row (`SingleBallingSetValNoSingleResponse`), which
+    ///   indicates a data consistency issue.
     pub fn get_single_balling_setval_from_database(
         &mut self,
         pump_id: i64,
@@ -284,11 +290,12 @@ impl SqlInterfaceBalling {
             },
         ) {
             Ok(c) => c,
-            Err(_) => {
-                return Err(SqlInterfaceError::SingleBallingSetValRequestFailure(
-                    module_path!().to_string(),
-                    sql_query_string,
-                ));
+            Err(e) => {
+                return Err(SqlInterfaceError::SingleBallingSetValRequestFailure {
+                    location: module_path!().to_string(),
+                    query: sql_query_string,
+                    source: e
+                });
             }
         };
 
@@ -324,10 +331,12 @@ impl SqlInterfaceBalling {
     // * `label` - A descriptive label for the fluid being dispensed by the pump.
     //
     // # Returns
-    // A `Result` which is:
-    // - `Ok(())` if the pump configuration was successfully inserted.
-    // - `Err(SqlInterfaceError::InsertBallingPumpConfigurationFailure)` if an error occurs
-    //   during the database insertion.
+    // An empty `Result` (`Ok(())`) if the configuration was successfully inserted.
+    //
+    // # Errors
+    // Returns `SqlInterfaceError::InsertBallingPumpConfigurationFailure` if the
+    // `INSERT` query fails. This error should be updated to include the source
+    // `mysql::Error` for better diagnostics in test failures.    
     pub fn insert_pump_configuration(
         &mut self,
         pump_id: i64,
