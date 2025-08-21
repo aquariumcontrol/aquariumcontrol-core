@@ -248,9 +248,10 @@ pub struct DataLogger {
 impl DataLogger {
     /// Creates a new `DataLogger` instance.
     ///
-    /// This constructor initializes the data logger module with its configuration,
-    /// and prepares output files on disk (if enabled). It also initializes many
-    /// internal "lock" flags designed to prevent log flooding during operation.
+    /// This constructor initializes the data logger module with its configuration.
+    /// If `output_to_disk` is enabled, it validates that all required output file
+    /// paths are non-empty and then resets each file by writing an empty string to it.
+    /// It also initializes many internal "lock" flags designed to prevent log flooding.
     ///
     /// # Arguments
     /// * `config` - Configuration data for the data logger, defining logging intervals,
@@ -258,180 +259,55 @@ impl DataLogger {
     /// * `database_ping_interval` - A `Duration` instance, providing the interval to ping the database.
     ///
     /// # Returns
-    /// - In case of success, a new `DataLogger` struct, ready to collect, filter, and log sensor data.
-    /// - In case of failure, an error of type `DataLoggerError`.
+    /// A `Result` containing a new, initialized `DataLogger` instance on success.
+    ///
+    /// # Errors
+    /// This function will return a `DataLoggerError` if `output_to_disk` is enabled and:
+    /// - Any of the configured output filenames are empty (`OutputFilenameEmpty`).
+    /// - It fails to write to (and thus reset) any of the configured output files,
+    ///   which could be due to permission issues or an invalid path (`FileResetFailure`).
     pub fn new(
         config: DataLoggerConfig,
         database_ping_interval: Duration,
     ) -> Result<DataLogger, DataLoggerError> {
         if config.output_to_disk {
-            if config.output_file_name_timestamp.is_empty()
-                || config.output_file_name_water_temperature.is_empty()
-                || config
-                    .output_file_name_water_temperature_filtered
-                    .is_empty()
-                || config.output_file_name_pH.is_empty()
-                || config.output_file_name_pH_filtered.is_empty()
-                || config.output_file_name_conductivity.is_empty()
-                || config.output_file_name_conductivity_filtered.is_empty()
-                || config
-                    .output_file_name_tank_level_switch_position
-                    .is_empty()
-                || config.output_file_name_tank_level_switch_invalid.is_empty()
-                || config
-                    .output_file_name_tank_level_switch_position_stabilized
-                    .is_empty()
-                || config.output_file_name_ventilation_is_on.is_empty()
-                || config.output_file_name_heating_is_on.is_empty()
-                || config.output_file_name_ambient_temperature.is_empty()
-                || config.output_file_name_humidity.is_empty()
-                || config.output_file_name_refill_in_progress.is_empty()
-            {
+            // --- World-Class Suggestion: Refactor to eliminate massive code duplication ---
+            // By defining the files in a collection, we can use iterators to check and
+            // initialize them, making the code concise, readable, and easy to maintain.
+            let files_to_initialize = [
+                (&config.output_file_name_timestamp, "timestamp"),
+                (&config.output_file_name_water_temperature, "water temperature"),
+                (&config.output_file_name_water_temperature_filtered, "filtered water temperature"),
+                (&config.output_file_name_pH, "pH value"),
+                (&config.output_file_name_pH_filtered, "filtered pH value"),
+                (&config.output_file_name_conductivity, "conductivity"),
+                (&config.output_file_name_conductivity_filtered, "filtered conductivity"),
+                (&config.output_file_name_tank_level_switch_position, "tank level switch position"),
+                (&config.output_file_name_tank_level_switch_invalid, "tank level switch invalid"),
+                (&config.output_file_name_tank_level_switch_position_stabilized, "tank level switch stabilized"),
+                (&config.output_file_name_ventilation_is_on, "ventilation status"),
+                (&config.output_file_name_heating_is_on, "heating status"),
+                (&config.output_file_name_ambient_temperature, "ambient temperature"),
+                (&config.output_file_name_humidity, "humidity"),
+                (&config.output_file_name_refill_in_progress, "refill in progress"),
+            ];
+
+            // 1. Check if any filename is empty.
+            if files_to_initialize.iter().any(|(filename, _)| filename.is_empty()) {
                 return Err(DataLoggerError::OutputFilenameEmpty(
                     module_path!().to_string(),
                 ));
-            } else {
-                fs::write(config.output_file_name_timestamp.clone(), String::new()).map_err(
-                    |e| DataLoggerError::FileResetFailure {
-                        location: module_path!().to_string(),
-                        signal_name: "timestamp".to_string(),
-                        output_file_name: config.output_file_name_timestamp.clone(),
-                        source: e,
-                    },
-                )?;
-                fs::write(
-                    config.output_file_name_water_temperature.clone(),
-                    String::new(),
-                )
-                .map_err(|e| DataLoggerError::FileResetFailure {
-                    location: module_path!().to_string(),
-                    signal_name: "water temperature".to_string(),
-                    output_file_name: config.output_file_name_water_temperature.clone(),
-                    source: e,
-                })?;
-                fs::write(
-                    config.output_file_name_water_temperature_filtered.clone(),
-                    String::new(),
-                )
-                .map_err(|e| DataLoggerError::FileResetFailure {
-                    location: module_path!().to_string(),
-                    signal_name: "filtered water temperature".to_string(),
-                    output_file_name: config.output_file_name_water_temperature_filtered.clone(),
-                    source: e,
-                })?;
-                fs::write(config.output_file_name_pH.clone(), String::new()).map_err(|e| {
+            }
+
+            // 2. Initialize all files by writing an empty string.
+            for (filename, signal_name) in files_to_initialize {
+                fs::write(filename, String::new()).map_err(|e| {
                     DataLoggerError::FileResetFailure {
                         location: module_path!().to_string(),
-                        signal_name: "pH value".to_string(),
-                        output_file_name: config.output_file_name_pH.clone(),
+                        signal_name: signal_name.to_string(),
+                        output_file_name: filename.clone(),
                         source: e,
                     }
-                })?;
-                fs::write(config.output_file_name_pH_filtered.clone(), String::new()).map_err(
-                    |e| DataLoggerError::FileResetFailure {
-                        location: module_path!().to_string(),
-                        signal_name: "filtered pH value".to_string(),
-                        output_file_name: config.output_file_name_pH_filtered.clone(),
-                        source: e,
-                    },
-                )?;
-                fs::write(config.output_file_name_conductivity.clone(), String::new()).map_err(
-                    |e| DataLoggerError::FileResetFailure {
-                        location: module_path!().to_string(),
-                        signal_name: "conductivity".to_string(),
-                        output_file_name: config.output_file_name_conductivity.clone(),
-                        source: e,
-                    },
-                )?;
-                fs::write(
-                    config.output_file_name_conductivity_filtered.clone(),
-                    String::new(),
-                )
-                .map_err(|e| DataLoggerError::FileResetFailure {
-                    location: module_path!().to_string(),
-                    signal_name: "filtered conductivity".to_string(),
-                    output_file_name: config.output_file_name_conductivity_filtered.clone(),
-                    source: e,
-                })?;
-                fs::write(
-                    config.output_file_name_tank_level_switch_position.clone(),
-                    String::new(),
-                )
-                .map_err(|e| DataLoggerError::FileResetFailure {
-                    location: module_path!().to_string(),
-                    signal_name: "tank level switch position".to_string(),
-                    output_file_name: config.output_file_name_tank_level_switch_position.clone(),
-                    source: e,
-                })?;
-                fs::write(
-                    config.output_file_name_tank_level_switch_invalid.clone(),
-                    String::new(),
-                )
-                .map_err(|e| DataLoggerError::FileResetFailure {
-                    location: module_path!().to_string(),
-                    signal_name: "tank level switch invalid".to_string(),
-                    output_file_name: config.output_file_name_tank_level_switch_invalid.clone(),
-                    source: e,
-                })?;
-                fs::write(
-                    config
-                        .output_file_name_tank_level_switch_position_stabilized
-                        .clone(),
-                    String::new(),
-                )
-                .map_err(|e| DataLoggerError::FileResetFailure {
-                    location: module_path!().to_string(),
-                    signal_name: "tank level switch stabilized".to_string(),
-                    output_file_name: config
-                        .output_file_name_tank_level_switch_position_stabilized
-                        .clone(),
-                    source: e,
-                })?;
-                fs::write(
-                    config.output_file_name_ventilation_is_on.clone(),
-                    String::new(),
-                )
-                .map_err(|e| DataLoggerError::FileResetFailure {
-                    location: module_path!().to_string(),
-                    signal_name: "ventilation status".to_string(),
-                    output_file_name: config.output_file_name_ventilation_is_on.clone(),
-                    source: e,
-                })?;
-                fs::write(config.output_file_name_heating_is_on.clone(), String::new()).map_err(
-                    |e| DataLoggerError::FileResetFailure {
-                        location: module_path!().to_string(),
-                        signal_name: "heating status".to_string(),
-                        output_file_name: config.output_file_name_heating_is_on.clone(),
-                        source: e,
-                    },
-                )?;
-                fs::write(
-                    config.output_file_name_ambient_temperature.clone(),
-                    String::new(),
-                )
-                .map_err(|e| DataLoggerError::FileResetFailure {
-                    location: module_path!().to_string(),
-                    signal_name: "ambient temperature".to_string(),
-                    output_file_name: config.output_file_name_ambient_temperature.clone(),
-                    source: e,
-                })?;
-                fs::write(config.output_file_name_humidity.clone(), String::new()).map_err(
-                    |e| DataLoggerError::FileResetFailure {
-                        location: module_path!().to_string(),
-                        signal_name: "humidity".to_string(),
-                        output_file_name: config.output_file_name_humidity.clone(),
-                        source: e,
-                    },
-                )?;
-                fs::write(
-                    config.output_file_name_refill_in_progress.clone(),
-                    String::new(),
-                )
-                .map_err(|e| DataLoggerError::FileResetFailure {
-                    location: module_path!().to_string(),
-                    signal_name: "refill in progress".to_string(),
-                    output_file_name: config.output_file_name_refill_in_progress.clone(),
-                    source: e,
                 })?;
             }
         }
@@ -513,12 +389,27 @@ impl DataLogger {
         }
     }
 
-    /// Outputs binary signal to a file (in RAM disk).
+    /// Outputs a boolean (binary) signal's state to a specified file, typically located on a RAM disk.
+    ///
+    /// This private helper function converts a boolean `state` into a descriptive string
+    /// (e.g., "ON"/"OFF", "HIGH"/"LOW") using provided labels and attempts to write it
+    /// to the given `output_file_name`. This operation only occurs if `output_to_disk`
+    /// is enabled in the data logger's configuration.
+    ///
+    /// Error logging for writing failures is controlled by the `inhibit_error_log` flag,
+    /// preventing a flood of repetitive error messages.
+    ///
     /// # Arguments
-    /// * `device_state` - signal which shall be converted to a humanly readable format and written to file
-    /// * `state_description_true` - label to write to a file for true value
-    /// * `state_description_false` - label to write to a file for false value
-    /// * `output_file_name` - name of the file where the value shall be written to    
+    /// * `state` - The `bool` value of the binary signal (e.g., `true` for ON, `false` for OFF).
+    /// * `state_description_true` - The string label to write to the file when `state` is `true`.
+    /// * `state_description_false` - The string label to write to the file when `state` is `false`.
+    /// * `output_file_name` - A reference to the `String` containing the full path to the output file.
+    /// * `inhibit_error_log` - A boolean flag that, if `true`, will prevent this specific
+    ///   error from being logged to the console/main log if a write operation fails.
+    ///
+    /// # Returns
+    /// - `true`: If an error occurred during the file write operation.
+    /// - `false`: If the write was successful or if `output_to_disk` is disabled.
     fn output_state(
         &self,
         state: bool,
@@ -553,27 +444,24 @@ impl DataLogger {
         }
     }
 
-    /// Outputs a boolean (binary) signal's state to a specified file, typically located on a RAM disk.
+    /// Outputs a `NaiveDateTime` timestamp to a specified file, typically located on a RAM disk.
     ///
-    /// This private helper function converts a boolean `state` into a descriptive string
-    /// (e.g., "ON"/"OFF", "HIGH"/"LOW") using provided labels and attempts to write it
-    /// to the given `output_file_name`. This operation only occurs if `output_to_disk`
-    /// is enabled in the data logger's configuration.
+    /// This private helper function converts a `NaiveDateTime` into its string representation
+    /// and attempts to write it to the given `output_file_name`. This operation only occurs
+    /// if `output_to_disk` is enabled in the data logger's configuration.
     ///
     /// Error logging for writing failures is controlled by the `inhibit_error_log` flag,
     /// preventing a flood of repetitive error messages.
     ///
     /// # Arguments
-    /// * `state` - The `bool` value of the binary signal (e.g., `true` for ON, `false` for OFF).
-    /// * `state_description_true` - The string label to write to the file when `state` is `true`.
-    /// * `state_description_false` - The string label to write to the file when `state` is `false`.
+    /// * `timestamp` - The `NaiveDateTime` value to be written to the file.
     /// * `output_file_name` - A reference to the `String` containing the full path to the output file.
     /// * `inhibit_error_log` - A boolean flag that, if `true`, will prevent this specific
     ///   error from being logged to the console/main log if a write operation fails.
     ///
     /// # Returns
-    /// `true` if an error occurred during the file write operation; `false` otherwise (including
-    /// when `output_to_disk` is `false` and no write is attempted).
+    /// - `true`: If an error occurred during the file write operation.
+    /// - `false`: If the write was successful or if `output_to_disk` is disabled.
     fn output_timestamp(
         &self,
         timestamp: NaiveDateTime,
@@ -689,18 +577,16 @@ impl DataLogger {
         }
     }
 
-    /// Retrieves current sensor readings from Atlas Scientific devices via shared mutexes and outputs them to files.
+    /// Retrieves current sensor readings from the `SensorManager` via a shared mutex and outputs them to files.
     ///
-    /// This private helper function accesses `Arc<Mutex<f32>>` protected data for water temperature,
-    /// pH, and conductivity readings from Atlas Scientific sensors. It updates the corresponding
-    /// `Option<f32>` variables with the retrieved values and then calls `output_signal` to write
-    /// these readings to their respective configured files on disk. If a mutex lock fails, the
-    /// corresponding `Option` will be set to `None`.
+    /// This private helper function locks the `mutex_sensor_manager_signals` to get the latest
+    /// readings for water temperature, pH, conductivity, ambient temperature, and humidity.
+    /// It updates the corresponding `Option<f32>` variables with the retrieved values and then
+    /// calls `output_signal` to write these readings to their respective configured files on disk.
+    /// If the mutex lock fails, an error is logged, and the function returns without updating the values.
     ///
     /// # Arguments
-    /// * `mutex_temperature` - An `Arc<Mutex<f32>>` holding the latest water temperature reading from Atlas Scientific.
-    /// * `mutex_ph` - An `Arc<Mutex<f32>>` holding the latest pH reading from Atlas Scientific.
-    /// * `mutex_conductivity` - An `Arc<Mutex<f32>>` holding the latest conductivity reading from Atlas Scientific.
+    /// * `mutex_sensor_manager_signals` - An `Arc<Mutex<SensorManagerSignals>>` holding the latest sensor readings.
     /// * `water_temperature_opt` - A mutable reference to an `Option<f32>` where the retrieved water temperature will be stored.
     /// * `ph_opt` - A mutable reference to an `Option<f32>` where the retrieved pH value will be stored.
     /// * `conductivity_opt` - A mutable reference to an `Option<f32>` where the retrieved conductivity value will be stored.
@@ -778,19 +664,19 @@ impl DataLogger {
         }
     }
 
-    /// Retrieves current temperature readings from DS18B20 sensors via shared mutexes and outputs them to files.
+    /// Retrieves current signals from the `TankLevelSwitch` via a shared mutex and outputs them to files.
     ///
-    /// This private helper function accesses `Arc<Mutex<f32>>` protected data for water temperature
-    /// and ambient temperature readings from DS18B20 sensors. It updates the corresponding
-    /// `Option<f32>` variables with the retrieved values and then calls `output_signal` to write
-    /// these readings to their respective configured files on disk. If a mutex lock fails, the
-    /// corresponding `Option` will be set to `None`.
+    /// This private helper function locks the `mutex_tank_level_switch_signals` to get the latest
+    /// state for the switch's position, its stabilized position, and its invalid status.
+    /// It updates the corresponding `Option<bool>` variables with the retrieved values and then
+    /// calls `output_state` to write these states to their respective configured files on disk.
+    /// If the mutex lock fails, the `Option` variables are set to `None`.
     ///
     /// # Arguments
-    /// * `mutex_water_temperature` - An `Arc<Mutex<f32>>` holding the latest water temperature reading from a DS18B20 sensor.
-    /// * `mutex_ambient_temperature` - An `Arc<Mutex<f32>>` holding the latest ambient temperature reading from a DS18B20 sensor.
-    /// * `water_temperature` - A mutable reference to an `Option<f32>` where the retrieved water temperature will be stored.
-    /// * `ambient_temperature` - A mutable reference to an `Option<f32>` where the retrieved ambient temperature will be stored.
+    /// * `mutex_tank_level_switch_signals` - An `Arc<Mutex<TankLevelSwitchSignals>>` holding the latest switch states.
+    /// * `tank_level_switch_position_opt` - A mutable reference to an `Option<bool>` for the switch's current position.
+    /// * `tank_level_switch_position_stabilized_opt` - A mutable reference to an `Option<bool>` for the switch's stabilized position.
+    /// * `tank_level_switch_invalid_opt` - A mutable reference to an `Option<bool>` for the switch's invalid status.
     fn update_tank_level_switch_signals(
         &mut self,
         mutex_tank_level_switch_signals: &Arc<Mutex<TankLevelSwitchSignals>>,
@@ -1383,119 +1269,41 @@ pub mod tests {
         target_ambient_humidity: f32,
         target_heater_status: bool,
     ) {
-        assert_eq!(
-            fs::read_to_string(&data_logger_config.output_file_name_water_temperature)
-                .expect("Could not read back water temperature from disk.")
+        // --- World-Class Suggestion: Refactor to eliminate massive code duplication ---
+        // Helper to assert the content of a file containing an f32 value.
+        let assert_file_f32 = |filename: &str, expected: f32| {
+            let content = fs::read_to_string(filename)
+                .unwrap_or_else(|_| panic!("Could not read file: {}", filename));
+            let value = content
                 .parse::<f32>()
-                .unwrap(),
-            target_water_temperature,
-        );
-        assert_eq!(
-            fs::read_to_string(&data_logger_config.output_file_name_water_temperature_filtered)
-                .expect("Could not read back filtered water temperature from disk.")
-                .parse::<f32>()
-                .unwrap(),
-            target_water_temperature_filtered,
-        );
-        assert_eq!(
-            fs::read_to_string(&data_logger_config.output_file_name_pH)
-                .expect("Could not read back pH from disk.")
-                .parse::<f32>()
-                .unwrap(),
-            target_water_ph,
-        );
-        assert_eq!(
-            fs::read_to_string(&data_logger_config.output_file_name_pH_filtered)
-                .expect("Could not read back filtered pH from disk.")
-                .parse::<f32>()
-                .unwrap(),
-            target_water_ph_filtered,
-        );
-        assert_eq!(
-            fs::read_to_string(&data_logger_config.output_file_name_conductivity)
-                .expect("Could not read back conductivity from disk.")
-                .parse::<f32>()
-                .unwrap(),
-            target_water_conductivity,
-        );
-        assert_eq!(
-            fs::read_to_string(&data_logger_config.output_file_name_conductivity_filtered)
-                .expect("Could not read back filtered conductivity from disk.")
-                .parse::<f32>()
-                .unwrap(),
-            target_water_conductivity_filtered,
-        );
-        assert_eq!(
-            fs::read_to_string(&data_logger_config.output_file_name_ambient_temperature)
-                .expect("Could not read back ambient temperature from disk.")
-                .parse::<f32>()
-                .unwrap(),
-            target_ambient_temperature,
-        );
-        assert_eq!(
-            fs::read_to_string(&data_logger_config.output_file_name_humidity)
-                .expect("Could not read back ambient humidity from disk.")
-                .parse::<f32>()
-                .unwrap(),
-            target_ambient_humidity,
-        );
-        let target_refill_in_progress_string = match target_refill_in_progress {
-            true => "ON".to_string(),
-            false => "OFF".to_string(),
+                .unwrap_or_else(|_| panic!("Could not parse f32 from file: {}", filename));
+            assert_eq!(value, expected, "Mismatch in file: {}", filename);
         };
-        assert_eq!(
-            fs::read_to_string(&data_logger_config.output_file_name_refill_in_progress)
-                .expect("Could not read back refill in progress from disk."),
-            target_refill_in_progress_string,
-        );
-        let target_tank_level_switch_position_string = match target_tank_level_switch_position {
-            true => "HIGH".to_string(),
-            false => "LOW".to_string(),
+
+        // Helper to assert the content of a file containing a boolean state.
+        let assert_file_bool = |filename: &str, expected_bool: bool, true_str: &str, false_str: &str| {
+            let content = fs::read_to_string(filename)
+                .unwrap_or_else(|_| panic!("Could not read file: {}", filename));
+            let expected_str = if expected_bool { true_str } else { false_str };
+            assert_eq!(content, expected_str, "Mismatch in file: {}", filename);
         };
-        assert_eq!(
-            fs::read_to_string(&data_logger_config.output_file_name_tank_level_switch_position)
-                .expect("Could not read back tank_level_switch_position from disk."),
-            target_tank_level_switch_position_string,
-        );
-        let target_tank_level_switch_invalid_string = match target_tank_level_switch_invalid {
-            true => "INVALID".to_string(),
-            false => "VALID".to_string(),
-        };
-        assert_eq!(
-            fs::read_to_string(&data_logger_config.output_file_name_tank_level_switch_invalid)
-                .expect("Could not read back tank level switch invalid from disk."),
-            target_tank_level_switch_invalid_string,
-        );
-        let target_tank_level_switch_position_stabilized_string =
-            match target_tank_level_switch_position_stabilized {
-                true => "HIGH".to_string(),
-                false => "LOW".to_string(),
-            };
-        assert_eq!(
-            fs::read_to_string(
-                &data_logger_config.output_file_name_tank_level_switch_position_stabilized
-            )
-            .expect("Could not read back tank_level_switch_position from disk."),
-            target_tank_level_switch_position_stabilized_string,
-        );
-        let target_surface_ventilation_status_string = match target_surface_ventilation_status {
-            true => "ON".to_string(),
-            false => "OFF".to_string(),
-        };
-        assert_eq!(
-            fs::read_to_string(&data_logger_config.output_file_name_ventilation_is_on)
-                .expect("Could not read back ventilation status from disk."),
-            target_surface_ventilation_status_string,
-        );
-        let target_heater_status_string = match target_heater_status {
-            true => "ON".to_string(),
-            false => "OFF".to_string(),
-        };
-        assert_eq!(
-            fs::read_to_string(&data_logger_config.output_file_name_heating_is_on)
-                .expect("Could not read back heater status from disk."),
-            target_heater_status_string,
-        );
+
+        // Now, the assertions are clean, single-line calls.
+        assert_file_f32(&data_logger_config.output_file_name_water_temperature, target_water_temperature);
+        assert_file_f32(&data_logger_config.output_file_name_water_temperature_filtered, target_water_temperature_filtered);
+        assert_file_f32(&data_logger_config.output_file_name_pH, target_water_ph);
+        assert_file_f32(&data_logger_config.output_file_name_pH_filtered, target_water_ph_filtered);
+        assert_file_f32(&data_logger_config.output_file_name_conductivity, target_water_conductivity);
+        assert_file_f32(&data_logger_config.output_file_name_conductivity_filtered, target_water_conductivity_filtered);
+        assert_file_f32(&data_logger_config.output_file_name_ambient_temperature, target_ambient_temperature);
+        assert_file_f32(&data_logger_config.output_file_name_humidity, target_ambient_humidity);
+
+        assert_file_bool(&data_logger_config.output_file_name_refill_in_progress, target_refill_in_progress, "ON", "OFF");
+        assert_file_bool(&data_logger_config.output_file_name_tank_level_switch_position, target_tank_level_switch_position, "HIGH", "LOW");
+        assert_file_bool(&data_logger_config.output_file_name_tank_level_switch_invalid, target_tank_level_switch_invalid, "INVALID", "VALID");
+        assert_file_bool(&data_logger_config.output_file_name_tank_level_switch_position_stabilized, target_tank_level_switch_position_stabilized, "HIGH", "LOW");
+        assert_file_bool(&data_logger_config.output_file_name_ventilation_is_on, target_surface_ventilation_status, "ON", "OFF");
+        assert_file_bool(&data_logger_config.output_file_name_heating_is_on, target_heater_status, "ON", "OFF");
     }
 
     #[test]
