@@ -75,4 +75,16 @@ pub enum RelayError {
         #[source]
         source: serialport::Error,
     },
+
+    /// Could not get pin from GPIO interface.
+    #[cfg(all(target_os = "linux", feature = "target_hw"))]
+    #[error("[{location}] Could not get pin {pin_number} from GPIO interface for {device}")]
+    GpioGetPinFailure {
+        location: String,
+        pin_number: u8,
+        device: String,
+
+        #[source]
+        source: rppal::gpio::Error,
+    }
 }

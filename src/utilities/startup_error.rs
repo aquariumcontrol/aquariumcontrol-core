@@ -107,7 +107,15 @@ pub enum StartupError {
         #[source]
         source: ActuateControllinoError,
     },
-
+    
+    /// Could not initialize the interface to Gpio.
+    #[cfg(all(feature = "target_hw", target_os = "linux"))]
+    #[error("Could not setup interface to Gpio.")]
+    ActuateGpioSetupFailure {
+        #[source]
+        source: ActuateGpioError,
+    },
+    
     /// Could not initialize the interface to the GPIO.
     #[cfg(all(feature = "target_hw", target_os = "linux"))]
     #[error("Could not setup the interface to the GPIO.")]

@@ -1165,7 +1165,11 @@ fn run() -> Result<(), StartupError> {
                      gpio_tank_level_switch
                 ).map_err(|e| StartupError::TankLevelSwitchSetupFailure { source: e })?;
                 dht = Dht::new(config.dht, Some(gpio_lib_handle.clone()), gpio_dht22_io, gpio_dht22_vcc);
-                actuate_gpio_opt = Some(ActuateGpio::new(gpio_lib_handle_cloned_for_relay_manager, actuate_gpio_config));
+                let actuate_gpio = ActuateGpio::new(
+                    gpio_lib_handle_cloned_for_relay_manager,
+                    actuate_gpio_config)
+                .map_err(|e| StartupError::ActuateGpioSetupFailure { source: e });
+                actuate_gpio_opt = Some(actuate_gpio);
             }
         }
         else {

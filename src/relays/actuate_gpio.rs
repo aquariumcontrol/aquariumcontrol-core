@@ -142,31 +142,28 @@ pub struct ActuateGpio {
 /// * `device_name` - A descriptive name of the device connected to this pin (used for error logging).
 ///
 /// # Returns
-/// An `OutputPin` instance, ready to be used for setting the pin's state (high or low).
+/// A `Result` containing a new `OutputPin` instance on success, ready to be used for setting the pin's state.
 ///
-/// # Panics
-/// This function will panic if it fails to:
-/// - Obtain access to the specified GPIO pin (e.g., if the pin is invalid or already in use).
-/// - Configure the pin as an output.
-pub fn get_output_pin(gpio: &Gpio, gpio_number: u8, device_name: &str) -> OutputPin {
-    match gpio.get(gpio_number) {
-        Ok(c) => c.into_output(),
-        Err(e) => {
-            panic!(
-                "{}: could not get pin {} from GPIO interface for {} ({e:?})",
-                module_path!(),
-                gpio_number,
-                device_name
-            );
-        }
-    }
+/// # Errors
+/// Returns a `RelayError::GpioGetPinFailure` if the underlying `rppal` library fails
+/// to access the pin. This can happen if the pin number is invalid for the hardware,
+/// if the pin is already in use by another process, or due to insufficient permissions.
+pub fn get_output_pin(gpio: &Gpio, gpio_number: u8, device_name: &str) -> Result<OutputPin, RelayError> {
+    gpio.get(gpio_number)
+        .map(|pin| pin.into_output())
+        .map_err(|e| RelayError::GpioGetPinFailure {
+            location: module_path!().to_string(),
+            pin_number: gpio_number,
+            device: device_name.to_string(),
+            source: e,
+        })
 }
 
 impl ActuateGpio {
     #[cfg(all(target_os = "linux", feature = "target_hw"))]
     /// Creates a new `ActuateGpio` instance by configuring and acquiring all necessary GPIO output pins.
     ///
-    /// This constructor is responsible for initializing the direct GPIO hardware control.
+    /// This constructor is responsible for initializing direct GPIO hardware control.
     /// It iterates through the `ActuateGpioConfig` to get each device's assigned GPIO pin,
     /// then acquires and sets up each pin as an `OutputPin` using the `rppal` library.
     ///
@@ -177,31 +174,33 @@ impl ActuateGpio {
     ///   specific GPIO pins.
     ///
     /// # Returns
-    /// A new `ActuateGpio` struct, holding all the configured `OutputPin` ready for direct control.
+    /// A `Result` containing a new `ActuateGpio` struct on success, holding all the configured `OutputPin`s.
     ///
-    /// # Panics
-    /// This function will **panic** if it fails to acquire or configure any of the specified
-    /// GPIO pins (e.g., if a pin is invalid, already in use, or if there's a low-level
-    /// GPIO access error).
-    pub fn new(gpio: Gpio, config: ActuateGpioConfig) -> ActuateGpio {
-        let output_pin_skimmer = get_output_pin(&gpio, config.gpio_skimmer, "skimmer");
-        let output_pin_main_pump1 = get_output_pin(&gpio, config.gpio_main_pump1, "main pump 1");
-        let output_pin_main_pump2 = get_output_pin(&gpio, config.gpio_main_pump2, "main pump 2");
-        let output_pin_aux_pump1 = get_output_pin(&gpio, config.gpio_aux_pump1, "aux pump 1");
-        let output_pin_aux_pump2 = get_output_pin(&gpio, config.gpio_aux_pump2, "aux pump 2");
-        let output_pin_feeder = get_output_pin(&gpio, config.gpio_feeder, "feeder");
-        let output_pin_refill_pump = get_output_pin(&gpio, config.gpio_refill_pump, "refill pump");
-        let output_pin_heater = get_output_pin(&gpio, config.gpio_heater, "heater");
-        let output_pin_ventilation = get_output_pin(&gpio, config.gpio_ventilation, "ventilation");
+    /// # Errors
+    /// Returns a `RelayError` if any of the underlying calls to `get_output_pin` fail.
+    /// This indicates a critical hardware or configuration error that prevents the
+    /// application from controlling the hardware correctly (e.g., invalid pin number,
+    /// permission issues).
+    pub fn new(gpio: Gpio, config: ActuateGpioConfig) -> Result<ActuateGpio, RelayError> {
+        let output_pin_skimmer = get_output_pin(&gpio, config.gpio_skimmer, "skimmer")?;
+        let output_pin_main_pump1 = get_output_pin(&gpio, config.gpio_main_pump1, "main pump 1")?;
+        let output_pin_main_pump2 = get_output_pin(&gpio, config.gpio_main_pump2, "main pump 2")?;
+        let output_pin_aux_pump1 = get_output_pin(&gpio, config.gpio_aux_pump1, "aux pump 1")?;
+        let output_pin_aux_pump2 = get_output_pin(&gpio, config.gpio_aux_pump2, "aux pump 2")?;
+        let output_pin_feeder = get_output_pin(&gpio, config.gpio_feeder, "feeder")?;
+        let output_pin_refill_pump = get_output_pin(&gpio, config.gpio_refill_pump, "refill pump")?;
+        let output_pin_heater = get_output_pin(&gpio, config.gpio_heater, "heater")?;
+        let output_pin_ventilation = get_output_pin(&gpio, config.gpio_ventilation, "ventilation")?;
         let output_pin_peristaltic_pump1 =
-            get_output_pin(&gpio, config.gpio_peristaltic_pump1, "peristaltic pump 1");
+            get_output_pin(&gpio, config.gpio_peristaltic_pump1, "peristaltic pump 1")?;
         let output_pin_peristaltic_pump2 =
-            get_output_pin(&gpio, config.gpio_peristaltic_pump2, "peristaltic pump 2");
+            get_output_pin(&gpio, config.gpio_peristaltic_pump2, "peristaltic pump 2")?;
         let output_pin_peristaltic_pump3 =
-            get_output_pin(&gpio, config.gpio_peristaltic_pump3, "peristaltic pump 3");
+            get_output_pin(&gpio, config.gpio_peristaltic_pump3, "peristaltic pump 3")?;
         let output_pin_peristaltic_pump4 =
-            get_output_pin(&gpio, config.gpio_peristaltic_pump4, "peristaltic pump 4");
+            get_output_pin(&gpio, config.gpio_peristaltic_pump4, "peristaltic pump 4")?;
 
+        Ok(
         ActuateGpio {
             output_pin_skimmer,
             output_pin_main_pump1,
@@ -216,16 +215,17 @@ impl ActuateGpio {
             output_pin_peristaltic_pump2,
             output_pin_peristaltic_pump3,
             output_pin_peristaltic_pump4,
-        }
+        })
     }
 }
 
 impl RelayActuationTrait for ActuateGpio {
-    /// Triggers actuation of relays via GPIO.
+    /// Actuates a relay by setting the state of its corresponding GPIO pin.
     ///
     /// This function translates `SwitchOn` and `SwitchOff` commands for specific aquarium devices
     /// into direct GPIO pin manipulations (`set_low()` or `set_high()`). It applies the correct
-    /// relay logic (e.g., whether `set_low()` means "on" or "off" for a given device).
+    /// relay logic (e.g., whether `set_low()` means "on" or "off" for a given device)
+    /// by calling `get_relay_command_gpio`.
     ///
     /// This implementation is active only on Linux systems when the `target_hw` feature is enabled.
     ///
@@ -233,10 +233,12 @@ impl RelayActuationTrait for ActuateGpio {
     /// * `internal_command` - The `InternalCommand` specifying the `AquariumDevice` and the desired state (`SwitchOn` or `SwitchOff`).
     ///
     /// # Returns
-    /// A `Result` which is:
-    /// - `Ok(())` if the GPIO pin state was successfully set.
-    /// - `Err(RelayError::IrrelevantCommand)` if the `internal_command` is not `SwitchOn` or `SwitchOff` (e.g., `Pulse`, `RequestSignal`).
-    /// - `Err(RelayError::PulseNotAllowedForDevice)` if `get_relay_command_gpio` returns an error (which it does for `Pulse` commands on non-pulsable devices).
+    /// An empty `Result` (`Ok(())`) if the GPIO pin state was successfully set.
+    ///
+    /// # Errors
+    /// This function will return a `RelayError` if the command is not applicable:
+    /// - `RelayError::IrrelevantCommand`: If the `internal_command` is not `SwitchOn` or `SwitchOff` (e.g., `Pulse`, `RequestSignal`).
+    /// - `RelayError::PulseNotAllowedForDevice`: If a `Pulse` command is attempted, as this GPIO implementation does not support it.
     fn actuate(&mut self, internal_command: &InternalCommand) -> Result<(), RelayError> {
         match internal_command {
             InternalCommand::SwitchOn(ref aquarium_device)
@@ -350,18 +352,42 @@ impl RelayActuationTrait for ActuateGpio {
         }
     }
 
-    /// Heartbeat is not used by this trait implementation.
+    /// Returns the heartbeat interval, which is not applicable for GPIO actuation.
+    ///
+    /// GPIO-based relays do not require a keep-alive signal, so this implementation
+    /// returns `None`.
+    ///
+    /// # Returns
+    /// Always returns `None`.
     fn get_heartbeat_interval_seconds(&self) -> Option<u64> {
         None
     }
 
-    /// Heartbeat is not used by this trait implementation.
+    /// Performs a heartbeat action, which is not applicable for GPIO actuation.
+    ///
+    /// This is a no-op for the GPIO implementation as there is no persistent
+    /// communication channel that needs to be kept alive.
+    ///
+    /// # Returns
+    /// Always returns `Ok(())`.
+    ///
+    /// # Errors
+    /// This function will never return an error.
     fn heartbeat(&mut self) -> Result<(), RelayError> {
         // do nothing
         Ok(())
     }
 
-    /// Flushing the buffer is not used by this trait implementation.
+    /// Flushes a communication buffer, which is not applicable for GPIO actuation.
+    ///
+    /// This is a no-op for the GPIO implementation as there is no serial communication
+    /// buffer to flush.
+    ///
+    /// # Returns
+    /// Always returns `Ok(())`.
+    ///
+    /// # Errors
+    /// This function will never return an error.
     fn flush_buffer(&mut self) -> Result<(), RelayError> {
         // do nothing
         Ok(())
