@@ -73,8 +73,8 @@ pub mod controllino_constants {
 ///   It is expected to be at least 8 bytes long.
 ///
 /// # Returns
-/// `true` if both calculated checksums match the received checksums, indicating data integrity;
-/// `false` otherwise.
+/// - `true`: If both calculated checksums match the received checksums, indicating data integrity.
+/// - `false`: If the checksums do not match.
 fn check_controllino_checksums(data: &[u8]) -> bool {
     let first_checksum = data[0] ^ data[1] ^ data[2];
     let second_checksum = data[4] ^ data[5] ^ data[6];
@@ -230,10 +230,21 @@ pub struct ActuateControllino {
     pub serial_port_opt: Option<Box<dyn SerialPort>>,
 }
 
-/// Creates the message to be sent to Controllino
+/// Creates the message to be sent to Controllino based on an internal command.
+///
+/// This function translates a high-level `InternalCommand` into a low-level,
+/// hardware-specific `ControllinoMessage` ready for serial transmission.
+///
 /// # Arguments
-/// * `internal_command` - enum value used for identifying if relay shall be switched on or switched off
-/// * `config` - configuration of Controllino
+/// * `internal_command` - The `InternalCommand` specifying the device and action.
+/// * `config` - A reference to the `ActuateControllinoConfig` for device-to-relay mappings.
+///
+/// # Returns
+/// A `Result` containing the constructed `ControllinoMessage` on success.
+///
+/// # Errors
+/// Returns a `RelayError` if the `internal_command` is not applicable for actuation
+/// (e.g., `ResetAllErrors`) or if `get_relay_command` fails for other reasons.
 fn create_command_message(
     internal_command: InternalCommand,
     config: &ActuateControllinoConfig,
@@ -242,12 +253,8 @@ fn create_command_message(
         InternalCommand::SwitchOn(ref c)
         | InternalCommand::SwitchOff(ref c)
         | InternalCommand::Pulse(ref c, _) => {
-            let relay_command = match get_relay_command(&internal_command, c.clone(), config) {
-                Ok(c) => c,
-                Err(e) => {
-                    return Err(e);
-                }
-            };
+            let relay_command = get_relay_command(&internal_command, c.clone(), config)?;
+
             let (relay_command_char, relay_id, duration_millis) = match relay_command {
                 InternalCommand::SetRelay(relay_id) => {
                     // relay id is set inside this crate, so the cast is safe
@@ -288,6 +295,14 @@ fn create_command_message(
     }
 }
 
+/// Creates a heartbeat message to be sent to the Controllino.
+///
+/// This function constructs a standard `ControllinoMessage` with the heartbeat
+/// command character. This is used to periodically signal to the hardware
+/// that the control software is still active.
+///
+/// # Returns
+/// A new `ControllinoMessage` configured for a heartbeat.
 fn create_heartbeat_message() -> ControllinoMessage {
     let message_content =
         ControllinoMessageContent::new(controllino_constants::COMMAND_HEARTBEAT, 0, 0);
@@ -306,220 +321,67 @@ fn create_heartbeat_message() -> ControllinoMessage {
 /// * `config` - A reference to the `ActuateControllinoConfig`, which provides device-to-relay ID mappings and other settings.
 ///
 /// # Returns
-/// A `Result` which is:
-/// - `Ok(ControllinoMessage)`: The successfully constructed message ready to be sent to the Controllino.
-/// - `Err(RelayError::IrrelevantCommand)`: If the `internal_command` is not one that this function can translate for Controllino actuation (e.g., `ResetAllErrors`).
-/// - `Err(RelayError::PulseNotAllowedForDevice)`: If a `Pulse` command is issued for a device that does not support pulsing.
+/// A `Result` containing the low-level `InternalCommand` (e.g., `SetRelay`, `PulseRelay`) on success.
+///
+/// # Errors
+/// This function will return a `RelayError` if:
+/// - The `internal_command` is not one that this function can translate for Controllino actuation (e.g., `ResetAllErrors`), resulting in `IrrelevantCommand`.
+/// - A `Pulse` command is issued for a device that does not support pulsing, resulting in `PulseNotAllowedForDevice`.
 pub fn get_relay_command(
     internal_command: &InternalCommand,
     device: AquariumDevice,
     config: &ActuateControllinoConfig,
 ) -> Result<InternalCommand, RelayError> {
-    match device {
-        AquariumDevice::Skimmer => match internal_command {
-            InternalCommand::SwitchOn(_) => {
-                Ok(InternalCommand::UnsetRelay(config.skimmer_id as u16))
+    let (relay_id, is_inverted, supports_pulse) = match device {
+        // Inverted logic, no pulse
+        AquariumDevice::Skimmer => (config.skimmer_id, true, false),
+        AquariumDevice::MainPump1 => (config.main_pump1_id, true, false),
+        AquariumDevice::MainPump2 => (config.main_pump2_id, true, false),
+        AquariumDevice::AuxPump1 => (config.aux_pump1_id, true, false),
+        AquariumDevice::AuxPump2 => (config.aux_pump2_id, true, false),
+
+        // Normal logic, no pulse
+        AquariumDevice::Heater => (config.heater_id, false, false),
+        AquariumDevice::Ventilation => (config.ventilation_id, false, false),
+        AquariumDevice::RefillPump => (config.refill_pump_id, false, false),
+        AquariumDevice::Feeder => (config.feeder_id, false, false),
+
+        // Normal logic, with pulse
+        AquariumDevice::PeristalticPump1 => (config.peristaltic_pump1_id, false, true),
+        AquariumDevice::PeristalticPump2 => (config.peristaltic_pump2_id, false, true),
+        AquariumDevice::PeristalticPump3 => (config.peristaltic_pump3_id, false, true),
+        AquariumDevice::PeristalticPump4 => (config.peristaltic_pump4_id, false, true),
+    };
+
+    match internal_command {
+        InternalCommand::SwitchOn(_) => {
+            if is_inverted {
+                Ok(InternalCommand::UnsetRelay(relay_id as u16))
+            } else {
+                Ok(InternalCommand::SetRelay(relay_id as u16))
             }
-            InternalCommand::SwitchOff(_) => {
-                Ok(InternalCommand::SetRelay(config.skimmer_id as u16))
+        }
+        InternalCommand::SwitchOff(_) => {
+            if is_inverted {
+                Ok(InternalCommand::SetRelay(relay_id as u16))
+            } else {
+                Ok(InternalCommand::UnsetRelay(relay_id as u16))
             }
-            InternalCommand::Pulse(d, _) => Err(RelayError::PulseNotAllowedForDevice(
-                module_path!().to_string(),
-                d.clone(),
-            )),
-            _ => Err(RelayError::IrrelevantCommand(
-                module_path!().to_string(),
-                internal_command.clone(),
-            )),
-        },
-        AquariumDevice::MainPump1 => match internal_command {
-            InternalCommand::SwitchOn(_) => {
-                Ok(InternalCommand::UnsetRelay(config.main_pump1_id as u16))
+        }
+        InternalCommand::Pulse(_, t) => {
+            if supports_pulse {
+                Ok(InternalCommand::PulseRelay(relay_id as u16, *t))
+            } else {
+                Err(RelayError::PulseNotAllowedForDevice(
+                    module_path!().to_string(),
+                    device,
+                ))
             }
-            InternalCommand::SwitchOff(_) => {
-                Ok(InternalCommand::SetRelay(config.main_pump1_id as u16))
-            }
-            InternalCommand::Pulse(d, _) => Err(RelayError::PulseNotAllowedForDevice(
-                module_path!().to_string(),
-                d.clone(),
-            )),
-            _ => Err(RelayError::IrrelevantCommand(
-                module_path!().to_string(),
-                internal_command.clone(),
-            )),
-        },
-        AquariumDevice::MainPump2 => match internal_command {
-            InternalCommand::SwitchOn(_) => {
-                Ok(InternalCommand::UnsetRelay(config.main_pump2_id as u16))
-            }
-            InternalCommand::SwitchOff(_) => {
-                Ok(InternalCommand::SetRelay(config.main_pump2_id as u16))
-            }
-            InternalCommand::Pulse(d, _) => Err(RelayError::PulseNotAllowedForDevice(
-                module_path!().to_string(),
-                d.clone(),
-            )),
-            _ => Err(RelayError::IrrelevantCommand(
-                module_path!().to_string(),
-                internal_command.clone(),
-            )),
-        },
-        AquariumDevice::AuxPump1 => match internal_command {
-            InternalCommand::SwitchOn(_) => {
-                Ok(InternalCommand::UnsetRelay(config.aux_pump1_id as u16))
-            }
-            InternalCommand::SwitchOff(_) => {
-                Ok(InternalCommand::SetRelay(config.aux_pump1_id as u16))
-            }
-            InternalCommand::Pulse(d, _) => Err(RelayError::PulseNotAllowedForDevice(
-                module_path!().to_string(),
-                d.clone(),
-            )),
-            _ => Err(RelayError::IrrelevantCommand(
-                module_path!().to_string(),
-                internal_command.clone(),
-            )),
-        },
-        AquariumDevice::AuxPump2 => match internal_command {
-            InternalCommand::SwitchOn(_) => {
-                Ok(InternalCommand::UnsetRelay(config.aux_pump2_id as u16))
-            }
-            InternalCommand::SwitchOff(_) => {
-                Ok(InternalCommand::SetRelay(config.aux_pump2_id as u16))
-            }
-            InternalCommand::Pulse(d, _) => Err(RelayError::PulseNotAllowedForDevice(
-                module_path!().to_string(),
-                d.clone(),
-            )),
-            _ => Err(RelayError::IrrelevantCommand(
-                module_path!().to_string(),
-                internal_command.clone(),
-            )),
-        },
-        AquariumDevice::Heater => match internal_command {
-            InternalCommand::SwitchOn(_) => Ok(InternalCommand::SetRelay(config.heater_id as u16)),
-            InternalCommand::SwitchOff(_) => {
-                Ok(InternalCommand::UnsetRelay(config.heater_id as u16))
-            }
-            InternalCommand::Pulse(d, _) => Err(RelayError::PulseNotAllowedForDevice(
-                module_path!().to_string(),
-                d.clone(),
-            )),
-            _ => Err(RelayError::IrrelevantCommand(
-                module_path!().to_string(),
-                internal_command.clone(),
-            )),
-        },
-        AquariumDevice::Ventilation => match internal_command {
-            InternalCommand::SwitchOn(_) => {
-                Ok(InternalCommand::SetRelay(config.ventilation_id as u16))
-            }
-            InternalCommand::SwitchOff(_) => {
-                Ok(InternalCommand::UnsetRelay(config.ventilation_id as u16))
-            }
-            InternalCommand::Pulse(d, _) => Err(RelayError::PulseNotAllowedForDevice(
-                module_path!().to_string(),
-                d.clone(),
-            )),
-            _ => Err(RelayError::IrrelevantCommand(
-                module_path!().to_string(),
-                internal_command.clone(),
-            )),
-        },
-        AquariumDevice::RefillPump => match internal_command {
-            InternalCommand::SwitchOn(_) => {
-                Ok(InternalCommand::SetRelay(config.refill_pump_id as u16))
-            }
-            InternalCommand::SwitchOff(_) => {
-                Ok(InternalCommand::UnsetRelay(config.refill_pump_id as u16))
-            }
-            InternalCommand::Pulse(d, _) => Err(RelayError::PulseNotAllowedForDevice(
-                module_path!().to_string(),
-                d.clone(),
-            )),
-            _ => Err(RelayError::IrrelevantCommand(
-                module_path!().to_string(),
-                internal_command.clone(),
-            )),
-        },
-        AquariumDevice::Feeder => match internal_command {
-            InternalCommand::SwitchOn(_) => Ok(InternalCommand::SetRelay(config.feeder_id as u16)),
-            InternalCommand::SwitchOff(_) => {
-                Ok(InternalCommand::UnsetRelay(config.feeder_id as u16))
-            }
-            InternalCommand::Pulse(d, _) => Err(RelayError::PulseNotAllowedForDevice(
-                module_path!().to_string(),
-                d.clone(),
-            )),
-            _ => Err(RelayError::IrrelevantCommand(
-                module_path!().to_string(),
-                internal_command.clone(),
-            )),
-        },
-        AquariumDevice::PeristalticPump1 => match internal_command {
-            InternalCommand::SwitchOn(_) => Ok(InternalCommand::SetRelay(
-                config.peristaltic_pump1_id as u16,
-            )),
-            InternalCommand::SwitchOff(_) => Ok(InternalCommand::UnsetRelay(
-                config.peristaltic_pump1_id as u16,
-            )),
-            InternalCommand::Pulse(_, t) => Ok(InternalCommand::PulseRelay(
-                config.peristaltic_pump1_id as u16,
-                *t,
-            )),
-            _ => Err(RelayError::IrrelevantCommand(
-                module_path!().to_string(),
-                internal_command.clone(),
-            )),
-        },
-        AquariumDevice::PeristalticPump2 => match internal_command {
-            InternalCommand::SwitchOn(_) => Ok(InternalCommand::SetRelay(
-                config.peristaltic_pump2_id as u16,
-            )),
-            InternalCommand::SwitchOff(_) => Ok(InternalCommand::UnsetRelay(
-                config.peristaltic_pump2_id as u16,
-            )),
-            InternalCommand::Pulse(_, t) => Ok(InternalCommand::PulseRelay(
-                config.peristaltic_pump2_id as u16,
-                *t,
-            )),
-            _ => Err(RelayError::IrrelevantCommand(
-                module_path!().to_string(),
-                internal_command.clone(),
-            )),
-        },
-        AquariumDevice::PeristalticPump3 => match internal_command {
-            InternalCommand::SwitchOn(_) => Ok(InternalCommand::SetRelay(
-                config.peristaltic_pump3_id as u16,
-            )),
-            InternalCommand::SwitchOff(_) => Ok(InternalCommand::UnsetRelay(
-                config.peristaltic_pump3_id as u16,
-            )),
-            InternalCommand::Pulse(_, t) => Ok(InternalCommand::PulseRelay(
-                config.peristaltic_pump3_id as u16,
-                *t,
-            )),
-            _ => Err(RelayError::IrrelevantCommand(
-                module_path!().to_string(),
-                internal_command.clone(),
-            )),
-        },
-        AquariumDevice::PeristalticPump4 => match internal_command {
-            InternalCommand::SwitchOn(_) => Ok(InternalCommand::SetRelay(
-                config.peristaltic_pump4_id as u16,
-            )),
-            InternalCommand::SwitchOff(_) => Ok(InternalCommand::UnsetRelay(
-                config.peristaltic_pump4_id as u16,
-            )),
-            InternalCommand::Pulse(_, t) => Ok(InternalCommand::PulseRelay(
-                config.peristaltic_pump4_id as u16,
-                *t,
-            )),
-            _ => Err(RelayError::IrrelevantCommand(
-                module_path!().to_string(),
-                internal_command.clone(),
-            )),
-        },
+        }
+        _ => Err(RelayError::IrrelevantCommand(
+            module_path!().to_string(),
+            internal_command.clone(),
+        )),
     }
 }
 
@@ -535,14 +397,16 @@ impl RelayActuationTrait for ActuateControllino {
     /// * `internal_command` - The `InternalCommand` specifying the device and desired action (e.g., `SwitchOn(Heater)`, `Pulse(PeristalticPump1, 500)`).
     ///
     /// # Returns
-    /// A `Result` which is:
-    /// - `Ok(())` if the command was sent successfully and a valid acknowledgment was received from the Controllino.
-    /// - `Err(RelayError::FailureCommandMessageCreation)` if there's an issue preparing the Controllino message.
-    /// - `Err(RelayError::WriteError)` if the command cannot be written to the serial port.
-    /// - `Err(RelayError::ReadError)` if a response cannot be read from the serial port.
-    /// - `Err(RelayError::IncorrectChecksum)` if the received response has an invalid checksum.
-    /// - `Err(RelayError::IrrelevantCommand)` if an inapplicable command is provided.
-    /// - `Err(RelayError::PulseNotAllowedForDevice)` if a `Pulse` command is attempted on a non-pulsable device.
+    /// An empty `Result` (`Ok(())`) if the command was sent successfully and a valid acknowledgment was received from the Controllino.
+    ///
+    /// # Errors
+    /// This function will return a `RelayError` if any step in the communication process fails:
+    /// - `FailureCommandMessageCreation`: If there's an issue preparing the Controllino message.
+    /// - `WriteError`: If the command cannot be written to the serial port.
+    /// - `ReadError`: If a response cannot be read from the serial port within the timeout.
+    /// - `IncorrectChecksum`: If the received response has an invalid checksum, indicating data corruption.
+    /// - `SerialPortNotConfigured`: If the serial port was not initialized (e.g., `active` is false in config).
+    /// - `IrrelevantCommand`: If an inapplicable command (e.g., `ResetAllErrors`) is provided.
     fn actuate(&mut self, internal_command: &InternalCommand) -> Result<(), RelayError> {
         match internal_command {
             InternalCommand::SwitchOn(ref _c)
@@ -640,15 +504,27 @@ impl RelayActuationTrait for ActuateControllino {
         }
     }
 
-    /// Getter-function for the heartbeat interval in seconds.
+    /// Gets the configured heartbeat interval in seconds.
+    ///
+    /// This function returns the interval at which the `heartbeat` method should be called
+    /// to keep the hardware connection alive.
     ///
     /// # Returns
-    /// - the heartbeat interval in seconds as u64 wrapped in Option
+    /// An `Option<u64>` containing the heartbeat interval in seconds. It returns `Some`
+    /// for this implementation as the interval is always configured.
     fn get_heartbeat_interval_seconds(&self) -> Option<u64> {
         Some(self.config.heartbeat_interval_seconds)
     }
 
-    /// Executes the heartbeat: Sending a signal to the actuator
+    /// Sends a heartbeat signal to the Controllino to indicate the software is active.
+    ///
+    /// # Returns
+    /// An empty `Result` (`Ok(())`) on success.
+    ///
+    /// # Errors
+    /// This function will return a `RelayError` if:
+    /// - The serial port is not configured (`SerialPortNotConfigured`).
+    /// - Sending the heartbeat message over the serial port fails (`SendToSerialPortFailed`).
     fn heartbeat(&mut self) -> Result<(), RelayError> {
         if let Some(serial_port) = self.serial_port_opt.as_mut() {
             // create a message to be sent to Controllino
@@ -683,8 +559,7 @@ impl RelayActuationTrait for ActuateControllino {
         Ok(())
     }
 
-    /// For communication with Controllino it may be necessary to flush the communication buffer
-    /// due to framing errors.
+    /// Flushes the serial communication buffer to recover from framing or synchronization errors.
     ///
     /// The root cause is usually a desynchronization between the sender (Controllino) and receiver (Raspberry Pi). This can happen due to:
     /// - Noise on the line: A stray bit flip could make the Pi misinterpret the start of a message.
@@ -692,8 +567,12 @@ impl RelayActuationTrait for ActuateControllino {
     /// - Buffer state: Leftover bytes from a previous, incomplete, or corrupted transmission can throw off further reads.
     ///
     /// # Returns
-    /// In case of success, a `Ok(())`
-    /// In case of failure, an error of type `RelayError` is returned.
+    /// An empty `Result` (`Ok(())`) on success.
+    ///
+    /// # Errors
+    /// This function will return a `RelayError` if:
+    /// - The serial port is not configured (`SerialPortNotConfigured`).
+    /// - Clearing the serial port buffer fails (`SerialPortFlushFailed`).
     fn flush_buffer(&mut self) -> Result<(), RelayError> {
         if let Some(serial_port) = self.serial_port_opt.as_mut() {
             match serial_port.clear(ClearBuffer::All) {
@@ -731,8 +610,14 @@ impl RelayActuationTrait for ActuateControllino {
 /// * `timeout_millis` - The read/write timeout for serial port operations in milliseconds.
 ///
 /// # Returns
-/// In case of success, a `Box<dyn SerialPort>` representing the opened and configured serial port.
-/// In case of failure, an error of type `ActuateControllinoError` is returned.
+/// A `Result` containing a `Box<dyn SerialPort>` representing the opened and configured serial port on success.
+///
+/// # Errors
+/// Returns an `ActuateControllinoError` if any step of the initialization fails:
+/// - `SerialPortOpenFailed`: If the port cannot be opened.
+/// - `SetTimeoutFailed`: If the timeout cannot be set on the port.
+/// - `ClearDTRFailed`: If the Data Terminal Ready signal cannot be cleared.
+/// - `ClearBufferFailed`: If the serial port's internal buffers cannot be cleared.
 fn controllino_open_serial_port(
     port_name: String,
     baud_rate: u32,
@@ -784,16 +669,17 @@ impl ActuateControllino {
     /// 2. It confirms that all assigned relay IDs are unique, preventing conflicts
     ///    where multiple devices might be configured to the same physical relay.
     ///
-    /// Errors (out-of-range or duplicate IDs) are logged to the console/main log,
-    /// with `println!` used in test configurations for direct output.
-    ///
     /// # Arguments
     /// * `config` - A reference to the `ActuateControllinoConfig` containing the
     ///   relay ID mappings for various aquarium devices.
     ///
     /// # Returns
-    /// An error of type `ActuateControllinoError` if an error is found.
-    /// `((Ok))` otherwise.
+    /// An empty `Result` (`Ok(())`) if the configuration is valid.
+    ///
+    /// # Errors
+    /// Returns an `ActuateControllinoError` if an invalid configuration is found:
+    /// - `RelayIdOutsideRange`: If a relay ID is less than the minimum or greater than the maximum allowed value.
+    /// - `RelayIdDuplicate`: If the same relay ID is assigned to more than one device.
     pub fn check_valid_relay_id_config(
         config: &ActuateControllinoConfig,
     ) -> Result<(), ActuateControllinoError> {
@@ -835,14 +721,19 @@ impl ActuateControllino {
     ///
     /// This constructor performs essential setup for hardware actuation. It validates the provided
     /// relay ID configuration for correctness and uniqueness, ensures a serial port name is provided,
-    /// and then opens and initializes the serial port connection to the Controllino device.
+    /// and then opens and initializes the serial port connection to the Controllino device if `active` is true.
     ///
     /// # Arguments
-    /// * `config` - Configuration data for the Controllino relays, including serial port settings and device-to-relay mappings.
+    /// * `config` - Configuration data for the Controllino relays, which is moved into the new instance.
     ///
     /// # Returns
-    /// In case of success, new `ActuateControllino` struct, ready for sending commands to the hardware.
-    /// In case of failure, an error of type `ActuateControllinoError` is returned.
+    /// A `Result` containing a new `ActuateControllino` struct, ready for sending commands to the hardware.
+    ///
+    /// # Errors
+    /// Returns an `ActuateControllinoError` if any part of the setup fails:
+    /// - If `check_valid_relay_id_config` finds an error in the relay IDs.
+    /// - `EmptyPortName`: If the `port_name` in the configuration is an empty string.
+    /// - If `controllino_open_serial_port` fails to open and configure the serial port.
     pub fn new(
         config: ActuateControllinoConfig,
     ) -> Result<ActuateControllino, ActuateControllinoError> {
