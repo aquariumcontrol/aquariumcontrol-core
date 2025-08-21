@@ -10,7 +10,7 @@ cfg_if::cfg_if! {
     if #[cfg(all(target_os = "linux", feature = "target_hw"))] {
         use serde_derive::Deserialize;
         use ws2818_rgb_led_spi_driver::adapter_gen::WS28xxAdapter;
-        use ws2818_rgb_led_spi_driver::adapter_spi::{WS28xxSpiAdapter, AdapterError};
+        use ws2818_rgb_led_spi_driver::adapter_spi::WS28xxSpiAdapter;
         use ws2818_rgb_led_spi_driver::encoding::encode_rgb;
         use thiserror::Error;
         use std::fmt;
@@ -80,22 +80,12 @@ pub struct Ws2812BConfig {
 #[derive(Error, Debug)]
 pub enum Ws2812BError {
     /// Failed to set up the underlying SPI adapter for the Ws2812B driver.
-    #[error("Failed to setup adapter for Ws2812B.")]
-    AdapterSetupFailure {
-        /// The underlying error from the `ws2818-rgb-led-spi-driver` crate.
-        #[source]
-        source: AdapterError,
-    },
+    #[error("[{0}] Failed to setup adapter for Ws2812B: {1}")]
+    AdapterSetupFailure(String, String),
 
     /// Failed to set the color of the Ws2812B LEDs.
-    #[error("Failed to set color of Ws2812B to {color}.")]
-    AdapterSetColorFailure {
-        /// The color that failed to be set.
-        color: RgbLedColor,
-        /// The underlying error from the `ws2818-rgb-led-spi-driver` crate.
-        #[source]
-        source: AdapterError,
-    },
+    #[error("[{0}] Failed to set color of Ws2812B to {1}: {2}")]
+    AdapterSetColorFailure(String, RgbLedColor, String),
 }
 
 /// A driver for controlling a strip of WS2812B RGB LEDs via an SPI interface.
@@ -129,7 +119,10 @@ impl Ws2812B {
     pub fn new(config: Ws2812BConfig) -> Result<Self, Ws2812BError> {
         let adapter =
             WS28xxSpiAdapter::new(&config.device_name)
-                .map_err(|e| Ws2812BError::AdapterSetupFailure { source: e })?;
+                .map_err(|e| Ws2812BError::AdapterSetupFailure(
+                    module_path!().to_string(),
+                    e
+                ))?;
         Ok(Ws2812B { adapter, config })
     }
 
@@ -166,7 +159,11 @@ impl Ws2812B {
 
         self.adapter
             .write_encoded_rgb(&spi_encoded_rgb_bits)
-            .map_err(|e| Ws2812BError::AdapterSetColorFailure { color, source: e })?;
+            .map_err(|e| Ws2812BError::AdapterSetColorFailure(
+                module_path!().to_string(),
+                color,
+                e
+            ))?;
 
         Ok(())
     }
