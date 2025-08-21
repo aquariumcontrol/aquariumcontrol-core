@@ -284,7 +284,7 @@ impl I2cInterface {
 
         let received_message_length =
             self.i2c
-                .read(&mut read_slice)
+                .read(read_slice)
                 .map_err(|e| I2cError::InsufficientRead {
                     location: module_path!().to_string(),
                     source: e,
@@ -296,7 +296,7 @@ impl I2cInterface {
                 received_message_length,
             ))
         } else {
-            Ok(I2cResponse::new(read_buffer, received_message_length))
+            Ok(I2cResponse::new(buffer))
         }
     }
 
