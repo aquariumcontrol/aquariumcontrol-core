@@ -81,4 +81,21 @@ pub enum I2cError {
     #[cfg(all(target_os = "linux", feature = "target_hw"))]
     #[error("[{0}] I2C response has incorrect length: Expected: {1} Received: {2}")]
     IncorrectResponseLength(String, usize, usize),
+
+    /// Command is too long for buffer
+    #[error("[{location}]: I2C command (length: {actual_len}) exceeds the maximum allowed length ({max_len}).")]
+    CommandTooLong {
+        location: String,
+        max_len: usize,
+        actual_len: usize,
+    },
+
+    /// Provided buffer is too small for the expected response.
+    #[cfg(all(target_os = "linux", feature = "target_hw"))]
+    #[error("[{location}]: Provided buffer (size: {buffer_size}) is too small for the expected response (size: {expected_size}).")]
+    ProvidedBufferTooSmall {
+        location: String,
+        buffer_size: usize,
+        expected_size: usize,
+    },
 }

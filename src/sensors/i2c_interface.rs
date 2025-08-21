@@ -47,6 +47,12 @@ pub struct I2cInterfaceConfig {
     timeout_transaction: u32,
 }
 
+/// A constant for the maximum command length considering future applications as well.
+const MAX_I2C_COMMAND_LENGTH: usize = 16;
+
+/// A constant for the maximum response length from an I2C device.
+const MAX_I2C_RESPONSE_LENGTH: usize = 64;
+
 pub struct I2cRequest {
     #[allow(unused)]
     /// I2C address of the bus participant
@@ -54,7 +60,11 @@ pub struct I2cRequest {
 
     #[allow(unused)]
     /// input sequence to be sent to the bus participant
-    pub(crate) send_buf: Vec<u8>,
+    pub(crate) send_buf: [u8; MAX_I2C_COMMAND_LENGTH],
+
+    #[allow(unused)]
+    /// The actual length of the command in the buffer.
+    pub(crate) send_len: usize,
 
     #[allow(unused)]
     /// sleep time in milliseconds before retrieving an answer from the bus participant
@@ -68,25 +78,38 @@ pub struct I2cRequest {
 impl I2cRequest {
     pub fn new(
         i2c_address: u16,
-        send_buf: Vec<u8>,
+        send_slice: &[u8],
         sleep_time_millis: u64,
         expected_response_length: usize,
-    ) -> I2cRequest {
-        I2cRequest {
+    ) -> Result<I2cRequest, I2cError> {
+        // Ensure the command fits into our fixed-size buffer.
+        if send_slice.len() > MAX_I2C_COMMAND_LENGTH {
+            return Err(I2cError::CommandTooLong {
+                location: module_path!().to_string(),
+                max_len: MAX_I2C_COMMAND_LENGTH,
+                actual_len: send_slice.len(),
+            });
+        }
+
+        // Create a zero-initialized array and copy the command into it.
+        let mut send_buf = [0u8; MAX_I2C_COMMAND_LENGTH];
+        send_buf[..send_slice.len()].copy_from_slice(send_slice);
+
+        Ok(I2cRequest {
             i2c_address,
             send_buf,
+            send_len: send_slice.len(),
             sleep_time_millis,
             expected_response_length,
-        }
+        })
     }
 }
 
 #[derive(Debug, Clone)]
 pub struct I2cResponse {
-    /// sequence received from the bus participant
-    pub read_buf: Vec<u8>,
+    /// A fixed-size buffer holding the sequence received from the bus participant.
+    pub read_buf: [u8; MAX_I2C_RESPONSE_LENGTH],
 
-    #[cfg(any(test, all(target_os = "linux", feature = "target_hw")))]
     #[allow(unused)]
     /// length of a message as informed by i2c::read
     pub length: usize,
@@ -97,11 +120,14 @@ impl fmt::Display for I2cResponse {
         // descriptive prefix
         write!(f, "I2cResponse [")?;
 
+        // Use self.length to iterate over only the valid part of the buffer.
+        let valid_slice = &self.read_buf[..self.length];
+
         // Format the read_buf content
         // Iterate over the bytes and format each as two-digit hexadecimal
-        for (i, &byte) in self.read_buf.iter().enumerate() {
+        for (i, &byte) in valid_slice.iter().enumerate() {
             write!(f, "{byte:02x}")?; // :02x ensures two hexadecimal digits, padding with leading zero if necessary
-            if i < self.read_buf.len() - 1 {
+            if i < valid_slice.len() - 1 {
                 write!(f, " ")?; // Add a space between bytes for readability
             }
         }
@@ -123,12 +149,20 @@ impl fmt::Display for I2cResponse {
     }
 }
 
-#[cfg(all(target_os = "linux", feature = "target_hw"))]
+#[allow(dead_code)]
 impl I2cResponse {
-    pub fn new(read_buf: Vec<u8>, length: usize) -> I2cResponse {
-        I2cResponse { read_buf, length }
-    }
-}
+    /// Creates a new I2cResponse by copying data from a slice.
+    pub fn new(read_data: &[u8]) -> I2cResponse {
+        let mut read_buf = [0u8; MAX_I2C_RESPONSE_LENGTH];
+
+        // The length of read_data is the number of bytes we want to copy.
+        // We assume `len` will not be greater than `MAX_I2C_RESPONSE_LENGTH` because
+        // the calling function `get_response_from_i2c` uses a slice of the correct size.
+        let len = read_data.len();
+        read_buf[..len].copy_from_slice(read_data);
+
+        I2cResponse { read_buf, length: len }
+    }}
 
 pub type I2cResult = Result<I2cResponse, I2cError>;
 
@@ -193,6 +227,7 @@ impl I2cInterface {
     ///
     /// # Arguments
     /// * `i2c_request` - A struct of type `I2cRequest` containing all details of the request.
+    /// * `buffer` - Mutable reference to an array to which the function shall write to
     ///
     /// # Returns
     /// A `Result<I2cResponse, I2cError>`:
@@ -202,8 +237,21 @@ impl I2cInterface {
     /// - `Err(I2cError::InsufficientWrite)`: If the command write is incomplete.
     /// - `Err(I2cError::InsufficientRead)`: If the full response cannot be read from the sensor.
     /// - `Err(I2cError::IncorrectResponseLength)`: If the sensor's response message does not have the correct length.
-    pub fn get_response_from_i2c(&mut self, i2c_request: I2cRequest) -> I2cResult {
+    pub fn get_response_from_i2c(
+        &mut self,
+        i2c_request: I2cRequest,
+        buffer: &mut [u8],
+    ) -> I2cResult {
         let sleep_duration = Duration::from_millis(i2c_request.sleep_time_millis);
+
+        // Check the buffer's capacity against the request's needs.
+        if buffer.len() < i2c_request.expected_response_length {
+            return Err(I2cError::ProvidedBufferTooSmall {
+                location: module_path!().to_string(),
+                buffer_size: buffer.len(),
+                expected_size: i2c_request.expected_response_length,
+            });
+        }
 
         self.i2c
             .set_slave_address(i2c_request.i2c_address)
@@ -215,15 +263,15 @@ impl I2cInterface {
 
         let realized_write_len =
             self.i2c
-                .write(&i2c_request.send_buf)
+                .write(&i2c_request.send_buf[..i2c_request.send_len])
                 .map_err(|e| I2cError::WriteFailure {
                     location: module_path!().to_string(),
                     source: e,
                 })?;
-        if realized_write_len != i2c_request.send_buf.len() {
+        if realized_write_len != i2c_request.send_len {
             return Err(I2cError::InsufficientWrite(
                 module_path!().to_string(),
-                i2c_request.send_buf.len(),
+                i2c_request.send_len,
                 realized_write_len,
             ));
         }
@@ -231,11 +279,12 @@ impl I2cInterface {
         // give the I2C bus participant time to process the request
         self.spin_sleeper.sleep(sleep_duration);
 
-        let mut read_buffer = vec![0u8; i2c_request.expected_response_length];
+        // Use a sub-slice of the provided buffer for the read operation.
+        let read_slice = &mut buffer[..i2c_request.expected_response_length];
 
         let received_message_length =
             self.i2c
-                .read(&mut read_buffer)
+                .read(&mut read_slice)
                 .map_err(|e| I2cError::InsufficientRead {
                     location: module_path!().to_string(),
                     source: e,
@@ -287,6 +336,9 @@ impl I2cInterface {
         let sleep_time = Duration::from_millis(100);
         let spin_sleeper = SpinSleeper::default();
 
+        // Allocate the read buffer once, here on the stack, using the correct size.
+        let mut read_buffer = [0u8; MAX_I2C_RESPONSE_LENGTH];
+
         loop {
             let (quit_command_received, _, _) =
                 self.process_external_request(&rx_from_signal_handler, None);
@@ -297,7 +349,7 @@ impl I2cInterface {
             match rx_from_atlas_scientific.try_recv() {
                 Ok(request) => {
                     lock_error_receive_atlas_scientific = false;
-                    let response = self.get_response_from_i2c(request);
+                    let response = self.get_response_from_i2c(request, &mut read_buffer);
                     match tx_to_atlas_scientific.send(response) {
                         Ok(_) => {
                             lock_error_send_atlas_scientific = false;

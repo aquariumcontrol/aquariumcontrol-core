@@ -7,10 +7,11 @@ The above copyright notice and this permission notice shall be included in all c
 THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 use crate::sensors::i2c_error::I2cError;
+use crate::sensors::i2c_interface::I2cRequest;
 use crate::utilities::channel_content::AquariumSignal;
 use std::num::ParseFloatError;
 use std::str::Utf8Error;
-use std::sync::mpsc::TryRecvError;
+use std::sync::mpsc::{SendError, TryRecvError};
 use thiserror::Error;
 
 /// error codes for evaluation of sensor unit response
@@ -92,4 +93,26 @@ pub enum AtlasScientificError {
         #[source]
         source: TryRecvError,
     },
+
+    /// Logic error: Signal is unknown
+    #[error("[{0}] Ignoring invalid signal request ({1})")]
+    InvalidSignal(String, AquariumSignal),
+
+    /// Signal request could not be created.
+    #[error("[{location}] Signal request creation failed.")]
+    SignalRequestCreationFailure {
+        location: String,
+
+        #[source]
+        source: I2cError,
+    },
+
+    /// Sending request to I2cInterface thread failed.
+    #[error("[{location}] Sending request to I2cInterface thread failed.")]
+    SendingRequestToI2cInterfaceFailed {
+        location: String,
+
+        #[source]
+        source: SendError<I2cRequest>,
+    }
 }
