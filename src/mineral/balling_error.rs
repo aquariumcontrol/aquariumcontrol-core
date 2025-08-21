@@ -21,7 +21,7 @@ pub enum BallingError {
     #[error("[{location}] Could not get set values for pump {pump_id} from database.")]
     SetValueRetrievalError {
         location: String,
-        pump_id: u64,
+        pump_id: i64,
 
         #[source]
         source: Box<SqlInterfaceError>,

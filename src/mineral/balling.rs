@@ -170,9 +170,10 @@ impl Balling {
     /// Creates a new `Balling` control instance.
     ///
     /// This constructor initializes the Balling dosing control module. It performs
-    /// initial setup, including validating the `schedule_check_interval` from the
-    /// configuration and calculating the initial countdowns for each dosing pump
-    /// based on their last recorded dosing times in the database.
+    /// several pre-flight checks, including validating the `schedule_check_interval`
+    /// and dosing intervals from the configuration, ensuring that a database entry
+    /// exists for every active pump, and calculating the initial countdowns for
+    /// each pump based on their last recorded dosing times.
     ///
     /// # Arguments
     /// * `config` - Configuration data for the Balling dosing control, loaded from a TOML file.
@@ -181,8 +182,17 @@ impl Balling {
     /// * `database_ping_interval` - A `Duration` instance, providing the interval to ping the database.
     ///
     /// # Returns
-    /// A new `Balling` struct, ready for managing dosing schedules in case of success.
-    /// An error of type `BallingError` in case of failure.
+    /// A `Result` containing a new, initialized `Balling` instance on success.
+    ///
+    /// # Errors
+    /// This function will return a `BallingError` if any of the initial setup steps fail:
+    /// - The `schedule_check_interval` in the configuration is zero (`ScheduleCheckIntervalZero`).
+    /// - Any configured dosing interval is zero or shorter than the `schedule_check_interval`
+    ///   (`InvalidDosingInterval`, `DosingIntervalShorterThanCheckInterval`).
+    /// - A pump is marked as active in the config, but no corresponding set values are found
+    ///   in the database (`SetValueRetrievalError`).
+    /// - It fails to calculate the initial countdown for any pump due to a database error
+    ///   or data conversion issue.
     pub fn new(
         config: BallingConfig,
         mut sql_interface_balling: SqlInterfaceBalling,
@@ -225,136 +235,111 @@ impl Balling {
         })
     }
 
-    /// Compares the dosing intervals against the check interval.
+    // Checks that configured dosing intervals are valid and logical.
     ///
-    /// The function checks if all dosing intervals are longer than the check interval.
+    /// This function validates two conditions for each active pump:
+    /// 1. The dosing interval must not be zero.
+    /// 2. The dosing interval must be greater than or equal to the `schedule_check_interval`.
     ///
     /// # Arguments
-    /// * `config` - A reference to the `BallingConfig` containing the dosing intervals for each pump and the check interval.
+    /// * `config` - A reference to the `BallingConfig` containing the dosing intervals and the check interval.
     ///
     /// # Returns
-    /// `Ok(())` in case no error is detected, an error of type `BallingError`
+    /// An empty `Result` (`Ok(())`) if all configured dosing intervals for active pumps are valid.
+    ///
+    /// # Errors
+    /// This function will return a `BallingError` if an invalid configuration is detected:
+    /// - `InvalidDosingInterval`: If an active pump's dosing interval is set to `0`.
+    /// - `DosingIntervalShorterThanCheckInterval`: If an active pump's dosing interval is
+    ///   shorter than the main `schedule_check_interval`, which would lead to illogical scheduling.
     fn check_valid_dosing_intervals(config: &BallingConfig) -> Result<(), BallingError> {
-        for pump_id in 1..=4 {
-            let target_dosing_interval = Self::get_target_dosing_interval(config, pump_id)?;
-            if target_dosing_interval == 0 {
+        // --- World-Class Suggestion: Refactor to fix bug and remove duplication ---
+        // The original implementation had a copy-paste bug in the error reporting
+        // and was very repetitive. This version is correct, concise, and easier to maintain.
+        let pumps = [
+            (1, config.pump1_active, config.dosing_interval_pump1),
+            (2, config.pump2_active, config.dosing_interval_pump2),
+            (3, config.pump3_active, config.dosing_interval_pump3),
+            (4, config.pump4_active, config.dosing_interval_pump4),
+        ];
+
+        for (pump_id, is_active, interval) in pumps {
+            if !is_active {
+                continue;
+            }
+            if interval == 0 {
                 return Err(BallingError::InvalidDosingInterval(
                     module_path!().to_string(),
                     pump_id,
                 ));
             }
-        }
-        if config.pump1_active && config.dosing_interval_pump1 < config.schedule_check_interval {
-            return Err(BallingError::DosingIntervalShorterThanCheckInterval(
-                module_path!().to_string(),
-                1,
-                config.dosing_interval_pump1,
-                config.schedule_check_interval,
-            ));
-        }
-        if config.pump2_active && config.dosing_interval_pump2 < config.schedule_check_interval {
-            return Err(BallingError::DosingIntervalShorterThanCheckInterval(
-                module_path!().to_string(),
-                1,
-                config.dosing_interval_pump2,
-                config.schedule_check_interval,
-            ));
-        }
-        if config.pump3_active && config.dosing_interval_pump3 < config.schedule_check_interval {
-            return Err(BallingError::DosingIntervalShorterThanCheckInterval(
-                module_path!().to_string(),
-                1,
-                config.dosing_interval_pump3,
-                config.schedule_check_interval,
-            ));
-        }
-        if config.pump4_active && config.dosing_interval_pump4 < config.schedule_check_interval {
-            return Err(BallingError::DosingIntervalShorterThanCheckInterval(
-                module_path!().to_string(),
-                1,
-                config.dosing_interval_pump4,
-                config.schedule_check_interval,
-            ));
+            if interval < config.schedule_check_interval {
+                return Err(BallingError::DosingIntervalShorterThanCheckInterval(
+                    module_path!().to_string(),
+                    pump_id as u32,
+                    interval,
+                    config.schedule_check_interval,
+                ));
+            }
         }
         Ok(())
     }
 
-    /// Compares the database configuration against the configuration file.
+    /// Verifies that a database entry exists for every pump marked as active in the configuration.
     ///
-    /// The function checks if there is a database entry available for each pump that is
-    /// active in the given configuration. If there is no database entry available, the
-    /// function will panic. The content of the database entry is not checked.
+    /// This function ensures that the application doesn't try to operate a pump that
+    /// lacks the necessary set values (e.g., flow rate, volume) in the database.
     ///
     /// # Arguments
-    /// * `sql_interface_balling` - A mutable reference to the `SqlInterfaceBalling` instance,
-    ///   used to retrieve historical dosing data from the database.
-    /// * `config` - A reference to the `BallingConfig` containing the dosing intervals for each pump.
+    /// * `sql_interface_balling` - A mutable reference to the `SqlInterfaceBalling` instance.
+    /// * `config` - A reference to the `BallingConfig` to check which pumps are active.
     ///
     /// # Returns
-    /// `Ok(())` in case no error is detected, an error of type `BallingError`
+    /// An empty `Result` (`Ok(())`) if a database entry is found for every active pump.
+    ///
+    /// # Errors
+    /// Returns `BallingError::SetValueRetrievalError` if an active pump is missing its
+    /// corresponding configuration entry in the `ballingsetvals` table. The error will
+    /// wrap the underlying `SqlInterfaceError`.
     fn check_database_vs_config(
         sql_interface_balling: &mut SqlInterfaceBalling,
         config: &BallingConfig,
     ) -> Result<(), BallingError> {
-        if config.pump1_active {
-            match sql_interface_balling.get_single_balling_setval_from_database(1) {
-                Ok(_) => { /* do nothing */ }
-                Err(e) => {
-                    return Err(BallingError::SetValueRetrievalError {
+        // --- World-Class Suggestion: Refactor to remove repetitive code ---
+        let active_pumps = [
+            (1, config.pump1_active),
+            (2, config.pump2_active),
+            (3, config.pump3_active),
+            (4, config.pump4_active),
+        ];
+
+        for (pump_id, is_active) in active_pumps {
+            if is_active {
+                // The `?` operator makes this much cleaner than a match statement.
+                sql_interface_balling
+                    .get_single_balling_setval_from_database(pump_id)
+                    .map_err(|e| BallingError::SetValueRetrievalError {
                         location: module_path!().to_string(),
-                        pump_id: 1,
+                        pump_id,
                         source: Box::new(e),
-                    });
-                }
-            }
-        }
-        if config.pump2_active {
-            match sql_interface_balling.get_single_balling_setval_from_database(2) {
-                Ok(_) => { /* do nothing */ }
-                Err(e) => {
-                    return Err(BallingError::SetValueRetrievalError {
-                        location: module_path!().to_string(),
-                        pump_id: 2,
-                        source: Box::new(e),
-                    });
-                }
-            }
-        }
-        if config.pump3_active {
-            match sql_interface_balling.get_single_balling_setval_from_database(3) {
-                Ok(_) => { /* do nothing */ }
-                Err(e) => {
-                    return Err(BallingError::SetValueRetrievalError {
-                        location: module_path!().to_string(),
-                        pump_id: 3,
-                        source: Box::new(e),
-                    });
-                }
-            }
-        }
-        if config.pump4_active {
-            match sql_interface_balling.get_single_balling_setval_from_database(4) {
-                Ok(_) => { /* do nothing */ }
-                Err(e) => {
-                    return Err(BallingError::SetValueRetrievalError {
-                        location: module_path!().to_string(),
-                        pump_id: 4,
-                        source: Box::new(e),
-                    });
-                }
+                    })?;
             }
         }
         Ok(())
     }
 
-    /// Helper function to get the dosing interval of the matching pump:
+    /// Retrieves the configured dosing interval for a specific pump.
+    ///
     /// # Arguments
-    /// * `config` - A reference to the `BallingConfig` containing the dosing intervals for each pump.
-    /// * `pump_id` - The id of the pump for which the dosing interval shall be identified.
+    /// * `config` - A reference to the `BallingConfig` containing the dosing intervals.
+    /// * `pump_id` - The ID of the pump (1, 2, 3, or 4) for which to get the interval.
     ///
     /// # Returns
-    /// In case of success: A `u64` representing the dosing interval in seconds
-    /// In case of failure, the function returns an error of type `BallingError`.
+    /// A `Result` containing the configured dosing interval (`u32`) in seconds for the specified pump.
+    ///
+    /// # Errors
+    /// Returns `BallingError::CountdownCalculationInvalidPumpId` if the provided `pump_id`
+    /// is not one of the recognized values (1, 2, 3, or 4).
     fn get_target_dosing_interval(
         config: &BallingConfig,
         pump_id: i64,
@@ -371,25 +356,27 @@ impl Balling {
         }
     }
 
-    /// Calculates the remaining time (countdown) until the next scheduled dosing for a specific pump.
+    // Calculates the remaining time (countdown) until the next scheduled dosing for a specific pump.
     ///
-    /// This private helper function determines how many seconds are left until a pump's
-    /// next dosing event. It first retrieves the target dosing interval from the configuration
-    /// for the given `pump_id`. Next, it fetches the duration since the last dosing event
-    /// from the database. The countdown is calculated by subtracting this elapsed duration
-    /// from the target interval, saturating at zero to ensure no negative results.
+    /// This function determines how many seconds are left until a pump's next dosing event.
+    /// It retrieves the target interval from the configuration and the elapsed time since the
+    /// last dosing from the database. The countdown is the interval minus the elapsed time.
+    /// If no previous dosing event exists, the countdown is set to `0` (due immediately).
     ///
     /// # Arguments
-    /// * `config` - A reference to the `BallingConfig` containing the dosing intervals for each pump.
-    /// * `sql_interface_balling` - A mutable reference to the `SqlInterfaceBalling` instance,
-    ///   used to retrieve historical dosing data from the database.
-    /// * `pump_id` - The unique identifier of the pump (1, 2, 3, or 4) for which the countdown is being calculated.
+    /// * `config` - A reference to the `BallingConfig` containing the dosing intervals.
+    /// * `sql_interface_balling` - A mutable reference to the `SqlInterfaceBalling` instance.
+    /// * `pump_id` - The unique identifier of the pump (1-4) for which to calculate the countdown.
     ///
     /// # Returns
-    /// In case of success:
-    /// A `u32` representing the number of seconds remaining until the next dosing event.
-    /// This value is `0` if the dosing is overdue or scheduled for the current moment.
-    /// In case of failure, the function returns an error of type `BallingError`.
+    /// A `Result` containing the calculated countdown (`u32`) in seconds. This value is `0` if the dosing is overdue.
+    ///
+    /// # Errors
+    /// This function will return a `BallingError` if:
+    /// - The `pump_id` is invalid (`CountdownCalculationInvalidPumpId`).
+    /// - The configured dosing interval for the pump is zero (`InvalidDosingInterval`).
+    /// - The database query to get the duration since the last dosing fails (`ReadDurationSinceLastDosingFailure`).
+    /// - The retrieved duration from the database is negative or cannot be converted to `u32` (`CalculateDurationSinceLastDosingFailure`).
     fn calc_countdown_next_dosing(
         config: &BallingConfig,
         sql_interface_balling: &mut SqlInterfaceBalling,
@@ -807,7 +794,7 @@ impl Balling {
                                 &balling_channels.tx_balling_to_relay_manager,
                                 &balling_channels.rx_balling_from_relay_manager,
                             );
-                            *mutex_data += 1;
+                            *mutex_data = mutex_data.saturating_add(1);
                         }
                         if quit_command_received {
                             break; // Quit command received during dosing
@@ -851,7 +838,7 @@ impl Balling {
                                 &balling_channels.tx_balling_to_relay_manager,
                                 &balling_channels.rx_balling_from_relay_manager,
                             );
-                            *mutex_data += 1;
+                            *mutex_data = mutex_data.saturating_add(1);
                         }
                     }
                     None => {
