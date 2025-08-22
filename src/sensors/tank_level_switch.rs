@@ -224,6 +224,11 @@ impl TankLevelSwitch {
     ///
     /// # Returns
     /// A new **`TankLevelSwitch` struct**, configured for simulated or non-hardware operation, wrapped in Ok().
+    ///
+    /// # Errors
+    /// This specific implementation for non-hardware platforms does not produce any errors
+    /// and always returns `Ok`. The `Result` type is used to maintain signature
+    /// compatibility with the hardware-specific version of this function.
     pub fn new(
         config: TankLevelSwitchConfig,
         initial_position_stabilized: bool,
@@ -245,51 +250,54 @@ impl TankLevelSwitch {
     }
 
     #[cfg(all(target_os = "linux", feature = "target_hw"))]
-    /// Creates a new **`TankLevelSwitch`** instance for **target hardware platforms**.
+    /// Creates a new `TankLevelSwitch` instance for target hardware platforms.
     ///
-    /// This constructor initializes the tank level switch monitoring module by establishing
-    /// access to the physical GPIO pin. It configures the pin as an input with a pull-up
-    /// resistor and sets the initial measured and stabilized positions, along with various
-    /// internal flags for error handling and logging.
+    /// This constructor initializes the tank level switch monitoring module. If not in
+    /// simulator mode, it establishes access to the physical GPIO pin, configuring it
+    /// as an input with a pull-up resistor.
     ///
     /// # Arguments
-    /// * `config` - **Configuration data** for the tank level switch, including simulation settings.
-    /// * `initial_position_stabilized` - The **assumed initially stabilized position** of the tank
-    ///   level (`true` for high water, `false` for low) before the first actual measurement.
-    /// * `gpio_lib_handle_opt` - An **`Option<Gpio>`** providing the interface to the GPIO library.
-    ///   This must be `Some(Gpio)` if `config.use_simulator` is `false`
-    ///   (i.e., when running on target hardware).
-    /// * `gpio_tank_level` - The **GPIO pin** (as `u8`) connected to the tank level switch sensor.
+    /// * `config` - Configuration data for the tank level switch.
+    /// * `initial_position_stabilized` - The assumed initially stabilized position of the
+    ///   tank level (`true` for high water, `false` for low).
+    /// * `gpio_lib_handle_opt` - An `Option<Gpio>` providing the interface to the GPIO library.
+    ///   This must be `Some(Gpio)` if `config.use_simulator` is `false`.
+    /// * `gpio_tank_level` - The GPIO pin (`u8`) connected to the tank level switch.
     ///
     /// # Returns
     /// A `Result` containing a new `TankLevelSwitch` instance on success.
     ///
     /// # Errors
-    /// This function will return a `TankLevelSwitchError` if:
-    /// - `use_simulator` is `false` but no `Gpio` handle is provided (`GPIOInterfaceNotProvided`).
-    /// - The specified GPIO pin cannot be retrieved from the GPIO interface (`GpioPinRetrievalError`).
+    /// Returns a `TankLevelSwitchError` if initialization fails:
+    /// - `TankLevelSwitchError::GPIOInterfaceNotProvided`: If `use_simulator` is `false`
+    ///   but no `Gpio` handle is provided.
+    /// - `TankLevelSwitchError::GpioPinRetrievalError`: If the specified GPIO pin cannot be
+    ///   retrieved from the GPIO interface (e.g., invalid pin, permissions issue).
     pub fn new(
         config: TankLevelSwitchConfig,
         initial_position_stabilized: bool,
         gpio_lib_handle_opt: Option<Gpio>,
         gpio_tank_level: u8,
     ) -> Result<TankLevelSwitch, TankLevelSwitchError> {
-        if !config.use_simulator && gpio_lib_handle_opt.is_none() {
-            return Err(TankLevelSwitchError::GPIOInterfaceNotProvided(
-                module_path!().to_string(),
-            ));
-        }
+        let input_pin_opt = if config.use_simulator {
+            // In simulator mode, we don't need a real pin.
+            None
+        } else {
+            // In hardware mode, the Gpio handle is required.
+            let gpio_lib_handle = gpio_lib_handle_opt.ok_or_else(|| {
+                TankLevelSwitchError::GPIOInterfaceNotProvided(module_path!().to_string())
+            })?;
 
-        let gpio_lib_handle = gpio_lib_handle_opt.unwrap();
-
-        // get pin for tank level monitoring
-        let tank_level_pin = gpio_lib_handle.get(gpio_tank_level).map_err(|e| {
-            TankLevelSwitchError::GpioPinRetrievalError {
-                location: module_path!().to_string(),
-                pin_number: gpio_tank_level,
-                source: e,
-            }
-        })?;
+            // Get the specific pin for tank level monitoring.
+            let tank_level_pin = gpio_lib_handle.get(gpio_tank_level).map_err(|e| {
+                TankLevelSwitchError::GpioPinRetrievalError {
+                    location: module_path!().to_string(),
+                    pin_number: gpio_tank_level,
+                    source: e,
+                }
+            })?;
+            Some(tank_level_pin.into_input_pullup())
+        };
 
         Ok(TankLevelSwitch {
             config,
@@ -299,97 +307,109 @@ impl TankLevelSwitch {
             tank_level_switch_position_low_stabilization_counter: 0,
             lock_warn_inapplicable_command_signal_handler: false,
             lock_error_channel_receive_termination: false,
-            lock_error_input_pin_none: false,
-            lock_error_mutex_poisoned: false,
-            input_pin_opt: Some(tank_level_pin.into_input_pullup()),
             lock_warn_max_mutex_access_duration: false,
+            lock_error_mutex_poisoned: false,
+            #[cfg(test)]
+            mutex_access_duration_exceeded: false,
+            lock_error_input_pin_none: false,
+            input_pin_opt,
         })
     }
 
-    /// Updates the measured tank level switch signals, either by reading a physical GPIO pin or communicating with a simulator.
+    /// Updates the measured tank level switch signals from either a GPIO pin or a simulator.
     ///
-    /// This function determines the source of the tank level switch position and invalid status based on the `use_simulator`
-    /// configuration.
-    /// - In **simulator mode**, it requests the `TankLevelSwitchPosition` and `TankLevelSwitchInvalid` signals
-    ///   from a TCP-based simulator via channels.
-    /// - In **hardware mode** (Linux with `target_hw` feature), it directly reads the state of the configured GPIO input pin.
+    /// This function determines the source of the tank level switch position and invalid status
+    /// based on the `use_simulator` configuration.
     ///
     /// # Arguments
-    /// * `tx_to_tcp_opt` - An `Option` containing the sender channel for communication with the TCP simulator.
-    ///   This is used in simulator mode to request sensor data.
-    /// * `rx_from_tcp_opt` - An `Option` containing the receiver channel for communication from the TCP simulator.
-    ///   This is used in simulator mode to receive sensor data.
+    /// * `tx_to_tcp_opt` - An `Option` containing the sender channel to the TCP simulator.
+    /// * `rx_from_tcp_opt` - An `Option` containing the receiver channel from the TCP simulator.
     ///
     /// # Returns
-    /// An empty `Result` on success.
+    /// An empty `Result` (`Ok(())`) on success.
     ///
     /// # Errors
-    /// This function will return a `TankLevelSwitchError` if:
-    /// - Communication with the simulator fails (`SimulatorCommunicationError`).
-    /// - It's running in hardware mode but the GPIO input pin is not available (`InputPinNotProvided`).
+    /// Returns a `TankLevelSwitchError` if:
+    /// - `TankLevelSwitchError::SimulatorChannelNotProvided`: If in simulator mode, and the
+    ///   required channels are missing.
+    /// - `TankLevelSwitchError::SimulatorCommunicationError`: If communication with the
+    ///   simulator fails for either signal.
+    /// - `TankLevelSwitchError::InputPinNotProvided`: If in hardware mode but the GPIO
+    ///   input pin is not available.
     pub fn update_tank_level_switch_signals(
         &mut self,
         tx_to_tcp_opt: &Option<Sender<InternalCommand>>,
         rx_from_tcp_opt: &Option<Receiver<Result<f32, TcpCommunicationError>>>,
     ) -> Result<(), TankLevelSwitchError> {
         if self.config.use_simulator {
-            let tx_to_tcp = tx_to_tcp_opt.as_ref().unwrap();
-            let rx_from_tcp = rx_from_tcp_opt.as_ref().unwrap();
-            self.tank_level_switch_position = Self::get_response_from_simulator(
+            // --- World-Class Suggestion: Refactor to reduce duplication ---
+            // Ensure channels are present before proceeding.
+            let tx_to_tcp = tx_to_tcp_opt
+                .as_ref()
+                .ok_or_else(|| TankLevelSwitchError::SimulatorChannelNotProvided(module_path!().to_string()))?;
+            let rx_from_tcp = rx_from_tcp_opt
+                .as_ref()
+                .ok_or_else(|| TankLevelSwitchError::SimulatorChannelNotProvided(module_path!().to_string()))?;
+
+            // Fetch the position signal.
+            let position_signal = AquariumSignal::TankLevelSwitchPosition;
+            let position_val = Self::get_response_from_simulator(
                 module_path!().to_string(),
                 tx_to_tcp,
                 rx_from_tcp,
-                InternalCommand::RequestSignal(AquariumSignal::TankLevelSwitchPosition),
+                InternalCommand::RequestSignal(position_signal.clone()),
             )
-            .map_err(|e| TankLevelSwitchError::SimulatorCommunicationError {
-                location: module_path!().to_string(),
-                signal: AquariumSignal::TankLevelSwitchPosition,
-                source: e,
-            })? > 0.0;
-            self.tank_level_switch_invalid = Self::get_response_from_simulator(
+                .map_err(|e| TankLevelSwitchError::SimulatorCommunicationError {
+                    location: module_path!().to_string(),
+                    signal: position_signal,
+                    source: e,
+                })?;
+            self.tank_level_switch_position = position_val > 0.0;
+
+            // Fetch the invalid signal.
+            let invalid_signal = AquariumSignal::TankLevelSwitchInvalid;
+            let invalid_val = Self::get_response_from_simulator(
                 module_path!().to_string(),
                 tx_to_tcp,
                 rx_from_tcp,
-                InternalCommand::RequestSignal(AquariumSignal::TankLevelSwitchInvalid),
+                InternalCommand::RequestSignal(invalid_signal.clone()),
             )
-            .map_err(|e| TankLevelSwitchError::SimulatorCommunicationError {
-                location: module_path!().to_string(),
-                signal: AquariumSignal::TankLevelSwitchInvalid,
-                source: e,
-            })? > 0.0;
+                .map_err(|e| TankLevelSwitchError::SimulatorCommunicationError {
+                    location: module_path!().to_string(),
+                    signal: invalid_signal,
+                    source: e,
+                })?;
+            self.tank_level_switch_invalid = invalid_val > 0.0;
         } else {
             #[cfg(all(target_os = "linux", feature = "target_hw"))]
             {
-                // unwrap is safe because tested in constructor
-                match self.input_pin_opt.as_mut() {
-                    Some(pin) => {
-                        self.tank_level_switch_position = pin.is_high();
-                        self.lock_error_input_pin_none = false;
-                    }
-                    None => {
-                        return Err(TankLevelSwitchError::InputPinNotProvided(
-                            module_path!().to_string(),
-                        ));
-                    }
+                // Use `if let` for more idiomatic Option handling.
+                if let Some(pin) = self.input_pin_opt.as_mut() {
+                    self.tank_level_switch_position = pin.is_high();
+                    self.lock_error_input_pin_none = false;
+                } else {
+                    // This case should ideally not be reached if the constructor logic is correct.
+                    return Err(TankLevelSwitchError::InputPinNotProvided(
+                        module_path!().to_string(),
+                    ));
                 }
             }
         }
         Ok(())
     }
 
-    /// Calculates a **stabilized tank level switch position signal**, applying asymmetric delay and handling invalid inputs.
+    /// Calculates a stabilized tank level position, applying asymmetric delay and handling invalid inputs.
     ///
-    /// This private helper function updates the `tank_level_switch_position_stabilized` flag based on the
-    /// raw `tank_level_switch_position` and `tank_level_switch_invalid` flags. It implements the following logic:
+    /// This private helper updates the `tank_level_switch_position_stabilized` flag.
+    /// It implements the following logic:
     ///
-    /// * **Invalid Signal**: If `tank_level_switch_invalid` is `true`, the stabilized position is immediately
-    ///   forced to `true` (indicating a safe, high water level state), overriding any raw input.
-    /// * **High Water Level (True)**: If the raw `tank_level_switch_position` is `true` (high water),
-    ///   the stabilized signal is set to `true` **immediately**, and the low-level stabilization counter is reset.
-    /// * **Low Water Level (False) - with Delay**: If the raw `tank_level_switch_position` is `false` (low water),
-    ///   a stabilization counter increments. The stabilized signal will only change to `false`
-    ///   (low water) **after** this counter exceeds the configured `tank_level_switch_position_low_stabilization_count`.
-    ///   This introduces a debouncing to prevent flickering from momentary low readings.
+    /// - **Invalid Signal**: If `tank_level_switch_invalid` is `true`, the stabilized position is
+    ///   immediately forced to `true` (a safe, high-water state).
+    /// - **High Water Level**: If the raw position is `true`, the stabilized signal is set to `true`
+    ///   immediately, and the low-level stabilization counter is reset.
+    /// - **Low Water Level (with Delay)**: If the raw position is `false`, a counter increments.
+    ///   The stabilized signal only changes to `false` after this counter exceeds the configured
+    ///   threshold, preventing flickering from momentary low readings.
     fn calc_tank_level_switch_position_stabilized(&mut self) {
         if self.tank_level_switch_invalid {
             // go to safe position if the input signal is invalid
@@ -433,34 +453,28 @@ impl TankLevelSwitch {
     /// Executes the main control loop for the tank level switch module.
     ///
     /// This function runs continuously, managing the measurement, stabilization,
-    /// and provision of the tank water level position. It periodically updates
-    /// its internal state by reading from either a physical GPIO pin or a simulator.
-    /// The stabilized and raw sensor data is then written to a shared mutex for
-    /// access by other application threads.
+    /// and provision of the tank water level. It periodically updates its state by
+    /// reading from a physical GPIO pin or a simulator and writes the result to a
+    /// shared mutex for access by other threads.
     ///
-    /// The loop is designed to maintain a fixed cycle time and remains
-    /// responsive to `Quit` commands from the signal handler for graceful shutdown.
+    /// The loop maintains a fixed cycle time and responds to `Quit` commands
+    /// from the signal handler for graceful shutdown.
     ///
     /// # Arguments
-    /// * `tx_to_tcp_opt` - An `Option` containing the sender channel for communication
-    ///   with the TCP simulator. This is used in simulator mode to request sensor data.
-    /// * `rx_from_tcp_opt` - An `Option` containing the receiver channel for communication
-    ///   from the TCP simulator. This is used in simulator mode to receive sensor data.
-    /// * `tx_to_signal_handler` - The sender channel for this module to send acknowledgment
-    ///   back to the main signal handler during shutdown.
-    /// * `rx_from_signal_handler` - The receiver channel for this module to receive commands
-    ///   (e.g., `Quit`, `Terminate`) from the main signal handler.
-    /// * `mutex_tank_level_switch_signals` - An `Arc<Mutex<TankLevelSwitchSignals>>` into
-    ///   which the latest tank level switch signals (raw and stabilized) will be written,
-    ///   ensuring thread-safe access for other modules.
+    /// * `tx_to_tcp_opt` - An `Option` containing the sender channel to the TCP simulator.
+    /// * `rx_from_tcp_opt` - An `Option` containing the receiver channel from the TCP simulator.
+    /// * `tx_to_signal_handler` - The sender channel to send shutdown acknowledgments.
+    /// * `rx_from_signal_handler` - The receiver channel for `Quit` commands.
+    /// * `mutex_tank_level_switch_signals` - The shared `Mutex` where the latest sensor
+    ///   signals are written for other modules to consume.
     ///
     /// # Returns
-    /// An empty `Result` on successful shutdown.
+    /// An empty `Result` (`Ok(())`) on successful shutdown.
     ///
     /// # Errors
-    /// This function will return a `TankLevelSwitchError::SimulatorChannelNotProvided` if
-    /// the module is configured to use the simulator but the required TCP communication
-    /// channels are not provided.
+    /// Returns a `TankLevelSwitchError::SimulatorChannelNotProvided` if the module is
+    /// configured to use the simulator, but the required TCP communication channels
+    /// are not provided at startup.
     pub fn execute(
         &mut self,
         tx_to_tcp_opt: &Option<Sender<InternalCommand>>,

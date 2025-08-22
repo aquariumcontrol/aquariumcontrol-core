@@ -357,7 +357,7 @@ impl SensorManager {
     ///
     /// # Panics
     /// This function will **panic** if either `tx_sensor_manager_to_tcp_opt` or `rx_sensor_manager_from_tcp_opt`
-    /// are `None`. This is because the `SensorManager` module performs checks beforehand to ensure
+    /// are `None`. This case is not possible, because the `SensorManager` module performs checks beforehand to ensure
     /// these channels are `Some` when running in simulator mode.
     fn communicate_with_simulator(
         &mut self,
