@@ -45,4 +45,24 @@ pub enum Ds18b20Error {
     /// suggesting a sensor malfunction or reading error.
     #[error("[{0}] Temperature value read from sensor is outside the expected range.")]
     TemperatureOutOfRange(String),
+
+    /// System driver base path prefix is empty.
+    #[error("[{0}] System driver base path prefix is empty.")]
+    SystemDriverBasePathEmpty(String),
+
+    /// System driver sensor path prefix is empty.
+    #[error("[{0}] System driver sensor path prefix is empty.")]
+    SystemDriverSensorPathEmpty(String),
+
+    /// System driver file name is empty.
+    #[error("[{0}] System driver file name is empty.")]
+    SystemDriverFileNameEmpty(String),
+
+    /// No water temperature sensor ID nor ambient temperature sensor ID provided.
+    #[error("[{0}] No water temperature sensor ID nor ambient temperature sensor ID provided!")]
+    NoSensorIdProvided(String),
+
+    /// Ambient and water temperature sensor IDs are identical.
+    #[error("Ambient and water temperature sensor IDs are identical.")]
+    SensorIdsIdentical(String),
 }

@@ -19,6 +19,7 @@ use crate::utilities::logger::LoggerSetupError;
 use crate::utilities::memory_config_check::MemoryConfigError;
 use crate::utilities::version_information::VersionInformationError;
 use thiserror::Error;
+use crate::sensors::ds18b20_error::Ds18b20Error;
 
 /// Contains top-level error definitions for errors which may happen at startup.
 /// No additional parameter to identify the module is required here.
@@ -152,5 +153,12 @@ pub enum StartupError {
     SensorManagerSetupFailure {
         #[source]
         source: SensorManagerError,
+    },
+
+    /// Could not initialize the Ds18b20 sensor communication.
+    #[error("Could not initialize Ds18b20 sensor communication.")]
+    Ds18b20SetupFailure {
+        #[source]
+        source: Ds18b20Error,
     },
 }

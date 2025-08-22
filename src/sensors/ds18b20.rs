@@ -112,63 +112,61 @@ pub struct Ds18b20 {
 impl ProcessExternalRequestTrait for Ds18b20 {}
 
 impl Ds18b20 {
-    /// Provides a struct of type Ds18b20.
+    /// Creates a new `Ds18b20` instance, validating the provided configuration.
     ///
     /// This constructor initializes the DS18B20 sensor module, preparing it to read
-    /// temperatures from 1-Wire devices via the Linux sysfs interface. It validates
-    /// the provided configuration paths and sensor IDs.
+    /// temperatures from 1-Wire devices via the Linux sysfs interface. It performs
+    /// several critical checks on the configuration to ensure that the module can
+    /// operate correctly.
     ///
     /// # Arguments
     /// * `config` - Configuration data for the DS18B20 sensor, including driver paths,
     ///   sensor IDs, and retry settings.
     ///
     /// # Returns
-    /// A new `Ds18b20` struct.
+    /// A `Result` containing a new `Ds18b20` struct on success.
     ///
-    /// # Panics
-    /// This function will panic if:
-    /// - `system_driver_base_path`, `system_driver_sensor_path_prefix`, or `system_driver_file_name` are empty.
-    /// - `active` is true, but both `water_temperature_sensor_id` and `ambient_temperature_sensor_id` are empty.
-    pub fn new(config: Ds18b20Config) -> Ds18b20 {
+    /// # Errors
+    /// Returns a `Ds18b20Error` variant if the configuration is invalid, preventing
+    /// the module from being created. This allows the application to handle setup
+    /// failures gracefully. Specific errors include:
+    /// - `Ds18b20Error::SystemDriverBasePathEmpty`: If the base path for the 1-Wire
+    ///   driver in the configuration is empty.
+    /// - `Ds18b20Error::SystemDriverSensorPathEmpty`: If the sensor path prefix is
+    ///   not specified.
+    /// - `Ds18b20Error::SystemDriverFileNameEmpty`: If the filename for the sensor
+    ///   data (e.g., `w1_slave`) is not provided.
+    /// - `Ds18b20Error::NoSensorIdProvided`: If the module is configured to be `active`
+    ///   but both the water and ambient temperature sensor IDs are empty.
+    /// - `Ds18b20Error::SensorIdsIdentical`: If the module is `active` and the same
+    ///   ID is assigned to both the water and ambient temperature sensors.
+    pub fn new(config: Ds18b20Config) -> Result<Ds18b20, Ds18b20Error> {
         if config.system_driver_base_path.is_empty() {
-            panic!(
-                "{}: System driver base path prefix is empty!",
-                module_path!()
-            );
+            return Err(Ds18b20Error::SystemDriverBasePathEmpty(module_path!().to_string()));
         }
         if config.system_driver_sensor_path_prefix.is_empty() {
-            panic!(
-                "{}: System driver sensor path prefix is empty!",
-                module_path!()
-            );
+            return Err(Ds18b20Error::SystemDriverSensorPathEmpty(module_path!().to_string()));
         }
         if config.system_driver_file_name.is_empty() {
-            panic!("{}: System driver file name is empty!", module_path!());
+            return Err(Ds18b20Error::SystemDriverFileNameEmpty(module_path!().to_string()));
         }
         if config.active
             && config.water_temperature_sensor_id.is_empty()
             && config.ambient_temperature_sensor_id.is_empty()
         {
-            panic!(
-                "{}: No water temperature sensor ID nor ambient temperature sensor ID provided!",
-                module_path!()
-            );
+            return Err(Ds18b20Error::NoSensorIdProvided(module_path!().to_string()));
         }
         if config.active
             && config.water_temperature_sensor_id == config.ambient_temperature_sensor_id
         {
-            #[cfg(not(test))]
-            warn!(
-                target: module_path!(),
-                "Ambient and water temperature sensor IDs are identical."
-            );
+            return Err(Ds18b20Error::SensorIdsIdentical(module_path!().to_string()));
         }
-        Ds18b20 {
+        Ok(Ds18b20 {
             config,
             lock_warn_max_mutex_access_duration: false,
             #[cfg(test)]
             mutex_access_duration_exceeded: false,
-        }
+        })
     }
 
     #[allow(unused)]
@@ -179,18 +177,26 @@ impl Ds18b20 {
     /// system driver paths. The function includes a retry mechanism for robust reading,
     /// as 1-Wire communication can sometimes be flaky.
     ///
-    /// The sensor reports temperature in milli-celsius (e.g., 24500 for 24.5°C), which
-    /// this function converts to `f32` degrees Celsius. It also verifies the "YES"
-    /// flag in the sysfs output to ensure a valid reading.
-    ///
     /// # Arguments
     /// * `sensor_id` - A string slice containing the unique 64-bit ID of the DS18B20 sensor
     ///   to read (e.g., "28-00000abcde12").
     ///
     /// # Returns
-    /// A `Ds18b20Result`:
-    /// - `Ok(f32)`: The temperature in degree Celsius if successfully read and parsed.
-    /// - `Err(Ds18b20Error)`: Description of the error which occurred during reading.
+    /// A `Ds18b20Result` containing `Ds18b20ResultData` on success, which includes the
+    /// temperature in degrees Celsius.
+    ///
+    /// # Errors
+    /// Returns a `Ds18b20Error` variant if the reading fails, even after retries.
+    /// Specific errors include:
+    /// - `Ds18b20Error::SensorIdNotFound`: If the directory for the given `sensor_id` does not exist.
+    /// - `Ds18b20Error::ReadToStringFailure`: If the underlying file read from the sysfs fails.
+    /// - `Ds18b20Error::InsufficientLinesInFile`: If the sensor file does not contain at least two lines.
+    /// - `Ds18b20Error::Line0NotEndingWithYes`: If the first line of the sensor file does not end with "YES",
+    ///   indicating a CRC error or invalid reading.
+    /// - `Ds18b20Error::TemperatureEntryNotFound`: If the second line does not contain the "t=" marker.
+    /// - `Ds18b20Error::TemperatureParseError`: If the temperature value after "t=" cannot be parsed into a number.
+    /// - `Ds18b20Error::TemperatureOutOfRange`: If the parsed temperature is outside the plausible range defined
+    ///   by `MIN_TEMPERATURE` and `MAX_TEMPERATURE`.
     pub fn read(&self, sensor_id: &str) -> Ds18b20Result {
         #[cfg(test)]
         println!("{}: reading from {}", module_path!(), sensor_id);
@@ -207,64 +213,72 @@ impl Ds18b20 {
         }
 
         let device_file = device_folder.join(self.config.system_driver_file_name.clone());
+        let mut last_error = Ds18b20Error::UnidentifiedError(module_path!().to_string());
 
-        let mut retries = self.config.max_retries;
-        let mut last_error_recorded = Ds18b20Error::UnidentifiedError(module_path!().to_string());
-
-        while retries > 0 {
+        // Use a `for` loop for a cleaner retry mechanism.
+        for _ in 0..=self.config.max_retries {
             match fs::read_to_string(&device_file) {
                 Ok(contents) => {
-                    let lines: Vec<&str> = contents.lines().collect();
-                    if lines.len() >= 2 {
-                        if lines[0].ends_with(" YES") {
-                            if let Some(temp_index) = lines[1].find("t=") {
-                                if let Ok(temp_str) =
-                                    lines[1][temp_index + 2..].trim().parse::<f32>()
-                                {
-                                    let celsius = temp_str / 1000.0;
-                                    if (ds18b20_constants::MIN_TEMPERATURE
-                                        ..=ds18b20_constants::MAX_TEMPERATURE)
-                                        .contains(&celsius)
-                                    {
-                                        // let fahrenheit = (celsius * 9.0 / 5.0) + 32.0;
-                                        return Ok(Ds18b20ResultData::new(celsius));
-                                    } else {
-                                        last_error_recorded = Ds18b20Error::TemperatureOutOfRange(
-                                            module_path!().to_string(),
-                                        );
-                                    }
-                                } else {
-                                    last_error_recorded = Ds18b20Error::TemperatureParseError(
-                                        module_path!().to_string(),
-                                    );
-                                }
-                            } else {
-                                last_error_recorded = Ds18b20Error::TemperatureEntryNotFound(
-                                    module_path!().to_string(),
-                                );
-                            }
-                        } else {
-                            last_error_recorded =
-                                Ds18b20Error::Line0NotEndingWithYes(module_path!().to_string());
-                        }
-                    } else {
-                        last_error_recorded =
-                            Ds18b20Error::InsufficientLinesInFile(module_path!().to_string());
+                    // Call the new helper function to handle parsing.
+                    match self.parse_contents(&contents) {
+                        Ok(celsius) => return Ok(Ds18b20ResultData::new(celsius)),
+                        Err(e) => last_error = e, // Store the error and retry.
                     }
                 }
-                Err(e) => {
-                    last_error_recorded =
+                Err(_) => {
+                    last_error =
                         Ds18b20Error::ReadToStringFailure(module_path!().to_string());
                 }
             }
-
             sleep(Duration::from_millis(
                 self.config.retry_pause_duration_millis,
             ));
-            retries -= 1;
         }
 
-        Err(last_error_recorded)
+        // If all retries fail, return the last error encountered.
+        Err(last_error)
+    }
+
+    /// Parses the string contents of a DS18B20 sysfs file.
+    /// This private helper contains the core parsing logic.
+    fn parse_contents(&self, contents: &str) -> Result<f32, Ds18b20Error> {
+        let lines: Vec<&str> = contents.lines().collect();
+
+        if lines.len() < 2 {
+            return Err(Ds18b20Error::InsufficientLinesInFile(
+                module_path!().to_string(),
+            ));
+        }
+
+        if !lines[0].ends_with(" YES") {
+            return Err(Ds18b20Error::Line0NotEndingWithYes(
+                module_path!().to_string(),
+            ));
+        }
+
+        let temp_line = lines[1];
+        if let Some(temp_index) = temp_line.find("t=") {
+            let temp_str = temp_line[temp_index + 2..].trim();
+            // Use `map_err` for more concise error conversion.
+            let temp_val = temp_str
+                .parse::<f32>()
+                .map_err(|_| Ds18b20Error::TemperatureParseError(module_path!().to_string()))?;
+
+            let celsius = temp_val / 1000.0;
+            if (ds18b20_constants::MIN_TEMPERATURE..=ds18b20_constants::MAX_TEMPERATURE)
+                .contains(&celsius)
+            {
+                Ok(celsius)
+            } else {
+                Err(Ds18b20Error::TemperatureOutOfRange(
+                    module_path!().to_string(),
+                ))
+            }
+        } else {
+            Err(Ds18b20Error::TemperatureEntryNotFound(
+                module_path!().to_string(),
+            ))
+        }
     }
 
     /// Executes the main control loop for the DS18B20 sensor module.
@@ -272,8 +286,8 @@ impl Ds18b20 {
     /// This function runs continuously, managing the periodic measurement of water and ambient
     /// temperatures from DS18B20 sensors via the Linux sysfs 1-Wire interface.
     /// It updates shared mutexes with the latest sensor readings, making them available to other
-    /// application threads. The loop maintains a measurement countdown and remains
-    /// responsive to `Quit` commands from the signal handler for graceful shutdown.
+    /// application threads. The loop remains responsive to `Quit` commands from the
+    /// signal handler for graceful shutdown.
     ///
     /// # Arguments
     /// * `rx_from_signal_handler` - The receiver channel for commands (e.g., `Quit`) from the main signal handler.
@@ -290,92 +304,88 @@ impl Ds18b20 {
         #[cfg(all(target_os = "linux", not(test)))]
         info!(target: module_path!(), "Thread started with TID: {}", gettid());
 
-        let sleep_duration_hundred_millis = Duration::from_millis(100);
+        let sleep_duration_main_cycle = Duration::from_millis(100);
         let spin_sleeper = SpinSleeper::default();
+        let measurement_interval =
+            Duration::from_millis(self.config.measurement_pause_duration_millis);
         let max_mutex_access_duration =
             Duration::from_millis(ds18b20_constants::MAX_MUTEX_ACCESS_DURATION_MILLIS);
 
-        // initialize countdown
-        let mut measurement_countdown: i32 = 0;
+        // Use an Instant to track time since the last measurement.
+        // Start with a measurement due to ensure the first loop iteration triggers a read.
+        let mut last_measurement_instant = Instant::now() - measurement_interval;
 
         loop {
-            if self.config.active {
-                if measurement_countdown > 0 {
-                    // count down to zero
-                    measurement_countdown = measurement_countdown.saturating_sub(100);
-                } else {
-                    let instant_before_locking_mutex = Instant::now();
-                    let instant_after_locking_mutex: Instant;
-
-                    // count down has reached zero - initiate the measurement
-                    {
-                        // life-time limitation of open mutex
-                        let mut water_temperature = mutex_water_temperature.lock().unwrap();
-                        let mut ambient_temperature = mutex_ambient_temperature.lock().unwrap();
-                        instant_after_locking_mutex = Instant::now();
-
-                        if !self.config.ambient_temperature_sensor_id.is_empty() {
-                            *ambient_temperature =
-                                self.read(self.config.ambient_temperature_sensor_id.as_str());
-                        }
-                        if !self.config.water_temperature_sensor_id.is_empty() {
-                            *water_temperature =
-                                self.read(self.config.water_temperature_sensor_id.as_str());
-                        }
-
-                        // restart the countdown
-                        measurement_countdown =
-                            self.config.measurement_pause_duration_millis as i32;
-                    }
-
-                    // check if access to mutex took too long
-                    let measured_mutex_access_duration =
-                        instant_after_locking_mutex.duration_since(instant_before_locking_mutex);
-                    if measured_mutex_access_duration > max_mutex_access_duration {
-                        if !self.lock_warn_max_mutex_access_duration {
-                            self.lock_warn_max_mutex_access_duration = true;
-                            #[cfg(not(test))]
-                            warn!(target: module_path!(),
-                                "Access to mutex took too long. Allowed={}ms, Measured={}ms",
-                                max_mutex_access_duration.as_millis(),
-                                measured_mutex_access_duration.as_millis(),
-                            );
-
-                            // record for testing purposes only
-                            cfg_if::cfg_if! {
-                                if #[cfg(test)] {
-                                    self.mutex_access_duration_exceeded = true;
-                                }
-                            }
-                        }
-                    } else {
-                        self.lock_warn_max_mutex_access_duration = false;
-                    }
-                }
-            }
-
-            let (
-                quit_command_received, // a request to end the application has been received
-                _,
-                _,
-            ) = self.process_external_request(&rx_from_signal_handler, None);
-
-            if quit_command_received {
+            // Check for quit command first for faster shutdown.
+            if self.process_external_request(&rx_from_signal_handler, None).0 {
                 #[cfg(test)]
                 println!("Quitting Ds18b20");
-
                 break;
             }
 
+            if self.config.active && last_measurement_instant.elapsed() >= measurement_interval {
+                // --- Refactoring: Read values BEFORE locking mutexes ---
+                let water_temp_result =
+                    if !self.config.water_temperature_sensor_id.is_empty() {
+                        Some(self.read(self.config.water_temperature_sensor_id.as_str()))
+                    } else {
+                        None
+                    };
+
+                let ambient_temp_result =
+                    if !self.config.ambient_temperature_sensor_id.is_empty() {
+                        Some(self.read(self.config.ambient_temperature_sensor_id.as_str()))
+                    } else {
+                        None
+                    };
+
+                // Now, lock the mutexes for the shortest possible time to write the results.
+                let instant_before_locking_mutex = Instant::now();
+
+                if let Some(result) = water_temp_result {
+                    // The lock is held only for the duration of this assignment.
+                    *mutex_water_temperature.lock().unwrap() = result;
+                }
+
+                if let Some(result) = ambient_temp_result {
+                    *mutex_ambient_temperature.lock().unwrap() = result;
+                }
+
+                let instant_after_locking_mutex = Instant::now();
+                last_measurement_instant = Instant::now(); // Reset the timer
+
+                // Check if access to mutex took too long
+                let measured_mutex_access_duration =
+                    instant_after_locking_mutex.duration_since(instant_before_locking_mutex);
+                if measured_mutex_access_duration > max_mutex_access_duration {
+                    if !self.lock_warn_max_mutex_access_duration {
+                        self.lock_warn_max_mutex_access_duration = true;
+                        #[cfg(not(test))]
+                        warn!(target: module_path!(),
+                        "Access to DS18B20 mutex took too long. Allowed={}ms, Measured={}ms",
+                        max_mutex_access_duration.as_millis(),
+                        measured_mutex_access_duration.as_millis(),
+                    );
+
+                        #[cfg(test)]
+                        {
+                            self.mutex_access_duration_exceeded = true;
+                        }
+                    }
+                } else {
+                    self.lock_warn_max_mutex_access_duration = false;
+                }
+            }
+
             // sleep for a defined period
-            spin_sleeper.sleep(sleep_duration_hundred_millis);
+            spin_sleeper.sleep(sleep_duration_main_cycle);
         }
     }
 }
 
 #[cfg(test)]
 pub mod tests {
-    use crate::sensors::ds18b20::{Ds18b20, Ds18b20Error};
+    use crate::sensors::ds18b20::{Ds18b20, Ds18b20Config, Ds18b20Error};
     use crate::sensors::ds18b20::{Ds18b20Result, Ds18b20ResultData};
     use crate::utilities::channel_content::InternalCommand;
     use crate::utilities::config::read_config_file;
@@ -424,7 +434,7 @@ pub mod tests {
 
         let water_temperature_sensor_id = config.ds18b20.water_temperature_sensor_id.clone();
 
-        let ds18b20 = Ds18b20::new(config.ds18b20);
+        let ds18b20 = Ds18b20::new(config.ds18b20).unwrap();
         match ds18b20.read(&water_temperature_sensor_id) {
             Ok(temperature) => {
                 println!(
@@ -443,45 +453,76 @@ pub mod tests {
     }
 
     #[test]
-    #[should_panic]
-    // Test case checks if invalid configuration of the system driver base path triggers a panic.
+    // Test case checks if invalid configuration of the system driver base path is recognized during startup..
     fn test_dsb18b20_init_with_invalid_system_driver_base_path() {
         let mut config =
             read_config_file("config/aquarium_control_test_generic.toml".to_string()).unwrap();
         config.ds18b20.system_driver_base_path = "".to_string();
-        let _ = Ds18b20::new(config.ds18b20);
+        let result = Ds18b20::new(config.ds18b20);
+        assert!(matches!(result, Err(Ds18b20Error::SystemDriverBasePathEmpty(_))));
     }
 
     #[test]
-    #[should_panic]
-    // Test case checks if invalid configuration of the system driver sensor path prefix triggers a panic.
+    // Test case checks if invalid configuration of the system driver sensor path prefix is recognized during startup.
     fn test_dsb18b20_init_with_invalid_system_driver_sensor_path_prefix() {
         let mut config =
             read_config_file("config/aquarium_control_test_generic.toml".to_string()).unwrap();
         config.ds18b20.system_driver_sensor_path_prefix = "".to_string();
-        let _ = Ds18b20::new(config.ds18b20);
+        let result = Ds18b20::new(config.ds18b20);
+        assert!(matches!(
+            result,
+            Err(Ds18b20Error::SystemDriverSensorPathEmpty(_))));
     }
 
     #[test]
-    #[should_panic]
-    // Test case checks if invalid configuration of the system driver sensor file name triggers a panic.
+    // Test case checks if invalid configuration of the system driver sensor file name is recognized during startup..
     fn test_dsb18b20_init_with_invalid_system_driver_file_name() {
         let mut config =
             read_config_file("config/aquarium_control_test_generic.toml".to_string()).unwrap();
         config.ds18b20.system_driver_file_name = "".to_string();
-        let _ = Ds18b20::new(config.ds18b20);
+        let result = Ds18b20::new(config.ds18b20);
+        assert!(matches!(
+            result,
+            Err(Ds18b20Error::SystemDriverFileNameEmpty(_))));
+    }
+    #[test]
+    fn test_new_fails_with_identical_sensor_ids() {
+        // Arrange: Create a configuration where both water and ambient sensors
+        // are assigned the exact same ID.
+        let identical_id = "28-00000abcdef12".to_string();
+        let config = Ds18b20Config {
+            active: true,
+            water_temperature_sensor_id: identical_id.clone(),
+            ambient_temperature_sensor_id: identical_id,
+            // Provide valid paths to pass other validation checks.
+            system_driver_base_path: "/sys/bus/w1/devices".to_string(),
+            system_driver_sensor_path_prefix: "28-".to_string(),
+            system_driver_file_name: "w1_slave".to_string(),
+            max_retries: 3,
+            retry_pause_duration_millis: 100,
+            measurement_pause_duration_millis: 1000,
+        };
+
+        // Act: Attempt to create a new Ds18b20 instance with the invalid config.
+        let result = Ds18b20::new(config);
+
+        // Assert: Verify that the result is an error and that the error variant
+        // is specifically `SensorIdsIdentical`.
+        assert!(matches!(result, Err(Ds18b20Error::SensorIdsIdentical(_))));
     }
 
     #[test]
-    #[should_panic]
-    // Test case checks if invalid configuration of the sensor ids triggers a panic.
+    // Test case checks if invalid configuration of the sensor ids is recognized during startup.
     fn test_dsb18b20_init_with_invalid_sensor_ids() {
         let mut config =
             read_config_file("config/aquarium_control_test_generic.toml".to_string()).unwrap();
         config.ds18b20.active = true;
         config.ds18b20.water_temperature_sensor_id = "".to_string();
         config.ds18b20.ambient_temperature_sensor_id = "".to_string();
-        let _ = Ds18b20::new(config.ds18b20);
+        let result = Ds18b20::new(config.ds18b20);
+        assert!(matches!(
+            result,
+            Err(Ds18b20Error::NoSensorIdProvided(_))));
     }
 
     #[test]
@@ -498,7 +539,7 @@ pub mod tests {
 
         let invalid_temperature_sensor_id = "33";
 
-        let ds18b20 = Ds18b20::new(config.ds18b20);
+        let ds18b20 = Ds18b20::new(config.ds18b20).unwrap();
 
         assert_eq!(
             matches!(
@@ -526,7 +567,7 @@ pub mod tests {
 
         let valid_temperature_sensor_id = config.ds18b20.water_temperature_sensor_id.clone();
 
-        let ds18b20 = Ds18b20::new(config.ds18b20);
+        let ds18b20 = Ds18b20::new(config.ds18b20).unwrap();
 
         assert_eq!(
             matches!(
@@ -551,7 +592,7 @@ pub mod tests {
 
         let valid_temperature_sensor_id = config.ds18b20.water_temperature_sensor_id.clone();
 
-        let ds18b20 = Ds18b20::new(config.ds18b20);
+        let ds18b20 = Ds18b20::new(config.ds18b20).unwrap();
 
         assert_eq!(
             matches!(
@@ -576,7 +617,7 @@ pub mod tests {
 
         let valid_temperature_sensor_id = config.ds18b20.water_temperature_sensor_id.clone();
 
-        let ds18b20 = Ds18b20::new(config.ds18b20);
+        let ds18b20 = Ds18b20::new(config.ds18b20).unwrap();
 
         assert_eq!(
             matches!(
@@ -601,7 +642,7 @@ pub mod tests {
 
         let valid_temperature_sensor_id = config.ds18b20.water_temperature_sensor_id.clone();
 
-        let ds18b20 = Ds18b20::new(config.ds18b20);
+        let ds18b20 = Ds18b20::new(config.ds18b20).unwrap();
 
         assert_eq!(
             matches!(
@@ -626,7 +667,7 @@ pub mod tests {
 
         let valid_temperature_sensor_id = config.ds18b20.water_temperature_sensor_id.clone();
 
-        let ds18b20 = Ds18b20::new(config.ds18b20);
+        let ds18b20 = Ds18b20::new(config.ds18b20).unwrap();
 
         assert_eq!(
             matches!(
@@ -651,7 +692,7 @@ pub mod tests {
 
         let valid_temperature_sensor_id = config.ds18b20.water_temperature_sensor_id.clone();
 
-        let ds18b20 = Ds18b20::new(config.ds18b20);
+        let ds18b20 = Ds18b20::new(config.ds18b20).unwrap();
 
         assert_eq!(
             matches!(
@@ -676,7 +717,7 @@ pub mod tests {
 
         let valid_temperature_sensor_id = config.ds18b20.water_temperature_sensor_id.clone();
 
-        let ds18b20 = Ds18b20::new(config.ds18b20);
+        let ds18b20 = Ds18b20::new(config.ds18b20).unwrap();
 
         assert_eq!(
             matches!(
@@ -716,7 +757,7 @@ pub mod tests {
         let mutex_ds18b20_ambient_temperature_clone_for_asserts =
             mutex_ds18b20_ambient_temperature.clone();
 
-        let mut ds18b20 = Ds18b20::new(config.ds18b20);
+        let mut ds18b20 = Ds18b20::new(config.ds18b20).unwrap();
 
         // *** signal handler => ds18b20 ***
         let (tx_signal_handler_to_ds18b20, rx_ds18b20_from_signal_handler): (
@@ -806,7 +847,7 @@ pub mod tests {
         let mutex_ds18b20_ambient_temperature_clone_for_asserts =
             mutex_ds18b20_ambient_temperature.clone();
 
-        let mut ds18b20 = Ds18b20::new(config.ds18b20);
+        let mut ds18b20 = Ds18b20::new(config.ds18b20).unwrap();
 
         // *** signal handler => ds18b20 ***
         let (tx_signal_handler_to_ds18b20, rx_ds18b20_from_signal_handler): (
