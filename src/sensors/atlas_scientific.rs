@@ -298,24 +298,25 @@ impl AtlasScientific {
     ///
     /// This private helper function performs several critical steps to parse sensor data:
     /// 1.  **Magic Number Check**: Verifies the protocol's start and end "magic" bytes.
-    /// 2.  **Numeric Content Validation**: Ensures all characters within the data section are valid numeric components (digits, decimal point, and optionally negative sign).
-    /// 3.  **UTF-8 Conversion**: Converts the validated numeric byte sequence into a `String`.
-    /// 4.  **Float Parsing**: Attempts to parse the `String` into an `f32` floating-point value.
+    /// 2.  **Numeric Content Validation**: Ensures all characters within the data section are valid numeric components.
+    /// 3.  **UTF-8 Conversion & Float Parsing**: Converts the validated byte sequence into a string and parses it into an `f32` value.
     ///
     /// The `is_ph` flag specifically controls whether a negative sign is allowed, as pH values are non-negative by definition.
     ///
     /// # Arguments
-    /// * `buffer` - A fixed-size array of `u8` bytes representing the complete message received from the Atlas Scientific sensor.
-    /// * `is_ph` - A `bool` flag indicating whether the response is expected from a pH sensor (`true`) or another type (`false`).
+    /// * `buffer` - A fixed-size array of `u8` bytes representing the complete message received from the sensor.
+    /// * `is_ph` - A `bool` flag indicating if the response is from a pH sensor (`true`) or another type (`false`).
     ///
     /// # Returns
-    /// A `Result<f32, AtlasScientificError>`:
-    /// - `Ok(f32)`: The successfully parsed floating-point sensor reading.
-    /// - `Err(AtlasScientificError::FirstCharacterNotMagic)`: If the message's first byte is incorrect.
-    /// - `Err(AtlasScientificError::LastCharacterNotMagic)`: If the message's last byte is incorrect.
-    /// - `Err(AtlasScientificError::ContainsInvalidCharacter)`: If the data section contains non-numeric characters (or an unexpected negative sign for pH).
-    /// - `Err(AtlasScientificError::InvalidUtf8Sequence)`: If the numeric byte sequence is not valid UTF-8.
-    /// - `Err(AtlasScientificError::ConversionFailure)`: If the valid numeric string cannot be parsed into an `f32`.
+    /// A `Result` containing the successfully parsed `f32` sensor reading.
+    ///
+    /// # Errors
+    /// Returns an `AtlasScientificError` variant if any validation or parsing step fails:
+    /// - `FirstCharacterNotMagic`: If the message's first byte is incorrect.
+    /// - `LastCharacterNotMagic`: If the message's last byte is incorrect.
+    /// - `ContainsInvalidCharacter`: If the data section contains non-numeric characters.
+    /// - `InvalidUtf8Sequence`: If the numeric byte sequence is not valid UTF-8.
+    /// - `ConversionFailure`: If the valid numeric string cannot be parsed into an `f32`.
     fn check_response(
         buffer: [u8; atlas_scientific_constants::MESSAGE_SIZE],
         is_ph: bool,
@@ -354,44 +355,42 @@ impl AtlasScientific {
         }
 
         // conversion to String
-        let numeric_string = match str::from_utf8(numeric_content) {
-            Ok(c) => c,
-            Err(e) => {
-                return Err(AtlasScientificError::InvalidUtf8Sequence {
-                    location: module_path!().to_string(),
-                    source: e,
-                })
+        let numeric_string = str::from_utf8(numeric_content).map_err(|e| {
+            AtlasScientificError::InvalidUtf8Sequence {
+                location: module_path!().to_string(),
+                source: e,
             }
-        };
+        })?;
 
         // conversion to f32
-        match &numeric_string.parse::<f32>() {
-            Ok(c) => Ok(*c),
-            Err(e) => Err(AtlasScientificError::ConversionFailure {
+        numeric_string
+            .parse::<f32>()
+            .map_err(|e| AtlasScientificError::ConversionFailure {
                 location: module_path!().to_string(),
                 source: e.clone(),
-            }),
-        }
+            })
     }
 
     /// Constructs and sends a measurement request to the I2C interface thread.
     ///
     /// This function creates an `I2cRequest` based on the specified `signal`. It
     /// retrieves the correct I2C address and sleep time from the configuration
-    /// for the given sensor (pH, conductivity, or temperature). The request is then
-    /// sent over the provided channel to the I2C thread for execution.
-    ///
-    /// It also manages an internal lock flag (`lock_error_channel_send_i2c_interface`)
-    /// to prevent flooding the logs with repeated errors if the channel send operation fails.
+    /// for the given sensor. The request is then sent over the provided channel
+    /// to the I2C thread for execution.
     ///
     /// # Arguments
     /// * `signal` - The `AquariumSignal` identifying which sensor to request a reading from.
-    /// * `tx_atlas_scientific_to_i2c_interface` - The sender channel for sending `I2cRequest`
-    ///   messages to the I2C thread.
+    /// * `tx_atlas_scientific_to_i2c_interface` - The sender channel for sending `I2cRequest` messages.
     ///
     /// # Returns
-    /// `true` if the measurement request was successfully sent; `false` if the channel
-    /// operation failed or if an unsupported signal was provided.
+    /// An empty `Result` (`Ok(())`) if the measurement request was successfully created and sent.
+    ///
+    /// # Errors
+    /// Returns an `AtlasScientificError` if any step fails:
+    /// - `InvalidSignal`: If an unsupported `AquariumSignal` is provided.
+    /// - `SignalRequestCreationFailure`: If the underlying `I2cRequest::new` call fails (e.g., command too long).
+    /// - `SendingRequestToI2cInterfaceFailed`: If sending the request over the channel fails, which
+    ///   typically means the receiver (the I2C thread) has been dropped.
     fn send_request_to_i2c_interface(
         &mut self,
         signal: &AquariumSignal,
@@ -447,19 +446,14 @@ impl AtlasScientific {
 
     /// Logs a warning if acquiring a sensor's mutex takes longer than the configured maximum.
     ///
-    /// This helper function is invoked when the time spent waiting to lock a mutex for a
-    /// specific sensor signal (temperature, pH, or conductivity) exceeds a predefined
-    /// threshold. To avoid flooding the log files with repetitive warnings for a
-    /// persistent issue, it uses an internal lock flag for each signal.
-    ///
-    /// The warning is logged only the first time the condition is detected. The lock
-    /// is reset when later mutex access for the same signal completes within
-    /// the allowed time outside of this function.
+    /// This helper function is invoked when the time spent waiting to lock a mutex
+    /// exceeds a predefined threshold. To avoid log flooding, it uses an internal
+    /// lock flag for each signal, logging the warning only once per sustained issue.
     ///
     /// # Arguments
-    /// * `signal` - The `AquariumSignal` identifying which sensor's mutex was slow to acquire.
-    /// * `measured_mutex_access_duration` - The `Duration` that was actually measured for the lock acquisition.
-    /// * `max_mutex_access_duration` - The maximum `Duration` allowed before a warning is triggered.
+    /// * `signal` - The `AquariumSignal` identifying which sensor's mutex was slow.
+    /// * `measured_mutex_access_duration` - The `Duration` that was actually measured.
+    /// * `max_mutex_access_duration` - The maximum `Duration` allowed before a warning.
     #[allow(unused)]
     fn warn_about_long_mutex_wait(
         &mut self,
@@ -467,114 +461,74 @@ impl AtlasScientific {
         measured_mutex_access_duration: Duration,
         max_mutex_access_duration: Duration,
     ) {
-        match signal {
-            AquariumSignal::WaterTemperature => {
-                if !self.lock_warn_max_mutex_access_duration_temperature {
-                    self.lock_warn_max_mutex_access_duration_temperature = true;
-                    #[cfg(not(test))]
-                    warn!(
-                        target: module_path!(),
-                        "Access to temperature mutex took too long. Allowed={}ms, Measured={}ms",
-                        max_mutex_access_duration.as_millis(),
-                        measured_mutex_access_duration.as_millis(),
-                    );
-                    // record for testing purposes only
-                    cfg_if::cfg_if! {
-                        if #[cfg(test)] {
-                            self.mutex_temperature_access_duration_exceeded = true;
-                        }
-                    }
+        let lock_flag = match signal {
+            AquariumSignal::WaterTemperature => &mut self.lock_warn_max_mutex_access_duration_temperature,
+            AquariumSignal::pH => &mut self.lock_warn_max_mutex_access_duration_ph,
+            AquariumSignal::Conductivity => &mut self.lock_warn_max_mutex_access_duration_conductivity,
+            _ => return, // Do nothing for other signals
+        };
+
+        if !*lock_flag {
+            *lock_flag = true;
+            #[cfg(not(test))]
+            warn!(
+            target: module_path!(),
+            "Access to {} mutex took too long. Allowed={}ms, Measured={}ms",
+            signal, // Display is implemented for AquariumSignal
+            max_mutex_access_duration.as_millis(),
+            measured_mutex_access_duration.as_millis(),
+        );
+
+            // This block handles the test-only flags
+            #[cfg(test)]
+            {
+                match signal {
+                    AquariumSignal::WaterTemperature => self.mutex_temperature_access_duration_exceeded = true,
+                    AquariumSignal::pH => self.mutex_ph_access_duration_exceeded = true,
+                    AquariumSignal::Conductivity => self.mutex_conductivity_access_duration_exceeded = true,
+                    _ => {}
                 }
             }
-            AquariumSignal::pH => {
-                if !self.lock_warn_max_mutex_access_duration_ph {
-                    self.lock_warn_max_mutex_access_duration_ph = true;
-                    #[cfg(not(test))]
-                    warn!(
-                        target: module_path!(),
-                        "Access to pH mutex took too long. Allowed={}ms, Measured={}ms",
-                        max_mutex_access_duration.as_millis(),
-                        measured_mutex_access_duration.as_millis(),
-                    );
-                    // record for testing purposes only
-                    cfg_if::cfg_if! {
-                        if #[cfg(test)] {
-                            self.mutex_ph_access_duration_exceeded = true;
-                        }
-                    }
-                }
-            }
-            AquariumSignal::Conductivity => {
-                if !self.lock_warn_max_mutex_access_duration_conductivity {
-                    self.lock_warn_max_mutex_access_duration_conductivity = true;
-                    #[cfg(not(test))]
-                    warn!(
-                        target: module_path!(),
-                        "Access to conductivity mutex took too long. Allowed={}ms, Measured={}ms",
-                        max_mutex_access_duration.as_millis(),
-                        measured_mutex_access_duration.as_millis(),
-                    );
-                    // record for testing purposes only
-                    cfg_if::cfg_if! {
-                        if #[cfg(test)] {
-                            self.mutex_conductivity_access_duration_exceeded = true;
-                        }
-                    }
-                }
-            }
-            _ => { /* do nothing */ }
         }
     }
 
-    /// Resets the warning lock flag for a given sensor's mutex.
+    // Resets the warning lock flag for a given sensor's mutex.
     ///
     /// This function is called after a mutex has been successfully and quickly acquired,
-    /// indicating that a potential previous condition of a slow mutex lock has resolved.
-    ///
-    /// By setting the corresponding internal lock flag back to `false`, it re-enables
-    /// the `warn_about_long_mutex_wait` function to log a new warning if the mutex
-    /// becomes slow to acquire again in the future.
+    /// re-enabling the `warn_about_long_mutex_wait` function to log a new warning
+    /// if the mutex becomes slow to acquire again in the future.
     ///
     /// # Arguments
     /// * `signal` - The `AquariumSignal` identifying which sensor's warning lock to reset.
     fn reset_warning_flag(&mut self, signal: &AquariumSignal) {
-        match signal {
-            AquariumSignal::WaterTemperature => {
-                self.lock_warn_max_mutex_access_duration_temperature = false;
-            }
-            AquariumSignal::Conductivity => {
-                self.lock_warn_max_mutex_access_duration_conductivity = false;
-            }
-            AquariumSignal::pH => {
-                self.lock_warn_max_mutex_access_duration_ph = false;
-            }
-            _ => { /* do nothing */ }
-        }
+        let lock_flag = match signal {
+            AquariumSignal::WaterTemperature => &mut self.lock_warn_max_mutex_access_duration_temperature,
+            AquariumSignal::Conductivity => &mut self.lock_warn_max_mutex_access_duration_conductivity,
+            AquariumSignal::pH => &mut self.lock_warn_max_mutex_access_duration_ph,
+            _ => return, // Do nothing for other signals
+        };
+        *lock_flag = false;
     }
 
     /// Atomically writes a sensor measurement result to the appropriate shared mutex.
     ///
-    /// This helper function directs an `AtlasScientificResult` to its corresponding
-    /// shared `Mutex` based on the provided `signal`. It handles the logic for
-    /// selecting the correct mutex (temperature, pH, or conductivity), locking it,
-    /// and updating its value.
-    ///
-    /// This encapsulation simplifies the calling code by centralizing the
+    /// This helper function directs an `AtlasScientificResultData` to its corresponding
+    /// shared `Mutex` based on the provided `signal`. It centralizes the
     /// mutex selection and locking logic.
     ///
     /// # Arguments
     /// * `signal` - The `AquariumSignal` that determines which mutex to update.
-    /// * `result` - The `AtlasScientificResult` (containing either sensor data or an error) to be written.
-    /// * `mutex_water_temperature` - The shared mutex for the water temperature sensor result.
+    /// * `result` - The `AtlasScientificResultData` to be written.
+    /// * `mutex_water_temperature` - The shared mutex for the water temperature result.
     /// * `mutex_ph` - The shared mutex for the pH sensor result.
     /// * `mutex_conductivity` - The shared mutex for the conductivity sensor result.
     ///
     /// # Returns
-    /// A `Result` which is:
-    /// - `Ok(Instant)`: On successful write, returns the `Instant` at which the lock was released.
-    ///   The caller can use this to measure total lock duration.
-    /// - `Err(AtlasScientificError::CouldNotLockMutex)`: If the target mutex is poisoned and
-    ///   cannot be locked.
+    /// A `Result` containing the `Instant` at which the lock was released on success.
+    ///
+    /// # Errors
+    /// Returns `Err(AtlasScientificError::CouldNotLockMutex)` if the target mutex is
+    /// poisoned and cannot be locked.
     fn write_result_to_mutex(
         &self,
         signal: &AquariumSignal,
@@ -583,35 +537,22 @@ impl AtlasScientific {
         mutex_ph: &Arc<Mutex<AtlasScientificResultData>>,
         mutex_conductivity: &Arc<Mutex<AtlasScientificResultData>>,
     ) -> Result<Instant, AtlasScientificError> {
-        match signal {
-            AquariumSignal::WaterTemperature => match mutex_water_temperature.lock() {
-                Ok(mut water_temperature) => *water_temperature = result,
-                Err(_e) => {
-                    return Err(AtlasScientificError::CouldNotLockMutex {
-                        location: module_path!().to_string(),
-                        signal: signal.clone(),
-                    });
-                }
-            },
-            AquariumSignal::pH => match mutex_ph.lock() {
-                Ok(mut ph) => *ph = result,
-                Err(_) => {
-                    return Err(AtlasScientificError::CouldNotLockMutex {
-                        location: module_path!().to_string(),
-                        signal: signal.clone(),
-                    });
-                }
-            },
-            AquariumSignal::Conductivity => match mutex_conductivity.lock() {
-                Ok(mut conductivity) => *conductivity = result,
-                Err(_) => {
-                    return Err(AtlasScientificError::CouldNotLockMutex {
-                        location: module_path!().to_string(),
-                        signal: signal.clone(),
-                    });
-                }
-            },
-            _ => { /* do nothing */ }
+        let target_mutex = match signal {
+            AquariumSignal::WaterTemperature => mutex_water_temperature,
+            AquariumSignal::pH => mutex_ph,
+            AquariumSignal::Conductivity => mutex_conductivity,
+            // For unsupported signals, do nothing and return success, matching original behavior.
+            _ => return Ok(Instant::now()),
+        };
+
+        match target_mutex.lock() {
+            Ok(mut guard) => *guard = result,
+            Err(_) => {
+                return Err(AtlasScientificError::CouldNotLockMutex {
+                    location: module_path!().to_string(),
+                    signal: signal.clone(),
+                });
+            }
         }
         Ok(Instant::now())
     }
@@ -625,26 +566,23 @@ impl AtlasScientific {
     /// For a successful payload, the function:
     /// 1. Parses the raw byte buffer using `check_response`.
     /// 2. Converts the valid data into an `AtlasScientificResultData` struct.
-    /// 3. Atomically writes this result to the correct shared `Mutex` (identified by `signal`)
-    ///    using the `write_result_to_mutex` helper.
-    /// 4. Monitors the duration of the mutex lock, issuing a warning via
-    ///    `warn_about_long_mutex_wait` if it exceeds the configured threshold.
-    ///
-    /// The function also handles all error conditions, wrapping them in the appropriate
-    /// `AtlasScientificError` variant for the caller to handle.
+    /// 3. Atomically writes this result to the correct shared `Mutex` using `write_result_to_mutex`.
+    /// 4. Monitors the duration of the mutex lock, issuing a warning if it exceeds the threshold.
     ///
     /// # Arguments
-    /// * `signal` - The `AquariumSignal` indicating which sensor's data is expected (e.g., Temperature, pH).
-    /// * `rx_atlas_scientific_from_i2c_interface` - The receiver channel for `I2cResult` messages from the I2C thread.
-    /// * `mutex_water_temperature` - The shared `Mutex` for storing the water temperature result.
-    /// * `mutex_ph` - The shared `Mutex` for storing the pH result.
-    /// * `mutex_conductivity` - The shared `Mutex` for storing the conductivity result.
+    /// * `signal` - The `AquariumSignal` indicating which sensor's data is expected.
+    /// * `rx_atlas_scientific_from_i2c_interface` - The receiver channel for `I2cResult` messages.
+    /// * `mutex_water_temperature` - The shared `Mutex` for the water temperature result.
+    /// * `mutex_ph` - The shared `Mutex` for the pH result.
+    /// * `mutex_conductivity` - The shared `Mutex` for the conductivity result.
     ///
     /// # Returns
-    /// An `AtlasScientificResult` which is:
-    /// - `Ok(AtlasScientificResultData)`: If a valid sensor reading was successfully received, parsed, and stored in its mutex.
-    /// - `Err(AtlasScientificError)`: If any error occurred. This includes:
-    ///   - `ChannelIsEmpty`: A recoverable error indicating no message was available. The caller should try again.
+    /// An `AtlasScientificResult` containing the `AtlasScientificResultData` if a valid sensor
+    /// reading was successfully received, parsed, and stored.
+    ///
+    /// # Errors
+    /// Returns an `AtlasScientificError` variant if any error occurred:
+    ///   - `ChannelIsEmpty`: A recoverable error indicating no message was available.
     ///   - `ChannelIsDisconnected`: A critical error indicating the I2C thread has terminated.
     ///   - `I2cCommunicationFailure`: The I2C thread reported a hardware-level communication error.
     ///   - `ResponseCheckFailed` / `IncorrectBufferLength`: The received data payload was malformed.
@@ -719,7 +657,7 @@ impl AtlasScientific {
                             // The final result of this arm is the successfully parsed data.
                             result = Ok(result_data_clone);
                         } else {
-                            // BUG FIX: If parsing failed, propagate the specific parsing error
+                            // If parsing failed, propagate the specific parsing error
                             // instead of letting it fall through as a generic 'Initial' error.
                             result = parsed_result;
                         }
