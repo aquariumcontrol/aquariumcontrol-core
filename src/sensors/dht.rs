@@ -295,9 +295,8 @@ impl Dht {
     #[allow(unused)]
     /// Converts a specific range of raw boolean data bits into a single `u8` byte.
     ///
-    /// This private helper function takes a segment of the `data_bits` array,
-    /// shifts bits to the left, and sets them according to their boolean value
-    /// to reconstruct the corresponding byte.
+    /// This private helper function takes a segment of the `data_bits` array and reconstructs
+    /// the corresponding byte by iterating through the bits and shifting them into place.
     ///
     /// # Arguments
     /// * `data_bits` - The array of `bool` representing the raw data bits received from the sensor.
@@ -312,17 +311,15 @@ impl Dht {
         stop_index: usize,
     ) -> u8 {
         let mut byte_val: u8 = 0;
-        for bit in data_bits.iter().take(stop_index).skip(start_index) {
-            byte_val |= match bit {
-                true => 1,
-                false => 0,
-            };
+        // Iterate over the exact slice of bits that form the byte.
+        for bit in &data_bits[start_index..=stop_index] {
+            // Shift the existing bits to the left to make room for the new one.
             byte_val <<= 1;
+            // If the current bit is true, set the last bit of the accumulator to 1.
+            if *bit {
+                byte_val |= 1;
+            }
         }
-        byte_val |= match data_bits[stop_index] {
-            true => 1,
-            false => 0,
-        };
         byte_val
     }
 
@@ -393,11 +390,13 @@ impl Dht {
     /// * `try_again` - A mutable reference to a boolean flag. Set to `true` when the top-level calling function may try again.    
     ///
     /// # Returns
-    /// A `Result<u8, DhtError>`:
-    /// - `Ok(u8)`: The calculated checksum if it matches the received one.
-    /// - `Err(DhtError::ChecksumCalculationError)`: If an unexpected error occurs during the checksum calculation process.
-    /// - `Err(DhtError::ChecksumError)`: If the calculated checksum does not match the received checksum,
-    ///   indicating invalid sensor data.
+    /// An empty `Result` (`Ok(())`) if the calculated checksum matches the received one.
+    ///
+    /// # Errors
+    /// Returns a `DhtError` if the checksum is invalid:
+    /// - `DhtError::ChecksumError`: If the calculated checksum does not match the received checksum,
+    ///   indicating that the data was corrupted during transmission. This is considered a
+    ///   recoverable error, and the calling function should retry the read operation.
     pub fn calc_checksum(
         byte_vals: [u8; dht22_constants::DHT22_DATA_LEN],
         try_again: &mut bool,
@@ -428,22 +427,23 @@ impl Dht {
     }
 
     #[allow(unused)]
-    /// Calculates temperature and humidity values (as `f32`) from the raw byte array received from a DHT22 sensor.
+    /// Calculates final temperature and humidity values from the raw byte array.
     ///
-    /// This private helper function reconstructs the 16-bit integer values for humidity and temperature
-    /// from their respective byte pairs in the `byte_vals` array. It then performs range checks
-    /// to ensure the values are within the sensor's specified operating limits. Finally, it converts
-    /// these scaled integer values into standard floating-point `f32` representations.
+    /// This function reconstructs the 16-bit integer values for humidity and temperature
+    /// from their respective byte pairs. It then performs range checks to ensure the values
+    /// are within the sensor's specified operating limits before converting them into
+    /// standard `f32` floating-point representations.
     ///
     /// # Arguments
-    /// * `byte_vals` - A fixed-size array of `u8` (5 bytes) containing the sensor's raw data,
-    ///   where the first four bytes represent humidity and temperature, and the last is the checksum.
+    /// * `byte_vals` - A fixed-size array of `u8` (5 bytes) containing the validated sensor data.
     ///
     /// # Returns
-    /// A `Result<(f32, f32), DhtError>`:
-    /// - `Ok((f32, f32))`: A tuple containing the calculated temperature in °C and humidity in %.
-    /// - `Err(DhtError::TemperatureOutOfRange)`: If the calculated temperature is outside the permissible limits.
-    /// - `Err(DhtError::HumidityOutOfRange)`: If the calculated humidity is outside the permissible limits.
+    /// A `Result` containing a tuple `(f32, f32)` with the temperature in °C and humidity in %RH.
+    ///
+    /// # Errors
+    /// Returns a `DhtError` if a value is outside the sensor's valid operating range:
+    /// - `DhtError::TemperatureOutOfRange`: If the calculated temperature is invalid.
+    /// - `DhtError::HumidityOutOfRange`: If the calculated humidity is invalid.
     pub fn calc_signals(
         byte_vals: [u8; dht22_constants::DHT22_DATA_LEN],
     ) -> Result<(f32, f32), DhtError> {
@@ -485,34 +485,33 @@ impl Dht {
     }
 
     #[cfg(all(target_os = "linux", feature = "target_hw"))]
-    /// Performs a low-level read operation to get temperature and humidity data from a DHT22 sensor.
+    /// Performs a low-level read from a DHT22 sensor using the `rppal` library.
     ///
     /// This function directly interacts with the GPIO pins to implement the DHT22 communication protocol.
     /// It handles sending the start signal, setting up interrupts to capture response timings,
-    /// and then processing these timings into raw data bits and bytes. It includes checks
-    /// for timeouts and validates checksums.
+    /// and then processing these timings into a final result.
     ///
     /// # Arguments
-    /// * `reset_sensor` - A boolean flag. If `true`, the sensor's power supply (VCC) will be briefly
-    ///   interrupted and restored before measurement, which can act as a hardware reset.
-    ///   If `false`, a pause duration is observed instead.
-    /// * `try_again` - A mutable reference to a boolean flag. Set to `true` when the top-level calling function may try again.    
+    /// * `reset_sensor` - If `true`, the sensor's power (VCC) will be toggled to perform a
+    ///   hardware reset before the reading.
     ///
     /// # Returns
-    /// A `Result<(f32, f32), DhtError>`:
-    /// - `Ok((f32, f32))`: A tuple containing the measured temperature in °C and humidity in %, if the reading is successful and valid.
-    /// - `Err(DhtError::VccPinAcquisitionFailed)`: If the VCC GPIO pin cannot be acquired.
-    /// - `Err(DhtError::DataPinOutputAcquisitionFailed)`: If the data GPIO pin cannot be acquired for output.
-    /// - `Err(DhtError::DataPinInputAcquisitionFailed)`: If the data GPIO pin cannot be acquired for input.
-    /// - `Err(DhtError::CouldNotSetInterrupt)`: If setting the GPIO interrupt fails.
-    /// - `Err(DhtError::InterruptFailed)`: If an error occurs during interrupt polling.
-    /// - `Err(DhtError::Timeout)`: If the sensor does not respond within the expected time frame.
-    /// - `Err(DhtError::WrongNumberOfValidTicks)`: If the number of signal transitions received is incorrect.
-    /// - `Err(DhtError::ChecksumCalculationError)`: If an error occurs during the checksum calculation.
-    /// - `Err(DhtError::ChecksumError)`: If the calculated checksum does not match the received checksum.
-    /// - `Err(DhtError::TemperatureOutOfRange)`: If the measured temperature is outside the sensor's specified range.
-    /// - `Err(DhtError::HumidityOutOfRange)`: If the measured humidity is outside the sensor's specified range.
-    /// - `Err(DhtError::IncorrectPlatform)`: If called with no gpio lib handle available.
+    /// A `Result` containing a tuple `(f32, f32)` with the temperature and humidity on success.
+    ///
+    /// # Errors
+    /// Returns a `DhtError` for a wide range of hardware and protocol failures:
+    /// - `DhtError::VccPinAcquisitionFailed`: If the VCC GPIO pin cannot be acquired.
+    /// - `DhtError::DataPinOutputAcquisitionFailed`: If the data GPIO pin cannot be acquired for output.
+    /// - `DhtError::DataPinInputAcquisitionFailed`: If the data GPIO pin cannot be acquired for input.
+    /// - `DhtError::CouldNotSetInterrupt`: If setting the GPIO interrupt fails.
+    /// - `DhtError::InterruptFailed`: If an error occurs during interrupt polling.
+    /// - `DhtError::Timeout`: If the sensor does not respond within the expected time frame.
+    /// - `DhtError::WrongNumberOfValidTicks`: If the number of signal transitions received is incorrect.
+    /// - `DhtError::ChecksumCalculationError`: If an error occurs during the checksum calculation.
+    /// - `DhtError::ChecksumError`: If the calculated checksum does not match the received checksum.
+    /// - `DhtError::TemperatureOutOfRange`: If the measured temperature is outside the sensor's specified range.
+    /// - `DhtError::HumidityOutOfRange`: If the measured humidity is outside the sensor's specified range.
+    /// - `DhtError::IncorrectPlatform`: If called with no gpio lib handle available.
     pub fn read(&mut self, reset_sensor: bool, try_again: &mut bool) -> DhtResult {
         let mut ticks = [0u64; dht22_constants::DHT22_TRANSMISSION_END_IDX];
 
@@ -679,23 +678,33 @@ impl Dht {
     }
 
     #[cfg(not(all(target_os = "linux", feature = "target_hw")))]
-    /// Stub function to allow build on a non-target platform
+    /// Stub function for non-target platforms to allow compilation.
+    ///
+    /// This version is used when the `target_hw` feature is disabled or on a non-Linux OS.
+    /// It does not interact with hardware and always returns an error.
+    ///
+    /// # Returns
+    /// This function does not return a value.
+    ///
+    /// # Errors
+    /// Always returns `Err(DhtError::IncorrectPlatform)`.
     pub fn read(&self, _reset_sensor: bool, _try_again: &mut bool) -> DhtResult {
         Err(DhtError::IncorrectPlatform(module_path!().to_string()))
     }
 
-    /// Initiates the reading process from the DHT22 sensor, including retry logic and post-processing of data.
+    /// Initiates a robust reading process from the DHT22 sensor, with retries.
     ///
-    /// This function attempts to read temperature and humidity data from the DHT22 sensor.
-    /// It includes an internal retry mechanism (`DHT22_MAX_RETRIES`) for transient
-    /// errors like timeouts or checksum mismatches, making the sensor reading more robust.
-    /// If an unrecoverable error occurs or all retries fail, an appropriate `DhtError` is returned.
+    /// This function attempts to read temperature and humidity data. It includes an
+    /// internal retry mechanism for transient, recoverable errors like timeouts or
+    /// checksum mismatches, making the sensor reading more reliable.
     ///
     /// # Returns
-    /// A `Result<(f32, f32), DhtError>`:
-    /// - `Ok((f32, f32))`: A tuple containing the measured temperature in °C and humidity in %, if the reading is successful and valid.
-    /// - `Err(DhtError)`: An error indicating various failure modes, including sensor communication issues,
-    ///   checksum errors, timeouts after all retries, or out-of-range sensor values.
+    /// A `Result` containing a tuple `(f32, f32)` with the temperature and humidity on success.
+    ///
+    /// # Errors
+    /// Returns a `DhtError` if the reading fails permanently or after all retries:
+    /// - `DhtError::FailedAfterRetries`: If all attempts fail due to recoverable errors.
+    /// - Any other `DhtError` variant for non-recoverable hardware or configuration failures.
     pub fn get_data(&mut self) -> DhtResult {
         // read one sample from DHT sensor to verify SW and HW are working ok
         let mut retry_counter = 0;
@@ -717,7 +726,7 @@ impl Dht {
                 }
                 Err(e) => {
                     if try_again {
-                        // for errors DhtError::Timeout and DhtError::ChecksumError
+                        // For errors DhtError::Timeout and DhtError::ChecksumError
                         // These two errors shall not be reported directly.
                         // Instead, the application will try to read again for multiple times.
                         retry_counter += 1;
