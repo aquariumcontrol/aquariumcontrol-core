@@ -161,8 +161,12 @@ impl I2cResponse {
         let len = read_data.len();
         read_buf[..len].copy_from_slice(read_data);
 
-        I2cResponse { read_buf, length: len }
-    }}
+        I2cResponse {
+            read_buf,
+            length: len,
+        }
+    }
+}
 
 pub type I2cResult = Result<I2cResponse, I2cError>;
 
@@ -261,13 +265,13 @@ impl I2cInterface {
                 source: e,
             })?;
 
-        let realized_write_len =
-            self.i2c
-                .write(&i2c_request.send_buf[..i2c_request.send_len])
-                .map_err(|e| I2cError::WriteFailure {
-                    location: module_path!().to_string(),
-                    source: e,
-                })?;
+        let realized_write_len = self
+            .i2c
+            .write(&i2c_request.send_buf[..i2c_request.send_len])
+            .map_err(|e| I2cError::WriteFailure {
+                location: module_path!().to_string(),
+                source: e,
+            })?;
         if realized_write_len != i2c_request.send_len {
             return Err(I2cError::InsufficientWrite(
                 module_path!().to_string(),

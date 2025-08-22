@@ -276,24 +276,54 @@ impl DataLogger {
             // initialize them, making the code concise, readable, and easy to maintain.
             let files_to_initialize = [
                 (&config.output_file_name_timestamp, "timestamp"),
-                (&config.output_file_name_water_temperature, "water temperature"),
-                (&config.output_file_name_water_temperature_filtered, "filtered water temperature"),
+                (
+                    &config.output_file_name_water_temperature,
+                    "water temperature",
+                ),
+                (
+                    &config.output_file_name_water_temperature_filtered,
+                    "filtered water temperature",
+                ),
                 (&config.output_file_name_pH, "pH value"),
                 (&config.output_file_name_pH_filtered, "filtered pH value"),
                 (&config.output_file_name_conductivity, "conductivity"),
-                (&config.output_file_name_conductivity_filtered, "filtered conductivity"),
-                (&config.output_file_name_tank_level_switch_position, "tank level switch position"),
-                (&config.output_file_name_tank_level_switch_invalid, "tank level switch invalid"),
-                (&config.output_file_name_tank_level_switch_position_stabilized, "tank level switch stabilized"),
-                (&config.output_file_name_ventilation_is_on, "ventilation status"),
+                (
+                    &config.output_file_name_conductivity_filtered,
+                    "filtered conductivity",
+                ),
+                (
+                    &config.output_file_name_tank_level_switch_position,
+                    "tank level switch position",
+                ),
+                (
+                    &config.output_file_name_tank_level_switch_invalid,
+                    "tank level switch invalid",
+                ),
+                (
+                    &config.output_file_name_tank_level_switch_position_stabilized,
+                    "tank level switch stabilized",
+                ),
+                (
+                    &config.output_file_name_ventilation_is_on,
+                    "ventilation status",
+                ),
                 (&config.output_file_name_heating_is_on, "heating status"),
-                (&config.output_file_name_ambient_temperature, "ambient temperature"),
+                (
+                    &config.output_file_name_ambient_temperature,
+                    "ambient temperature",
+                ),
                 (&config.output_file_name_humidity, "humidity"),
-                (&config.output_file_name_refill_in_progress, "refill in progress"),
+                (
+                    &config.output_file_name_refill_in_progress,
+                    "refill in progress",
+                ),
             ];
 
             // 1. Check if any filename is empty.
-            if files_to_initialize.iter().any(|(filename, _)| filename.is_empty()) {
+            if files_to_initialize
+                .iter()
+                .any(|(filename, _)| filename.is_empty())
+            {
                 return Err(DataLoggerError::OutputFilenameEmpty(
                     module_path!().to_string(),
                 ));
@@ -1281,29 +1311,81 @@ pub mod tests {
         };
 
         // Helper to assert the content of a file containing a boolean state.
-        let assert_file_bool = |filename: &str, expected_bool: bool, true_str: &str, false_str: &str| {
-            let content = fs::read_to_string(filename)
-                .unwrap_or_else(|_| panic!("Could not read file: {}", filename));
-            let expected_str = if expected_bool { true_str } else { false_str };
-            assert_eq!(content, expected_str, "Mismatch in file: {}", filename);
-        };
+        let assert_file_bool =
+            |filename: &str, expected_bool: bool, true_str: &str, false_str: &str| {
+                let content = fs::read_to_string(filename)
+                    .unwrap_or_else(|_| panic!("Could not read file: {}", filename));
+                let expected_str = if expected_bool { true_str } else { false_str };
+                assert_eq!(content, expected_str, "Mismatch in file: {}", filename);
+            };
 
         // Now, the assertions are clean, single-line calls.
-        assert_file_f32(&data_logger_config.output_file_name_water_temperature, target_water_temperature);
-        assert_file_f32(&data_logger_config.output_file_name_water_temperature_filtered, target_water_temperature_filtered);
+        assert_file_f32(
+            &data_logger_config.output_file_name_water_temperature,
+            target_water_temperature,
+        );
+        assert_file_f32(
+            &data_logger_config.output_file_name_water_temperature_filtered,
+            target_water_temperature_filtered,
+        );
         assert_file_f32(&data_logger_config.output_file_name_pH, target_water_ph);
-        assert_file_f32(&data_logger_config.output_file_name_pH_filtered, target_water_ph_filtered);
-        assert_file_f32(&data_logger_config.output_file_name_conductivity, target_water_conductivity);
-        assert_file_f32(&data_logger_config.output_file_name_conductivity_filtered, target_water_conductivity_filtered);
-        assert_file_f32(&data_logger_config.output_file_name_ambient_temperature, target_ambient_temperature);
-        assert_file_f32(&data_logger_config.output_file_name_humidity, target_ambient_humidity);
+        assert_file_f32(
+            &data_logger_config.output_file_name_pH_filtered,
+            target_water_ph_filtered,
+        );
+        assert_file_f32(
+            &data_logger_config.output_file_name_conductivity,
+            target_water_conductivity,
+        );
+        assert_file_f32(
+            &data_logger_config.output_file_name_conductivity_filtered,
+            target_water_conductivity_filtered,
+        );
+        assert_file_f32(
+            &data_logger_config.output_file_name_ambient_temperature,
+            target_ambient_temperature,
+        );
+        assert_file_f32(
+            &data_logger_config.output_file_name_humidity,
+            target_ambient_humidity,
+        );
 
-        assert_file_bool(&data_logger_config.output_file_name_refill_in_progress, target_refill_in_progress, "ON", "OFF");
-        assert_file_bool(&data_logger_config.output_file_name_tank_level_switch_position, target_tank_level_switch_position, "HIGH", "LOW");
-        assert_file_bool(&data_logger_config.output_file_name_tank_level_switch_invalid, target_tank_level_switch_invalid, "INVALID", "VALID");
-        assert_file_bool(&data_logger_config.output_file_name_tank_level_switch_position_stabilized, target_tank_level_switch_position_stabilized, "HIGH", "LOW");
-        assert_file_bool(&data_logger_config.output_file_name_ventilation_is_on, target_surface_ventilation_status, "ON", "OFF");
-        assert_file_bool(&data_logger_config.output_file_name_heating_is_on, target_heater_status, "ON", "OFF");
+        assert_file_bool(
+            &data_logger_config.output_file_name_refill_in_progress,
+            target_refill_in_progress,
+            "ON",
+            "OFF",
+        );
+        assert_file_bool(
+            &data_logger_config.output_file_name_tank_level_switch_position,
+            target_tank_level_switch_position,
+            "HIGH",
+            "LOW",
+        );
+        assert_file_bool(
+            &data_logger_config.output_file_name_tank_level_switch_invalid,
+            target_tank_level_switch_invalid,
+            "INVALID",
+            "VALID",
+        );
+        assert_file_bool(
+            &data_logger_config.output_file_name_tank_level_switch_position_stabilized,
+            target_tank_level_switch_position_stabilized,
+            "HIGH",
+            "LOW",
+        );
+        assert_file_bool(
+            &data_logger_config.output_file_name_ventilation_is_on,
+            target_surface_ventilation_status,
+            "ON",
+            "OFF",
+        );
+        assert_file_bool(
+            &data_logger_config.output_file_name_heating_is_on,
+            target_heater_status,
+            "ON",
+            "OFF",
+        );
     }
 
     #[test]

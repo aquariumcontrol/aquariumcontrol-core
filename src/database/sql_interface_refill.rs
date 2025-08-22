@@ -414,7 +414,8 @@ pub mod tests {
         let mut sql_interface: SqlInterface = SqlInterface::new(config.sql_interface)
             .expect("Initialization of SQL interface for test failed.");
         let mut sql_interface_refill =
-            SqlInterfaceRefill::new(sql_interface.get_connection().unwrap(), max_rows_refill).unwrap();
+            SqlInterfaceRefill::new(sql_interface.get_connection().unwrap(), max_rows_refill)
+                .unwrap();
 
         // *** check timestamp of last refill *************************************************
         match SqlInterface::truncate_table(&mut sql_interface, SQL_TABLE_REFILL.to_string()) {

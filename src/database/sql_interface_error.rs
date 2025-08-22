@@ -21,7 +21,7 @@ pub enum SqlInterfaceError {
         location: String,
 
         #[source]
-        source: mysql::Error
+        source: mysql::Error,
     },
 
     /// The database wait_timeout is less than the required minimum.
@@ -39,7 +39,7 @@ pub enum SqlInterfaceError {
         url: String,
 
         #[source]
-        source: mysql::Error
+        source: mysql::Error,
     },
 
     /// Required tables are not existing in the database.
@@ -103,7 +103,9 @@ pub enum SqlInterfaceError {
     SingleFloatRequestNoSingleResponse(String, String),
 
     /// Could not get single heating stats entry from the database.
-    #[error("[{location}] Could not get single heating stats entry from database using query: {query}")]
+    #[error(
+        "[{location}] Could not get single heating stats entry from database using query: {query}"
+    )]
     SingleHeatingStatsRequestFailure {
         location: String,
         query: String,
@@ -232,13 +234,15 @@ pub enum SqlInterfaceError {
     },
 
     /// Could not get feed schedule entry from the database.
-    #[error("[{location}] Could not get feed schedule entry from the database using query: {query}")]
+    #[error(
+        "[{location}] Could not get feed schedule entry from the database using query: {query}"
+    )]
     FeedScheduleEntryRequestFailure {
         location: String,
         query: String,
 
         #[source]
-        source: MySqlError
+        source: MySqlError,
     },
 
     /// Could not convert feedschedule entry string(s) read from the database to timestamp.
@@ -291,7 +295,7 @@ pub enum SqlInterfaceError {
         query: String,
 
         #[source]
-        source: MySqlError
+        source: MySqlError,
     },
 
     /// database responded with empty response.
@@ -359,13 +363,15 @@ pub enum SqlInterfaceError {
     HeatingSetValsInvalid(String, f32, f32),
 
     /// Could not get ventilation set values from the database.
-    #[error("[{location}] Could not get ventilation set values from the database with query: {query}")]
+    #[error(
+        "[{location}] Could not get ventilation set values from the database with query: {query}"
+    )]
     VentilationSetValsRequestFailure {
         location: String,
         query: String,
 
         #[source]
-        source: MySqlError
+        source: MySqlError,
     },
 
     /// The database returned more than one ventilation set value entry.
@@ -610,7 +616,9 @@ pub enum SqlInterfaceError {
     DatabaseFeedTableNegativeValue(String, String, i64, i64),
 
     #[cfg(test)]
-    #[error("[{location}] Error when inserting heating set values into database using query: {query}")]
+    #[error(
+        "[{location}] Error when inserting heating set values into database using query: {query}"
+    )]
     InsertHeatingSetValuesFailure {
         location: String,
         query: String,

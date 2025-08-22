@@ -141,7 +141,7 @@ impl SqlInterface {
                 return Err(SqlInterfaceError::ConnectionPoolFailure {
                     location: module_path!().to_string(),
                     url,
-                    source: e
+                    source: e,
                 });
             }
         };
@@ -151,7 +151,7 @@ impl SqlInterface {
             .get_conn()
             .map_err(|e| SqlInterfaceError::ConnectionFromPool {
                 location: module_path!().to_string(),
-                source: e
+                source: e,
             })?;
 
         // Call the refactored check_wait_timeout
@@ -169,11 +169,13 @@ impl SqlInterface {
     /// This function will return an `Err(SqlInterfaceError::ConnectionFromPool)` if it
     /// fails to retrieve a database connection from the pool. This typically indicates
     /// a severe issue with database availability, pool exhaustion, or configuration.
-   pub fn get_connection(&self) -> Result<PooledConn, SqlInterfaceError> {
-        self.pool.get_conn().map_err(|e| SqlInterfaceError::ConnectionFromPool {
-            location: module_path!().to_string(),
-            source: e,
-        })
+    pub fn get_connection(&self) -> Result<PooledConn, SqlInterfaceError> {
+        self.pool
+            .get_conn()
+            .map_err(|e| SqlInterfaceError::ConnectionFromPool {
+                location: module_path!().to_string(),
+                source: e,
+            })
     }
 
     /// Executes a given SQL query and maps the results into a vector of `SingleString` structs.
@@ -405,7 +407,6 @@ impl SqlInterface {
         }
         Ok(response_array)
     }
-
 
     /// Executes an SQL query and strictly expects a single integer result.
     ///
@@ -1092,10 +1093,11 @@ pub mod tests {
         // *****************************************************************************************
 
         // *** check if the current date is local date *********************************************
-        let sql_date = match SqlInterface::get_current_date(&mut sql_interface.get_connection().unwrap()) {
-            Ok(c) => c,
-            Err(_) => panic!("Could not get current date from the database."),
-        };
+        let sql_date =
+            match SqlInterface::get_current_date(&mut sql_interface.get_connection().unwrap()) {
+                Ok(c) => c,
+                Err(_) => panic!("Could not get current date from the database."),
+            };
         let sql_date_string = sql_date.format("%Y-%m-%d").to_string();
         let local_date_string = Local::now().trunc_subsecs(0).format("%Y-%m-%d").to_string();
         assert_eq!(sql_date_string, local_date_string);

@@ -440,7 +440,8 @@ pub mod tests {
             )
             .unwrap();
         let mut sql_interface_schedule =
-            SqlInterfaceSchedule::new(sql_interface.get_connection().unwrap(), max_rows_schedule).unwrap();
+            SqlInterfaceSchedule::new(sql_interface.get_connection().unwrap(), max_rows_schedule)
+                .unwrap();
 
         match sql_interface_schedule.read_schedule() {
             Ok(_) => {

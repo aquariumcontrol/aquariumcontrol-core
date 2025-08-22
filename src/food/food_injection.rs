@@ -439,7 +439,6 @@ impl FoodInjection {
 }
 
 impl FoodInjectionTrait for FoodInjection {
-    
     /// Actuates the feeder according to the specified feed pattern to inject food.
     ///
     /// This implementation executes a sequence of feed phases defined in the `feedpattern`.

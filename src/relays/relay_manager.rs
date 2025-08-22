@@ -33,12 +33,62 @@ use crate::utilities::proc_ext_req::ProcessExternalRequestTrait;
 /// Trait for the execution of relay actuation on either simulator or real hardware.
 /// This trait allows running the main control with a mock implementation for testing.
 pub trait RelayActuationTrait {
+    /// Actuates a device based on the given command.
+    ///
+    /// This is the primary method for controlling a hardware device. Implementations
+    /// should translate the high-level `InternalCommand` into a hardware-specific
+    /// action (e.g., sending a serial command, setting a GPIO pin).
+    ///
+    /// # Arguments
+    /// * `internal_command` - The command specifying the device and action to perform.
+    ///
+    /// # Returns
+    /// An empty `Result` (`Ok(())`) on successful actuation.
+    ///
+    /// # Errors
+    /// Returns a `RelayError` variant if the actuation fails. This could be due to
+    /// various reasons depending on the implementation, such as:
+    /// - A failure to write to a serial port (`WriteError`).
+    /// - A corrupt response from the hardware (`IncorrectChecksum`).
+    /// - An attempt to use an unsupported command for the given hardware.
     fn actuate(&mut self, internal_command: &InternalCommand) -> Result<(), RelayError>;
 
+    /// Gets the required interval for the heartbeat signal, if any.
+    ///
+    /// Some hardware (like the Controllino) requires a periodic "keep-alive" signal
+    /// to ensure the connection is active. This method defines that interval.
+    ///
+    /// # Returns
+    /// - `Some(u64)`: The heartbeat interval in seconds.
+    /// - `None`: If no heartbeat is required for this actuator (e.g., for direct
+    ///   GPIO control or a simulator).
     fn get_heartbeat_interval_seconds(&self) -> Option<u64>;
 
+    /// Sends a heartbeat signal to the hardware.
+    ///
+    /// This method should be called periodically according to the interval specified
+    /// by `get_heartbeat_interval_seconds` to maintain the hardware connection.
+    ///
+    /// # Returns
+    /// An empty `Result` (`Ok(())`) if the heartbeat was sent successfully.
+    ///
+    /// # Errors
+    /// Returns a `RelayError` if sending the heartbeat signal fails, for instance,
+    /// due to a disconnected serial port.
     fn heartbeat(&mut self) -> Result<(), RelayError>;
 
+    /// Flushes the communication buffer of the hardware interface.
+    ///
+    /// This method is a recovery mechanism, typically used after a communication
+    /// error (like an incorrect checksum) to clear any lingering, corrupt data
+    /// from the input/output buffers and resynchronize communication.
+    ///
+    /// # Returns
+    /// An empty `Result` (`Ok(())`) if the buffer was flushed successfully.
+    ///
+    /// # Errors
+    /// Returns a `RelayError` if the flush operation fails, which could indicate
+    /// a deeper issue with the serial port or hardware driver.
     fn flush_buffer(&mut self) -> Result<(), RelayError>;
 }
 
@@ -192,9 +242,6 @@ impl RelayManager {
     /// A new `RelayManager` struct, ready to handle relay actuation commands
     /// and communicate with other modules.    
     pub fn new(config: RelayManagerConfig) -> RelayManager {
-        #[cfg(not(test))]
-        println!("{config}");
-
         RelayManager {
             config,
             lock_error_channel_send_refill: false,
@@ -210,31 +257,30 @@ impl RelayManager {
         }
     }
 
-    /// Attempts to actuate a given command a fixed number of times in case of failure.
+    /// Attempts to actuate a given command, with retries on failure.
     ///
     /// This helper function encapsulates the retry logic for actuator commands. It
     /// will attempt the actuation at least once, and if it fails, it will retry
     /// up to the number of times specified by `self.config.actuation_retries`.
-    ///
-    /// Error logging for actuation failures is managed internally: an `error!`-
-    /// message is logged on the first failure and on the final failure (after all
-    /// retries are exhausted). If actuation succeeds after one or more retries,
-    /// a `warn!` message is logged to indicate that a recovery occurred.
+    /// If a failure is due to an `IncorrectChecksum`, it will attempt to flush the
+    /// buffer before retrying.
     ///
     /// # Arguments
+    /// * `actuator` - A mutable reference to an object implementing `RelayActuationTrait`.
+    /// * `command` - The `InternalCommand` to be executed.
+    /// * `actuation_name` - A descriptive name for the action (e.g., "refill pump") for logging.
+    /// * `spin_sleeper` - A `SpinSleeper` to pause between retries.
+    /// * `sleep_duration` - The `Duration` to wait between retry attempts.
     ///
-    /// * `self` - A mutable reference to the `RelayManager` instance, providing
-    ///   access to the configuration (`self.config.actuation_retries`) and
-    ///   allowing modification of the associated error lock flag.
-    /// * `actuator` - A mutable reference to the `Actuator` responsible for
-    ///   performing the physical action.
-    /// * `command` - The specific `ActuatorCommand` to be sent to the actuator.
-    /// * `actuation_name` - A string slice providing a descriptive name for the
-    ///   actuation being attempted (e.g., "refill pump", "heater"). This is
-    ///   used in log messages to make them more informative.
     /// # Returns
-    /// * `Ok(())` in case of success
-    /// * `RelayError::ActuationFailed` in case of failure
+    /// An empty `Result` (`Ok(())`) if the actuation succeeds, possibly after one or more retries.
+    ///
+    /// # Errors
+    /// Returns `Err(RelayError::ActuationFailed)` if all attempts (the initial one plus all
+    /// retries) fail. This error is a wrapper that contains detailed context, including:
+    /// - The name of the actuation that failed.
+    /// - The total number of attempts made.
+    /// - The specific error from the *last* attempt, providing the root cause of the final failure.
     fn actuate_with_retries(
         &mut self,
         actuator: &mut impl RelayActuationTrait,
@@ -296,18 +342,17 @@ impl RelayManager {
     /// Executes the main control loop for the Relay Manager.
     ///
     /// This function runs continuously, acting as the central dispatcher for actuation commands
-    /// received from various control modules. It forwards these commands either to real hardware
-    /// (e.g., Controllino via serial port) or to a simulator, depending on the `RelayActuationTrait`
-    /// implementation it receives.
+    /// received from various control modules (Refill, Heating, etc.). It uses a helper function,
+    /// `process_actuation_request`, to handle the logic for each module's channel pair,
+    /// keeping the main loop clean and readable.
     ///
-    /// The loop continually checks for new commands from different sources (Refill, Heating,
-    /// Ventilation, Balling, Feed) and from the global signal handler. It remains active
-    /// until a `Quit` command is received from the signal handler, at which point it initiates
-    /// a graceful shutdown.
+    /// The loop forwards commands to the provided `actuator` and handles graceful shutdown
+    /// when a `Quit` command is received from the signal handler. It also manages sending
+    /// periodic heartbeats to the hardware if required.
     ///
     /// # Arguments
     /// * `relay_manager_channels` - A struct containing all `mpsc` channels necessary for
-    ///   communication with other control threads and the main signal handler.
+    ///   communication with other control threads.
     /// * `actuator` - A mutable reference to an object implementing the `RelayActuationTrait`,
     ///   which handles the actual hardware interaction or simulation.
     pub fn execute(
@@ -325,310 +370,119 @@ impl RelayManager {
         let sleep_duration_main_cycle = Duration::from_millis(10);
 
         loop {
-            let (quit_command_received, _, _) = self.process_external_request(
-                &relay_manager_channels.rx_relay_manager_from_signal_handler,
-                None,
-            );
-            if quit_command_received {
+            // Check for quit command first
+            if self
+                .process_external_request(
+                    &relay_manager_channels.rx_relay_manager_from_signal_handler,
+                    None,
+                )
+                .0
+            {
                 #[cfg(feature = "debug_relay_manager")]
-                debug!(
-                    target: module_path!(),
-                    "received QUIT command"
-                );
-
+                debug!(target: module_path!(), "received QUIT command");
                 break;
             }
 
-            // *** communication with refill control ***
-            match relay_manager_channels
-                .rx_relay_manager_from_refill
-                .try_recv()
-            {
-                Ok(command) => {
-                    self.lock_error_channel_receive_refill = false;
-                    if self.config.active {
-                        if let Err(refill_actuation_error) = self.actuate_with_retries(
-                            actuator,
-                            &command,
-                            "refill",
-                            &mut spin_sleeper,
-                            sleep_duration_between_retries,
-                        ) {
-                            log_error_chain(
-                                module_path!(),
-                                "Actuation of refill pump failed.",
-                                refill_actuation_error,
-                            );
-                        }
-                    }
-                    match &relay_manager_channels.tx_relay_manager_to_refill.send(true) {
-                        Ok(()) => {
-                            self.lock_error_channel_send_refill = false;
-                        }
-                        Err(e) => {
-                            if !self.lock_error_channel_send_refill {
-                                error!(
-                                    target: module_path!(),
-                                    "responding to refill control ({e:?})"
-                                );
-                                self.lock_error_channel_send_refill = true;
-                            }
-                        }
-                    }
-                }
-                Err(e) => {
-                    match e {
-                        TryRecvError::Empty => {
-                            /* empty buffer - no action required */
-                            self.lock_error_channel_receive_refill = false;
-                        }
-                        TryRecvError::Disconnected => {
-                            if !self.lock_error_channel_receive_refill {
-                                error!(
-                                    "{}: error when trying to receive command from refill control ({e:?})",
-                                    module_path!()
-                                );
-                                self.lock_error_channel_receive_refill = true;
-                            }
-                        }
-                    }
-                }
-            }
-            // **********************************
+            (
+                self.lock_error_channel_receive_refill,
+                self.lock_error_channel_send_refill,
+            ) = self.process_actuation_request(
+                (
+                    &relay_manager_channels.rx_relay_manager_from_refill,
+                    &relay_manager_channels.tx_relay_manager_to_refill,
+                ),
+                (
+                    self.lock_error_channel_receive_refill,
+                    self.lock_error_channel_send_refill,
+                ),
+                "refill",
+                actuator,
+                &mut spin_sleeper,
+                sleep_duration_between_retries,
+            );
 
-            // *** communication with heating control ***
-            match relay_manager_channels
-                .rx_relay_manager_from_heating
-                .try_recv()
-            {
-                Ok(command) => {
-                    self.lock_error_channel_receive_heating = false;
-                    if let Err(heating_actuation_error) = self.actuate_with_retries(
-                        actuator,
-                        &command,
-                        "heating",
-                        &mut spin_sleeper,
-                        sleep_duration_between_retries,
-                    ) {
-                        log_error_chain(
-                            module_path!(),
-                            "Actuation of heater failed.",
-                            heating_actuation_error,
-                        );
-                    }
-                    match &relay_manager_channels
-                        .tx_relay_manager_to_heating
-                        .send(true)
-                    {
-                        Ok(()) => {
-                            self.lock_error_channel_send_heating = false;
-                        }
-                        Err(e) => {
-                            if !self.lock_error_channel_send_heating {
-                                error!(
-                                    target: module_path!(),
-                                    "responding to heating control: {e:?}"
-                                );
-                                self.lock_error_channel_send_heating = true;
-                            }
-                        }
-                    }
-                }
-                Err(e) => {
-                    match e {
-                        TryRecvError::Empty => {
-                            /* empty buffer - no action required */
-                            self.lock_error_channel_receive_heating = false;
-                        }
-                        TryRecvError::Disconnected => {
-                            if !self.lock_error_channel_receive_heating {
-                                error!(
-                                    "{}: Error in trying to receive command from heating control {e:?}",
-                                    module_path!()
-                                );
-                                self.lock_error_channel_receive_heating = true;
-                            }
-                        }
-                    }
-                }
-            }
-            // **********************************
+            (
+                self.lock_error_channel_receive_heating,
+                self.lock_error_channel_send_heating,
+            ) = self.process_actuation_request(
+                (
+                    &relay_manager_channels.rx_relay_manager_from_heating,
+                    &relay_manager_channels.tx_relay_manager_to_heating,
+                ),
+                (
+                    self.lock_error_channel_receive_heating,
+                    self.lock_error_channel_send_heating,
+                ),
+                "heating",
+                actuator,
+                &mut spin_sleeper,
+                sleep_duration_between_retries,
+            );
 
-            // *** communication with ventilation control ***
-            match relay_manager_channels
-                .rx_relay_manager_from_ventilation
-                .try_recv()
-            {
-                Ok(command) => {
-                    self.lock_error_channel_receive_ventilation = false;
-                    if let Err(ventilation_actuation_error) = self.actuate_with_retries(
-                        actuator,
-                        &command,
-                        "ventilation",
-                        &mut spin_sleeper,
-                        sleep_duration_between_retries,
-                    ) {
-                        log_error_chain(
-                            module_path!(),
-                            "Actuation of ventilation failed.",
-                            ventilation_actuation_error,
-                        );
-                    }
-                    match &relay_manager_channels
-                        .tx_relay_manager_to_ventilation
-                        .send(true)
-                    {
-                        Ok(()) => {
-                            self.lock_error_channel_send_ventilation = false;
-                        }
-                        Err(e) => {
-                            if !self.lock_error_channel_send_ventilation {
-                                error!(
-                                    target: module_path!(),
-                                    "responding to ventilation control ({e:?})"
-                                );
-                                self.lock_error_channel_send_ventilation = true;
-                            }
-                        }
-                    }
-                }
-                Err(e) => {
-                    match e {
-                        TryRecvError::Empty => {
-                            /* empty buffer - no action required */
-                            self.lock_error_channel_receive_ventilation = false;
-                        }
-                        TryRecvError::Disconnected => {
-                            if !self.lock_error_channel_receive_ventilation {
-                                error!(
-                                    "{}: Error in trying to receive command from ventilation control {e:?}",
-                                    module_path!()
-                                );
-                                self.lock_error_channel_receive_ventilation = true;
-                            }
-                        }
-                    }
-                }
-            }
-            // **********************************
+            (
+                self.lock_error_channel_receive_ventilation,
+                self.lock_error_channel_send_ventilation,
+            ) = self.process_actuation_request(
+                (
+                    &relay_manager_channels.rx_relay_manager_from_ventilation,
+                    &relay_manager_channels.tx_relay_manager_to_ventilation,
+                ),
+                (
+                    self.lock_error_channel_receive_ventilation,
+                    self.lock_error_channel_send_ventilation,
+                ),
+                "ventilation",
+                actuator,
+                &mut spin_sleeper,
+                sleep_duration_between_retries,
+            );
 
-            // *** communication with Balling dosing control ***
-            match relay_manager_channels
-                .rx_relay_manager_from_balling
-                .try_recv()
-            {
-                Ok(command) => {
-                    self.lock_error_channel_receive_balling = false;
-                    if let Err(balling_actuation_error) = self.actuate_with_retries(
-                        actuator,
-                        &command,
-                        "balling",
-                        &mut spin_sleeper,
-                        sleep_duration_between_retries,
-                    ) {
-                        log_error_chain(
-                            module_path!(),
-                            "Actuation of Balling dosing failed.",
-                            balling_actuation_error,
-                        );
-                    }
-                    match &relay_manager_channels
-                        .tx_relay_manager_to_balling
-                        .send(true)
-                    {
-                        Ok(()) => {
-                            self.lock_error_channel_send_balling = false;
-                        }
-                        Err(e) => {
-                            if !self.lock_error_channel_send_balling {
-                                error!(
-                                    target: module_path!(),
-                                    "responding to Balling dosing control ({e:?})"
-                                );
-                                self.lock_error_channel_send_balling = true;
-                            }
-                        }
-                    }
-                }
-                Err(e) => {
-                    match e {
-                        TryRecvError::Empty => {
-                            /* empty buffer - no action required */
-                            self.lock_error_channel_receive_balling = false;
-                        }
-                        TryRecvError::Disconnected => {
-                            if !self.lock_error_channel_receive_balling {
-                                error!(
-                                    "{}: Error in trying to receive command from Balling dosing control ({e:?})", 
-                                    module_path!()
-                                );
-                                self.lock_error_channel_receive_balling = true;
-                            }
-                        }
-                    }
-                }
-            }
-            // **********************************
+            (
+                self.lock_error_channel_receive_balling,
+                self.lock_error_channel_send_balling,
+            ) = self.process_actuation_request(
+                (
+                    &relay_manager_channels.rx_relay_manager_from_balling,
+                    &relay_manager_channels.tx_relay_manager_to_balling,
+                ),
+                (
+                    self.lock_error_channel_receive_balling,
+                    self.lock_error_channel_send_balling,
+                ),
+                "Balling dosing",
+                actuator,
+                &mut spin_sleeper,
+                sleep_duration_between_retries,
+            );
 
-            // *** communication with feed control ***
-            match relay_manager_channels.rx_relay_manager_from_feed.try_recv() {
-                Ok(command) => {
-                    self.lock_error_channel_receive_feed = false;
-                    if let Err(feed_actuation_error) = self.actuate_with_retries(
-                        actuator,
-                        &command,
-                        "feed",
-                        &mut spin_sleeper,
-                        sleep_duration_between_retries,
-                    ) {
-                        log_error_chain(
-                            module_path!(),
-                            "Actuation of feed failed.",
-                            feed_actuation_error,
-                        );
-                    }
-                    match &relay_manager_channels.tx_relay_manager_to_feed.send(true) {
-                        Ok(()) => {
-                            self.lock_error_channel_send_feed = false;
-                        }
-                        Err(e) => {
-                            if !self.lock_error_channel_send_feed {
-                                error!(
-                                    target: module_path!(),
-                                    "responding to feed control ({e:?})"
-                                );
-                                self.lock_error_channel_send_feed = true;
-                            }
-                        }
-                    }
-                }
-                Err(e) => {
-                    match e {
-                        TryRecvError::Empty => {
-                            /* empty buffer - no action required */
-                            self.lock_error_channel_receive_feed = false;
-                        }
-                        TryRecvError::Disconnected => {
-                            if !self.lock_error_channel_receive_feed {
-                                error!(
-                                    "{}: Error in trying to receive command from feed control ({e:?})",
-                                    module_path!()
-                                );
-                                self.lock_error_channel_receive_feed = true;
-                            }
-                        }
-                    }
-                }
-            }
-            // **********************************
+            (
+                self.lock_error_channel_receive_feed,
+                self.lock_error_channel_send_feed,
+            ) = self.process_actuation_request(
+                (
+                    &relay_manager_channels.rx_relay_manager_from_feed,
+                    &relay_manager_channels.tx_relay_manager_to_feed,
+                ),
+                (
+                    self.lock_error_channel_receive_feed,
+                    self.lock_error_channel_send_feed,
+                ),
+                "feed",
+                actuator,
+                &mut spin_sleeper,
+                sleep_duration_between_retries,
+            );
 
             // *** send heartbeat ***
-            let heartbeat_interval = actuator.get_heartbeat_interval_seconds();
-            if let Some(interval_secs) = heartbeat_interval {
-                // This block is only executed if heartbeat_interval is Some(value),
-                // and 'value' is bound to 'interval_secs'.
+            if let Some(interval_secs) = actuator.get_heartbeat_interval_seconds() {
                 if Instant::now().duration_since(last_heartbeat_time).as_secs() >= interval_secs {
-                    _ = actuator.heartbeat();
+                    if let Err(e) = actuator.heartbeat() {
+                        log_error_chain(
+                            module_path!(),
+                            "Execution of heartbeat for relay control failed.",
+                            e,
+                        );
+                    }
                     last_heartbeat_time = Instant::now();
                 }
             }
@@ -645,23 +499,94 @@ impl RelayManager {
 
         // Application received request to terminate. That is why the loop was left.
         // Answer to the thread which sent the request for termination, so that shutdown can proceed further.
-        match &relay_manager_channels
+        if let Err(e) = relay_manager_channels
             .tx_relay_manager_to_signal_handler
             .send(true)
         {
-            Ok(()) => {
-                #[cfg(feature = "debug_relay_manager")]
-                debug!(
-                    target: module_path!(),
-                    "sent back confirmation to signal handler"
-                );
-            }
-            Err(e) => {
-                error!(target: module_path!(),
-                    "sending confirmation to signal handler ({e:?})"
-                );
-            }
+            error!(target: module_path!(), "Sending confirmation to signal handler failed. ({e:?})");
         };
+    }
+
+    /// Helper function to process an actuation request from a single channel pair.
+    ///
+    /// This function encapsulates the logic for receiving a command, actuating it with retries,
+    /// and sending a confirmation response. It is used to de-duplicate the main `execute` loop.
+    ///
+    /// It takes the current state of the log-suppression flags (`lock_receive`, `lock_send`)
+    /// by value and returns their updated state in a tuple. This pattern is used to work
+    /// around Rust's borrowing rules, as the flags are fields on `RelayManager` and cannot
+    /// be mutably borrowed multiple times in the `execute` loop.
+    ///
+    /// # Arguments
+    /// * `rx` - The channel for receiving `InternalCommand`s from a control module.
+    /// * `tx` - The channel for sending a boolean confirmation back to the control module.
+    /// * `lock_receive` - The current state of the receive error lock flag.
+    /// * `lock_send` - The current state of the send error lock flag.
+    /// * `actuation_name` - A descriptive name for the action (e.g., "refill") for logging.
+    /// * `actuator` - A mutable reference to the hardware actuator.
+    /// * `spin_sleeper` - A `SpinSleeper` to pause between retries.
+    /// * `sleep_duration_between_retries` - The `Duration` to wait between retry attempts.
+    ///
+    /// # Returns
+    /// A tuple `(bool, bool)` containing the updated state of the `lock_receive` and
+    /// `lock_send` flags, respectively.
+    fn process_actuation_request(
+        &mut self,
+        channels: (&Receiver<InternalCommand>, &Sender<bool>),
+        locks: (bool, bool),
+        actuation_name: &str,
+        actuator: &mut impl RelayActuationTrait,
+        spin_sleeper: &mut SpinSleeper,
+        sleep_duration_between_retries: Duration,
+    ) -> (bool, bool) {
+        let (rx, tx) = channels;
+        let (mut lock_receive, mut lock_send) = locks;
+        match rx.try_recv() {
+            Ok(command) => {
+                lock_receive = false;
+                if self.config.active {
+                    if let Err(actuation_error) = self.actuate_with_retries(
+                        actuator,
+                        &command,
+                        actuation_name,
+                        spin_sleeper,
+                        sleep_duration_between_retries,
+                    ) {
+                        log_error_chain(
+                            module_path!(),
+                            &format!("Actuation of {actuation_name} failed."),
+                            actuation_error,
+                        );
+                    }
+                }
+                if let Err(e) = tx.send(true) {
+                    if !lock_send {
+                        error!(
+                            target: module_path!(),
+                            "responding to {actuation_name} control ({e:?})",
+                        );
+                        lock_send = true;
+                    }
+                } else {
+                    lock_send = false;
+                }
+            }
+            Err(e) => match e {
+                TryRecvError::Empty => {
+                    lock_receive = false;
+                }
+                TryRecvError::Disconnected => {
+                    if !lock_receive {
+                        error!(
+                            "{}: error when trying to receive command from {actuation_name} control ({e:?})",
+                            module_path!(),
+                        );
+                        lock_receive = true;
+                    }
+                }
+            },
+        }
+        (lock_receive, lock_send)
     }
 }
 

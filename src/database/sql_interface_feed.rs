@@ -107,7 +107,7 @@ pub trait DatabaseInterfaceFeedTrait {
         &mut self,
         feedschedule_entries: &mut Vec<FeedScheduleEntry>,
     ) -> Result<(), SqlInterfaceError>;
-    
+
     /// Pings the database to check connection health and prevent timeouts.
     ///
     /// This function executes a lightweight query to ensure the connection is still
@@ -193,15 +193,17 @@ impl DatabaseInterfaceFeedTrait for SqlInterfaceFeed {
         profile_name: String,
         profile_id: i32,
     ) -> Result<(), SqlInterfaceError> {
-        self.conn.exec_drop::<_, _>(
-            sql_query_strings::SQL_QUERY_WRITE_FEED_EVENT.to_owned(),
-            params! {
-            "timestamp" => timestamp.format("%Y-%m-%d %H:%M:%S").to_string(),
-            "feeder_run_time" => feeder_run_time,
-            "profile_name" => profile_name,
-            "profile_id" => profile_id,
-            },
-        ).map_err(|e| SqlInterfaceError::InsertFeedEventFailure {
+        self.conn
+            .exec_drop::<_, _>(
+                sql_query_strings::SQL_QUERY_WRITE_FEED_EVENT.to_owned(),
+                params! {
+                "timestamp" => timestamp.format("%Y-%m-%d %H:%M:%S").to_string(),
+                "feeder_run_time" => feeder_run_time,
+                "profile_name" => profile_name,
+                "profile_id" => profile_id,
+                },
+            )
+            .map_err(|e| SqlInterfaceError::InsertFeedEventFailure {
                 location: module_path!().to_string(),
                 source: e,
             })?;
@@ -599,7 +601,7 @@ impl SqlInterfaceFeed {
                 return Err(SqlInterfaceError::FeedScheduleEntryRequestFailure {
                     location: module_path!().to_string(),
                     query: sql_query.to_string(),
-                    source: e
+                    source: e,
                 });
             }
         };

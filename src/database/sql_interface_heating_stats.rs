@@ -313,30 +313,33 @@ impl SqlInterfaceHeatingStats {
         &mut self,
     ) -> Result<HeatingStatsEntry, SqlInterfaceError> {
         // Get single heating stats entry from database
-        let single_heating_stats_entry_array = self.conn.query_map(
-            sql_query_strings::SQL_QUERY_READ_HEATING_STATS,
-            |(
-                date,
-                energy,
-                ambient_temperature_average_value,
-                ambient_temperature_average_counter,
-                water_temperature_average_value,
-                water_temperature_average_counter,
-                heating_control_runtime,
-            )| HeatingStatsStringEntry {
-                date,
-                energy,
-                ambient_temperature_average_value,
-                ambient_temperature_average_counter,
-                water_temperature_average_value,
-                water_temperature_average_counter,
-                heating_control_runtime,
-            },
-        ).map_err(|e| SqlInterfaceError::SingleHeatingStatsRequestFailure {
-                    location: module_path!().to_string(),
-                    query: sql_query_strings::SQL_QUERY_READ_HEATING_STATS.to_string(),
-                    source: e,
-                })?;
+        let single_heating_stats_entry_array = self
+            .conn
+            .query_map(
+                sql_query_strings::SQL_QUERY_READ_HEATING_STATS,
+                |(
+                    date,
+                    energy,
+                    ambient_temperature_average_value,
+                    ambient_temperature_average_counter,
+                    water_temperature_average_value,
+                    water_temperature_average_counter,
+                    heating_control_runtime,
+                )| HeatingStatsStringEntry {
+                    date,
+                    energy,
+                    ambient_temperature_average_value,
+                    ambient_temperature_average_counter,
+                    water_temperature_average_value,
+                    water_temperature_average_counter,
+                    heating_control_runtime,
+                },
+            )
+            .map_err(|e| SqlInterfaceError::SingleHeatingStatsRequestFailure {
+                location: module_path!().to_string(),
+                query: sql_query_strings::SQL_QUERY_READ_HEATING_STATS.to_string(),
+                source: e,
+            })?;
 
         // check the error case if there is no response
         if single_heating_stats_entry_array.is_empty() {
@@ -564,10 +567,11 @@ pub mod tests {
 
         // *** insert heating stats ****************************************************************
         // prepare data for inserting into the database
-        let today = match SqlInterface::get_current_date(&mut sql_interface.get_connection().unwrap()) {
-            Ok(c) => c,
-            Err(_) => panic!("Could not get current date."),
-        };
+        let today =
+            match SqlInterface::get_current_date(&mut sql_interface.get_connection().unwrap()) {
+                Ok(c) => c,
+                Err(_) => panic!("Could not get current date."),
+            };
         let mut heating_stats_entry = HeatingStatsEntry {
             date: today.into(),
             energy: 0.9,

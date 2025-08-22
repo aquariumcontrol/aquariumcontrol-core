@@ -147,9 +147,7 @@ impl SqlInterfaceHeatingSetVals {
     /// - The query returns more than one row, indicating a data inconsistency (`HeatingSetValsNoSingleResponse`).
     /// - The retrieved `heating_switch_on_temperature` is bigger than the `heating_switch_off_temperature`,
     ///   which is a critical configuration error (`HeatingSetValsInvalid`).
-    pub fn get_heating_set_values(
-        &mut self,
-    ) -> Result<Option<HeatingSetVals>, SqlInterfaceError> {
+    pub fn get_heating_set_values(&mut self) -> Result<Option<HeatingSetVals>, SqlInterfaceError> {
         let sql_heating_setvals_array = match self.conn.query_map(
             sql_query_strings::SQL_QUERY_READ_HEATING_SETVALS,
             |(heatingSwitchOffTemp, heatingSwitchOnTemp)| HeatingSetVals {
@@ -162,7 +160,7 @@ impl SqlInterfaceHeatingSetVals {
                 return Err(SqlInterfaceError::HeatingSetValsRequestFailure {
                     location: module_path!().to_string(),
                     query: sql_query_strings::SQL_QUERY_READ_HEATING_SETVALS.to_string(),
-                    source: e
+                    source: e,
                 });
             }
         };
@@ -220,17 +218,19 @@ impl SqlInterfaceHeatingSetVals {
         &mut self,
         heating_set_vals: &HeatingSetVals,
     ) -> Result<(), SqlInterfaceError> {
-        self.conn.exec_drop::<_, _>(
-            sql_query_strings::SQL_QUERY_WRITE_HEATING_SETVALS,
-            params! {
-               "heating_switch_off_temp" => heating_set_vals.heating_switch_off_temperature,
-               "heating_switch_on_temp" => heating_set_vals.heating_switch_on_temperature,
-            },
-        ).map_err(|e| SqlInterfaceError::InsertHeatingSetValuesFailure {
-                    location: module_path!().to_string(),
-                    query: sql_query_strings::SQL_QUERY_WRITE_HEATING_SETVALS.to_string(),
-                    source: e
-                })?;
+        self.conn
+            .exec_drop::<_, _>(
+                sql_query_strings::SQL_QUERY_WRITE_HEATING_SETVALS,
+                params! {
+                   "heating_switch_off_temp" => heating_set_vals.heating_switch_off_temperature,
+                   "heating_switch_on_temp" => heating_set_vals.heating_switch_on_temperature,
+                },
+            )
+            .map_err(|e| SqlInterfaceError::InsertHeatingSetValuesFailure {
+                location: module_path!().to_string(),
+                query: sql_query_strings::SQL_QUERY_WRITE_HEATING_SETVALS.to_string(),
+                source: e,
+            })?;
         Ok(())
     }
 }
@@ -269,7 +269,7 @@ impl HeatingSetValueUpdaterTrait for SqlInterfaceHeatingSetVals {
         // Either enough time has passed or this is the first update.
         // Update the time before reading the values from the database.
         self.update_time = Some(Instant::now());
-        
+
         match self.get_heating_set_values() {
             Ok(Some(heating_set_vals)) => {
                 *heating_switch_off_temperature = heating_set_vals.heating_switch_off_temperature;
@@ -317,9 +317,11 @@ pub mod tests {
         }
 
         // instantiation of the test object
-        let mut sql_interface_heating_setvals =
-            SqlInterfaceHeatingSetVals::new(sql_interface.get_connection().unwrap(), &config.heating)
-                .unwrap();
+        let mut sql_interface_heating_setvals = SqlInterfaceHeatingSetVals::new(
+            sql_interface.get_connection().unwrap(),
+            &config.heating,
+        )
+        .unwrap();
 
         // check if reading an empty table returns None
         match sql_interface_heating_setvals.get_heating_set_values() {
@@ -408,8 +410,10 @@ pub mod tests {
             sql_interface_heating_setvals.insert_heating_set_values(&valid_heating_set_vals),
             Ok(())
         ));
-        let test_result =
-            SqlInterfaceHeatingSetVals::new(sql_interface.get_connection().unwrap(), &config.heating);
+        let test_result = SqlInterfaceHeatingSetVals::new(
+            sql_interface.get_connection().unwrap(),
+            &config.heating,
+        );
         assert!(matches!(
             test_result,
             Err(SqlInterfaceError::DatabaseHeatingSetValTableContainsTooManyRows(_, _))

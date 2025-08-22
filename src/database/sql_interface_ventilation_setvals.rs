@@ -170,17 +170,20 @@ impl SqlInterfaceVentilationSetVals {
     pub fn get_ventilation_set_values(
         &mut self,
     ) -> Result<Option<VentilationSetVals>, SqlInterfaceError> {
-        let sql_ventilation_setvals_array = self.conn.query_map(
-            sql_query_strings::SQL_QUERY_READ_VENTILATION_SETVALS,
-            |(ventilationSwitchOffTemp, ventilationSwitchOnTemp)| VentilationSetVals {
-                ventilation_switch_off_temperature: ventilationSwitchOffTemp,
-                ventilation_switch_on_temperature: ventilationSwitchOnTemp,
-            },
-        ).map_err(|e| SqlInterfaceError::VentilationSetValsRequestFailure {
-                    location: module_path!().to_string(),
-                    query: sql_query_strings::SQL_QUERY_READ_VENTILATION_SETVALS.to_string(),
-                    source: e,
-                })?;
+        let sql_ventilation_setvals_array = self
+            .conn
+            .query_map(
+                sql_query_strings::SQL_QUERY_READ_VENTILATION_SETVALS,
+                |(ventilationSwitchOffTemp, ventilationSwitchOnTemp)| VentilationSetVals {
+                    ventilation_switch_off_temperature: ventilationSwitchOffTemp,
+                    ventilation_switch_on_temperature: ventilationSwitchOnTemp,
+                },
+            )
+            .map_err(|e| SqlInterfaceError::VentilationSetValsRequestFailure {
+                location: module_path!().to_string(),
+                query: sql_query_strings::SQL_QUERY_READ_VENTILATION_SETVALS.to_string(),
+                source: e,
+            })?;
 
         // return none if the query result is empty (user may have not set any values yet)
         if sql_ventilation_setvals_array.is_empty() {

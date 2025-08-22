@@ -148,7 +148,11 @@ pub struct ActuateGpio {
 /// Returns a `RelayError::GpioGetPinFailure` if the underlying `rppal` library fails
 /// to access the pin. This can happen if the pin number is invalid for the hardware,
 /// if the pin is already in use by another process, or due to insufficient permissions.
-pub fn get_output_pin(gpio: &Gpio, gpio_number: u8, device_name: &str) -> Result<OutputPin, RelayError> {
+pub fn get_output_pin(
+    gpio: &Gpio,
+    gpio_number: u8,
+    device_name: &str,
+) -> Result<OutputPin, RelayError> {
     gpio.get(gpio_number)
         .map(|pin| pin.into_output())
         .map_err(|e| RelayError::GpioGetPinFailure {
@@ -200,8 +204,7 @@ impl ActuateGpio {
         let output_pin_peristaltic_pump4 =
             get_output_pin(&gpio, config.gpio_peristaltic_pump4, "peristaltic pump 4")?;
 
-        Ok(
-        ActuateGpio {
+        Ok(ActuateGpio {
             output_pin_skimmer,
             output_pin_main_pump1,
             output_pin_main_pump2,

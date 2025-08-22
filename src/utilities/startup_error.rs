@@ -1,3 +1,5 @@
+#[cfg(all(feature = "target_hw", target_os = "linux"))]
+use crate::beacon::ws2812b::Ws2812BError;
 use crate::database::sql_interface_error::SqlInterfaceError;
 #[cfg(target_os = "linux")]
 use crate::dispatch::messaging_error::MessagingError;
@@ -8,8 +10,6 @@ use crate::relays::actuate_controllino::ActuateControllinoError;
 use crate::sensors::gpio_handler::GpioHandlerError;
 #[cfg(all(feature = "target_hw", target_os = "linux"))]
 use crate::sensors::i2c_error::I2cError;
-#[cfg(all(feature = "target_hw", target_os = "linux"))]
-use crate::beacon::ws2812b::Ws2812BError;
 use crate::sensors::sensor_manager::SensorManagerError;
 use crate::sensors::tank_level_switch::TankLevelSwitchError;
 use crate::simulator::tcp_communication_error::TcpCommunicationError;
@@ -107,7 +107,7 @@ pub enum StartupError {
         #[source]
         source: ActuateControllinoError,
     },
-    
+
     /// Could not initialize the interface to Gpio.
     #[cfg(all(feature = "target_hw", target_os = "linux"))]
     #[error("Could not setup interface to Gpio.")]
@@ -115,7 +115,7 @@ pub enum StartupError {
         #[source]
         source: ActuateGpioError,
     },
-    
+
     /// Could not initialize the interface to the GPIO.
     #[cfg(all(feature = "target_hw", target_os = "linux"))]
     #[error("Could not setup the interface to the GPIO.")]
@@ -139,7 +139,7 @@ pub enum StartupError {
         #[source]
         source: Ws2812BError,
     },
-    
+
     /// Could not initialize the tank level switch measurement and calculation.
     #[error("Could not initialize the tank level switch measurement and calculation.")]
     TankLevelSwitchSetupFailure {

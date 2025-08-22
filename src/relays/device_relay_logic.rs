@@ -29,12 +29,12 @@ enum RelayLogic {
 fn get_gpio_state(command: &InternalCommand, logic: RelayLogic) -> Result<bool, RelayError> {
     match command {
         InternalCommand::SwitchOn(_) => match logic {
-            RelayLogic::NormallyOpen => Ok(true),   // ON is HIGH
+            RelayLogic::NormallyOpen => Ok(true),    // ON is HIGH
             RelayLogic::NormallyClosed => Ok(false), // ON is LOW
         },
         InternalCommand::SwitchOff(_) => match logic {
-            RelayLogic::NormallyOpen => Ok(false), // OFF is LOW
-            RelayLogic::NormallyClosed => Ok(true),  // OFF is HIGH
+            RelayLogic::NormallyOpen => Ok(false),  // OFF is LOW
+            RelayLogic::NormallyClosed => Ok(true), // OFF is HIGH
         },
         InternalCommand::Pulse(d, _) => Err(RelayError::PulseNotAllowedForDevice(
             module_path!().to_string(),

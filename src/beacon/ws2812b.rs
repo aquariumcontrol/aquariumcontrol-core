@@ -117,12 +117,8 @@ impl Ws2812B {
     /// to initialize. This can happen if the specified SPI device file does not
     /// exist or if there are permission issues.
     pub fn new(config: Ws2812BConfig) -> Result<Self, Ws2812BError> {
-        let adapter =
-            WS28xxSpiAdapter::new(&config.device_name)
-                .map_err(|e| Ws2812BError::AdapterSetupFailure(
-                    module_path!().to_string(),
-                    e
-                ))?;
+        let adapter = WS28xxSpiAdapter::new(&config.device_name)
+            .map_err(|e| Ws2812BError::AdapterSetupFailure(module_path!().to_string(), e))?;
         Ok(Ws2812B { adapter, config })
     }
 
@@ -159,11 +155,9 @@ impl Ws2812B {
 
         self.adapter
             .write_encoded_rgb(&spi_encoded_rgb_bits)
-            .map_err(|e| Ws2812BError::AdapterSetColorFailure(
-                module_path!().to_string(),
-                color,
-                e
-            ))?;
+            .map_err(|e| {
+                Ws2812BError::AdapterSetColorFailure(module_path!().to_string(), color, e)
+            })?;
 
         Ok(())
     }
@@ -185,8 +179,7 @@ pub mod tests {
                 .expect("Failed to read config in test");
         let spin_sleeper = SpinSleeper::default();
         let sleep_duration = Duration::from_millis(500);
-        let mut ws2812b =
-            Ws2812B::new(config.ws2812b).expect("Failed to create Ws2812B in test");
+        let mut ws2812b = Ws2812B::new(config.ws2812b).expect("Failed to create Ws2812B in test");
 
         ws2812b
             .set_color(RgbLedColor::Green)

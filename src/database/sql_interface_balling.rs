@@ -205,9 +205,8 @@ impl SqlInterfaceBalling {
         let current_datetime = SqlInterface::get_current_timestamp(&mut self.conn)?;
         let last_dosing_datetime_opt = self.get_last_balling_dosing_timestamp(pump_id)?;
 
-        let duration_opt = last_dosing_datetime_opt.map(|last_dosing_datetime| {
-            (current_datetime - last_dosing_datetime).num_seconds()
-        });
+        let duration_opt = last_dosing_datetime_opt
+            .map(|last_dosing_datetime| (current_datetime - last_dosing_datetime).num_seconds());
 
         Ok(duration_opt)
     }
@@ -252,7 +251,7 @@ impl SqlInterfaceBalling {
                 source: e,
             })
     }
-    
+
     /// Retrieves a single set of Balling dosing parameters for a specified pump from the database.
     ///
     /// This function queries the database for the Balling set values (e.g., dosing speed, volume, label)
@@ -294,7 +293,7 @@ impl SqlInterfaceBalling {
                 return Err(SqlInterfaceError::SingleBallingSetValRequestFailure {
                     location: module_path!().to_string(),
                     query: sql_query_string,
-                    source: e
+                    source: e,
                 });
             }
         };
@@ -336,7 +335,7 @@ impl SqlInterfaceBalling {
     // # Errors
     // Returns `SqlInterfaceError::InsertBallingPumpConfigurationFailure` if the
     // `INSERT` query fails. This error should be updated to include the source
-    // `mysql::Error` for better diagnostics in test failures.    
+    // `mysql::Error` for better diagnostics in test failures.
     pub fn insert_pump_configuration(
         &mut self,
         pump_id: i64,

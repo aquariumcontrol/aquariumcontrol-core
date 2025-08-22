@@ -86,5 +86,5 @@ pub enum RelayError {
 
         #[source]
         source: rppal::gpio::Error,
-    }
+    },
 }

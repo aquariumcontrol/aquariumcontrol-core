@@ -21,7 +21,9 @@ use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
 use crate::sensors::atlas_scientific_error::AtlasScientificError;
-use crate::sensors::atlas_scientific_error::AtlasScientificError::{InvalidSignal, SignalRequestCreationFailure};
+use crate::sensors::atlas_scientific_error::AtlasScientificError::{
+    InvalidSignal, SignalRequestCreationFailure,
+};
 use crate::sensors::i2c_interface::{I2cRequest, I2cResult};
 use crate::simulator::get_resp_sim::GetResponseFromSimulatorTrait;
 use crate::utilities::channel_content::{AquariumSignal, InternalCommand};
@@ -425,7 +427,8 @@ impl AtlasScientific {
             &command_buffer,
             sleep_time_millis,
             atlas_scientific_constants::MESSAGE_SIZE,
-        ).map_err(|e| SignalRequestCreationFailure {
+        )
+        .map_err(|e| SignalRequestCreationFailure {
             location: module_path!().to_string(),
             source: e,
         });
@@ -435,12 +438,10 @@ impl AtlasScientific {
                 self.lock_error_channel_send_i2c_interface = false;
                 Ok(())
             }
-            Err(e) => {
-                Err(AtlasScientificError::SendingRequestToI2cInterfaceFailed {
-                    location: module_path!().to_string(),
-                    source: e
-                })
-            }
+            Err(e) => Err(AtlasScientificError::SendingRequestToI2cInterfaceFailed {
+                location: module_path!().to_string(),
+                source: e,
+            }),
         }
     }
 
@@ -835,12 +836,15 @@ impl AtlasScientific {
                     state_send_receive = match send_result {
                         Ok(()) => true,
                         Err(e) => {
-                            if !matches!(e, AtlasScientificError::SendingRequestToI2cInterfaceFailed { .. })
-                                || !self.lock_error_channel_send_i2c_interface {
+                            if !matches!(
+                                e,
+                                AtlasScientificError::SendingRequestToI2cInterfaceFailed { .. }
+                            ) || !self.lock_error_channel_send_i2c_interface
+                            {
                                 log_error_chain(
                                     module_path!(),
                                     "Error in communication with I2C thread.",
-                                    e
+                                    e,
                                 );
                             }
                             false
@@ -1200,13 +1204,16 @@ pub mod tests {
             &tx_atlas_scientific_to_i2c_interface,
         );
 
-        assert!(matches!(result, Err(AtlasScientificError::InvalidSignal(_, _))));
+        assert!(matches!(
+            result,
+            Err(AtlasScientificError::InvalidSignal(_, _))
+        ));
     }
 
     #[test]
     // Test function receive_response_from_i2c_interface
     pub fn test_receive_response_from_i2c_interface() {
-        let mut stimuli_array_temperature= [0u8; 64];
+        let mut stimuli_array_temperature = [0u8; 64];
 
         let message_temperature: [u8; atlas_scientific_constants::MESSAGE_SIZE] = [
             atlas_scientific_constants::MESSAGE_START_MAGIC,
@@ -1218,7 +1225,8 @@ pub mod tests {
             '0' as u8,
             atlas_scientific_constants::MESSAGE_FINISH_MAGIC,
         ];
-        stimuli_array_temperature[..message_temperature.len()].copy_from_slice(&message_temperature);
+        stimuli_array_temperature[..message_temperature.len()]
+            .copy_from_slice(&message_temperature);
         let stimuli_i2c_response_temperature = I2cResponse {
             read_buf: stimuli_array_temperature,
             length: atlas_scientific_constants::MESSAGE_SIZE,
@@ -1237,7 +1245,8 @@ pub mod tests {
         ];
         // Copy the 8-byte message into the beginning of the 64-byte buffer.
         // The rest of the buffer will remain filled with zeros.
-        stimuli_array_conductivity[..message_conductivity.len()].copy_from_slice(&message_conductivity);
+        stimuli_array_conductivity[..message_conductivity.len()]
+            .copy_from_slice(&message_conductivity);
         let stimuli_i2c_response_conductivity = I2cResponse {
             read_buf: stimuli_array_conductivity,
             length: atlas_scientific_constants::MESSAGE_SIZE,
@@ -1367,7 +1376,8 @@ pub mod tests {
             '0' as u8,
             atlas_scientific_constants::MESSAGE_FINISH_MAGIC,
         ];
-        stimuli_array_temperature[..message_temperature.len()].copy_from_slice(&message_temperature);
+        stimuli_array_temperature[..message_temperature.len()]
+            .copy_from_slice(&message_temperature);
         let stimuli_i2c_response_temperature = I2cResponse {
             read_buf: stimuli_array_temperature,
             length: atlas_scientific_constants::MESSAGE_SIZE,
@@ -1384,7 +1394,8 @@ pub mod tests {
             '0' as u8,
             atlas_scientific_constants::MESSAGE_FINISH_MAGIC,
         ];
-        stimuli_array_conductivity[..message_conductivity.len()].copy_from_slice(&message_conductivity);
+        stimuli_array_conductivity[..message_conductivity.len()]
+            .copy_from_slice(&message_conductivity);
         let stimuli_i2c_response_conductivity = I2cResponse {
             read_buf: stimuli_array_conductivity,
             length: atlas_scientific_constants::MESSAGE_SIZE,
@@ -1581,7 +1592,8 @@ pub mod tests {
             '0' as u8,
             atlas_scientific_constants::MESSAGE_FINISH_MAGIC,
         ];
-        stimuli_array_temperature[..message_temperature.len()].copy_from_slice(&message_temperature);
+        stimuli_array_temperature[..message_temperature.len()]
+            .copy_from_slice(&message_temperature);
         let stimuli_i2c_response_temperature = I2cResponse {
             read_buf: stimuli_array_temperature,
             length: atlas_scientific_constants::MESSAGE_SIZE,
@@ -1598,7 +1610,8 @@ pub mod tests {
             '0' as u8,
             atlas_scientific_constants::MESSAGE_FINISH_MAGIC,
         ];
-        stimuli_array_conductivity[..message_conductivity.len()].copy_from_slice(&message_conductivity);
+        stimuli_array_conductivity[..message_conductivity.len()]
+            .copy_from_slice(&message_conductivity);
         let stimuli_i2c_response_conductivity = I2cResponse {
             read_buf: stimuli_array_conductivity,
             length: atlas_scientific_constants::MESSAGE_SIZE,
@@ -1902,10 +1915,7 @@ pub mod tests {
             received_request.send_buf[0],
             [atlas_scientific_constants::COMMAND_READ][0]
         );
-        assert_eq!(
-            received_request.send_len,
-            1
-        );
+        assert_eq!(received_request.send_len, 1);
         assert_eq!(
             received_request.expected_response_length,
             atlas_scientific_constants::MESSAGE_SIZE

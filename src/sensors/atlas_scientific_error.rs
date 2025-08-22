@@ -114,5 +114,5 @@ pub enum AtlasScientificError {
 
         #[source]
         source: SendError<I2cRequest>,
-    }
+    },
 }
