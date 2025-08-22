@@ -22,29 +22,34 @@ pub struct ActuateSimulator {
 }
 
 impl RelayActuationTrait for ActuateSimulator {
-    /// Triggers simulated relay actuation via TCP communication for development and testing.
+    /// Simulates relay actuation by sending a command over a channel, typically for testing.
     ///
-    /// This function translates `SwitchOn` and `SwitchOff` commands for specific aquarium devices
-    /// into their corresponding `SetRelay` or `UnsetRelay` commands (considering the configured
-    /// relay logic). These translated commands are then sent over a TCP communication channel
-    /// to a listener (typically a simulator or a test harness).
+    /// This function translates a high-level `InternalCommand` (like `SwitchOn` or `SwitchOff`)
+    /// into a low-level relay command (e.g., `SetRelay`) using the same logic as the
+    /// physical Controllino actuator. The resulting command is then sent over an `mpsc`
+    /// channel, presumably to a test harness or a TCP listener that simulates the hardware.
     ///
     /// This implementation is intended **solely for development and system testing**
-    /// and does not interact with physical hardware directly.
+    /// and does not interact with physical hardware.
     ///
     /// # Arguments
-    /// * `internal_command` - The `InternalCommand` specifying the `AquariumDevice` and the desired state (`SwitchOn` or `SwitchOff`).
+    /// * `internal_command` - The `InternalCommand` specifying the `AquariumDevice` and the
+    ///   desired state (`SwitchOn` or `SwitchOff`).
     ///
     /// # Returns
-    /// A `Result` which is:
-    /// - `Ok(())` if the translated command was successfully sent via the TCP channel.
-    /// - `Err(RelayError::IrrelevantCommand)` if the `internal_command` is not `SwitchOn` or `SwitchOff` (e.g., `Pulse`, `RequestSignal`).
+    /// An empty `Result` (`Ok(())`) if the translated command was successfully sent
+    /// via the channel.
     ///
-    /// # Panics
-    /// This function will panic if:
-    /// - The internal `tx_to_tcp_opt` channel sender is `None` (meaning the TCP communication channel was not set up).
-    /// - There's an error translating the `internal_command` into a relay-specific command (e.g., `Pulse` command for a non-pulsable device).
-    /// - There's a failure sending the command through the TCP channel.
+    /// # Errors
+    /// This function will return a `RelayError` if any part of the simulation fails:
+    /// - `RelayError::SimulatorNotInitialized`: If the simulator was created without a
+    ///   valid sender channel (`tx_to_tcp_opt` was `None`).
+    /// - `RelayError::IrrelevantCommand`: If the provided `internal_command` is not one that
+    ///   can be translated into a relay action (e.g., `RequestSignal`).
+    /// - `RelayError::PulseNotAllowedForDevice`: If a `Pulse` command is attempted for a
+    ///   device that doesn't support it (propagated from `get_relay_command`).
+    /// - `RelayError::SimulatorSendFailed`: If sending the command over the `mpsc`
+    ///   channel fails, which typically means the receiver has been dropped.
     fn actuate(&mut self, internal_command: &InternalCommand) -> Result<(), RelayError> {
         let tx_to_tcp = self.tx_to_tcp_opt.as_ref().unwrap();
         match internal_command {
@@ -81,18 +86,42 @@ impl RelayActuationTrait for ActuateSimulator {
         }
     }
 
-    /// Heartbeat is not used by this trait implementation.
+    /// Returns the heartbeat interval, which is not applicable for the simulator.
+    ///
+    /// The simulator does not require a keep-alive signal, so this implementation
+    /// always returns `None`.
+    ///
+    /// # Returns
+    /// Always returns `None`.
     fn get_heartbeat_interval_seconds(&self) -> Option<u64> {
         None
     }
 
-    /// Heartbeat is not used by this trait implementation.
+    /// Performs a heartbeat action, which is not applicable for the simulator.
+    ///
+    /// This is a no-op for the simulator implementation as there is no persistent
+    /// communication channel that needs to be kept alive.
+    ///
+    /// # Returns
+    /// Always returns `Ok(())`.
+    ///
+    /// # Errors
+    /// This function will never return an error.
     fn heartbeat(&mut self) -> Result<(), RelayError> {
         // do nothing
         Ok(())
     }
 
-    /// Flush buffer is not used by this trait implementation.
+    /// Flushes a communication buffer, which is not applicable for the simulator.
+    ///
+    /// This is a no-op for the simulator implementation as there is no serial
+    /// communication buffer to flush.
+    ///
+    /// # Returns
+    /// Always returns `Ok(())`.
+    ///
+    /// # Errors
+    /// This function will never return an error.
     fn flush_buffer(&mut self) -> Result<(), RelayError> {
         // do nothing
         Ok(())
