@@ -76,6 +76,26 @@ pub struct I2cRequest {
 }
 
 impl I2cRequest {
+    /// Creates a new `I2cRequest` after validating the command length.
+    ///
+    /// This constructor prepares a command for sending over the I2C bus. It takes a
+    /// command as a slice, copies it into a fixed-size buffer, and packages it
+    /// with the necessary metadata for the I2C interface to execute the request.
+    ///
+    /// # Arguments
+    /// * `i2c_address` - The 7-bit I2C address of the target device.
+    /// * `send_slice` - A byte slice (`&[u8]`) containing the command to be sent.
+    /// * `sleep_time_millis` - The duration in milliseconds to wait after sending the
+    ///   command before attempting to read a response.
+    /// * `expected_response_length` - The number of bytes expected in the response from the device.
+    ///
+    /// # Returns
+    /// A `Result` containing a new `I2cRequest` struct on success.
+    ///
+    /// # Errors
+    /// Returns an `I2cError` if the provided command is too large for the buffer:
+    /// - `I2cError::CommandTooLong`: If the length of `send_slice` exceeds the
+    ///   `MAX_I2C_COMMAND_LENGTH` constant.
     pub fn new(
         i2c_address: u16,
         send_slice: &[u8],
@@ -151,7 +171,18 @@ impl fmt::Display for I2cResponse {
 
 #[allow(dead_code)]
 impl I2cResponse {
-    /// Creates a new I2cResponse by copying data from a slice.
+    /// Creates a new `I2cResponse` by copying data from a slice.
+    ///
+    /// This constructor is used to package the raw data received from an I2C device
+    /// into a structured response. It copies the contents of the provided slice
+    /// into a fixed-size internal buffer.
+    ///
+    /// # Arguments
+    /// * `read_data` - A byte slice (`&[u8]`) containing the data read from the I2C bus.
+    ///   The length of this slice determines the `length` field of the new struct.
+    ///
+    /// # Returns
+    /// A new `I2cResponse` struct containing the sensor data.
     pub fn new(read_data: &[u8]) -> I2cResponse {
         let mut read_buf = [0u8; MAX_I2C_RESPONSE_LENGTH];
 
@@ -187,17 +218,25 @@ pub struct I2cInterface {
 
 impl I2cInterface {
     #[cfg(all(target_os = "linux", feature = "target_hw"))]
-    /// Creates a new **`I2cInterface`** instance, establishing and configuring the I2C bus for sensor communication.
+    /// Creates a new `I2cInterface` instance, establishing and configuring the I2C bus.
     ///
-    /// This constructor initializes the I2C interface on target hardware. It opens the I2C bus,
-    /// sets a global transaction timeout.
+    /// This constructor initializes the I2C interface on the target hardware. It opens the I2C bus
+    /// provided by the `rppal` library and sets a global transaction timeout based on the
+    /// provided configuration.
     ///
     /// # Arguments
-    /// * `config` - **Configuration data** for the I2C interface
+    /// * `config` - Configuration data for the I2C interface, including the transaction timeout.
     ///
     /// # Returns
-    /// In case of success, a new `I2cInterface` struct, ready to communicate with the I2C bus participants.
-    /// An `I2cError` otherwise.
+    /// A `Result` containing a new `I2cInterface` struct on success, ready to communicate
+    /// with devices on the I2C bus.
+    ///
+    /// # Errors
+    /// Returns an `I2cError` if the I2C bus cannot be initialized or configured:
+    /// - `I2cError::InitializationFailure`: If the underlying call to `I2c::new()` fails,
+    ///   which can be caused by permission issues (not running as root or not in the `i2c` group),
+    ///   or if the I2C hardware is not enabled on the system.
+    /// - `I2cError::SetTimeoutError`: If setting the I2C transaction timeout fails.
     pub fn new(config: I2cInterfaceConfig) -> Result<I2cInterface, I2cError> {
         let i2c = I2c::new().map_err(|e| InitializationFailure {
             location: module_path!().to_string(),
@@ -217,30 +256,31 @@ impl I2cInterface {
     }
 
     #[cfg(all(target_os = "linux", feature = "target_hw"))]
-    /// Communicates with I2C bus participants via request and response
+    /// Performs a complete I2C write/read transaction with a sensor.
     ///
-    /// This function performs a complete I2C communication cycle to retrieve a sensor reading:
-    /// 1.  It sets the address of the bus participant which shall receive the request.
-    /// 2.  It sends the request buffer to the bus participant.
-    /// 3.  It pauses for a specific duration to allow the sensor to process the command.
-    /// 4.  It reads the response from the sensor.
-    /// 5.  It checks if the response length matches the expected length from the request.
-    ///
-    /// Errors encountered at any stage (e.g., I2C communication issues or malformed sensor responses)
-    /// are logged and returned as `I2cError` variants.
+    /// This function orchestrates a full I2C communication cycle:
+    /// 1.  Sets the I2C slave address for the target device.
+    /// 2.  Writes the command from the `i2c_request`.
+    /// 3.  Pauses for the specified duration to allow the sensor to process the command.
+    /// 4.  Reads the response from the sensor into the provided buffer.
     ///
     /// # Arguments
-    /// * `i2c_request` - A struct of type `I2cRequest` containing all details of the request.
-    /// * `buffer` - Mutable reference to an array to which the function shall write to
+    /// * `i2c_request` - A struct containing the I2C address, command, and timing details.
+    /// * `buffer` - A mutable byte slice that will be used to store the data read from the sensor.
     ///
     /// # Returns
-    /// A `Result<I2cResponse, I2cError>`:
-    /// - `Ok(I2cResponse)`: The successfully read sensor data
-    /// - `Err(I2cError::SetAddressError)`: If setting the I2C slave address fails.
-    /// - `Err(I2cError::WriteFailure)`: If the command cannot be written to the sensor.
-    /// - `Err(I2cError::InsufficientWrite)`: If the command write is incomplete.
-    /// - `Err(I2cError::InsufficientRead)`: If the full response cannot be read from the sensor.
-    /// - `Err(I2cError::IncorrectResponseLength)`: If the sensor's response message does not have the correct length.
+    /// A `Result` containing an `I2cResponse` with the successfully read sensor data.
+    ///
+    /// # Errors
+    /// Returns an `I2cError` variant if any stage of the communication fails:
+    /// - `I2cError::ProvidedBufferTooSmall`: If the provided `buffer` is not large enough
+    ///   to hold the `expected_response_length`.
+    /// - `I2cError::SetAddressError`: If setting the I2C slave address fails.
+    /// - `I2cError::WriteFailure`: If the command cannot be written to the sensor.
+    /// - `I2cError::InsufficientWrite`: If not all bytes of the command could be written.
+    /// - `I2cError::InsufficientRead`: If the full response could not be read from the sensor.
+    /// - `I2cError::IncorrectResponseLength`: If the number of bytes read does not match
+    ///   the `expected_response_length`.
     pub fn get_response_from_i2c(
         &mut self,
         i2c_request: I2cRequest,
@@ -300,32 +340,29 @@ impl I2cInterface {
                 received_message_length,
             ))
         } else {
-            Ok(I2cResponse::new(buffer))
+            Ok(I2cResponse::new(read_slice))
         }
     }
 
     #[cfg(all(target_os = "linux", feature = "target_hw"))]
-    /// Executes the main loop for the I2C interface thread, processing incoming requests and sending sensor data responses.
+    /// Executes the main loop for the I2C interface thread, acting as a request/response service.
     ///
-    /// This function runs indefinitely, acting as a dedicated service for communicating with
-    /// Atlas Scientific I2C sensors. It continuously waits for `InternalCommand` messages
-    /// from other modules (like `AtlasScientific` or the `SignalHandler`).
+    /// This function runs indefinitely, processing I2C requests received from other modules.
+    /// It listens on the `rx_from_atlas_scientific` channel for an `I2cRequest`. Upon
+    /// receiving a request, it calls `get_response_from_i2c` to perform the hardware
+    /// communication and sends the resulting `I2cResult` back to the caller via the
+    /// `tx_to_atlas_scientific` channel.
     ///
-    /// When a `RequestSignal` command for water temperature, pH, or conductivity is received,
-    /// it triggers a full sensor measurement cycle using `self.get_all_data()`. The `Result`
-    /// of this measurement (containing all three sensor values or an error) is then sent back
-    /// to the requesting module.
-    ///
-    /// The loop also handles `Quit` commands for graceful shutdown and logs errors or warnings
-    /// for invalid commands or channel communication issues, using internal lock flags to prevent log flooding.
-    ///
-    /// This function does not log error. Error logging is done by the `AtlasScientific` module.
+    /// The loop also listens for a `Quit` command on the `rx_from_signal_handler` channel
+    /// to enable graceful shutdown. It uses internal lock flags to prevent log flooding
+    /// from repeated channel communication errors.
     ///
     /// # Arguments
-    /// * `tx_to_atlas_scientific` - The sender channel for sending `Result<(f32, f32, f32), I2cError>`
-    ///   measurement data back to the `AtlasScientific` module.
-    /// * `rx_from_atlas_scientific_or_signal_handler` - The receiver channel for getting `InternalCommand`s
-    ///   (e.g., `RequestSignal`, `Quit`) from the `AtlasScientific` module or the `SignalHandler`.
+    /// * `tx_to_atlas_scientific` - The sender channel for sending `I2cResult` data back
+    ///   to the requesting module.
+    /// * `rx_from_atlas_scientific` - The receiver channel for getting `I2cRequest`s.
+    /// * `rx_from_signal_handler` - The receiver channel for getting `InternalCommand`s
+    ///   (e.g., `Quit`) from the `SignalHandler`.
     pub fn execute(
         &mut self,
         tx_to_atlas_scientific: Sender<I2cResult>,
