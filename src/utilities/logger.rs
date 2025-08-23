@@ -28,22 +28,29 @@ impl LoggerConfig {
 }
 
 #[derive(Debug, Error)]
+/// Contains the error definition for the logger setup.
 pub enum LoggerSetupError {
+    /// The configured log file name is empty.
     #[error("Configured log file name is empty.")]
     EmptyLogFileName,
 
+    /// Log file configuration has no file name component.
     #[error("Log file configuration {0} has no file name component.")]
     MissingFileName(String),
 
+    /// The configured log file path is an existing directory.
     #[error("The configured log file path {0} is an existing directory.")]
     PathIsADirectory(String),
 
+    /// Log file configuration contains a non-existing folder.
     #[error("Log file configuration contains a non-existing folder ({0}).")]
     ParentDirDoesNotExist(String),
 
-    #[error("Log file configuration contains a folder which is not a directory ({0}).")]
+    /// Log file configuration contains a folder, which is not a directory.
+    #[error("Log file configuration contains a folder, which is not a directory ({0}).")]
     ParentIsNotADirectory(String),
 
+    /// Could not open the output file for logging.
     #[error("Could not open output file for logging.")]
     CouldNotOpenOutputFile {
         #[source]
@@ -51,17 +58,30 @@ pub enum LoggerSetupError {
     },
 }
 
-/// Sets up and configures the application's logger using the `fern` crate.
+/// Sets up and configures the application's global logger using the `fern` crate.
 ///
-/// This function initializes a global logger that outputs messages to both
-/// standard output (console) and a log file located at `/var/log/aquarium.log`.
-/// Log messages are formatted with a timestamp, log level, and target.
-/// The default logging level is set to `Debug`.
+/// This function initializes a global logger that dispatches messages to both
+/// standard output (the console) and a specified log file. It performs several
+/// validation checks on the provided log file path before attempting to create
+/// the file and apply the logging configuration.
 ///
-/// # Panics
-/// This function will panic if it fails to open or create the log file
-/// at `/var/log/aquarium.log`. This typically indicates a permissions
-/// issue or an invalid path.
+/// Log messages are formatted to include a high-precision timestamp, log level,
+/// and the source module (`target`). The default logging level is set to `Debug`.
+///
+/// # Arguments
+/// * `logger_config` - A `LoggerConfig` struct containing the path to the log file.
+///
+/// # Returns
+/// An empty `Result` (`Ok(())`) on successful initialization of the logger.
+///
+/// # Errors
+/// Returns a `LoggerSetupError` variant if any validation or setup step fails:
+/// - `LoggerSetupError::EmptyLogFileName`: If the configured log file name is empty or contains only whitespace.
+/// - `LoggerSetupError::PathIsADirectory`: If the provided log file path points to an existing directory.
+/// - `LoggerSetupError::MissingFileName`: If the log file path does not have a valid file name component (e.g., it ends in `..`).
+/// - `LoggerSetupError::ParentDirDoesNotExist`: If the parent directory of the specified log file does not exist.
+/// - `LoggerSetupError::ParentIsNotADirectory`: If a component of the log file's parent path is a file, not a directory.
+/// - `LoggerSetupError::CouldNotOpenOutputFile`: If the log file cannot be opened or created, which typically indicates a file system permissions issue.
 pub fn setup_logger(logger_config: LoggerConfig) -> Result<(), LoggerSetupError> {
     // check if the configured file name is empty
     if logger_config.logfile.trim().is_empty() {
