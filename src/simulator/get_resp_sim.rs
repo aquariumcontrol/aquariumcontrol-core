@@ -12,32 +12,34 @@ use crate::utilities::channel_content::InternalCommand;
 use log::warn;
 use std::sync::mpsc::{Receiver, Sender};
 
-/// The trait implements communication with the simulator instead of real HW.
+/// A trait that provides a generic method for communicating with a simulator.
 pub trait GetResponseFromSimulatorTrait {
-    /// Requests a response from the simulator via TCP communication by sending
-    /// an internal message via the channel to the TCP thread.
+    /// Sends a request to a simulator via a channel and blocks until a response is received.
     ///
-    /// This function is used **solely for development and testing purposes**.
-    /// It sends a `RequestSignal` command to the TCP communication thread (which
-    /// acts as a simulator) and then synchronously waits for a response.
-    /// Inapplicable commands are logged as warnings and return a default success value.
+    /// This function standardizes the request/response pattern for fetching simulated
+    /// sensor data. It sends an `InternalCommand` to a simulator thread (typically
+    /// the `TcpCommunication` module) and waits for a floating-point value in return.
     ///
     /// # Arguments
-    /// * `requester` - For debugging purposes: identify the thread which is requesting the response.
-    /// * `tx_to_tcp` - A reference to the sender channel for sending commands to the TCP communication thread.
-    /// * `rx_from_tcp` - A reference to the receiver channel for receiving `Result<f32, TcpCommunicationError>` data from the TCP communication thread.
-    /// * `internal_command` - The `InternalCommand` to send, expected to be a `RequestSignal` for sensor data.
+    /// * `requester` - A `String` identifying the calling module, used for logging and error context.
+    /// * `tx_to_tcp` - The sender end of the channel to the simulator thread.
+    /// * `rx_from_tcp` - The receiver end of the channel from the simulator thread.
+    /// * `internal_command` - The command to send, which should be a `RequestSignal` variant.
     ///
     /// # Returns
-    /// A `Result` which is:
-    /// - `Ok(f32)`: Containing the simulated sensor value on success.
-    /// - `Ok(0.0)`: For inapplicable commands that are ignored.
-    /// - `Err(TcpCommunicationError)`: If sending the request or receiving the response fails.
+    /// A `Result` containing the simulated sensor value:
+    /// - `Ok(f32)`: The floating-point value received from the simulator.
+    /// - `Ok(0.0)`: If a non-`RequestSignal` command is passed, which is logged and ignored.
     ///
     /// # Errors
-    /// This function will return an error if:
-    /// - Sending the `internal_command` to the TCP thread fails (e.g., the channel is disconnected).
-    /// - Receiving the response from the TCP thread fails (e.g., the channel is disconnected).
+    /// Returns a `TcpCommunicationError` if the communication fails at any stage:
+    /// - `TcpCommunicationError::SendingToTCPThreadFailed`: If sending the request fails,
+    ///   which typically means the simulator thread has panicked or shut down and the
+    ///   channel is disconnected.
+    /// - `TcpCommunicationError::ReceivingFromTCPThreadFailed`: If receiving the response
+    ///   fails, which also indicates the simulator thread is no longer available.
+    /// - It will also propagate any `TcpCommunicationError` that the simulator
+    ///   thread itself sends back within its `Result`.
     fn get_response_from_simulator(
         requester: String,
         tx_to_tcp: &Sender<InternalCommand>,
@@ -45,20 +47,28 @@ pub trait GetResponseFromSimulatorTrait {
         internal_command: InternalCommand,
     ) -> Result<f32, TcpCommunicationError> {
         match internal_command {
-            InternalCommand::RequestSignal(_) => match tx_to_tcp.send(internal_command) {
-                Ok(()) => rx_from_tcp.recv().unwrap_or_else(|e| {
-                    Err(TcpCommunicationError::ReceivingFromTCPThreadFailed {
+            InternalCommand::RequestSignal(_) => {
+                // --- World-Class Suggestion: Refactor for clarity and idiomatic error handling ---
+
+                // 1. Try to send the command, mapping the error if it fails.
+                tx_to_tcp.send(internal_command).map_err(|e| {
+                    TcpCommunicationError::SendingToTCPThreadFailed {
                         location: module_path!().to_string(),
-                        requester,
+                        requester: requester.clone(), // Clone for this error path
                         source: e,
-                    })
-                }),
-                Err(e) => Err(TcpCommunicationError::SendingToTCPThreadFailed {
-                    location: module_path!().to_string(),
-                    requester,
-                    source: e,
-                }),
-            },
+                    }
+                })?;
+
+                // 2. Block and wait for the response, mapping the error if it fails.
+                // The inner `Result` is the actual payload from the simulator.
+                rx_from_tcp.recv().map_err(|e| {
+                    TcpCommunicationError::ReceivingFromTCPThreadFailed {
+                        location: module_path!().to_string(),
+                        requester, // Move the original requester string here
+                        source: e,
+                    }
+                })? // This '?' unwraps the outer Result<_, RecvError>
+            }
             _ => {
                 warn!(
                     target: module_path!(),
