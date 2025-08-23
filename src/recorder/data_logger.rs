@@ -271,7 +271,6 @@ impl DataLogger {
         database_ping_interval: Duration,
     ) -> Result<DataLogger, DataLoggerError> {
         if config.output_to_disk {
-            // --- World-Class Suggestion: Refactor to eliminate massive code duplication ---
             // By defining the files in a collection, we can use iterators to check and
             // initialize them, making the code concise, readable, and easy to maintain.
             let files_to_initialize = [

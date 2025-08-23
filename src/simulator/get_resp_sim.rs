@@ -48,8 +48,6 @@ pub trait GetResponseFromSimulatorTrait {
     ) -> Result<f32, TcpCommunicationError> {
         match internal_command {
             InternalCommand::RequestSignal(_) => {
-                // --- World-Class Suggestion: Refactor for clarity and idiomatic error handling ---
-
                 // 1. Try to send the command, mapping the error if it fails.
                 tx_to_tcp.send(internal_command).map_err(|e| {
                     TcpCommunicationError::SendingToTCPThreadFailed {

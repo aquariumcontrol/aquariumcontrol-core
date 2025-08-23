@@ -75,7 +75,6 @@ pub fn get_relay_command_gpio(
     internal_command: &InternalCommand,
     device: AquariumDevice,
 ) -> Result<bool, RelayError> {
-    // --- World-Class Suggestion: Refactor to remove duplication and improve clarity ---
     // First, determine the relay logic for the device. This separates the
     // "what is it" from the "how to control it".
     let logic = match device {

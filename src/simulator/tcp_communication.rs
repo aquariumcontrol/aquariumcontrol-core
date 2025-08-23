@@ -366,7 +366,6 @@ impl TcpCommunication {
         &mut self,
         aquarium_signal: AquariumSignal,
     ) -> Result<f32, TcpCommunicationError> {
-        // --- World-Class Suggestion: Combine match statements and flatten parsing ---
         let (category, tcp_signal_identifier) = match aquarium_signal {
             AquariumSignal::WaterTemperature => (
                 category::ATLASSCIENTIFIC,

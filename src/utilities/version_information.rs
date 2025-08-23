@@ -90,41 +90,46 @@ impl VersionInformation {
     /// `Cargo.toml` at compile time and calculating the SHA-256 hash of the
     /// current executable.
     ///
-    /// This is the primary constructor for production use.
+    /// This is the primary constructor for production use. It performs the following steps:
+    /// 1.  Retrieves the package version string (e.g., "1.2.3") from the `CARGO_PKG_VERSION`
+    ///     environment variable, which Cargo sets at compile time.
+    /// 2.  Determines the full path to the running executable.
+    /// 3.  Reads the executable file's binary content.
+    /// 4.  Calculates a SHA-256 hash of the binary content to serve as a unique fingerprint.
+    /// 5.  Parses the version string and combines it with the hash.
     ///
     /// # Returns
-    /// * A new `VersionInformation` struct containing the major, minor, build,
-    ///   and the calculated executable hash in case of success.
-    /// * `VersionInformationError` in case of error
+    /// A `Result` containing a new `VersionInformation` struct on success.
+    ///
+    /// # Errors
+    /// Returns a `VersionInformationError` if any part of the process fails:
+    /// - `VersionInformationError::CurrentExecutablePathRetrievalFailure`: If the path
+    ///   to the current executable cannot be determined.
+    /// - `VersionInformationError::ExecutableFileReadFailure`: If the executable file
+    ///   cannot be read from the filesystem, which could be due to a permissions issue.
+    /// - It will also propagate any parsing or conversion errors from the underlying
+    ///   `from_string_and_hash` function if the version string from `Cargo.toml` is malformed.
     pub fn new() -> Result<VersionInformation, VersionInformationError> {
-        // get the version string from Cargo.toml
         let version_string = env!("CARGO_PKG_VERSION").to_string();
 
-        // get the fully qualified path and file name
-        let pathfilename = match env::current_exe() {
-            Ok(exe_path) => {
-                #[cfg(not(test))]
-                info!(
-                    target: module_path!(),
-                    "path of this executable is: {}", exe_path.display()
-                );
+        // Get the fully qualified path and file name.
+        let pathfilename = env::current_exe()
+            .map_err(|e| VersionInformationError::CurrentExecutablePathRetrievalFailure { source: e })?;
 
-                exe_path
-            }
-            Err(e) => {
-                return Err(
-                    VersionInformationError::CurrentExecutablePathRetrievalFailure { source: e },
-                )
-            }
-        };
+        #[cfg(not(test))]
+        info!(
+            target: module_path!(),
+            "path of this executable is: {}",
+            pathfilename.display()
+        );
 
-        // calculate hash from executable
-        let bytes = std::fs::read(pathfilename)
+        // Calculate hash from the executable.
+        let bytes = std::fs::read(&pathfilename)
             .map_err(|e| VersionInformationError::ExecutableFileReadFailure { source: e })?;
 
         let hash = sha256::digest(&bytes);
 
-        // further process information in testable function
+        // Further process information in the testable function.
         Self::from_string_and_hash(version_string, hash)
     }
 
@@ -144,7 +149,7 @@ impl VersionInformation {
         version_string: String,
         hash: String,
     ) -> Result<VersionInformation, VersionInformationError> {
-        // Split the "0.3.0" string into its parts, returning specific error on failure
+        // Split the "x.y.z" string into its parts, returning specific error on failure
         let mut parts = version_string.split('.');
         let major_str = match parts.next() {
             Some(major_str) => major_str,
@@ -207,22 +212,18 @@ impl VersionInformation {
 impl Display for VersionInformation {
     /// Formats the `VersionInformation` for display.
     ///
-    /// This implementation of the `fmt` method for the `Display` trait
-    /// provides a human-readable representation of the version details.
-    /// It outputs the major, minor, build numbers and the commit hash
-    /// in a structured, multi-line format.
+    /// This implementation provides a human-readable, multi-line representation of the
+    /// version details, including major, minor, build numbers, and the executable hash.
     ///
     /// # Arguments
-    ///
-    /// * `f` - A mutable reference to a `Formatter` to which the formatted
-    ///   output will be written.
+    /// * `f` - A mutable reference to a `Formatter` where the output will be written.
     ///
     /// # Returns
+    /// An `Ok(())` on successful formatting.
     ///
-    /// `std::fmt::Result`:
-    /// - `Ok(())` if the formatting was successful.
-    /// - `Err` containing an ` std::fmt::Error ` if an I/O error occurred
-    ///   while writing to the formatter.
+    /// # Errors
+    /// Returns an `Err` containing a `std::fmt::Error` if an I/O error occurs
+    /// while writing to the formatter.
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         writeln!(f, "Version information:")?;
         writeln!(f, "  Major: {}", self.major)?;
