@@ -7,11 +7,10 @@ The above copyright notice and this permission notice shall be included in all c
 THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
-#[cfg(not(test))]
-use log::info;
-
 use serde_derive::Deserialize;
+use std::num::ParseIntError;
 use std::{fs, process};
+use thiserror::Error;
 
 /// Holds the configuration data for the PID publication.
 /// The configuration is loaded from the .toml configuration file.
@@ -22,6 +21,43 @@ pub struct PublishPidConfig {
     pid_filename: String,
 }
 
+/// Contains the error definition for PublishPid
+#[derive(Debug, Error)]
+pub enum PublishPidError {
+    #[error("[{location}] Unable to read PID file ({file}).")]
+    UnableToReadPidFile {
+        location: String,
+        file: String,
+
+        #[source]
+        source: std::io::Error,
+    },
+
+    #[error("[{location}] PID file ({file}) contains invalid content.")]
+    PidFileParseError {
+        location: String,
+        file: String,
+
+        #[source]
+        source: ParseIntError,
+    },
+
+    #[error("[{location}] PID file ({file}) already contains published PID: {pid}")]
+    PidFileContainsPid {
+        location: String,
+        file: String,
+        pid: u32,
+    },
+
+    #[error("[{location}] Unable to write PID file ({file}).")]
+    UnableToWritePidFile {
+        location: String,
+        file: String,
+
+        #[source]
+        source: std::io::Error,
+    },
+}
 /// Contains the struct for configuration data and provides implementation for
 /// publication of process id (Pid).
 #[derive(Clone)]
@@ -33,80 +69,107 @@ impl PublishPid {
     /// Creates a new `PublishPid` instance and publishes the current process ID (PID) to a file.
     ///
     /// This constructor performs a critical step of publishing the application's PID to a
-    /// designated file, preventing multiple instances of the application from running
-    /// concurrently.
+    /// designated file. This is often used to prevent multiple instances of the application
+    /// from running concurrently.
     ///
     /// The process involves:
-    /// 1. Reading the content of the specified PID file.
-    /// 2. If the file already contains a non-empty, valid, and positive PID, the function panics,
-    ///    indicating that another instance of the application is likely already running.
-    /// 3. If the file is empty, does not exist, or contains invalid content (and it's not a valid PID),
-    ///    the current process's PID is written to the file.
-    /// 4. If writing the PID to the file fails, the function panics.
+    /// 1.  Checking for the existence of the PID file.
+    /// 2.  If the file exists and contains a valid, positive PID, the function returns an error,
+    ///     indicating that another instance of the application is likely already running.
+    /// 3.  If the file does not exist, is empty, or contains "0", the function
+    ///     proceeds to write the current process's PID to the file, creating it if necessary.
     ///
     /// # Arguments
     /// * `config` - Configuration data for publishing the PID, primarily containing
-    ///   the `pid_filename` (the path to the file where the PID should be written).
+    ///   the `pid_filename`.
     ///
     /// # Returns
-    /// A new `PublishPid` struct if the PID is successfully published.
+    /// A `Result` containing a new `PublishPid` struct on success.
     ///
-    /// # Panics
-    /// This function will panic in several error scenarios:
-    /// - If it's unable to read the specified PID file.
-    /// - If the PID file exists and already contains a valid, non-zero PID (indicating a potential
-    ///   duplicate instance).
-    /// - If the PID file contains invalid or unparseable content.
-    /// - If it fails to write the current process's PID to the file (e.g., due to permissions).
-    pub fn new(config: PublishPidConfig) -> PublishPid {
-        let file_data = fs::read_to_string(config.pid_filename.clone())
-            .expect("PublishPid: Unable to read PID file.");
-        let file_data_trimmed = file_data.trim();
+    /// # Errors
+    /// Returns a `PublishPidError` if the PID cannot be published:
+    /// - `PublishPidError::UnableToReadPidFile`: If the specified PID file exists but cannot
+    ///   be read due to, for example, insufficient permissions.
+    /// - `PublishPidError::PidFileParseError`: If the PID file contains content that cannot
+    ///   be parsed into a `u32` integer.
+    /// - `PublishPidError::PidFileContainsPid`: If the PID file already contains a valid,
+    ///   positive PID, indicating a potential duplicate instance is running.
+    /// - `PublishPidError::UnableToWritePidFile`: If writing the current process's PID to
+    ///   the file fails, for example due to insufficient write permissions or an invalid path.
+    pub fn new(config: PublishPidConfig) -> Result<PublishPid, PublishPidError> {
+        match fs::read_to_string(&config.pid_filename) {
+            Ok(file_data) => {
+                // File exists, check its content.
+                let file_data_trimmed = file_data.trim();
+                if !file_data_trimmed.is_empty() {
+                    let process_id_read: u32 = file_data_trimmed.parse().map_err(|e| {
+                        PublishPidError::PidFileParseError {
+                            location: module_path!().to_string(),
+                            file: config.pid_filename.clone(),
+                            source: e,
+                        }
+                    })?;
 
-        if !file_data_trimmed.is_empty() {
-            let process_id_read: u32 = match file_data_trimmed.parse() {
-                Ok(c) => c,
-                Err(e) => {
-                    #[cfg(not(test))]
-                    info!(
-                        target: module_path!(),
-                        "PID file ({}) contains invalid content: {e:?}",
-                        config.pid_filename
-                    );
-
-                    panic!(
-                        "{}: PID file ({}) contains invalid content: {e:?}",
-                        module_path!(),
-                        config.pid_filename
-                    );
+                    if process_id_read > 0 {
+                        // A common extension here is to check if a process with this PID is
+                        // actually running, but for now, checking the file is a robust start.
+                        return Err(PublishPidError::PidFileContainsPid {
+                            location: module_path!().to_string(),
+                            file: config.pid_filename.clone(),
+                            pid: process_id_read,
+                        });
+                    }
                 }
-            };
-            if process_id_read > 0 {
-                #[cfg(not(test))]
-                info!(
-                    target: module_path!(),
-                    "PID file ({}) already contains published PID.",
-                    config.pid_filename
-                );
-
-                panic!(
-                    "{}: PID file ({}) already contains published PID.",
-                    module_path!(),
-                    config.pid_filename
-                );
+                // If we are here, the file was empty or contained "0". We can proceed to write.
+            }
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
+                // File doesn't exist, which is a valid state. We will create it.
+            }
+            Err(e) => {
+                // Any other read error is fatal.
+                return Err(PublishPidError::UnableToReadPidFile {
+                    location: module_path!().to_string(),
+                    file: config.pid_filename.clone(),
+                    source: e,
+                });
             }
         }
-        let process_id_numeric: u32 = process::id();
-        let process_id_string: String = process_id_numeric.to_string() + "\n";
-        fs::write(config.pid_filename.clone(), process_id_string)
-            .expect("PublishPid: Could not publish PID.");
 
-        PublishPid { config }
+        // If all checks have passed, it's safe to write our PID.
+        let process_id_numeric: u32 = process::id();
+        let process_id_string = format!("{process_id_numeric}\n");
+        fs::write(&config.pid_filename, process_id_string).map_err(|e| {
+            PublishPidError::UnableToWritePidFile {
+                location: module_path!().to_string(),
+                file: config.pid_filename.clone(),
+                source: e,
+            }
+        })?;
+
+        Ok(PublishPid { config })
     }
 
-    /// Erases PID from the file previously generated
-    pub fn erase_pid(&self) {
-        fs::write(self.config.pid_filename.clone(), "0").expect("PublishPid: Could not erase PID.");
+    /// Erases the PID from the file by writing "0" to it.
+    ///
+    /// This is typically called during a graceful shutdown to release the application "lock"
+    /// and allow a new instance to start up without conflicts.
+    ///
+    /// # Returns
+    /// An empty `Result` (`Ok(())`) on a successful write.
+    ///
+    /// # Errors
+    /// Returns a `PublishPidError::UnableToWritePidFile` if the PID file cannot be
+    /// written to. This could be due to a permissions issue, an invalid path, or if
+    /// the file was unexpectedly deleted.
+    pub fn erase_pid(&self) -> Result<(), PublishPidError> {
+        // --- World-Class Suggestion: Return a Result instead of panicking ---
+        fs::write(&self.config.pid_filename, "0\n").map_err(|e| {
+            PublishPidError::UnableToWritePidFile {
+                location: module_path!().to_string(),
+                file: self.config.pid_filename.clone(),
+                source: e,
+            }
+        })
     }
 }
 

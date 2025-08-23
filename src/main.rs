@@ -410,7 +410,9 @@ fn run() -> Result<(), StartupError> {
     }
 
     // publish the PID to a file so that the client application can communicate with this application
-    let publish_pid = PublishPid::new(config.publish_pid);
+    let publish_pid = PublishPid::new(config.publish_pid)
+        .map_err(|e| StartupError::PidCheckError { source: e })?;
+
     let publish_pid_clone = publish_pid.clone();
 
     panic::set_hook(Box::new(move |panic_info| {
@@ -418,7 +420,7 @@ fn run() -> Result<(), StartupError> {
         // This allows later runs of the application without needing to manually
         // clear the PID file.
         // Print the panic message to stderr.
-        publish_pid_clone.erase_pid();
+        let result_reset_pid = publish_pid_clone.erase_pid();
         error!("Panic occurred: {panic_info}");
 
         if let Some(location) = panic_info.location() {
@@ -427,6 +429,10 @@ fn run() -> Result<(), StartupError> {
                 location.file(),
                 location.line()
             );
+        }
+        // additionally log an error if the PID could not be reset
+        if let Err(error_reset_pid) = result_reset_pid {
+            error!("Could not reset PID file: {error_reset_pid}");
         }
     }));
 
@@ -1754,7 +1760,14 @@ fn run() -> Result<(), StartupError> {
             messaging.execute(messaging_channels);
 
             // remove PID from the file
-            publish_pid.erase_pid();
+            let publish_pid_result = publish_pid.erase_pid();
+            if let Err(e) = publish_pid_result {
+                log_error_chain(
+                    module_path!(),
+                    "Error occurred when trying to reset PID.",
+                    e,
+                );
+            }
 
             #[cfg(feature = "debug_main")]
             debug!(target: module_path!(), "Messaging terminated.");

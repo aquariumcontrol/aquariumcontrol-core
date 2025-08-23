@@ -86,8 +86,8 @@ pub fn memory_config_check(
     let var_name = &memory_config.env_variable_name;
 
     // Get the environment variable's value as a string.
-    let val_string = std::env::var(var_name)
-        .map_err(|_| MemoryConfigError::EnvVarNotSet(var_name.clone()))?;
+    let val_string =
+        std::env::var(var_name).map_err(|_| MemoryConfigError::EnvVarNotSet(var_name.clone()))?;
 
     // Parse the string into u64.
     let val = val_string

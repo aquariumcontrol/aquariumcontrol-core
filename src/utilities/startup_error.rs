@@ -18,6 +18,7 @@ use crate::utilities::config_error::ConfigError;
 use crate::utilities::config_file_definition_error::ConfigFileDefinitionError;
 use crate::utilities::logger::LoggerSetupError;
 use crate::utilities::memory_config_check::MemoryConfigError;
+use crate::utilities::publish_pid::PublishPidError;
 use crate::utilities::version_information::VersionInformationError;
 use thiserror::Error;
 
@@ -160,5 +161,12 @@ pub enum StartupError {
     Ds18b20SetupFailure {
         #[source]
         source: Ds18b20Error,
+    },
+
+    /// Could not check for already running version of the application.
+    #[error("Could not check for already running version of the application.")]
+    PidCheckError {
+        #[source]
+        source: PublishPidError,
     },
 }
