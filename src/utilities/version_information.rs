@@ -113,8 +113,9 @@ impl VersionInformation {
         let version_string = env!("CARGO_PKG_VERSION").to_string();
 
         // Get the fully qualified path and file name.
-        let pathfilename = env::current_exe()
-            .map_err(|e| VersionInformationError::CurrentExecutablePathRetrievalFailure { source: e })?;
+        let pathfilename = env::current_exe().map_err(|e| {
+            VersionInformationError::CurrentExecutablePathRetrievalFailure { source: e }
+        })?;
 
         #[cfg(not(test))]
         info!(

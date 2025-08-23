@@ -342,7 +342,6 @@ impl TankLevelSwitch {
         rx_from_tcp_opt: &Option<Receiver<Result<f32, TcpCommunicationError>>>,
     ) -> Result<(), TankLevelSwitchError> {
         if self.config.use_simulator {
-            // --- World-Class Suggestion: Refactor to reduce duplication ---
             // Ensure channels are present before proceeding.
             let tx_to_tcp = tx_to_tcp_opt.as_ref().ok_or_else(|| {
                 TankLevelSwitchError::SimulatorChannelNotProvided(module_path!().to_string())

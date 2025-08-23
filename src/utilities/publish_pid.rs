@@ -162,7 +162,6 @@ impl PublishPid {
     /// written to. This could be due to a permissions issue, an invalid path, or if
     /// the file was unexpectedly deleted.
     pub fn erase_pid(&self) -> Result<(), PublishPidError> {
-        // --- World-Class Suggestion: Return a Result instead of panicking ---
         fs::write(&self.config.pid_filename, "0\n").map_err(|e| {
             PublishPidError::UnableToWritePidFile {
                 location: module_path!().to_string(),

@@ -18,7 +18,7 @@ use log::info;
 
 #[cfg(all(target_os = "linux", not(test)))]
 use nix::unistd::gettid;
-
+use thiserror::Error;
 use crate::utilities::channel_content::InternalCommand;
 use crate::utilities::proc_ext_req::ProcessExternalRequestTrait;
 
@@ -43,6 +43,29 @@ pub struct WatchdogConfig {
     watchdog_deactivation: String,
 }
 
+/// Contains the error definition for Watchdog
+#[derive(Error, Debug)]
+pub enum WatchdogError {
+    /// Duration between two heartbeats is zero.
+    #[error("[{0}] Duration between two watchdog heartbeats is zero - please assign a value > 0")]
+    DurationBetweenTwoHeartbeatsIsZero(String),
+    
+    /// Watchdog filename is empty.
+    #[error("[{0}] Watchdog filename is empty - please assign a value")]
+    FilenameIsEmpty(String),
+    
+    /// Watchdog heartbeat message is empty.
+    #[error("[{0}] Watchdog heartbeat message is empty - please assign a value")]
+    HeartbeatMessageIsEmpty(String),
+
+    /// Watchdog deactivation message is empty.
+    #[error("[{0}] Watchdog deactivation message is empty - please assign a value")]
+    DeactivationMessageIsEmpty(String),
+    
+    /// Watchdog heartbeat and deactivation messages are identical.
+    #[error("[{0}] watchdog heartbeat and deactivation message are identical ({1}) - please assign different values")]
+    HeartbeatAndDeactivationMessagesAreIdentical(String, String),
+}
 /// Contains the configuration and the implementation for the Watchdog communication
 pub struct Watchdog {
     config: WatchdogConfig,
@@ -72,39 +95,27 @@ impl Watchdog {
     /// # Panics
     /// This function will **panic** if any of the configuration validation checks fail,
     /// as an incorrectly configured watchdog can lead to system instability or unintended resets.
-    pub fn new(config: WatchdogConfig) -> Watchdog {
+    pub fn new(config: WatchdogConfig) -> Result<Watchdog, WatchdogError> {
         if config.heartbeat_duration_millis == 0 {
-            panic!(
-                "{}: duration between two watchdog heartbeats is zero - please assign a value > 0",
-                module_path!()
-            );
+            return Err(WatchdogError::DurationBetweenTwoHeartbeatsIsZero(module_path!().to_string()));
         }
         if config.watchdog_filename.is_empty() {
-            panic!(
-                "{}: watchdog filename is empty - please assign a value",
-                module_path!()
-            );
+            return Err(WatchdogError::FilenameIsEmpty(module_path!().to_string()));
         }
         if config.watchdog_heartbeat.is_empty() {
-            panic!(
-                "{}: watchdog heartbeat message is empty - please assign a value",
-                module_path!()
-            );
+            return Err(WatchdogError::HeartbeatMessageIsEmpty(module_path!().to_string()));
         }
         if config.watchdog_deactivation.is_empty() {
-            panic!(
-                "{}: watchdog heartbeat message is empty - please assign a value",
-                module_path!()
-            );
+            return Err(WatchdogError::DeactivationMessageIsEmpty(module_path!().to_string()));
         }
         if config.watchdog_deactivation == config.watchdog_heartbeat {
-            panic!(
-                "{}: watchdog heartbeat and deactivation message are identical - please assign different values",
-                module_path!()
-            );
+            return Err(WatchdogError::HeartbeatAndDeactivationMessagesAreIdentical(
+                module_path!().to_string(),
+                config.watchdog_deactivation,
+            ));
         }
 
-        Watchdog { config }
+        Ok(Watchdog { config })
     }
 
     /// Executes the main control loop for the watchdog communication module.
@@ -202,8 +213,11 @@ impl Watchdog {
 
 #[cfg(test)]
 pub mod tests {
+    use crate::mocks::mock_petting::tests::MockPetting;
+    use crate::utilities::channel_content::InternalCommand;
     use crate::utilities::config::{read_config_file, ConfigData};
-    use crate::watchmen::watchdog::Watchdog;
+    use crate::watchmen::petting::Petting;
+    use crate::watchmen::watchdog::{Watchdog, WatchdogError};
     use spin_sleep::SpinSleeper;
     use std::fs::OpenOptions;
     use std::io::Read;
@@ -211,74 +225,100 @@ pub mod tests {
     use std::thread::scope;
     use std::time::Duration;
 
-    use crate::mocks::mock_petting::tests::MockPetting;
-    use crate::utilities::channel_content::InternalCommand;
-    use crate::watchmen::petting::Petting;
-
     #[test]
-    #[should_panic]
-    // test if the watchdog is panicking during initialization if the configuration file contains
-    // an empty string for watchdog filename
-    pub fn test_watchdog_init_watchdog_file_empty() {
+    // test if Watchdog::new fails if the configuration contains an empty watchdog filename
+    fn test_new_fails_with_empty_filename() {
+        // Arrange
         let mut config: ConfigData =
             read_config_file("/config/aquarium_control_test_generic.toml".to_string()).unwrap();
         config.watchdog.watchdog_filename = "".to_string();
 
-        let _ = Watchdog::new(config.watchdog);
+        // Act
+        let result = Watchdog::new(config.watchdog);
+
+        // Assert
+        assert!(matches!(result, Err(WatchdogError::FilenameIsEmpty(_))));
     }
 
     #[test]
-    #[should_panic]
-    // test if the watchdog is panicking during initialization if the configuration file contains an
-    // empty string for heartbeat signal
-    pub fn test_watchdog_init_heartbeat_empty() {
+    // test if Watchdog::new fails if the configuration contains an empty heartbeat message
+    fn test_new_fails_with_empty_heartbeat() {
+        // Arrange
         let mut config: ConfigData =
             read_config_file("/config/aquarium_control_test_generic.toml".to_string()).unwrap();
         config.watchdog.watchdog_heartbeat = "".to_string();
 
-        let _ = Watchdog::new(config.watchdog);
+        // Act
+        let result = Watchdog::new(config.watchdog);
+
+        // Assert
+        assert!(matches!(
+            result,
+            Err(WatchdogError::HeartbeatMessageIsEmpty(_))
+        ));
     }
 
     #[test]
-    #[should_panic]
-    // test if the watchdog is panicking during initialization if the configuration file contains an
-    // empty string for deactivation signal
-    pub fn test_watchdog_init_deactivation_empty() {
+    // test if Watchdog::new fails if the configuration contains an empty deactivation message
+    fn test_new_fails_with_empty_deactivation_message() {
+        // Arrange
         let mut config: ConfigData =
             read_config_file("/config/aquarium_control_test_generic.toml".to_string()).unwrap();
         config.watchdog.watchdog_deactivation = "".to_string();
 
-        let _ = Watchdog::new(config.watchdog);
+        // Act
+        let result = Watchdog::new(config.watchdog);
+
+        // Assert
+        assert!(matches!(
+            result,
+            Err(WatchdogError::DeactivationMessageIsEmpty(_))
+        ));
     }
 
     #[test]
-    #[should_panic]
-    // test if the watchdog is panicking during initialization if the configuration file contains
-    // identical strings for heartbeat and deactivation
-    pub fn test_watchdog_init_heartbeat_deactivation_identical() {
+    // test if Watchdog::new fails if the configuration contains identical heartbeat and deactivation messages
+    fn test_new_fails_with_identical_messages() {
+        // Arrange
         let mut config: ConfigData =
             read_config_file("/config/aquarium_control_test_generic.toml".to_string()).unwrap();
         config.watchdog.watchdog_deactivation = "T".to_string();
         config.watchdog.watchdog_heartbeat = "T".to_string();
 
-        let _ = Watchdog::new(config.watchdog);
+        // Act
+        let result = Watchdog::new(config.watchdog);
+
+        // Assert
+        assert!(matches!(
+            result,
+            Err(WatchdogError::HeartbeatAndDeactivationMessagesAreIdentical(
+                _,
+                _
+            ))
+        ));
     }
 
     #[test]
-    #[should_panic]
-    // test if the watchdog is panicking during initialization if the configuration file contains
-    // zero value for duration of pause between two heartbeats
-    pub fn test_watchdog_init_heartbeat_duration_zero() {
+    // test if Watchdog::new fails if the configuration contains a zero-heartbeat duration
+    fn test_new_fails_with_zero_heartbeat_duration() {
+        // Arrange
         let mut config: ConfigData =
             read_config_file("/config/aquarium_control_test_generic.toml".to_string()).unwrap();
         config.watchdog.heartbeat_duration_millis = 0;
 
-        let _ = Watchdog::new(config.watchdog);
+        // Act
+        let result = Watchdog::new(config.watchdog);
+
+        // Assert
+        assert!(matches!(
+            result,
+            Err(WatchdogError::DurationBetweenTwoHeartbeatsIsZero(_))
+        ));
     }
 
     #[test]
     // test if the watchdog is executing the petting in time
-    pub fn test_watchdog_execute_petting() {
+    fn test_watchdog_execute_petting() {
         let config: ConfigData =
             read_config_file("/config/aquarium_control_test_generic.toml".to_string()).unwrap();
         let (tx_watchdog_to_signal_handler, rx_signal_handler_from_watchdog) = mpsc::channel();
@@ -290,7 +330,7 @@ pub mod tests {
         let reference_heartbeat_signal = config.watchdog.watchdog_heartbeat.clone();
         let reference_deactivation_signal = config.watchdog.watchdog_deactivation.clone();
 
-        let mut watchdog = Watchdog::new(config.watchdog);
+        let mut watchdog = Watchdog::new(config.watchdog).unwrap();
         let mut mock_petting = MockPetting::new();
 
         scope(|scope| {
@@ -312,13 +352,10 @@ pub mod tests {
                     tx_watchdog_to_signal_handler,
                     rx_watchdog_from_signal_handler,
                     None,
-                    &mut mock_petting
+                    &mut mock_petting,
                 );
 
-                assert_eq!(
-                    mock_petting.petting_recorder.len(),
-                    5
-                );
+                assert_eq!(mock_petting.petting_recorder.len(), 5);
 
                 // Check intervals between consecutive heartbeats
                 // Iterate from the second timestamp (index 1)
@@ -363,7 +400,7 @@ pub mod tests {
 
     #[test]
     // test if the watchdog is writing the right heartbeat messages to the watchdog file
-    pub fn test_watchdog_check_heartbeat_message() {
+    fn test_watchdog_check_heartbeat_message() {
         let mut config: ConfigData =
             read_config_file("/config/aquarium_control_test_generic.toml".to_string()).unwrap();
 
@@ -382,7 +419,7 @@ pub mod tests {
         _ = file.set_len(0); // This is the core operation
 
         let watchdog_filename_for_assert = config.watchdog.watchdog_filename.clone();
-        let mut watchdog = Watchdog::new(config.watchdog);
+        let mut watchdog = Watchdog::new(config.watchdog).unwrap();
         let mut petting = Petting::new();
 
         scope(|scope| {

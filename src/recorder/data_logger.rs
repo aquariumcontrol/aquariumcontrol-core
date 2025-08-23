@@ -1298,8 +1298,7 @@ pub mod tests {
         target_ambient_humidity: f32,
         target_heater_status: bool,
     ) {
-        // --- World-Class Suggestion: Refactor to eliminate massive code duplication ---
-        // Helper to assert the content of a file containing an f32 value.
+        // Helper to assert the content of a file containing a f32 value.
         let assert_file_f32 = |filename: &str, expected: f32| {
             let content = fs::read_to_string(filename)
                 .unwrap_or_else(|_| panic!("Could not read file: {}", filename));

@@ -253,9 +253,6 @@ impl Balling {
     /// - `DosingIntervalShorterThanCheckInterval`: If an active pump's dosing interval is
     ///   shorter than the main `schedule_check_interval`, which would lead to illogical scheduling.
     fn check_valid_dosing_intervals(config: &BallingConfig) -> Result<(), BallingError> {
-        // --- World-Class Suggestion: Refactor to fix bug and remove duplication ---
-        // The original implementation had a copy-paste bug in the error reporting
-        // and was very repetitive. This version is correct, concise, and easier to maintain.
         let pumps = [
             (1, config.pump1_active, config.dosing_interval_pump1),
             (2, config.pump2_active, config.dosing_interval_pump2),
@@ -305,7 +302,6 @@ impl Balling {
         sql_interface_balling: &mut SqlInterfaceBalling,
         config: &BallingConfig,
     ) -> Result<(), BallingError> {
-        // --- World-Class Suggestion: Refactor to remove repetitive code ---
         let active_pumps = [
             (1, config.pump1_active),
             (2, config.pump2_active),

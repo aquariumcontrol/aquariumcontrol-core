@@ -21,6 +21,7 @@ use crate::utilities::memory_config_check::MemoryConfigError;
 use crate::utilities::publish_pid::PublishPidError;
 use crate::utilities::version_information::VersionInformationError;
 use thiserror::Error;
+use crate::watchmen::watchdog::WatchdogError;
 
 /// Contains top-level error definitions for errors which may happen at startup.
 /// No additional parameter to identify the module is required here.
@@ -163,10 +164,17 @@ pub enum StartupError {
         source: Ds18b20Error,
     },
 
-    /// Could not check for already running version of the application.
+    /// Could not check for an already running version of the application.
     #[error("Could not check for already running version of the application.")]
     PidCheckError {
         #[source]
         source: PublishPidError,
+    },
+
+    /// Could not set up watchdog.
+    #[error("Could not setup watchdog.")]
+    WatchdogSetupFailure {
+        #[source]
+        source: WatchdogError
     },
 }

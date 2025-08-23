@@ -199,9 +199,6 @@ impl SqlInterfaceBalling {
         &mut self,
         pump_id: i64,
     ) -> Result<Option<i64>, SqlInterfaceError> {
-        // --- World-Class Suggestion: Refactor for conciseness and clarity ---
-        // The original implementation with `match` statements can be simplified
-        // using the `?` operator for error propagation and `Option::map` for the final calculation.
         let current_datetime = SqlInterface::get_current_timestamp(&mut self.conn)?;
         let last_dosing_datetime_opt = self.get_last_balling_dosing_timestamp(pump_id)?;
 
@@ -236,7 +233,6 @@ impl SqlInterfaceBalling {
         dosing_volume: f64,
     ) -> Result<(), SqlInterfaceError> {
         let sql_query_string = sql_query_strings::SQL_QUERY_WRITE_BALLING_EVENT.to_owned();
-        // --- World-Class Suggestion: Use `map_err` for more idiomatic error handling ---
         self.conn
             .exec_drop(
                 sql_query_string,

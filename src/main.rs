@@ -1335,7 +1335,8 @@ fn run() -> Result<(), StartupError> {
     )
     .map_err(|e| StartupError::InvalidBallingConfiguration { source: e })?;
     let mut monitors = Monitors::new(config.monitors);
-    let mut watchdog = Watchdog::new(config.watchdog);
+    let mut watchdog = Watchdog::new(config.watchdog)
+        .map_err(|e| StartupError::WatchdogSetupFailure { source: e })?;
 
     let mut ds18b20 = Ds18b20::new(config.ds18b20)
         .map_err(|e| StartupError::Ds18b20SetupFailure { source: e })?;
