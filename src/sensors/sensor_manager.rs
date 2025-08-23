@@ -189,12 +189,10 @@ pub enum SensorManagerError {
 /// Thread communication of this component is as follows:
 /// ```mermaid
 /// graph LR
-///     ambient[Ambient] -.-> data_logger[DataLogger]
-///     ambient --> tcp_communication[TcpCommunication]
-///     tcp_communication --> ambient
-///     ambient -.-> heating[Heating]
-///     signal_handler[SignalHandler] --> ambient
-///     ambient --> signal_handler
+///     signal_handler[SignalHandler] --> sensor_manager[SensorManager]
+///     sensor_manager[SensorManager] --> signal_handler[SignalHandler]
+///     signal_handler[SignalHandler] --> tcp_communication[TcpCommunication]
+///     tcp_communication[TcpCommunication] --> signal_handler[SignalHandler]
 /// ```
 pub struct SensorManager {
     // configuration data for Ambient
@@ -501,6 +499,7 @@ impl SensorManager {
             if current_instant.duration_since(self.instant_last_measurement)
                 > self.measurement_interval
             {
+                self.instant_last_measurement = current_instant;
                 if self.config.use_simulator {
                     let result = self.communicate_with_simulator(
                         sensor_manager_channels.tx_sensor_manager_to_tcp_opt,
