@@ -136,21 +136,24 @@ pub struct ConfigData {
 #[cfg(not(test))]
 /// Loads configuration data from a specified `.toml` file into a `ConfigData` struct.
 ///
-/// This version of the function is intended for execution environments (`#[cfg(not(test))]`).
-/// It reads the entire content of the `.toml` file and then attempts to parse
-/// it into the `ConfigData` structure.
+/// This version of the function is intended for production environments. It reads
+/// the entire content of the `.toml` file and then attempts to parse it into the
+/// `ConfigData` structure.
 ///
 /// # Arguments
 /// * `filename` - The fully qualified path (including directory and file name)
 ///   of the `.toml` configuration file to be read.
 ///
 /// # Returns
-/// A `ConfigData` struct containing the parsed configuration if successful.
+/// A `Result` containing a `ConfigData` struct with the parsed configuration on success.
 ///
-/// # Panics
-/// This function will panic in the following scenarios:
-/// - If the specified file cannot be read (e.g., file not found, permission denied).
-/// - If the file content is not valid TOML or cannot be deserialized into `ConfigData`.
+/// # Errors
+/// Returns a `ConfigError` variant if any part of the process fails:
+/// - `ConfigError::FileRead`: If the specified file cannot be read from the filesystem.
+///   This can be caused by the file not existing, or the application lacking the
+///   necessary permissions to access it.
+/// - `ConfigError::TomlParse`: If the file's content is not valid TOML or if its
+///   structure does not match the `ConfigData` struct, preventing deserialization.
 pub fn read_config_file(filename: String) -> Result<ConfigData, ConfigError> {
     #[cfg(not(test))]
     info!(target: module_path!(), "reading configuration from {filename}");
