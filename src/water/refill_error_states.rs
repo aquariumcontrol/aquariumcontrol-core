@@ -51,7 +51,7 @@ impl RefillErrorStates {
 }
 
 impl fmt::Display for RefillErrorStates {
-    /// Formats the `RefillErrors` struct into a concise, single-line string for development purposes.
+    /// Formats the `RefillErrorStates` struct into a concise, single-line string for development purposes.
     ///
     /// This implementation is designed for quick inspection of the refill control's
     /// error states. It displays the boolean value of each error flag, making it
@@ -61,7 +61,10 @@ impl fmt::Display for RefillErrorStates {
     /// * `f` - A mutable reference to the formatter, as required by the `fmt::Display` trait.
     ///
     /// # Returns
-    /// A `fmt::Result` indicating whether the formatting operation was successful.
+    /// An empty `Result` (`Ok(())`) on successful formatting.
+    ///
+    /// # Errors
+    /// Returns a `fmt::Error` if an I/O error occurs while writing to the formatter.
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f,
             "error_switch_stuck_high: {}, error_switch_stuck_low: {}, error_receive_tank_level_switch_position: {},  error_sql_update_failed: {}, error_sql_get_historic_data_failed: {}",

@@ -66,6 +66,21 @@ impl RefillMonitorView {
 
 // Implement the Display trait for RefillMonitorView to provide a human-readable string representation.
 impl fmt::Display for RefillMonitorView {
+    /// Formats the `RefillMonitorView` flags into a human-readable string.
+    ///
+    /// This implementation provides a concise, single-line summary of any active
+    /// refill warnings. If no flags are set, it reports that all checks are OK.
+    /// Otherwise, it lists the specific warnings, separated by commas.
+    ///
+    /// # Arguments
+    /// * `f` - A mutable reference to a `Formatter` where the output will be written.
+    ///
+    /// # Returns
+    /// An `Ok(())` on successful formatting.
+    ///
+    /// # Errors
+    /// Returns an `Err` containing a `std::fmt::Error` if an I/O error occurs
+    /// while writing to the formatter.
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         let mut checks = Vec::new();
 

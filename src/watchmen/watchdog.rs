@@ -16,11 +16,11 @@ use std::time::Duration;
 #[cfg(all(target_os = "linux", not(test)))]
 use log::info;
 
+use crate::utilities::channel_content::InternalCommand;
+use crate::utilities::proc_ext_req::ProcessExternalRequestTrait;
 #[cfg(all(target_os = "linux", not(test)))]
 use nix::unistd::gettid;
 use thiserror::Error;
-use crate::utilities::channel_content::InternalCommand;
-use crate::utilities::proc_ext_req::ProcessExternalRequestTrait;
 
 /// Holds the configuration data for the watchdog communication.
 /// The configuration is loaded from the .toml configuration file.
@@ -49,11 +49,11 @@ pub enum WatchdogError {
     /// Duration between two heartbeats is zero.
     #[error("[{0}] Duration between two watchdog heartbeats is zero - please assign a value > 0")]
     DurationBetweenTwoHeartbeatsIsZero(String),
-    
+
     /// Watchdog filename is empty.
     #[error("[{0}] Watchdog filename is empty - please assign a value")]
     FilenameIsEmpty(String),
-    
+
     /// Watchdog heartbeat message is empty.
     #[error("[{0}] Watchdog heartbeat message is empty - please assign a value")]
     HeartbeatMessageIsEmpty(String),
@@ -61,7 +61,7 @@ pub enum WatchdogError {
     /// Watchdog deactivation message is empty.
     #[error("[{0}] Watchdog deactivation message is empty - please assign a value")]
     DeactivationMessageIsEmpty(String),
-    
+
     /// Watchdog heartbeat and deactivation messages are identical.
     #[error("[{0}] watchdog heartbeat and deactivation message are identical ({1}) - please assign different values")]
     HeartbeatAndDeactivationMessagesAreIdentical(String, String),
@@ -97,16 +97,22 @@ impl Watchdog {
     /// as an incorrectly configured watchdog can lead to system instability or unintended resets.
     pub fn new(config: WatchdogConfig) -> Result<Watchdog, WatchdogError> {
         if config.heartbeat_duration_millis == 0 {
-            return Err(WatchdogError::DurationBetweenTwoHeartbeatsIsZero(module_path!().to_string()));
+            return Err(WatchdogError::DurationBetweenTwoHeartbeatsIsZero(
+                module_path!().to_string(),
+            ));
         }
         if config.watchdog_filename.is_empty() {
             return Err(WatchdogError::FilenameIsEmpty(module_path!().to_string()));
         }
         if config.watchdog_heartbeat.is_empty() {
-            return Err(WatchdogError::HeartbeatMessageIsEmpty(module_path!().to_string()));
+            return Err(WatchdogError::HeartbeatMessageIsEmpty(
+                module_path!().to_string(),
+            ));
         }
         if config.watchdog_deactivation.is_empty() {
-            return Err(WatchdogError::DeactivationMessageIsEmpty(module_path!().to_string()));
+            return Err(WatchdogError::DeactivationMessageIsEmpty(
+                module_path!().to_string(),
+            ));
         }
         if config.watchdog_deactivation == config.watchdog_heartbeat {
             return Err(WatchdogError::HeartbeatAndDeactivationMessagesAreIdentical(

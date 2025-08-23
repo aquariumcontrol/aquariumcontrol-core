@@ -20,8 +20,8 @@ use crate::utilities::logger::LoggerSetupError;
 use crate::utilities::memory_config_check::MemoryConfigError;
 use crate::utilities::publish_pid::PublishPidError;
 use crate::utilities::version_information::VersionInformationError;
-use thiserror::Error;
 use crate::watchmen::watchdog::WatchdogError;
+use thiserror::Error;
 
 /// Contains top-level error definitions for errors which may happen at startup.
 /// No additional parameter to identify the module is required here.
@@ -175,6 +175,6 @@ pub enum StartupError {
     #[error("Could not setup watchdog.")]
     WatchdogSetupFailure {
         #[source]
-        source: WatchdogError
+        source: WatchdogError,
     },
 }

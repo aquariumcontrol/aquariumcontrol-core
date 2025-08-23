@@ -157,12 +157,23 @@ fn display_usage() {
     println!("-v, --version: Output version information including hash of executable.");
 }
 
-/// Checks if the string represents a user command and executes related functionality.
+/// Checks if a command-line argument is a recognized command and executes it.
+///
+/// This function handles special command-line flags that provide information
+/// to the user (e.g., help, version) without starting the main application.
+///
 /// # Arguments
-/// * `command` - A string slice representing the potential command.
+/// * `command` - A string slice representing the potential command (e.g., "-h", "--version").
+///
 /// # Returns
-/// * A boolean value if a valid command has been recognized unless error occurred.
-/// * `VersionInformationError` in case version information could not be retrieved
+/// A `Result` indicating the outcome:
+/// - `Ok(true)`: If the argument was a recognized command and was handled successfully.
+/// - `Ok(false)`: If the argument was not a recognized command.
+///
+/// # Errors
+/// Returns a `VersionInformationError` if the `-v` or `--version` command is used,
+/// but the application fails to retrieve its own version information (e.g., cannot
+/// calculate the executable's hash).
 fn check_is_command(command: &str) -> Result<bool, VersionInformationError> {
     match command {
         "-h" | "--help" => {
@@ -195,9 +206,14 @@ fn check_is_command(command: &str) -> Result<bool, VersionInformationError> {
 /// * `user_selected_config_file_name` - A string slice representing the potential path to the configuration file.
 ///
 /// # Returns
-/// A `Result<String, ConfigFileDefinitionError>`:
-/// - `Ok(String)`: The validated and owned file path if all checks pass.
-/// - `Err(ConfigFileDefinitionError)`: If any validation check fails, with a descriptive error message.
+/// A `Result` containing the validated and owned file path as a `String` on success.
+///
+/// # Errors
+/// Returns a `ConfigFileDefinitionError` if any validation check fails:
+/// - `ConfigFileDefinitionError::PathDoesNotExist`: If no file or directory exists at the given path.
+/// - `ConfigFileDefinitionError::IsNotAFile`: If the path points to a directory, not a regular file.
+/// - `ConfigFileDefinitionError::FileNameHasNoSuffix`: If the path does not have a file extension.
+/// - `ConfigFileDefinitionError::SuffixIsNotToml`: If the file's extension is not `.toml`.
 fn check_argument_for_valid_config_file_name(
     user_selected_config_file_name: &str,
 ) -> Result<String, ConfigFileDefinitionError> {
@@ -268,6 +284,22 @@ fn is_running_as_root() -> bool {
 /// 11. Manages the initial data acquisition phase, waiting for sensors to provide first readings before control loops become fully active.
 ///
 /// This function is responsible for the overall lifecycle of the application, including graceful startup and panic handling.
+///
+/// # Returns
+/// An empty `Result` (`Ok(())`) on a graceful shutdown. This occurs if the user
+/// provides a command-line flag like `-h` or if the application is terminated
+/// normally by the signal handler.
+///
+/// # Errors
+/// Returns a `StartupError` if any part of the initialization or setup fails.
+/// This error enum covers a wide range of potential issues, including:
+/// - `StartupError::Config`: If the configuration file is invalid or cannot be parsed.
+/// - `StartupError::LoggingSetupFailure`: If the logger cannot be initialized (e.g., due to file permissions).
+/// - `StartupError::NotRoot`: If the application is run without the necessary root privileges.
+/// - `StartupError::PidCheckError`: If another instance is already running or the PID file cannot be written.
+/// - `StartupError::Database`: If any database connection, query, or setup fails.
+/// - `StartupError::GpioHandlerSetupFailure`: If the GPIO interface cannot be initialized on the target hardware.
+/// - And various other setup failures for specific modules.
 ///
 /// Global thread communication is as follows:
 /// ```mermaid
@@ -430,7 +462,7 @@ fn run() -> Result<(), StartupError> {
                 location.line()
             );
         }
-        // additionally log an error if the PID could not be reset
+        // Additionally, log an error if the PID could not be reset
         if let Err(error_reset_pid) = result_reset_pid {
             error!("Could not reset PID file: {error_reset_pid}");
         }
