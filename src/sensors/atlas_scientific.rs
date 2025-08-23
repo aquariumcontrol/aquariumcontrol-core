@@ -462,9 +462,13 @@ impl AtlasScientific {
         max_mutex_access_duration: Duration,
     ) {
         let lock_flag = match signal {
-            AquariumSignal::WaterTemperature => &mut self.lock_warn_max_mutex_access_duration_temperature,
+            AquariumSignal::WaterTemperature => {
+                &mut self.lock_warn_max_mutex_access_duration_temperature
+            }
             AquariumSignal::pH => &mut self.lock_warn_max_mutex_access_duration_ph,
-            AquariumSignal::Conductivity => &mut self.lock_warn_max_mutex_access_duration_conductivity,
+            AquariumSignal::Conductivity => {
+                &mut self.lock_warn_max_mutex_access_duration_conductivity
+            }
             _ => return, // Do nothing for other signals
         };
 
@@ -472,20 +476,24 @@ impl AtlasScientific {
             *lock_flag = true;
             #[cfg(not(test))]
             warn!(
-            target: module_path!(),
-            "Access to {} mutex took too long. Allowed={}ms, Measured={}ms",
-            signal, // Display is implemented for AquariumSignal
-            max_mutex_access_duration.as_millis(),
-            measured_mutex_access_duration.as_millis(),
-        );
+                target: module_path!(),
+                "Access to {} mutex took too long. Allowed={}ms, Measured={}ms",
+                signal, // Display is implemented for AquariumSignal
+                max_mutex_access_duration.as_millis(),
+                measured_mutex_access_duration.as_millis(),
+            );
 
             // This block handles the test-only flags
             #[cfg(test)]
             {
                 match signal {
-                    AquariumSignal::WaterTemperature => self.mutex_temperature_access_duration_exceeded = true,
+                    AquariumSignal::WaterTemperature => {
+                        self.mutex_temperature_access_duration_exceeded = true
+                    }
                     AquariumSignal::pH => self.mutex_ph_access_duration_exceeded = true,
-                    AquariumSignal::Conductivity => self.mutex_conductivity_access_duration_exceeded = true,
+                    AquariumSignal::Conductivity => {
+                        self.mutex_conductivity_access_duration_exceeded = true
+                    }
                     _ => {}
                 }
             }
@@ -502,8 +510,12 @@ impl AtlasScientific {
     /// * `signal` - The `AquariumSignal` identifying which sensor's warning lock to reset.
     fn reset_warning_flag(&mut self, signal: &AquariumSignal) {
         let lock_flag = match signal {
-            AquariumSignal::WaterTemperature => &mut self.lock_warn_max_mutex_access_duration_temperature,
-            AquariumSignal::Conductivity => &mut self.lock_warn_max_mutex_access_duration_conductivity,
+            AquariumSignal::WaterTemperature => {
+                &mut self.lock_warn_max_mutex_access_duration_temperature
+            }
+            AquariumSignal::Conductivity => {
+                &mut self.lock_warn_max_mutex_access_duration_conductivity
+            }
             AquariumSignal::pH => &mut self.lock_warn_max_mutex_access_duration_ph,
             _ => return, // Do nothing for other signals
         };

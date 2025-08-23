@@ -6,6 +6,7 @@ use crate::dispatch::messaging_error::MessagingError;
 use crate::mineral::balling_error::BallingError;
 use crate::recorder::data_logger::DataLoggerError;
 use crate::relays::actuate_controllino::ActuateControllinoError;
+use crate::sensors::ds18b20_error::Ds18b20Error;
 #[cfg(all(feature = "target_hw", target_os = "linux"))]
 use crate::sensors::gpio_handler::GpioHandlerError;
 #[cfg(all(feature = "target_hw", target_os = "linux"))]
@@ -19,7 +20,6 @@ use crate::utilities::logger::LoggerSetupError;
 use crate::utilities::memory_config_check::MemoryConfigError;
 use crate::utilities::version_information::VersionInformationError;
 use thiserror::Error;
-use crate::sensors::ds18b20_error::Ds18b20Error;
 
 /// Contains top-level error definitions for errors which may happen at startup.
 /// No additional parameter to identify the module is required here.

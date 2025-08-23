@@ -24,9 +24,9 @@ use std::sync::mpsc::{Receiver, Sender};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
+use crate::utilities::logger::log_error_chain;
 #[cfg(all(not(test), target_os = "linux"))]
 use nix::unistd::gettid;
-use crate::utilities::logger::log_error_chain;
 
 const CYCLE_TIME_VENTILATION_MILLIS: u64 = 500;
 
@@ -103,7 +103,8 @@ fn actuate_ventilation(
     } else {
         // now listen for the response
         if let Err(e) = rx_ventilation_from_relay_manager.recv() {
-            let error_message = format!("Receiving answer from relay manager for {command} failed.");
+            let error_message =
+                format!("Receiving answer from relay manager for {command} failed.");
             log_error_chain(module_path!(), &error_message, e);
         }
     };

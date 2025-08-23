@@ -344,12 +344,12 @@ impl TankLevelSwitch {
         if self.config.use_simulator {
             // --- World-Class Suggestion: Refactor to reduce duplication ---
             // Ensure channels are present before proceeding.
-            let tx_to_tcp = tx_to_tcp_opt
-                .as_ref()
-                .ok_or_else(|| TankLevelSwitchError::SimulatorChannelNotProvided(module_path!().to_string()))?;
-            let rx_from_tcp = rx_from_tcp_opt
-                .as_ref()
-                .ok_or_else(|| TankLevelSwitchError::SimulatorChannelNotProvided(module_path!().to_string()))?;
+            let tx_to_tcp = tx_to_tcp_opt.as_ref().ok_or_else(|| {
+                TankLevelSwitchError::SimulatorChannelNotProvided(module_path!().to_string())
+            })?;
+            let rx_from_tcp = rx_from_tcp_opt.as_ref().ok_or_else(|| {
+                TankLevelSwitchError::SimulatorChannelNotProvided(module_path!().to_string())
+            })?;
 
             // Fetch the position signal.
             let position_signal = AquariumSignal::TankLevelSwitchPosition;
@@ -359,11 +359,11 @@ impl TankLevelSwitch {
                 rx_from_tcp,
                 InternalCommand::RequestSignal(position_signal.clone()),
             )
-                .map_err(|e| TankLevelSwitchError::SimulatorCommunicationError {
-                    location: module_path!().to_string(),
-                    signal: position_signal,
-                    source: e,
-                })?;
+            .map_err(|e| TankLevelSwitchError::SimulatorCommunicationError {
+                location: module_path!().to_string(),
+                signal: position_signal,
+                source: e,
+            })?;
             self.tank_level_switch_position = position_val > 0.0;
 
             // Fetch the invalid signal.
@@ -374,11 +374,11 @@ impl TankLevelSwitch {
                 rx_from_tcp,
                 InternalCommand::RequestSignal(invalid_signal.clone()),
             )
-                .map_err(|e| TankLevelSwitchError::SimulatorCommunicationError {
-                    location: module_path!().to_string(),
-                    signal: invalid_signal,
-                    source: e,
-                })?;
+            .map_err(|e| TankLevelSwitchError::SimulatorCommunicationError {
+                location: module_path!().to_string(),
+                signal: invalid_signal,
+                source: e,
+            })?;
             self.tank_level_switch_invalid = invalid_val > 0.0;
         } else {
             #[cfg(all(target_os = "linux", feature = "target_hw"))]

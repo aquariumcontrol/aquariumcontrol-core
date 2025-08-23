@@ -142,13 +142,19 @@ impl Ds18b20 {
     ///   ID is assigned to both the water and ambient temperature sensors.
     pub fn new(config: Ds18b20Config) -> Result<Ds18b20, Ds18b20Error> {
         if config.system_driver_base_path.is_empty() {
-            return Err(Ds18b20Error::SystemDriverBasePathEmpty(module_path!().to_string()));
+            return Err(Ds18b20Error::SystemDriverBasePathEmpty(
+                module_path!().to_string(),
+            ));
         }
         if config.system_driver_sensor_path_prefix.is_empty() {
-            return Err(Ds18b20Error::SystemDriverSensorPathEmpty(module_path!().to_string()));
+            return Err(Ds18b20Error::SystemDriverSensorPathEmpty(
+                module_path!().to_string(),
+            ));
         }
         if config.system_driver_file_name.is_empty() {
-            return Err(Ds18b20Error::SystemDriverFileNameEmpty(module_path!().to_string()));
+            return Err(Ds18b20Error::SystemDriverFileNameEmpty(
+                module_path!().to_string(),
+            ));
         }
         if config.active
             && config.water_temperature_sensor_id.is_empty()
@@ -226,8 +232,7 @@ impl Ds18b20 {
                     }
                 }
                 Err(_) => {
-                    last_error =
-                        Ds18b20Error::ReadToStringFailure(module_path!().to_string());
+                    last_error = Ds18b20Error::ReadToStringFailure(module_path!().to_string());
                 }
             }
             sleep(Duration::from_millis(
@@ -317,7 +322,10 @@ impl Ds18b20 {
 
         loop {
             // Check for quit command first for faster shutdown.
-            if self.process_external_request(&rx_from_signal_handler, None).0 {
+            if self
+                .process_external_request(&rx_from_signal_handler, None)
+                .0
+            {
                 #[cfg(test)]
                 println!("Quitting Ds18b20");
                 break;
@@ -325,19 +333,17 @@ impl Ds18b20 {
 
             if self.config.active && last_measurement_instant.elapsed() >= measurement_interval {
                 // --- Refactoring: Read values BEFORE locking mutexes ---
-                let water_temp_result =
-                    if !self.config.water_temperature_sensor_id.is_empty() {
-                        Some(self.read(self.config.water_temperature_sensor_id.as_str()))
-                    } else {
-                        None
-                    };
+                let water_temp_result = if !self.config.water_temperature_sensor_id.is_empty() {
+                    Some(self.read(self.config.water_temperature_sensor_id.as_str()))
+                } else {
+                    None
+                };
 
-                let ambient_temp_result =
-                    if !self.config.ambient_temperature_sensor_id.is_empty() {
-                        Some(self.read(self.config.ambient_temperature_sensor_id.as_str()))
-                    } else {
-                        None
-                    };
+                let ambient_temp_result = if !self.config.ambient_temperature_sensor_id.is_empty() {
+                    Some(self.read(self.config.ambient_temperature_sensor_id.as_str()))
+                } else {
+                    None
+                };
 
                 // Now, lock the mutexes for the shortest possible time to write the results.
                 let instant_before_locking_mutex = Instant::now();
@@ -362,10 +368,10 @@ impl Ds18b20 {
                         self.lock_warn_max_mutex_access_duration = true;
                         #[cfg(not(test))]
                         warn!(target: module_path!(),
-                        "Access to DS18B20 mutex took too long. Allowed={}ms, Measured={}ms",
-                        max_mutex_access_duration.as_millis(),
-                        measured_mutex_access_duration.as_millis(),
-                    );
+                            "Access to DS18B20 mutex took too long. Allowed={}ms, Measured={}ms",
+                            max_mutex_access_duration.as_millis(),
+                            measured_mutex_access_duration.as_millis(),
+                        );
 
                         #[cfg(test)]
                         {
@@ -459,7 +465,10 @@ pub mod tests {
             read_config_file("config/aquarium_control_test_generic.toml".to_string()).unwrap();
         config.ds18b20.system_driver_base_path = "".to_string();
         let result = Ds18b20::new(config.ds18b20);
-        assert!(matches!(result, Err(Ds18b20Error::SystemDriverBasePathEmpty(_))));
+        assert!(matches!(
+            result,
+            Err(Ds18b20Error::SystemDriverBasePathEmpty(_))
+        ));
     }
 
     #[test]
@@ -471,7 +480,8 @@ pub mod tests {
         let result = Ds18b20::new(config.ds18b20);
         assert!(matches!(
             result,
-            Err(Ds18b20Error::SystemDriverSensorPathEmpty(_))));
+            Err(Ds18b20Error::SystemDriverSensorPathEmpty(_))
+        ));
     }
 
     #[test]
@@ -483,7 +493,8 @@ pub mod tests {
         let result = Ds18b20::new(config.ds18b20);
         assert!(matches!(
             result,
-            Err(Ds18b20Error::SystemDriverFileNameEmpty(_))));
+            Err(Ds18b20Error::SystemDriverFileNameEmpty(_))
+        ));
     }
     #[test]
     fn test_new_fails_with_identical_sensor_ids() {
@@ -520,9 +531,7 @@ pub mod tests {
         config.ds18b20.water_temperature_sensor_id = "".to_string();
         config.ds18b20.ambient_temperature_sensor_id = "".to_string();
         let result = Ds18b20::new(config.ds18b20);
-        assert!(matches!(
-            result,
-            Err(Ds18b20Error::NoSensorIdProvided(_))));
+        assert!(matches!(result, Err(Ds18b20Error::NoSensorIdProvided(_))));
     }
 
     #[test]

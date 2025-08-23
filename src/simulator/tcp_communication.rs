@@ -188,12 +188,12 @@ impl TcpCommunication {
         let stream = TcpStream::connect(
             tcp_connection.ip_address.clone() + ":" + &tcp_connection.port.to_string(),
         )
-            .map_err(|e| TcpCommunicationError::ConnectionFailed {
-                location: module_path!().to_string(),
-                ip_address: tcp_connection.ip_address.clone(),
-                port: tcp_connection.port,
-                source: e,
-            })?;
+        .map_err(|e| TcpCommunicationError::ConnectionFailed {
+            location: module_path!().to_string(),
+            ip_address: tcp_connection.ip_address.clone(),
+            port: tcp_connection.port,
+            source: e,
+        })?;
 
         let write_stream =
             stream
@@ -321,12 +321,7 @@ impl TcpCommunication {
             command::UNSETSINGLE
         };
 
-        let request = format!(
-            "{} {} {}\n",
-            category::CONTROLLINO,
-            command,
-            relay_id
-        );
+        let request = format!("{} {} {}\n", category::CONTROLLINO, command, relay_id);
 
         self.write_stream_check_for_error(request)?;
 
@@ -373,13 +368,23 @@ impl TcpCommunication {
     ) -> Result<f32, TcpCommunicationError> {
         // --- World-Class Suggestion: Combine match statements and flatten parsing ---
         let (category, tcp_signal_identifier) = match aquarium_signal {
-            AquariumSignal::WaterTemperature => (category::ATLASSCIENTIFIC, signal::ATLASSCIENTIFICTEMPERATURE),
+            AquariumSignal::WaterTemperature => (
+                category::ATLASSCIENTIFIC,
+                signal::ATLASSCIENTIFICTEMPERATURE,
+            ),
             AquariumSignal::pH => (category::ATLASSCIENTIFIC, signal::ATLASSCIENTIFICPH),
-            AquariumSignal::Conductivity => (category::ATLASSCIENTIFIC, signal::ATLASSCIENTIFICCONDUCTIVITY),
+            AquariumSignal::Conductivity => (
+                category::ATLASSCIENTIFIC,
+                signal::ATLASSCIENTIFICCONDUCTIVITY,
+            ),
             AquariumSignal::AmbientTemperature => (category::DHT22, signal::AMBIENTTEMPERATURE),
             AquariumSignal::AmbientHumidity => (category::DHT22, signal::AMBIENTHUMIDITY),
-            AquariumSignal::TankLevelSwitchPosition => (category::TANKLEVELSWITCH, signal::TANKLEVELSWITCHPOSITION),
-            AquariumSignal::TankLevelSwitchInvalid => (category::TANKLEVELSWITCH, signal::TANKLEVELSWITCHINVALID),
+            AquariumSignal::TankLevelSwitchPosition => {
+                (category::TANKLEVELSWITCH, signal::TANKLEVELSWITCHPOSITION)
+            }
+            AquariumSignal::TankLevelSwitchInvalid => {
+                (category::TANKLEVELSWITCH, signal::TANKLEVELSWITCHINVALID)
+            }
             _ => {
                 return Err(TcpCommunicationError::IllegalSignalRequestToSimulator(
                     module_path!().to_string(),
@@ -401,10 +406,14 @@ impl TcpCommunication {
 
         // Flattened and more robust parsing logic
         Self::get_last_word(&response)
-            .ok_or_else(|| TcpCommunicationError::ResponseContainsNoWords(module_path!().to_string()))
+            .ok_or_else(|| {
+                TcpCommunicationError::ResponseContainsNoWords(module_path!().to_string())
+            })
             .and_then(|last_word| {
                 if last_word.is_empty() {
-                    Err(TcpCommunicationError::LastWordOfResponseEmpty(module_path!().to_string()))
+                    Err(TcpCommunicationError::LastWordOfResponseEmpty(
+                        module_path!().to_string(),
+                    ))
                 } else {
                     let mut last_word_string = last_word.to_string();
                     Self::trim_newline(&mut last_word_string);
@@ -455,27 +464,23 @@ impl TcpCommunication {
                             response_to_calling_thread = simulator_response;
                         }
                         match tx.send(response_to_calling_thread) {
-                            Ok(()) => { Ok(()) }
-                            Err(_) => {
-                                Err(
-                                    TcpCommunicationError::SendingResponseViaChannelFailure(
-                                        module_path!().to_string(),
-                                    ),
-                                )
-                            }
+                            Ok(()) => Ok(()),
+                            Err(_) => Err(TcpCommunicationError::SendingResponseViaChannelFailure(
+                                module_path!().to_string(),
+                            )),
                         }
                     }
-                    _ => { Ok(()) /* Do nothing for all other commands */ }
+                    _ => {
+                        Ok(()) /* Do nothing for all other commands */
+                    }
                 }
             }
-            Err(e) => {
-                match e {
-                    TryRecvError::Empty => { Ok(()) }
-                    TryRecvError::Disconnected => Err(
-                        TcpCommunicationError::ChannelDisconnected(module_path!().to_string()),
-                    ),
-                }
-            }
+            Err(e) => match e {
+                TryRecvError::Empty => Ok(()),
+                TryRecvError::Disconnected => Err(TcpCommunicationError::ChannelDisconnected(
+                    module_path!().to_string(),
+                )),
+            },
         }
     }
 

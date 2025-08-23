@@ -137,8 +137,7 @@ fn actuate_heater(
     mutex_blocked_during_actuation: &mut bool,
 ) {
     // reduce the probability of wrong warning
-    *mutex_blocked_during_actuation |=
-        check_if_mutex_is_blocked(mutex_device_scheduler_heating);
+    *mutex_blocked_during_actuation |= check_if_mutex_is_blocked(mutex_device_scheduler_heating);
 
     // avoid electrical overloads through parallel device actuation
     let mut mutex_data = mutex_device_scheduler_heating.lock().unwrap();
@@ -150,7 +149,8 @@ fn actuate_heater(
     } else {
         // If send was successful, wait for the response.
         if let Err(e) = rx_heating_from_relay_manager.recv() {
-            let error_message = format!("Receiving answer from relay manager for {command} failed.");
+            let error_message =
+                format!("Receiving answer from relay manager for {command} failed.");
             log_error_chain(module_path!(), &error_message, e);
         }
     }
@@ -382,7 +382,7 @@ impl Heating {
         self.sql_interface_heating
             .get_duration_until_midnight()
             .unwrap_or_else(|e| {
-                log_error_chain(module_path!(),"Could not get duration until midnight.", e);
+                log_error_chain(module_path!(), "Could not get duration until midnight.", e);
                 24 * 3600 // default value for time in seconds until midnight
             })
     }

@@ -1331,8 +1331,8 @@ fn run() -> Result<(), StartupError> {
     let mut monitors = Monitors::new(config.monitors);
     let mut watchdog = Watchdog::new(config.watchdog);
 
-    let mut ds18b20 = Ds18b20::new(config.ds18b20).map_err(
-        |e| StartupError::Ds18b20SetupFailure { source: e })?;
+    let mut ds18b20 = Ds18b20::new(config.ds18b20)
+        .map_err(|e| StartupError::Ds18b20SetupFailure { source: e })?;
 
     let relay_manager_channels = RelayManagerChannels {
         tx_relay_manager_to_refill,
