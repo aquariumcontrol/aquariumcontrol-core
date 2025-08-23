@@ -5,6 +5,7 @@ use crate::database::sql_interface_error::SqlInterfaceError;
 use crate::dispatch::messaging_error::MessagingError;
 use crate::mineral::balling_error::BallingError;
 use crate::recorder::data_logger::DataLoggerError;
+use crate::relays::relay_error::RelayError;
 use crate::relays::actuate_controllino::ActuateControllinoError;
 use crate::sensors::ds18b20_error::Ds18b20Error;
 #[cfg(all(feature = "target_hw", target_os = "linux"))]
@@ -116,7 +117,7 @@ pub enum StartupError {
     #[error("Could not setup interface to Gpio.")]
     ActuateGpioSetupFailure {
         #[source]
-        source: ActuateGpioError,
+        source: RelayError,
     },
 
     /// Could not initialize the interface to the GPIO.
