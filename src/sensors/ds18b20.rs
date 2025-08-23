@@ -459,7 +459,7 @@ pub mod tests {
     }
 
     #[test]
-    // Test case checks if invalid configuration of the system driver base path is recognized during startup..
+    // Test case checks if invalid configuration of the system driver base path is recognized during startup.
     fn test_dsb18b20_init_with_invalid_system_driver_base_path() {
         let mut config =
             read_config_file("config/aquarium_control_test_generic.toml".to_string()).unwrap();
@@ -485,7 +485,7 @@ pub mod tests {
     }
 
     #[test]
-    // Test case checks if invalid configuration of the system driver sensor file name is recognized during startup..
+    // Test case checks if invalid configuration of the system driver sensor file name is recognized during startup.
     fn test_dsb18b20_init_with_invalid_system_driver_file_name() {
         let mut config =
             read_config_file("config/aquarium_control_test_generic.toml".to_string()).unwrap();
