@@ -44,44 +44,72 @@ pub enum MemoryConfigError {
     EnvVarNotSet(String),
 }
 
+/// Checks a specified environment variable against a configured minimum and maximum values.
+///
+/// This function is used at application startup to verify that a system memory
+/// setting (`MALLOC_ARENA_MAX`) is within a safe and expected range.
+///
+/// # Arguments
+/// * `memory_config` - A reference to the `MemoryConfig` struct containing the check
+///   parameters (active flag, variable name, min/max values).
+///
+/// # Returns
+/// A `Result` containing an `Option` on success:
+/// - `Ok(Some((String, u64)))`: If the check is active and the environment variable's
+///   value is within the configured bounds. The tuple contains the variable's name
+///   and its parsed value.
+/// - `Ok(None)`: If the check is configured to be inactive (`active: false`).
+///
+/// # Errors
+/// Returns a `MemoryConfigError` if the check is active and any validation step fails:
+/// - `MemoryConfigError::ConfigEnvVarNameEmpty`: If `active` is true, but the
+///   `env_variable_name` in the configuration is empty.
+/// - `MemoryConfigError::EnvVarNotSet`: If the specified environment variable is not
+///   set in the current environment.
+/// - `MemoryConfigError::EnvVarParseError`: If the value of the environment variable
+///   cannot be parsed into a `u64` integer.
+/// - `MemoryConfigError::EnvVarValueTooLow`: If the parsed value is less than the
+///   configured `env_variable_min_val`.
+/// - `MemoryConfigError::EnvVarValueTooHigh`: If the parsed value is greater than the
+///   configured `env_variable_max_val`.
 pub fn memory_config_check(
     memory_config: &MemoryConfig,
 ) -> Result<Option<(String, u64)>, MemoryConfigError> {
-    if memory_config.active {
-        // check if environment variable is set in the configuration file
-        if memory_config.env_variable_name.is_empty() {
-            return Err(MemoryConfigError::ConfigEnvVarNameEmpty);
-        }
-        return match std::env::var(memory_config.env_variable_name.as_str()) {
-            Ok(val_string) => {
-                let val = match val_string.parse() {
-                    Ok(val) => val,
-                    Err(_) => {
-                        return Err(MemoryConfigError::EnvVarParseError(val_string));
-                    }
-                };
-                if val < memory_config.env_variable_min_val {
-                    return Err(MemoryConfigError::EnvVarValueTooLow(
-                        val,
-                        memory_config.env_variable_min_val,
-                    ));
-                }
-                if val > memory_config.env_variable_max_val {
-                    return Err(MemoryConfigError::EnvVarValueTooHigh(
-                        val,
-                        memory_config.env_variable_max_val,
-                    ));
-                }
-
-                // return the pair of environment variable name and configured value, so that upper level can report it
-                Ok(Some((memory_config.env_variable_name.clone(), val)))
-            }
-            Err(_) => Err(MemoryConfigError::EnvVarNotSet(
-                memory_config.env_variable_name.clone(),
-            )),
-        };
+    if !memory_config.active {
+        return Ok(None);
     }
-    Ok(None)
+
+    if memory_config.env_variable_name.is_empty() {
+        return Err(MemoryConfigError::ConfigEnvVarNameEmpty);
+    }
+
+    let var_name = &memory_config.env_variable_name;
+
+    // Get the environment variable's value as a string.
+    let val_string = std::env::var(var_name)
+        .map_err(|_| MemoryConfigError::EnvVarNotSet(var_name.clone()))?;
+
+    // Parse the string into u64.
+    let val = val_string
+        .parse::<u64>()
+        .map_err(|_| MemoryConfigError::EnvVarParseError(val_string))?;
+
+    // Check if the value is within the configured bounds.
+    if val < memory_config.env_variable_min_val {
+        return Err(MemoryConfigError::EnvVarValueTooLow(
+            val,
+            memory_config.env_variable_min_val,
+        ));
+    }
+    if val > memory_config.env_variable_max_val {
+        return Err(MemoryConfigError::EnvVarValueTooHigh(
+            val,
+            memory_config.env_variable_max_val,
+        ));
+    }
+
+    // If all checks pass, return the name and value.
+    Ok(Some((var_name.clone(), val)))
 }
 
 #[cfg(test)]
