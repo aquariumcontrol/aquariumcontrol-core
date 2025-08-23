@@ -26,6 +26,7 @@ use std::time::{Duration, Instant};
 
 #[cfg(all(not(test), target_os = "linux"))]
 use nix::unistd::gettid;
+use crate::utilities::logger::log_error_chain;
 
 const CYCLE_TIME_VENTILATION_MILLIS: u64 = 500;
 
@@ -69,108 +70,96 @@ pub struct VentilationConfig {
     pub set_value_check_interval: u64,
 }
 
+/// Sends a command to the relay manager to actuate the ventilation and waits for a response.
+///
+/// This private helper function encapsulates the logic for sending a command
+/// (either `SwitchOn` or `SwitchOff`) to the relay manager. It handles channel
+/// communication, error logging, and updates the shared actuation mutex.
+///
+/// # Arguments
+/// * `command` - The `InternalCommand` to send (`SwitchOn` or `SwitchOff`).
+/// * `mutex_device_scheduler_ventilation` - A reference to the shared actuation mutex.
+/// * `tx_ventilation_to_relay_manager` - The sender channel to the relay manager.
+/// * `rx_ventilation_from_relay_manager` - The receiver channel from the relay manager.
+/// * `mutex_blocked_during_actuation` - A mutable flag to track if the actuation mutex was blocked.
+fn actuate_ventilation(
+    command: InternalCommand,
+    mutex_device_scheduler_ventilation: &Arc<Mutex<i32>>,
+    tx_ventilation_to_relay_manager: &Sender<InternalCommand>,
+    rx_ventilation_from_relay_manager: &Receiver<bool>,
+    mutex_blocked_during_actuation: &mut bool,
+) {
+    // reduce the probability of wrong warning
+    *mutex_blocked_during_actuation |=
+        check_if_mutex_is_blocked(mutex_device_scheduler_ventilation);
+
+    // avoid electrical overloads through parallel device actuation
+    let mut mutex_data = mutex_device_scheduler_ventilation.lock().unwrap();
+
+    // Use if let for cleaner error handling
+    if let Err(e) = tx_ventilation_to_relay_manager.send(command.clone()) {
+        let error_message = format!("Channel communication to relay manager for {command} failed.");
+        log_error_chain(module_path!(), &error_message, e);
+    } else {
+        // now listen for the response
+        if let Err(e) = rx_ventilation_from_relay_manager.recv() {
+            let error_message = format!("Receiving answer from relay manager for {command} failed.");
+            log_error_chain(module_path!(), &error_message, e);
+        }
+    };
+    *mutex_data += 1;
+}
+
 /// Commands the relay manager to switch on the ventilation device.
 ///
-/// This private helper function sends a `SwitchOn` command for `AquariumDevice::Ventilation`
-/// to the relay manager thread. It then waits for an acknowledgment from the relay manager,
-/// incrementing a shared mutex counter (`mutex_device_scheduler_ventilation`) to track actuation.
-/// It also updates a flag (`mutex_blocked_during_actuation`) to help manage warnings if the
-/// device scheduler mutex was blocked.
+/// This function is a specific wrapper around `actuate_ventilation` that sends the `SwitchOn` command.
 ///
 /// # Arguments
 /// * `mutex_device_scheduler_ventilation` - A reference to an `Arc<Mutex<i32>>` used for
-///   coordinating device actuation, preventing parallel operations, and tracking actuation counts.
-/// * `tx_ventilation_to_relay_manager` - The sender channel for communicating the `SwitchOn` command to the relay manager.
-/// * `rx_ventilation_from_relay_manager` - The receiver channel for getting a boolean acknowledgment back from the relay manager.
-/// * `mutex_blocked_during_actuation` - A mutable boolean flag that is set to `true` if the
-///   `mutex_device_scheduler_ventilation` was found to be blocked during the `check_if_mutex_is_blocked` call.
+///   coordinating device actuation.
+/// * `tx_ventilation_to_relay_manager` - The sender channel for communicating with the relay manager.
+/// * `rx_ventilation_from_relay_manager` - The receiver channel for getting an acknowledgment.
+/// * `mutex_blocked_during_actuation` - A mutable boolean flag that is set if the
+///   actuation mutex was found to be blocked.
 fn switch_on_ventilation(
     mutex_device_scheduler_ventilation: &Arc<Mutex<i32>>,
     tx_ventilation_to_relay_manager: &Sender<InternalCommand>,
     rx_ventilation_from_relay_manager: &Receiver<bool>,
     mutex_blocked_during_actuation: &mut bool,
 ) {
-    // reduce the probability of wrong warning
-    *mutex_blocked_during_actuation |=
-        check_if_mutex_is_blocked(mutex_device_scheduler_ventilation);
-
-    // avoid electrical overloads through parallel device actuation
-    let mut mutex_data = mutex_device_scheduler_ventilation.lock().unwrap();
-    match tx_ventilation_to_relay_manager
-        .send(InternalCommand::SwitchOn(AquariumDevice::Ventilation))
-    {
-        Ok(_) => {
-            // now listen for the response
-            match rx_ventilation_from_relay_manager.recv() {
-                Ok(_) => {}
-                Err(e) => {
-                    error!(
-                        target: module_path!(),
-                        "receiving answer from relay manager when switching on ventilation failed ({e:?})"
-                    );
-                }
-            };
-        }
-        Err(e) => {
-            error!(
-                target: module_path!(),
-                "channel communication to relay manager when switching on ventilation ({e:?})"
-            );
-        }
-    }
-    *mutex_data += 1;
+    actuate_ventilation(
+        InternalCommand::SwitchOn(AquariumDevice::Ventilation),
+        mutex_device_scheduler_ventilation,
+        tx_ventilation_to_relay_manager,
+        rx_ventilation_from_relay_manager,
+        mutex_blocked_during_actuation,
+    );
 }
 
 /// Commands the relay manager to switch off the ventilation device.
 ///
-/// This private helper function sends a `SwitchOff` command for `AquariumDevice::Ventilation`
-/// to the relay manager thread. It then waits for an acknowledgment from the relay manager,
-/// incrementing a shared mutex counter (`mutex_device_scheduler_ventilation`) to track actuation.
-/// It also updates a flag (`mutex_blocked_during_actuation`) to help manage warnings if the
-/// device scheduler mutex was blocked.
+/// This function is a specific wrapper around `actuate_ventilation` that sends the `SwitchOff` command.
 ///
 /// # Arguments
 /// * `mutex_device_scheduler_ventilation` - A reference to an `Arc<Mutex<i32>>` used for
-///   coordinating device actuation, preventing parallel operations, and tracking actuation counts.
-/// * `tx_ventilation_to_relay_manager` - The sender channel for communicating the `SwitchOff` command to the relay manager.
-/// * `rx_ventilation_from_relay_manager` - The receiver channel for getting a boolean acknowledgment back from the relay manager.
-/// * `mutex_blocked_during_actuation` - A mutable boolean flag that is set to `true` if the
-///   `mutex_device_scheduler_ventilation` was found to be blocked during the `check_if_mutex_is_blocked` call.
+///   coordinating device actuation.
+/// * `tx_ventilation_to_relay_manager` - The sender channel for communicating with the relay manager.
+/// * `rx_ventilation_from_relay_manager` - The receiver channel for getting an acknowledgment.
+/// * `mutex_blocked_during_actuation` - A mutable boolean flag that is set if the
+///   actuation mutex was found to be blocked.
 fn switch_off_ventilation(
     mutex_device_scheduler_ventilation: &Arc<Mutex<i32>>,
     tx_ventilation_to_relay_manager: &Sender<InternalCommand>,
     rx_ventilation_from_relay_manager: &Receiver<bool>,
     mutex_blocked_during_actuation: &mut bool,
 ) {
-    // reduce the probability of wrong warning
-    *mutex_blocked_during_actuation |=
-        check_if_mutex_is_blocked(mutex_device_scheduler_ventilation);
-
-    // avoid electrical overloads through parallel device actuation
-    let mut mutex_data = mutex_device_scheduler_ventilation.lock().unwrap();
-    match tx_ventilation_to_relay_manager
-        .send(InternalCommand::SwitchOff(AquariumDevice::Ventilation))
-    {
-        Ok(_) => {
-            // now listen for the response
-            match rx_ventilation_from_relay_manager.recv() {
-                Ok(_) => {}
-                Err(e) => {
-                    error!(
-                        target: module_path!(),
-                        "receiving answer from relay manager when switching off ventilation failed ({e:?})"
-                    );
-                }
-            };
-        }
-        Err(e) => {
-            error!(
-                target: module_path!(),
-                "channel communication to relay manager when switching off ventilation failed ({e:?})"
-            );
-        }
-    }
-    *mutex_data += 1;
+    actuate_ventilation(
+        InternalCommand::SwitchOff(AquariumDevice::Ventilation),
+        mutex_device_scheduler_ventilation,
+        tx_ventilation_to_relay_manager,
+        rx_ventilation_from_relay_manager,
+        mutex_blocked_during_actuation,
+    );
 }
 
 /// Struct collects the channels for communication between Ventilation and other components.
@@ -364,6 +353,12 @@ impl Ventilation {
     /// * `mutex_sensor_manager_channels` - An `Arc<Mutex<SensorManagerSignals>>` from which the latest water temperature
     ///   reading will be retrieved.
     /// * `mutex_ventilation_status` - An `Arc<Mutex<bool>>` for communicating the ventilation status to the data logger.
+    ///
+    /// # Returns
+    /// This function does not return a value in the traditional sense, as it is designed
+    /// to loop indefinitely. It will only break out of its loop and terminate when a `Quit`
+    /// command is received from the signal handler, after which it performs final cleanup
+    /// (switching the ventilation to its configured terminal state) and confirms shutdown.
     pub fn execute(
         &mut self,
         mutex_device_scheduler_ventilation: Arc<Mutex<i32>>,
