@@ -178,7 +178,7 @@ pub mod tests {
     use std::process;
 
     use crate::utilities::config::{read_config_file, ConfigData};
-    use crate::utilities::publish_pid::PublishPid;
+    use crate::utilities::publish_pid::{PublishPid, PublishPidError};
 
     #[test]
     pub fn test_publish_pid() {
@@ -206,21 +206,15 @@ pub mod tests {
     }
 
     #[test]
-    #[should_panic]
-    pub fn test_non_existent_pid_file() {
-        let mut config: ConfigData =
-            read_config_file("/config/aquarium_control_test_generic.toml".to_string()).unwrap();
-        config.publish_pid.pid_filename = "/var/local/aquarium-ctrl-non-existent.pid".to_string();
-        _ = PublishPid::new(config.publish_pid);
-    }
-
-    #[test]
-    #[should_panic]
     pub fn test_publish_pid_invalid_content_pid_file() {
         let mut config: ConfigData =
             read_config_file("/config/aquarium_control_test_generic.toml".to_string()).unwrap();
         config.publish_pid.pid_filename =
             "/var/local/aquarium-ctrl-invalid-content.pid".to_string();
-        _ = PublishPid::new(config.publish_pid);
+        let result = PublishPid::new(config.publish_pid);
+        assert!(matches!(
+            result,
+            Err(PublishPidError::PidFileParseError { .. })
+        ));
     }
 }
