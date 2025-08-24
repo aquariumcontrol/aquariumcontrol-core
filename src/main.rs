@@ -1395,11 +1395,22 @@ fn run() -> Result<(), StartupError> {
         rx_relay_manager_from_signal_handler,
     };
 
-    let atlas_scientific_channels = AtlasScientificChannels {
+    let mut atlas_scientific_channels = AtlasScientificChannels {
         tx_atlas_scientific_to_i2c_interface,
+        #[cfg(feature = "debug_channels")]
+        cnt_tx_atlas_scientific_to_i2c_interface: 0,
+
         rx_atlas_scientific_from_i2c_interface,
+        #[cfg(feature = "debug_channels")]
+        cnt_rx_atlas_scientific_from_i2c_interface: 0,
+        
         tx_atlas_scientific_to_signal_handler,
+        #[cfg(feature = "debug_channels")]
+        cnt_tx_atlas_scientific_to_signal_handler: 0,
+        
         rx_atlas_scientific_from_signal_handler,
+        #[cfg(feature = "debug_channels")]
+        cnt_rx_atlas_scientific_from_signal_handler: 0,
     };
 
     let mut refill_channels = RefillChannels {
@@ -1761,7 +1772,7 @@ fn run() -> Result<(), StartupError> {
 
         scope.spawn(move || {
             atlas_scientific.execute(
-                atlas_scientific_channels,
+                &mut atlas_scientific_channels,
                 mutex_atlas_scientific_temperature,
                 mutex_atlas_scientific_ph,
                 mutex_atlas_scientific_conductivity,
@@ -1769,6 +1780,9 @@ fn run() -> Result<(), StartupError> {
 
             #[cfg(feature = "debug_main")]
             debug!(target: module_path!(), "Atlas Scientific terminated.");
+            
+            #[cfg(feature = "debug_channels")]
+            debug!(target: module_path!(), "{atlas_scientific_channels}");
         });
 
         scope.spawn(move || {

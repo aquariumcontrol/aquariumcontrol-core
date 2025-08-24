@@ -39,3 +39,6 @@ pub mod ds18b20_error;
 
 /// Contains error definition occurring in communication via I2C
 pub mod i2c_error;
+
+/// Container for channels used by atlas_scientific module
+pub mod atlas_scientific_channels;

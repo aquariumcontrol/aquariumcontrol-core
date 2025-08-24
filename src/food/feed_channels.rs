@@ -89,7 +89,7 @@ impl FeedChannels {
 #[cfg(feature = "debug_channels")]
 impl fmt::Display for FeedChannels {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        writeln!(f, "\n")?;
+        writeln!(f, "")?;
         writeln!(
             f,
             "cnt_tx_feed_to_relay_manager: {}",

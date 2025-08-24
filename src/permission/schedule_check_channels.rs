@@ -88,7 +88,7 @@ impl ScheduleCheckChannels {
 #[cfg(feature = "debug_channels")]
 impl fmt::Display for ScheduleCheckChannels {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        writeln!(f, "\n")?;
+        writeln!(f, "")?;
         writeln!(
             f,
             "cnt_tx_schedule_check_to_ventilation: {}",
