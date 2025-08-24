@@ -20,22 +20,17 @@ cfg_if::cfg_if! {
         use spin_sleep::SpinSleeper;
         #[cfg(not(test))]
         use nix::unistd::gettid;
+
+        use crate::MessagingChannels;
+        use crate::dispatch::messaging_error::MessagingError;
+        use crate::utilities::proc_ext_req::ProcessExternalRequestTrait;
+        use crate::InternalCommand;
+        use std::fmt;
+        use std::io::ErrorKind;
     }
 }
 
-#[cfg(target_os = "linux")]
-use crate::dispatch::messaging_error::MessagingError;
-#[cfg(target_os = "linux")]
-use crate::utilities::proc_ext_req::ProcessExternalRequestTrait;
-#[cfg(target_os = "linux")]
-use crate::InternalCommand;
 use serde_derive::Deserialize;
-#[cfg(target_os = "linux")]
-use std::fmt;
-#[cfg(target_os = "linux")]
-use std::io::ErrorKind;
-#[cfg(target_os = "linux")]
-use std::sync::mpsc::{Receiver, Sender};
 
 #[cfg(target_os = "linux")]
 /// Contains constants of all domains addressed in IPC messages
@@ -428,7 +423,7 @@ impl Messaging {
                                     );
                                 }
                             }
-                            
+
                             let counter = match domain {
                                 MessagingDomain::Refill => &mut messaging_channels.cnt_tx_to_refill,
                                 MessagingDomain::Ventilation => &messaging_channels.cnt_tx_to_ventilation,
