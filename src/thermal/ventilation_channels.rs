@@ -104,6 +104,7 @@ impl VentilationChannels {
 #[cfg(feature = "debug_channels")]
 impl fmt::Display for VentilationChannels {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        writeln!(f, "\n")?;
         writeln!(
             f,
             "cnt_tx_ventilation_to_relay_manager: {}",

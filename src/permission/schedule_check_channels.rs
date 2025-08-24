@@ -14,52 +14,60 @@ use std::sync::mpsc::{Receiver, SendError, Sender};
 pub struct ScheduleCheckChannels {
     /// Sender part of the channel for communication to ventilation
     pub tx_schedule_check_to_ventilation: Sender<bool>,
-    /// Receiver part of the channel for communication from ventilation
-    pub rx_schedule_check_from_ventilation: Receiver<InternalCommand>,
-    /// Sender part of the channel for communication to heating
-    pub tx_schedule_check_to_heating: Sender<bool>,
-    /// Receiver part of the channel for communication from heating
-    pub rx_schedule_check_from_heating: Receiver<InternalCommand>,
-    /// Sender part of the channel for communication to refill
-    pub tx_schedule_check_to_refill: Sender<bool>,
-    /// Receiver part of the channel for communication from refill
-    pub rx_schedule_check_from_refill: Receiver<InternalCommand>,
-    /// Sender part of the channel for communication to the Balling dosing control
-    pub tx_schedule_check_to_balling: Sender<bool>,
-    /// Receiver part of the channel for communication from the Balling dosing control
-    pub rx_schedule_check_from_balling: Receiver<InternalCommand>,
-    /// Sender part of the channel for communication to the signal handler
-    pub tx_schedule_check_to_signal_handler: Sender<bool>,
-    /// Receiver part of the channel for communication from the signal handler
-    pub rx_schedule_check_from_signal_handler: Receiver<InternalCommand>,
-
     #[cfg(feature = "debug_channels")]
     /// Counter for messages sent to ventilation
     pub cnt_tx_schedule_check_to_ventilation: u64,
+
+    /// Receiver part of the channel for communication from ventilation
+    pub rx_schedule_check_from_ventilation: Receiver<InternalCommand>,
     #[cfg(feature = "debug_channels")]
     /// Counter for messages received from ventilation
     pub cnt_rx_schedule_check_from_ventilation: u64,
+
+    /// Sender part of the channel for communication to heating
+    pub tx_schedule_check_to_heating: Sender<bool>,
     #[cfg(feature = "debug_channels")]
     /// Counter for messages sent to heating
     pub cnt_tx_schedule_check_to_heating: u64,
+
+    /// Receiver part of the channel for communication from heating
+    pub rx_schedule_check_from_heating: Receiver<InternalCommand>,
     #[cfg(feature = "debug_channels")]
     /// Counter for messages received from heating
     pub cnt_rx_schedule_check_from_heating: u64,
+
+    /// Sender part of the channel for communication to refill
+    pub tx_schedule_check_to_refill: Sender<bool>,
     #[cfg(feature = "debug_channels")]
     /// Counter for messages sent to refill
     pub cnt_tx_schedule_check_to_refill: u64,
+
+    /// Receiver part of the channel for communication from refill
+    pub rx_schedule_check_from_refill: Receiver<InternalCommand>,
     #[cfg(feature = "debug_channels")]
     /// Counter for messages received from refill
     pub cnt_rx_schedule_check_from_refill: u64,
+
+    /// Sender part of the channel for communication to the Balling dosing control
+    pub tx_schedule_check_to_balling: Sender<bool>,
     #[cfg(feature = "debug_channels")]
     /// Counter for messages sent to balling
     pub cnt_tx_schedule_check_to_balling: u64,
+
+    /// Receiver part of the channel for communication from the Balling dosing control
+    pub rx_schedule_check_from_balling: Receiver<InternalCommand>,
     #[cfg(feature = "debug_channels")]
     /// Counter for messages received from balling
     pub cnt_rx_schedule_check_from_balling: u64,
+
+    /// Sender part of the channel for communication to the signal handler
+    pub tx_schedule_check_to_signal_handler: Sender<bool>,
     #[cfg(feature = "debug_channels")]
     /// Counter for messages sent to the signal handler
     pub cnt_tx_schedule_check_to_signal_handler: u64,
+
+    /// Receiver part of the channel for communication from the signal handler
+    pub rx_schedule_check_from_signal_handler: Receiver<InternalCommand>,
     #[cfg(feature = "debug_channels")]
     /// Counter for messages received from the signal handler
     pub cnt_rx_schedule_check_from_signal_handler: u64,
@@ -80,6 +88,7 @@ impl ScheduleCheckChannels {
 #[cfg(feature = "debug_channels")]
 impl fmt::Display for ScheduleCheckChannels {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        writeln!(f, "\n")?;
         writeln!(
             f,
             "cnt_tx_schedule_check_to_ventilation: {}",

@@ -8,11 +8,11 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 */
 
 use spin_sleep::SpinSleeper;
-use std::sync::mpsc::{Receiver, Sender};
 use std::time::{Duration, Instant};
 
 use crate::food::food_injection_error::FoodInjectionError;
 use crate::food::{feed::FeedConfig, feed_pattern::Feedpattern};
+use crate::food::feed::FeedChannels;
 use crate::utilities::channel_content::{ActuatorState, AquariumDevice, InternalCommand};
 use crate::utilities::proc_ext_req::ProcessExternalRequestTrait;
 
@@ -27,16 +27,14 @@ pub trait FoodInjectionTrait {
     /// while also monitoring for external shutdown commands.
     ///
     /// # Arguments
-    /// * `tx_to_relay_manager` - Sender channel for communication to the relay manager.
-    /// * `rx_from_relay_manager` - Receiver channel for communication from the relay manager.
-    /// * `rx_from_signal_handler` - Receiver channel for communication from the signal handler.
+    /// * `feed_channels` - A mutable reference to the struct containing the channels.
     /// * `feed_pattern` - A reference to the struct holding the description of the feed pattern.
     ///
     /// # Returns
     /// A tuple `(bool, Result<(), Vec<FoodInjectionError>>)` where:
     /// - The first element (`bool`) is `true` if a `Quit` command was received from the
     ///   signal handler, indicating an early termination request. Otherwise, it is `false`.
-    /// - The second element is a `Result`. It is `Ok(())` if the entire sequence
+    /// - The second element is a `Result`. It is `Ok(())` if the entire sequence is
     ///   completed without any errors.
     ///
     /// # Errors
@@ -47,9 +45,7 @@ pub trait FoodInjectionTrait {
     /// - An attempt to set a device to an undefined state (e.g., `UndefinedTargetStateSkimmer`).
     fn inject_food(
         &mut self,
-        tx_to_relay_manager: &Sender<InternalCommand>,
-        rx_from_relay_manager: &Receiver<bool>,
-        rx_from_signal_handler: &Receiver<InternalCommand>,
+        feed_channels: &mut FeedChannels,
         feedpattern: &Feedpattern,
     ) -> (bool, Result<(), Vec<FoodInjectionError>>);
 }
@@ -136,8 +132,7 @@ impl FoodInjection {
     /// # Arguments
     /// * `target_actuator_states` - A `FoodInjectionTargetActuatorStates` struct containing the
     ///   desired `ActuatorState` for each relevant device.
-    /// * `tx_to_relay_manager` - The sender channel for communication with the relay manager.
-    /// * `rx_from_relay_manager` - The receiver channel for acknowledgments from the relay manager.
+    /// * `feed_channels` - A mutable reference to the struct containing the channels.
     ///
     /// # Returns
     /// An `Ok(())` if all devices were switched successfully.
@@ -153,8 +148,7 @@ impl FoodInjection {
     fn switch_skimmer_pumps_feeder(
         &mut self,
         target_actuator_states: FoodInjectionTargetActuatorStates,
-        tx_to_relay_manager: &Sender<InternalCommand>,
-        rx_from_relay_manager: &Receiver<bool>,
+        feed_channels: &mut FeedChannels
     ) -> Result<(), Vec<FoodInjectionError>> {
         // Initialize a vector to collect any errors that occur.
         let mut errors: Vec<FoodInjectionError> = Vec::new();
@@ -173,7 +167,7 @@ impl FoodInjection {
                         } else {
                             InternalCommand::SwitchOff(device.clone())
                         };
-                    if let Err(e) = tx_to_relay_manager.send(command) {
+                    if let Err(e) = feed_channels.send_to_relay_manager(command) {
                         #[cfg(test)]
                         println!(
                             "Encountered error when sending command {:?} for {} to relay manager: {e:?}",
@@ -185,7 +179,7 @@ impl FoodInjection {
                             device: device.clone(),
                             source: e,
                         });
-                    } else if let Err(e) = rx_from_relay_manager.recv() {
+                    } else if let Err(e) = feed_channels.receive_from_relay_manager() {
                         println!(
                             "Encountered error when receiving command to relay manager: {e:?}"
                         );
@@ -224,7 +218,7 @@ impl FoodInjection {
                         } else {
                             InternalCommand::SwitchOff(device.clone())
                         };
-                    if let Err(e) = tx_to_relay_manager.send(command) {
+                    if let Err(e) = feed_channels.send_to_relay_manager(command) {
                         #[cfg(test)]
                         println!(
                             "Encountered error when sending command {:?} for {} to relay manager: {e:?}",
@@ -236,7 +230,7 @@ impl FoodInjection {
                             device: device.clone(),
                             source: e,
                         });
-                    } else if let Err(e) = rx_from_relay_manager.recv() {
+                    } else if let Err(e) = feed_channels.receive_from_relay_manager() {
                         errors.push(FoodInjectionError::RelayManagerReceive {
                             location: module_path!().to_string(),
                             device: device.clone(),
@@ -268,7 +262,7 @@ impl FoodInjection {
                         } else {
                             InternalCommand::SwitchOff(device.clone())
                         };
-                    if let Err(e) = tx_to_relay_manager.send(command) {
+                    if let Err(e) = feed_channels.send_to_relay_manager(command) {
                         #[cfg(test)]
                         println!(
                             "Encountered error when sending command {:?} for {} to relay manager: {e:?}",
@@ -280,7 +274,7 @@ impl FoodInjection {
                             device: device.clone(),
                             source: e,
                         });
-                    } else if let Err(e) = rx_from_relay_manager.recv() {
+                    } else if let Err(e) = feed_channels.receive_from_relay_manager() {
                         errors.push(FoodInjectionError::RelayManagerReceive {
                             location: module_path!().to_string(),
                             device: device.clone(),
@@ -312,7 +306,7 @@ impl FoodInjection {
                         } else {
                             InternalCommand::SwitchOff(device.clone())
                         };
-                    if let Err(e) = tx_to_relay_manager.send(command) {
+                    if let Err(e) = feed_channels.send_to_relay_manager(command) {
                         #[cfg(test)]
                         println!(
                             "Encountered error when sending command {:?} for {} to relay manager: {e:?}",
@@ -324,7 +318,7 @@ impl FoodInjection {
                             device: device.clone(),
                             source: e,
                         });
-                    } else if let Err(e) = rx_from_relay_manager.recv() {
+                    } else if let Err(e) = feed_channels.receive_from_relay_manager() {
                         errors.push(FoodInjectionError::RelayManagerReceive {
                             location: module_path!().to_string(),
                             device: device.clone(),
@@ -356,7 +350,7 @@ impl FoodInjection {
                         } else {
                             InternalCommand::SwitchOff(device.clone())
                         };
-                    if let Err(e) = tx_to_relay_manager.send(command) {
+                    if let Err(e) = feed_channels.send_to_relay_manager(command) {
                         #[cfg(test)]
                         println!(
                             "Encountered error when sending command {:?} for {} to relay manager: {e:?}",
@@ -368,7 +362,7 @@ impl FoodInjection {
                             device: device.clone(),
                             source: e,
                         });
-                    } else if let Err(e) = rx_from_relay_manager.recv() {
+                    } else if let Err(e) = feed_channels.receive_from_relay_manager() {
                         errors.push(FoodInjectionError::RelayManagerReceive {
                             location: module_path!().to_string(),
                             device: device.clone(),
@@ -400,7 +394,7 @@ impl FoodInjection {
                     } else {
                         InternalCommand::SwitchOff(device.clone())
                     };
-                    if let Err(e) = tx_to_relay_manager.send(command) {
+                    if let Err(e) = feed_channels.send_to_relay_manager(command) {
                         #[cfg(test)]
                         println!(
                             "Encountered error when sending command {:?} for {} to relay manager: {e:?}",
@@ -412,7 +406,7 @@ impl FoodInjection {
                             device: device.clone(),
                             source: e,
                         });
-                    } else if let Err(e) = rx_from_relay_manager.recv() {
+                    } else if let Err(e) = feed_channels.receive_from_relay_manager() {
                         errors.push(FoodInjectionError::RelayManagerReceive {
                             location: module_path!().to_string(),
                             device: device.clone(),
@@ -450,16 +444,14 @@ impl FoodInjectionTrait for FoodInjection {
     /// pumps are returned to an active state and the feeder is off.
     ///
     /// # Arguments
-    /// * `tx_to_relay_manager` - Sender channel for communication to the relay manager.
-    /// * `rx_from_relay_manager` - Receiver channel for communication from the relay manager.
-    /// * `rx_from_signal_handler` - Receiver channel for communication from the signal handler.
+    /// * `feed_channels` - A mutable reference to the struct containing the channels.
     /// * `feedpattern` - A reference to the struct holding the description of the feed pattern.
     ///
     /// # Returns
     /// A tuple `(bool, Result<(), Vec<FoodInjectionError>>)` where:
     /// - The first element (`bool`) is `true` if a `Quit` command was received from the
     ///   signal handler, indicating an early termination request. Otherwise, it is `false`.
-    /// - The second element is a `Result`. It is `Ok(())` if the entire sequence
+    /// - The second element is a `Result`. It is `Ok(())` if the entire sequence is
     ///   completed without any errors.
     ///
     /// # Errors
@@ -469,9 +461,7 @@ impl FoodInjectionTrait for FoodInjection {
     /// contain all errors encountered during both the main sequence and the cleanup.
     fn inject_food(
         &mut self,
-        tx_to_relay_manager: &Sender<InternalCommand>,
-        rx_from_relay_manager: &Receiver<bool>,
-        rx_from_signal_handler: &Receiver<InternalCommand>,
+        feed_channels: &mut FeedChannels,
         feedpattern: &Feedpattern,
     ) -> (bool, Result<(), Vec<FoodInjectionError>>) {
         let spin_sleeper = SpinSleeper::default();
@@ -488,7 +478,7 @@ impl FoodInjectionTrait for FoodInjection {
         for feedphase in &feedpattern.feedphases {
             // check if there is a quit request
             (quit_command_received, _, _) =
-                self.process_external_request(rx_from_signal_handler, None);
+                self.process_external_request(&feed_channels.rx_feed_from_signal_handler, None);
             if quit_command_received {
                 break; // exit outer loop
             }
@@ -525,8 +515,7 @@ impl FoodInjectionTrait for FoodInjection {
                 };
                 if let Err(collected_errors) = self.switch_skimmer_pumps_feeder(
                     target_actuator_states,
-                    tx_to_relay_manager,
-                    rx_from_relay_manager,
+                    feed_channels
                 ) {
                     collected_errors_cumulated.extend(collected_errors);
                     break; // if any error occurs, abort the feed sequence
@@ -538,7 +527,7 @@ impl FoodInjectionTrait for FoodInjection {
             let pause_duration = Duration::from_millis(feedphase.pause_duration as u64);
             while Instant::now().duration_since(start_of_pause) < pause_duration {
                 (quit_command_received, _, _) =
-                    self.process_external_request(rx_from_signal_handler, None);
+                    self.process_external_request(&feed_channels.rx_feed_from_signal_handler, None);
                 if quit_command_received {
                     #[cfg(test)]
                     println!("Received quit command during pause phase of food injection");
@@ -582,8 +571,7 @@ impl FoodInjectionTrait for FoodInjection {
                 };
                 if let Err(collected_errors) = self.switch_skimmer_pumps_feeder(
                     target_actuator_states,
-                    tx_to_relay_manager,
-                    rx_from_relay_manager,
+                    feed_channels
                 ) {
                     collected_errors_cumulated.extend(collected_errors);
                     break; // if any error occurs, abort the feed sequence
@@ -595,7 +583,7 @@ impl FoodInjectionTrait for FoodInjection {
             let feed_duration = Duration::from_millis(feedphase.feed_duration as u64);
             while Instant::now().duration_since(start_of_pause) < feed_duration {
                 (quit_command_received, _, _) =
-                    self.process_external_request(rx_from_signal_handler, None);
+                    self.process_external_request(&feed_channels.rx_feed_from_signal_handler, None);
                 if quit_command_received {
                     #[cfg(test)]
                     println!("Received quit command during feed phase of food injection");
@@ -619,8 +607,7 @@ impl FoodInjectionTrait for FoodInjection {
                 target_aux_pump2_state: ActuatorState::On,
                 target_feeder_state: ActuatorState::Off,
             },
-            tx_to_relay_manager,
-            rx_from_relay_manager,
+            feed_channels
         ) {
             collected_errors_cumulated.extend(collected_errors);
         }
@@ -639,7 +626,7 @@ pub mod tests {
     use std::sync::mpsc::{self, Receiver, Sender};
     use std::thread::scope;
     use std::time::Instant;
-
+    use crate::food::feed::FeedChannels;
     use crate::food::feed_pattern::{FeedPhase, Feedpattern};
     use crate::food::food_injection::{FoodInjection, FoodInjectionTrait};
     use crate::utilities::channel_content::{ActuatorState, AquariumDevice, InternalCommand};
@@ -776,6 +763,29 @@ pub mod tests {
         let (tx_feed_to_relay_manager, rx_relay_manager_from_feed) = mpsc::channel();
         let (tx_relay_manager_to_feed, rx_feed_from_relay_manager) = mpsc::channel();
         let (_tx_signal_handler_to_feed, rx_feed_from_signal_handler) = mpsc::channel();
+        let (tx_feed_to_signal_handler, _rx_signal_handler_from_feed) = mpsc::channel();
+
+        let mut feed_channels = FeedChannels {
+            tx_feed_to_relay_manager,
+            #[cfg(feature = "debug_channels")]
+            cnt_tx_feed_to_relay_manager: 0,
+
+            rx_feed_from_relay_manager,
+            #[cfg(feature = "debug_channels")]
+            cnt_rx_feed_from_relay_manager: 0,
+
+            tx_feed_to_signal_handler,
+            #[cfg(feature = "debug_channels")]
+            cnt_tx_feed_to_signal_handler: 0,
+
+            rx_feed_from_signal_handler,
+            #[cfg(feature = "debug_channels")]
+            cnt_rx_feed_from_signal_handler: 0,
+
+            rx_feed_from_messaging_opt: None,
+            #[cfg(feature = "debug_channels")]
+            cnt_rx_feed_from_messaging_opt: 0,
+        };
 
         scope(|scope| {
             // this scope is providing the test environment
@@ -850,9 +860,7 @@ pub mod tests {
 
                 let start_time = Instant::now();
                 let result_tuple = food_injection.inject_food(
-                    &tx_feed_to_relay_manager,
-                    &rx_feed_from_relay_manager,
-                    &rx_feed_from_signal_handler,
+                    &mut feed_channels,
                     &feedpattern,
                 );
                 let end_time = Instant::now();
@@ -884,6 +892,29 @@ pub mod tests {
         let (tx_feed_to_relay_manager, rx_relay_manager_from_feed) = mpsc::channel();
         let (tx_relay_manager_to_feed, rx_feed_from_relay_manager) = mpsc::channel();
         let (tx_signal_handler_to_feed, rx_feed_from_signal_handler) = mpsc::channel();
+        let (tx_feed_to_signal_handler, _rx_signal_handler_from_feed) = mpsc::channel();
+
+        let mut feed_channels = FeedChannels {
+            tx_feed_to_relay_manager,
+            #[cfg(feature = "debug_channels")]
+            cnt_tx_feed_to_relay_manager: 0,
+
+            rx_feed_from_relay_manager,
+            #[cfg(feature = "debug_channels")]
+            cnt_rx_feed_from_relay_manager: 0,
+
+            tx_feed_to_signal_handler,
+            #[cfg(feature = "debug_channels")]
+            cnt_tx_feed_to_signal_handler: 0,
+
+            rx_feed_from_signal_handler,
+            #[cfg(feature = "debug_channels")]
+            cnt_rx_feed_from_signal_handler: 0,
+
+            rx_feed_from_messaging_opt: None,
+            #[cfg(feature = "debug_channels")]
+            cnt_rx_feed_from_messaging_opt: 0,
+        };
 
         scope(|scope| {
             // this scope is providing the test environment
@@ -978,9 +1009,7 @@ pub mod tests {
 
                 let start_time = Instant::now();
                 let result_tuple = food_injection.inject_food(
-                    &tx_feed_to_relay_manager,
-                    &rx_feed_from_relay_manager,
-                    &rx_feed_from_signal_handler,
+                    &mut feed_channels,
                     &feedpattern,
                 );
                 let end_time = Instant::now();

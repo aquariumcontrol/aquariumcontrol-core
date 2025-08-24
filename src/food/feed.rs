@@ -23,11 +23,11 @@ use nix::unistd::gettid;
 
 use serde_derive::Deserialize;
 use spin_sleep::SpinSleeper;
-use std::sync::mpsc::{Receiver, Sender};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
 use crate::database::sql_interface_feed::DatabaseInterfaceFeedTrait;
+pub(crate) use crate::food::feed_channels::FeedChannels;
 use crate::food::feed_schedule_entry::FeedScheduleEntry;
 use crate::food::food_injection::FoodInjectionTrait;
 use crate::utilities::channel_content::InternalCommand;
@@ -57,24 +57,6 @@ pub struct FeedConfig {
     /// Example 99: Numbers higher than the number of entries found in the past will trigger execution of the
     /// last entry which has a timestamp furthest from the current time.
     strategy_multiple_schedule_entries_in_past: i32,
-}
-
-/// Struct collects the channels for communication between the feed control and the other components.
-pub struct FeedChannels {
-    /// Sender part of the channel for communication to relay manager
-    pub tx_feed_to_relay_manager: Sender<InternalCommand>,
-
-    /// Receiver part of the channel for communication from the relay manager
-    pub rx_feed_from_relay_manager: Receiver<bool>,
-
-    /// Sender part of the channel for communication to the signal handler
-    pub tx_feed_to_signal_handler: Sender<bool>,
-
-    /// Receiver part of the channel for communication from the signal handler  
-    pub rx_feed_from_signal_handler: Receiver<InternalCommand>,
-
-    /// Receiver part of the channel wrapped in Option for communication from the messaging  
-    pub rx_feed_from_messaging_opt: Option<Receiver<InternalCommand>>,
 }
 
 #[cfg_attr(doc, aquamarine::aquamarine)]
@@ -197,15 +179,13 @@ impl Feed {
     /// * `profile_id` - The unique identifier of the feed profile to be loaded and executed.
     /// * `food_injection` - A mutable reference to an object implementing the `FoodInjectionTrait`,
     ///   responsible for the physical actuation of the feeder.
-    /// * `tx_feed_to_relay_manager` - The sender channel for `Feed` to send commands to the relay manager (e.g., for pump control).
-    /// * `rx_feed_from_relay_manager` - The receiver channel for `Feed` to get acknowledgments from the relay manager.
-    /// * `rx_feed_from_signal_handler` - The receiver channel for `Feed` to listen for signals (like `Quit`) from the signal handler.
+    /// * `feed_channels` - A mutable reference to the struct containing the channels.
     ///
     /// # Returns
     /// A tuple `(Result<(), ()>, bool)` where:
     /// - The first element is the overall result of the operation. It is `Ok(())` only if
     ///   the food injection and the database logging both complete without error.
-    /// - The second element is a `bool` which is `true` if a `Quit` command was received
+    /// - The second element is a `bool,` which is `true` if a `Quit` command was received
     ///   from the signal handler during the `inject_food` process, `false` otherwise. This
     ///   value is independent of the success or failure of the operation itself.
     ///
@@ -222,9 +202,7 @@ impl Feed {
         &mut self,
         profile_id: i32,
         food_injection: &mut impl FoodInjectionTrait,
-        tx_feed_to_relay_manager: &Sender<InternalCommand>,
-        rx_feed_from_relay_manager: &Receiver<bool>,
-        rx_feed_from_signal_handler: &Receiver<InternalCommand>,
+        feed_channels: &mut FeedChannels
     ) -> (Result<(), ()>, bool) {
         // First, load the feed pattern from the database.
         let feed_pattern = match self
@@ -246,9 +224,7 @@ impl Feed {
         // 1. `quit_during_injection`: A bool indicating if a quit command was received.
         // 2. `injection_result`: A Result indicating if the injection itself succeeded.
         let (quit_during_injection, injection_result) = food_injection.inject_food(
-            tx_feed_to_relay_manager,
-            rx_feed_from_relay_manager,
-            rx_feed_from_signal_handler,
+            feed_channels,
             &feed_pattern,
         );
         // *** Handle the Result part of the tuple independently ***
@@ -360,7 +336,7 @@ impl Feed {
     /// * `profile_id` - The numeric identifier of the feed profile to be executed.
     /// * `food_injection` - A mutable reference to an object implementing `FoodInjectionTrait`,
     ///   responsible for physical feeder actuation.
-    /// * `tx_feed_to_relay_manager` - The sender channel for sending commands to the relay manager.
+    /// * `feed_channels` - A mutable reference to the struct `FoodInjectionTrait` containing the channels.
     /// * `rx_feed_from_relay_manager` - The receiver channel for receiving acknowledgments from the relay manager.
     /// * `rx_feed_from_signal_handler` - The receiver channel for listening to signals (e.g., `Quit`) from the signal handler.
     /// * `feed_schedule_entries` - A mutable reference to the vector of `FeedScheduleEntry`
@@ -373,9 +349,7 @@ impl Feed {
         &mut self,
         profile_id: i32,
         food_injection: &mut impl FoodInjectionTrait,
-        tx_feed_to_relay_manager: &Sender<InternalCommand>,
-        rx_feed_from_relay_manager: &Receiver<bool>,
-        rx_feed_from_signal_handler: &Receiver<InternalCommand>,
+        feed_channels: &mut FeedChannels,
         feed_schedule_entries: &mut Vec<FeedScheduleEntry>,
     ) -> bool {
         #[cfg(all(feature = "debug_feed", not(test)))]
@@ -388,9 +362,7 @@ impl Feed {
         let (result, quit_command_received_during_feed) = self.execute_feed(
             profile_id,
             food_injection,
-            tx_feed_to_relay_manager,
-            rx_feed_from_relay_manager,
-            rx_feed_from_signal_handler,
+            feed_channels
         );
 
         match result {
@@ -438,7 +410,7 @@ impl Feed {
     /// * `mutex_device_scheduler_feed` - An `Arc<Mutex<i32>>` used for coordinating
     ///   access to device scheduling, preventing parallel actuation across different
     ///   control modules. It holds a counter of the completed actuation.
-    /// * `feed_channels` - A `FeedChannels` struct containing all necessary `mpsc`
+    /// * `feed_channels` - A mutable reference to `FeedChannels` struct containing all necessary `mpsc`
     ///   sender and receiver channels for inter-thread communication (e.g., with
     ///   the signal handler, relay manager, and messaging).
     /// * `food_injection` - A mutable reference to an object implementing the
@@ -446,7 +418,7 @@ impl Feed {
     pub fn execute(
         &mut self,
         mutex_device_scheduler_feed: Arc<Mutex<i32>>,
-        feed_channels: FeedChannels,
+        feed_channels: &mut FeedChannels,
         food_injection: &mut impl FoodInjectionTrait,
     ) {
         #[cfg(all(target_os = "linux", not(test)))]
@@ -508,9 +480,7 @@ impl Feed {
                                                 .execute_profile_update_database(
                                                     feed_schedule_entry.profile_id,
                                                     food_injection,
-                                                    &feed_channels.tx_feed_to_relay_manager,
-                                                    &feed_channels.rx_feed_from_relay_manager,
-                                                    &feed_channels.rx_feed_from_signal_handler,
+                                                    feed_channels,
                                                     &mut feed_schedule_entries,
                                                 );
 
@@ -605,9 +575,7 @@ impl Feed {
                     let (result, quit_command_received_during_requested_feed) = self.execute_feed(
                         self.profile_id_requested,
                         food_injection,
-                        &feed_channels.tx_feed_to_relay_manager,
-                        &feed_channels.rx_feed_from_relay_manager,
-                        &feed_channels.rx_feed_from_signal_handler,
+                        feed_channels,
                     );
                     match result {
                         Ok(_) => { /* do nothing */ }
@@ -648,7 +616,7 @@ impl Feed {
             "Sending Quit confirmation to signal handler."
         );
 
-        match feed_channels.tx_feed_to_signal_handler.send(true) {
+        match feed_channels.send_to_signal_handler(true) {
             Ok(()) => {}
             Err(e) => {
                 log_error_chain(
@@ -664,7 +632,7 @@ impl Feed {
         // The shutdown sequence is handled by the signal_handler module.
         let mut termination_command_received = false;
         while !termination_command_received {
-            termination_command_received = match feed_channels.rx_feed_from_signal_handler.recv() {
+            termination_command_received = match feed_channels.receive_from_signal_handler() {
                 Ok(c) => {
                     self.lock_error_channel_receive_termination_signal = false;
                     match c {
@@ -771,7 +739,7 @@ pub mod tests {
         // The channel arguments are ignored in this mock implementation.
         //
         // # Arguments
-        // * `_tx_feed_to_relay_manager` - (Ignored) the sender channel for sending commands to the relay manager.
+        // * `_feed_channels` - (Ignored) mutable reference to struct containing the channels.
         // * `_rx_feed_from_relay_manager` - (Ignored) the receiver channel for acknowledgments from the relay manager.
         // * `_rx_feed_from_signal_handler` - (Ignored) the receiver channel for listening to signals from the signal handler.
         // * `feed_pattern` - The `Feedpattern` that contains the profile ID to be recorded.
@@ -780,9 +748,7 @@ pub mod tests {
         // Always returns `false`, indicating that no `Quit` command was received.
         fn inject_food(
             &mut self,
-            _tx_feed_to_relay_manager: &Sender<InternalCommand>,
-            _rx_feed_from_relay_manager: &Receiver<bool>,
-            _rx_feed_from_signal_handler: &Receiver<InternalCommand>,
+            _feed_channels: &mut FeedChannels,
             feed_pattern: &Feedpattern,
         ) -> (bool, Result<(), Vec<FoodInjectionError>>) {
             // do nothing except for logging the profile id of the feed pattern
@@ -958,19 +924,33 @@ pub mod tests {
 
             spin_sleeper.sleep(sleep_duration_100_millis);
 
-            let feed_channels = FeedChannels {
+            let mut feed_channels = FeedChannels {
                 tx_feed_to_relay_manager,
+                #[cfg(feature = "debug_channels")]
+                cnt_tx_feed_to_relay_manager: 0,
+
                 rx_feed_from_relay_manager,
+                #[cfg(feature = "debug_channels")]
+                cnt_rx_feed_from_relay_manager: 0,
+
                 tx_feed_to_signal_handler,
+                #[cfg(feature = "debug_channels")]
+                cnt_tx_feed_to_signal_handler: 0,
+
                 rx_feed_from_signal_handler,
+                #[cfg(feature = "debug_channels")]
+                cnt_rx_feed_from_signal_handler: 0,
+
                 rx_feed_from_messaging_opt: None,
+                #[cfg(feature = "debug_channels")]
+                cnt_rx_feed_from_messaging_opt: 0,
             };
 
             // thread for the test object
             scope.spawn(move || {
                 feed.execute(
                     mutex_device_scheduler_feed.clone(),
-                    feed_channels,
+                    &mut feed_channels,
                     &mut mock_food_injection,
                 );
 
@@ -1151,17 +1131,31 @@ pub mod tests {
         let join_handle_test_object = thread::Builder::new()
             .name("test_object".to_string())
             .spawn(move || {
-                let feed_channels = FeedChannels {
+                let mut feed_channels = FeedChannels {
                     tx_feed_to_relay_manager,
+                    #[cfg(feature = "debug_channels")]
+                    cnt_tx_feed_to_relay_manager: 0,
+
                     rx_feed_from_relay_manager,
+                    #[cfg(feature = "debug_channels")]
+                    cnt_rx_feed_from_relay_manager: 0,
+
                     tx_feed_to_signal_handler,
+                    #[cfg(feature = "debug_channels")]
+                    cnt_tx_feed_to_signal_handler: 0,
+
                     rx_feed_from_signal_handler,
+                    #[cfg(feature = "debug_channels")]
+                    cnt_rx_feed_from_signal_handler: 0,
+
                     rx_feed_from_messaging_opt: Some(rx_feed_from_messaging),
+                    #[cfg(feature = "debug_channels")]
+                    cnt_rx_feed_from_messaging_opt: 0,
                 };
 
                 feed.execute(
                     mutex_device_scheduler_feed_test_object.clone(),
-                    feed_channels,
+                    &mut feed_channels,
                     &mut mock_food_injection,
                 );
                 println!("MockFoodInjection:\n{}", mock_food_injection);
@@ -1243,17 +1237,31 @@ pub mod tests {
         let join_handle_test_object = thread::Builder::new()
             .name("test_object".to_string())
             .spawn(move || {
-                let feed_channels = FeedChannels {
+                let mut feed_channels = FeedChannels {
                     tx_feed_to_relay_manager,
+                    #[cfg(feature = "debug_channels")]
+                    cnt_tx_feed_to_relay_manager: 0,
+
                     rx_feed_from_relay_manager,
+                    #[cfg(feature = "debug_channels")]
+                    cnt_rx_feed_from_relay_manager: 0,
+
                     tx_feed_to_signal_handler,
+                    #[cfg(feature = "debug_channels")]
+                    cnt_tx_feed_to_signal_handler: 0,
+
                     rx_feed_from_signal_handler,
+                    #[cfg(feature = "debug_channels")]
+                    cnt_rx_feed_from_signal_handler: 0,
+
                     rx_feed_from_messaging_opt: None,
+                    #[cfg(feature = "debug_channels")]
+                    cnt_rx_feed_from_messaging_opt: 0,
                 };
 
                 feed.execute(
                     mutex_device_scheduler_feed_test_object.clone(),
-                    feed_channels,
+                    &mut feed_channels,
                     &mut mock_food_injection,
                 );
                 println!("MockFoodInjection:\n{}", mock_food_injection);
@@ -1535,17 +1543,31 @@ pub mod tests {
 
             // thread for the test object
             scope.spawn(move || {
-                let feed_channels = FeedChannels {
+                let mut feed_channels = FeedChannels {
                     tx_feed_to_relay_manager,
+                    #[cfg(feature = "debug_channels")]
+                    cnt_tx_feed_to_relay_manager: 0,
+
                     rx_feed_from_relay_manager,
+                    #[cfg(feature = "debug_channels")]
+                    cnt_rx_feed_from_relay_manager: 0,
+
                     tx_feed_to_signal_handler,
+                    #[cfg(feature = "debug_channels")]
+                    cnt_tx_feed_to_signal_handler: 0,
+
                     rx_feed_from_signal_handler,
+                    #[cfg(feature = "debug_channels")]
+                    cnt_rx_feed_from_signal_handler: 0,
+
                     rx_feed_from_messaging_opt: None,
+                    #[cfg(feature = "debug_channels")]
+                    cnt_rx_feed_from_messaging_opt: 0,
                 };
 
                 feed.execute(
                     mutex_device_scheduler_feed.clone(),
-                    feed_channels,
+                    &mut feed_channels,
                     &mut mock_food_injection,
                 );
 
@@ -1670,17 +1692,31 @@ pub mod tests {
 
             // thread for the test object
             scope.spawn(move || {
-                let feed_channels = FeedChannels {
+                let mut feed_channels = FeedChannels {
                     tx_feed_to_relay_manager,
+                    #[cfg(feature = "debug_channels")]
+                    cnt_tx_feed_to_relay_manager: 0,
+
                     rx_feed_from_relay_manager,
+                    #[cfg(feature = "debug_channels")]
+                    cnt_rx_feed_from_relay_manager: 0,
+
                     tx_feed_to_signal_handler,
+                    #[cfg(feature = "debug_channels")]
+                    cnt_tx_feed_to_signal_handler: 0,
+
                     rx_feed_from_signal_handler,
+                    #[cfg(feature = "debug_channels")]
+                    cnt_rx_feed_from_signal_handler: 0,
+
                     rx_feed_from_messaging_opt: None,
+                    #[cfg(feature = "debug_channels")]
+                    cnt_rx_feed_from_messaging_opt: 0,
                 };
 
                 feed.execute(
                     mutex_device_scheduler_feed.clone(),
-                    feed_channels,
+                    &mut feed_channels,
                     &mut mock_food_injection,
                 );
 

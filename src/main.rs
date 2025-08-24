@@ -1493,12 +1493,26 @@ fn run() -> Result<(), StartupError> {
         cnt_rx_ventilation_from_messaging_opt: 0,
     };
 
-    let feed_channels = FeedChannels {
+    let mut feed_channels = FeedChannels {
         tx_feed_to_relay_manager,
+        #[cfg(feature = "debug_channels")]
+        cnt_tx_feed_to_relay_manager: 0,
+        
         rx_feed_from_relay_manager,
+        #[cfg(feature = "debug_channels")]
+        cnt_rx_feed_from_relay_manager: 0,
+
         tx_feed_to_signal_handler,
+        #[cfg(feature = "debug_channels")]
+        cnt_tx_feed_to_signal_handler: 0,
+
         rx_feed_from_signal_handler,
+        #[cfg(feature = "debug_channels")]
+        cnt_rx_feed_from_signal_handler: 0,
+        
         rx_feed_from_messaging_opt,
+        #[cfg(feature = "debug_channels")]
+        cnt_rx_feed_from_messaging_opt: 0,
     };
 
     let mut heating_channels = HeatingChannels {
@@ -1893,11 +1907,15 @@ fn run() -> Result<(), StartupError> {
         scope.spawn(move || {
             feed.execute(
                 mutex_device_scheduler_feed,
-                feed_channels,
+                &mut feed_channels,
                 &mut food_injection,
             );
+            
             #[cfg(feature = "debug_main")]
             debug!(target: module_path!(), "Feed terminated.");
+            
+            #[cfg(feature = "debug_channels")]
+            debug!(target: module_path!(), "{feed_channels}");
         });
 
         // Balling dosing needs actuation of relays
