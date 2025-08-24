@@ -1048,7 +1048,7 @@ impl Refill {
         while !termination_command_received {
             termination_command_received = match refill_channels
                 .rx_refill_from_signal_handler
-                .recv()
+                .recv() // @todo: change to try_recv
             {
                 Ok(c) => {
                     self.lock_error_channel_receive_termination_command = false;

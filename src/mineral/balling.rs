@@ -19,6 +19,7 @@ use nix::unistd::gettid;
 use serde_derive::Deserialize;
 use spin_sleep::SpinSleeper;
 use std::sync::{Arc, Mutex};
+use std::sync::mpsc::TryRecvError;
 use std::time::{Duration, Instant};
 
 use crate::database::sql_interface_balling::{BallingSetVal, SqlInterfaceBalling};
@@ -874,10 +875,15 @@ impl Balling {
                     }
                 }
                 Err(e) => {
-                    if !self.lock_error_channel_receive_termination_signal {
-                        error!(target: module_path!(),
-                            "error when trying to receive termination signal. ({e:?})");
-                        self.lock_error_channel_receive_termination_signal = true;
+                    match e {
+                        TryRecvError::Empty => { /* do nothing */ }
+                        TryRecvError::Disconnected => {
+                            if !self.lock_error_channel_receive_termination_signal {
+                                error!(target: module_path!(),
+                                    "error when trying to receive termination signal. ({e:?})");
+                                self.lock_error_channel_receive_termination_signal = true;
+                            }
+                        }
                     }
                     false
                 }

@@ -858,7 +858,7 @@ impl AtlasScientific {
         while !termination_command_received {
             termination_command_received = match atlas_scientific_channels
                 .rx_atlas_scientific_from_signal_handler
-                .recv()
+                .recv() // @todo: change to try_recv
             {
                 Ok(c) => match c {
                     InternalCommand::Terminate => {

@@ -11,6 +11,7 @@ use log::{error, warn};
 use serde_derive::Deserialize;
 use spin_sleep::SpinSleeper;
 use std::sync::{Arc, Mutex};
+use std::sync::mpsc::TryRecvError;
 use std::time::{Duration, Instant};
 
 #[cfg(all(target_os = "linux", not(test)))]
@@ -32,6 +33,8 @@ use crate::utilities::proc_ext_req::ProcessExternalRequestTrait;
 use crate::utilities::sawtooth_profile::{SawToothProfile, SawToothProfileConfig};
 
 const CYCLE_TIME_HEATING_MILLIS: u64 = 500;
+
+const SLEEP_TIME_TERMINATION: u64 = 100;
 
 const CYCLE_TIME_HEATING_DIVISOR: u64 = 1000 / CYCLE_TIME_HEATING_MILLIS;
 
@@ -880,17 +883,22 @@ impl Heating {
                     }
                 }
                 Err(e) => {
-                    if !self.lock_error_channel_receive_termination_signal {
-                        error!(
-                            target: module_path!(),
-                            "receiving termination signal from signal handler failed ({e:?})"
-                        );
-                        self.lock_error_channel_receive_termination_signal = true;
+                    match e {
+                        TryRecvError::Empty => { /* do nothing */ }
+                        TryRecvError::Disconnected => {
+                            if !self.lock_error_channel_receive_termination_signal {
+                                error!(
+                                    target: module_path!(),
+                                    "receiving termination signal from signal handler failed ({e:?})"
+                                );
+                                self.lock_error_channel_receive_termination_signal = true;
+                            }
+                        }
                     }
                     false
                 }
             };
-            let sleep_duration = Duration::from_millis(CYCLE_TIME_HEATING_MILLIS);
+            let sleep_duration = Duration::from_millis(SLEEP_TIME_TERMINATION);
             spin_sleeper.sleep(sleep_duration);
         }
     }

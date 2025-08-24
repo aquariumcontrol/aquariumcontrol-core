@@ -633,7 +633,7 @@ impl Ventilation {
         // The shutdown sequence is handled by the signal_handler module.
         let mut termination_command_received = false;
         while !termination_command_received {
-            termination_command_received = match ventilation_channels
+            termination_command_received = match ventilation_channels // @todo: change to try_recv
                 .rx_ventilation_from_signal_handler
                 .recv()
             {
