@@ -38,11 +38,12 @@ impl I2cInterfaceChannels {
         &mut self,
         result: I2cResult,
     ) -> Result<(), SendError<I2cResult>> {
+        let result = self.tx_i2c_interface_to_atlas_scientific.send(result);
         #[cfg(feature = "debug_channels")]
-        {
+        if result.is_ok() {
             self.cnt_tx_i2c_interface_to_atlas_scientific += 1;
         }
-        self.tx_i2c_interface_to_atlas_scientific.send(result)
+        result
     }
 
     /// Receives a request from the Atlas Scientific module.
@@ -78,7 +79,11 @@ impl fmt::Display for I2cInterfaceChannels {
     }
 }
 
-#[cfg(all(not(feature = "debug_channels"), target_os = "linux", feature = "target_hw"))]
+#[cfg(all(
+    not(feature = "debug_channels"),
+    target_os = "linux",
+    feature = "target_hw"
+))]
 impl fmt::Display for I2cInterfaceChannels {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(

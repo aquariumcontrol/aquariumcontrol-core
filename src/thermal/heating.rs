@@ -166,13 +166,13 @@ fn actuate_heater(
 fn switch_on_heater(
     mutex_device_scheduler_heating: &Arc<Mutex<i32>>,
     mutex_blocked_during_actuation: &mut bool,
-    heating_channels: &mut HeatingChannels
+    heating_channels: &mut HeatingChannels,
 ) {
     actuate_heater(
         InternalCommand::SwitchOn(AquariumDevice::Heater),
         mutex_device_scheduler_heating,
         mutex_blocked_during_actuation,
-        heating_channels
+        heating_channels,
     );
 }
 
@@ -507,28 +507,27 @@ impl Heating {
                 }
 
                 // schedule check to see if actuation is allowed
-                match heating_channels.send_to_schedule_check(InternalCommand::ScheduleCheck)
-                {
+                match heating_channels.send_to_schedule_check(InternalCommand::ScheduleCheck) {
                     Ok(_) => {
                         self.lock_error_channel_send_schedule_check = false;
                         // now listen for the response
-                        schedule_check_result =
-                            match heating_channels.receive_from_schedule_check() {
-                                Ok(c) => {
-                                    self.lock_error_channel_receive_schedule_check = false;
-                                    c
+                        schedule_check_result = match heating_channels.receive_from_schedule_check()
+                        {
+                            Ok(c) => {
+                                self.lock_error_channel_receive_schedule_check = false;
+                                c
+                            }
+                            Err(e) => {
+                                if !self.lock_error_channel_receive_schedule_check {
+                                    error!(
+                                        target: module_path!(),
+                                        "receiving from schedule check failed ({e:?})"
+                                    );
+                                    self.lock_error_channel_receive_schedule_check = true;
                                 }
-                                Err(e) => {
-                                    if !self.lock_error_channel_receive_schedule_check {
-                                        error!(
-                                            target: module_path!(),
-                                            "receiving from schedule check failed ({e:?})"
-                                        );
-                                        self.lock_error_channel_receive_schedule_check = true;
-                                    }
-                                    false // assume we are not allowed to actuate when communication is not successful
-                                }
-                            };
+                                false // assume we are not allowed to actuate when communication is not successful
+                            }
+                        };
                     }
                     Err(e) => {
                         if !self.lock_error_channel_send_schedule_check {
@@ -642,7 +641,7 @@ impl Heating {
                                     switch_on_heater(
                                         &mutex_device_scheduler_heating,
                                         &mut actuation_mutex_was_blocked_during_actuation,
-                                        heating_channels
+                                        heating_channels,
                                     );
                                     heater_state = ActuatorState::On;
                                 }
@@ -653,7 +652,7 @@ impl Heating {
                                     switch_off_heater(
                                         &mutex_device_scheduler_heating,
                                         &mut actuation_mutex_was_blocked_during_actuation,
-                                        heating_channels
+                                        heating_channels,
                                     );
                                     heater_state = ActuatorState::Off;
                                 }
@@ -860,38 +859,37 @@ impl Heating {
         // The shutdown sequence is handled by the signal_handler module.
         let mut termination_command_received = false;
         while !termination_command_received {
-            termination_command_received =
-                match heating_channels.receive_from_signal_handler() {
-                    Ok(c) => {
-                        self.lock_error_channel_receive_termination_signal = false;
-                        match c {
-                            InternalCommand::Terminate => {
-                                self.lock_warn_inapplicable_command = false;
-                                true
+            termination_command_received = match heating_channels.receive_from_signal_handler() {
+                Ok(c) => {
+                    self.lock_error_channel_receive_termination_signal = false;
+                    match c {
+                        InternalCommand::Terminate => {
+                            self.lock_warn_inapplicable_command = false;
+                            true
+                        }
+                        _ => {
+                            if !self.lock_warn_inapplicable_command {
+                                warn!(
+                                    target: module_path!(),
+                                    "ignoring not applicable command from signal handler (c)"
+                                );
+                                self.lock_warn_inapplicable_command = true;
                             }
-                            _ => {
-                                if !self.lock_warn_inapplicable_command {
-                                    warn!(
-                                        target: module_path!(),
-                                        "ignoring not applicable command from signal handler (c)"
-                                    );
-                                    self.lock_warn_inapplicable_command = true;
-                                }
-                                false
-                            }
+                            false
                         }
                     }
-                    Err(e) => {
-                        if !self.lock_error_channel_receive_termination_signal {
-                            error!(
-                                target: module_path!(),
-                                "receiving termination signal from signal handler failed ({e:?})"
-                            );
-                            self.lock_error_channel_receive_termination_signal = true;
-                        }
-                        false
+                }
+                Err(e) => {
+                    if !self.lock_error_channel_receive_termination_signal {
+                        error!(
+                            target: module_path!(),
+                            "receiving termination signal from signal handler failed ({e:?})"
+                        );
+                        self.lock_error_channel_receive_termination_signal = true;
                     }
-                };
+                    false
+                }
+            };
             let sleep_duration = Duration::from_millis(CYCLE_TIME_HEATING_MILLIS);
             spin_sleeper.sleep(sleep_duration);
         }
@@ -1220,27 +1218,27 @@ pub mod tests {
                     tx_heating_to_relay_manager,
                     #[cfg(feature = "debug_channels")]
                     cnt_tx_heating_to_relay_manager: 0,
-                    
+
                     rx_heating_from_relay_manager,
                     #[cfg(feature = "debug_channels")]
                     cnt_rx_heating_from_relay_manager: 0,
-                    
+
                     tx_heating_to_signal_handler,
                     #[cfg(feature = "debug_channels")]
                     cnt_tx_heating_to_signal_handler: 0,
-                    
+
                     rx_heating_from_signal_handler,
                     #[cfg(feature = "debug_channels")]
                     cnt_rx_heating_from_signal_handler: 0,
-                    
+
                     tx_heating_to_schedule_check,
                     #[cfg(feature = "debug_channels")]
                     cnt_tx_heating_to_schedule_check: 0,
-                    
+
                     rx_heating_from_schedule_check,
                     #[cfg(feature = "debug_channels")]
                     cnt_rx_heating_from_schedule_check: 0,
-                    
+
                     rx_heating_from_messaging_opt: None,
                     #[cfg(feature = "debug_channels")]
                     cnt_rx_heating_from_messaging_opt: 0,

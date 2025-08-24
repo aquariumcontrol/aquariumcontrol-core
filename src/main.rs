@@ -99,7 +99,8 @@ use crate::mineral::balling::{Balling, BallingChannels};
 use crate::mineral::mineral_injection::MineralInjection;
 use crate::permission::schedule_check::{ScheduleCheck, ScheduleCheckChannels};
 use crate::recorder::data_injection::DataInjection;
-use crate::recorder::data_logger::{DataLogger, DataLoggerChannels, DataLoggerMutexes};
+use crate::recorder::data_logger::{DataLogger, DataLoggerMutexes};
+use crate::recorder::data_logger_channels::DataLoggerChannels;
 use crate::relays::actuate_controllino::ActuateControllino;
 #[cfg(all(target_os = "linux", feature = "target_hw"))]
 use crate::relays::actuate_gpio::{ActuateGpio, ActuateGpioConfig};
@@ -1530,33 +1531,33 @@ fn run() -> Result<(), StartupError> {
     };
 
     let mut heating_channels = HeatingChannels {
-         tx_heating_to_relay_manager,
-         #[cfg(feature = "debug_channels")]
-         cnt_tx_heating_to_relay_manager: 0,
+        tx_heating_to_relay_manager,
+        #[cfg(feature = "debug_channels")]
+        cnt_tx_heating_to_relay_manager: 0,
 
-         rx_heating_from_relay_manager,
-         #[cfg(feature = "debug_channels")]
-         cnt_rx_heating_from_relay_manager: 0,
+        rx_heating_from_relay_manager,
+        #[cfg(feature = "debug_channels")]
+        cnt_rx_heating_from_relay_manager: 0,
 
-         tx_heating_to_signal_handler,
-         #[cfg(feature = "debug_channels")]
-         cnt_tx_heating_to_signal_handler: 0,
+        tx_heating_to_signal_handler,
+        #[cfg(feature = "debug_channels")]
+        cnt_tx_heating_to_signal_handler: 0,
 
-         rx_heating_from_signal_handler,
-         #[cfg(feature = "debug_channels")]
-         cnt_rx_heating_from_signal_handler: 0,
+        rx_heating_from_signal_handler,
+        #[cfg(feature = "debug_channels")]
+        cnt_rx_heating_from_signal_handler: 0,
 
-         tx_heating_to_schedule_check,
-         #[cfg(feature = "debug_channels")]
-         cnt_tx_heating_to_schedule_check: 0,
+        tx_heating_to_schedule_check,
+        #[cfg(feature = "debug_channels")]
+        cnt_tx_heating_to_schedule_check: 0,
 
-         rx_heating_from_schedule_check,
-         #[cfg(feature = "debug_channels")]
-         cnt_rx_heating_from_schedule_check: 0,
+        rx_heating_from_schedule_check,
+        #[cfg(feature = "debug_channels")]
+        cnt_rx_heating_from_schedule_check: 0,
 
-         rx_heating_from_messaging_opt,
-         #[cfg(feature = "debug_channels")]
-         cnt_rx_heating_from_messaging_opt: 0,
+        rx_heating_from_messaging_opt,
+        #[cfg(feature = "debug_channels")]
+        cnt_rx_heating_from_messaging_opt: 0,
     };
 
     let tcp_communication_channels = TcpCommunicationChannels {
@@ -1845,9 +1846,14 @@ fn run() -> Result<(), StartupError> {
         println!("starting control...");
 
         scope.spawn(move || {
-            let data_logger_channels = DataLoggerChannels {
-                tx_to_signal_handler: &tx_data_logger_to_signal_handler,
-                rx_from_signal_handler: &rx_data_logger_from_signal_handler,
+            let mut data_logger_channels = DataLoggerChannels {
+                tx_to_signal_handler: tx_data_logger_to_signal_handler,
+                #[cfg(feature = "debug_channels")]
+                cnt_tx_to_signal_handler: 0,
+
+                rx_from_signal_handler: rx_data_logger_from_signal_handler,
+                #[cfg(feature = "debug_channels")]
+                cnt_rx_from_signal_handler: 0,
             };
 
             let data_logger_mutexes = DataLoggerMutexes {
@@ -1862,12 +1868,15 @@ fn run() -> Result<(), StartupError> {
             data_logger.execute(
                 &mut data_injection,
                 sql_interface_data,
-                data_logger_channels,
+                &mut data_logger_channels,
                 data_logger_mutexes,
             );
 
             #[cfg(feature = "debug_main")]
             debug!(target: module_path!(), "Data logger terminated.");
+
+            #[cfg(feature = "debug_channels")]
+            debug!(target: module_path!(), "{data_logger_channels}");
         });
 
         scope.spawn(move || {

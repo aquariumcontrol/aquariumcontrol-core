@@ -8,7 +8,7 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 */
 use crate::utilities::channel_content::InternalCommand;
 use std::fmt;
-use std::sync::mpsc::{Receiver, RecvError, SendError, Sender};
+use std::sync::mpsc::{Receiver, RecvError, SendError, Sender, TryRecvError};
 
 /// Struct collects the channels for communication to relay manager, signal handler, data logger, schedule check, and messaging.
 pub struct HeatingChannels {
@@ -61,11 +61,12 @@ impl HeatingChannels {
         &mut self,
         command: InternalCommand,
     ) -> Result<(), SendError<InternalCommand>> {
+        let result = self.tx_heating_to_relay_manager.send(command);
         #[cfg(feature = "debug_channels")]
-        {
+        if result.is_ok() {
             self.cnt_tx_heating_to_relay_manager += 1;
         }
-        self.tx_heating_to_relay_manager.send(command)
+        result
     }
 
     /// Receives a response from the relay manager.
@@ -80,16 +81,17 @@ impl HeatingChannels {
 
     /// Sends an acknowledgment to the signal handler.
     pub fn send_to_signal_handler(&mut self, ack: bool) -> Result<(), SendError<bool>> {
+        let result = self.tx_heating_to_signal_handler.send(ack);
         #[cfg(feature = "debug_channels")]
-        {
+        if result.is_ok() {
             self.cnt_tx_heating_to_signal_handler += 1;
         }
-        self.tx_heating_to_signal_handler.send(ack)
+        result
     }
 
     /// Receives a command from the signal handler.
-    pub fn receive_from_signal_handler(&mut self) -> Result<InternalCommand, RecvError> {
-        let result = self.rx_heating_from_signal_handler.recv();
+    pub fn receive_from_signal_handler(&mut self) -> Result<InternalCommand, TryRecvError> {
+        let result = self.rx_heating_from_signal_handler.try_recv();
         #[cfg(feature = "debug_channels")]
         if result.is_ok() {
             self.cnt_rx_heating_from_signal_handler += 1;
@@ -102,11 +104,12 @@ impl HeatingChannels {
         &mut self,
         command: InternalCommand,
     ) -> Result<(), SendError<InternalCommand>> {
+        let result = self.tx_heating_to_schedule_check.send(command);
         #[cfg(feature = "debug_channels")]
-        {
+        if result.is_ok() {
             self.cnt_tx_heating_to_schedule_check += 1;
         }
-        self.tx_heating_to_schedule_check.send(command)
+        result
     }
 
     /// Receives a response from the schedule checker.
@@ -123,10 +126,9 @@ impl HeatingChannels {
 #[cfg(feature = "debug_channels")]
 impl fmt::Display for HeatingChannels {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        writeln!(f, "")?;
         writeln!(
             f,
-            "cnt_tx_heating_to_relay_manager: {}",
+            "\ncnt_tx_heating_to_relay_manager: {}",
             self.cnt_tx_heating_to_relay_manager
         )?;
         writeln!(

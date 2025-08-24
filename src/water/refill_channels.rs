@@ -58,10 +58,13 @@ pub struct RefillChannels {
 }
 
 impl RefillChannels {
-    pub fn send_to_relay_manager(&mut self, command: InternalCommand) -> Result<(), std::sync::mpsc::SendError<InternalCommand>> {
+    pub fn send_to_relay_manager(
+        &mut self,
+        command: InternalCommand,
+    ) -> Result<(), std::sync::mpsc::SendError<InternalCommand>> {
         let result = self.tx_refill_to_relay_manager.send(command);
         #[cfg(feature = "debug_channels")]
-        {
+        if result.is_ok() {
             self.cnt_tx_refill_to_relay_manager += 1;
         }
         result
@@ -70,16 +73,19 @@ impl RefillChannels {
     pub fn receive_from_relay_manager(&mut self) -> Result<bool, RecvError> {
         let result = self.rx_refill_from_relay_manager.recv();
         #[cfg(feature = "debug_channels")]
-        {
+        if result.is_ok() {
             self.cnt_rx_refill_from_relay_manager += 1;
         }
         result
     }
 
-    pub fn send_to_schedule_check(&mut self, command: InternalCommand) -> Result<(), std::sync::mpsc::SendError<InternalCommand>> {
+    pub fn send_to_schedule_check(
+        &mut self,
+        command: InternalCommand,
+    ) -> Result<(), std::sync::mpsc::SendError<InternalCommand>> {
         let result = self.tx_refill_to_schedule_check.send(command);
         #[cfg(feature = "debug_channels")]
-        {
+        if result.is_ok() {
             self.cnt_tx_refill_to_schedule_check += 1;
         }
         result
@@ -88,16 +94,19 @@ impl RefillChannels {
     pub fn receive_from_schedule_check(&mut self) -> Result<bool, RecvError> {
         let result = self.rx_refill_from_schedule_check.recv();
         #[cfg(feature = "debug_channels")]
-        {
+        if result.is_ok() {
             self.cnt_rx_refill_from_schedule_check += 1;
         }
         result
     }
 
-    pub fn send_to_monitor(&mut self, view: RefillMonitorView) -> Result<(), std::sync::mpsc::SendError<RefillMonitorView>> {
+    pub fn send_to_monitor(
+        &mut self,
+        view: RefillMonitorView,
+    ) -> Result<(), std::sync::mpsc::SendError<RefillMonitorView>> {
         let result = self.tx_refill_to_monitors.send(view);
         #[cfg(feature = "debug_channels")]
-        {
+        if result.is_ok() {
             self.cnt_tx_refill_to_monitors += 1;
         }
         result
@@ -107,10 +116,9 @@ impl RefillChannels {
 #[cfg(feature = "debug_channels")]
 impl fmt::Display for RefillChannels {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        writeln!(f, "")?;
         writeln!(
             f,
-            "cnt_tx_refill_to_relay_manager: {}",
+            "\ncnt_tx_refill_to_relay_manager: {}",
             self.cnt_tx_refill_to_relay_manager
         )?;
         writeln!(
@@ -174,7 +182,7 @@ mod tests {
     fn setup_channels() -> (
         RefillChannels,
         mpsc::Receiver<InternalCommand>, // Test receiver for schedule_check
-        mpsc::Sender<bool>,               // Test sender for schedule_check response
+        mpsc::Sender<bool>,              // Test sender for schedule_check response
         mpsc::Receiver<RefillMonitorView>, // Test receiver for monitors
     ) {
         let (tx_relay, _rx_relay) = mpsc::channel();

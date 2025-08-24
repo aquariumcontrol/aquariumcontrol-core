@@ -7,12 +7,12 @@ The above copyright notice and this permission notice shall be included in all c
 THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
-use log::error;
-use spin_sleep::SpinSleeper;
-use std::time::{Duration, Instant};
 use crate::mineral::balling_channels::BallingChannels;
 use crate::utilities::channel_content::{AquariumDevice, InternalCommand};
 use crate::utilities::proc_ext_req::ProcessExternalRequestTrait;
+use log::error;
+use spin_sleep::SpinSleeper;
+use std::time::{Duration, Instant};
 
 /// Trait for the execution of the Balling mineral dosing.
 /// This trait allows running the main control with a mock implementation for testing.
@@ -90,7 +90,9 @@ impl MineralInjectionTrait for MineralInjection {
         let sleep_duration = Duration::from_millis(sleep_interval_millis as u64);
         let mut quit_command_received: bool;
 
-        match balling_channels.send_to_relay_manager(InternalCommand::SwitchOn(mineral_pump.clone())) {
+        match balling_channels
+            .send_to_relay_manager(InternalCommand::SwitchOn(mineral_pump.clone()))
+        {
             Ok(_) => {
                 // now listen for the response
                 match balling_channels.receive_from_relay_manager() {
@@ -116,8 +118,8 @@ impl MineralInjectionTrait for MineralInjection {
 
         loop {
             // check if there is a quit request
-            (quit_command_received, _, _) =
-                self.process_external_request(&balling_channels.rx_balling_from_signal_handler, None);
+            (quit_command_received, _, _) = self
+                .process_external_request(&balling_channels.rx_balling_from_signal_handler, None);
             if quit_command_received {
                 break; // stop dosing
             }
@@ -171,14 +173,14 @@ impl MineralInjectionTrait for MineralInjection {
 
 #[cfg(test)]
 pub mod tests {
+    use crate::mineral::balling::BallingChannels;
+    use crate::mineral::mineral_injection::{MineralInjection, MineralInjectionTrait};
+    use crate::utilities::channel_content::{ActuatorState, AquariumDevice, InternalCommand};
     use all_asserts::{assert_ge, assert_le};
     use spin_sleep::SpinSleeper;
     use std::sync::mpsc::{self, Receiver, Sender};
     use std::thread::scope;
     use std::time::Duration;
-    use crate::mineral::balling::BallingChannels;
-    use crate::mineral::mineral_injection::{MineralInjection, MineralInjectionTrait};
-    use crate::utilities::channel_content::{ActuatorState, AquariumDevice, InternalCommand};
 
     // Simulates the Relay Manager's behavior for Mineral Injection tests.
     //
@@ -313,14 +315,10 @@ pub mod tests {
     // This test case executes the mineral injection without interruption from the signal handler.
     #[test]
     pub fn test_mineral_dosing_happy_case() {
-        let (tx_balling_to_relay_manager, rx_relay_manager_from_balling) =
-            mpsc::channel();
-        let (tx_relay_manager_to_balling, rx_balling_from_relay_manager) =
-            mpsc::channel();
-        let (_tx_signal_handler_to_balling, rx_balling_from_signal_handler) =
-            mpsc::channel();
-        let (tx_balling_to_signal_handler, _rx_signal_handler_from_balling) =
-            mpsc::channel();
+        let (tx_balling_to_relay_manager, rx_relay_manager_from_balling) = mpsc::channel();
+        let (tx_relay_manager_to_balling, rx_balling_from_relay_manager) = mpsc::channel();
+        let (_tx_signal_handler_to_balling, rx_balling_from_signal_handler) = mpsc::channel();
+        let (tx_balling_to_signal_handler, _rx_signal_handler_from_balling) = mpsc::channel();
         let (tx_balling_to_schedule_check, _rx_schedule_check_from_balling) = mpsc::channel();
         let (_tx_schedule_check_to_balling, rx_balling_from_schedule_check) = mpsc::channel();
         let mut balling_channels = BallingChannels {
@@ -390,14 +388,10 @@ pub mod tests {
     // This test case executes the mineral injection with interruption from the signal handler.
     #[test]
     pub fn test_mineral_dosing_interrupted() {
-        let (tx_balling_to_relay_manager, rx_relay_manager_from_balling) =
-            mpsc::channel();
-        let (tx_relay_manager_to_balling, rx_balling_from_relay_manager) =
-            mpsc::channel();
-        let (tx_signal_handler_to_balling, rx_balling_from_signal_handler) =
-            mpsc::channel();
-        let (tx_balling_to_signal_handler, _rx_signal_handler_from_balling) =
-            mpsc::channel();
+        let (tx_balling_to_relay_manager, rx_relay_manager_from_balling) = mpsc::channel();
+        let (tx_relay_manager_to_balling, rx_balling_from_relay_manager) = mpsc::channel();
+        let (tx_signal_handler_to_balling, rx_balling_from_signal_handler) = mpsc::channel();
+        let (tx_balling_to_signal_handler, _rx_signal_handler_from_balling) = mpsc::channel();
         let (tx_balling_to_schedule_check, _rx_schedule_check_from_balling) = mpsc::channel();
         let (_tx_schedule_check_to_balling, rx_balling_from_schedule_check) = mpsc::channel();
 
@@ -430,7 +424,6 @@ pub mod tests {
             #[cfg(feature = "debug_channels")]
             cnt_rx_balling_from_messaging_opt: 0,
         };
-
 
         let mut mineral_injection = MineralInjection::new();
 

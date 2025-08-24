@@ -74,24 +74,23 @@ pub struct ScheduleCheckChannels {
 }
 
 impl ScheduleCheckChannels {
-
     /// Sends an acknowledgment to the signal handler.
     pub fn send_to_signal_handler(&mut self, ack: bool) -> Result<(), SendError<bool>> {
+        let result = self.tx_schedule_check_to_signal_handler.send(ack);
         #[cfg(feature = "debug_channels")]
-        {
+        if result.is_ok() {
             self.cnt_tx_schedule_check_to_signal_handler += 1;
         }
-        self.tx_schedule_check_to_signal_handler.send(ack)
+        result
     }
 }
 
 #[cfg(feature = "debug_channels")]
 impl fmt::Display for ScheduleCheckChannels {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        writeln!(f, "")?;
         writeln!(
             f,
-            "cnt_tx_schedule_check_to_ventilation: {}",
+            "\ncnt_tx_schedule_check_to_ventilation: {}",
             self.cnt_tx_schedule_check_to_ventilation
         )?;
         writeln!(

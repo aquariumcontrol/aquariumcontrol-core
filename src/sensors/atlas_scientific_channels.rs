@@ -44,11 +44,12 @@ impl AtlasScientificChannels {
         &mut self,
         request: I2cRequest,
     ) -> Result<(), SendError<I2cRequest>> {
+        let result = self.tx_atlas_scientific_to_i2c_interface.send(request);
         #[cfg(feature = "debug_channels")]
-        {
+        if result.is_ok() {
             self.cnt_tx_atlas_scientific_to_i2c_interface += 1;
         }
-        self.tx_atlas_scientific_to_i2c_interface.send(request)
+        result
     }
 
     /// Receives a result from the I2C interface.
@@ -65,10 +66,9 @@ impl AtlasScientificChannels {
 #[cfg(feature = "debug_channels")]
 impl fmt::Display for AtlasScientificChannels {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        writeln!(f, "")?;
         writeln!(
             f,
-            "cnt_tx_atlas_scientific_to_i2c_interface: {}",
+            "\ncnt_tx_atlas_scientific_to_i2c_interface: {}",
             self.cnt_tx_atlas_scientific_to_i2c_interface
         )?;
         writeln!(

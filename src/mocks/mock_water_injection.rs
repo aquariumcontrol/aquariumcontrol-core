@@ -18,7 +18,7 @@ pub mod tests {
     use crate::sensors::tank_level_switch::TankLevelSwitchSignals;
     use crate::water::refill::RefillChannels;
     use crate::water::refill_error_states::RefillErrorStates;
-    use crate::water::water_injection::{WaterInjectionTrait};
+    use crate::water::water_injection::WaterInjectionTrait;
 
     pub struct MockWaterInjection {
         tx_water_injection_to_test_environment_opt: Option<Sender<TestCommand>>,

@@ -15,3 +15,6 @@ pub mod data_injection;
 
 /// Contains data definition for the data to be written
 pub mod recorder_data_frame;
+
+/// Container for channels used by data logger module
+pub mod data_logger_channels;

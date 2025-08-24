@@ -216,7 +216,7 @@ impl ScheduleCheck {
                         Some(c) => {
                             receive_success = true;
                             c.check_if_allowed()
-                        },
+                        }
                         None => config.strategy_if_schedule_not_found,
                     }
                 }
@@ -487,8 +487,7 @@ impl ScheduleCheck {
 
         // The application received the request to terminate. That is why the loop was left.
         // Answer to the thread which sent the request for termination, so that shutdown can proceed further.
-        match schedule_check_channels.send_to_signal_handler(true)
-        {
+        match schedule_check_channels.send_to_signal_handler(true) {
             Ok(()) => {
                 #[cfg(feature = "debug_schedule_check")]
                 debug!(

@@ -23,10 +23,10 @@ use spin_sleep::SpinSleeper;
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
+pub(crate) use crate::thermal::ventilation_channels::VentilationChannels;
 use crate::utilities::logger::log_error_chain;
 #[cfg(all(not(test), target_os = "linux"))]
 use nix::unistd::gettid;
-pub(crate) use crate::thermal::ventilation_channels::VentilationChannels;
 
 const CYCLE_TIME_VENTILATION_MILLIS: u64 = 500;
 
@@ -85,7 +85,7 @@ fn actuate_ventilation(
     command: InternalCommand,
     mutex_device_scheduler_ventilation: &Arc<Mutex<i32>>,
     mutex_blocked_during_actuation: &mut bool,
-    ventilation_channels: &mut VentilationChannels
+    ventilation_channels: &mut VentilationChannels,
 ) {
     // reduce the probability of wrong warning
     *mutex_blocked_during_actuation |=
@@ -122,13 +122,13 @@ fn actuate_ventilation(
 fn switch_on_ventilation(
     mutex_device_scheduler_ventilation: &Arc<Mutex<i32>>,
     mutex_blocked_during_actuation: &mut bool,
-    ventilation_channels: &mut VentilationChannels
+    ventilation_channels: &mut VentilationChannels,
 ) {
     actuate_ventilation(
         InternalCommand::SwitchOn(AquariumDevice::Ventilation),
         mutex_device_scheduler_ventilation,
         mutex_blocked_during_actuation,
-        ventilation_channels
+        ventilation_channels,
     );
 }
 
@@ -145,13 +145,13 @@ fn switch_on_ventilation(
 fn switch_off_ventilation(
     mutex_device_scheduler_ventilation: &Arc<Mutex<i32>>,
     mutex_blocked_during_actuation: &mut bool,
-    ventilation_channels: &mut VentilationChannels
+    ventilation_channels: &mut VentilationChannels,
 ) {
     actuate_ventilation(
         InternalCommand::SwitchOff(AquariumDevice::Ventilation),
         mutex_device_scheduler_ventilation,
         mutex_blocked_during_actuation,
-        ventilation_channels
+        ventilation_channels,
     );
 }
 
@@ -282,7 +282,7 @@ impl Ventilation {
                     switch_on_ventilation(
                         mutex_device_scheduler_ventilation,
                         mutex_was_blocked_during_actuation,
-                        ventilation_channels
+                        ventilation_channels,
                     );
                     *ventilation_state = ActuatorState::On;
                 }
@@ -293,7 +293,7 @@ impl Ventilation {
                     switch_off_ventilation(
                         mutex_device_scheduler_ventilation,
                         mutex_was_blocked_during_actuation,
-                        ventilation_channels
+                        ventilation_channels,
                     );
                     *ventilation_state = ActuatorState::Off;
                 }
@@ -414,8 +414,7 @@ impl Ventilation {
                 }
 
                 // schedule check to see if actuation is allowed
-                match ventilation_channels.send_to_schedule_check(InternalCommand::ScheduleCheck)
-                {
+                match ventilation_channels.send_to_schedule_check(InternalCommand::ScheduleCheck) {
                     Ok(_) => {
                         self.lock_error_channel_send_schedule_check = false;
                         // now listen for the response
@@ -464,7 +463,7 @@ impl Ventilation {
                                 switch_on_ventilation(
                                     &mutex_device_scheduler_ventilation,
                                     &mut actuation_mutex_was_blocked_during_actuation,
-                                    ventilation_channels
+                                    ventilation_channels,
                                 );
                                 ventilation_state = ActuatorState::On;
                             }
@@ -474,7 +473,7 @@ impl Ventilation {
                                 switch_off_ventilation(
                                     &mutex_device_scheduler_ventilation,
                                     &mut actuation_mutex_was_blocked_during_actuation,
-                                    ventilation_channels
+                                    ventilation_channels,
                                 );
                                 ventilation_state = ActuatorState::Off;
                             }
@@ -487,7 +486,7 @@ impl Ventilation {
                                 switch_on_ventilation(
                                     &mutex_device_scheduler_ventilation,
                                     &mut actuation_mutex_was_blocked_during_actuation,
-                                    ventilation_channels
+                                    ventilation_channels,
                                 );
                                 ventilation_state = ActuatorState::On;
                             }
@@ -498,7 +497,7 @@ impl Ventilation {
                                 switch_off_ventilation(
                                     &mutex_device_scheduler_ventilation,
                                     &mut actuation_mutex_was_blocked_during_actuation,
-                                    ventilation_channels
+                                    ventilation_channels,
                                 );
                                 ventilation_state = ActuatorState::Off;
                             }
@@ -600,7 +599,7 @@ impl Ventilation {
                 switch_on_ventilation(
                     &mutex_device_scheduler_ventilation,
                     &mut actuation_mutex_was_blocked_during_actuation,
-                    ventilation_channels
+                    ventilation_channels,
                 );
             }
         } else {
@@ -609,7 +608,7 @@ impl Ventilation {
                 switch_off_ventilation(
                     &mutex_device_scheduler_ventilation,
                     &mut actuation_mutex_was_blocked_during_actuation,
-                    ventilation_channels
+                    ventilation_channels,
                 );
             }
         }
@@ -1871,7 +1870,6 @@ pub mod tests {
                     #[cfg(feature = "debug_channels")]
                     cnt_rx_ventilation_from_messaging_opt: 0,
                 };
-
 
                 // set up the set value updater to actively manipulate the set values
                 let mut ventilation_set_value_updater = MockSqlInterfaceVentilationSetVals::new(

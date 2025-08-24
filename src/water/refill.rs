@@ -31,7 +31,7 @@ pub(crate) use crate::water::refill_channels::RefillChannels;
 use crate::water::refill_error_states::RefillErrorStates;
 use crate::water::refill_monitor_view::RefillMonitorView;
 use crate::water::refill_stats_data::RefillStatsData;
-use crate::water::water_injection::{WaterInjectionTrait};
+use crate::water::water_injection::WaterInjectionTrait;
 
 /// Holds the configuration data for the refill control.
 /// The configuration is loaded from the .toml configuration file.
@@ -536,7 +536,7 @@ impl Refill {
     fn check_volume_count_time_limits(
         &mut self,
         sql_refill_data: &RefillStatsData,
-        refill_channels: &mut RefillChannels
+        refill_channels: &mut RefillChannels,
     ) -> bool {
         #[cfg(feature = "debug_refill")]
         debug!(
@@ -670,10 +670,7 @@ impl Refill {
     ///
     /// # Returns
     /// `true` if actuation is allowed by the schedule checker (or if communication fails, leading to a fail-safe `true`); `false` otherwise.
-    fn check_schedule(
-        &mut self,
-        refill_channels: &mut RefillChannels,
-    ) -> bool {
+    fn check_schedule(&mut self, refill_channels: &mut RefillChannels) -> bool {
         match refill_channels.send_to_schedule_check(InternalCommand::ScheduleCheck) {
             Ok(_) => {
                 self.lock_error_channel_send_schedule_check = false;
@@ -850,16 +847,12 @@ impl Refill {
                     self.get_refill_stats_data(&mut refill_stats_data);
 
                     // execute checks before initiating refill
-                    if !self.check_volume_count_time_limits(
-                        &refill_stats_data,
-                        refill_channels
-                    ) && !self.refill_errors.error_switch_stuck_low
+                    if !self.check_volume_count_time_limits(&refill_stats_data, refill_channels)
+                        && !self.refill_errors.error_switch_stuck_low
                         && !self.refill_errors.error_sql_update_failed
                         && !self.refill_errors.error_sql_get_historic_data_failed
                     {
-                        schedule_check_result = self.check_schedule(
-                            refill_channels
-                        );
+                        schedule_check_result = self.check_schedule(refill_channels);
 
                         if schedule_check_result
                             && !tank_level_switch_position_stabilized

@@ -10,9 +10,9 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 use spin_sleep::SpinSleeper;
 use std::time::{Duration, Instant};
 
+use crate::food::feed::FeedChannels;
 use crate::food::food_injection_error::FoodInjectionError;
 use crate::food::{feed::FeedConfig, feed_pattern::Feedpattern};
-use crate::food::feed::FeedChannels;
 use crate::utilities::channel_content::{ActuatorState, AquariumDevice, InternalCommand};
 use crate::utilities::proc_ext_req::ProcessExternalRequestTrait;
 
@@ -148,7 +148,7 @@ impl FoodInjection {
     fn switch_skimmer_pumps_feeder(
         &mut self,
         target_actuator_states: FoodInjectionTargetActuatorStates,
-        feed_channels: &mut FeedChannels
+        feed_channels: &mut FeedChannels,
     ) -> Result<(), Vec<FoodInjectionError>> {
         // Initialize a vector to collect any errors that occur.
         let mut errors: Vec<FoodInjectionError> = Vec::new();
@@ -513,10 +513,9 @@ impl FoodInjectionTrait for FoodInjection {
                     target_aux_pump2_state,
                     target_feeder_state: ActuatorState::Off,
                 };
-                if let Err(collected_errors) = self.switch_skimmer_pumps_feeder(
-                    target_actuator_states,
-                    feed_channels
-                ) {
+                if let Err(collected_errors) =
+                    self.switch_skimmer_pumps_feeder(target_actuator_states, feed_channels)
+                {
                     collected_errors_cumulated.extend(collected_errors);
                     break; // if any error occurs, abort the feed sequence
                 }
@@ -569,10 +568,9 @@ impl FoodInjectionTrait for FoodInjection {
                     target_aux_pump2_state,
                     target_feeder_state: ActuatorState::On,
                 };
-                if let Err(collected_errors) = self.switch_skimmer_pumps_feeder(
-                    target_actuator_states,
-                    feed_channels
-                ) {
+                if let Err(collected_errors) =
+                    self.switch_skimmer_pumps_feeder(target_actuator_states, feed_channels)
+                {
                     collected_errors_cumulated.extend(collected_errors);
                     break; // if any error occurs, abort the feed sequence
                 }
@@ -607,7 +605,7 @@ impl FoodInjectionTrait for FoodInjection {
                 target_aux_pump2_state: ActuatorState::On,
                 target_feeder_state: ActuatorState::Off,
             },
-            feed_channels
+            feed_channels,
         ) {
             collected_errors_cumulated.extend(collected_errors);
         }
@@ -622,15 +620,15 @@ impl FoodInjectionTrait for FoodInjection {
 
 #[cfg(test)]
 pub mod tests {
-    use all_asserts::{assert_ge, assert_le};
-    use std::sync::mpsc::{self, Receiver, Sender};
-    use std::thread::scope;
-    use std::time::Instant;
     use crate::food::feed::FeedChannels;
     use crate::food::feed_pattern::{FeedPhase, Feedpattern};
     use crate::food::food_injection::{FoodInjection, FoodInjectionTrait};
     use crate::utilities::channel_content::{ActuatorState, AquariumDevice, InternalCommand};
     use crate::utilities::config::{read_config_file, ConfigData};
+    use all_asserts::{assert_ge, assert_le};
+    use std::sync::mpsc::{self, Receiver, Sender};
+    use std::thread::scope;
+    use std::time::Instant;
 
     // Simulates the relay manager's behavior in response to actuation commands.
     //
@@ -859,10 +857,7 @@ pub mod tests {
                 };
 
                 let start_time = Instant::now();
-                let result_tuple = food_injection.inject_food(
-                    &mut feed_channels,
-                    &feedpattern,
-                );
+                let result_tuple = food_injection.inject_food(&mut feed_channels, &feedpattern);
                 let end_time = Instant::now();
 
                 let execution_duration = end_time - start_time;
@@ -1008,10 +1003,7 @@ pub mod tests {
                 };
 
                 let start_time = Instant::now();
-                let result_tuple = food_injection.inject_food(
-                    &mut feed_channels,
-                    &feedpattern,
-                );
+                let result_tuple = food_injection.inject_food(&mut feed_channels, &feedpattern);
                 let end_time = Instant::now();
 
                 let execution_duration = end_time - start_time;

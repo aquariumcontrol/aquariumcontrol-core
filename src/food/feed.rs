@@ -202,7 +202,7 @@ impl Feed {
         &mut self,
         profile_id: i32,
         food_injection: &mut impl FoodInjectionTrait,
-        feed_channels: &mut FeedChannels
+        feed_channels: &mut FeedChannels,
     ) -> (Result<(), ()>, bool) {
         // First, load the feed pattern from the database.
         let feed_pattern = match self
@@ -223,10 +223,8 @@ impl Feed {
         // *** Execute the feed pattern and destructure the returned tuple ***
         // 1. `quit_during_injection`: A bool indicating if a quit command was received.
         // 2. `injection_result`: A Result indicating if the injection itself succeeded.
-        let (quit_during_injection, injection_result) = food_injection.inject_food(
-            feed_channels,
-            &feed_pattern,
-        );
+        let (quit_during_injection, injection_result) =
+            food_injection.inject_food(feed_channels, &feed_pattern);
         // *** Handle the Result part of the tuple independently ***
         // If errors occurred during injection, log each one.
         if let Err(errors) = &injection_result {
@@ -359,11 +357,8 @@ impl Feed {
             profile_id
         );
 
-        let (result, quit_command_received_during_feed) = self.execute_feed(
-            profile_id,
-            food_injection,
-            feed_channels
-        );
+        let (result, quit_command_received_during_feed) =
+            self.execute_feed(profile_id, food_injection, feed_channels);
 
         match result {
             Ok(_) => { /* do nothing */ }
@@ -572,11 +567,8 @@ impl Feed {
                     // scope to limit the lifetime of unlocked mutex
                     let mut mutex_data = mutex_device_scheduler_feed.lock().unwrap();
 
-                    let (result, quit_command_received_during_requested_feed) = self.execute_feed(
-                        self.profile_id_requested,
-                        food_injection,
-                        feed_channels,
-                    );
+                    let (result, quit_command_received_during_requested_feed) =
+                        self.execute_feed(self.profile_id_requested, food_injection, feed_channels);
                     match result {
                         Ok(_) => { /* do nothing */ }
                         Err(_) => {

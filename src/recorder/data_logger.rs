@@ -23,7 +23,6 @@ use mysql::PooledConn;
 use serde_derive::Deserialize;
 use spin_sleep::SpinSleeper;
 use std::fs;
-use std::sync::mpsc::{Receiver, Sender};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 use thiserror::Error;
@@ -31,6 +30,7 @@ use thiserror::Error;
 use crate::database::sql_interface::SqlInterface;
 use crate::database::sql_interface_data::SqlInterfaceData;
 use crate::recorder::data_injection::DataInjectionTrait;
+use crate::recorder::data_logger_channels::DataLoggerChannels;
 use crate::recorder::recorder_data_frame::RecorderDataFrame;
 use crate::sensors::sensor_manager::SensorManagerSignals;
 use crate::sensors::tank_level_switch::TankLevelSwitchSignals;
@@ -114,17 +114,6 @@ pub struct DataLoggerConfig {
 
     /// sleep time in milliseconds before starting the data recording
     initial_sleep_time_millis: u64,
-}
-
-/// Struct acts as a central hub for communication channels used by the DataLogger.
-/// It's a way to bundle together all the necessary mpsc (Multi-Producer, Single-Consumer) channel
-/// endpoints that the data logger needs to interact with other parts of your application.
-pub struct DataLoggerChannels<'a> {
-    /// Sender part of the channel for communication to the signal handler
-    pub tx_to_signal_handler: &'a Sender<bool>,
-
-    /// Receiver part of the channel for communication from the signal handler                
-    pub rx_from_signal_handler: &'a Receiver<InternalCommand>,
 }
 
 /// Contains `Arc<Mutex>`-wrapped shared data points accessed by the data logger.
@@ -438,7 +427,7 @@ impl DataLogger {
     ///
     /// # Returns
     /// - `true`: If an error occurred during the file write operation.
-    /// - `false`: If the write was successful or if `output_to_disk` is disabled.
+    /// - `false`: If the write-operation was successful or if `output_to_disk` is disabled.
     fn output_state(
         &self,
         state: bool,
@@ -490,7 +479,7 @@ impl DataLogger {
     ///
     /// # Returns
     /// - `true`: If an error occurred during the file write operation.
-    /// - `false`: If the write was successful or if `output_to_disk` is disabled.
+    /// - `false`: If the write-operation was successful or if `output_to_disk` is disabled.
     fn output_timestamp(
         &self,
         timestamp: NaiveDateTime,
@@ -888,21 +877,17 @@ impl DataLogger {
     ///
     /// # Arguments
     ///
-    /// * `tx_to_signal_handler` - A `Sender<bool>` used to send a `true` value back to the
-    ///   signal handler, confirming that the application is ready for the next phase of shutdown.
-    /// * `rx_from_signal_handler` - A `Receiver<InternalCommand>` used to receive commands
-    ///   from the signal handler, specifically waiting for the `InternalCommand::Terminate` signal.
+    /// * `data_logger_channels` - A mutable reference to the struct that contains the channels.
     fn confirm_quit_and_wait_for_termination_command(
         &mut self,
-        tx_to_signal_handler: &Sender<bool>,
-        rx_from_signal_handler: &Receiver<InternalCommand>,
+        data_logger_channels: &mut DataLoggerChannels,
     ) {
         let spin_sleeper = SpinSleeper::default();
         let sleep_duration_hundred_millis = Duration::from_millis(100);
 
         // Application received request to terminate. That is why the loop was left.
         // Answer to the thread which sent the request for termination, so that shutdown can proceed further.
-        match tx_to_signal_handler.send(true) {
+        match data_logger_channels.send_to_signal_handler(true) {
             Ok(()) => {}
             Err(e) => {
                 error!(
@@ -917,7 +902,8 @@ impl DataLogger {
         // The shutdown sequence is handled by the signal_handler module.
         let mut termination_command_received = false;
         while !termination_command_received {
-            termination_command_received = match rx_from_signal_handler.recv() {
+            termination_command_received = match data_logger_channels.receive_from_signal_handler()
+            {
                 Ok(c) => match c {
                     InternalCommand::Terminate => {
                         self.lock_warn_inapplicable_command = false;
@@ -981,7 +967,7 @@ impl DataLogger {
         &mut self,
         data_injection: &mut impl DataInjectionTrait,
         mut sql_interface_data: SqlInterfaceData,
-        data_logger_channels: DataLoggerChannels,
+        data_logger_channels: &mut DataLoggerChannels,
         data_logger_mutexes: DataLoggerMutexes,
     ) {
         #[cfg(all(target_os = "linux", not(test)))]
@@ -1044,12 +1030,9 @@ impl DataLogger {
         {
             spin_sleeper.sleep(sleep_duration_hundred_millis);
             (quit_command_received, _, _) =
-                self.process_external_request(data_logger_channels.rx_from_signal_handler, None);
+                self.process_external_request(&data_logger_channels.rx_from_signal_handler, None);
             if quit_command_received {
-                self.confirm_quit_and_wait_for_termination_command(
-                    data_logger_channels.tx_to_signal_handler,
-                    data_logger_channels.rx_from_signal_handler,
-                );
+                self.confirm_quit_and_wait_for_termination_command(data_logger_channels);
                 return;
             }
         }
@@ -1157,7 +1140,7 @@ impl DataLogger {
                 i += 100;
                 spin_sleeper.sleep(sleep_duration_hundred_millis);
                 (quit_command_received, _, _) = self
-                    .process_external_request(data_logger_channels.rx_from_signal_handler, None);
+                    .process_external_request(&data_logger_channels.rx_from_signal_handler, None);
                 if quit_command_received {
                     #[cfg(feature = "debug_data_logger")]
                     debug!(
@@ -1219,10 +1202,7 @@ impl DataLogger {
             start_time = Instant::now(); // start time for the next cycle
         }
 
-        self.confirm_quit_and_wait_for_termination_command(
-            data_logger_channels.tx_to_signal_handler,
-            data_logger_channels.rx_from_signal_handler,
-        );
+        self.confirm_quit_and_wait_for_termination_command(data_logger_channels);
     }
 }
 
@@ -1234,9 +1214,8 @@ pub mod tests {
     use crate::mocks::mock_signal::tests::MockSignal;
     use crate::mocks::mock_ventilation::tests::mock_ventilation;
     use crate::mocks::test_command::tests::TestCommand;
-    use crate::recorder::data_logger::{
-        DataLogger, DataLoggerChannels, DataLoggerConfig, DataLoggerMutexes,
-    };
+    use crate::recorder::data_logger::{DataLogger, DataLoggerConfig, DataLoggerMutexes};
+    use crate::recorder::data_logger_channels::DataLoggerChannels;
     use crate::sensors::sensor_manager::SensorManagerSignals;
     use crate::sensors::tank_level_switch::TankLevelSwitchSignals;
     use crate::utilities::channel_content::InternalCommand;
@@ -1597,9 +1576,14 @@ pub mod tests {
         let join_handle_test_object = thread::Builder::new()
             .name("test_object".to_string())
             .spawn(move || {
-                let data_logger_channels = DataLoggerChannels {
-                    tx_to_signal_handler: &tx_data_logger_to_signal_handler,
-                    rx_from_signal_handler: &rx_data_logger_from_signal_handler,
+                let mut data_logger_channels = DataLoggerChannels {
+                    tx_to_signal_handler: tx_data_logger_to_signal_handler,
+                    #[cfg(feature = "debug_channels")]
+                    cnt_tx_to_signal_handler: 0,
+
+                    rx_from_signal_handler: rx_data_logger_from_signal_handler,
+                    #[cfg(feature = "debug_channels")]
+                    cnt_rx_from_signal_handler: 0
                 };
 
                 let data_logger_mutexes = DataLoggerMutexes {
@@ -1614,7 +1598,7 @@ pub mod tests {
                 data_logger.execute(
                     &mut mock_data_injection,
                     sql_interface_data,
-                    data_logger_channels,
+                    &mut data_logger_channels,
                     data_logger_mutexes,
                 );
 

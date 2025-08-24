@@ -483,7 +483,7 @@ impl Balling {
         pump_id: u32,
         pump_device: AquariumDevice,
         mineral_injection: &mut impl MineralInjectionTrait,
-        balling_channels: &mut BallingChannels
+        balling_channels: &mut BallingChannels,
     ) -> bool {
         let mut quit_command_received: bool = false;
         let actual_dosing_duration_millis: u32;
@@ -506,11 +506,7 @@ impl Balling {
 
                 if dosing_duration_millis > 0 {
                     (quit_command_received, actual_dosing_duration_millis) = mineral_injection
-                        .inject_mineral(
-                            balling_channels,
-                            pump_device,
-                            dosing_duration_millis,
-                        );
+                        .inject_mineral(balling_channels, pump_device, dosing_duration_millis);
                     let actual_dosing_volume = Self::calc_actual_dosing_volume(
                         &balling_setval,
                         actual_dosing_duration_millis,
@@ -609,8 +605,7 @@ impl Balling {
                 // and the monitoring period has passed (usually every 60 seconds)
 
                 // schedule check to see if actuation is allowed
-                match balling_channels.send_to_schedule_check(InternalCommand::ScheduleCheck)
-                {
+                match balling_channels.send_to_schedule_check(InternalCommand::ScheduleCheck) {
                     Ok(_) => {
                         // now listen for the response
                         schedule_check_result = match balling_channels.receive_from_schedule_check()
@@ -692,7 +687,7 @@ impl Balling {
                                 2,
                                 AquariumDevice::PeristalticPump2,
                                 mineral_injection,
-                                balling_channels
+                                balling_channels,
                             );
                             *mutex_data = mutex_data.saturating_add(1);
                         }
@@ -719,7 +714,7 @@ impl Balling {
                                 3,
                                 AquariumDevice::PeristalticPump3,
                                 mineral_injection,
-                                balling_channels
+                                balling_channels,
                             );
                             *mutex_data = mutex_data.saturating_add(1);
                         }
@@ -746,7 +741,7 @@ impl Balling {
                                 4,
                                 AquariumDevice::PeristalticPump4,
                                 mineral_injection,
-                                balling_channels
+                                balling_channels,
                             );
                             *mutex_data = mutex_data.saturating_add(1);
                         }
@@ -788,7 +783,7 @@ impl Balling {
                                 pump_id,
                                 pump_device,
                                 mineral_injection,
-                                balling_channels
+                                balling_channels,
                             );
                             *mutex_data = mutex_data.saturating_add(1);
                         }
@@ -859,35 +854,34 @@ impl Balling {
         // The shutdown sequence is handled by the signal_handler module.
         let mut termination_command_received = false;
         while !termination_command_received {
-            termination_command_received =
-                match balling_channels.receive_from_signal_handler() {
-                    Ok(c) => {
-                        self.lock_error_channel_receive_termination_signal = false;
-                        match c {
-                            InternalCommand::Terminate => {
-                                self.lock_warn_inapplicable_command = false;
-                                true
-                            }
-                            _ => {
-                                if !self.lock_warn_inapplicable_command {
-                                    warn!(
+            termination_command_received = match balling_channels.receive_from_signal_handler() {
+                Ok(c) => {
+                    self.lock_error_channel_receive_termination_signal = false;
+                    match c {
+                        InternalCommand::Terminate => {
+                            self.lock_warn_inapplicable_command = false;
+                            true
+                        }
+                        _ => {
+                            if !self.lock_warn_inapplicable_command {
+                                warn!(
                                     target: module_path!(),
                                     "ignoring inapplicable command {c} from signal handler.");
-                                    self.lock_warn_inapplicable_command = true;
-                                }
-                                false
+                                self.lock_warn_inapplicable_command = true;
                             }
+                            false
                         }
                     }
-                    Err(e) => {
-                        if !self.lock_error_channel_receive_termination_signal {
-                            error!(target: module_path!(),
+                }
+                Err(e) => {
+                    if !self.lock_error_channel_receive_termination_signal {
+                        error!(target: module_path!(),
                             "error when trying to receive termination signal. ({e:?})");
-                            self.lock_error_channel_receive_termination_signal = true;
-                        }
-                        false
+                        self.lock_error_channel_receive_termination_signal = true;
                     }
-                };
+                    false
+                }
+            };
             spin_sleeper.sleep(sleep_duration_hundred_millis);
         }
     }
