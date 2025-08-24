@@ -426,12 +426,12 @@ impl Messaging {
 
                             let counter = match domain {
                                 MessagingDomain::Refill => &mut messaging_channels.cnt_tx_to_refill,
-                                MessagingDomain::Ventilation => &messaging_channels.cnt_tx_to_ventilation,
-                                MessagingDomain::Feed => &messaging_channels.cnt_tx_to_feed,
-                                MessagingDomain::Heating => &messaging_channels.cnt_tx_to_heating,
-                                MessagingDomain::Balling => &messaging_channels.cnt_tx_to_balling,
-                                MessagingDomain::Monitors => &messaging_channels.cnt_tx_to_monitors,
-                                MessagingDomain::Watchdog => &messaging_channels.cnt_tx_to_watchdog,
+                                MessagingDomain::Ventilation => &mut messaging_channels.cnt_tx_to_ventilation,
+                                MessagingDomain::Feed => &mut messaging_channels.cnt_tx_to_feed,
+                                MessagingDomain::Heating => &mut messaging_channels.cnt_tx_to_heating,
+                                MessagingDomain::Balling => &mut messaging_channels.cnt_tx_to_balling,
+                                MessagingDomain::Monitors => &mut messaging_channels.cnt_tx_to_monitors,
+                                MessagingDomain::Watchdog => &mut messaging_channels.cnt_tx_to_watchdog,
                                 MessagingDomain::Unknown => unreachable!(),
                             };
                             *counter += 1;
