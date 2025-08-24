@@ -358,16 +358,10 @@ impl I2cInterface {
     /// from repeated channel communication errors.
     ///
     /// # Arguments
-    /// * `tx_to_atlas_scientific` - The sender channel for sending `I2cResult` data back
-    ///   to the requesting module.
-    /// * `rx_from_atlas_scientific` - The receiver channel for getting `I2cRequest`s.
-    /// * `rx_from_signal_handler` - The receiver channel for getting `InternalCommand`s
-    ///   (e.g., `Quit`) from the `SignalHandler`.
+    /// * `i2c_interface_channels` - A mutable reference to the struct containing the channels.
     pub fn execute(
         &mut self,
-        tx_to_atlas_scientific: Sender<I2cResult>,
-        rx_from_atlas_scientific: Receiver<I2cRequest>,
-        rx_from_signal_handler: Receiver<InternalCommand>,
+        i2c_interface_channels: &mut I2cInterfaceChannels,
     ) {
         #[cfg(not(test))]
         info!(target: module_path!(), "Thread started with TID: {}", gettid());
@@ -387,11 +381,11 @@ impl I2cInterface {
                 break;
             }
 
-            match rx_from_atlas_scientific.try_recv() {
+            match i2c_interface_channels.receive_from_atlas_scientific() {
                 Ok(request) => {
                     lock_error_receive_atlas_scientific = false;
                     let response = self.get_response_from_i2c(request, &mut read_buffer);
-                    match tx_to_atlas_scientific.send(response) {
+                    match i2c_interface_channels.send_to_atlas_scientific(response) {
                         Ok(_) => {
                             lock_error_send_atlas_scientific = false;
                         }

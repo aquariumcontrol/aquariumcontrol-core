@@ -1403,11 +1403,11 @@ fn run() -> Result<(), StartupError> {
         rx_atlas_scientific_from_i2c_interface,
         #[cfg(feature = "debug_channels")]
         cnt_rx_atlas_scientific_from_i2c_interface: 0,
-        
+
         tx_atlas_scientific_to_signal_handler,
         #[cfg(feature = "debug_channels")]
         cnt_tx_atlas_scientific_to_signal_handler: 0,
-        
+
         rx_atlas_scientific_from_signal_handler,
         #[cfg(feature = "debug_channels")]
         cnt_rx_atlas_scientific_from_signal_handler: 0,
@@ -1611,6 +1611,21 @@ fn run() -> Result<(), StartupError> {
         cnt_rx_schedule_check_from_signal_handler: 0,
     };
 
+    #[cfg(all(target_os = "linux", feature = "target_hw"))]
+    let mut i2c_interface_channels = I2cInterfaceChannels {
+        tx_i2c_interface_to_atlas_scientific,
+        #[cfg(feature = "debug_channels")]
+        cnt_tx_i2c_interface_to_atlas_scientific: 0,
+
+        rx_i2c_interface_from_atlas_scientific,
+        #[cfg(feature = "debug_channels")]
+        cnt_rx_i2c_interface_from_atlas_scientific: 0,
+
+        rx_i2c_interface_from_signal_handler,
+        #[cfg(feature = "debug_channels")]
+        cnt_rx_i2c_interface_from_signal_handler: 0,
+    };
+
     let signal_handler_channels = SignalHandlerChannels {
         tx_signal_handler_to_messaging_opt,
         rx_signal_handler_from_messaging_opt,
@@ -1759,14 +1774,13 @@ fn run() -> Result<(), StartupError> {
                 .map_err(|e| StartupError::I2cSetupFailure { source: e })?;
 
             scope.spawn(move || {
-                i2c_interface.execute(
-                    tx_i2c_interface_to_atlas_scientific,
-                    rx_i2c_interface_from_atlas_scientific,
-                    rx_i2c_interface_from_signal_handler,
-                );
+                i2c_interface.execute(&mut i2c_interface_channels);
 
                 #[cfg(feature = "debug_main")]
                 debug!(target: module_path!(), "i2c_interface terminated.");
+
+                #[cfg(feature = "debug_channels")]
+                debug!(target: module_path!(), "{i2c_interface_channels}");
             });
         }
 
@@ -1780,7 +1794,7 @@ fn run() -> Result<(), StartupError> {
 
             #[cfg(feature = "debug_main")]
             debug!(target: module_path!(), "Atlas Scientific terminated.");
-            
+
             #[cfg(feature = "debug_channels")]
             debug!(target: module_path!(), "{atlas_scientific_channels}");
         });

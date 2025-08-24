@@ -42,3 +42,6 @@ pub mod i2c_error;
 
 /// Container for channels used by atlas_scientific module
 pub mod atlas_scientific_channels;
+
+/// Container for channels used by i2c_interface module
+pub mod i2c_interface_channels;
