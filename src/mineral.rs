@@ -15,3 +15,6 @@ pub mod balling_error;
 
 /// Contains the trait implementation for the execution of the dosing
 pub mod mineral_injection;
+
+/// Container for the channels of the Balling module
+pub mod balling_channels;

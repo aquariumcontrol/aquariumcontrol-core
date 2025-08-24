@@ -10,7 +10,6 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 use chrono::Local;
 use log::error;
 use spin_sleep::SpinSleeper;
-use std::sync::mpsc::{Receiver, Sender};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
@@ -19,35 +18,15 @@ use crate::sensors::tank_level_switch::TankLevelSwitchSignals;
 use crate::utilities::channel_content::{AquariumDevice, InternalCommand};
 use crate::utilities::proc_ext_req::ProcessExternalRequestTrait;
 use crate::water::refill::RefillConfig;
+use crate::water::refill_channels::RefillChannels;
 use crate::water::refill_error_states::RefillErrorStates;
-
-pub struct WaterInjectionChannels<'a> {
-    /// Collects the communication channels required by the `WaterInjection` module.
-    ///
-    /// This struct bundles all necessary `mpsc` channel endpoints that `WaterInjection`
-    /// uses to interact with `RelayManager` and the `SignalHandler`.
-    ///
-    /// # Lifetime Parameters
-    /// * `'a` - Indicates that this struct holds borrowed references (`&'a Sender`, `&'a Receiver`)
-    ///   whose lifetime is tied to the caller that owns the channels.
-    ///
-    /// # Fields
-    /// * `tx_water_injection_to_relay_manager`: Reference to the sender part of the channel for sending commands to the relay manager.
-    /// * `rx_water_injection_from_relay_manager`: Reference to the receiver part of the channel for receiving acknowledgments from the relay manager.
-    /// * `rx_water_injection_from_signal_handler`: Reference to the receiver part of the channel for receiving commands (e.g., `Quit`) from the signal handler.
-    pub tx_water_injection_to_relay_manager: &'a Sender<InternalCommand>,
-
-    pub rx_water_injection_from_relay_manager: &'a Receiver<bool>,
-
-    pub rx_water_injection_from_signal_handler: &'a Receiver<InternalCommand>,
-}
 
 /// Trait for the execution of the refill once control has detected that the water level is low.
 /// This trait allows running the main control with a mock implementation for testing.
 pub trait WaterInjectionTrait {
     fn inject_water(
         &mut self,
-        water_injection_channels: WaterInjectionChannels,
+        refill_channels: &mut RefillChannels,
         refill_errors: &mut RefillErrorStates,
         sql_interface_refill: &mut Box<dyn DatabaseInterfaceRefillTrait + Sync + Send>,
         mutex_tank_level_switch: &Arc<Mutex<TankLevelSwitchSignals>>,
@@ -122,7 +101,7 @@ impl WaterInjectionTrait for WaterInjection {
     /// and logs the final refill event details (timestamp, duration, volume, error code) to the database.
     ///
     /// # Arguments
-    /// * `water_injection_channels` - Struct containing all necessary communication channels with
+    /// * `refill_channels` - A mutable reference to a struct containing all necessary communication channels with
     ///   `RelayManager`, `DataLogger`, and `SignalHandler`.
     /// * `refill_errors` - A mutable reference to a `RefillErrors` struct, where specific error
     ///   flags (e.g., `error_switch_stuck_low`, `error_sql_update_failed`) will be set if issues occur during injection.
@@ -136,7 +115,7 @@ impl WaterInjectionTrait for WaterInjection {
     /// `false` otherwise (meaning it completed normally or aborted due to other conditions like level reached or errors).
     fn inject_water(
         &mut self,
-        water_injection_channels: WaterInjectionChannels,
+        refill_channels: &mut RefillChannels,
         refill_errors: &mut RefillErrorStates,
         sql_interface_refill: &mut Box<dyn DatabaseInterfaceRefillTrait + Sync + Send>,
         mutex_tank_level_switch_signals: &Arc<Mutex<TankLevelSwitchSignals>>,
@@ -144,15 +123,11 @@ impl WaterInjectionTrait for WaterInjection {
         let mut quit_command_received = false;
 
         // command start of refill pump
-        match water_injection_channels
-            .tx_water_injection_to_relay_manager
-            .send(InternalCommand::SwitchOn(AquariumDevice::RefillPump))
+        match refill_channels.send_to_relay_manager(InternalCommand::SwitchOn(AquariumDevice::RefillPump))
         {
             Ok(_) => {
                 // now listen for the response
-                match water_injection_channels
-                    .rx_water_injection_from_relay_manager
-                    .recv()
+                match refill_channels.receive_from_relay_manager()
                 {
                     Ok(_) => {}
                     Err(e) => {
@@ -215,7 +190,7 @@ impl WaterInjectionTrait for WaterInjection {
                 additional_refill_volume_executed += self.refill_increment;
             }
             (quit_command_received, _, _) = self.process_external_request(
-                water_injection_channels.rx_water_injection_from_signal_handler,
+                &refill_channels.rx_refill_from_signal_handler,
                 None,
             );
             if quit_command_received {
@@ -229,15 +204,11 @@ impl WaterInjectionTrait for WaterInjection {
         }
 
         // command stop of refill pump
-        match water_injection_channels
-            .tx_water_injection_to_relay_manager
-            .send(InternalCommand::SwitchOff(AquariumDevice::RefillPump))
+        match refill_channels.send_to_relay_manager(InternalCommand::SwitchOff(AquariumDevice::RefillPump))
         {
             Ok(_) => {
                 // now listen for the response
-                match water_injection_channels
-                    .rx_water_injection_from_relay_manager
-                    .recv()
+                match refill_channels.receive_from_relay_manager()
                 {
                     Ok(_) => {}
                     Err(e) => {
@@ -283,9 +254,9 @@ pub mod tests {
     use crate::sensors::tank_level_switch::TankLevelSwitchSignals;
     use crate::utilities::channel_content::{ActuatorState, AquariumDevice, InternalCommand};
     use crate::water::refill::tests::prepare_refill_tests;
-    use crate::water::refill::Refill;
+    use crate::water::refill::{Refill, RefillChannels};
     use crate::water::water_injection::{
-        WaterInjection, WaterInjectionChannels, WaterInjectionTrait,
+        WaterInjection, WaterInjectionTrait,
     };
     use all_asserts::{assert_ge, assert_le};
     use spin_sleep::SpinSleeper;
@@ -318,9 +289,9 @@ pub mod tests {
     // # Panics
     // This function will panic if the new thread cannot be spawned, or if any of the `assert_eq!` calls inside the spawned thread fails.
     fn create_assert_test_object(
-        tx_water_injection_to_relay_manager: Sender<InternalCommand>,
-        rx_water_injection_from_relay_manager: Receiver<bool>,
-        rx_water_injection_from_signal_handler: Receiver<InternalCommand>,
+        tx_refill_to_relay_manager: Sender<InternalCommand>,
+        rx_refill_from_relay_manager: Receiver<bool>,
+        rx_refill_from_signal_handler: Receiver<InternalCommand>,
         mut refill: Refill,
         mutex_tank_level_switch_signals: Arc<Mutex<TankLevelSwitchSignals>>,
         target_result: bool,
@@ -331,13 +302,47 @@ pub mod tests {
             .spawn(move || {
                 let mut water_injection = WaterInjection::new(&refill.config);
 
-                let water_injection_channels = WaterInjectionChannels {
-                    tx_water_injection_to_relay_manager: &tx_water_injection_to_relay_manager,
-                    rx_water_injection_from_relay_manager: &rx_water_injection_from_relay_manager,
-                    rx_water_injection_from_signal_handler: &rx_water_injection_from_signal_handler,
+                let (tx_refill_to_signal_handler, _rx_signal_handler_from_refill) = mpsc::channel::<bool>();
+                let (_tx_schedule_check_to_refill, rx_refill_from_schedule_check) = mpsc::channel::<bool>();
+                let (tx_refill_to_schedule_check, _rx_schedule_check_from_refill) =
+                    mpsc::channel::<InternalCommand>();
+                let (tx_refill_to_monitors, _rx_monitors_from_refill) = mpsc::channel();
+                let mut refill_channels = RefillChannels {
+                    tx_refill_to_relay_manager,
+                    #[cfg(feature = "debug_channels")]
+                    cnt_tx_refill_to_relay_manager: 0,
+
+                    rx_refill_from_relay_manager,
+                    #[cfg(feature = "debug_channels")]
+                    cnt_rx_refill_from_relay_manager: 0,
+
+                    tx_refill_to_signal_handler,
+                    #[cfg(feature = "debug_channels")]
+                    cnt_tx_refill_to_signal_handler: 0,
+
+                    rx_refill_from_signal_handler,
+                    #[cfg(feature = "debug_channels")]
+                    cnt_rx_refill_from_signal_handler: 0,
+
+                    tx_refill_to_schedule_check,
+                    #[cfg(feature = "debug_channels")]
+                    cnt_tx_refill_to_schedule_check: 0,
+
+                    rx_refill_from_schedule_check,
+                    #[cfg(feature = "debug_channels")]
+                    cnt_rx_refill_from_schedule_check: 0,
+
+                    rx_refill_from_messaging_opt: None,
+                    #[cfg(feature = "debug_channels")]
+                    cnt_rx_refill_from_messaging_opt: 0,
+
+                    tx_refill_to_monitors,
+                    #[cfg(feature = "debug_channels")]
+                    cnt_tx_refill_to_monitors: 0,
                 };
+
                 let result = water_injection.inject_water(
-                    water_injection_channels,
+                    &mut refill_channels,
                     &mut refill.refill_errors,
                     &mut refill.sql_interface_refill,
                     &mutex_tank_level_switch_signals,
@@ -779,14 +784,18 @@ pub mod tests {
         let (_, mut refill, _) = prepare_refill_tests(None, 2, 60, Some(43));
         let mut water_injection = WaterInjection::new(&refill.config);
 
-        let (tx_water_injection_to_relay_manager, rx_relay_manager_from_water_injection) =
-            mpsc::channel();
-        let (tx_relay_manager_to_water_injection, rx_water_injection_from_relay_manager) =
-            mpsc::channel();
-        let (_tx_signal_handler_to_water_injection, rx_water_injection_from_signal_handler) =
-            mpsc::channel();
+        let (tx_refill_to_relay_manager, rx_relay_manager_from_refill) =
+            mpsc::channel::<InternalCommand>();
+        let (tx_relay_manager_to_refill, rx_refill_from_relay_manager) = mpsc::channel::<bool>();
+        let (_tx_signal_handler_to_refill, rx_refill_from_signal_handler) =
+            mpsc::channel::<InternalCommand>();
+        let (tx_refill_to_signal_handler, _rx_signal_handler_from_refill) = mpsc::channel::<bool>();
+        let (_tx_schedule_check_to_refill, rx_refill_from_schedule_check) = mpsc::channel::<bool>();
+        let (tx_refill_to_schedule_check, _rx_schedule_check_from_refill) =
+            mpsc::channel::<InternalCommand>();
+        let (tx_refill_to_monitors, _rx_monitors_from_refill) = mpsc::channel();
 
-        let tx_signal_handler_to_relay_manager = tx_water_injection_to_relay_manager.clone();
+        let tx_signal_handler_to_relay_manager = tx_refill_to_relay_manager.clone();
 
         let mutex_tank_level_switch_signals =
             Arc::new(Mutex::new(TankLevelSwitchSignals::new(false, false, false)));
@@ -796,8 +805,8 @@ pub mod tests {
             .name("mock_relay_manager".to_string())
             .spawn(move || {
                 let (mut actuation_events, actuator_states) = mock_relay_manager(
-                    &tx_relay_manager_to_water_injection,
-                    &rx_relay_manager_from_water_injection,
+                    &tx_relay_manager_to_refill,
+                    &rx_relay_manager_from_refill,
                 );
                 assert_eq!(actuation_events.len(), 2);
                 let last_actuation_event = actuation_events.pop().unwrap();
@@ -843,13 +852,41 @@ pub mod tests {
         let join_handle_test_object = thread::Builder::new()
             .name("test_object".to_string())
             .spawn(move || {
-                let water_injection_channels = WaterInjectionChannels {
-                    tx_water_injection_to_relay_manager: &tx_water_injection_to_relay_manager,
-                    rx_water_injection_from_relay_manager: &rx_water_injection_from_relay_manager,
-                    rx_water_injection_from_signal_handler: &rx_water_injection_from_signal_handler,
+                let mut refill_channels = RefillChannels {
+                    tx_refill_to_relay_manager,
+                    #[cfg(feature = "debug_channels")]
+                    cnt_tx_refill_to_relay_manager: 0,
+
+                    rx_refill_from_relay_manager,
+                    #[cfg(feature = "debug_channels")]
+                    cnt_rx_refill_from_relay_manager: 0,
+
+                    tx_refill_to_signal_handler,
+                    #[cfg(feature = "debug_channels")]
+                    cnt_tx_refill_to_signal_handler: 0,
+
+                    rx_refill_from_signal_handler,
+                    #[cfg(feature = "debug_channels")]
+                    cnt_rx_refill_from_signal_handler: 0,
+
+                    tx_refill_to_schedule_check,
+                    #[cfg(feature = "debug_channels")]
+                    cnt_tx_refill_to_schedule_check: 0,
+
+                    rx_refill_from_schedule_check,
+                    #[cfg(feature = "debug_channels")]
+                    cnt_rx_refill_from_schedule_check: 0,
+
+                    rx_refill_from_messaging_opt: None,
+                    #[cfg(feature = "debug_channels")]
+                    cnt_rx_refill_from_messaging_opt: 0,
+
+                    tx_refill_to_monitors,
+                    #[cfg(feature = "debug_channels")]
+                    cnt_tx_refill_to_monitors: 0,
                 };
                 let result = water_injection.inject_water(
-                    water_injection_channels,
+                    &mut refill_channels,
                     &mut refill.refill_errors,
                     &mut refill.sql_interface_refill,
                     &mutex_tank_level_switch_signals,
@@ -882,14 +919,18 @@ pub mod tests {
         let (_, mut refill, _) = prepare_refill_tests(None, 10, 60, Some(44));
         let mut water_injection = WaterInjection::new(&refill.config);
 
-        let (tx_water_injection_to_relay_manager, rx_relay_manager_from_water_injection) =
-            mpsc::channel();
-        let (tx_relay_manager_to_water_injection, rx_water_injection_from_relay_manager) =
-            mpsc::channel();
-        let (tx_signal_handler_to_water_injection, rx_water_injection_from_signal_handler) =
-            mpsc::channel();
+        let (tx_refill_to_relay_manager, rx_relay_manager_from_refill) =
+            mpsc::channel::<InternalCommand>();
+        let (tx_relay_manager_to_refill, rx_refill_from_relay_manager) = mpsc::channel::<bool>();
+        let (tx_signal_handler_to_refill, rx_refill_from_signal_handler) =
+            mpsc::channel::<InternalCommand>();
+        let (tx_refill_to_signal_handler, _rx_signal_handler_from_refill) = mpsc::channel::<bool>();
+        let (_tx_schedule_check_to_refill, rx_refill_from_schedule_check) = mpsc::channel::<bool>();
+        let (tx_refill_to_schedule_check, _rx_schedule_check_from_refill) =
+            mpsc::channel::<InternalCommand>();
+        let (tx_refill_to_monitors, _rx_monitors_from_refill) = mpsc::channel();
 
-        let tx_signal_handler_to_relay_manager = tx_water_injection_to_relay_manager.clone();
+        let tx_signal_handler_to_relay_manager = tx_refill_to_relay_manager.clone();
 
         let mutex_tank_level_switch_signals =
             Arc::new(Mutex::new(TankLevelSwitchSignals::new(false, false, false)));
@@ -899,8 +940,8 @@ pub mod tests {
             .name("mock_relay_manager".to_string())
             .spawn(move || {
                 let (mut actuation_events, mock_actuator_states) = mock_relay_manager(
-                    &tx_relay_manager_to_water_injection,
-                    &rx_relay_manager_from_water_injection,
+                    &tx_relay_manager_to_refill,
+                    &rx_relay_manager_from_refill,
                 );
                 assert_eq!(actuation_events.len(), 2);
                 let last_actuation_event = actuation_events.pop().unwrap();
@@ -929,7 +970,7 @@ pub mod tests {
 
         // thread for controlling duration of test run
         let join_handle_test_environment = create_test_environment(
-            tx_signal_handler_to_water_injection,
+            tx_signal_handler_to_refill,
             tx_signal_handler_to_relay_manager,
         );
 
@@ -940,14 +981,43 @@ pub mod tests {
         let join_handle_test_object = thread::Builder::new()
             .name("test_object".to_string())
             .spawn(move || {
-                let water_injection_channels = WaterInjectionChannels {
-                    tx_water_injection_to_relay_manager: &tx_water_injection_to_relay_manager,
-                    rx_water_injection_from_relay_manager: &rx_water_injection_from_relay_manager,
-                    rx_water_injection_from_signal_handler: &rx_water_injection_from_signal_handler,
+                let mut refill_channels = RefillChannels {
+                    tx_refill_to_relay_manager,
+                    #[cfg(feature = "debug_channels")]
+                    cnt_tx_refill_to_relay_manager: 0,
+
+                    rx_refill_from_relay_manager,
+                    #[cfg(feature = "debug_channels")]
+                    cnt_rx_refill_from_relay_manager: 0,
+
+                    tx_refill_to_signal_handler,
+                    #[cfg(feature = "debug_channels")]
+                    cnt_tx_refill_to_signal_handler: 0,
+
+                    rx_refill_from_signal_handler,
+                    #[cfg(feature = "debug_channels")]
+                    cnt_rx_refill_from_signal_handler: 0,
+
+                    tx_refill_to_schedule_check,
+                    #[cfg(feature = "debug_channels")]
+                    cnt_tx_refill_to_schedule_check: 0,
+
+                    rx_refill_from_schedule_check,
+                    #[cfg(feature = "debug_channels")]
+                    cnt_rx_refill_from_schedule_check: 0,
+
+                    rx_refill_from_messaging_opt: None,
+                    #[cfg(feature = "debug_channels")]
+                    cnt_rx_refill_from_messaging_opt: 0,
+
+                    tx_refill_to_monitors,
+                    #[cfg(feature = "debug_channels")]
+                    cnt_tx_refill_to_monitors: 0,
                 };
 
+
                 let result = water_injection.inject_water(
-                    water_injection_channels,
+                    &mut refill_channels,
                     &mut refill.refill_errors,
                     &mut refill.sql_interface_refill,
                     &mutex_tank_level_switch_signals,

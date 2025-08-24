@@ -6,6 +6,7 @@ The above copyright notice and this permission notice shall be included in all c
 
 THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
+#[cfg(not(test))]
 use log::error;
 #[cfg(all(not(test), target_os = "linux"))]
 use log::info;
@@ -47,7 +48,7 @@ pub trait RelayActuationTrait {
     ///
     /// # Errors
     /// Returns a `RelayError` variant if the actuation fails. This could be due to
-    /// various reasons depending on the implementation, such as:
+    /// various reasons depending on the implementation, such as
     /// - A failure to write to a serial port (`WriteError`).
     /// - A corrupt response from the hardware (`IncorrectChecksum`).
     /// - An attempt to use an unsupported command for the given hardware.
@@ -277,7 +278,7 @@ impl RelayManager {
     ///
     /// # Errors
     /// Returns `Err(RelayError::ActuationFailed)` if all attempts (the initial one plus all
-    /// retries) fail. This error is a wrapper that contains detailed context, including:
+    /// retries) fail. This error is a wrapper that contains detailed context, including
     /// - The name of the actuation that failed.
     /// - The total number of attempts made.
     /// - The specific error from the *last* attempt, providing the root cause of the final failure.
@@ -347,7 +348,7 @@ impl RelayManager {
     /// keeping the main loop clean and readable.
     ///
     /// The loop forwards commands to the provided `actuator` and handles graceful shutdown
-    /// when a `Quit` command is received from the signal handler. It also manages sending
+    /// when a `Quit` command is received from the signal handler. It also manages to send
     /// periodic heartbeats to the hardware if required.
     ///
     /// # Arguments
@@ -499,11 +500,12 @@ impl RelayManager {
 
         // Application received request to terminate. That is why the loop was left.
         // Answer to the thread which sent the request for termination, so that shutdown can proceed further.
-        if let Err(e) = relay_manager_channels
+        if let Err(_e) = relay_manager_channels
             .tx_relay_manager_to_signal_handler
             .send(true)
         {
-            error!(target: module_path!(), "Sending confirmation to signal handler failed. ({e:?})");
+            #[cfg(not(test))]
+            error!(target: module_path!(), "Sending confirmation to signal handler failed. ({_e:?})");
         };
     }
 
@@ -520,7 +522,7 @@ impl RelayManager {
     /// # Arguments
     /// * `rx` - The channel for receiving `InternalCommand`s from a control module.
     /// * `tx` - The channel for sending a boolean confirmation back to the control module.
-    /// * `lock_receive` - The current state of the receive error lock flag.
+    /// * `lock_receive` - The current state of the receive-error lock flag.
     /// * `lock_send` - The current state of the send error lock flag.
     /// * `actuation_name` - A descriptive name for the action (e.g., "refill") for logging.
     /// * `actuator` - A mutable reference to the hardware actuator.
@@ -542,28 +544,30 @@ impl RelayManager {
         let (rx, tx) = channels;
         let (mut lock_receive, mut lock_send) = locks;
         match rx.try_recv() {
-            Ok(command) => {
+            Ok(_command) => {
                 lock_receive = false;
                 if self.config.active {
-                    if let Err(actuation_error) = self.actuate_with_retries(
+                    if let Err(_actuation_error) = self.actuate_with_retries(
                         actuator,
-                        &command,
+                        &_command,
                         actuation_name,
                         spin_sleeper,
                         sleep_duration_between_retries,
                     ) {
+                        #[cfg(not(test))]
                         log_error_chain(
                             module_path!(),
                             &format!("Actuation of {actuation_name} failed."),
-                            actuation_error,
+                            _actuation_error,
                         );
                     }
                 }
-                if let Err(e) = tx.send(true) {
+                if let Err(_e) = tx.send(true) {
                     if !lock_send {
+                        #[cfg(not(test))]
                         error!(
                             target: module_path!(),
-                            "responding to {actuation_name} control ({e:?})",
+                            "responding to {actuation_name} control ({_e:?})",
                         );
                         lock_send = true;
                     }
@@ -577,6 +581,7 @@ impl RelayManager {
                 }
                 TryRecvError::Disconnected => {
                     if !lock_receive {
+                        #[cfg(not(test))]
                         error!(
                             "{}: error when trying to receive command from {actuation_name} control ({e:?})",
                             module_path!(),

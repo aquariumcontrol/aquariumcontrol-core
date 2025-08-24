@@ -15,3 +15,9 @@ pub mod distinct_interval_check;
 
 /// Contains functionality to control the ventilation
 pub mod ventilation;
+
+/// Container for the channels of heating control used to communicate with other threads
+pub mod heating_channels;
+
+/// Container for the channels of ventilation control used to communicate with other threads
+mod ventilation_channels;

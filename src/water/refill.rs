@@ -19,7 +19,6 @@ use nix::unistd::gettid;
 
 use serde_derive::Deserialize;
 use spin_sleep::SpinSleeper;
-use std::sync::mpsc::{Receiver, Sender};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
@@ -28,10 +27,11 @@ use crate::log_error_chain;
 use crate::sensors::tank_level_switch::TankLevelSwitchSignals;
 use crate::utilities::channel_content::InternalCommand;
 use crate::utilities::proc_ext_req::ProcessExternalRequestTrait;
+pub(crate) use crate::water::refill_channels::RefillChannels;
 use crate::water::refill_error_states::RefillErrorStates;
 use crate::water::refill_monitor_view::RefillMonitorView;
 use crate::water::refill_stats_data::RefillStatsData;
-use crate::water::water_injection::{WaterInjectionChannels, WaterInjectionTrait};
+use crate::water::water_injection::{WaterInjectionTrait};
 
 /// Holds the configuration data for the refill control.
 /// The configuration is loaded from the .toml configuration file.
@@ -82,33 +82,6 @@ pub struct RefillConfig {
 }
 
 const MILLIS_PER_SEC: u64 = 1000;
-
-/// Struct collects the channels for the communication between the refill control and the other components.
-pub struct RefillChannels {
-    /// Sender part of the channel for communication to relay manager
-    pub tx_refill_to_relay_manager: Sender<InternalCommand>,
-
-    /// Receiver part of the channel for communication from the relay manager
-    pub rx_refill_from_relay_manager: Receiver<bool>,
-
-    /// Sender part of the channel for communication to the signal handler
-    pub tx_refill_to_signal_handler: Sender<bool>,
-
-    /// Receiver part of the channel for communication from the signal handler
-    pub rx_refill_from_signal_handler: Receiver<InternalCommand>,
-
-    /// Sender part of the channel for communication to the schedule checker
-    pub tx_refill_to_schedule_check: Sender<InternalCommand>,
-
-    /// Receiver part of the channel for communication from the schedule checker
-    pub rx_refill_from_schedule_check: Receiver<bool>,
-
-    /// Receiver part of the channel for communication from the messaging
-    pub rx_refill_from_messaging_opt: Option<Receiver<InternalCommand>>,
-
-    /// Sender part of the channel for communication to the monitors
-    pub tx_refill_to_monitors: Sender<RefillMonitorView>,
-}
 
 /// Struct contains the status of the refill control for communication to the data logger.
 pub struct RefillStatus {
@@ -563,7 +536,7 @@ impl Refill {
     fn check_volume_count_time_limits(
         &mut self,
         sql_refill_data: &RefillStatsData,
-        tx_refill_to_monitors: &Sender<RefillMonitorView>,
+        refill_channels: &mut RefillChannels
     ) -> bool {
         #[cfg(feature = "debug_refill")]
         debug!(
@@ -664,7 +637,7 @@ impl Refill {
             refill_check_interval_last_refill,
         };
 
-        match tx_refill_to_monitors.send(refill_monitor_view) {
+        match refill_channels.send_to_monitor(refill_monitor_view) {
             Ok(_) => {
                 self.lock_error_channel_send_monitors = false;
             }
@@ -693,20 +666,18 @@ impl Refill {
     /// despite the communication issue. It uses internal lock flags to prevent log flooding from recurring errors.
     ///
     /// # Arguments
-    /// * `tx_refill_to_schedule_check` - A reference to the **sender channel** for sending `InternalCommand::ScheduleCheck` to the `ScheduleCheck` module.
-    /// * `rx_refill_from_schedule_check` - A reference to the **receiver channel** for getting the boolean result (`true` if allowed, `false` if inhibited) back from the `ScheduleCheck` module.
+    /// * `refill_channels` - A mutable reference to the struct containing the channels
     ///
     /// # Returns
     /// `true` if actuation is allowed by the schedule checker (or if communication fails, leading to a fail-safe `true`); `false` otherwise.
     fn check_schedule(
         &mut self,
-        tx_refill_to_schedule_check: &Sender<InternalCommand>,
-        rx_refill_from_schedule_check: &Receiver<bool>,
+        refill_channels: &mut RefillChannels,
     ) -> bool {
-        match tx_refill_to_schedule_check.send(InternalCommand::ScheduleCheck) {
+        match refill_channels.send_to_schedule_check(InternalCommand::ScheduleCheck) {
             Ok(_) => {
                 self.lock_error_channel_send_schedule_check = false;
-                match rx_refill_from_schedule_check.recv() {
+                match refill_channels.receive_from_schedule_check() {
                     Ok(c) => {
                         self.lock_error_channel_receive_schedule_check = false;
                         c
@@ -768,7 +739,7 @@ impl Refill {
     pub fn execute(
         &mut self,
         mutex_device_scheduler_refill: Arc<Mutex<i32>>,
-        refill_channels: RefillChannels,
+        refill_channels: &mut RefillChannels,
         water_injection: &mut impl WaterInjectionTrait,
         mutex_tank_level_switch_signals_clone_for_refill: Arc<Mutex<TankLevelSwitchSignals>>,
         mutex_refill_status: Arc<Mutex<RefillStatus>>,
@@ -881,14 +852,13 @@ impl Refill {
                     // execute checks before initiating refill
                     if !self.check_volume_count_time_limits(
                         &refill_stats_data,
-                        &refill_channels.tx_refill_to_monitors,
+                        refill_channels
                     ) && !self.refill_errors.error_switch_stuck_low
                         && !self.refill_errors.error_sql_update_failed
                         && !self.refill_errors.error_sql_get_historic_data_failed
                     {
                         schedule_check_result = self.check_schedule(
-                            &refill_channels.tx_refill_to_schedule_check,
-                            &refill_channels.rx_refill_from_schedule_check,
+                            refill_channels
                         );
 
                         if schedule_check_result
@@ -912,15 +882,6 @@ impl Refill {
                                 mutex_data
                             );
 
-                            let water_injection_channels = WaterInjectionChannels {
-                                tx_water_injection_to_relay_manager: &refill_channels
-                                    .tx_refill_to_relay_manager,
-                                rx_water_injection_from_relay_manager: &refill_channels
-                                    .rx_refill_from_relay_manager,
-                                rx_water_injection_from_signal_handler: &refill_channels
-                                    .rx_refill_from_signal_handler,
-                            };
-
                             {
                                 // internal scope to limit lifetime of mutex lock
                                 match mutex_refill_status.lock() {
@@ -939,7 +900,7 @@ impl Refill {
                             }
 
                             quit_command_received = water_injection.inject_water(
-                                water_injection_channels,
+                                refill_channels,
                                 &mut self.refill_errors,
                                 &mut self.sql_interface_refill,
                                 &mutex_tank_level_switch_signals_clone_for_refill,
@@ -1461,20 +1422,43 @@ pub mod tests {
                 let tx_refill_to_schedule_check_for_test_case_finish =
                     tx_refill_to_schedule_check.clone();
 
-                let refill_channels = RefillChannels {
+                let mut refill_channels = RefillChannels {
                     tx_refill_to_relay_manager,
+                    #[cfg(feature = "debug_channels")]
+                    cnt_tx_refill_to_relay_manager: 0,
+
                     rx_refill_from_relay_manager,
+                    #[cfg(feature = "debug_channels")]
+                    cnt_rx_refill_from_relay_manager: 0,
+
                     tx_refill_to_signal_handler,
+                    #[cfg(feature = "debug_channels")]
+                    cnt_tx_refill_to_signal_handler: 0,
+
                     rx_refill_from_signal_handler,
+                    #[cfg(feature = "debug_channels")]
+                    cnt_rx_refill_from_signal_handler: 0,
+
                     tx_refill_to_schedule_check,
+                    #[cfg(feature = "debug_channels")]
+                    cnt_tx_refill_to_schedule_check: 0,
+
                     rx_refill_from_schedule_check,
+                    #[cfg(feature = "debug_channels")]
+                    cnt_rx_refill_from_schedule_check: 0,
+
                     rx_refill_from_messaging_opt: None,
+                    #[cfg(feature = "debug_channels")]
+                    cnt_rx_refill_from_messaging_opt: 0,
+
                     tx_refill_to_monitors,
+                    #[cfg(feature = "debug_channels")]
+                    cnt_tx_refill_to_monitors: 0,
                 };
 
                 refill.execute(
                     mutex_device_scheduler,
-                    refill_channels,
+                    &mut refill_channels,
                     &mut mock_water_injection,
                     mutex_tank_level_switch_signals_for_refill,
                     mutex_refill_status,
@@ -1626,20 +1610,43 @@ pub mod tests {
                 let tx_refill_to_schedule_check_for_test_case_finish =
                     tx_refill_to_schedule_check.clone();
 
-                let refill_channels = RefillChannels {
+                let mut refill_channels = RefillChannels {
                     tx_refill_to_relay_manager,
+                    #[cfg(feature = "debug_channels")]
+                    cnt_tx_refill_to_relay_manager: 0,
+
                     rx_refill_from_relay_manager,
+                    #[cfg(feature = "debug_channels")]
+                    cnt_rx_refill_from_relay_manager: 0,
+
                     tx_refill_to_signal_handler,
+                    #[cfg(feature = "debug_channels")]
+                    cnt_tx_refill_to_signal_handler: 0,
+
                     rx_refill_from_signal_handler,
+                    #[cfg(feature = "debug_channels")]
+                    cnt_rx_refill_from_signal_handler: 0,
+
                     tx_refill_to_schedule_check,
+                    #[cfg(feature = "debug_channels")]
+                    cnt_tx_refill_to_schedule_check: 0,
+
                     rx_refill_from_schedule_check,
+                    #[cfg(feature = "debug_channels")]
+                    cnt_rx_refill_from_schedule_check: 0,
+
                     rx_refill_from_messaging_opt: None,
+                    #[cfg(feature = "debug_channels")]
+                    cnt_rx_refill_from_messaging_opt: 0,
+
                     tx_refill_to_monitors,
+                    #[cfg(feature = "debug_channels")]
+                    cnt_tx_refill_to_monitors: 0,
                 };
 
                 refill.execute(
                     mutex_device_scheduler,
-                    refill_channels,
+                    &mut refill_channels,
                     &mut mock_water_injection,
                     mutex_tank_level_switch_signals,
                     mutex_refill_status,
@@ -1792,20 +1799,43 @@ pub mod tests {
                 let tx_refill_to_schedule_check_for_test_case_finish =
                     tx_refill_to_schedule_check.clone();
 
-                let refill_channels = RefillChannels {
+                let mut refill_channels = RefillChannels {
                     tx_refill_to_relay_manager,
+                    #[cfg(feature = "debug_channels")]
+                    cnt_tx_refill_to_relay_manager: 0,
+
                     rx_refill_from_relay_manager,
+                    #[cfg(feature = "debug_channels")]
+                    cnt_rx_refill_from_relay_manager: 0,
+
                     tx_refill_to_signal_handler,
+                    #[cfg(feature = "debug_channels")]
+                    cnt_tx_refill_to_signal_handler: 0,
+
                     rx_refill_from_signal_handler,
+                    #[cfg(feature = "debug_channels")]
+                    cnt_rx_refill_from_signal_handler: 0,
+
                     tx_refill_to_schedule_check,
+                    #[cfg(feature = "debug_channels")]
+                    cnt_tx_refill_to_schedule_check: 0,
+
                     rx_refill_from_schedule_check,
+                    #[cfg(feature = "debug_channels")]
+                    cnt_rx_refill_from_schedule_check: 0,
+
                     rx_refill_from_messaging_opt: None,
+                    #[cfg(feature = "debug_channels")]
+                    cnt_rx_refill_from_messaging_opt: 0,
+
                     tx_refill_to_monitors,
+                    #[cfg(feature = "debug_channels")]
+                    cnt_tx_refill_to_monitors: 0,
                 };
 
                 refill.execute(
                     mutex_device_scheduler,
-                    refill_channels,
+                    &mut refill_channels,
                     &mut mock_water_injection,
                     mutex_tank_level_switch_signals,
                     mutex_refill_status,
@@ -1989,20 +2019,43 @@ pub mod tests {
                 let tx_refill_to_schedule_check_for_test_case_finish =
                     tx_refill_to_schedule_check.clone();
 
-                let refill_channels = RefillChannels {
+                let mut refill_channels = RefillChannels {
                     tx_refill_to_relay_manager,
+                    #[cfg(feature = "debug_channels")]
+                    cnt_tx_refill_to_relay_manager: 0,
+
                     rx_refill_from_relay_manager,
+                    #[cfg(feature = "debug_channels")]
+                    cnt_rx_refill_from_relay_manager: 0,
+
                     tx_refill_to_signal_handler,
+                    #[cfg(feature = "debug_channels")]
+                    cnt_tx_refill_to_signal_handler: 0,
+
                     rx_refill_from_signal_handler,
+                    #[cfg(feature = "debug_channels")]
+                    cnt_rx_refill_from_signal_handler: 0,
+
                     tx_refill_to_schedule_check,
+                    #[cfg(feature = "debug_channels")]
+                    cnt_tx_refill_to_schedule_check: 0,
+
                     rx_refill_from_schedule_check,
+                    #[cfg(feature = "debug_channels")]
+                    cnt_rx_refill_from_schedule_check: 0,
+
                     rx_refill_from_messaging_opt: Some(rx_refill_from_messaging),
+                    #[cfg(feature = "debug_channels")]
+                    cnt_rx_refill_from_messaging_opt: 0,
+
                     tx_refill_to_monitors,
+                    #[cfg(feature = "debug_channels")]
+                    cnt_tx_refill_to_monitors: 0,
                 };
 
                 refill.execute(
                     mutex_device_scheduler,
-                    refill_channels,
+                    &mut refill_channels,
                     &mut mock_water_injection,
                     mutex_tank_level_switch_signals,
                     mutex_refill_status,
@@ -2155,20 +2208,43 @@ pub mod tests {
                 let tx_refill_to_schedule_check_for_test_case_finish =
                     tx_refill_to_schedule_check.clone();
 
-                let refill_channels = RefillChannels {
+                let mut refill_channels = RefillChannels {
                     tx_refill_to_relay_manager,
+                    #[cfg(feature = "debug_channels")]
+                    cnt_tx_refill_to_relay_manager: 0,
+
                     rx_refill_from_relay_manager,
+                    #[cfg(feature = "debug_channels")]
+                    cnt_rx_refill_from_relay_manager: 0,
+
                     tx_refill_to_signal_handler,
+                    #[cfg(feature = "debug_channels")]
+                    cnt_tx_refill_to_signal_handler: 0,
+
                     rx_refill_from_signal_handler,
+                    #[cfg(feature = "debug_channels")]
+                    cnt_rx_refill_from_signal_handler: 0,
+
                     tx_refill_to_schedule_check,
+                    #[cfg(feature = "debug_channels")]
+                    cnt_tx_refill_to_schedule_check: 0,
+
                     rx_refill_from_schedule_check,
+                    #[cfg(feature = "debug_channels")]
+                    cnt_rx_refill_from_schedule_check: 0,
+
                     rx_refill_from_messaging_opt: None,
+                    #[cfg(feature = "debug_channels")]
+                    cnt_rx_refill_from_messaging_opt: 0,
+
                     tx_refill_to_monitors,
+                    #[cfg(feature = "debug_channels")]
+                    cnt_tx_refill_to_monitors: 0,
                 };
 
                 refill.execute(
                     mutex_device_scheduler,
-                    refill_channels,
+                    &mut refill_channels,
                     &mut mock_water_injection,
                     mutex_tank_level_switch_signals,
                     mutex_refill_status,
@@ -2331,20 +2407,43 @@ pub mod tests {
                 let tx_refill_to_schedule_check_for_test_case_finish =
                     tx_refill_to_schedule_check.clone();
 
-                let refill_channels = RefillChannels {
+                let mut refill_channels = RefillChannels {
                     tx_refill_to_relay_manager,
+                    #[cfg(feature = "debug_channels")]
+                    cnt_tx_refill_to_relay_manager: 0,
+
                     rx_refill_from_relay_manager,
+                    #[cfg(feature = "debug_channels")]
+                    cnt_rx_refill_from_relay_manager: 0,
+
                     tx_refill_to_signal_handler,
+                    #[cfg(feature = "debug_channels")]
+                    cnt_tx_refill_to_signal_handler: 0,
+
                     rx_refill_from_signal_handler,
+                    #[cfg(feature = "debug_channels")]
+                    cnt_rx_refill_from_signal_handler: 0,
+
                     tx_refill_to_schedule_check,
+                    #[cfg(feature = "debug_channels")]
+                    cnt_tx_refill_to_schedule_check: 0,
+
                     rx_refill_from_schedule_check,
+                    #[cfg(feature = "debug_channels")]
+                    cnt_rx_refill_from_schedule_check: 0,
+
                     rx_refill_from_messaging_opt: Some(rx_refill_from_messaging),
+                    #[cfg(feature = "debug_channels")]
+                    cnt_rx_refill_from_messaging_opt: 0,
+
                     tx_refill_to_monitors,
+                    #[cfg(feature = "debug_channels")]
+                    cnt_tx_refill_to_monitors: 0,
                 };
 
                 refill.execute(
                     mutex_device_scheduler,
-                    refill_channels,
+                    &mut refill_channels,
                     &mut mock_water_injection,
                     mutex_tank_level_switch_signals,
                     mutex_refill_status,
@@ -2497,20 +2596,43 @@ pub mod tests {
                 let tx_refill_to_schedule_check_for_test_case_finish =
                     tx_refill_to_schedule_check.clone();
 
-                let refill_channels = RefillChannels {
+                let mut refill_channels = RefillChannels {
                     tx_refill_to_relay_manager,
+                    #[cfg(feature = "debug_channels")]
+                    cnt_tx_refill_to_relay_manager: 0,
+
                     rx_refill_from_relay_manager,
+                    #[cfg(feature = "debug_channels")]
+                    cnt_rx_refill_from_relay_manager: 0,
+
                     tx_refill_to_signal_handler,
+                    #[cfg(feature = "debug_channels")]
+                    cnt_tx_refill_to_signal_handler: 0,
+
                     rx_refill_from_signal_handler,
+                    #[cfg(feature = "debug_channels")]
+                    cnt_rx_refill_from_signal_handler: 0,
+
                     tx_refill_to_schedule_check,
+                    #[cfg(feature = "debug_channels")]
+                    cnt_tx_refill_to_schedule_check: 0,
+
                     rx_refill_from_schedule_check,
+                    #[cfg(feature = "debug_channels")]
+                    cnt_rx_refill_from_schedule_check: 0,
+
                     rx_refill_from_messaging_opt: None,
+                    #[cfg(feature = "debug_channels")]
+                    cnt_rx_refill_from_messaging_opt: 0,
+
                     tx_refill_to_monitors,
+                    #[cfg(feature = "debug_channels")]
+                    cnt_tx_refill_to_monitors: 0,
                 };
 
                 refill.execute(
                     mutex_device_scheduler,
-                    refill_channels,
+                    &mut refill_channels,
                     &mut mock_water_injection,
                     mutex_tank_level_switch_signals,
                     mutex_refill_status,
@@ -2706,20 +2828,43 @@ pub mod tests {
                 let tx_refill_to_schedule_check_for_test_case_finish =
                     tx_refill_to_schedule_check.clone();
 
-                let refill_channels = RefillChannels {
+                let mut refill_channels = RefillChannels {
                     tx_refill_to_relay_manager,
+                    #[cfg(feature = "debug_channels")]
+                    cnt_tx_refill_to_relay_manager: 0,
+
                     rx_refill_from_relay_manager,
+                    #[cfg(feature = "debug_channels")]
+                    cnt_rx_refill_from_relay_manager: 0,
+
                     tx_refill_to_signal_handler,
+                    #[cfg(feature = "debug_channels")]
+                    cnt_tx_refill_to_signal_handler: 0,
+
                     rx_refill_from_signal_handler,
+                    #[cfg(feature = "debug_channels")]
+                    cnt_rx_refill_from_signal_handler: 0,
+
                     tx_refill_to_schedule_check,
+                    #[cfg(feature = "debug_channels")]
+                    cnt_tx_refill_to_schedule_check: 0,
+
                     rx_refill_from_schedule_check,
+                    #[cfg(feature = "debug_channels")]
+                    cnt_rx_refill_from_schedule_check: 0,
+
                     rx_refill_from_messaging_opt: Some(rx_refill_from_messaging),
+                    #[cfg(feature = "debug_channels")]
+                    cnt_rx_refill_from_messaging_opt: 0,
+
                     tx_refill_to_monitors,
+                    #[cfg(feature = "debug_channels")]
+                    cnt_tx_refill_to_monitors: 0,
                 };
 
                 refill.execute(
                     mutex_device_scheduler,
-                    refill_channels,
+                    &mut refill_channels,
                     &mut mock_water_injection,
                     mutex_tank_level_switch_signals,
                     mutex_refill_status,
@@ -2866,20 +3011,43 @@ pub mod tests {
                 let tx_refill_to_schedule_check_for_test_case_finish =
                     tx_refill_to_schedule_check.clone();
 
-                let refill_channels = RefillChannels {
+                let mut refill_channels = RefillChannels {
                     tx_refill_to_relay_manager,
+                    #[cfg(feature = "debug_channels")]
+                    cnt_tx_refill_to_relay_manager: 0,
+
                     rx_refill_from_relay_manager,
+                    #[cfg(feature = "debug_channels")]
+                    cnt_rx_refill_from_relay_manager: 0,
+
                     tx_refill_to_signal_handler,
+                    #[cfg(feature = "debug_channels")]
+                    cnt_tx_refill_to_signal_handler: 0,
+
                     rx_refill_from_signal_handler,
+                    #[cfg(feature = "debug_channels")]
+                    cnt_rx_refill_from_signal_handler: 0,
+
                     tx_refill_to_schedule_check,
+                    #[cfg(feature = "debug_channels")]
+                    cnt_tx_refill_to_schedule_check: 0,
+
                     rx_refill_from_schedule_check,
+                    #[cfg(feature = "debug_channels")]
+                    cnt_rx_refill_from_schedule_check: 0,
+
                     rx_refill_from_messaging_opt: None,
+                    #[cfg(feature = "debug_channels")]
+                    cnt_rx_refill_from_messaging_opt: 0,
+
                     tx_refill_to_monitors,
+                    #[cfg(feature = "debug_channels")]
+                    cnt_tx_refill_to_monitors: 0,
                 };
 
                 refill.execute(
                     mutex_device_scheduler,
-                    refill_channels,
+                    &mut refill_channels,
                     &mut mock_water_injection,
                     mutex_tank_level_switch_signals,
                     mutex_refill_status,
@@ -2921,6 +3089,44 @@ pub mod tests {
         let (tx_refill_to_monitors, rx_monitors_from_refill) = mpsc::channel();
         let (tx_test_environment_to_monitors, rx_monitors_from_test_environment) =
             mpsc::channel::<InternalCommand>();
+        let (tx_dummy1, rx_dummy1) = mpsc::channel();
+        let (tx_dummy2, rx_dummy2) = mpsc::channel();
+        let (tx_dummy3, _rx_dummy3) = mpsc::channel();
+        let (_tx_dummy4, rx_dummy4) = mpsc::channel();
+
+        let mut refill_channels = RefillChannels {
+            tx_refill_to_relay_manager: tx_dummy1,
+            #[cfg(feature = "debug_channels")]
+            cnt_tx_refill_to_relay_manager: 0,
+
+            rx_refill_from_relay_manager: rx_dummy2,
+            #[cfg(feature = "debug_channels")]
+            cnt_rx_refill_from_relay_manager: 0,
+
+            tx_refill_to_signal_handler: tx_dummy2,
+            #[cfg(feature = "debug_channels")]
+            cnt_tx_refill_to_signal_handler: 0,
+
+            rx_refill_from_signal_handler: rx_dummy1,
+            #[cfg(feature = "debug_channels")]
+            cnt_rx_refill_from_signal_handler: 0,
+
+            tx_refill_to_schedule_check: tx_dummy3,
+            #[cfg(feature = "debug_channels")]
+            cnt_tx_refill_to_schedule_check: 0,
+
+            rx_refill_from_schedule_check: rx_dummy4,
+            #[cfg(feature = "debug_channels")]
+            cnt_rx_refill_from_schedule_check: 0,
+
+            rx_refill_from_messaging_opt: None,
+            #[cfg(feature = "debug_channels")]
+            cnt_rx_refill_from_messaging_opt: 0,
+
+            tx_refill_to_monitors,
+            #[cfg(feature = "debug_channels")]
+            cnt_tx_refill_to_monitors: 0,
+        };
 
         // thread for mock monitors
         let join_handle_mock_monitors = thread::Builder::new()
@@ -2962,7 +3168,7 @@ pub mod tests {
 
         // first execution without any errors
         assert_eq!(
-            refill.check_volume_count_time_limits(&sql_refill_stats_data, &tx_refill_to_monitors),
+            refill.check_volume_count_time_limits(&sql_refill_stats_data, &mut refill_channels),
             false
         );
         spin_sleeper.sleep(sleep_duration_200_millis);
@@ -2971,7 +3177,7 @@ pub mod tests {
         sql_refill_stats_data.refill_count_last_24h = config.refill.max_refill_count_24h + 1;
 
         assert_eq!(
-            refill.check_volume_count_time_limits(&sql_refill_stats_data, &tx_refill_to_monitors),
+            refill.check_volume_count_time_limits(&sql_refill_stats_data, &mut refill_channels),
             true
         );
         spin_sleeper.sleep(sleep_duration_200_millis);
@@ -2981,7 +3187,7 @@ pub mod tests {
         sql_refill_stats_data.refill_count_last_hour = config.refill.max_refill_count_hour + 1;
 
         assert_eq!(
-            refill.check_volume_count_time_limits(&sql_refill_stats_data, &tx_refill_to_monitors),
+            refill.check_volume_count_time_limits(&sql_refill_stats_data, &mut refill_channels),
             true
         );
         spin_sleeper.sleep(sleep_duration_200_millis);
@@ -2991,7 +3197,7 @@ pub mod tests {
         sql_refill_stats_data.refill_volume_last_24h = config.refill.max_refill_volume_24h + 1.0;
 
         assert_eq!(
-            refill.check_volume_count_time_limits(&sql_refill_stats_data, &tx_refill_to_monitors),
+            refill.check_volume_count_time_limits(&sql_refill_stats_data, &mut refill_channels),
             true
         );
         spin_sleeper.sleep(sleep_duration_200_millis);
@@ -3001,7 +3207,7 @@ pub mod tests {
         sql_refill_stats_data.refill_volume_last_hour = config.refill.max_refill_volume_hour + 1.0;
 
         assert_eq!(
-            refill.check_volume_count_time_limits(&sql_refill_stats_data, &tx_refill_to_monitors),
+            refill.check_volume_count_time_limits(&sql_refill_stats_data, &mut refill_channels),
             true
         );
         spin_sleeper.sleep(sleep_duration_200_millis);
@@ -3012,7 +3218,7 @@ pub mod tests {
             config.refill.min_interval_last_refill - 1;
 
         assert_eq!(
-            refill.check_volume_count_time_limits(&sql_refill_stats_data, &tx_refill_to_monitors),
+            refill.check_volume_count_time_limits(&sql_refill_stats_data, &mut refill_channels),
             true
         );
         spin_sleeper.sleep(sleep_duration_200_millis);
@@ -3021,7 +3227,7 @@ pub mod tests {
         sql_refill_stats_data.duration_since_last_refill =
             config.refill.min_interval_last_refill + 1;
         assert_eq!(
-            refill.check_volume_count_time_limits(&sql_refill_stats_data, &tx_refill_to_monitors),
+            refill.check_volume_count_time_limits(&sql_refill_stats_data, &mut refill_channels),
             false
         );
         spin_sleeper.sleep(sleep_duration_200_millis);

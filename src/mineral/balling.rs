@@ -18,11 +18,11 @@ use nix::unistd::gettid;
 
 use serde_derive::Deserialize;
 use spin_sleep::SpinSleeper;
-use std::sync::mpsc::{Receiver, Sender};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
 use crate::database::sql_interface_balling::{BallingSetVal, SqlInterfaceBalling};
+pub(crate) use crate::mineral::balling_channels::BallingChannels;
 use crate::mineral::balling_error::BallingError;
 use crate::mineral::mineral_injection::MineralInjectionTrait;
 use crate::utilities::channel_content::{AquariumDevice, InternalCommand};
@@ -65,30 +65,6 @@ pub struct BallingConfig {
 
     /// wait for a fixed period between dosings from different pumps
     pub pump_switch_delay_millis: u32,
-}
-
-/// Container for the channels used by Balling for inter-thread communication
-pub struct BallingChannels {
-    /// sender part of the channel for communication to relay manager
-    pub tx_balling_to_relay_manager: Sender<InternalCommand>,
-
-    /// receiver part of the channel for communication from the relay manager
-    pub rx_balling_from_relay_manager: Receiver<bool>,
-
-    /// sender part of the channel for communication to the signal handler
-    pub tx_balling_to_signal_handler: Sender<bool>,
-
-    /// receiver part of the channel for communication from the signal handler                
-    pub rx_balling_from_signal_handler: Receiver<InternalCommand>,
-
-    /// sender part of the channel for communication to the schedule checker
-    pub tx_balling_to_schedule_check: Sender<InternalCommand>,
-
-    /// receiver part of the channel for communication from the schedule checker
-    pub rx_balling_from_schedule_check: Receiver<bool>,
-
-    /// receiver part of the channel communication wrapped in Option from Messaging
-    pub rx_balling_from_messaging_opt: Option<Receiver<InternalCommand>>,
 }
 
 #[cfg_attr(doc, aquamarine::aquamarine)]
@@ -352,7 +328,7 @@ impl Balling {
         }
     }
 
-    // Calculates the remaining time (countdown) until the next scheduled dosing for a specific pump.
+    /// Calculates the remaining time (countdown) until the next scheduled dosing for a specific pump.
     ///
     /// This function determines how many seconds are left until a pump's next dosing event.
     /// It retrieves the target interval from the configuration and the elapsed time since the
@@ -497,9 +473,7 @@ impl Balling {
     ///   representing the physical device.
     /// * `mineral_injection` - A mutable reference to an object implementing `MineralInjectionTrait`,
     ///   responsible for the physical control of the pump.
-    /// * `rx_balling_from_signal_handler` - The receiver channel for listening to signals (like `Quit`) from the signal handler.
-    /// * `tx_balling_to_relay_manager` - The sender channel for sending commands to the relay manager (Controllino).
-    /// * `rx_balling_from_relay_manager` - The receiver channel for receiving acknowledgments from the relay manager.
+    /// * `balling_channels` - A mutable reference to `BallingChannels` struct containing all necessary `mpsc`
     ///
     /// # Returns
     /// A `bool` which is `true` if a `Quit` command was received from the signal handler
@@ -509,9 +483,7 @@ impl Balling {
         pump_id: u32,
         pump_device: AquariumDevice,
         mineral_injection: &mut impl MineralInjectionTrait,
-        rx_balling_from_signal_handler: &Receiver<InternalCommand>,
-        tx_balling_to_relay_manager: &Sender<InternalCommand>,
-        rx_balling_from_relay_manager: &Receiver<bool>,
+        balling_channels: &mut BallingChannels
     ) -> bool {
         let mut quit_command_received: bool = false;
         let actual_dosing_duration_millis: u32;
@@ -535,9 +507,7 @@ impl Balling {
                 if dosing_duration_millis > 0 {
                     (quit_command_received, actual_dosing_duration_millis) = mineral_injection
                         .inject_mineral(
-                            tx_balling_to_relay_manager,
-                            rx_balling_from_relay_manager,
-                            rx_balling_from_signal_handler,
+                            balling_channels,
                             pump_device,
                             dosing_duration_millis,
                         );
@@ -606,7 +576,7 @@ impl Balling {
     /// * `mutex_device_scheduler_balling` - An `Arc<Mutex<i32>>` used for coordinating
     ///   access to device scheduling, preventing parallel actuation across different
     ///   control modules. It holds a counter of the completed actuation.
-    /// * `balling_channels` - A `BallingChannels` struct containing all necessary `mpsc`
+    /// * `balling_channels` - A mutable reference to `BallingChannels` struct containing all necessary `mpsc`
     ///   sender and receiver channels for inter-thread communication (e.g., with
     ///   the signal handler, relay manager, and schedule checker).
     /// * `mineral_injection` - A mutable reference to an object implementing the
@@ -614,7 +584,7 @@ impl Balling {
     pub fn execute(
         &mut self,
         mutex_device_scheduler_balling: Arc<Mutex<i32>>,
-        balling_channels: BallingChannels,
+        balling_channels: &mut BallingChannels,
         mineral_injection: &mut impl MineralInjectionTrait,
     ) {
         #[cfg(all(target_os = "linux", not(test)))]
@@ -639,15 +609,11 @@ impl Balling {
                 // and the monitoring period has passed (usually every 60 seconds)
 
                 // schedule check to see if actuation is allowed
-                match balling_channels
-                    .tx_balling_to_schedule_check
-                    .send(InternalCommand::ScheduleCheck)
+                match balling_channels.send_to_schedule_check(InternalCommand::ScheduleCheck)
                 {
                     Ok(_) => {
                         // now listen for the response
-                        schedule_check_result = match balling_channels
-                            .rx_balling_from_schedule_check
-                            .recv()
+                        schedule_check_result = match balling_channels.receive_from_schedule_check()
                         {
                             Ok(c) => {
                                 self.lock_error_channel_receive_schedule_check = false;
@@ -699,9 +665,7 @@ impl Balling {
                                 1,
                                 AquariumDevice::PeristalticPump1,
                                 mineral_injection,
-                                &balling_channels.rx_balling_from_signal_handler,
-                                &balling_channels.tx_balling_to_relay_manager,
-                                &balling_channels.rx_balling_from_relay_manager,
+                                balling_channels,
                             );
                             *mutex_data = mutex_data.saturating_add(1);
                         }
@@ -728,9 +692,7 @@ impl Balling {
                                 2,
                                 AquariumDevice::PeristalticPump2,
                                 mineral_injection,
-                                &balling_channels.rx_balling_from_signal_handler,
-                                &balling_channels.tx_balling_to_relay_manager,
-                                &balling_channels.rx_balling_from_relay_manager,
+                                balling_channels
                             );
                             *mutex_data = mutex_data.saturating_add(1);
                         }
@@ -757,9 +719,7 @@ impl Balling {
                                 3,
                                 AquariumDevice::PeristalticPump3,
                                 mineral_injection,
-                                &balling_channels.rx_balling_from_signal_handler,
-                                &balling_channels.tx_balling_to_relay_manager,
-                                &balling_channels.rx_balling_from_relay_manager,
+                                balling_channels
                             );
                             *mutex_data = mutex_data.saturating_add(1);
                         }
@@ -786,9 +746,7 @@ impl Balling {
                                 4,
                                 AquariumDevice::PeristalticPump4,
                                 mineral_injection,
-                                &balling_channels.rx_balling_from_signal_handler,
-                                &balling_channels.tx_balling_to_relay_manager,
-                                &balling_channels.rx_balling_from_relay_manager,
+                                balling_channels
                             );
                             *mutex_data = mutex_data.saturating_add(1);
                         }
@@ -830,9 +788,7 @@ impl Balling {
                                 pump_id,
                                 pump_device,
                                 mineral_injection,
-                                &balling_channels.rx_balling_from_signal_handler,
-                                &balling_channels.tx_balling_to_relay_manager,
-                                &balling_channels.rx_balling_from_relay_manager,
+                                balling_channels
                             );
                             *mutex_data = mutex_data.saturating_add(1);
                         }
@@ -888,7 +844,7 @@ impl Balling {
         }
         // The application received the request to terminate. That is why the loop was left.
         // Answer to the thread which sent the request for termination, so that shutdown can proceed further.
-        match balling_channels.tx_balling_to_signal_handler.send(true) {
+        match balling_channels.send_to_signal_handler(true) {
             Ok(()) => {}
             Err(e) => {
                 error!(
@@ -904,7 +860,7 @@ impl Balling {
         let mut termination_command_received = false;
         while !termination_command_received {
             termination_command_received =
-                match balling_channels.rx_balling_from_signal_handler.recv() {
+                match balling_channels.receive_from_signal_handler() {
                     Ok(c) => {
                         self.lock_error_channel_receive_termination_signal = false;
                         match c {
@@ -1380,19 +1336,39 @@ pub mod tests {
                 let tx_balling_to_schedule_check_for_test_case_finish =
                     tx_balling_to_schedule_check.clone();
 
-                let balling_channels = BallingChannels {
+                let mut balling_channels = BallingChannels {
                     tx_balling_to_relay_manager,
+                    #[cfg(feature = "debug_channels")]
+                    cnt_tx_balling_to_relay_manager: 0,
+
                     rx_balling_from_relay_manager,
+                    #[cfg(feature = "debug_channels")]
+                    cnt_rx_balling_from_relay_manager: 0,
+
                     tx_balling_to_signal_handler,
+                    #[cfg(feature = "debug_channels")]
+                    cnt_tx_balling_to_signal_handler: 0,
+
                     rx_balling_from_signal_handler,
+                    #[cfg(feature = "debug_channels")]
+                    cnt_rx_balling_from_signal_handler: 0,
+
                     tx_balling_to_schedule_check,
+                    #[cfg(feature = "debug_channels")]
+                    cnt_tx_balling_to_schedule_check: 0,
+
                     rx_balling_from_schedule_check,
+                    #[cfg(feature = "debug_channels")]
+                    cnt_rx_balling_from_schedule_check: 0,
+
                     rx_balling_from_messaging_opt: None,
+                    #[cfg(feature = "debug_channels")]
+                    cnt_rx_balling_from_messaging_opt: 0,
                 };
 
                 balling.execute(
                     mutex_device_scheduler,
-                    balling_channels,
+                    &mut balling_channels,
                     &mut mock_mineral_injection,
                 );
 
@@ -1709,6 +1685,7 @@ pub mod tests {
         let (tx_schedule_check_to_balling, rx_balling_from_schedule_check) = mpsc::channel();
         let (tx_balling_to_schedule_check, rx_schedule_check_from_balling) = mpsc::channel();
         let (tx_messaging_to_balling, rx_balling_from_messaging) = mpsc::channel();
+        let rx_balling_from_messaging_opt = Some(rx_balling_from_messaging);
 
         let tx_balling_to_schedule_check_for_test_case_finish =
             tx_balling_to_schedule_check.clone();
@@ -1802,19 +1779,39 @@ pub mod tests {
 
             // thread for the test object and assertions
             scope.spawn(move || {
-                let balling_channels = BallingChannels {
+                let mut balling_channels = BallingChannels {
                     tx_balling_to_relay_manager,
+                    #[cfg(feature = "debug_channels")]
+                    cnt_tx_balling_to_relay_manager: 0,
+
                     rx_balling_from_relay_manager,
+                    #[cfg(feature = "debug_channels")]
+                    cnt_rx_balling_from_relay_manager: 0,
+
                     tx_balling_to_signal_handler,
+                    #[cfg(feature = "debug_channels")]
+                    cnt_tx_balling_to_signal_handler: 0,
+
                     rx_balling_from_signal_handler,
+                    #[cfg(feature = "debug_channels")]
+                    cnt_rx_balling_from_signal_handler: 0,
+
                     tx_balling_to_schedule_check,
+                    #[cfg(feature = "debug_channels")]
+                    cnt_tx_balling_to_schedule_check: 0,
+
                     rx_balling_from_schedule_check,
-                    rx_balling_from_messaging_opt: Some(rx_balling_from_messaging),
+                    #[cfg(feature = "debug_channels")]
+                    cnt_rx_balling_from_schedule_check: 0,
+
+                    rx_balling_from_messaging_opt,
+                    #[cfg(feature = "debug_channels")]
+                    cnt_rx_balling_from_messaging_opt: 0,
                 };
 
                 balling.execute(
                     mutex_device_scheduler,
-                    balling_channels,
+                    &mut balling_channels,
                     &mut mock_mineral_injection,
                 );
                 println!("MockMineralInjection:\n{}", mock_mineral_injection);
@@ -1957,6 +1954,7 @@ pub mod tests {
         let (tx_schedule_check_to_balling, rx_balling_from_schedule_check) = mpsc::channel();
         let (tx_balling_to_schedule_check, rx_schedule_check_from_balling) = mpsc::channel();
         let (tx_messaging_to_balling, rx_balling_from_messaging) = mpsc::channel();
+        let rx_balling_from_messaging_opt = Some(rx_balling_from_messaging);
 
         let mutex_device_scheduler = Arc::new(Mutex::new(0));
         let mutex_device_scheduler_environment = mutex_device_scheduler.clone();
@@ -2030,19 +2028,39 @@ pub mod tests {
                 let tx_balling_to_schedule_check_for_test_case_finish =
                     tx_balling_to_schedule_check.clone();
 
-                let balling_channels = BallingChannels {
+                let mut balling_channels = BallingChannels {
                     tx_balling_to_relay_manager,
+                    #[cfg(feature = "debug_channels")]
+                    cnt_tx_balling_to_relay_manager: 0,
+
                     rx_balling_from_relay_manager,
+                    #[cfg(feature = "debug_channels")]
+                    cnt_rx_balling_from_relay_manager: 0,
+
                     tx_balling_to_signal_handler,
+                    #[cfg(feature = "debug_channels")]
+                    cnt_tx_balling_to_signal_handler: 0,
+
                     rx_balling_from_signal_handler,
+                    #[cfg(feature = "debug_channels")]
+                    cnt_rx_balling_from_signal_handler: 0,
+
                     tx_balling_to_schedule_check,
+                    #[cfg(feature = "debug_channels")]
+                    cnt_tx_balling_to_schedule_check: 0,
+
                     rx_balling_from_schedule_check,
-                    rx_balling_from_messaging_opt: Some(rx_balling_from_messaging),
+                    #[cfg(feature = "debug_channels")]
+                    cnt_rx_balling_from_schedule_check: 0,
+
+                    rx_balling_from_messaging_opt,
+                    #[cfg(feature = "debug_channels")]
+                    cnt_rx_balling_from_messaging_opt: 0,
                 };
 
                 balling.execute(
                     mutex_device_scheduler,
-                    balling_channels,
+                    &mut balling_channels,
                     &mut mock_mineral_injection,
                 );
 

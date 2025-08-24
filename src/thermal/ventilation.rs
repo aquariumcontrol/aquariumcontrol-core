@@ -20,13 +20,13 @@ use crate::utilities::proc_ext_req::ProcessExternalRequestTrait;
 use crate::utilities::sawtooth_profile::{SawToothProfile, SawToothProfileConfig};
 use serde_derive::Deserialize;
 use spin_sleep::SpinSleeper;
-use std::sync::mpsc::{Receiver, Sender};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
 use crate::utilities::logger::log_error_chain;
 #[cfg(all(not(test), target_os = "linux"))]
 use nix::unistd::gettid;
+pub(crate) use crate::thermal::ventilation_channels::VentilationChannels;
 
 const CYCLE_TIME_VENTILATION_MILLIS: u64 = 500;
 
@@ -79,15 +79,13 @@ pub struct VentilationConfig {
 /// # Arguments
 /// * `command` - The `InternalCommand` to send (`SwitchOn` or `SwitchOff`).
 /// * `mutex_device_scheduler_ventilation` - A reference to the shared actuation mutex.
-/// * `tx_ventilation_to_relay_manager` - The sender channel to the relay manager.
-/// * `rx_ventilation_from_relay_manager` - The receiver channel from the relay manager.
 /// * `mutex_blocked_during_actuation` - A mutable flag to track if the actuation mutex was blocked.
+/// * `ventilation_channels` - A mutable reference to the struct containing the channels.
 fn actuate_ventilation(
     command: InternalCommand,
     mutex_device_scheduler_ventilation: &Arc<Mutex<i32>>,
-    tx_ventilation_to_relay_manager: &Sender<InternalCommand>,
-    rx_ventilation_from_relay_manager: &Receiver<bool>,
     mutex_blocked_during_actuation: &mut bool,
+    ventilation_channels: &mut VentilationChannels
 ) {
     // reduce the probability of wrong warning
     *mutex_blocked_during_actuation |=
@@ -97,12 +95,12 @@ fn actuate_ventilation(
     let mut mutex_data = mutex_device_scheduler_ventilation.lock().unwrap();
 
     // Use if let for cleaner error handling
-    if let Err(e) = tx_ventilation_to_relay_manager.send(command.clone()) {
+    if let Err(e) = ventilation_channels.send_to_relay_manager(command.clone()) {
         let error_message = format!("Channel communication to relay manager for {command} failed.");
         log_error_chain(module_path!(), &error_message, e);
     } else {
         // now listen for the response
-        if let Err(e) = rx_ventilation_from_relay_manager.recv() {
+        if let Err(e) = ventilation_channels.receive_from_relay_manager() {
             let error_message =
                 format!("Receiving answer from relay manager for {command} failed.");
             log_error_chain(module_path!(), &error_message, e);
@@ -118,22 +116,19 @@ fn actuate_ventilation(
 /// # Arguments
 /// * `mutex_device_scheduler_ventilation` - A reference to an `Arc<Mutex<i32>>` used for
 ///   coordinating device actuation.
-/// * `tx_ventilation_to_relay_manager` - The sender channel for communicating with the relay manager.
-/// * `rx_ventilation_from_relay_manager` - The receiver channel for getting an acknowledgment.
 /// * `mutex_blocked_during_actuation` - A mutable boolean flag that is set if the
+/// * `ventilation_channels` - A mutable reference to the struct containing the channels.
 ///   actuation mutex was found to be blocked.
 fn switch_on_ventilation(
     mutex_device_scheduler_ventilation: &Arc<Mutex<i32>>,
-    tx_ventilation_to_relay_manager: &Sender<InternalCommand>,
-    rx_ventilation_from_relay_manager: &Receiver<bool>,
     mutex_blocked_during_actuation: &mut bool,
+    ventilation_channels: &mut VentilationChannels
 ) {
     actuate_ventilation(
         InternalCommand::SwitchOn(AquariumDevice::Ventilation),
         mutex_device_scheduler_ventilation,
-        tx_ventilation_to_relay_manager,
-        rx_ventilation_from_relay_manager,
         mutex_blocked_during_actuation,
+        ventilation_channels
     );
 }
 
@@ -144,47 +139,20 @@ fn switch_on_ventilation(
 /// # Arguments
 /// * `mutex_device_scheduler_ventilation` - A reference to an `Arc<Mutex<i32>>` used for
 ///   coordinating device actuation.
-/// * `tx_ventilation_to_relay_manager` - The sender channel for communicating with the relay manager.
-/// * `rx_ventilation_from_relay_manager` - The receiver channel for getting an acknowledgment.
 /// * `mutex_blocked_during_actuation` - A mutable boolean flag that is set if the
+/// * `ventilation_channels` - A mutable reference to the struct containing the channels.
 ///   actuation mutex was found to be blocked.
 fn switch_off_ventilation(
     mutex_device_scheduler_ventilation: &Arc<Mutex<i32>>,
-    tx_ventilation_to_relay_manager: &Sender<InternalCommand>,
-    rx_ventilation_from_relay_manager: &Receiver<bool>,
     mutex_blocked_during_actuation: &mut bool,
+    ventilation_channels: &mut VentilationChannels
 ) {
     actuate_ventilation(
         InternalCommand::SwitchOff(AquariumDevice::Ventilation),
         mutex_device_scheduler_ventilation,
-        tx_ventilation_to_relay_manager,
-        rx_ventilation_from_relay_manager,
         mutex_blocked_during_actuation,
+        ventilation_channels
     );
-}
-
-/// Struct collects the channels for communication between Ventilation and other components.
-pub struct VentilationChannels {
-    /// Sender part of the channel for communication to relay manager
-    pub tx_ventilation_to_relay_manager: Sender<InternalCommand>,
-
-    /// Receiver part of the channel for communication from the relay manager
-    pub rx_ventilation_from_relay_manager: Receiver<bool>,
-
-    /// Sender part of the channel for communication to the signal handler
-    pub tx_ventilation_to_signal_handler: Sender<bool>,
-
-    /// Receiver part of the channel for communication from the signal handler                
-    pub rx_ventilation_from_signal_handler: Receiver<InternalCommand>,
-
-    /// Sender part of the channel for communication to the schedule checker
-    pub tx_ventilation_to_schedule_check: Sender<InternalCommand>,
-
-    /// Receiver part of the channel for communication from the schedule checker                   
-    pub rx_ventilation_from_schedule_check: Receiver<bool>,
-
-    /// Receiver part of the channel for communication from the messaging                   
-    pub rx_ventilation_from_messaging_opt: Option<Receiver<InternalCommand>>,
 }
 
 #[cfg_attr(doc, aquamarine::aquamarine)]
@@ -304,7 +272,7 @@ impl Ventilation {
         condition: bool,
         ventilation_state: &mut ActuatorState,
         mutex_device_scheduler_ventilation: &Arc<Mutex<i32>>,
-        ventilation_channels: &VentilationChannels,
+        ventilation_channels: &mut VentilationChannels,
         mutex_was_blocked_during_actuation: &mut bool,
     ) {
         match condition {
@@ -313,9 +281,8 @@ impl Ventilation {
                 if *ventilation_state != ActuatorState::On {
                     switch_on_ventilation(
                         mutex_device_scheduler_ventilation,
-                        &ventilation_channels.tx_ventilation_to_relay_manager,
-                        &ventilation_channels.rx_ventilation_from_relay_manager,
                         mutex_was_blocked_during_actuation,
+                        ventilation_channels
                     );
                     *ventilation_state = ActuatorState::On;
                 }
@@ -325,9 +292,8 @@ impl Ventilation {
                 if *ventilation_state != ActuatorState::Off {
                     switch_off_ventilation(
                         mutex_device_scheduler_ventilation,
-                        &ventilation_channels.tx_ventilation_to_relay_manager,
-                        &ventilation_channels.rx_ventilation_from_relay_manager,
                         mutex_was_blocked_during_actuation,
+                        ventilation_channels
                     );
                     *ventilation_state = ActuatorState::Off;
                 }
@@ -349,7 +315,7 @@ impl Ventilation {
     /// # Arguments
     /// * `mutex_device_scheduler_ventilation` - An `Arc<Mutex<i32>>` used for coordinating
     ///   device actuation, preventing parallel operations, and tracking actuation counts.
-    /// * `ventilation_channels` - A `VentilationChannels` struct containing all `mpsc`
+    /// * `ventilation_channels` - A mutable reference to `VentilationChannels` struct containing all `mpsc`
     ///   channels for communication with other threads (e.g., relay manager, data logger, schedule checker, signal handler).
     /// * `mutex_sensor_manager_channels` - An `Arc<Mutex<SensorManagerSignals>>` from which the latest water temperature
     ///   reading will be retrieved.
@@ -363,7 +329,7 @@ impl Ventilation {
     pub fn execute(
         &mut self,
         mutex_device_scheduler_ventilation: Arc<Mutex<i32>>,
-        ventilation_channels: VentilationChannels,
+        ventilation_channels: &mut VentilationChannels,
         ventilation_set_val_updater: &mut impl VentilationSetValueUpdaterTrait,
         mutex_sensor_manager_signals: Arc<Mutex<SensorManagerSignals>>,
         mutex_ventilation_status: Arc<Mutex<bool>>,
@@ -448,16 +414,13 @@ impl Ventilation {
                 }
 
                 // schedule check to see if actuation is allowed
-                match ventilation_channels
-                    .tx_ventilation_to_schedule_check
-                    .send(InternalCommand::ScheduleCheck)
+                match ventilation_channels.send_to_schedule_check(InternalCommand::ScheduleCheck)
                 {
                     Ok(_) => {
                         self.lock_error_channel_send_schedule_check = false;
                         // now listen for the response
                         schedule_check_result = match ventilation_channels
-                            .rx_ventilation_from_schedule_check
-                            .recv()
+                            .receive_from_schedule_check()
                         {
                             Ok(c) => {
                                 self.lock_error_channel_receive_schedule_check = false;
@@ -500,9 +463,8 @@ impl Ventilation {
                             if ventilation_state != ActuatorState::On {
                                 switch_on_ventilation(
                                     &mutex_device_scheduler_ventilation,
-                                    &ventilation_channels.tx_ventilation_to_relay_manager,
-                                    &ventilation_channels.rx_ventilation_from_relay_manager,
                                     &mut actuation_mutex_was_blocked_during_actuation,
+                                    ventilation_channels
                                 );
                                 ventilation_state = ActuatorState::On;
                             }
@@ -511,9 +473,8 @@ impl Ventilation {
                             if ventilation_state != ActuatorState::Off {
                                 switch_off_ventilation(
                                     &mutex_device_scheduler_ventilation,
-                                    &ventilation_channels.tx_ventilation_to_relay_manager,
-                                    &ventilation_channels.rx_ventilation_from_relay_manager,
                                     &mut actuation_mutex_was_blocked_during_actuation,
+                                    ventilation_channels
                                 );
                                 ventilation_state = ActuatorState::Off;
                             }
@@ -525,9 +486,8 @@ impl Ventilation {
                             if ventilation_state != ActuatorState::On {
                                 switch_on_ventilation(
                                     &mutex_device_scheduler_ventilation,
-                                    &ventilation_channels.tx_ventilation_to_relay_manager,
-                                    &ventilation_channels.rx_ventilation_from_relay_manager,
                                     &mut actuation_mutex_was_blocked_during_actuation,
+                                    ventilation_channels
                                 );
                                 ventilation_state = ActuatorState::On;
                             }
@@ -537,9 +497,8 @@ impl Ventilation {
                             if ventilation_state != ActuatorState::Off {
                                 switch_off_ventilation(
                                     &mutex_device_scheduler_ventilation,
-                                    &ventilation_channels.tx_ventilation_to_relay_manager,
-                                    &ventilation_channels.rx_ventilation_from_relay_manager,
                                     &mut actuation_mutex_was_blocked_during_actuation,
+                                    ventilation_channels
                                 );
                                 ventilation_state = ActuatorState::Off;
                             }
@@ -551,7 +510,7 @@ impl Ventilation {
                         self.config.switch_on_when_external_stop,
                         &mut ventilation_state,
                         &mutex_device_scheduler_ventilation,
-                        &ventilation_channels,
+                        ventilation_channels,
                         &mut actuation_mutex_was_blocked_during_actuation,
                     );
                 } else {
@@ -560,7 +519,7 @@ impl Ventilation {
                         self.config.switch_on_when_out_of_schedule,
                         &mut ventilation_state,
                         &mutex_device_scheduler_ventilation,
-                        &ventilation_channels,
+                        ventilation_channels,
                         &mut actuation_mutex_was_blocked_during_actuation,
                     );
                 }
@@ -640,9 +599,8 @@ impl Ventilation {
             if ventilation_state != ActuatorState::On {
                 switch_on_ventilation(
                     &mutex_device_scheduler_ventilation,
-                    &ventilation_channels.tx_ventilation_to_relay_manager,
-                    &ventilation_channels.rx_ventilation_from_relay_manager,
                     &mut actuation_mutex_was_blocked_during_actuation,
+                    ventilation_channels
                 );
             }
         } else {
@@ -650,9 +608,8 @@ impl Ventilation {
             if ventilation_state != ActuatorState::Off {
                 switch_off_ventilation(
                     &mutex_device_scheduler_ventilation,
-                    &ventilation_channels.tx_ventilation_to_relay_manager,
-                    &ventilation_channels.rx_ventilation_from_relay_manager,
                     &mut actuation_mutex_was_blocked_during_actuation,
+                    ventilation_channels
                 );
             }
         }
@@ -887,14 +844,34 @@ pub mod tests {
                 let tx_ventilation_to_relay_manager_for_test_case_finish =
                     tx_ventilation_to_relay_manager.clone();
 
-                let ventilation_channels = VentilationChannels {
+                let mut ventilation_channels = VentilationChannels {
                     tx_ventilation_to_relay_manager,
+                    #[cfg(feature = "debug_channels")]
+                    cnt_tx_ventilation_to_relay_manager: 0,
+
                     rx_ventilation_from_relay_manager,
+                    #[cfg(feature = "debug_channels")]
+                    cnt_rx_ventilation_from_relay_manager: 0,
+
                     tx_ventilation_to_signal_handler,
+                    #[cfg(feature = "debug_channels")]
+                    cnt_tx_ventilation_to_signal_handler: 0,
+
                     rx_ventilation_from_signal_handler,
+                    #[cfg(feature = "debug_channels")]
+                    cnt_rx_ventilation_from_signal_handler: 0,
+
                     tx_ventilation_to_schedule_check,
+                    #[cfg(feature = "debug_channels")]
+                    cnt_tx_ventilation_to_schedule_check: 0,
+
                     rx_ventilation_from_schedule_check,
+                    #[cfg(feature = "debug_channels")]
+                    cnt_rx_ventilation_from_schedule_check: 0,
+
                     rx_ventilation_from_messaging_opt: None,
+                    #[cfg(feature = "debug_channels")]
+                    cnt_rx_ventilation_from_messaging_opt: 0,
                 };
 
                 let mut ventilation_set_value_updater =
@@ -902,7 +879,7 @@ pub mod tests {
 
                 ventilation.execute(
                     mutex_device_scheduler_ventilation.clone(),
-                    ventilation_channels,
+                    &mut ventilation_channels,
                     &mut ventilation_set_value_updater,
                     mutex_sensor_manager_signals,
                     Arc::new(Mutex::new(false)),
@@ -1052,14 +1029,34 @@ pub mod tests {
                 let tx_ventilation_to_relay_manager_for_test_case_finish =
                     tx_ventilation_to_relay_manager.clone();
 
-                let ventilation_channels = VentilationChannels {
+                let mut ventilation_channels = VentilationChannels {
                     tx_ventilation_to_relay_manager,
+                    #[cfg(feature = "debug_channels")]
+                    cnt_tx_ventilation_to_relay_manager: 0,
+
                     rx_ventilation_from_relay_manager,
+                    #[cfg(feature = "debug_channels")]
+                    cnt_rx_ventilation_from_relay_manager: 0,
+
                     tx_ventilation_to_signal_handler,
+                    #[cfg(feature = "debug_channels")]
+                    cnt_tx_ventilation_to_signal_handler: 0,
+
                     rx_ventilation_from_signal_handler,
+                    #[cfg(feature = "debug_channels")]
+                    cnt_rx_ventilation_from_signal_handler: 0,
+
                     tx_ventilation_to_schedule_check,
+                    #[cfg(feature = "debug_channels")]
+                    cnt_tx_ventilation_to_schedule_check: 0,
+
                     rx_ventilation_from_schedule_check,
+                    #[cfg(feature = "debug_channels")]
+                    cnt_rx_ventilation_from_schedule_check: 0,
+
                     rx_ventilation_from_messaging_opt: None,
+                    #[cfg(feature = "debug_channels")]
+                    cnt_rx_ventilation_from_messaging_opt: 0,
                 };
 
                 let mut ventilation_set_value_updater =
@@ -1067,7 +1064,7 @@ pub mod tests {
 
                 ventilation.execute(
                     mutex_device_scheduler_ventilation.clone(),
-                    ventilation_channels,
+                    &mut ventilation_channels,
                     &mut ventilation_set_value_updater,
                     mutex_sensor_manager_signals,
                     Arc::new(Mutex::new(false)),
@@ -1306,14 +1303,34 @@ pub mod tests {
                 let tx_ventilation_to_relay_manager_for_test_case_finish =
                     tx_ventilation_to_relay_manager.clone();
 
-                let ventilation_channels = VentilationChannels {
+                let mut ventilation_channels = VentilationChannels {
                     tx_ventilation_to_relay_manager,
+                    #[cfg(feature = "debug_channels")]
+                    cnt_tx_ventilation_to_relay_manager: 0,
+
                     rx_ventilation_from_relay_manager,
+                    #[cfg(feature = "debug_channels")]
+                    cnt_rx_ventilation_from_relay_manager: 0,
+
                     tx_ventilation_to_signal_handler,
+                    #[cfg(feature = "debug_channels")]
+                    cnt_tx_ventilation_to_signal_handler: 0,
+
                     rx_ventilation_from_signal_handler,
+                    #[cfg(feature = "debug_channels")]
+                    cnt_rx_ventilation_from_signal_handler: 0,
+
                     tx_ventilation_to_schedule_check,
+                    #[cfg(feature = "debug_channels")]
+                    cnt_tx_ventilation_to_schedule_check: 0,
+
                     rx_ventilation_from_schedule_check,
+                    #[cfg(feature = "debug_channels")]
+                    cnt_rx_ventilation_from_schedule_check: 0,
+
                     rx_ventilation_from_messaging_opt: None,
+                    #[cfg(feature = "debug_channels")]
+                    cnt_rx_ventilation_from_messaging_opt: 0,
                 };
 
                 let mut ventilation_set_value_updater =
@@ -1321,7 +1338,7 @@ pub mod tests {
 
                 ventilation.execute(
                     mutex_device_scheduler_ventilation.clone(),
-                    ventilation_channels,
+                    &mut ventilation_channels,
                     &mut ventilation_set_value_updater,
                     mutex_sensor_manager_signals,
                     Arc::new(Mutex::new(false)),
@@ -1419,14 +1436,34 @@ pub mod tests {
                 let tx_ventilation_to_relay_manager_for_test_case_finish =
                     tx_ventilation_to_relay_manager.clone();
 
-                let ventilation_channels = VentilationChannels {
+                let mut ventilation_channels = VentilationChannels {
                     tx_ventilation_to_relay_manager,
+                    #[cfg(feature = "debug_channels")]
+                    cnt_tx_ventilation_to_relay_manager: 0,
+
                     rx_ventilation_from_relay_manager,
+                    #[cfg(feature = "debug_channels")]
+                    cnt_rx_ventilation_from_relay_manager: 0,
+
                     tx_ventilation_to_signal_handler,
+                    #[cfg(feature = "debug_channels")]
+                    cnt_tx_ventilation_to_signal_handler: 0,
+
                     rx_ventilation_from_signal_handler,
+                    #[cfg(feature = "debug_channels")]
+                    cnt_rx_ventilation_from_signal_handler: 0,
+
                     tx_ventilation_to_schedule_check,
+                    #[cfg(feature = "debug_channels")]
+                    cnt_tx_ventilation_to_schedule_check: 0,
+
                     rx_ventilation_from_schedule_check,
+                    #[cfg(feature = "debug_channels")]
+                    cnt_rx_ventilation_from_schedule_check: 0,
+
                     rx_ventilation_from_messaging_opt: None,
+                    #[cfg(feature = "debug_channels")]
+                    cnt_rx_ventilation_from_messaging_opt: 0,
                 };
 
                 let mut ventilation_set_value_updater =
@@ -1434,7 +1471,7 @@ pub mod tests {
 
                 ventilation.execute(
                     mutex_device_scheduler_ventilation.clone(),
-                    ventilation_channels,
+                    &mut ventilation_channels,
                     &mut ventilation_set_value_updater,
                     mutex_sensor_manager_signals,
                     Arc::new(Mutex::new(false)),
@@ -1646,14 +1683,34 @@ pub mod tests {
                 let tx_ventilation_to_relay_manager_for_test_case_finish =
                     tx_ventilation_to_relay_manager.clone();
 
-                let ventilation_channels = VentilationChannels {
+                let mut ventilation_channels = VentilationChannels {
                     tx_ventilation_to_relay_manager,
+                    #[cfg(feature = "debug_channels")]
+                    cnt_tx_ventilation_to_relay_manager: 0,
+
                     rx_ventilation_from_relay_manager,
+                    #[cfg(feature = "debug_channels")]
+                    cnt_rx_ventilation_from_relay_manager: 0,
+
                     tx_ventilation_to_signal_handler,
+                    #[cfg(feature = "debug_channels")]
+                    cnt_tx_ventilation_to_signal_handler: 0,
+
                     rx_ventilation_from_signal_handler,
+                    #[cfg(feature = "debug_channels")]
+                    cnt_rx_ventilation_from_signal_handler: 0,
+
                     tx_ventilation_to_schedule_check,
+                    #[cfg(feature = "debug_channels")]
+                    cnt_tx_ventilation_to_schedule_check: 0,
+
                     rx_ventilation_from_schedule_check,
+                    #[cfg(feature = "debug_channels")]
+                    cnt_rx_ventilation_from_schedule_check: 0,
+
                     rx_ventilation_from_messaging_opt: Some(rx_ventilation_from_messaging),
+                    #[cfg(feature = "debug_channels")]
+                    cnt_rx_ventilation_from_messaging_opt: 0,
                 };
 
                 let mut ventilation_set_value_updater =
@@ -1661,7 +1718,7 @@ pub mod tests {
 
                 ventilation.execute(
                     mutex_device_scheduler_ventilation.clone(),
-                    ventilation_channels,
+                    &mut ventilation_channels,
                     &mut ventilation_set_value_updater,
                     mutex_sensor_manager_signals,
                     Arc::new(Mutex::new(false)),
@@ -1785,15 +1842,36 @@ pub mod tests {
                 let tx_ventilation_to_relay_manager_for_test_case_finish =
                     tx_ventilation_to_relay_manager.clone();
 
-                let ventilation_channels = VentilationChannels {
+                let mut ventilation_channels = VentilationChannels {
                     tx_ventilation_to_relay_manager,
+                    #[cfg(feature = "debug_channels")]
+                    cnt_tx_ventilation_to_relay_manager: 0,
+
                     rx_ventilation_from_relay_manager,
+                    #[cfg(feature = "debug_channels")]
+                    cnt_rx_ventilation_from_relay_manager: 0,
+
                     tx_ventilation_to_signal_handler,
+                    #[cfg(feature = "debug_channels")]
+                    cnt_tx_ventilation_to_signal_handler: 0,
+
                     rx_ventilation_from_signal_handler,
+                    #[cfg(feature = "debug_channels")]
+                    cnt_rx_ventilation_from_signal_handler: 0,
+
                     tx_ventilation_to_schedule_check,
+                    #[cfg(feature = "debug_channels")]
+                    cnt_tx_ventilation_to_schedule_check: 0,
+
                     rx_ventilation_from_schedule_check,
+                    #[cfg(feature = "debug_channels")]
+                    cnt_rx_ventilation_from_schedule_check: 0,
+
                     rx_ventilation_from_messaging_opt: None,
+                    #[cfg(feature = "debug_channels")]
+                    cnt_rx_ventilation_from_messaging_opt: 0,
                 };
+
 
                 // set up the set value updater to actively manipulate the set values
                 let mut ventilation_set_value_updater = MockSqlInterfaceVentilationSetVals::new(
@@ -1805,7 +1883,7 @@ pub mod tests {
 
                 ventilation.execute(
                     mutex_device_scheduler_ventilation.clone(),
-                    ventilation_channels,
+                    &mut ventilation_channels,
                     &mut ventilation_set_value_updater,
                     mutex_sensor_manager_signals,
                     Arc::new(Mutex::new(false)),
@@ -1930,14 +2008,34 @@ pub mod tests {
                 let tx_ventilation_to_relay_manager_for_test_case_finish =
                     tx_ventilation_to_relay_manager.clone();
 
-                let ventilation_channels = VentilationChannels {
+                let mut ventilation_channels = VentilationChannels {
                     tx_ventilation_to_relay_manager,
+                    #[cfg(feature = "debug_channels")]
+                    cnt_tx_ventilation_to_relay_manager: 0,
+
                     rx_ventilation_from_relay_manager,
+                    #[cfg(feature = "debug_channels")]
+                    cnt_rx_ventilation_from_relay_manager: 0,
+
                     tx_ventilation_to_signal_handler,
+                    #[cfg(feature = "debug_channels")]
+                    cnt_tx_ventilation_to_signal_handler: 0,
+
                     rx_ventilation_from_signal_handler,
+                    #[cfg(feature = "debug_channels")]
+                    cnt_rx_ventilation_from_signal_handler: 0,
+
                     tx_ventilation_to_schedule_check,
+                    #[cfg(feature = "debug_channels")]
+                    cnt_tx_ventilation_to_schedule_check: 0,
+
                     rx_ventilation_from_schedule_check,
+                    #[cfg(feature = "debug_channels")]
+                    cnt_rx_ventilation_from_schedule_check: 0,
+
                     rx_ventilation_from_messaging_opt: None,
+                    #[cfg(feature = "debug_channels")]
+                    cnt_rx_ventilation_from_messaging_opt: 0,
                 };
 
                 let mut ventilation_set_value_updater =
@@ -1945,7 +2043,7 @@ pub mod tests {
 
                 ventilation.execute(
                     mutex_device_scheduler_ventilation.clone(),
-                    ventilation_channels,
+                    &mut ventilation_channels,
                     &mut ventilation_set_value_updater,
                     mutex_sensor_manager_signals,
                     mutex_ventilation_status,

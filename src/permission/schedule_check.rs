@@ -21,6 +21,7 @@ use std::sync::mpsc::{Receiver, Sender, TryRecvError};
 use std::time::{Duration, Instant};
 
 use crate::database::sql_interface_schedule::{ScheduleEntry, ScheduleType, SqlInterfaceSchedule};
+pub(crate) use crate::permission::schedule_check_channels::ScheduleCheckChannels;
 use crate::utilities::channel_content::InternalCommand;
 use crate::utilities::logger::log_error_chain;
 use crate::utilities::proc_ext_req::ProcessExternalRequestTrait;
@@ -40,39 +41,6 @@ pub struct ScheduleCheckConfig {
     /// - true allows actuation
     /// - false inhibits actuation
     strategy_if_schedule_not_found: bool,
-}
-
-/// Struct collects all channels for communication between ScheduleCheck and other components.
-pub struct ScheduleCheckChannels {
-    /// Sender part of the channel for communication to ventilation
-    pub tx_schedule_check_to_ventilation: Sender<bool>,
-
-    /// Receiver part of the channel for communication from ventilation
-    pub rx_schedule_check_from_ventilation: Receiver<InternalCommand>,
-
-    /// Sender part of the channel for communication to heating
-    pub tx_schedule_check_to_heating: Sender<bool>,
-
-    /// Receiver part of the channel for communication from heating
-    pub rx_schedule_check_from_heating: Receiver<InternalCommand>,
-
-    /// Sender part of the channel for communication to refill
-    pub tx_schedule_check_to_refill: Sender<bool>,
-
-    /// Receiver part of the channel for communication from refill
-    pub rx_schedule_check_from_refill: Receiver<InternalCommand>,
-
-    /// Sender part of the channel for communication to the Balling dosing control
-    pub tx_schedule_check_to_balling: Sender<bool>,
-
-    /// Receiver part of the channel for communication from the Balling dosing control
-    pub rx_schedule_check_from_balling: Receiver<InternalCommand>,
-
-    /// Sender part of the channel for communication to the signal handler
-    pub tx_schedule_check_to_signal_handler: Sender<bool>,
-
-    /// Receiver part of the channel for communication from the signal handler                
-    pub rx_schedule_check_from_signal_handler: Receiver<InternalCommand>,
 }
 
 #[cfg_attr(doc, aquamarine::aquamarine)]
@@ -226,6 +194,9 @@ impl ScheduleCheck {
     ///   inhibits repeated error logging for channel send failures.
     /// * `lock_warn_inapplicable_command` - A mutable reference to a boolean flag that, when `true`,
     ///   inhibits repeated warning logging for inapplicable commands received.
+    ///
+    /// # Returns
+    /// * A tuple (bool, bool) indicating a successful send operation and a successful receive-operation.
     fn check_pending_schedule_request(
         config: &ScheduleCheckConfig,
         tx: &Sender<bool>,
@@ -234,13 +205,18 @@ impl ScheduleCheck {
         lock_error_channel_receive: &mut bool,
         lock_error_channel_send: &mut bool,
         lock_warn_inapplicable_command: &mut bool,
-    ) {
+    ) -> (bool, bool) {
+        let mut send_success = false;
+        let mut receive_success = false;
         match tx.send(match rx.try_recv() {
             Ok(c) => match c {
                 InternalCommand::ScheduleCheck => {
                     *lock_warn_inapplicable_command = false;
                     match schedule_entry {
-                        Some(c) => c.check_if_allowed(),
+                        Some(c) => {
+                            receive_success = true;
+                            c.check_if_allowed()
+                        },
                         None => config.strategy_if_schedule_not_found,
                     }
                 }
@@ -252,7 +228,7 @@ impl ScheduleCheck {
                         );
                         *lock_warn_inapplicable_command = true;
                     }
-                    return;
+                    return (send_success, receive_success);
                 }
             },
             Err(e) => {
@@ -272,11 +248,11 @@ impl ScheduleCheck {
                         }
                     }
                 }
-                return;
+                return (send_success, receive_success);
             }
         }) {
             Ok(_) => {
-                /* nothing to be done */
+                send_success = true;
                 *lock_error_channel_send = false;
             }
             Err(e) => {
@@ -286,6 +262,7 @@ impl ScheduleCheck {
                 }
             }
         };
+        (send_success, receive_success)
     }
 
     /// Executes the main control loop for the schedule checker.
@@ -304,7 +281,7 @@ impl ScheduleCheck {
     /// * `schedule_check_channels` - A `ScheduleCheckChannels` struct containing all
     ///   necessary `mpsc` sender and receiver channels for communication with
     ///   other application modules and the signal handler.
-    pub fn execute(&mut self, schedule_check_channels: ScheduleCheckChannels) {
+    pub fn execute(&mut self, schedule_check_channels: &mut ScheduleCheckChannels) {
         #[cfg(all(target_os = "linux", not(test)))]
         info!(target: module_path!(), "Thread started with TID: {}", gettid());
 
@@ -361,7 +338,7 @@ impl ScheduleCheck {
                     None
                 }
             };
-            Self::check_pending_schedule_request(
+            let (_send_success, _receive_success) = Self::check_pending_schedule_request(
                 &self.config,
                 &schedule_check_channels.tx_schedule_check_to_ventilation,
                 &schedule_check_channels.rx_schedule_check_from_ventilation,
@@ -370,6 +347,15 @@ impl ScheduleCheck {
                 &mut self.lock_error_channel_send_ventilation,
                 &mut self.lock_warn_inapplicable_command_ventilation,
             );
+            #[cfg(feature = "debug_channels")]
+            {
+                if _send_success {
+                    schedule_check_channels.cnt_rx_schedule_check_from_ventilation += 1;
+                }
+                if _receive_success {
+                    schedule_check_channels.cnt_tx_schedule_check_to_ventilation += 1;
+                }
+            }
             //***************************************
 
             //*********** heating ***********
@@ -389,7 +375,7 @@ impl ScheduleCheck {
                     None
                 }
             };
-            Self::check_pending_schedule_request(
+            let (_send_success, _receive_success) = Self::check_pending_schedule_request(
                 &self.config,
                 &schedule_check_channels.tx_schedule_check_to_heating,
                 &schedule_check_channels.rx_schedule_check_from_heating,
@@ -398,6 +384,15 @@ impl ScheduleCheck {
                 &mut self.lock_error_channel_send_heating,
                 &mut self.lock_warn_inapplicable_command_heating,
             );
+            #[cfg(feature = "debug_channels")]
+            {
+                if _send_success {
+                    schedule_check_channels.cnt_rx_schedule_check_from_heating += 1;
+                }
+                if _receive_success {
+                    schedule_check_channels.cnt_tx_schedule_check_to_heating += 1;
+                }
+            }
             //***************************************
 
             //*********** refill ***********
@@ -417,7 +412,7 @@ impl ScheduleCheck {
                     None
                 }
             };
-            Self::check_pending_schedule_request(
+            let (_send_success, _receive_success) = Self::check_pending_schedule_request(
                 &self.config,
                 &schedule_check_channels.tx_schedule_check_to_refill,
                 &schedule_check_channels.rx_schedule_check_from_refill,
@@ -426,6 +421,15 @@ impl ScheduleCheck {
                 &mut self.lock_error_channel_send_refill,
                 &mut self.lock_warn_inapplicable_command_refill,
             );
+            #[cfg(feature = "debug_channels")]
+            {
+                if _send_success {
+                    schedule_check_channels.cnt_rx_schedule_check_from_refill += 1;
+                }
+                if _receive_success {
+                    schedule_check_channels.cnt_tx_schedule_check_to_refill += 1;
+                }
+            }
             //***************************************
 
             //*********** Balling ***********
@@ -445,7 +449,7 @@ impl ScheduleCheck {
                     None
                 }
             };
-            Self::check_pending_schedule_request(
+            let (_send_success, _receive_success) = Self::check_pending_schedule_request(
                 &self.config,
                 &schedule_check_channels.tx_schedule_check_to_balling,
                 &schedule_check_channels.rx_schedule_check_from_balling,
@@ -454,6 +458,15 @@ impl ScheduleCheck {
                 &mut self.lock_error_channel_send_balling,
                 &mut self.lock_warn_inapplicable_command_balling,
             );
+            #[cfg(feature = "debug_channels")]
+            {
+                if _send_success {
+                    schedule_check_channels.cnt_rx_schedule_check_from_balling += 1;
+                }
+                if _receive_success {
+                    schedule_check_channels.cnt_tx_schedule_check_to_balling += 1;
+                }
+            }
             //***************************************
 
             spin_sleeper.sleep(sleep_duration_hundred_millis);
@@ -474,9 +487,7 @@ impl ScheduleCheck {
 
         // The application received the request to terminate. That is why the loop was left.
         // Answer to the thread which sent the request for termination, so that shutdown can proceed further.
-        match schedule_check_channels
-            .tx_schedule_check_to_signal_handler
-            .send(true)
+        match schedule_check_channels.send_to_signal_handler(true)
         {
             Ok(()) => {
                 #[cfg(feature = "debug_schedule_check")]

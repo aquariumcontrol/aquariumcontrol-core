@@ -70,6 +70,8 @@ use log::{error, info, warn};
 
 #[cfg(feature = "debug_main")]
 use log::debug;
+#[cfg(feature = "debug_channels")]
+use log::debug;
 
 #[cfg(any(target_os = "linux", target_os = "macos"))]
 use nix::unistd;
@@ -1397,35 +1399,98 @@ fn run() -> Result<(), StartupError> {
         rx_atlas_scientific_from_signal_handler,
     };
 
-    let refill_channels = RefillChannels {
+    let mut refill_channels = RefillChannels {
         tx_refill_to_relay_manager,
+        #[cfg(feature = "debug_channels")]
+        cnt_tx_refill_to_relay_manager: 0,
+
         rx_refill_from_relay_manager,
+        #[cfg(feature = "debug_channels")]
+        cnt_rx_refill_from_relay_manager: 0,
+
         tx_refill_to_signal_handler,
+        #[cfg(feature = "debug_channels")]
+        cnt_tx_refill_to_signal_handler: 0,
+
         rx_refill_from_signal_handler,
+        #[cfg(feature = "debug_channels")]
+        cnt_rx_refill_from_signal_handler: 0,
+
         tx_refill_to_schedule_check,
+        #[cfg(feature = "debug_channels")]
+        cnt_tx_refill_to_schedule_check: 0,
+
         rx_refill_from_schedule_check,
+        #[cfg(feature = "debug_channels")]
+        cnt_rx_refill_from_schedule_check: 0,
+
         tx_refill_to_monitors,
+        #[cfg(feature = "debug_channels")]
+        cnt_tx_refill_to_monitors: 0,
+
         rx_refill_from_messaging_opt,
+        #[cfg(feature = "debug_channels")]
+        cnt_rx_refill_from_messaging_opt: 0,
     };
 
-    let balling_channels = BallingChannels {
+    let mut balling_channels = BallingChannels {
         tx_balling_to_relay_manager,
+        #[cfg(feature = "debug_channels")]
+        cnt_tx_balling_to_relay_manager: 0,
+
         rx_balling_from_relay_manager,
+        #[cfg(feature = "debug_channels")]
+        cnt_rx_balling_from_relay_manager: 0,
+
         tx_balling_to_signal_handler,
+        #[cfg(feature = "debug_channels")]
+        cnt_tx_balling_to_signal_handler: 0,
+
         rx_balling_from_signal_handler,
+        #[cfg(feature = "debug_channels")]
+        cnt_rx_balling_from_signal_handler: 0,
+
         tx_balling_to_schedule_check,
+        #[cfg(feature = "debug_channels")]
+        cnt_tx_balling_to_schedule_check: 0,
+
         rx_balling_from_schedule_check,
+        #[cfg(feature = "debug_channels")]
+        cnt_rx_balling_from_schedule_check: 0,
+
         rx_balling_from_messaging_opt,
+        #[cfg(feature = "debug_channels")]
+        cnt_rx_balling_from_messaging_opt: 0,
     };
 
-    let ventilation_channels = VentilationChannels {
+    let mut ventilation_channels = VentilationChannels {
         tx_ventilation_to_relay_manager,
+        #[cfg(feature = "debug_channels")]
+        cnt_tx_ventilation_to_relay_manager: 0,
+
         rx_ventilation_from_relay_manager,
+        #[cfg(feature = "debug_channels")]
+        cnt_rx_ventilation_from_relay_manager: 0,
+
         tx_ventilation_to_signal_handler,
+        #[cfg(feature = "debug_channels")]
+        cnt_tx_ventilation_to_signal_handler: 0,
+
         rx_ventilation_from_signal_handler,
+        #[cfg(feature = "debug_channels")]
+        cnt_rx_ventilation_from_signal_handler: 0,
+
         tx_ventilation_to_schedule_check,
+        #[cfg(feature = "debug_channels")]
+        cnt_tx_ventilation_to_schedule_check: 0,
+
         rx_ventilation_from_schedule_check,
+        #[cfg(feature = "debug_channels")]
+        cnt_rx_ventilation_from_schedule_check: 0,
+
         rx_ventilation_from_messaging_opt,
+        #[cfg(feature = "debug_channels")]
+        cnt_rx_ventilation_from_messaging_opt: 0,
     };
 
     let feed_channels = FeedChannels {
@@ -1436,14 +1501,34 @@ fn run() -> Result<(), StartupError> {
         rx_feed_from_messaging_opt,
     };
 
-    let heating_channels = HeatingChannels {
-        tx_heating_to_relay_manager,
-        rx_heating_from_relay_manager,
-        tx_heating_to_signal_handler,
-        rx_heating_from_signal_handler,
-        tx_heating_to_schedule_check,
-        rx_heating_from_schedule_check,
-        rx_heating_from_messaging_opt,
+    let mut heating_channels = HeatingChannels {
+         tx_heating_to_relay_manager,
+         #[cfg(feature = "debug_channels")]
+         cnt_tx_heating_to_relay_manager: 0,
+
+         rx_heating_from_relay_manager,
+         #[cfg(feature = "debug_channels")]
+         cnt_rx_heating_from_relay_manager: 0,
+
+         tx_heating_to_signal_handler,
+         #[cfg(feature = "debug_channels")]
+         cnt_tx_heating_to_signal_handler: 0,
+
+         rx_heating_from_signal_handler,
+         #[cfg(feature = "debug_channels")]
+         cnt_rx_heating_from_signal_handler: 0,
+
+         tx_heating_to_schedule_check,
+         #[cfg(feature = "debug_channels")]
+         cnt_tx_heating_to_schedule_check: 0,
+
+         rx_heating_from_schedule_check,
+         #[cfg(feature = "debug_channels")]
+         cnt_rx_heating_from_schedule_check: 0,
+
+         rx_heating_from_messaging_opt,
+         #[cfg(feature = "debug_channels")]
+         cnt_rx_heating_from_messaging_opt: 0,
     };
 
     let tcp_communication_channels = TcpCommunicationChannels {
@@ -1456,17 +1541,46 @@ fn run() -> Result<(), StartupError> {
         rx_tcp_communication_from_signal_handler,
     };
 
-    let schedule_check_channels = ScheduleCheckChannels {
+    let mut schedule_check_channels = ScheduleCheckChannels {
         tx_schedule_check_to_ventilation,
+        #[cfg(feature = "debug_channels")]
+        cnt_tx_schedule_check_to_ventilation: 0,
+
         rx_schedule_check_from_ventilation,
+        #[cfg(feature = "debug_channels")]
+        cnt_rx_schedule_check_from_ventilation: 0,
+
         tx_schedule_check_to_heating,
+        #[cfg(feature = "debug_channels")]
+        cnt_tx_schedule_check_to_heating: 0,
+
         rx_schedule_check_from_heating,
+        #[cfg(feature = "debug_channels")]
+        cnt_rx_schedule_check_from_heating: 0,
+
         tx_schedule_check_to_refill,
+        #[cfg(feature = "debug_channels")]
+        cnt_tx_schedule_check_to_refill: 0,
+        
         rx_schedule_check_from_refill,
+        #[cfg(feature = "debug_channels")]
+        cnt_rx_schedule_check_from_refill: 0,
+
         tx_schedule_check_to_balling,
+        #[cfg(feature = "debug_channels")]
+        cnt_tx_schedule_check_to_balling: 0,
+
         rx_schedule_check_from_balling,
+        #[cfg(feature = "debug_channels")]
+        cnt_rx_schedule_check_from_balling: 0,
+        
         tx_schedule_check_to_signal_handler,
+        #[cfg(feature = "debug_channels")]
+        cnt_tx_schedule_check_to_signal_handler: 0,
+        
         rx_schedule_check_from_signal_handler,
+        #[cfg(feature = "debug_channels")]
+        cnt_rx_schedule_check_from_signal_handler: 0,
     };
 
     let signal_handler_channels = SignalHandlerChannels {
@@ -1576,10 +1690,13 @@ fn run() -> Result<(), StartupError> {
         });
 
         scope.spawn(move || {
-            schedule_check.execute(schedule_check_channels);
+            schedule_check.execute(&mut schedule_check_channels);
 
             #[cfg(feature = "debug_main")]
             debug!(target: module_path!(), "Schedule checker terminated.");
+            
+            #[cfg(feature = "debug_channels")]
+            debug!(target: module_path!(), "{schedule_check_channels}");
         });
 
         #[cfg(all(target_os = "linux", feature = "target_hw"))]
@@ -1701,7 +1818,7 @@ fn run() -> Result<(), StartupError> {
         scope.spawn(move || {
             refill.execute(
                 mutex_device_scheduler_refill,
-                refill_channels,
+                &mut refill_channels,
                 &mut water_injection,
                 mutex_tank_level_switch_signals_clone_for_refill,
                 mutex_refill_status,
@@ -1709,6 +1826,9 @@ fn run() -> Result<(), StartupError> {
 
             #[cfg(feature = "debug_main")]
             debug!(target: module_path!(), "Refill terminated.");
+
+            #[cfg(feature = "debug_channels")]
+            debug!(target: module_path!(), "{refill_channels}");
         });
 
         // Heating needs actuation of relay
@@ -1725,7 +1845,7 @@ fn run() -> Result<(), StartupError> {
         scope.spawn(move || {
             heating.execute(
                 mutex_device_scheduler_heating,
-                heating_channels,
+                &mut heating_channels,
                 &mut heating_stats_transfer,
                 &mut heating_set_value_updater,
                 heating_mutexes,
@@ -1733,6 +1853,9 @@ fn run() -> Result<(), StartupError> {
 
             #[cfg(feature = "debug_main")]
             debug!(target: module_path!(), "Heating terminated.");
+
+            #[cfg(feature = "debug_channels")]
+            debug!(target: module_path!(), "{heating_channels}");
         });
 
         // Ventilation needs actuation of relay
@@ -1741,7 +1864,7 @@ fn run() -> Result<(), StartupError> {
         scope.spawn(move || {
             ventilation.execute(
                 mutex_device_scheduler_ventilation,
-                ventilation_channels,
+                &mut ventilation_channels,
                 &mut ventilation_set_value_updater,
                 mutex_sensor_manager_signals_clone_for_ventilation,
                 mutex_ventilation_status,
@@ -1749,6 +1872,9 @@ fn run() -> Result<(), StartupError> {
 
             #[cfg(feature = "debug_main")]
             debug!(target: module_path!(), "Ventilation terminated.");
+
+            #[cfg(feature = "debug_channels")]
+            debug!(target: module_path!(), "{ventilation_channels}");
         });
 
         // Monitors needs communication with the Controllino device
@@ -1780,12 +1906,15 @@ fn run() -> Result<(), StartupError> {
         scope.spawn(move || {
             balling.execute(
                 mutex_device_scheduler_balling,
-                balling_channels,
+                &mut balling_channels,
                 &mut mineral_injection,
             );
 
             #[cfg(feature = "debug_main")]
             debug!(target: module_path!(), "Balling terminated.");
+
+            #[cfg(feature = "debug_channels")]
+            debug!(target: module_path!(), "{balling_channels}");
         });
 
         // IPC via messages

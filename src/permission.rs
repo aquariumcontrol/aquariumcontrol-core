@@ -11,3 +11,6 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 /// The implementation polls the database and answers requests from the threads with the
 /// information retrieved from the database.
 pub mod schedule_check;
+
+/// Container for channels
+pub mod schedule_check_channels;

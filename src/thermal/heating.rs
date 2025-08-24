@@ -10,7 +10,6 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 use log::{error, warn};
 use serde_derive::Deserialize;
 use spin_sleep::SpinSleeper;
-use std::sync::mpsc::{Receiver, Sender};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
@@ -25,6 +24,7 @@ use crate::database::sql_interface_heating_setvals::HeatingSetValueUpdaterTrait;
 use crate::database::sql_interface_heating_stats::{HeatingStatsEntry, SqlInterfaceHeatingStats};
 use crate::sensors::sensor_manager::SensorManagerSignals;
 use crate::sensors::tank_level_switch::TankLevelSwitchSignals;
+pub(crate) use crate::thermal::heating_channels::HeatingChannels;
 use crate::utilities::channel_content::{ActuatorState, AquariumDevice, InternalCommand};
 use crate::utilities::common::check_if_mutex_is_blocked;
 use crate::utilities::logger::log_error_chain;
@@ -126,15 +126,13 @@ pub struct HeatingConfig {
 /// # Arguments
 /// * `command` - The `InternalCommand` to send (`SwitchOn` or `SwitchOff`).
 /// * `mutex_device_scheduler_heating` - A reference to the shared actuation mutex.
-/// * `tx_heating_to_relay_manager` - The sender channel to the relay manager.
-/// * `rx_heating_from_relay_manager` - The receiver channel from the relay manager.
 /// * `mutex_blocked_during_actuation` - A mutable flag to track if the actuation mutex was blocked.
+/// * `heating_channels` - A mutable reference to the struct containing the channels.
 fn actuate_heater(
     command: InternalCommand,
     mutex_device_scheduler_heating: &Arc<Mutex<i32>>,
-    tx_heating_to_relay_manager: &Sender<InternalCommand>,
-    rx_heating_from_relay_manager: &Receiver<bool>,
     mutex_blocked_during_actuation: &mut bool,
+    heating_channels: &mut HeatingChannels,
 ) {
     // reduce the probability of wrong warning
     *mutex_blocked_during_actuation |= check_if_mutex_is_blocked(mutex_device_scheduler_heating);
@@ -143,12 +141,12 @@ fn actuate_heater(
     let mut mutex_data = mutex_device_scheduler_heating.lock().unwrap();
 
     // Use map_err for more concise error handling on the send operation.
-    if let Err(e) = tx_heating_to_relay_manager.send(command.clone()) {
+    if let Err(e) = heating_channels.send_to_relay_manager(command.clone()) {
         let error_message = format!("Channel communication to relay manager for {command} failed.");
         log_error_chain(module_path!(), &error_message, e);
     } else {
         // If send was successful, wait for the response.
-        if let Err(e) = rx_heating_from_relay_manager.recv() {
+        if let Err(e) = heating_channels.receive_from_relay_manager() {
             let error_message =
                 format!("Receiving answer from relay manager for {command} failed.");
             log_error_chain(module_path!(), &error_message, e);
@@ -163,21 +161,18 @@ fn actuate_heater(
 ///
 /// # Arguments
 /// * `mutex_device_scheduler_heating` - A reference to the shared actuation mutex.
-/// * `tx_heating_to_relay_manager` - The sender channel to the relay manager.
-/// * `rx_heating_from_relay_manager` - The receiver channel from the relay manager.
 /// * `mutex_blocked_during_actuation` - A mutable flag to track if the actuation mutex was blocked.
+/// * `heating_channels` - A mutable reference to the struct containing the channels.
 fn switch_on_heater(
     mutex_device_scheduler_heating: &Arc<Mutex<i32>>,
-    tx_heating_to_relay_manager: &Sender<InternalCommand>,
-    rx_heating_from_relay_manager: &Receiver<bool>,
     mutex_blocked_during_actuation: &mut bool,
+    heating_channels: &mut HeatingChannels
 ) {
     actuate_heater(
         InternalCommand::SwitchOn(AquariumDevice::Heater),
         mutex_device_scheduler_heating,
-        tx_heating_to_relay_manager,
-        rx_heating_from_relay_manager,
         mutex_blocked_during_actuation,
+        heating_channels
     );
 }
 
@@ -187,46 +182,19 @@ fn switch_on_heater(
 ///
 /// # Arguments
 /// * `mutex_device_scheduler_heating` - A reference to the shared actuation mutex.
-/// * `tx_heating_to_relay_manager` - The sender channel to the relay manager.
-/// * `rx_heating_from_relay_manager` - The receiver channel from the relay manager.
 /// * `mutex_blocked_during_actuation` - A mutable flag to track if the actuation mutex was blocked.
+/// * `heating_channels` - A mutable reference to the struct containing the channels.
 fn switch_off_heater(
     mutex_device_scheduler_heating: &Arc<Mutex<i32>>,
-    tx_heating_to_relay_manager: &Sender<InternalCommand>,
-    rx_heating_from_relay_manager: &Receiver<bool>,
     mutex_blocked_during_actuation: &mut bool,
+    heating_channels: &mut HeatingChannels,
 ) {
     actuate_heater(
         InternalCommand::SwitchOff(AquariumDevice::Heater),
         mutex_device_scheduler_heating,
-        tx_heating_to_relay_manager,
-        rx_heating_from_relay_manager,
         mutex_blocked_during_actuation,
+        heating_channels,
     );
-}
-
-/// Struct collects the channels for communication to relay manager, signal handler, data logger, schedule check, and messaging.
-pub struct HeatingChannels {
-    /// Sender part of the channel for communication to the relay manager
-    pub tx_heating_to_relay_manager: Sender<InternalCommand>,
-
-    /// Receiver part of the channel for communication from the relay manager
-    pub rx_heating_from_relay_manager: Receiver<bool>,
-
-    /// Sender part of the channel for communication to the signal handler
-    pub tx_heating_to_signal_handler: Sender<bool>,
-
-    /// Receiver part of the channel for communication from the signal handler                
-    pub rx_heating_from_signal_handler: Receiver<InternalCommand>,
-
-    /// Sender part of the channel for communication to the schedule checker
-    pub tx_heating_to_schedule_check: Sender<InternalCommand>,
-
-    /// Receiver part of the channel for communication from the schedule checker               
-    pub rx_heating_from_schedule_check: Receiver<bool>,
-
-    /// Receiver part of the channel for communication from the messaging
-    pub rx_heating_from_messaging_opt: Option<Receiver<InternalCommand>>,
 }
 
 /// Contains `Arc<Mutex>`-wrapped shared data points accessed by the heating control.
@@ -424,7 +392,7 @@ impl Heating {
     pub fn execute(
         &mut self,
         mutex_device_scheduler_heating: Arc<Mutex<i32>>,
-        heating_channels: HeatingChannels,
+        heating_channels: &mut HeatingChannels,
         heating_stats_transfer: &mut impl HeatingStatsDataTransferTrait,
         heating_set_val_updater: &mut impl HeatingSetValueUpdaterTrait,
         heating_mutexes: HeatingMutexes,
@@ -539,15 +507,13 @@ impl Heating {
                 }
 
                 // schedule check to see if actuation is allowed
-                match heating_channels
-                    .tx_heating_to_schedule_check
-                    .send(InternalCommand::ScheduleCheck)
+                match heating_channels.send_to_schedule_check(InternalCommand::ScheduleCheck)
                 {
                     Ok(_) => {
                         self.lock_error_channel_send_schedule_check = false;
                         // now listen for the response
                         schedule_check_result =
-                            match heating_channels.rx_heating_from_schedule_check.recv() {
+                            match heating_channels.receive_from_schedule_check() {
                                 Ok(c) => {
                                     self.lock_error_channel_receive_schedule_check = false;
                                     c
@@ -603,9 +569,8 @@ impl Heating {
                     if heater_state != ActuatorState::Off {
                         switch_off_heater(
                             &mutex_device_scheduler_heating,
-                            &heating_channels.tx_heating_to_relay_manager,
-                            &heating_channels.rx_heating_from_relay_manager,
                             &mut actuation_mutex_was_blocked_during_actuation,
+                            heating_channels,
                         );
                         heater_state = ActuatorState::Off;
                     }
@@ -627,9 +592,8 @@ impl Heating {
                                 if heater_state != ActuatorState::On {
                                     switch_on_heater(
                                         &mutex_device_scheduler_heating,
-                                        &heating_channels.tx_heating_to_relay_manager,
-                                        &heating_channels.rx_heating_from_relay_manager,
                                         &mut actuation_mutex_was_blocked_during_actuation,
+                                        heating_channels,
                                     );
                                     heater_state = ActuatorState::On;
                                 }
@@ -638,9 +602,8 @@ impl Heating {
                                 if heater_state != ActuatorState::Off {
                                     switch_off_heater(
                                         &mutex_device_scheduler_heating,
-                                        &heating_channels.tx_heating_to_relay_manager,
-                                        &heating_channels.rx_heating_from_relay_manager,
                                         &mut actuation_mutex_was_blocked_during_actuation,
+                                        heating_channels,
                                     );
                                     heater_state = ActuatorState::Off;
                                 }
@@ -652,9 +615,8 @@ impl Heating {
                                 if heater_state != ActuatorState::Off {
                                     switch_off_heater(
                                         &mutex_device_scheduler_heating,
-                                        &heating_channels.tx_heating_to_relay_manager,
-                                        &heating_channels.rx_heating_from_relay_manager,
                                         &mut actuation_mutex_was_blocked_during_actuation,
+                                        heating_channels,
                                     );
                                     heater_state = ActuatorState::Off;
                                 }
@@ -664,9 +626,8 @@ impl Heating {
                                 if heater_state != ActuatorState::On {
                                     switch_on_heater(
                                         &mutex_device_scheduler_heating,
-                                        &heating_channels.tx_heating_to_relay_manager,
-                                        &heating_channels.rx_heating_from_relay_manager,
                                         &mut actuation_mutex_was_blocked_during_actuation,
+                                        heating_channels,
                                     );
                                     heater_state = ActuatorState::On;
                                 }
@@ -680,9 +641,8 @@ impl Heating {
                                 if heater_state != ActuatorState::On {
                                     switch_on_heater(
                                         &mutex_device_scheduler_heating,
-                                        &heating_channels.tx_heating_to_relay_manager,
-                                        &heating_channels.rx_heating_from_relay_manager,
                                         &mut actuation_mutex_was_blocked_during_actuation,
+                                        heating_channels
                                     );
                                     heater_state = ActuatorState::On;
                                 }
@@ -692,9 +652,8 @@ impl Heating {
                                 if heater_state != ActuatorState::Off {
                                     switch_off_heater(
                                         &mutex_device_scheduler_heating,
-                                        &heating_channels.tx_heating_to_relay_manager,
-                                        &heating_channels.rx_heating_from_relay_manager,
                                         &mut actuation_mutex_was_blocked_during_actuation,
+                                        heating_channels
                                     );
                                     heater_state = ActuatorState::Off;
                                 }
@@ -708,9 +667,8 @@ impl Heating {
                                 if heater_state != ActuatorState::On {
                                     switch_on_heater(
                                         &mutex_device_scheduler_heating,
-                                        &heating_channels.tx_heating_to_relay_manager,
-                                        &heating_channels.rx_heating_from_relay_manager,
                                         &mut actuation_mutex_was_blocked_during_actuation,
+                                        heating_channels,
                                     );
                                     heater_state = ActuatorState::On;
                                 }
@@ -720,9 +678,8 @@ impl Heating {
                                 if heater_state != ActuatorState::Off {
                                     switch_off_heater(
                                         &mutex_device_scheduler_heating,
-                                        &heating_channels.tx_heating_to_relay_manager,
-                                        &heating_channels.rx_heating_from_relay_manager,
                                         &mut actuation_mutex_was_blocked_during_actuation,
+                                        heating_channels,
                                     );
                                     heater_state = ActuatorState::Off;
                                 }
@@ -864,9 +821,8 @@ impl Heating {
         if heater_state != ActuatorState::Off {
             switch_off_heater(
                 &mutex_device_scheduler_heating,
-                &heating_channels.tx_heating_to_relay_manager,
-                &heating_channels.rx_heating_from_relay_manager,
                 &mut actuation_mutex_was_blocked_during_actuation,
+                heating_channels,
             );
         }
 
@@ -883,7 +839,7 @@ impl Heating {
 
         // The application received request to terminate. That is why the loop was left.
         // Answer to the thread which sent the request for termination, so that shutdown can proceed further.
-        match heating_channels.tx_heating_to_signal_handler.send(true) {
+        match heating_channels.send_to_signal_handler(true) {
             Ok(()) => {
                 #[cfg(test)]
                 println!(
@@ -905,7 +861,7 @@ impl Heating {
         let mut termination_command_received = false;
         while !termination_command_received {
             termination_command_received =
-                match heating_channels.rx_heating_from_signal_handler.recv() {
+                match heating_channels.receive_from_signal_handler() {
                     Ok(c) => {
                         self.lock_error_channel_receive_termination_signal = false;
                         match c {
@@ -1260,14 +1216,34 @@ pub mod tests {
                 let tx_heating_to_relay_manager_for_test_case_finish =
                     tx_heating_to_relay_manager.clone();
 
-                let heating_channels = HeatingChannels {
+                let mut heating_channels = HeatingChannels {
                     tx_heating_to_relay_manager,
+                    #[cfg(feature = "debug_channels")]
+                    cnt_tx_heating_to_relay_manager: 0,
+                    
                     rx_heating_from_relay_manager,
+                    #[cfg(feature = "debug_channels")]
+                    cnt_rx_heating_from_relay_manager: 0,
+                    
                     tx_heating_to_signal_handler,
+                    #[cfg(feature = "debug_channels")]
+                    cnt_tx_heating_to_signal_handler: 0,
+                    
                     rx_heating_from_signal_handler,
+                    #[cfg(feature = "debug_channels")]
+                    cnt_rx_heating_from_signal_handler: 0,
+                    
                     tx_heating_to_schedule_check,
+                    #[cfg(feature = "debug_channels")]
+                    cnt_tx_heating_to_schedule_check: 0,
+                    
                     rx_heating_from_schedule_check,
+                    #[cfg(feature = "debug_channels")]
+                    cnt_rx_heating_from_schedule_check: 0,
+                    
                     rx_heating_from_messaging_opt: None,
+                    #[cfg(feature = "debug_channels")]
+                    cnt_rx_heating_from_messaging_opt: 0,
                 };
 
                 let mut heating_stats_transfer =
@@ -1285,7 +1261,7 @@ pub mod tests {
 
                 heating.execute(
                     mutex_device_scheduler_heating.clone(),
-                    heating_channels,
+                    &mut heating_channels,
                     &mut heating_stats_transfer,
                     &mut heating_set_value_updater,
                     heating_mutexes,
@@ -1412,14 +1388,34 @@ pub mod tests {
                 let tx_heating_to_relay_manager_for_test_case_finish =
                     tx_heating_to_relay_manager.clone();
 
-                let heating_channels = HeatingChannels {
+                let mut heating_channels = HeatingChannels {
                     tx_heating_to_relay_manager,
+                    #[cfg(feature = "debug_channels")]
+                    cnt_tx_heating_to_relay_manager: 0,
+
                     rx_heating_from_relay_manager,
+                    #[cfg(feature = "debug_channels")]
+                    cnt_rx_heating_from_relay_manager: 0,
+
                     tx_heating_to_signal_handler,
+                    #[cfg(feature = "debug_channels")]
+                    cnt_tx_heating_to_signal_handler: 0,
+
                     rx_heating_from_signal_handler,
+                    #[cfg(feature = "debug_channels")]
+                    cnt_rx_heating_from_signal_handler: 0,
+
                     tx_heating_to_schedule_check,
+                    #[cfg(feature = "debug_channels")]
+                    cnt_tx_heating_to_schedule_check: 0,
+
                     rx_heating_from_schedule_check,
+                    #[cfg(feature = "debug_channels")]
+                    cnt_rx_heating_from_schedule_check: 0,
+
                     rx_heating_from_messaging_opt: None,
+                    #[cfg(feature = "debug_channels")]
+                    cnt_rx_heating_from_messaging_opt: 0,
                 };
 
                 let mut heating_stats_transfer =
@@ -1437,7 +1433,7 @@ pub mod tests {
 
                 heating.execute(
                     mutex_device_scheduler_heating.clone(),
-                    heating_channels,
+                    &mut heating_channels,
                     &mut heating_stats_transfer,
                     &mut heating_set_value_updater,
                     heating_mutexes,
@@ -1682,14 +1678,34 @@ pub mod tests {
                 let mut heating_set_value_updater =
                     MockSqlInterfaceHeatingSetVals::new(false, None, None, None);
 
-                let heating_channels = HeatingChannels {
+                let mut heating_channels = HeatingChannels {
                     tx_heating_to_relay_manager,
+                    #[cfg(feature = "debug_channels")]
+                    cnt_tx_heating_to_relay_manager: 0,
+
                     rx_heating_from_relay_manager,
+                    #[cfg(feature = "debug_channels")]
+                    cnt_rx_heating_from_relay_manager: 0,
+
                     tx_heating_to_signal_handler,
+                    #[cfg(feature = "debug_channels")]
+                    cnt_tx_heating_to_signal_handler: 0,
+
                     rx_heating_from_signal_handler,
+                    #[cfg(feature = "debug_channels")]
+                    cnt_rx_heating_from_signal_handler: 0,
+
                     tx_heating_to_schedule_check,
+                    #[cfg(feature = "debug_channels")]
+                    cnt_tx_heating_to_schedule_check: 0,
+
                     rx_heating_from_schedule_check,
+                    #[cfg(feature = "debug_channels")]
+                    cnt_rx_heating_from_schedule_check: 0,
+
                     rx_heating_from_messaging_opt: None,
+                    #[cfg(feature = "debug_channels")]
+                    cnt_rx_heating_from_messaging_opt: 0,
                 };
 
                 let heating_mutexes = HeatingMutexes {
@@ -1702,7 +1718,7 @@ pub mod tests {
 
                 heating.execute(
                     mutex_device_scheduler_heating.clone(),
-                    heating_channels,
+                    &mut heating_channels,
                     &mut heating_stats_transfer,
                     &mut heating_set_value_updater,
                     heating_mutexes,
@@ -1824,14 +1840,34 @@ pub mod tests {
                     HeatingStatsMockDataTransfer::new(&mut sql_interface.get_connection().unwrap());
                 let mut heating_set_value_updater = MockSqlInterfaceHeatingSetVals::new(false, None, None, None);
 
-                let heating_channels = HeatingChannels {
+                let mut heating_channels = HeatingChannels {
                     tx_heating_to_relay_manager,
+                    #[cfg(feature = "debug_channels")]
+                    cnt_tx_heating_to_relay_manager: 0,
+
                     rx_heating_from_relay_manager,
+                    #[cfg(feature = "debug_channels")]
+                    cnt_rx_heating_from_relay_manager: 0,
+
                     tx_heating_to_signal_handler,
+                    #[cfg(feature = "debug_channels")]
+                    cnt_tx_heating_to_signal_handler: 0,
+
                     rx_heating_from_signal_handler,
+                    #[cfg(feature = "debug_channels")]
+                    cnt_rx_heating_from_signal_handler: 0,
+
                     tx_heating_to_schedule_check,
+                    #[cfg(feature = "debug_channels")]
+                    cnt_tx_heating_to_schedule_check: 0,
+
                     rx_heating_from_schedule_check,
-                    rx_heating_from_messaging_opt: None
+                    #[cfg(feature = "debug_channels")]
+                    cnt_rx_heating_from_schedule_check: 0,
+
+                    rx_heating_from_messaging_opt: None,
+                    #[cfg(feature = "debug_channels")]
+                    cnt_rx_heating_from_messaging_opt: 0,
                 };
 
                 let heating_mutexes = HeatingMutexes {
@@ -1842,7 +1878,7 @@ pub mod tests {
 
                 heating.execute(
                     mutex_device_scheduler_heating.clone(),
-                    heating_channels,
+                    &mut heating_channels,
                     &mut heating_stats_transfer,
                     &mut heating_set_value_updater,
                     heating_mutexes
@@ -1974,14 +2010,34 @@ pub mod tests {
                     HeatingStatsMockDataTransfer::new(&mut sql_interface.get_connection().unwrap());
                 let mut heating_set_value_updater = MockSqlInterfaceHeatingSetVals::new(false, None, None, None);
 
-                let heating_channels = HeatingChannels {
+                let mut heating_channels = HeatingChannels {
                     tx_heating_to_relay_manager,
+                    #[cfg(feature = "debug_channels")]
+                    cnt_tx_heating_to_relay_manager: 0,
+
                     rx_heating_from_relay_manager,
+                    #[cfg(feature = "debug_channels")]
+                    cnt_rx_heating_from_relay_manager: 0,
+
                     tx_heating_to_signal_handler,
+                    #[cfg(feature = "debug_channels")]
+                    cnt_tx_heating_to_signal_handler: 0,
+
                     rx_heating_from_signal_handler,
+                    #[cfg(feature = "debug_channels")]
+                    cnt_rx_heating_from_signal_handler: 0,
+
                     tx_heating_to_schedule_check,
+                    #[cfg(feature = "debug_channels")]
+                    cnt_tx_heating_to_schedule_check: 0,
+
                     rx_heating_from_schedule_check,
-                    rx_heating_from_messaging_opt: None
+                    #[cfg(feature = "debug_channels")]
+                    cnt_rx_heating_from_schedule_check: 0,
+
+                    rx_heating_from_messaging_opt: None,
+                    #[cfg(feature = "debug_channels")]
+                    cnt_rx_heating_from_messaging_opt: 0,
                 };
 
                 let heating_mutexes = HeatingMutexes {
@@ -1992,7 +2048,7 @@ pub mod tests {
 
                 heating.execute(
                     mutex_device_scheduler_heating.clone(),
-                    heating_channels,
+                    &mut heating_channels,
                     &mut heating_stats_transfer,
                     &mut heating_set_value_updater,
                     heating_mutexes
@@ -2224,14 +2280,34 @@ pub mod tests {
                     HeatingStatsMockDataTransfer::new(&mut sql_interface.get_connection().unwrap());
                 let mut heating_set_value_updater = MockSqlInterfaceHeatingSetVals::new(false, None, None, None);
 
-                let heating_channels = HeatingChannels {
+                let mut heating_channels = HeatingChannels {
                     tx_heating_to_relay_manager,
+                    #[cfg(feature = "debug_channels")]
+                    cnt_tx_heating_to_relay_manager: 0,
+
                     rx_heating_from_relay_manager,
+                    #[cfg(feature = "debug_channels")]
+                    cnt_rx_heating_from_relay_manager: 0,
+
                     tx_heating_to_signal_handler,
+                    #[cfg(feature = "debug_channels")]
+                    cnt_tx_heating_to_signal_handler: 0,
+
                     rx_heating_from_signal_handler,
+                    #[cfg(feature = "debug_channels")]
+                    cnt_rx_heating_from_signal_handler: 0,
+
                     tx_heating_to_schedule_check,
+                    #[cfg(feature = "debug_channels")]
+                    cnt_tx_heating_to_schedule_check: 0,
+
                     rx_heating_from_schedule_check,
-                    rx_heating_from_messaging_opt: None
+                    #[cfg(feature = "debug_channels")]
+                    cnt_rx_heating_from_schedule_check: 0,
+
+                    rx_heating_from_messaging_opt: None,
+                    #[cfg(feature = "debug_channels")]
+                    cnt_rx_heating_from_messaging_opt: 0,
                 };
 
                 let heating_mutexes = HeatingMutexes {
@@ -2242,7 +2318,7 @@ pub mod tests {
 
                 heating.execute(
                     mutex_device_scheduler_heating.clone(),
-                    heating_channels,
+                    &mut heating_channels,
                     &mut heating_stats_transfer,
                     &mut heating_set_value_updater,
                     heating_mutexes
@@ -2469,14 +2545,34 @@ pub mod tests {
                 let mut heating_set_value_updater =
                     MockSqlInterfaceHeatingSetVals::new(false, None, None, None);
 
-                let heating_channels = HeatingChannels {
+                let mut heating_channels = HeatingChannels {
                     tx_heating_to_relay_manager,
+                    #[cfg(feature = "debug_channels")]
+                    cnt_tx_heating_to_relay_manager: 0,
+
                     rx_heating_from_relay_manager,
+                    #[cfg(feature = "debug_channels")]
+                    cnt_rx_heating_from_relay_manager: 0,
+
                     tx_heating_to_signal_handler,
+                    #[cfg(feature = "debug_channels")]
+                    cnt_tx_heating_to_signal_handler: 0,
+
                     rx_heating_from_signal_handler,
+                    #[cfg(feature = "debug_channels")]
+                    cnt_rx_heating_from_signal_handler: 0,
+
                     tx_heating_to_schedule_check,
+                    #[cfg(feature = "debug_channels")]
+                    cnt_tx_heating_to_schedule_check: 0,
+
                     rx_heating_from_schedule_check,
+                    #[cfg(feature = "debug_channels")]
+                    cnt_rx_heating_from_schedule_check: 0,
+
                     rx_heating_from_messaging_opt: None,
+                    #[cfg(feature = "debug_channels")]
+                    cnt_rx_heating_from_messaging_opt: 0,
                 };
 
                 let heating_mutexes = HeatingMutexes {
@@ -2489,7 +2585,7 @@ pub mod tests {
 
                 heating.execute(
                     mutex_device_scheduler_heating.clone(),
-                    heating_channels,
+                    &mut heating_channels,
                     &mut heating_stats_transfer,
                     &mut heating_set_value_updater,
                     heating_mutexes,
@@ -2612,14 +2708,34 @@ pub mod tests {
                 let mut heating_set_value_updater =
                     MockSqlInterfaceHeatingSetVals::new(false, None, None, None);
 
-                let heating_channels = HeatingChannels {
+                let mut heating_channels = HeatingChannels {
                     tx_heating_to_relay_manager,
+                    #[cfg(feature = "debug_channels")]
+                    cnt_tx_heating_to_relay_manager: 0,
+
                     rx_heating_from_relay_manager,
+                    #[cfg(feature = "debug_channels")]
+                    cnt_rx_heating_from_relay_manager: 0,
+
                     tx_heating_to_signal_handler,
+                    #[cfg(feature = "debug_channels")]
+                    cnt_tx_heating_to_signal_handler: 0,
+
                     rx_heating_from_signal_handler,
+                    #[cfg(feature = "debug_channels")]
+                    cnt_rx_heating_from_signal_handler: 0,
+
                     tx_heating_to_schedule_check,
+                    #[cfg(feature = "debug_channels")]
+                    cnt_tx_heating_to_schedule_check: 0,
+
                     rx_heating_from_schedule_check,
+                    #[cfg(feature = "debug_channels")]
+                    cnt_rx_heating_from_schedule_check: 0,
+
                     rx_heating_from_messaging_opt: None,
+                    #[cfg(feature = "debug_channels")]
+                    cnt_rx_heating_from_messaging_opt: 0,
                 };
 
                 let heating_mutexes = HeatingMutexes {
@@ -2632,7 +2748,7 @@ pub mod tests {
 
                 heating.execute(
                     mutex_device_scheduler_heating.clone(),
-                    heating_channels,
+                    &mut heating_channels,
                     &mut heating_stats_transfer,
                     &mut heating_set_value_updater,
                     heating_mutexes,
@@ -2834,14 +2950,34 @@ pub mod tests {
                 let mut heating_set_value_updater =
                     MockSqlInterfaceHeatingSetVals::new(false, None, None, None);
 
-                let heating_channels = HeatingChannels {
+                let mut heating_channels = HeatingChannels {
                     tx_heating_to_relay_manager,
+                    #[cfg(feature = "debug_channels")]
+                    cnt_tx_heating_to_relay_manager: 0,
+
                     rx_heating_from_relay_manager,
+                    #[cfg(feature = "debug_channels")]
+                    cnt_rx_heating_from_relay_manager: 0,
+
                     tx_heating_to_signal_handler,
+                    #[cfg(feature = "debug_channels")]
+                    cnt_tx_heating_to_signal_handler: 0,
+
                     rx_heating_from_signal_handler,
+                    #[cfg(feature = "debug_channels")]
+                    cnt_rx_heating_from_signal_handler: 0,
+
                     tx_heating_to_schedule_check,
+                    #[cfg(feature = "debug_channels")]
+                    cnt_tx_heating_to_schedule_check: 0,
+
                     rx_heating_from_schedule_check,
+                    #[cfg(feature = "debug_channels")]
+                    cnt_rx_heating_from_schedule_check: 0,
+
                     rx_heating_from_messaging_opt: Some(rx_heating_from_messaging),
+                    #[cfg(feature = "debug_channels")]
+                    cnt_rx_heating_from_messaging_opt: 0,
                 };
 
                 let heating_mutexes = HeatingMutexes {
@@ -2854,7 +2990,7 @@ pub mod tests {
 
                 heating.execute(
                     mutex_device_scheduler_heating.clone(),
-                    heating_channels,
+                    &mut heating_channels,
                     &mut heating_stats_transfer,
                     &mut heating_set_value_updater,
                     heating_mutexes,
@@ -3003,14 +3139,34 @@ pub mod tests {
                 let tx_heating_to_relay_manager_for_test_case_finish =
                     tx_heating_to_relay_manager.clone();
 
-                let heating_channels = HeatingChannels {
+                let mut heating_channels = HeatingChannels {
                     tx_heating_to_relay_manager,
+                    #[cfg(feature = "debug_channels")]
+                    cnt_tx_heating_to_relay_manager: 0,
+
                     rx_heating_from_relay_manager,
+                    #[cfg(feature = "debug_channels")]
+                    cnt_rx_heating_from_relay_manager: 0,
+
                     tx_heating_to_signal_handler,
+                    #[cfg(feature = "debug_channels")]
+                    cnt_tx_heating_to_signal_handler: 0,
+
                     rx_heating_from_signal_handler,
+                    #[cfg(feature = "debug_channels")]
+                    cnt_rx_heating_from_signal_handler: 0,
+
                     tx_heating_to_schedule_check,
+                    #[cfg(feature = "debug_channels")]
+                    cnt_tx_heating_to_schedule_check: 0,
+
                     rx_heating_from_schedule_check,
+                    #[cfg(feature = "debug_channels")]
+                    cnt_rx_heating_from_schedule_check: 0,
+
                     rx_heating_from_messaging_opt: None,
+                    #[cfg(feature = "debug_channels")]
+                    cnt_rx_heating_from_messaging_opt: 0,
                 };
 
                 let mut heating_stats_transfer =
@@ -3034,7 +3190,7 @@ pub mod tests {
 
                 heating.execute(
                     mutex_device_scheduler_heating.clone(),
-                    heating_channels,
+                    &mut heating_channels,
                     &mut heating_stats_transfer,
                     &mut heating_set_value_updater,
                     heating_mutexes,
@@ -3180,14 +3336,34 @@ pub mod tests {
                 let tx_heating_to_relay_manager_for_test_case_finish =
                     tx_heating_to_relay_manager.clone();
 
-                let heating_channels = HeatingChannels {
+                let mut heating_channels = HeatingChannels {
                     tx_heating_to_relay_manager,
+                    #[cfg(feature = "debug_channels")]
+                    cnt_tx_heating_to_relay_manager: 0,
+
                     rx_heating_from_relay_manager,
+                    #[cfg(feature = "debug_channels")]
+                    cnt_rx_heating_from_relay_manager: 0,
+
                     tx_heating_to_signal_handler,
+                    #[cfg(feature = "debug_channels")]
+                    cnt_tx_heating_to_signal_handler: 0,
+
                     rx_heating_from_signal_handler,
+                    #[cfg(feature = "debug_channels")]
+                    cnt_rx_heating_from_signal_handler: 0,
+
                     tx_heating_to_schedule_check,
+                    #[cfg(feature = "debug_channels")]
+                    cnt_tx_heating_to_schedule_check: 0,
+
                     rx_heating_from_schedule_check,
+                    #[cfg(feature = "debug_channels")]
+                    cnt_rx_heating_from_schedule_check: 0,
+
                     rx_heating_from_messaging_opt: None,
+                    #[cfg(feature = "debug_channels")]
+                    cnt_rx_heating_from_messaging_opt: 0,
                 };
 
                 let mut heating_stats_transfer =
@@ -3205,7 +3381,7 @@ pub mod tests {
 
                 heating.execute(
                     mutex_device_scheduler_heating.clone(),
-                    heating_channels,
+                    &mut heating_channels,
                     &mut heating_stats_transfer,
                     &mut heating_set_value_updater,
                     heating_mutexes,

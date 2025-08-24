@@ -32,6 +32,19 @@ pub struct RefillMonitorView {
 
 #[cfg(test)]
 impl RefillMonitorView {
+    pub(crate) fn default() -> Self {
+        RefillMonitorView {
+            refill_check_volume_last_24h: false,
+            refill_check_count_last_24h: false,
+            refill_check_volume_last_hour: false,
+            refill_check_count_last_hour: false,
+            refill_check_interval_last_refill: false,
+        }
+    }
+}
+
+#[cfg(test)]
+impl RefillMonitorView {
     // Helper function to assert the state of a RefillMonitorView
     pub fn assert_refill_monitor_view(
         &self,

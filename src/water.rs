@@ -21,3 +21,6 @@ pub mod refill_monitor_view;
 
 /// Container for communication with SQL database
 pub mod refill_stats_data;
+
+/// Container for channels
+pub mod refill_channels;

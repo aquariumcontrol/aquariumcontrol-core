@@ -9,10 +9,10 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 
 #[cfg(test)]
 pub mod tests {
+    use crate::mineral::balling::BallingChannels;
     use crate::mineral::mineral_injection::MineralInjectionTrait;
-    use crate::utilities::channel_content::{AquariumDevice, InternalCommand};
+    use crate::utilities::channel_content::AquariumDevice;
     use std::fmt;
-    use std::sync::mpsc::{Receiver, Sender};
 
     pub struct MockMineralInjection {
         pub(crate) pump1_engagement_durations: Vec<u32>,
@@ -57,9 +57,7 @@ pub mod tests {
         // The channel arguments are ignored in this mock implementation.
         //
         // # Arguments
-        // * `_tx_balling_to_relay_manager` - (Ignored) Sender channel for sending commands to the relay manager.
-        // * `_rx_balling_from_relay_manager` - (Ignored) Receiver channel for acknowledgments from the relay manager.
-        // * `_rx_balling_from_signal_handler` - (Ignored) Receiver channel for listening to signals from the signal handler.
+        // * `_balling_channels` - (Ignored) Mutable reference to struct for channels.
         // * `mineral_pump` - The `AquariumDevice` enum variant representing the peristaltic pump to be "actuated."
         // * `dosing_duration_millis` - The target duration (in milliseconds) for which the pump would run.
         //
@@ -73,9 +71,7 @@ pub mod tests {
         // one of the peristaltic pumps (e.g., `AquariumDevice::Skimmer`).
         fn inject_mineral(
             &mut self,
-            _tx_balling_to_relay_manager: &Sender<InternalCommand>,
-            _rx_balling_from_relay_manager: &Receiver<bool>,
-            _rx_balling_from_signal_handler: &Receiver<InternalCommand>,
+            _balling_channels: &mut BallingChannels,
             mineral_pump: AquariumDevice,
             dosing_duration_millis: u32,
         ) -> (bool, u32) {
