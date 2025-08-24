@@ -432,6 +432,7 @@ impl Messaging {
                                 MessagingDomain::Balling => &messaging_channels.cnt_tx_to_balling,
                                 MessagingDomain::Monitors => &messaging_channels.cnt_tx_to_monitors,
                                 MessagingDomain::Watchdog => &messaging_channels.cnt_tx_to_watchdog,
+                                MessagingDomain::Unknown => unreachable!(),
                             };
                             *counter += 1;
                         }
