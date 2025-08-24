@@ -208,19 +208,6 @@ pub struct MessagingConfig {
     timeout_millis: u64,
 }
 
-#[cfg(target_os = "linux")]
-pub struct MessagingChannels {
-    pub tx_to_signal_handler: Sender<bool>,
-    pub rx_from_signal_handler: Receiver<InternalCommand>,
-    pub tx_to_refill: Sender<InternalCommand>,
-    pub tx_to_ventilation: Sender<InternalCommand>,
-    pub tx_to_heating: Sender<InternalCommand>,
-    pub tx_to_feed: Sender<InternalCommand>,
-    pub tx_to_balling: Sender<InternalCommand>,
-    pub tx_to_monitors: Sender<InternalCommand>,
-    pub tx_to_watchdog: Sender<InternalCommand>,
-}
-
 #[cfg_attr(doc, aquamarine::aquamarine)]
 /// Struct provides data structure and implementation for IPC message queue communication.
 /// Thread communication of this component is as follows:
@@ -311,13 +298,13 @@ impl Messaging {
     /// and then waits for a `Terminate` command before exiting.
     ///
     /// # Arguments
-    /// * `messaging_channels` - struct containing all channels for communication to other threads.
+    /// * `messaging_channels` - A mutable reference to a struct containing all channels for communication to other threads.
     ///
     /// # Panics
     /// This function will panic if:
     /// - It encounters a fatal error while receiving from the POSIX message queue (other than a timeout).
     /// - It fails to receive the `Terminate` command from the signal handler during shutdown.
-    pub fn execute(&mut self, messaging_channels: MessagingChannels) {
+    pub fn execute(&mut self, messaging_channels: &mut MessagingChannels) {
         #[cfg(not(test))]
         info!(target: module_path!(), "Thread started with TID: {}", gettid());
         let duration_timeout = Duration::from_millis(self.config.timeout_millis);
@@ -441,6 +428,17 @@ impl Messaging {
                                     );
                                 }
                             }
+                            
+                            let counter = match domain {
+                                MessagingDomain::Refill => &mut messaging_channels.cnt_tx_to_refill,
+                                MessagingDomain::Ventilation => &messaging_channels.cnt_tx_to_ventilation,
+                                MessagingDomain::Feed => &messaging_channels.cnt_tx_to_feed,
+                                MessagingDomain::Heating => &messaging_channels.cnt_tx_to_heating,
+                                MessagingDomain::Balling => &messaging_channels.cnt_tx_to_balling,
+                                MessagingDomain::Monitors => &messaging_channels.cnt_tx_to_monitors,
+                                MessagingDomain::Watchdog => &messaging_channels.cnt_tx_to_watchdog,
+                            };
+                            *counter += 1;
                         }
                     } else {
                         error!(

@@ -16,3 +16,6 @@ pub mod messaging;
 
 /// Enum codifies the errors which the program may encounter in communication with the Linux messaging system.
 pub mod messaging_error;
+
+/// Container for channels
+pub mod messaging_channels;

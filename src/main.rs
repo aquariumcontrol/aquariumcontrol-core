@@ -89,7 +89,10 @@ use crate::database::sql_interface_refill::{DatabaseInterfaceRefillTrait, SqlInt
 use crate::database::sql_interface_schedule::SqlInterfaceSchedule;
 use crate::database::sql_interface_ventilation_setvals::SqlInterfaceVentilationSetVals;
 #[cfg(target_os = "linux")]
-use crate::dispatch::messaging::{Messaging, MessagingChannels};
+use crate::dispatch::messaging::Messaging;
+#[cfg(target_os = "linux")]
+use crate::dispatch::messaging_channels::MessagingChannels;
+
 use crate::food::feed::{Feed, FeedChannels};
 use crate::food::food_injection::FoodInjection;
 use crate::mineral::balling::{Balling, BallingChannels};
@@ -1497,7 +1500,7 @@ fn run() -> Result<(), StartupError> {
         tx_feed_to_relay_manager,
         #[cfg(feature = "debug_channels")]
         cnt_tx_feed_to_relay_manager: 0,
-        
+
         rx_feed_from_relay_manager,
         #[cfg(feature = "debug_channels")]
         cnt_rx_feed_from_relay_manager: 0,
@@ -1509,7 +1512,7 @@ fn run() -> Result<(), StartupError> {
         rx_feed_from_signal_handler,
         #[cfg(feature = "debug_channels")]
         cnt_rx_feed_from_signal_handler: 0,
-        
+
         rx_feed_from_messaging_opt,
         #[cfg(feature = "debug_channels")]
         cnt_rx_feed_from_messaging_opt: 0,
@@ -1575,7 +1578,7 @@ fn run() -> Result<(), StartupError> {
         tx_schedule_check_to_refill,
         #[cfg(feature = "debug_channels")]
         cnt_tx_schedule_check_to_refill: 0,
-        
+
         rx_schedule_check_from_refill,
         #[cfg(feature = "debug_channels")]
         cnt_rx_schedule_check_from_refill: 0,
@@ -1587,11 +1590,11 @@ fn run() -> Result<(), StartupError> {
         rx_schedule_check_from_balling,
         #[cfg(feature = "debug_channels")]
         cnt_rx_schedule_check_from_balling: 0,
-        
+
         tx_schedule_check_to_signal_handler,
         #[cfg(feature = "debug_channels")]
         cnt_tx_schedule_check_to_signal_handler: 0,
-        
+
         rx_schedule_check_from_signal_handler,
         #[cfg(feature = "debug_channels")]
         cnt_rx_schedule_check_from_signal_handler: 0,
@@ -1643,16 +1646,42 @@ fn run() -> Result<(), StartupError> {
     };
 
     #[cfg(target_os = "linux")]
-    let messaging_channels = MessagingChannels {
+    let mut messaging_channels = MessagingChannels {
         tx_to_signal_handler: tx_messaging_to_signal_handler,
+        #[cfg(feature = "debug_channels")]
+        cnt_tx_to_signal_handler: 0,
+
         rx_from_signal_handler: rx_messaging_from_signal_handler,
+        #[cfg(feature = "debug_channels")]
+        cnt_rx_from_signal_handler: 0,
+
         tx_to_refill: tx_messaging_to_refill,
+        #[cfg(feature = "debug_channels")]
+        cnt_tx_to_refill: 0,
+
         tx_to_ventilation: tx_messaging_to_ventilation,
+        #[cfg(feature = "debug_channels")]
+        cnt_tx_to_ventilation: 0,
+
         tx_to_heating: tx_messaging_to_heating,
+        #[cfg(feature = "debug_channels")]
+        cnt_tx_to_heating: 0,
+
         tx_to_feed: tx_messaging_to_feed,
+        #[cfg(feature = "debug_channels")]
+        cnt_tx_to_feed: 0,
+
         tx_to_balling: tx_messaging_to_balling,
+        #[cfg(feature = "debug_channels")]
+        cnt_tx_to_balling: 0,
+
         tx_to_monitors: tx_messaging_to_monitors,
+        #[cfg(feature = "debug_channels")]
+        cnt_tx_to_monitors: 0,
+
         tx_to_watchdog: tx_messaging_to_watchdog,
+        #[cfg(feature = "debug_channels")]
+        cnt_tx_to_watchdog: 0,
     };
 
     scope(|scope| {
@@ -1708,7 +1737,7 @@ fn run() -> Result<(), StartupError> {
 
             #[cfg(feature = "debug_main")]
             debug!(target: module_path!(), "Schedule checker terminated.");
-            
+
             #[cfg(feature = "debug_channels")]
             debug!(target: module_path!(), "{schedule_check_channels}");
         });
@@ -1910,10 +1939,10 @@ fn run() -> Result<(), StartupError> {
                 &mut feed_channels,
                 &mut food_injection,
             );
-            
+
             #[cfg(feature = "debug_main")]
             debug!(target: module_path!(), "Feed terminated.");
-            
+
             #[cfg(feature = "debug_channels")]
             debug!(target: module_path!(), "{feed_channels}");
         });
@@ -1939,7 +1968,7 @@ fn run() -> Result<(), StartupError> {
         scope.spawn(move || {
             // read/send messages
             #[cfg(target_os = "linux")]
-            messaging.execute(messaging_channels);
+            messaging.execute(&mut messaging_channels);
 
             // remove PID from the file
             let publish_pid_result = publish_pid.erase_pid();
@@ -1953,6 +1982,9 @@ fn run() -> Result<(), StartupError> {
 
             #[cfg(feature = "debug_main")]
             debug!(target: module_path!(), "Messaging terminated.");
+
+            #[cfg(all(feature = "debug_channels", target_os = "linux"))]
+            debug!(target: module_path!(), "{messaging_channels}");
         });
 
         // Watchdog communication
