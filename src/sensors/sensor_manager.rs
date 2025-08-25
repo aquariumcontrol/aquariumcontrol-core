@@ -22,7 +22,6 @@ use nix::unistd::gettid;
 
 use serde_derive::Deserialize;
 use spin_sleep::SpinSleeper;
-use std::sync::mpsc::{Receiver, Sender};
 
 use crate::sensors::atlas_scientific::AtlasScientificResultData;
 use crate::sensors::dht::DhtResult;
@@ -34,6 +33,7 @@ use crate::utilities::logger::log_error_chain;
 use crate::utilities::proc_ext_req::ProcessExternalRequestTrait;
 use std::time::{Duration, Instant};
 use thiserror::Error;
+use crate::sensors::sensor_manager_channels::SensorManagerChannels;
 
 #[derive(Deserialize, Debug)]
 /// Holds the configuration data for the measurement of ambient signals from DHT sensor
@@ -81,20 +81,6 @@ mod sensor_manager_constants {
 
     /// allow max. 10 milliseconds for mutex to be blocked by any other thread
     pub const MAX_MUTEX_ACCESS_DURATION_MILLIS: u64 = 10;
-}
-
-pub struct SensorManagerChannels<'a> {
-    /// Sender part of the channel for communication via TCP wrapped as optional
-    pub tx_sensor_manager_to_tcp_opt: &'a Option<Sender<InternalCommand>>,
-
-    /// Receiver part of the channel for communication via TCP wrapped as optional
-    pub rx_sensor_manager_from_tcp_opt: &'a Option<Receiver<Result<f32, TcpCommunicationError>>>,
-
-    /// Sender part of the channel for communication to the signal handler
-    pub tx_sensor_manager_to_signal_handler: Sender<bool>,
-
-    /// Receiver part of the channel for communication from the signal handler                
-    pub rx_sensor_manager_from_signal_handler: Receiver<InternalCommand>,
 }
 
 /// Contains `Arc<Mutex>`-wrapped shared data points accessed by the sensor manager.
@@ -359,12 +345,11 @@ impl SensorManager {
     /// these channels are `Some` when running in simulator mode.
     fn communicate_with_simulator(
         &mut self,
-        tx_sensor_manager_to_tcp_opt: &Option<Sender<InternalCommand>>,
-        rx_sensor_manager_from_tcp_opt: &Option<Receiver<Result<f32, TcpCommunicationError>>>,
+        sensor_manager_channels: &mut SensorManagerChannels
     ) -> Result<(), SensorManagerError> {
         // unwrap is safe because tested beforehand
-        let tx_sensor_manager_to_simulator = tx_sensor_manager_to_tcp_opt.as_ref().unwrap();
-        let rx_sensor_manager_from_simulator = rx_sensor_manager_from_tcp_opt.as_ref().unwrap();
+        let tx_sensor_manager_to_simulator = sensor_manager_channels.tx_sensor_manager_to_tcp_opt.as_ref().unwrap();
+        let rx_sensor_manager_from_simulator = sensor_manager_channels.rx_sensor_manager_from_tcp_opt.as_ref().unwrap();
 
         self.ambient_temperature = Self::get_response_from_simulator(
             module_path!().to_string(),
@@ -450,7 +435,7 @@ impl SensorManager {
     /// - It's configured to use the simulator but essential TCP communication channels are missing.
     pub fn execute(
         &mut self,
-        sensor_manager_channels: SensorManagerChannels,
+        sensor_manager_channels: &mut SensorManagerChannels,
         mutexes: SensorManagerMutexes,
     ) {
         #[cfg(all(target_os = "linux", not(test)))]
@@ -502,8 +487,7 @@ impl SensorManager {
                 self.instant_last_measurement = current_instant;
                 if self.config.use_simulator {
                     let result = self.communicate_with_simulator(
-                        sensor_manager_channels.tx_sensor_manager_to_tcp_opt,
-                        sensor_manager_channels.rx_sensor_manager_from_tcp_opt,
+                        sensor_manager_channels
                     );
                     if result.is_err() {
                         log_error_chain(
@@ -823,17 +807,28 @@ pub mod tests {
         target_value_ambient_temperature: f32,
         reference_mutex_access_time_exceeded: bool,
     ) {
-        let sensor_manager_channels = SensorManagerChannels {
-            tx_sensor_manager_to_tcp_opt: &None,
-            rx_sensor_manager_from_tcp_opt: &None,
+        let mut sensor_manager_channels = SensorManagerChannels {
+            tx_sensor_manager_to_tcp_opt: None,
+            #[cfg(feature = "debug_channels")]
+            cnt_tx_sensor_manager_to_tcp_opt: 0,
+
+            rx_sensor_manager_from_tcp_opt: None,
+            #[cfg(feature = "debug_channels")]
+            cnt_rx_sensor_manager_from_tcp_opt: 0,
+
             tx_sensor_manager_to_signal_handler,
+            #[cfg(feature = "debug_channels")]
+            cnt_tx_sensor_manager_to_signal_handler: 0,
+
             rx_sensor_manager_from_signal_handler,
+            #[cfg(feature = "debug_channels")]
+            cnt_rx_sensor_manager_from_signal_handler: 0,
         };
 
         let mutexes_clone_for_asserts = mutexes.clone();
 
         // test object
-        sensor_manager.execute(sensor_manager_channels, mutexes);
+        sensor_manager.execute(&mut sensor_manager_channels, mutexes);
 
         match mutexes_clone_for_asserts
             .mutex_sensor_manager_signals

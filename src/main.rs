@@ -114,8 +114,9 @@ use crate::sensors::dht::{Dht, DhtResult};
 use crate::sensors::ds18b20::{Ds18b20, Ds18b20ResultData};
 use crate::sensors::i2c_interface::{I2cRequest, I2cResult};
 use crate::sensors::sensor_manager::{
-    SensorManager, SensorManagerChannels, SensorManagerMutexes, SensorManagerSignals,
+    SensorManager, SensorManagerMutexes, SensorManagerSignals,
 };
+use crate::sensors::sensor_manager_channels::SensorManagerChannels;
 use crate::sensors::tank_level_switch::{TankLevelSwitch, TankLevelSwitchSignals};
 use crate::simulator::tcp_communication::TcpCommunication;
 use crate::simulator::tcp_communication_channels::{
@@ -1786,8 +1787,12 @@ fn run() -> Result<(), StartupError> {
                 let mut actuate_simulator =
                     ActuateSimulator::new(tx_relay_manager_to_tcp_opt, config.controllino_relay);
                 relay_manager.execute(&mut relay_manager_channels, &mut actuate_simulator);
+
                 #[cfg(feature = "debug_main")]
                 debug!(target: module_path!(), "Controllino (simulator) terminated.");
+
+                #[cfg(feature = "debug_channels")]
+                debug!(target: module_path!(), "{relay_manager_channels}");
             });
         } else {
             scope.spawn(move || {
@@ -1803,6 +1808,9 @@ fn run() -> Result<(), StartupError> {
 
                 #[cfg(feature = "debug_main")]
                 debug!(target: module_path!(), "Controllino (with hardware) terminated.");
+
+                #[cfg(feature = "debug_channels")]
+                debug!(target: module_path!(), "{relay_manager_channels}");
             });
         }
 
@@ -1864,11 +1872,22 @@ fn run() -> Result<(), StartupError> {
         });
 
         scope.spawn(move || {
-            let sensor_manager_channels = SensorManagerChannels {
-                tx_sensor_manager_to_tcp_opt: &tx_sensor_manager_to_tcp_opt,
-                rx_sensor_manager_from_tcp_opt: &rx_sensor_manager_from_tcp_opt,
+            let mut sensor_manager_channels = SensorManagerChannels {
+                tx_sensor_manager_to_tcp_opt,
+                #[cfg(feature = "debug_channels")]
+                cnt_tx_sensor_manager_to_tcp_opt: 0,
+
+                rx_sensor_manager_from_tcp_opt,
+                #[cfg(feature = "debug_channels")]
+                cnt_rx_sensor_manager_from_tcp_opt: 0,
+
                 tx_sensor_manager_to_signal_handler,
+                #[cfg(feature = "debug_channels")]
+                cnt_tx_sensor_manager_to_signal_handler: 0,
+
                 rx_sensor_manager_from_signal_handler,
+                #[cfg(feature = "debug_channels")]
+                cnt_rx_sensor_manager_from_signal_handler: 0,
             };
 
             let mutexes_sensor_manager = SensorManagerMutexes {
@@ -1885,10 +1904,13 @@ fn run() -> Result<(), StartupError> {
                 mutex_sensor_manager_signals,
             };
 
-            sensor_manager.execute(sensor_manager_channels, mutexes_sensor_manager);
+            sensor_manager.execute(&mut sensor_manager_channels, mutexes_sensor_manager);
 
             #[cfg(feature = "debug_main")]
-            debug!(target: module_path!(), "Ambient terminated.");
+            debug!(target: module_path!(), "SensorManager terminated.");
+
+            #[cfg(feature = "debug_channels")]
+            debug!(target: module_path!(), "{sensor_manager_channels}");
         });
 
         // give sensor reading components some time so that they can acquire a first data set

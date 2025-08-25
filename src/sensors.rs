@@ -45,3 +45,6 @@ pub mod atlas_scientific_channels;
 
 /// Container for channels used by i2c_interface module
 pub mod i2c_interface_channels;
+
+/// Container for channels used by sensor manager module
+pub mod sensor_manager_channels;
