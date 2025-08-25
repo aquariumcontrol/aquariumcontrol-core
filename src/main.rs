@@ -132,7 +132,8 @@ use crate::utilities::publish_pid::PublishPid;
 use crate::utilities::signal_handler::{handle_signals, SignalHandlerChannels};
 use crate::utilities::startup_error::StartupError;
 use crate::utilities::version_information::{VersionInformation, VersionInformationError};
-use crate::watchmen::monitors::{Monitors, MonitorsChannels};
+use crate::watchmen::monitors::Monitors;
+use crate::watchmen::monitors_channels::MonitorsChannels;
 use crate::watchmen::petting::Petting;
 use crate::watchmen::watchdog::Watchdog;
 use crate::water::refill::{Refill, RefillChannels, RefillStatus};
@@ -871,17 +872,6 @@ fn run() -> Result<(), StartupError> {
         Receiver<InternalCommand>,
     ) = mpsc::channel();
     let (tx_schedule_check_to_balling, rx_balling_from_schedule_check): (
-        Sender<bool>,
-        Receiver<bool>,
-    ) = mpsc::channel();
-    // *******************************
-
-    // *** monitors <=> relay_manager ***
-    let (tx_monitors_to_relay_manager, _rx_relay_manager_from_monitors): (
-        Sender<InternalCommand>,
-        Receiver<InternalCommand>,
-    ) = mpsc::channel();
-    let (_tx_relay_manager_to_monitors, rx_monitors_from_relay_manager): (
         Sender<bool>,
         Receiver<bool>,
     ) = mpsc::channel();
@@ -1663,13 +1653,22 @@ fn run() -> Result<(), StartupError> {
         tx_signal_handler_to_ds18b20,
     };
 
-    let monitors_channels = MonitorsChannels {
-        tx_monitors_to_relay_manager,
-        rx_monitors_from_relay_manager,
+    let mut monitors_channels = MonitorsChannels {
         rx_monitors_from_refill,
+        #[cfg(feature = "debug_channels")]
+        cnt_rx_monitors_from_refill: 0,
+
         tx_monitors_to_signal_handler,
+        #[cfg(feature = "debug_channels")]
+        cnt_tx_monitors_to_signal_handler: 0,
+
         rx_monitors_from_signal_handler,
+        #[cfg(feature = "debug_channels")]
+        cnt_rx_monitors_from_signal_handler: 0,
+
         rx_monitors_from_messaging_opt,
+        #[cfg(feature = "debug_channels")]
+        cnt_rx_monitors_from_messaging_opt: 0,
     };
 
     #[cfg(target_os = "linux")]
@@ -1961,7 +1960,7 @@ fn run() -> Result<(), StartupError> {
         let mutex_device_scheduler_monitors = Arc::clone(&mutex_device_scheduler);
 
         scope.spawn(move || {
-            monitors.execute(mutex_device_scheduler_monitors, monitors_channels);
+            monitors.execute(mutex_device_scheduler_monitors, &mut monitors_channels);
 
             #[cfg(feature = "debug_main")]
             debug!(target: module_path!(), "Monitors terminated.");

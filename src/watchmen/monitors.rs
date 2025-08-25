@@ -18,12 +18,11 @@ use nix::unistd::gettid;
 use serde_derive::Deserialize;
 use spin_sleep::SpinSleeper;
 use std::sync::mpsc::TryRecvError;
-use std::sync::mpsc::{Receiver, Sender};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
-use crate::utilities::channel_content::InternalCommand;
 use crate::utilities::proc_ext_req::ProcessExternalRequestTrait;
+use crate::watchmen::monitors_channels::MonitorsChannels;
 use crate::water::refill_monitor_view::RefillMonitorView;
 
 /// Holds the configuration data for the monitors.
@@ -36,29 +35,6 @@ pub struct MonitorsConfig {
 
     /// Maximum number of monitoring entries for refill
     max_length_refill_monitor_views: usize,
-}
-
-/// Struct collects the channels for the communication between the monitors and the other components.
-pub struct MonitorsChannels {
-    /// sender part of the channel for communication to the relay manager
-    #[allow(unused)]
-    pub tx_monitors_to_relay_manager: Sender<InternalCommand>,
-
-    /// receiver part of the channel for communication from the relay manager
-    #[allow(unused)]
-    pub rx_monitors_from_relay_manager: Receiver<bool>,
-
-    /// receiver part of the channel for communication from the refill control
-    pub rx_monitors_from_refill: Receiver<RefillMonitorView>,
-
-    /// sender part of the channel for communication to the signal handler
-    pub tx_monitors_to_signal_handler: Sender<bool>,
-
-    /// receiver part of the channel for communication from the signal handler
-    pub rx_monitors_from_signal_handler: Receiver<InternalCommand>,
-
-    /// receiver part of the channel for communication from the messaging component
-    pub rx_monitors_from_messaging_opt: Option<Receiver<InternalCommand>>,
 }
 
 #[cfg_attr(doc, aquamarine::aquamarine)]
@@ -143,20 +119,11 @@ impl Monitors {
     /// # Arguments
     /// * `_mutex_device_scheduler_monitors` - (Ignored) A clone of a mutex for device scheduling.
     ///   This argument is part of a common signature but is not used by this module's logic.
-    /// * `_tx_to_relay_manager` - (Ignored) The sender channel for communicating with the relay manager.
-    ///   This argument is present for signature consistency but not used by this function.
-    /// * `_rx_from_relay_manager` - (Ignored) The receiver channel for communication from the relay manager.
-    ///   This argument is present for signature consistency but not used by this function.
-    /// * `tx_to_signal_handler` - The sender channel for this module to send acknowledgment
-    ///   back to the main signal handler during shutdown.
-    /// * `rx_from_signal_handler` - The receiver channel for this module to receive commands
-    ///   (e.g., `Quit`, `Terminate`) from the main signal handler.
-    /// * `rx_from_messaging_opt` - An `Option` containing the receiver channel for commands
-    ///   from the messaging system (e.g., `Start`, `Stop`).
+    /// * `monitors_channels` - A mutable reference to the struct containing the channels.
     pub fn execute(
         &mut self,
         _mutex_device_scheduler_monitors: Arc<Mutex<i32>>,
-        monitors_channels: MonitorsChannels,
+        monitors_channels: &mut MonitorsChannels,
     ) {
         #[cfg(all(target_os = "linux", not(test)))]
         info!(target: module_path!(), "Thread started with TID: {}", gettid());
@@ -185,7 +152,7 @@ impl Monitors {
                     );
                 }
 
-                match monitors_channels.rx_monitors_from_refill.try_recv() {
+                match monitors_channels.receive_from_refill() {
                     Ok(new_refill_view) => match old_refill_view_opt {
                         Some(ref old_refill_view) => {
                             if &new_refill_view != old_refill_view {
