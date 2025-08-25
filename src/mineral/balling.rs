@@ -18,8 +18,8 @@ use nix::unistd::gettid;
 
 use serde_derive::Deserialize;
 use spin_sleep::SpinSleeper;
-use std::sync::{Arc, Mutex};
 use std::sync::mpsc::TryRecvError;
+use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
 use crate::database::sql_interface_balling::{BallingSetVal, SqlInterfaceBalling};

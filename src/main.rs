@@ -116,8 +116,9 @@ use crate::sensors::sensor_manager::{
     SensorManager, SensorManagerChannels, SensorManagerMutexes, SensorManagerSignals,
 };
 use crate::sensors::tank_level_switch::{TankLevelSwitch, TankLevelSwitchSignals};
-use crate::simulator::tcp_communication::{
-    TcpCommunication, TcpCommunicationChannelPair, TcpCommunicationChannels,
+use crate::simulator::tcp_communication::TcpCommunication;
+use crate::simulator::tcp_communication_channels::{
+    TcpCommunicationChannelPair, TcpCommunicationChannels,
 };
 use crate::simulator::tcp_communication_error::TcpCommunicationError;
 use crate::thermal::distinct_interval_check::distinct_thermal_control_interval_check;
@@ -1550,14 +1551,34 @@ fn run() -> Result<(), StartupError> {
         cnt_rx_heating_from_messaging_opt: 0,
     };
 
-    let tcp_communication_channels = TcpCommunicationChannels {
+    let mut tcp_communication_channels = TcpCommunicationChannels {
         rx_tcp_communication_from_relay_manager_opt,
+        #[cfg(feature = "debug_channels")]
+        cnt_rx_tcp_communication_from_relay_manager_opt: 0,
+
         rx_tcp_communication_from_sensor_manager_opt,
+        #[cfg(feature = "debug_channels")]
+        cnt_rx_tcp_communication_from_sensor_manager_opt: 0,
+
         tx_tcp_communication_to_sensor_manager_opt,
+        #[cfg(feature = "debug_channels")]
+        cnt_tx_tcp_communication_to_sensor_manager_opt: 0,
+
         rx_tcp_communication_from_tank_level_switch_opt,
+        #[cfg(feature = "debug_channels")]
+        cnt_rx_tcp_communication_from_tank_level_switch_opt: 0,
+
         tx_tcp_communication_to_tank_level_switch_opt,
+        #[cfg(feature = "debug_channels")]
+        cnt_tx_tcp_communication_to_tank_level_switch_opt: 0,
+
         tx_tcp_communication_to_signal_handler,
+        #[cfg(feature = "debug_channels")]
+        cnt_tx_tcp_communication_to_signal_handler: 0,
+
         rx_tcp_communication_from_signal_handler,
+        #[cfg(feature = "debug_channels")]
+        cnt_rx_tcp_communication_from_signal_handler: 0,
     };
 
     let mut schedule_check_channels = ScheduleCheckChannels {
@@ -1718,7 +1739,7 @@ fn run() -> Result<(), StartupError> {
                 .map_err(|e| StartupError::TcpConnection { source: e })?;
 
             scope.spawn(move || {
-                tcp_communication.execute(tcp_communication_channels);
+                tcp_communication.execute(&mut tcp_communication_channels);
             });
             #[cfg(feature = "debug_main")]
             debug!(target: module_path!(), "TcpCommunication terminated.");

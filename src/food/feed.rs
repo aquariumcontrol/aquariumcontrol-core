@@ -23,8 +23,8 @@ use nix::unistd::gettid;
 
 use serde_derive::Deserialize;
 use spin_sleep::SpinSleeper;
-use std::sync::{Arc, Mutex};
 use std::sync::mpsc::TryRecvError;
+use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
 use crate::database::sql_interface_feed::DatabaseInterfaceFeedTrait;
@@ -650,7 +650,11 @@ impl Feed {
                         TryRecvError::Empty => { /* do nothing */ }
                         TryRecvError::Disconnected => {
                             if !self.lock_error_channel_receive_termination_signal {
-                                log_error_chain(module_path!(), "Receiving termination signal failed.", e);
+                                log_error_chain(
+                                    module_path!(),
+                                    "Receiving termination signal failed.",
+                                    e,
+                                );
                                 self.lock_error_channel_receive_termination_signal = true;
                             }
                         }

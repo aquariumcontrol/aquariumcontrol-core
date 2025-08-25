@@ -1583,7 +1583,7 @@ pub mod tests {
 
                     rx_from_signal_handler: rx_data_logger_from_signal_handler,
                     #[cfg(feature = "debug_channels")]
-                    cnt_rx_from_signal_handler: 0
+                    cnt_rx_from_signal_handler: 0,
                 };
 
                 let data_logger_mutexes = DataLoggerMutexes {

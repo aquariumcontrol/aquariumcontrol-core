@@ -10,8 +10,8 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 use log::{error, warn};
 use serde_derive::Deserialize;
 use spin_sleep::SpinSleeper;
-use std::sync::{Arc, Mutex};
 use std::sync::mpsc::TryRecvError;
+use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
 #[cfg(all(target_os = "linux", not(test)))]

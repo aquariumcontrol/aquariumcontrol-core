@@ -612,7 +612,8 @@ impl TankLevelSwitch {
         let mut termination_command_received = false;
         let sleep_duration_one_millis = Duration::from_millis(1);
         while !termination_command_received {
-            termination_command_received = match rx_from_signal_handler.recv() { // @todo: change to try_recv
+            termination_command_received = match rx_from_signal_handler.recv() {
+                // @todo: change to try_recv
                 Ok(c) => match c {
                     InternalCommand::Terminate => {
                         self.lock_warn_inapplicable_command_signal_handler = false;

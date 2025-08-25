@@ -52,32 +52,32 @@ impl MonitorsChannels {
     }
 
     /*
-    /// Sends an acknowledgment to the signal handler.
-    ///
-    /// This wrapper sends a boolean acknowledgment and increments the debug counter.
-    pub fn send_to_signal_handler(&mut self, ack: bool) -> Result<(), SendError<bool>> {
-        let result = self.tx_monitors_to_signal_handler.send(ack);
-        #[cfg(feature = "debug_channels")]
-        if result.is_ok() {
-            self.cnt_tx_monitors_to_signal_handler += 1;
+        /// Sends an acknowledgment to the signal handler.
+        ///
+        /// This wrapper sends a boolean acknowledgment and increments the debug counter.
+        pub fn send_to_signal_handler(&mut self, ack: bool) -> Result<(), SendError<bool>> {
+            let result = self.tx_monitors_to_signal_handler.send(ack);
+            #[cfg(feature = "debug_channels")]
+            if result.is_ok() {
+                self.cnt_tx_monitors_to_signal_handler += 1;
+            }
+            result
         }
-        result
-    }
-*/
+    */
 
     /*
-    /// Receives a command from the signal handler.
-    ///
-    /// This wrapper performs a non-blocking receive-operation and increments the debug counter on success.
-    pub fn receive_from_signal_handler(&mut self) -> Result<InternalCommand, TryRecvError> {
-        let result = self.rx_monitors_from_signal_handler.try_recv();
-        #[cfg(feature = "debug_channels")]
-        if result.is_ok() {
-            self.cnt_rx_monitors_from_signal_handler += 1;
+        /// Receives a command from the signal handler.
+        ///
+        /// This wrapper performs a non-blocking receive-operation and increments the debug counter on success.
+        pub fn receive_from_signal_handler(&mut self) -> Result<InternalCommand, TryRecvError> {
+            let result = self.rx_monitors_from_signal_handler.try_recv();
+            #[cfg(feature = "debug_channels")]
+            if result.is_ok() {
+                self.cnt_rx_monitors_from_signal_handler += 1;
+            }
+            result
         }
-        result
-    }
-*/
+    */
     /*
     /// Receives a command from messaging if the channel exists.
     ///
@@ -100,7 +100,7 @@ impl fmt::Display for MonitorsChannels {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         writeln!(
             f,
-            "cnt_rx_monitors_from_refill: {}",
+            "\ncnt_rx_monitors_from_refill: {}",
             self.cnt_rx_monitors_from_refill
         )?;
         writeln!(

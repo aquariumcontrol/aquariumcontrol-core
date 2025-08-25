@@ -13,7 +13,6 @@ use log::{debug, error, warn};
 
 use serde_derive::Deserialize;
 use spin_sleep::SpinSleeper;
-use std::fmt;
 use std::sync::mpsc::{Receiver, Sender, TryRecvError};
 use std::{
     io::{prelude::*, BufReader},
@@ -21,6 +20,7 @@ use std::{
     time::Duration,
 };
 
+use crate::simulator::tcp_communication_channels::TcpCommunicationChannels;
 pub(crate) use crate::simulator::tcp_communication_error::TcpCommunicationError;
 use crate::simulator::tcp_data::*;
 use crate::utilities::channel_content::{AquariumSignal, InternalCommand};
@@ -40,104 +40,6 @@ pub struct TcpConnectionConfig {
     /// numeric port number
     port: u16,
 }
-
-/// Struct collects the channels for communication with other threads.
-pub struct TcpCommunicationChannels {
-    /// Receiver part of the channel for communication from the relay manager wrapped in Option type
-    pub rx_tcp_communication_from_relay_manager_opt: Option<Receiver<InternalCommand>>,
-
-    /// Receiver part of the channel for communication from the sensor manager wrapped in Option type
-    pub rx_tcp_communication_from_sensor_manager_opt: Option<Receiver<InternalCommand>>,
-
-    /// Sender part of the channel for communication to sensor manager wrapped in Option type
-    pub tx_tcp_communication_to_sensor_manager_opt:
-        Option<Sender<Result<f32, TcpCommunicationError>>>,
-
-    /// Receiver part of the channel for communication from tank level switch wrapped in Option type
-    pub rx_tcp_communication_from_tank_level_switch_opt: Option<Receiver<InternalCommand>>,
-
-    /// Sender part of the channel for communication to tank level switch wrapped in Option type       
-    pub tx_tcp_communication_to_tank_level_switch_opt:
-        Option<Sender<Result<f32, TcpCommunicationError>>>,
-
-    /// Sender part of the channel for communication to the signal handler       
-    pub tx_tcp_communication_to_signal_handler: Sender<bool>,
-
-    /// Receiver part of the channel for communication from the signal handler       
-    pub rx_tcp_communication_from_signal_handler: Receiver<InternalCommand>,
-}
-
-impl fmt::Display for TcpCommunicationChannels {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        writeln!(f, "TcpCommunicationChannels Status:")?;
-
-        writeln!(
-            f,
-            "- rx_tcp_communication_from_relay_manager_opt: {}",
-            if self.rx_tcp_communication_from_relay_manager_opt.is_some() {
-                "Some"
-            } else {
-                "None"
-            }
-        )?;
-
-        writeln!(
-            f,
-            "- rx_tcp_communication_from_sensor_manager_opt: {}",
-            if self.rx_tcp_communication_from_sensor_manager_opt.is_some() {
-                "Some"
-            } else {
-                "None"
-            }
-        )?;
-
-        writeln!(
-            f,
-            "- tx_tcp_communication_to_sensor_manager_opt: {}",
-            if self.tx_tcp_communication_to_sensor_manager_opt.is_some() {
-                "Some"
-            } else {
-                "None"
-            }
-        )?;
-
-        writeln!(
-            f,
-            "- rx_tcp_communication_from_tank_level_switch_opt: {}",
-            if self
-                .rx_tcp_communication_from_tank_level_switch_opt
-                .is_some()
-            {
-                "Some"
-            } else {
-                "None"
-            }
-        )?;
-
-        writeln!(
-            f,
-            "- tx_tcp_communication_to_tank_level_switch_opt: {}",
-            if self.tx_tcp_communication_to_tank_level_switch_opt.is_some() {
-                "Some"
-            } else {
-                "None"
-            }
-        )?;
-
-        writeln!(f, "- tx_tcp_communication_to_signal_handler: Present")?;
-
-        writeln!(f, "- rx_tcp_communication_from_signal_handler: Present")
-    }
-}
-
-/// A type alias for a sender/receiver pair used in TCP communication.
-///
-/// This channel is used to send sensor values (`f32`) or communication errors
-/// between a module and the TCP simulator thread.
-pub type TcpCommunicationChannelPair = (
-    Sender<Result<f32, TcpCommunicationError>>,
-    Receiver<Result<f32, TcpCommunicationError>>,
-);
 
 #[cfg_attr(doc, aquamarine::aquamarine)]
 /// Contains configuration of implementation for opening, reading, and closing TCP channel.
@@ -493,19 +395,21 @@ impl TcpCommunication {
     /// Upon receiving `Quit`, it breaks out of the loop and sends a confirmation back to the signal handler.
     ///
     /// # Arguments
-    /// * `tcp_communication_channels` - Channels for communication with other threads,
-    ///   including senders/receivers for Ambient, Atlas Scientific, Tank Level Switch,
+    /// * `tcp_communication_channels` - A mutable reference to a struct containing the
+    ///   channels for communication with other threads,
+    ///   including senders/receivers for SensorManager, Tank Level Switch,
     ///   Relay Manager, and the Signal Handler.
-    pub fn execute(&mut self, tcp_communication_channels: TcpCommunicationChannels) {
+    pub fn execute(&mut self, tcp_communication_channels: &mut TcpCommunicationChannels) {
         #[cfg(all(target_os = "linux", not(test)))]
         info!(target: module_path!(), "Thread started with TID: {}", gettid());
+
+        #[cfg(not(test))]
+        tcp_communication_channels.report_status();
 
         let spin_sleeper = SpinSleeper::default();
         let sleep_interval_millis = 10;
         let sleep_duration_ten_milli_sec = Duration::from_millis(sleep_interval_millis);
         let mut lock_relay_manager_channel_disconnected = false;
-
-        println!("{tcp_communication_channels}");
 
         loop {
             let (quit_command_received, _, _) = self.process_external_request(
@@ -517,15 +421,15 @@ impl TcpCommunication {
             }
 
             // *** communication with Ambient ***
-            if let Some(ref rx_tcp_communication_from_ambient) =
+            if let Some(ref rx_tcp_communication_from_sensor_manager) =
                 tcp_communication_channels.rx_tcp_communication_from_sensor_manager_opt
             {
-                if let Some(ref tx_tcp_communication_to_ambient) =
+                if let Some(ref tx_tcp_communication_to_sensor_manager) =
                     tcp_communication_channels.tx_tcp_communication_to_sensor_manager_opt
                 {
                     if let Err(e) = self.receive_and_answer(
-                        rx_tcp_communication_from_ambient,
-                        tx_tcp_communication_to_ambient,
+                        rx_tcp_communication_from_sensor_manager,
+                        tx_tcp_communication_to_sensor_manager,
                     ) {
                         log_error_chain(
                             module_path!(),
@@ -610,10 +514,7 @@ impl TcpCommunication {
 
         // The application received request to terminate. That is why the loop was left.
         // Answer to the thread which sent the request for termination, so that shutdown can proceed further.
-        match tcp_communication_channels
-            .tx_tcp_communication_to_signal_handler
-            .send(true)
-        {
+        match tcp_communication_channels.send_to_signal_handler(true) {
             Ok(()) => {}
             Err(e) => {
                 error!(
@@ -622,77 +523,5 @@ impl TcpCommunication {
                 );
             }
         };
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use std::sync::mpsc::channel;
-
-    #[test]
-    fn test_tcp_channels_display_all_some() {
-        let (_, rx1) = channel();
-        let (_, rx2) = channel();
-        let (tx3, _) = channel();
-        let (_, rx4) = channel();
-        let (tx5, _) = channel();
-        let (tx6, _) = channel();
-        let (_, rx7) = channel();
-
-        let channels = TcpCommunicationChannels {
-            rx_tcp_communication_from_relay_manager_opt: Some(rx1),
-            rx_tcp_communication_from_sensor_manager_opt: Some(rx2),
-            tx_tcp_communication_to_sensor_manager_opt: Some(tx3),
-            rx_tcp_communication_from_tank_level_switch_opt: Some(rx4),
-            tx_tcp_communication_to_tank_level_switch_opt: Some(tx5),
-            tx_tcp_communication_to_signal_handler: tx6,
-            rx_tcp_communication_from_signal_handler: rx7,
-        };
-
-        println!("Output for TcpCommunicationChannels: {}", channels);
-
-        let expected_output = "\
-TcpCommunicationChannels Status:
-- rx_tcp_communication_from_relay_manager_opt: Some
-- rx_tcp_communication_from_sensor_manager_opt: Some
-- tx_tcp_communication_to_sensor_manager_opt: Some
-- rx_tcp_communication_from_tank_level_switch_opt: Some
-- tx_tcp_communication_to_tank_level_switch_opt: Some
-- tx_tcp_communication_to_signal_handler: Present
-- rx_tcp_communication_from_signal_handler: Present
-";
-        assert_eq!(format!("{}", channels), expected_output);
-    }
-
-    #[test]
-    fn test_tcp_channels_display_some_none_mix() {
-        let (_, rx1) = channel();
-        let (tx6, _) = channel();
-        let (_, rx7) = channel();
-
-        let channels = TcpCommunicationChannels {
-            rx_tcp_communication_from_relay_manager_opt: None, // None
-            rx_tcp_communication_from_sensor_manager_opt: Some(rx1), // Some
-            tx_tcp_communication_to_sensor_manager_opt: None,  // None
-            rx_tcp_communication_from_tank_level_switch_opt: Some(channel().1), // Some (new channel)
-            tx_tcp_communication_to_tank_level_switch_opt: None,                // None
-            tx_tcp_communication_to_signal_handler: tx6,
-            rx_tcp_communication_from_signal_handler: rx7,
-        };
-
-        println!("Output for TcpCommunicationChannels: {}", channels);
-
-        let expected_output = "\
-TcpCommunicationChannels Status:
-- rx_tcp_communication_from_relay_manager_opt: None
-- rx_tcp_communication_from_sensor_manager_opt: Some
-- tx_tcp_communication_to_sensor_manager_opt: None
-- rx_tcp_communication_from_tank_level_switch_opt: Some
-- tx_tcp_communication_to_tank_level_switch_opt: None
-- tx_tcp_communication_to_signal_handler: Present
-- rx_tcp_communication_from_signal_handler: Present
-";
-        assert_eq!(format!("{}", channels), expected_output);
     }
 }

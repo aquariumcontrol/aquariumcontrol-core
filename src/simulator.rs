@@ -18,3 +18,6 @@ pub mod tcp_communication_error;
 
 /// Contains definition of data to be exchanged with the test server
 pub mod tcp_data;
+
+/// Contains channels for communication between threads
+pub mod tcp_communication_channels;
