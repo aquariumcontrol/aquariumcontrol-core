@@ -27,6 +27,7 @@ use std::sync::mpsc::{Receiver, Sender, TryRecvError};
 use std::time::{Duration, Instant};
 
 use crate::relays::relay_error::RelayError;
+use crate::relays::relay_manager_channels::RelayManagerChannels;
 use crate::utilities::channel_content::InternalCommand;
 use crate::utilities::logger::log_error_chain;
 use crate::utilities::proc_ext_req::ProcessExternalRequestTrait;
@@ -133,45 +134,6 @@ impl fmt::Display for RelayManagerConfig {
             self.pause_between_retries_millis
         )
     }
-}
-
-/// Container for channels used by relay manager
-pub struct RelayManagerChannels {
-    /// sender part of the channel for communication to the refill thread
-    pub tx_relay_manager_to_refill: Sender<bool>,
-
-    /// receiver part of the channel for communication from the refill thread
-    pub rx_relay_manager_from_refill: Receiver<InternalCommand>,
-
-    /// sender part of the channel for communication to the heating thread
-    pub tx_relay_manager_to_heating: Sender<bool>,
-
-    /// receiver part of the channel for communication from the heating thread
-    pub rx_relay_manager_from_heating: Receiver<InternalCommand>,
-
-    /// sender part of the channel for communication to the ventilation thread
-    pub tx_relay_manager_to_ventilation: Sender<bool>,
-
-    /// receiver part of the channel for communication from the ventilation thread
-    pub rx_relay_manager_from_ventilation: Receiver<InternalCommand>,
-
-    /// sender part of the channel for communication to the Balling dosing thread
-    pub tx_relay_manager_to_balling: Sender<bool>,
-
-    /// receiver part of the channel for communication from the Balling dosing thread
-    pub rx_relay_manager_from_balling: Receiver<InternalCommand>,
-
-    /// sender part of the channel for communication to the feed thread
-    pub tx_relay_manager_to_feed: Sender<bool>,
-
-    /// receiver part of the channel for communication from the feed thread
-    pub rx_relay_manager_from_feed: Receiver<InternalCommand>,
-
-    /// sender part of the channel for communication to the signal handler
-    pub tx_relay_manager_to_signal_handler: Sender<bool>,
-
-    /// receiver part of the channel for communication from the signal handler
-    pub rx_relay_manager_from_signal_handler: Receiver<InternalCommand>,
 }
 
 #[cfg_attr(doc, aquamarine::aquamarine)]
@@ -352,13 +314,13 @@ impl RelayManager {
     /// periodic heartbeats to the hardware if required.
     ///
     /// # Arguments
-    /// * `relay_manager_channels` - A struct containing all `mpsc` channels necessary for
+    /// * `relay_manager_channels` - A mutable reference to the struct containing all `mpsc` channels necessary for
     ///   communication with other control threads.
     /// * `actuator` - A mutable reference to an object implementing the `RelayActuationTrait`,
     ///   which handles the actual hardware interaction or simulation.
     pub fn execute(
         &mut self,
-        relay_manager_channels: RelayManagerChannels,
+        relay_manager_channels: &mut RelayManagerChannels,
         actuator: &mut impl RelayActuationTrait,
     ) {
         #[cfg(all(target_os = "linux", not(test)))]
@@ -933,22 +895,57 @@ pub mod tests {
                     permanent_error_result: None,
                 };
 
-                let relay_manager_channels = RelayManagerChannels {
+                let mut relay_manager_channels = RelayManagerChannels {
                     tx_relay_manager_to_refill,
+                    #[cfg(feature = "debug_channels")]
+                    cnt_tx_relay_manager_to_refill: 0,
+
                     rx_relay_manager_from_refill,
+                    #[cfg(feature = "debug_channels")]
+                    cnt_rx_relay_manager_from_refill: 0,
+
                     tx_relay_manager_to_heating,
+                    #[cfg(feature = "debug_channels")]
+                    cnt_tx_relay_manager_to_heating: 0,
+
                     rx_relay_manager_from_heating,
+                    #[cfg(feature = "debug_channels")]
+                    cnt_rx_relay_manager_from_heating: 0,
+
                     tx_relay_manager_to_ventilation,
+                    #[cfg(feature = "debug_channels")]
+                    cnt_tx_relay_manager_to_ventilation: 0,
+
                     rx_relay_manager_from_ventilation,
+                    #[cfg(feature = "debug_channels")]
+                    cnt_rx_relay_manager_from_ventilation: 0,
+
                     tx_relay_manager_to_balling,
+                    #[cfg(feature = "debug_channels")]
+                    cnt_tx_relay_manager_to_balling: 0,
+
                     rx_relay_manager_from_balling,
+                    #[cfg(feature = "debug_channels")]
+                    cnt_rx_relay_manager_from_balling: 0,
+
                     tx_relay_manager_to_feed,
+                    #[cfg(feature = "debug_channels")]
+                    cnt_tx_relay_manager_to_feed: 0,
+
                     rx_relay_manager_from_feed,
+                    #[cfg(feature = "debug_channels")]
+                    cnt_rx_relay_manager_from_feed: 0,
+
                     tx_relay_manager_to_signal_handler,
+                    #[cfg(feature = "debug_channels")]
+                    cnt_tx_relay_manager_to_signal_handler: 0,
+
                     rx_relay_manager_from_signal_handler,
+                    #[cfg(feature = "debug_channels")]
+                    cnt_rx_relay_manager_from_signal_handler: 0,
                 };
 
-                relay_manager.execute(relay_manager_channels, &mut mock_actuator);
+                relay_manager.execute(&mut relay_manager_channels, &mut mock_actuator);
 
                 // Test object thread has ended.
                 assert_eq!(mock_actuator.get_execution_count(), 24); //Assertion checks the number of calls to the actuator.
@@ -1018,22 +1015,57 @@ pub mod tests {
                     permanent_error_result: None,
                 };
 
-                let relay_manager_channels = RelayManagerChannels {
+                let mut relay_manager_channels = RelayManagerChannels {
                     tx_relay_manager_to_refill,
+                    #[cfg(feature = "debug_channels")]
+                    cnt_tx_relay_manager_to_refill: 0,
+
                     rx_relay_manager_from_refill,
+                    #[cfg(feature = "debug_channels")]
+                    cnt_rx_relay_manager_from_refill: 0,
+
                     tx_relay_manager_to_heating,
+                    #[cfg(feature = "debug_channels")]
+                    cnt_tx_relay_manager_to_heating: 0,
+
                     rx_relay_manager_from_heating,
+                    #[cfg(feature = "debug_channels")]
+                    cnt_rx_relay_manager_from_heating: 0,
+
                     tx_relay_manager_to_ventilation,
+                    #[cfg(feature = "debug_channels")]
+                    cnt_tx_relay_manager_to_ventilation: 0,
+
                     rx_relay_manager_from_ventilation,
+                    #[cfg(feature = "debug_channels")]
+                    cnt_rx_relay_manager_from_ventilation: 0,
+
                     tx_relay_manager_to_balling,
+                    #[cfg(feature = "debug_channels")]
+                    cnt_tx_relay_manager_to_balling: 0,
+
                     rx_relay_manager_from_balling,
+                    #[cfg(feature = "debug_channels")]
+                    cnt_rx_relay_manager_from_balling: 0,
+
                     tx_relay_manager_to_feed,
+                    #[cfg(feature = "debug_channels")]
+                    cnt_tx_relay_manager_to_feed: 0,
+
                     rx_relay_manager_from_feed,
+                    #[cfg(feature = "debug_channels")]
+                    cnt_rx_relay_manager_from_feed: 0,
+
                     tx_relay_manager_to_signal_handler,
+                    #[cfg(feature = "debug_channels")]
+                    cnt_tx_relay_manager_to_signal_handler: 0,
+
                     rx_relay_manager_from_signal_handler,
+                    #[cfg(feature = "debug_channels")]
+                    cnt_rx_relay_manager_from_signal_handler: 0,
                 };
 
-                relay_manager.execute(relay_manager_channels, &mut mock_actuator);
+                relay_manager.execute(&mut relay_manager_channels, &mut mock_actuator);
 
                 // Test object thread has ended.
                 assert_eq!(mock_actuator.get_execution_count(), 3); //Assertion checks the number of calls to the actuator.
@@ -1097,22 +1129,57 @@ pub mod tests {
                     )),
                 };
 
-                let relay_manager_channels = RelayManagerChannels {
+                let mut relay_manager_channels = RelayManagerChannels {
                     tx_relay_manager_to_refill,
+                    #[cfg(feature = "debug_channels")]
+                    cnt_tx_relay_manager_to_refill: 0,
+
                     rx_relay_manager_from_refill,
+                    #[cfg(feature = "debug_channels")]
+                    cnt_rx_relay_manager_from_refill: 0,
+
                     tx_relay_manager_to_heating,
+                    #[cfg(feature = "debug_channels")]
+                    cnt_tx_relay_manager_to_heating: 0,
+
                     rx_relay_manager_from_heating,
+                    #[cfg(feature = "debug_channels")]
+                    cnt_rx_relay_manager_from_heating: 0,
+
                     tx_relay_manager_to_ventilation,
+                    #[cfg(feature = "debug_channels")]
+                    cnt_tx_relay_manager_to_ventilation: 0,
+
                     rx_relay_manager_from_ventilation,
+                    #[cfg(feature = "debug_channels")]
+                    cnt_rx_relay_manager_from_ventilation: 0,
+
                     tx_relay_manager_to_balling,
+                    #[cfg(feature = "debug_channels")]
+                    cnt_tx_relay_manager_to_balling: 0,
+
                     rx_relay_manager_from_balling,
+                    #[cfg(feature = "debug_channels")]
+                    cnt_rx_relay_manager_from_balling: 0,
+
                     tx_relay_manager_to_feed,
+                    #[cfg(feature = "debug_channels")]
+                    cnt_tx_relay_manager_to_feed: 0,
+
                     rx_relay_manager_from_feed,
+                    #[cfg(feature = "debug_channels")]
+                    cnt_rx_relay_manager_from_feed: 0,
+
                     tx_relay_manager_to_signal_handler,
+                    #[cfg(feature = "debug_channels")]
+                    cnt_tx_relay_manager_to_signal_handler: 0,
+
                     rx_relay_manager_from_signal_handler,
+                    #[cfg(feature = "debug_channels")]
+                    cnt_rx_relay_manager_from_signal_handler: 0,
                 };
 
-                relay_manager.execute(relay_manager_channels, &mut mock_actuator);
+                relay_manager.execute(&mut relay_manager_channels, &mut mock_actuator);
 
                 // Test object thread has ended.
 

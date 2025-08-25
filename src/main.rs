@@ -105,7 +105,8 @@ use crate::relays::actuate_controllino::ActuateControllino;
 #[cfg(all(target_os = "linux", feature = "target_hw"))]
 use crate::relays::actuate_gpio::{ActuateGpio, ActuateGpioConfig};
 use crate::relays::actuate_simulator::ActuateSimulator;
-use crate::relays::relay_manager::{RelayManager, RelayManagerChannels};
+use crate::relays::relay_manager::RelayManager;
+use crate::relays::relay_manager_channels::RelayManagerChannels;
 use crate::sensors::atlas_scientific::{
     AtlasScientific, AtlasScientificChannels, AtlasScientificResultData,
 };
@@ -1372,19 +1373,54 @@ fn run() -> Result<(), StartupError> {
     let mut ds18b20 = Ds18b20::new(config.ds18b20)
         .map_err(|e| StartupError::Ds18b20SetupFailure { source: e })?;
 
-    let relay_manager_channels = RelayManagerChannels {
+    let mut relay_manager_channels = RelayManagerChannels {
         tx_relay_manager_to_refill,
+        #[cfg(feature = "debug_channels")]
+        cnt_tx_relay_manager_to_refill: 0,
+
         rx_relay_manager_from_refill,
+        #[cfg(feature = "debug_channels")]
+        cnt_rx_relay_manager_from_refill: 0,
+
         tx_relay_manager_to_heating,
+        #[cfg(feature = "debug_channels")]
+        cnt_tx_relay_manager_to_heating: 0,
+
         rx_relay_manager_from_heating,
+        #[cfg(feature = "debug_channels")]
+        cnt_rx_relay_manager_from_heating: 0,
+
         tx_relay_manager_to_ventilation,
+        #[cfg(feature = "debug_channels")]
+        cnt_tx_relay_manager_to_ventilation: 0,
+
         rx_relay_manager_from_ventilation,
+        #[cfg(feature = "debug_channels")]
+        cnt_rx_relay_manager_from_ventilation: 0,
+
         tx_relay_manager_to_balling,
+        #[cfg(feature = "debug_channels")]
+        cnt_tx_relay_manager_to_balling: 0,
+
         rx_relay_manager_from_balling,
+        #[cfg(feature = "debug_channels")]
+        cnt_rx_relay_manager_from_balling: 0,
+
         tx_relay_manager_to_feed,
+        #[cfg(feature = "debug_channels")]
+        cnt_tx_relay_manager_to_feed: 0,
+
         rx_relay_manager_from_feed,
+        #[cfg(feature = "debug_channels")]
+        cnt_rx_relay_manager_from_feed: 0,
+
         tx_relay_manager_to_signal_handler,
+        #[cfg(feature = "debug_channels")]
+        cnt_tx_relay_manager_to_signal_handler: 0,
+
         rx_relay_manager_from_signal_handler,
+        #[cfg(feature = "debug_channels")]
+        cnt_rx_relay_manager_from_signal_handler: 0,
     };
 
     let mut atlas_scientific_channels = AtlasScientificChannels {
@@ -1749,7 +1785,7 @@ fn run() -> Result<(), StartupError> {
             scope.spawn(move || {
                 let mut actuate_simulator =
                     ActuateSimulator::new(tx_relay_manager_to_tcp_opt, config.controllino_relay);
-                relay_manager.execute(relay_manager_channels, &mut actuate_simulator);
+                relay_manager.execute(&mut relay_manager_channels, &mut actuate_simulator);
                 #[cfg(feature = "debug_main")]
                 debug!(target: module_path!(), "Controllino (simulator) terminated.");
             });
@@ -1762,7 +1798,7 @@ fn run() -> Result<(), StartupError> {
                         &mut actuate_gpio_opt.expect("Internal error: Illegal configuration (unwrapping of GPIO actuator failed)")
                     );
                 } else {
-                    relay_manager.execute(relay_manager_channels, &mut actuate_controllino);
+                    relay_manager.execute(&mut relay_manager_channels, &mut actuate_controllino);
                 }
 
                 #[cfg(feature = "debug_main")]
