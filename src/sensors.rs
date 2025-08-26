@@ -51,3 +51,6 @@ pub mod sensor_manager_channels;
 
 /// Container for channels used by tank level switch module
 pub mod tank_level_switch_channels;
+
+/// Container for channels used by Ds18b20 module
+pub mod ds18b20_channels;

@@ -10,7 +10,6 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 use nix::unistd::gettid;
 use serde_derive::Deserialize;
 use spin_sleep::SpinSleeper;
-use std::sync::mpsc::Receiver;
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
@@ -24,9 +23,8 @@ use log::debug;
 use log::info;
 #[cfg(not(test))]
 use log::warn;
-
+use crate::sensors::ds18b20_channels::Ds18b20Channels;
 use crate::sensors::ds18b20_error::Ds18b20Error;
-use crate::utilities::channel_content::InternalCommand;
 use crate::utilities::proc_ext_req::ProcessExternalRequestTrait;
 
 mod ds18b20_constants {
@@ -302,7 +300,7 @@ impl Ds18b20 {
     ///   will be written, ensuring thread-safe access for other modules.
     pub fn execute(
         &mut self,
-        rx_from_signal_handler: Receiver<InternalCommand>,
+        ds18b20_channels: &mut Ds18b20Channels,
         mutex_water_temperature: Arc<Mutex<Ds18b20Result>>,
         mutex_ambient_temperature: Arc<Mutex<Ds18b20Result>>,
     ) {
@@ -323,7 +321,7 @@ impl Ds18b20 {
         loop {
             // Check for quit command first for faster shutdown.
             if self
-                .process_external_request(&rx_from_signal_handler, None)
+                .process_external_request(&ds18b20_channels.rx_ds18b20_from_signal_handler, None)
                 .0
             {
                 #[cfg(test)]
@@ -400,6 +398,7 @@ pub mod tests {
     use std::sync::{mpsc, Arc, Mutex};
     use std::time::Duration;
     use std::{env, thread};
+    use crate::sensors::ds18b20_channels::Ds18b20Channels;
 
     #[test]
     #[ignore]
@@ -773,6 +772,11 @@ pub mod tests {
             Sender<InternalCommand>,
             Receiver<InternalCommand>,
         ) = mpsc::channel();
+        let mut ds18b20_channels = Ds18b20Channels {
+            rx_ds18b20_from_signal_handler,
+            #[cfg(feature = "debug_channels")]
+            cnt_rx_ds18b20_from_signal_handler: 0,
+        };
 
         // thread for test environment (incl. signal handler)
         let join_handle_test_environment = thread::Builder::new()
@@ -793,7 +797,7 @@ pub mod tests {
             .name("test_object".to_string())
             .spawn(move || {
                 ds18b20.execute(
-                    rx_ds18b20_from_signal_handler,
+                    &mut ds18b20_channels,
                     mutex_ds18b20_water_temperature,
                     mutex_ds18b20_ambient_temperature,
                 );
@@ -863,6 +867,11 @@ pub mod tests {
             Sender<InternalCommand>,
             Receiver<InternalCommand>,
         ) = mpsc::channel();
+        let mut ds18b20_channels = Ds18b20Channels {
+            rx_ds18b20_from_signal_handler,
+            #[cfg(feature = "debug_channels")]
+            cnt_rx_ds18b20_from_signal_handler: 0,
+        };
 
         // thread for test environment (incl. signal handler)
         let join_handle_test_environment = thread::Builder::new()
@@ -896,7 +905,7 @@ pub mod tests {
             .name("test_object".to_string())
             .spawn(move || {
                 ds18b20.execute(
-                    rx_ds18b20_from_signal_handler,
+                    &mut ds18b20_channels,
                     mutex_ds18b20_water_temperature,
                     mutex_ds18b20_ambient_temperature,
                 );

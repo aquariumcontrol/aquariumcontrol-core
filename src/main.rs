@@ -147,6 +147,7 @@ use spin_sleep::SpinSleeper;
 use std::sync::mpsc::{self, Receiver, Sender};
 use std::sync::{atomic::AtomicBool, Arc, Mutex};
 use std::{env, panic, path::Path, thread::scope, time::Duration};
+use crate::sensors::ds18b20_channels::Ds18b20Channels;
 use crate::sensors::tank_level_switch_channels::TankLevelSwitchChannels;
 
 cfg_if::cfg_if! {
@@ -1801,6 +1802,12 @@ fn run() -> Result<(), StartupError> {
         #[cfg(feature = "debug_channels")]
         cnt_rx_watchdog_from_messaging_opt: 0,
     };
+    
+    let mut ds18b20_channels = Ds18b20Channels {
+        rx_ds18b20_from_signal_handler,
+        #[cfg(feature = "debug_channels")]
+        cnt_rx_ds18b20_from_signal_handler: 0,
+    };
 
     scope(|scope| {
         // open tcp connection only if configuration requires use of simulator instead of HW
@@ -2153,10 +2160,16 @@ fn run() -> Result<(), StartupError> {
         // Ds18b20 communication
         scope.spawn(move || {
             ds18b20.execute(
-                rx_ds18b20_from_signal_handler,
+                &mut ds18b20_channels,
                 mutex_ds18b20_water_temperature,
                 mutex_ds18b20_ambient_temperature,
             );
+            
+            #[cfg(feature = "debug_main")]
+            debug!(target: module_path!(), "Ds18b20 terminated");
+            
+            #[cfg(feature = "debug_channels")]
+            debug!(target: module_path!(), "{ds18b20_channels}");
         });
 
         Ok(())
