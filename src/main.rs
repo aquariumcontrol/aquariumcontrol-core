@@ -139,6 +139,7 @@ use crate::watchmen::monitors::Monitors;
 use crate::watchmen::monitors_channels::MonitorsChannels;
 use crate::watchmen::petting::Petting;
 use crate::watchmen::watchdog::Watchdog;
+use crate::watchmen::watchdog_channels::WatchDogChannels;
 use crate::water::refill::{Refill, RefillChannels, RefillStatus};
 use crate::water::refill_monitor_view::RefillMonitorView;
 use crate::water::water_injection::WaterInjection;
@@ -1787,6 +1788,20 @@ fn run() -> Result<(), StartupError> {
         cnt_rx_tank_level_switch_from_signal_handler: 0,
     };
 
+    let mut watchdog_channels = WatchDogChannels {
+        tx_watchdog_to_signal_handler,
+        #[cfg(feature = "debug_channels")]
+        cnt_tx_watchdog_to_signal_handler: 0,
+
+        rx_watchdog_from_signal_handler,
+        #[cfg(feature = "debug_channels")]
+        cnt_rx_watchdog_from_signal_handler: 0,
+
+        rx_watchdog_from_messaging_opt,
+        #[cfg(feature = "debug_channels")]
+        cnt_rx_watchdog_from_messaging_opt: 0,
+    };
+
     scope(|scope| {
         // open tcp connection only if configuration requires use of simulator instead of HW
         if use_simulator {
@@ -2124,14 +2139,15 @@ fn run() -> Result<(), StartupError> {
         // Watchdog communication
         scope.spawn(move || {
             watchdog.execute(
-                tx_watchdog_to_signal_handler,
-                rx_watchdog_from_signal_handler,
-                rx_watchdog_from_messaging_opt,
+                &mut watchdog_channels,
                 &mut petting,
             );
 
             #[cfg(feature = "debug_main")]
             debug!(target: module_path!(), "Watchdog terminated.");
+
+            #[cfg(feature = "debug_channels")]
+            debug!(target: module_path!(), "{watchdog_channels}");
         });
 
         // Ds18b20 communication

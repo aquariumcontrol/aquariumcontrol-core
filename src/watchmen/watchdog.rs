@@ -7,17 +7,16 @@ The above copyright notice and this permission notice shall be included in all c
 THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 use crate::watchmen::petting::PettingTrait;
+use crate::watchmen::watchdog_channels::WatchDogChannels;
+use crate::utilities::proc_ext_req::ProcessExternalRequestTrait;
 use log::error;
 use serde_derive::Deserialize;
 use spin_sleep::SpinSleeper;
-use std::sync::mpsc::{Receiver, Sender};
 use std::time::Duration;
 
 #[cfg(all(target_os = "linux", not(test)))]
 use log::info;
 
-use crate::utilities::channel_content::InternalCommand;
-use crate::utilities::proc_ext_req::ProcessExternalRequestTrait;
 #[cfg(all(target_os = "linux", not(test)))]
 use nix::unistd::gettid;
 use thiserror::Error;
@@ -143,19 +142,12 @@ impl Watchdog {
     ///   to the signal handler.
     ///
     /// # Arguments
-    /// * `tx_to_signal_handler` - The sender channel for this module to send acknowledgment
-    ///   back to the main signal handler during shutdown.
-    /// * `rx_from_signal_handler` - The receiver channel for this module to receive commands
-    ///   (e.g., `Quit`, `Terminate`) from the main signal handler.
-    /// * `rx_from_messaging_opt` - An `Option` containing the receiver channel for commands
-    ///   (e.g., `Start`, `Stop`) from the messaging system.
+    /// * `watchdog_channels` - A mutable reference to the struct containing the channels.
     /// * `petting` - A mutable reference to an object implementing the `PettingTrait`,
     ///   responsible for the actual writing of heartbeat/deactivation messages to the watchdog file.
     pub fn execute(
         &mut self,
-        tx_to_signal_handler: Sender<bool>,
-        rx_from_signal_handler: Receiver<InternalCommand>,
-        rx_from_messaging_opt: Option<Receiver<InternalCommand>>,
+        watchdog_channels: &mut WatchDogChannels, 
         petting: &mut impl PettingTrait,
     ) {
         #[cfg(all(target_os = "linux", not(test)))]
@@ -182,7 +174,7 @@ impl Watchdog {
                 start_command_received,
                 stop_command_received,
             ) = self
-                .process_external_request(&rx_from_signal_handler, rx_from_messaging_opt.as_ref());
+                .process_external_request(&watchdog_channels.rx_watchdog_from_signal_handler, watchdog_channels.rx_watchdog_from_messaging_opt.as_ref());
 
             if quit_command_received {
                 // Deactivate the watchdog functionality
@@ -205,7 +197,7 @@ impl Watchdog {
 
         // The application received the request to terminate. That is why the loop was left.
         // Answer to the thread which sent the request for termination, so that shutdown can proceed further.
-        match tx_to_signal_handler.send(true) {
+        match watchdog_channels.tx_watchdog_to_signal_handler.send(true) {
             Ok(()) => {}
             Err(e) => {
                 error!(
@@ -224,6 +216,7 @@ pub mod tests {
     use crate::utilities::config::{read_config_file, ConfigData};
     use crate::watchmen::petting::Petting;
     use crate::watchmen::watchdog::{Watchdog, WatchdogError};
+    use crate::watchmen::watchdog_channels::WatchDogChannels;
     use spin_sleep::SpinSleeper;
     use std::fs::OpenOptions;
     use std::io::Read;
@@ -329,7 +322,20 @@ pub mod tests {
             read_config_file("/config/aquarium_control_test_generic.toml".to_string()).unwrap();
         let (tx_watchdog_to_signal_handler, rx_signal_handler_from_watchdog) = mpsc::channel();
         let (tx_signal_handler_to_watchdog, rx_watchdog_from_signal_handler) = mpsc::channel();
+        let mut watchdog_channels = WatchDogChannels {
+            tx_watchdog_to_signal_handler,
+            #[cfg(feature = "debug_channels")]
+            cnt_tx_watchdog_to_signal_handler: 0,
 
+            rx_watchdog_from_signal_handler,
+            #[cfg(feature = "debug_channels")]
+            cnt_rx_watchdog_from_signal_handler: 0,
+
+            rx_watchdog_from_messaging_opt: None,
+            #[cfg(feature = "debug_channels")]
+            cnt_rx_watchdog_from_messaging_opt: 0,
+        };
+        
         let min_duration = Duration::from_millis(config.watchdog.heartbeat_duration_millis - 50);
         let max_duration = Duration::from_millis(config.watchdog.heartbeat_duration_millis + 50);
 
@@ -355,9 +361,7 @@ pub mod tests {
             // thread for the test object
             scope.spawn(move || {
                 watchdog.execute(
-                    tx_watchdog_to_signal_handler,
-                    rx_watchdog_from_signal_handler,
-                    None,
+                    &mut watchdog_channels,
                     &mut mock_petting,
                 );
 
@@ -413,6 +417,19 @@ pub mod tests {
         config.watchdog.watchdog_filename = "/var/log/watchdog.log".to_string();
         let (tx_watchdog_to_signal_handler, rx_signal_handler_from_watchdog) = mpsc::channel();
         let (tx_signal_handler_to_watchdog, rx_watchdog_from_signal_handler) = mpsc::channel();
+        let mut watchdog_channels = WatchDogChannels {
+            tx_watchdog_to_signal_handler,
+            #[cfg(feature = "debug_channels")]
+            cnt_tx_watchdog_to_signal_handler: 0,
+
+            rx_watchdog_from_signal_handler,
+            #[cfg(feature = "debug_channels")]
+            cnt_rx_watchdog_from_signal_handler: 0,
+
+            rx_watchdog_from_messaging_opt: None,
+            #[cfg(feature = "debug_channels")]
+            cnt_rx_watchdog_from_messaging_opt: 0,
+        };
 
         let reference_heartbeat_signal = config.watchdog.watchdog_heartbeat.clone();
         let reference_deactivation_signal = config.watchdog.watchdog_deactivation.clone();
@@ -475,9 +492,7 @@ pub mod tests {
             // thread for the test object
             scope.spawn(move || {
                 watchdog.execute(
-                    tx_watchdog_to_signal_handler,
-                    rx_watchdog_from_signal_handler,
-                    None,
+                    &mut watchdog_channels,
                     &mut petting,
                 );
             });
