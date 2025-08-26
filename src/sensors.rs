@@ -48,3 +48,6 @@ pub mod i2c_interface_channels;
 
 /// Container for channels used by sensor manager module
 pub mod sensor_manager_channels;
+
+/// Container for channels used by tank level switch module
+pub mod tank_level_switch_channels;

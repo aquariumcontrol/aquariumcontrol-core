@@ -9,7 +9,7 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 use crate::simulator::tcp_communication::TcpCommunicationError;
 use crate::utilities::channel_content::InternalCommand;
 use std::fmt;
-use std::sync::mpsc::{Receiver, Sender};
+use std::sync::mpsc::{Receiver, RecvError, SendError, Sender};
 
 pub struct SensorManagerChannels {
     /// Sender part of the channel for communication via TCP wrapped as optional
@@ -34,8 +34,8 @@ pub struct SensorManagerChannels {
 }
 
 impl SensorManagerChannels {
-    /*
-    /// Sends a command to the TCP simulator, if the channel exists.
+    /// Sends a command to the TCP simulator if the channel exists.
+    #[allow(unused)]
     pub fn send_to_tcp(
         &mut self,
         command: InternalCommand,
@@ -50,7 +50,8 @@ impl SensorManagerChannels {
         })
     }
 
-    /// Receives a result from the TCP simulator, if the channel exists.
+    /// Receives a result from the TCP simulator if the channel exists.
+    #[allow(unused)]
     pub fn receive_from_tcp(
         &mut self,
     ) -> Option<Result<Result<f32, TcpCommunicationError>, RecvError>> {
@@ -65,6 +66,7 @@ impl SensorManagerChannels {
     }
 
     /// Sends an acknowledgment to the signal handler.
+    #[allow(unused)]
     pub fn send_to_signal_handler(&mut self, ack: bool) -> Result<(), SendError<bool>> {
         let result = self.tx_sensor_manager_to_signal_handler.send(ack);
         #[cfg(feature = "debug_channels")]
@@ -75,6 +77,7 @@ impl SensorManagerChannels {
     }
 
     /// Receives a command from the signal handler.
+    #[allow(unused)]
     pub fn receive_from_signal_handler(&mut self) -> Result<InternalCommand, RecvError> {
         let result = self.rx_sensor_manager_from_signal_handler.recv();
         #[cfg(feature = "debug_channels")]
@@ -83,7 +86,6 @@ impl SensorManagerChannels {
         }
         result
     }
-     */
 }
 
 #[cfg(feature = "debug_channels")]

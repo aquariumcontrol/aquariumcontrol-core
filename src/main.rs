@@ -146,6 +146,7 @@ use spin_sleep::SpinSleeper;
 use std::sync::mpsc::{self, Receiver, Sender};
 use std::sync::{atomic::AtomicBool, Arc, Mutex};
 use std::{env, panic, path::Path, thread::scope, time::Duration};
+use crate::sensors::tank_level_switch_channels::TankLevelSwitchChannels;
 
 cfg_if::cfg_if! {
     if #[cfg(all(target_os = "linux", feature = "target_hw"))] {
@@ -1768,6 +1769,24 @@ fn run() -> Result<(), StartupError> {
         cnt_tx_to_watchdog: 0,
     };
 
+    let mut tank_level_switch_channels = TankLevelSwitchChannels {
+        tx_tank_level_switch_to_tcp_opt,
+        #[cfg(feature = "debug_channels")]
+        cnt_tx_tank_level_switch_to_tcp_opt: 0,
+
+        rx_tank_level_switch_from_tcp_opt,
+        #[cfg(feature = "debug_channels")]
+        cnt_rx_tank_level_switch_from_tcp_opt: 0,
+
+        tx_tank_level_switch_to_signal_handler,
+        #[cfg(feature = "debug_channels")]
+        cnt_tx_tank_level_switch_to_signal_handler: 0,
+
+        rx_tank_level_switch_from_signal_handler,
+        #[cfg(feature = "debug_channels")]
+        cnt_rx_tank_level_switch_from_signal_handler: 0,
+    };
+
     scope(|scope| {
         // open tcp connection only if configuration requires use of simulator instead of HW
         if use_simulator {
@@ -1959,15 +1978,15 @@ fn run() -> Result<(), StartupError> {
 
         scope.spawn(move || {
             let _ = tank_level_switch.execute(
-                &tx_tank_level_switch_to_tcp_opt,
-                &rx_tank_level_switch_from_tcp_opt,
-                &tx_tank_level_switch_to_signal_handler,
-                &rx_tank_level_switch_from_signal_handler,
+                &mut tank_level_switch_channels,
                 mutex_tank_level_switch_signals,
             );
 
             #[cfg(feature = "debug_main")]
             debug!(target: module_path!(), "Tank level switch calculation terminated.");
+
+            #[cfg(feature = "debug_channels")]
+            debug!(target: module_path!(), "{tank_level_switch_channels}");
         });
 
         // Refill needs actuation of relay

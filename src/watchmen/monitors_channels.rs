@@ -9,7 +9,7 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 use crate::utilities::channel_content::InternalCommand;
 use crate::water::refill_monitor_view::RefillMonitorView;
 use std::fmt;
-use std::sync::mpsc::{Receiver, Sender, TryRecvError};
+use std::sync::mpsc::{Receiver, SendError, Sender, TryRecvError};
 
 /// Struct collects the channels for communication between Monitors and other components.
 pub struct MonitorsChannels {
@@ -42,6 +42,7 @@ impl MonitorsChannels {
     /// Receives a monitor view from the refill module.
     ///
     /// This wrapper performs a non-blocking receive-operation and increments the debug counter on success.
+    #[allow(unused)]
     pub fn receive_from_refill(&mut self) -> Result<RefillMonitorView, TryRecvError> {
         let result = self.rx_monitors_from_refill.try_recv();
         #[cfg(feature = "debug_channels")]
@@ -50,38 +51,37 @@ impl MonitorsChannels {
         }
         result
     }
-
-    /*
-        /// Sends an acknowledgment to the signal handler.
-        ///
-        /// This wrapper sends a boolean acknowledgment and increments the debug counter.
-        pub fn send_to_signal_handler(&mut self, ack: bool) -> Result<(), SendError<bool>> {
-            let result = self.tx_monitors_to_signal_handler.send(ack);
-            #[cfg(feature = "debug_channels")]
-            if result.is_ok() {
-                self.cnt_tx_monitors_to_signal_handler += 1;
-            }
-            result
+    
+    /// Sends an acknowledgment to the signal handler.
+    ///
+    /// This wrapper sends a boolean acknowledgment and increments the debug counter.
+    #[allow(unused)]
+    pub fn send_to_signal_handler(&mut self, ack: bool) -> Result<(), SendError<bool>> {
+        let result = self.tx_monitors_to_signal_handler.send(ack);
+        #[cfg(feature = "debug_channels")]
+        if result.is_ok() {
+            self.cnt_tx_monitors_to_signal_handler += 1;
         }
-    */
+        result
+    }
 
-    /*
-        /// Receives a command from the signal handler.
-        ///
-        /// This wrapper performs a non-blocking receive-operation and increments the debug counter on success.
-        pub fn receive_from_signal_handler(&mut self) -> Result<InternalCommand, TryRecvError> {
-            let result = self.rx_monitors_from_signal_handler.try_recv();
-            #[cfg(feature = "debug_channels")]
-            if result.is_ok() {
-                self.cnt_rx_monitors_from_signal_handler += 1;
-            }
-            result
+    /// Receives a command from the signal handler.
+    ///
+    /// This wrapper performs a non-blocking receive-operation and increments the debug counter on success.
+    #[allow(unused)]
+    pub fn receive_from_signal_handler(&mut self) -> Result<InternalCommand, TryRecvError> {
+        let result = self.rx_monitors_from_signal_handler.try_recv();
+        #[cfg(feature = "debug_channels")]
+        if result.is_ok() {
+            self.cnt_rx_monitors_from_signal_handler += 1;
         }
-    */
-    /*
+        result
+    }
+
     /// Receives a command from messaging if the channel exists.
     ///
     /// This wrapper performs a non-blocking receive-operation and increments the debug counter on success.
+    #[allow(unused)]
     pub fn receive_from_messaging(&mut self) -> Option<Result<InternalCommand, TryRecvError>> {
         self.rx_monitors_from_messaging_opt.as_ref().map(|rx| {
             let result = rx.try_recv();
@@ -92,7 +92,7 @@ impl MonitorsChannels {
             result
         })
     }
-     */
+    
 }
 
 #[cfg(feature = "debug_channels")]

@@ -8,7 +8,7 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 */
 use crate::utilities::channel_content::InternalCommand;
 use std::fmt;
-use std::sync::mpsc::{Receiver, /*SendError,*/ Sender/*, TryRecvError*/};
+use std::sync::mpsc::{Receiver, SendError, Sender, TryRecvError};
 
 /// Container for channels used by relay manager
 pub struct RelayManagerChannels {
@@ -73,9 +73,9 @@ pub struct RelayManagerChannels {
     pub cnt_rx_relay_manager_from_signal_handler: u64,
 }
 
-/*
 impl RelayManagerChannels {
     /// Sends a response to the refill module.
+    #[allow(unused)]
     pub fn send_to_refill(&mut self, ack: bool) -> Result<(), SendError<bool>> {
         let result = self.tx_relay_manager_to_refill.send(ack);
         #[cfg(feature = "debug_channels")]
@@ -86,6 +86,7 @@ impl RelayManagerChannels {
     }
 
     /// Receives a command from the refill module (non-blocking).
+    #[allow(unused)]
     pub fn receive_from_refill(&mut self) -> Result<InternalCommand, TryRecvError> {
         let result = self.rx_relay_manager_from_refill.try_recv();
         #[cfg(feature = "debug_channels")]
@@ -96,6 +97,7 @@ impl RelayManagerChannels {
     }
 
     /// Sends a response to the heating module.
+    #[allow(unused)]
     pub fn send_to_heating(&mut self, ack: bool) -> Result<(), SendError<bool>> {
         let result = self.tx_relay_manager_to_heating.send(ack);
         #[cfg(feature = "debug_channels")]
@@ -106,6 +108,7 @@ impl RelayManagerChannels {
     }
 
     /// Receives a command from the heating module (non-blocking).
+    #[allow(unused)]
     pub fn receive_from_heating(&mut self) -> Result<InternalCommand, TryRecvError> {
         let result = self.rx_relay_manager_from_heating.try_recv();
         #[cfg(feature = "debug_channels")]
@@ -116,6 +119,7 @@ impl RelayManagerChannels {
     }
 
     /// Sends a response to the ventilation module.
+    #[allow(unused)]
     pub fn send_to_ventilation(&mut self, ack: bool) -> Result<(), SendError<bool>> {
         let result = self.tx_relay_manager_to_ventilation.send(ack);
         #[cfg(feature = "debug_channels")]
@@ -126,6 +130,7 @@ impl RelayManagerChannels {
     }
 
     /// Receives a command from the ventilation module (non-blocking).
+    #[allow(unused)]
     pub fn receive_from_ventilation(&mut self) -> Result<InternalCommand, TryRecvError> {
         let result = self.rx_relay_manager_from_ventilation.try_recv();
         #[cfg(feature = "debug_channels")]
@@ -136,6 +141,7 @@ impl RelayManagerChannels {
     }
 
     /// Sends a response to the balling module.
+    #[allow(unused)]
     pub fn send_to_balling(&mut self, ack: bool) -> Result<(), SendError<bool>> {
         let result = self.tx_relay_manager_to_balling.send(ack);
         #[cfg(feature = "debug_channels")]
@@ -146,6 +152,7 @@ impl RelayManagerChannels {
     }
 
     /// Receives a command from the balling module (non-blocking).
+    #[allow(unused)]
     pub fn receive_from_balling(&mut self) -> Result<InternalCommand, TryRecvError> {
         let result = self.rx_relay_manager_from_balling.try_recv();
         #[cfg(feature = "debug_channels")]
@@ -156,6 +163,7 @@ impl RelayManagerChannels {
     }
 
     /// Sends a response to the feed module.
+    #[allow(unused)]
     pub fn send_to_feed(&mut self, ack: bool) -> Result<(), SendError<bool>> {
         let result = self.tx_relay_manager_to_feed.send(ack);
         #[cfg(feature = "debug_channels")]
@@ -166,6 +174,7 @@ impl RelayManagerChannels {
     }
 
     /// Receives a command from the feed module (non-blocking).
+    #[allow(unused)]
     pub fn receive_from_feed(&mut self) -> Result<InternalCommand, TryRecvError> {
         let result = self.rx_relay_manager_from_feed.try_recv();
         #[cfg(feature = "debug_channels")]
@@ -176,6 +185,7 @@ impl RelayManagerChannels {
     }
 
     /// Sends a response to the signal handler.
+    #[allow(unused)]
     pub fn send_to_signal_handler(&mut self, ack: bool) -> Result<(), SendError<bool>> {
         let result = self.tx_relay_manager_to_signal_handler.send(ack);
         #[cfg(feature = "debug_channels")]
@@ -186,6 +196,7 @@ impl RelayManagerChannels {
     }
 
     /// Receives a command from the signal handler (non-blocking).
+    #[allow(unused)]
     pub fn receive_from_signal_handler(&mut self) -> Result<InternalCommand, TryRecvError> {
         let result = self.rx_relay_manager_from_signal_handler.try_recv();
         #[cfg(feature = "debug_channels")]
@@ -195,7 +206,6 @@ impl RelayManagerChannels {
         result
     }
 }
-*/
 
 #[cfg(feature = "debug_channels")]
 impl fmt::Display for RelayManagerChannels {
