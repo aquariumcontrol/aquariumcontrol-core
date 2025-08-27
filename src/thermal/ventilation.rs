@@ -678,7 +678,8 @@ pub mod tests {
     use crate::mocks::mock_schedule_check::tests::mock_schedule_check;
     use crate::mocks::mock_ventilation::tests::MockSqlInterfaceVentilationSetVals;
     use crate::sensors::sensor_manager::SensorManagerSignals;
-    use crate::thermal::ventilation::{Ventilation, VentilationChannels};
+    use crate::thermal::ventilation::Ventilation;
+    use crate::thermal::ventilation_channels::VentilationChannels;
     use crate::utilities::channel_content::{AquariumDevice, InternalCommand};
     use crate::utilities::common::tests::update_min_max_actuation_duration;
     use crate::utilities::config::{read_config_file, ConfigData};

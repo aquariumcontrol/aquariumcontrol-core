@@ -1030,7 +1030,7 @@ impl DataLogger {
         {
             spin_sleeper.sleep(sleep_duration_hundred_millis);
             (quit_command_received, _, _) =
-                self.process_external_request(&data_logger_channels.rx_from_signal_handler, None);
+                self.process_external_request(&data_logger_channels.rx_data_logger_from_signal_handler, None);
             if quit_command_received {
                 self.confirm_quit_and_wait_for_termination_command(data_logger_channels);
                 return;
@@ -1140,7 +1140,7 @@ impl DataLogger {
                 i += 100;
                 spin_sleeper.sleep(sleep_duration_hundred_millis);
                 (quit_command_received, _, _) = self
-                    .process_external_request(&data_logger_channels.rx_from_signal_handler, None);
+                    .process_external_request(&data_logger_channels.rx_data_logger_from_signal_handler, None);
                 if quit_command_received {
                     #[cfg(feature = "debug_data_logger")]
                     debug!(
@@ -1577,11 +1577,11 @@ pub mod tests {
             .name("test_object".to_string())
             .spawn(move || {
                 let mut data_logger_channels = DataLoggerChannels {
-                    tx_to_signal_handler: tx_data_logger_to_signal_handler,
+                    tx_data_logger_to_signal_handler: tx_data_logger_to_signal_handler,
                     #[cfg(feature = "debug_channels")]
                     cnt_tx_to_signal_handler: 0,
 
-                    rx_from_signal_handler: rx_data_logger_from_signal_handler,
+                    rx_data_logger_from_signal_handler: rx_data_logger_from_signal_handler,
                     #[cfg(feature = "debug_channels")]
                     cnt_rx_from_signal_handler: 0,
                 };

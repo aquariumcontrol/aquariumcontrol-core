@@ -43,8 +43,8 @@ pub mod sawtooth_profile;
 /// Manages system signals (e.g., SIGINT, SIGTERM) to ensure graceful application shutdown.
 pub mod signal_handler;
 
-/// Defines a unified error type for failures that can occur during application initialization.
-pub mod startup_error;
-
 /// Provides access to the application's version information from the build environment.
 pub mod version_information;
+
+/// Container for channels used by signal handler
+pub mod signal_handler_channels;

@@ -17,12 +17,12 @@ use nix::unistd::gettid;
 use log::info;
 use log::{error, warn};
 
+use crate::sensors::tank_level_switch_channels::TankLevelSwitchChannels;
 use serde_derive::Deserialize;
 use spin_sleep::SpinSleeper;
 use std::sync::mpsc::{Receiver, Sender};
 use std::time::{Duration, Instant};
 use thiserror::Error;
-use crate::sensors::tank_level_switch_channels::TankLevelSwitchChannels;
 
 cfg_if::cfg_if! {
     if #[cfg(all(target_os = "linux", feature = "target_hw"))] {
@@ -481,7 +481,14 @@ impl TankLevelSwitch {
         let mut lock_warn_cycle_time_exceeded: bool = false;
         let cycle_time_duration = Duration::from_millis(CYCLE_TIME_TANK_LEVEL_SWITCH_MILLIS);
 
-        if (self.config.use_simulator) && (tank_level_switch_channels.tx_tank_level_switch_to_tcp_opt.is_none() | tank_level_switch_channels.rx_tank_level_switch_from_tcp_opt.is_none()) {
+        if (self.config.use_simulator)
+            && (tank_level_switch_channels
+                .tx_tank_level_switch_to_tcp_opt
+                .is_none()
+                | tank_level_switch_channels
+                    .rx_tank_level_switch_from_tcp_opt
+                    .is_none())
+        {
             return Err(TankLevelSwitchError::SimulatorChannelNotProvided(
                 module_path!().to_string(),
             ));
@@ -494,16 +501,20 @@ impl TankLevelSwitch {
                 quit_command_received, // a request to end the application has been received
                 _,
                 _,
-            ) = self.process_external_request(&tank_level_switch_channels.rx_tank_level_switch_from_signal_handler, None);
+            ) = self.process_external_request(
+                &tank_level_switch_channels.rx_tank_level_switch_from_signal_handler,
+                None,
+            );
             if quit_command_received {
                 break;
             }
 
             if self.config.active {
                 // either communicate with real HW or with the simulator to get updated signal information
-                if let Err(e) =
-                    self.update_tank_level_switch_signals(&tank_level_switch_channels.tx_tank_level_switch_to_tcp_opt, &tank_level_switch_channels.rx_tank_level_switch_from_tcp_opt)
-                {
+                if let Err(e) = self.update_tank_level_switch_signals(
+                    &tank_level_switch_channels.tx_tank_level_switch_to_tcp_opt,
+                    &tank_level_switch_channels.rx_tank_level_switch_from_tcp_opt,
+                ) {
                     if matches!(e, TankLevelSwitchError::InputPinNotProvided(_))
                         && !self.lock_error_input_pin_none
                     {
@@ -591,7 +602,10 @@ impl TankLevelSwitch {
             start_time = Instant::now();
         }
 
-        match tank_level_switch_channels.tx_tank_level_switch_to_signal_handler.send(true) {
+        match tank_level_switch_channels
+            .tx_tank_level_switch_to_signal_handler
+            .send(true)
+        {
             Ok(()) => {}
             Err(e) => {
                 error!(
@@ -607,7 +621,10 @@ impl TankLevelSwitch {
         let mut termination_command_received = false;
         let sleep_duration_one_millis = Duration::from_millis(1);
         while !termination_command_received {
-            termination_command_received = match tank_level_switch_channels.rx_tank_level_switch_from_signal_handler.recv() {
+            termination_command_received = match tank_level_switch_channels
+                .rx_tank_level_switch_from_signal_handler
+                .recv()
+            {
                 // @todo: change to try_recv
                 Ok(c) => match c {
                     InternalCommand::Terminate => {
@@ -754,7 +771,6 @@ pub mod tests {
                     cnt_rx_tank_level_switch_from_signal_handler: 0,
                 };
 
-                
                 let mutex_tank_level_switch_signals_for_assert =
                     mutex_tank_level_switch_signals.clone();
                 let _ = tank_level_switch.execute(
@@ -1364,7 +1380,6 @@ pub mod tests {
                     #[cfg(feature = "debug_channels")]
                     cnt_rx_tank_level_switch_from_signal_handler: 0,
                 };
-
 
                 let _ = tank_level_switch.execute(
                     &mut tank_level_switch_channels,

@@ -17,15 +17,15 @@ use std::fs;
 use std::path::PathBuf;
 use std::thread::sleep;
 
+use crate::sensors::ds18b20_channels::Ds18b20Channels;
+use crate::sensors::ds18b20_error::Ds18b20Error;
+use crate::utilities::proc_ext_req::ProcessExternalRequestTrait;
 #[cfg(feature = "debug_ds18b20")]
 use log::debug;
 #[cfg(all(not(test), target_os = "linux"))]
 use log::info;
 #[cfg(not(test))]
 use log::warn;
-use crate::sensors::ds18b20_channels::Ds18b20Channels;
-use crate::sensors::ds18b20_error::Ds18b20Error;
-use crate::utilities::proc_ext_req::ProcessExternalRequestTrait;
 
 mod ds18b20_constants {
     /// minimum viable temperature used for health check of sensor signal
@@ -391,6 +391,7 @@ impl Ds18b20 {
 pub mod tests {
     use crate::sensors::ds18b20::{Ds18b20, Ds18b20Config, Ds18b20Error};
     use crate::sensors::ds18b20::{Ds18b20Result, Ds18b20ResultData};
+    use crate::sensors::ds18b20_channels::Ds18b20Channels;
     use crate::utilities::channel_content::InternalCommand;
     use crate::utilities::config::read_config_file;
     use spin_sleep::SpinSleeper;
@@ -398,7 +399,6 @@ pub mod tests {
     use std::sync::{mpsc, Arc, Mutex};
     use std::time::Duration;
     use std::{env, thread};
-    use crate::sensors::ds18b20_channels::Ds18b20Channels;
 
     #[test]
     #[ignore]

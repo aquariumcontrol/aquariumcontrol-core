@@ -26,6 +26,7 @@ use spin_sleep::SpinSleeper;
 use crate::sensors::atlas_scientific::AtlasScientificResultData;
 use crate::sensors::dht::DhtResult;
 use crate::sensors::ds18b20::Ds18b20Result;
+use crate::sensors::sensor_manager_channels::SensorManagerChannels;
 use crate::simulator::get_resp_sim::GetResponseFromSimulatorTrait;
 use crate::simulator::tcp_communication_error::TcpCommunicationError;
 use crate::utilities::channel_content::{AquariumSignal, InternalCommand};
@@ -33,7 +34,6 @@ use crate::utilities::logger::log_error_chain;
 use crate::utilities::proc_ext_req::ProcessExternalRequestTrait;
 use std::time::{Duration, Instant};
 use thiserror::Error;
-use crate::sensors::sensor_manager_channels::SensorManagerChannels;
 
 #[derive(Deserialize, Debug)]
 /// Holds the configuration data for the measurement of ambient signals from DHT sensor
@@ -345,11 +345,17 @@ impl SensorManager {
     /// these channels are `Some` when running in simulator mode.
     fn communicate_with_simulator(
         &mut self,
-        sensor_manager_channels: &mut SensorManagerChannels
+        sensor_manager_channels: &mut SensorManagerChannels,
     ) -> Result<(), SensorManagerError> {
         // unwrap is safe because tested beforehand
-        let tx_sensor_manager_to_simulator = sensor_manager_channels.tx_sensor_manager_to_tcp_opt.as_ref().unwrap();
-        let rx_sensor_manager_from_simulator = sensor_manager_channels.rx_sensor_manager_from_tcp_opt.as_ref().unwrap();
+        let tx_sensor_manager_to_simulator = sensor_manager_channels
+            .tx_sensor_manager_to_tcp_opt
+            .as_ref()
+            .unwrap();
+        let rx_sensor_manager_from_simulator = sensor_manager_channels
+            .rx_sensor_manager_from_tcp_opt
+            .as_ref()
+            .unwrap();
 
         self.ambient_temperature = Self::get_response_from_simulator(
             module_path!().to_string(),
@@ -486,9 +492,7 @@ impl SensorManager {
             {
                 self.instant_last_measurement = current_instant;
                 if self.config.use_simulator {
-                    let result = self.communicate_with_simulator(
-                        sensor_manager_channels
-                    );
+                    let result = self.communicate_with_simulator(sensor_manager_channels);
                     if result.is_err() {
                         log_error_chain(
                             module_path!(),

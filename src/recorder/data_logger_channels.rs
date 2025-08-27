@@ -15,12 +15,12 @@ use std::sync::mpsc::{Receiver, SendError, Sender, TryRecvError};
 /// endpoints that the data logger needs to interact with other parts of your application.
 pub struct DataLoggerChannels {
     /// Sender part of the channel for communication to the signal handler
-    pub tx_to_signal_handler: Sender<bool>,
+    pub tx_data_logger_to_signal_handler: Sender<bool>,
     #[cfg(feature = "debug_channels")]
     pub cnt_tx_to_signal_handler: u64,
 
     /// Receiver part of the channel for communication from the signal handler                
-    pub rx_from_signal_handler: Receiver<InternalCommand>,
+    pub rx_data_logger_from_signal_handler: Receiver<InternalCommand>,
     #[cfg(feature = "debug_channels")]
     pub cnt_rx_from_signal_handler: u64,
 }
@@ -31,7 +31,7 @@ impl DataLoggerChannels {
     /// This wrapper function sends a boolean acknowledgment and increments the
     /// associated debug counter if the `debug_channels` feature is enabled.
     pub fn send_to_signal_handler(&mut self, ack: bool) -> Result<(), SendError<bool>> {
-        let result = self.tx_to_signal_handler.send(ack);
+        let result = self.tx_data_logger_to_signal_handler.send(ack);
         #[cfg(feature = "debug_channels")]
         if result.is_ok() {
             self.cnt_tx_to_signal_handler += 1;
@@ -44,7 +44,7 @@ impl DataLoggerChannels {
     /// This wrapper function performs a blocking receive for a command and increments
     /// the associated debug counter if the `debug_channels` feature is enabled.
     pub fn receive_from_signal_handler(&mut self) -> Result<InternalCommand, TryRecvError> {
-        let result = self.rx_from_signal_handler.try_recv();
+        let result = self.rx_data_logger_from_signal_handler.try_recv();
         #[cfg(feature = "debug_channels")]
         if result.is_ok() {
             self.cnt_rx_from_signal_handler += 1;

@@ -11,7 +11,7 @@ use log::error;
 #[cfg(any(target_os = "linux", feature = "debug_signal_handler", not(test)))]
 use log::info;
 
-#[cfg(feature = "debug_signal_handler")]
+#[cfg(any(target_os = "linux", feature = "debug_signal_handler", feature = "debug_channels"))]
 use log::debug;
 
 #[cfg(target_os = "linux")]
@@ -23,6 +23,7 @@ use std::sync::mpsc::{Receiver, Sender};
 use std::{sync::Arc, time::Duration};
 
 use crate::utilities::channel_content::InternalCommand;
+pub(crate) use crate::utilities::signal_handler_channels::SignalHandlerChannels;
 
 /// Sends a specified `InternalCommand` to a target thread's channel and optionally waits for an acknowledgment.
 ///
@@ -82,107 +83,6 @@ fn send_command(
             debug!(target: module_path!(), "not sending QUIT to i2c_interface");
         }
     }
-}
-
-pub struct SignalHandlerChannels {
-    /// sender part of the channel for communication to messaging wrapped in Option
-    pub tx_signal_handler_to_messaging_opt: Option<Sender<InternalCommand>>,
-
-    /// receiver part of the channel for communication to messaging wrapped in Option
-    pub rx_signal_handler_from_messaging_opt: Option<Receiver<bool>>,
-
-    /// sender part of the channel for communication to refill control
-    pub tx_signal_handler_to_refill: Sender<InternalCommand>,
-
-    /// receiver part of the channel for communication from refill control
-    pub rx_signal_handler_from_refill: Receiver<bool>,
-
-    /// sender part of the channel for communication to tank level switch
-    pub tx_signal_handler_to_tank_level_switch: Sender<InternalCommand>,
-
-    /// receiver part of the channel for communication from tank level switch
-    pub rx_signal_handler_from_tank_level_switch: Receiver<bool>,
-
-    /// sender part of the channel for communication to heating control
-    pub tx_signal_handler_to_heating: Sender<InternalCommand>,
-
-    /// receiver part of the channel for communication from heating control
-    pub rx_signal_handler_from_heating: Receiver<bool>,
-
-    /// sender part of the channel for communication to Controllino
-    pub tx_signal_handler_to_relay_manager: Sender<InternalCommand>,
-
-    /// receiver part of the channel for communication from Controllino
-    pub rx_signal_handler_from_relay_manager: Receiver<bool>,
-
-    /// sender part of the channel for communication to Atlas Scientific
-    pub tx_signal_handler_to_atlas_scientific: Sender<InternalCommand>,
-
-    /// receiver part of the channel for communication from Atlas Scientific
-    pub rx_signal_handler_from_atlas_scientific: Receiver<bool>,
-
-    /// sender part of the channel for communication to the sensor manager
-    pub tx_signal_handler_to_sensor_manager: Sender<InternalCommand>,
-
-    /// receiver part of the channel for communication from the sensor manager
-    pub rx_signal_handler_from_sensor_manager: Receiver<bool>,
-
-    /// sender part of the channel for communication to data logger
-    pub tx_signal_handler_to_data_logger: Sender<InternalCommand>,
-
-    /// receiver part of the channel for communication from data logger
-    pub rx_signal_handler_from_data_logger: Receiver<bool>,
-
-    /// sender part of the channel for communication to Balling dosing control
-    pub tx_signal_handler_to_balling: Sender<InternalCommand>,
-
-    /// receiver part of the channel for communication from Balling dosing control
-    pub rx_signal_handler_from_balling: Receiver<bool>,
-
-    /// sender part of the channel for communication to ventilation control
-    pub tx_signal_handler_to_ventilation: Sender<InternalCommand>,
-
-    /// receiver part of the channel for communication from ventilation control
-    pub rx_signal_handler_from_ventilation: Receiver<bool>,
-
-    /// sender part of the channel for communication to monitors
-    pub tx_signal_handler_to_monitors: Sender<InternalCommand>,
-
-    /// receiver part of the channel for communication from monitors
-    pub rx_signal_handler_from_monitors: Receiver<bool>,
-
-    /// sender part of the channel for communication to feed control
-    pub tx_signal_handler_to_feed: Sender<InternalCommand>,
-
-    /// receiver part of the channel for communication from feed control
-    pub rx_signal_handler_from_feed: Receiver<bool>,
-
-    /// sender part of the channel for communication to schedule check
-    pub tx_signal_handler_to_schedule_check: Sender<InternalCommand>,
-
-    /// receiver part of the channel for communication schedule check
-    pub rx_signal_handler_from_schedule_check: Receiver<bool>,
-
-    /// sender part of the channel for communication to TCPCommunication wrapped in Option
-    pub tx_signal_handler_to_tcp_opt: Option<Sender<InternalCommand>>,
-
-    /// receiver part of the channel for communication to TCPCommunication wrapped in Option
-    pub rx_signal_handler_from_tcp_opt: Option<Receiver<bool>>,
-
-    /// sender part of the channel for communication to Dht wrapped in Option
-    pub tx_signal_handler_to_dht: Sender<InternalCommand>,
-
-    /// sender part of the channel for communication to I2C interface
-    pub tx_signal_handler_to_i2c_interface: Sender<InternalCommand>,
-
-    /// sender part of the channel for communication to watchdog
-    pub tx_signal_handler_to_watchdog: Sender<InternalCommand>,
-
-    /// receiver part of the channel for communication from watchdog
-    pub rx_signal_handler_from_watchdog: Receiver<bool>,
-
-    /// sender part of the channel for communication to DS18B20 sensor reading
-    pub tx_signal_handler_to_ds18b20: Sender<InternalCommand>,
 }
 
 /// Handles operating system termination signals (e.g., SIGTERM).
@@ -381,18 +281,21 @@ pub fn handle_signals(term: Arc<AtomicBool>, signal_handler_channels: SignalHand
     );
 
     // phase 4: shut down low-level controls
-    send_command(
-        InternalCommand::Quit,
-        Some(&signal_handler_channels.tx_signal_handler_to_i2c_interface),
-        None,
-        "i2c_interface",
-    );
-    send_command(
-        InternalCommand::Quit,
-        Some(&signal_handler_channels.tx_signal_handler_to_dht),
-        None,
-        "dht",
-    );
+    #[cfg(all(feature = "target_hw", target_os = "linux"))]
+    {
+        send_command(
+            InternalCommand::Quit,
+            Some(&signal_handler_channels.tx_signal_handler_to_i2c_interface),
+            None,
+            "i2c_interface",
+        );
+        send_command(
+            InternalCommand::Quit,
+            Some(&signal_handler_channels.tx_signal_handler_to_dht),
+            None,
+            "dht",
+        );
+    }
     send_command(
         InternalCommand::Quit,
         Some(&signal_handler_channels.tx_signal_handler_to_relay_manager),
@@ -520,6 +423,9 @@ pub fn handle_signals(term: Arc<AtomicBool>, signal_handler_channels: SignalHand
     );
 
     println!("Termination of application completed");
+
+    #[cfg(feature = "debug_channels")]
+    debug!(target: module_path!(), "{signal_handler_channels}");
 }
 
 #[cfg(test)]
@@ -719,11 +625,13 @@ pub mod tests {
         ) = mpsc::channel();
         let rx_signal_handler_from_messaging_opt = Some(rx_signal_handler_from_messaging);
 
+        #[cfg(all(target_os = "linux", feature = "target_hw"))]
         let (tx_signal_handler_to_dht, rx_dht_from_signal_handler): (
             Sender<InternalCommand>,
             Receiver<InternalCommand>,
         ) = mpsc::channel();
 
+        #[allow(unused)]
         let (tx_signal_handler_to_i2c_interface, rx_i2c_interface_from_signal_handler): (
             Sender<InternalCommand>,
             Receiver<InternalCommand>,
@@ -746,38 +654,138 @@ pub mod tests {
             .spawn(move || {
                 let signal_handler_channels = SignalHandlerChannels {
                     tx_signal_handler_to_messaging_opt,
+                    #[cfg(feature = "debug_channels")]
+                    cnt_tx_signal_handler_to_messaging_opt: 0,
+
                     rx_signal_handler_from_messaging_opt,
+                    #[cfg(feature = "debug_channels")]
+                    cnt_rx_signal_handler_from_messaging_opt: 0,
+
                     tx_signal_handler_to_refill,
+                    #[cfg(feature = "debug_channels")]
+                    cnt_tx_signal_handler_to_refill: 0,
+
                     rx_signal_handler_from_refill,
+                    #[cfg(feature = "debug_channels")]
+                    cnt_rx_signal_handler_from_refill: 0,
+
                     tx_signal_handler_to_tank_level_switch,
+                    #[cfg(feature = "debug_channels")]
+                    cnt_tx_signal_handler_to_tank_level_switch: 0,
+
                     rx_signal_handler_from_tank_level_switch,
+                    #[cfg(feature = "debug_channels")]
+                    cnt_rx_signal_handler_from_tank_level_switch: 0,
+
                     tx_signal_handler_to_heating,
+                    #[cfg(feature = "debug_channels")]
+                    cnt_tx_signal_handler_to_heating: 0,
+
                     rx_signal_handler_from_heating,
+                    #[cfg(feature = "debug_channels")]
+                    cnt_rx_signal_handler_from_heating: 0,
+
                     tx_signal_handler_to_relay_manager,
+                    #[cfg(feature = "debug_channels")]
+                    cnt_tx_signal_handler_to_relay_manager: 0,
+
                     rx_signal_handler_from_relay_manager,
+                    #[cfg(feature = "debug_channels")]
+                    cnt_rx_signal_handler_from_relay_manager: 0,
+
                     tx_signal_handler_to_atlas_scientific,
+                    #[cfg(feature = "debug_channels")]
+                    cnt_tx_signal_handler_to_atlas_scientific: 0,
+
                     rx_signal_handler_from_atlas_scientific,
+                    #[cfg(feature = "debug_channels")]
+                    cnt_rx_signal_handler_from_atlas_scientific: 0,
+
                     tx_signal_handler_to_sensor_manager,
-                    tx_signal_handler_to_data_logger,
-                    rx_signal_handler_from_data_logger,
-                    tx_signal_handler_to_balling,
-                    rx_signal_handler_from_balling,
-                    tx_signal_handler_to_ventilation,
-                    rx_signal_handler_from_ventilation,
-                    tx_signal_handler_to_monitors,
-                    rx_signal_handler_from_monitors,
-                    tx_signal_handler_to_feed,
-                    rx_signal_handler_from_feed,
-                    tx_signal_handler_to_schedule_check,
-                    rx_signal_handler_from_schedule_check,
-                    tx_signal_handler_to_tcp_opt,
-                    rx_signal_handler_from_tcp_opt,
-                    tx_signal_handler_to_dht,
-                    tx_signal_handler_to_i2c_interface,
-                    tx_signal_handler_to_watchdog,
-                    rx_signal_handler_from_watchdog,
-                    tx_signal_handler_to_ds18b20,
+                    #[cfg(feature = "debug_channels")]
+                    cnt_tx_signal_handler_to_sensor_manager: 0,
+
                     rx_signal_handler_from_sensor_manager,
+                    #[cfg(feature = "debug_channels")]
+                    cnt_rx_signal_handler_from_sensor_manager: 0,
+
+                    tx_signal_handler_to_data_logger,
+                    #[cfg(feature = "debug_channels")]
+                    cnt_tx_signal_handler_to_data_logger: 0,
+
+                    rx_signal_handler_from_data_logger,
+                    #[cfg(feature = "debug_channels")]
+                    cnt_rx_signal_handler_from_data_logger: 0,
+
+                    tx_signal_handler_to_balling,
+                    #[cfg(feature = "debug_channels")]
+                    cnt_tx_signal_handler_to_balling: 0,
+
+                    rx_signal_handler_from_balling,
+                    #[cfg(feature = "debug_channels")]
+                    cnt_rx_signal_handler_from_balling: 0,
+
+                    tx_signal_handler_to_ventilation,
+                    #[cfg(feature = "debug_channels")]
+                    cnt_tx_signal_handler_to_ventilation: 0,
+
+                    rx_signal_handler_from_ventilation,
+                    #[cfg(feature = "debug_channels")]
+                    cnt_rx_signal_handler_from_ventilation: 0,
+
+                    tx_signal_handler_to_monitors,
+                    #[cfg(feature = "debug_channels")]
+                    cnt_tx_signal_handler_to_monitors: 0,
+
+                    rx_signal_handler_from_monitors,
+                    #[cfg(feature = "debug_channels")]
+                    cnt_rx_signal_handler_from_monitors: 0,
+
+                    tx_signal_handler_to_feed,
+                    #[cfg(feature = "debug_channels")]
+                    cnt_tx_signal_handler_to_feed: 0,
+
+                    rx_signal_handler_from_feed,
+                    #[cfg(feature = "debug_channels")]
+                    cnt_rx_signal_handler_from_feed: 0,
+
+                    tx_signal_handler_to_schedule_check,
+                    #[cfg(feature = "debug_channels")]
+                    cnt_tx_signal_handler_to_schedule_check: 0,
+
+                    rx_signal_handler_from_schedule_check,
+                    #[cfg(feature = "debug_channels")]
+                    cnt_rx_signal_handler_from_schedule_check: 0,
+
+                    tx_signal_handler_to_tcp_opt,
+                    #[cfg(feature = "debug_channels")]
+                    cnt_tx_signal_handler_to_tcp_opt: 0,
+
+                    rx_signal_handler_from_tcp_opt,
+                    #[cfg(feature = "debug_channels")]
+                    cnt_rx_signal_handler_from_tcp_opt: 0,
+
+                    #[cfg(all(feature = "target_hw", target_os = "linux"))]
+                    tx_signal_handler_to_dht,
+                    #[cfg(all(feature = "target_hw", target_os = "linux", feature = "debug_channels"))]
+                    cnt_tx_signal_handler_to_dht: 0,
+
+                    #[cfg(all(feature = "target_hw", target_os = "linux"))]
+                    tx_signal_handler_to_i2c_interface,
+                    #[cfg(all(feature = "target_hw", target_os = "linux", feature = "debug_channels"))]
+                    cnt_tx_signal_handler_to_i2c_interface: 0,
+
+                    tx_signal_handler_to_watchdog,
+                    #[cfg(feature = "debug_channels")]
+                    cnt_tx_signal_handler_to_watchdog: 0,
+
+                    rx_signal_handler_from_watchdog,
+                    #[cfg(feature = "debug_channels")]
+                    cnt_rx_signal_handler_from_watchdog: 0,
+
+                    tx_signal_handler_to_ds18b20,
+                    #[cfg(feature = "debug_channels")]
+                    cnt_tx_signal_handler_to_ds18b20: 0
                 };
 
                 handle_signals(term_clone, signal_handler_channels);
@@ -862,6 +870,7 @@ pub mod tests {
         );
         // no response from i2c_interface
 
+        #[cfg(all(target_os = "linux", feature = "target_hw"))]
         assert_eq!(
             rx_dht_from_signal_handler.recv().unwrap(),
             InternalCommand::Quit

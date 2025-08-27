@@ -8,20 +8,20 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 */
 
 use log::warn;
-use std::sync::mpsc::Sender;
 
 use crate::relays::actuate_controllino::{get_relay_command, ActuateControllinoConfig};
+use crate::relays::actuate_simulator_channels::ActuateSimulatorChannels;
 use crate::relays::relay_error::RelayError;
 use crate::relays::relay_manager::RelayActuationTrait;
 use crate::utilities::channel_content::InternalCommand;
 
 /// Contains trait implementation for system testing purposes.
-pub struct ActuateSimulator {
+pub struct ActuateSimulator<'a> {
     config: ActuateControllinoConfig,
-    tx_to_tcp_opt: Option<Sender<InternalCommand>>,
+    actuate_simulator_channels: &'a mut ActuateSimulatorChannels,
 }
 
-impl RelayActuationTrait for ActuateSimulator {
+impl<'a> RelayActuationTrait for ActuateSimulator<'a> {
     /// Simulates relay actuation by sending a command over a channel, typically for testing.
     ///
     /// This function translates a high-level `InternalCommand` (like `SwitchOn` or `SwitchOff`)
@@ -51,7 +51,11 @@ impl RelayActuationTrait for ActuateSimulator {
     /// - `RelayError::SimulatorSendFailed`: If sending the command over the `mpsc`
     ///   channel fails, which typically means the receiver has been dropped.
     fn actuate(&mut self, internal_command: &InternalCommand) -> Result<(), RelayError> {
-        let tx_to_tcp = self.tx_to_tcp_opt.as_ref().unwrap();
+        let tx_actuate_simulator_to_tcp = self
+            .actuate_simulator_channels
+            .tx_actuate_simulator_to_tcp_opt
+            .as_ref()
+            .unwrap();
         match internal_command {
             InternalCommand::SwitchOn(ref c) | InternalCommand::SwitchOff(ref c) => {
                 let relay_command = match get_relay_command(
@@ -64,7 +68,7 @@ impl RelayActuationTrait for ActuateSimulator {
                         panic!("Controllino: Error in preparation of communication to simulator: {e:?}");
                     }
                 };
-                match tx_to_tcp.send(relay_command.clone()) {
+                match tx_actuate_simulator_to_tcp.send(relay_command.clone()) {
                     Ok(()) => Ok(()),
                     Err(e) => {
                         panic!(
@@ -128,7 +132,7 @@ impl RelayActuationTrait for ActuateSimulator {
     }
 }
 
-impl ActuateSimulator {
+impl<'a> ActuateSimulator<'a> {
     /// Creates a new `ActuateSimulator` instance.
     ///
     /// This constructor initializes the simulator with an optional sender channel
@@ -136,20 +140,18 @@ impl ActuateSimulator {
     /// It's used to set up the mock actuation logic for testing purposes.
     ///
     /// # Arguments
-    /// * `tx_to_tcp_opt` - An `Option` containing the sender channel (`Sender<InternalCommand>`)
-    ///   used to send simulated relay commands via TCP. If `None`, attempts to `actuate`
-    ///   will panic.
+    /// * `actuate_simulator_channels` - A mutable reference to the struct containing the channel.
     /// * `config` - The `ActuateControllinoConfig` struct, providing device-to-relay mappings
     ///   and other configuration relevant when simulating Controllino behavior.
     ///
     /// # Returns
     /// A new `ActuateSimulator` struct.
     pub fn new(
-        tx_to_tcp_opt: Option<Sender<InternalCommand>>,
+        actuate_simulator_channels: &'a mut ActuateSimulatorChannels,
         config: ActuateControllinoConfig,
     ) -> Self {
         Self {
-            tx_to_tcp_opt,
+            actuate_simulator_channels,
             config,
         }
     }

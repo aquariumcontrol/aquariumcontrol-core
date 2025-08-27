@@ -51,7 +51,7 @@ impl MonitorsChannels {
         }
         result
     }
-    
+
     /// Sends an acknowledgment to the signal handler.
     ///
     /// This wrapper sends a boolean acknowledgment and increments the debug counter.
@@ -92,7 +92,6 @@ impl MonitorsChannels {
             result
         })
     }
-    
 }
 
 #[cfg(feature = "debug_channels")]

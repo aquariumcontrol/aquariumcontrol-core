@@ -30,3 +30,6 @@ pub mod relay_error;
 
 /// Container for channels used by relay manager
 pub mod relay_manager_channels;
+
+/// Container for channel used by ActuateSimulator
+pub mod actuate_simulator_channels;

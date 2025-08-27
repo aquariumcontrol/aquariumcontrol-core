@@ -66,11 +66,12 @@ mod beacon;
 /// This container module features all functionality to replace the evaporated water with fresh water.
 mod water;
 
+/// This container module features all supporting functionality for the main module.
+mod launch;
+
 use log::{error, info, warn};
 
-#[cfg(feature = "debug_main")]
-use log::debug;
-#[cfg(feature = "debug_channels")]
+#[cfg(any(feature = "debug_main", feature = "debug_channels"))]
 use log::debug;
 
 #[cfg(any(target_os = "linux", target_os = "macos"))]
@@ -93,63 +94,46 @@ use crate::dispatch::messaging::Messaging;
 #[cfg(target_os = "linux")]
 use crate::dispatch::messaging_channels::MessagingChannels;
 
-use crate::food::feed::{Feed, FeedChannels};
+use crate::food::feed::{Feed};
 use crate::food::food_injection::FoodInjection;
-use crate::mineral::balling::{Balling, BallingChannels};
+use crate::launch::startup_error::StartupError;
+use crate::mineral::balling::{Balling};
 use crate::mineral::mineral_injection::MineralInjection;
-use crate::permission::schedule_check::{ScheduleCheck, ScheduleCheckChannels};
+use crate::permission::schedule_check::{ScheduleCheck};
 use crate::recorder::data_injection::DataInjection;
 use crate::recorder::data_logger::{DataLogger, DataLoggerMutexes};
-use crate::recorder::data_logger_channels::DataLoggerChannels;
 use crate::relays::actuate_controllino::ActuateControllino;
 #[cfg(all(target_os = "linux", feature = "target_hw"))]
 use crate::relays::actuate_gpio::{ActuateGpio, ActuateGpioConfig};
 use crate::relays::actuate_simulator::ActuateSimulator;
 use crate::relays::relay_manager::RelayManager;
-use crate::relays::relay_manager_channels::RelayManagerChannels;
 use crate::sensors::atlas_scientific::{
-    AtlasScientific, AtlasScientificChannels, AtlasScientificResultData,
+    AtlasScientific, AtlasScientificResultData,
 };
 use crate::sensors::dht::{Dht, DhtResult};
 use crate::sensors::ds18b20::{Ds18b20, Ds18b20ResultData};
-use crate::sensors::i2c_interface::{I2cRequest, I2cResult};
-use crate::sensors::sensor_manager::{
-    SensorManager, SensorManagerMutexes, SensorManagerSignals,
-};
-use crate::sensors::sensor_manager_channels::SensorManagerChannels;
+use crate::sensors::sensor_manager::{SensorManager, SensorManagerMutexes, SensorManagerSignals};
 use crate::sensors::tank_level_switch::{TankLevelSwitch, TankLevelSwitchSignals};
 use crate::simulator::tcp_communication::TcpCommunication;
-use crate::simulator::tcp_communication_channels::{
-    TcpCommunicationChannelPair, TcpCommunicationChannels,
-};
-use crate::simulator::tcp_communication_error::TcpCommunicationError;
 use crate::thermal::distinct_interval_check::distinct_thermal_control_interval_check;
-use crate::thermal::heating::{Heating, HeatingChannels, HeatingMutexes};
-use crate::thermal::ventilation::{Ventilation, VentilationChannels};
-use crate::utilities::channel_content::InternalCommand;
+use crate::thermal::heating::{Heating, HeatingMutexes};
+use crate::thermal::ventilation::{Ventilation};
 use crate::utilities::config::read_config_file;
 use crate::utilities::config_file_definition_error::ConfigFileDefinitionError;
 use crate::utilities::logger::{log_error_chain, setup_logger, LoggerConfig};
 use crate::utilities::memory_config_check::memory_config_check;
 use crate::utilities::publish_pid::PublishPid;
-use crate::utilities::signal_handler::{handle_signals, SignalHandlerChannels};
-use crate::utilities::startup_error::StartupError;
+use crate::utilities::signal_handler::{handle_signals};
 use crate::utilities::version_information::{VersionInformation, VersionInformationError};
 use crate::watchmen::monitors::Monitors;
-use crate::watchmen::monitors_channels::MonitorsChannels;
 use crate::watchmen::petting::Petting;
 use crate::watchmen::watchdog::Watchdog;
-use crate::watchmen::watchdog_channels::WatchDogChannels;
-use crate::water::refill::{Refill, RefillChannels, RefillStatus};
-use crate::water::refill_monitor_view::RefillMonitorView;
+use crate::water::refill::{Refill, RefillStatus};
 use crate::water::water_injection::WaterInjection;
 use spin_sleep::SpinSleeper;
-use std::sync::mpsc::{self, Receiver, Sender};
-use std::sync::{atomic::AtomicBool, Arc, Mutex};
+pub use std::sync::{atomic::AtomicBool, Arc, Mutex};
 use std::{env, panic, path::Path, thread::scope, time::Duration};
-use crate::sensors::dht_channels::DhtChannels;
-use crate::sensors::ds18b20_channels::Ds18b20Channels;
-use crate::sensors::tank_level_switch_channels::TankLevelSwitchChannels;
+use crate::launch::channels::Channels;
 
 cfg_if::cfg_if! {
     if #[cfg(all(target_os = "linux", feature = "target_hw"))] {
@@ -697,477 +681,11 @@ fn run() -> Result<(), StartupError> {
         | config.sensor_manager.use_simulator
         | config.tank_level_switch.use_simulator;
 
-    // create channels for communication between threads
-    let tx_signal_handler_to_messaging_opt: Option<Sender<InternalCommand>>;
-    let rx_signal_handler_from_messaging_opt: Option<Receiver<bool>>;
-    let rx_refill_from_messaging_opt: Option<Receiver<InternalCommand>>;
-    let rx_ventilation_from_messaging_opt: Option<Receiver<InternalCommand>>;
-    let rx_heating_from_messaging_opt: Option<Receiver<InternalCommand>>;
-    let rx_feed_from_messaging_opt: Option<Receiver<InternalCommand>>;
-    let rx_balling_from_messaging_opt: Option<Receiver<InternalCommand>>;
-    let rx_monitors_from_messaging_opt: Option<Receiver<InternalCommand>>;
-
-    #[allow(clippy::needless_late_init)]
-    let rx_watchdog_from_messaging_opt: Option<Receiver<InternalCommand>>;
-
-    cfg_if::cfg_if! {
-        if #[cfg(target_os = "linux")] {
-            // channels for linux-specific code (messaging)
-            // *** signal_handler => messaging ***
-            let (tx_signal_handler_to_messaging, rx_messaging_from_signal_handler): (
-                Sender<InternalCommand>,
-                Receiver<InternalCommand>,
-            ) = mpsc::channel();
-            tx_signal_handler_to_messaging_opt = Some(tx_signal_handler_to_messaging);
-
-            let (tx_messaging_to_signal_handler, rx_signal_handler_from_messaging): (
-                Sender<bool>,
-                Receiver<bool>,
-            ) = mpsc::channel();
-            rx_signal_handler_from_messaging_opt = Some(rx_signal_handler_from_messaging);
-
-            // *** messaging => refill ***
-            let (tx_messaging_to_refill, rx_refill_from_messaging): (
-                Sender<InternalCommand>,
-                Receiver<InternalCommand>,
-            ) = mpsc::channel();
-            rx_refill_from_messaging_opt = Some(rx_refill_from_messaging);
-
-            // *** messaging => ventilation ***
-            let (tx_messaging_to_ventilation, rx_ventilation_from_messaging): (
-                Sender<InternalCommand>,
-                Receiver<InternalCommand>,
-            ) = mpsc::channel();
-            rx_ventilation_from_messaging_opt = Some(rx_ventilation_from_messaging);
-
-            // *** messaging => heating ***
-            let (tx_messaging_to_heating, rx_heating_from_messaging): (
-                Sender<InternalCommand>,
-                Receiver<InternalCommand>,
-            ) = mpsc::channel();
-            rx_heating_from_messaging_opt = Some(rx_heating_from_messaging);
-
-            // *** messaging => feed ***
-            let (tx_messaging_to_feed, rx_feed_from_messaging): (
-                Sender<InternalCommand>,
-                Receiver<InternalCommand>,
-            ) = mpsc::channel();
-            rx_feed_from_messaging_opt = Some(rx_feed_from_messaging);
-
-            // *** messaging => balling ***
-            let (tx_messaging_to_balling, rx_balling_from_messaging): (
-                Sender<InternalCommand>,
-                Receiver<InternalCommand>,
-            ) = mpsc::channel();
-            rx_balling_from_messaging_opt = Some(rx_balling_from_messaging);
-
-            // *** messaging => monitors ***
-            let (tx_messaging_to_monitors, rx_monitors_from_messaging): (
-                Sender<InternalCommand>,
-                Receiver<InternalCommand>,
-            ) = mpsc::channel();
-            rx_monitors_from_messaging_opt = Some(rx_monitors_from_messaging);
-
-            // *** messaging => monitors ***
-            let (tx_messaging_to_watchdog, rx_watchdog_from_messaging): (
-                Sender<InternalCommand>,
-                Receiver<InternalCommand>,
-            ) = mpsc::channel();
-            rx_watchdog_from_messaging_opt = Some(rx_watchdog_from_messaging);
-        }
-        else {
-            // replacement values for channels for non-linux specific code
-            tx_signal_handler_to_messaging_opt = None;
-            rx_signal_handler_from_messaging_opt = None;
-            rx_refill_from_messaging_opt = None;
-            rx_ventilation_from_messaging_opt = None;
-            rx_heating_from_messaging_opt = None;
-            rx_feed_from_messaging_opt = None;
-            rx_balling_from_messaging_opt = None;
-            rx_monitors_from_messaging_opt = None;
-            rx_watchdog_from_messaging_opt = None;
-        }
-    }
-
-    // *** refill <=> relay_manager ***
-    let (tx_refill_to_relay_manager, rx_relay_manager_from_refill): (
-        Sender<InternalCommand>,
-        Receiver<InternalCommand>,
-    ) = mpsc::channel();
-    let (tx_relay_manager_to_refill, rx_refill_from_relay_manager): (Sender<bool>, Receiver<bool>) =
-        mpsc::channel();
-    // *******************************
-
-    // *** refill <=> schedule_check ***
-    let (tx_refill_to_schedule_check, rx_schedule_check_from_refill): (
-        Sender<InternalCommand>,
-        Receiver<InternalCommand>,
-    ) = mpsc::channel();
-    let (tx_schedule_check_to_refill, rx_refill_from_schedule_check): (
-        Sender<bool>,
-        Receiver<bool>,
-    ) = mpsc::channel();
-    // *******************************
-
-    // *** heating <=> relay_manager ***
-    let (tx_heating_to_relay_manager, rx_relay_manager_from_heating): (
-        Sender<InternalCommand>,
-        Receiver<InternalCommand>,
-    ) = mpsc::channel();
-    let (tx_relay_manager_to_heating, rx_heating_from_relay_manager): (
-        Sender<bool>,
-        Receiver<bool>,
-    ) = mpsc::channel();
-    // *******************************
-
-    // *** heating <=> schedule_check ***
-    let (tx_heating_to_schedule_check, rx_schedule_check_from_heating): (
-        Sender<InternalCommand>,
-        Receiver<InternalCommand>,
-    ) = mpsc::channel();
-    let (tx_schedule_check_to_heating, rx_heating_from_schedule_check): (
-        Sender<bool>,
-        Receiver<bool>,
-    ) = mpsc::channel();
-    // *******************************
-
-    // *** ventilation <=> relay_manager ***
-    let (tx_ventilation_to_relay_manager, rx_relay_manager_from_ventilation): (
-        Sender<InternalCommand>,
-        Receiver<InternalCommand>,
-    ) = mpsc::channel();
-    let (tx_relay_manager_to_ventilation, rx_ventilation_from_relay_manager): (
-        Sender<bool>,
-        Receiver<bool>,
-    ) = mpsc::channel();
-    // *******************************
-
-    // *** ventilation <=> schedule_check ***
-    let (tx_ventilation_to_schedule_check, rx_schedule_check_from_ventilation): (
-        Sender<InternalCommand>,
-        Receiver<InternalCommand>,
-    ) = mpsc::channel();
-    let (tx_schedule_check_to_ventilation, rx_ventilation_from_schedule_check): (
-        Sender<bool>,
-        Receiver<bool>,
-    ) = mpsc::channel();
-    // *******************************
-
-    // *** feed <=> relay_manager ***
-    let (tx_feed_to_relay_manager, rx_relay_manager_from_feed): (
-        Sender<InternalCommand>,
-        Receiver<InternalCommand>,
-    ) = mpsc::channel();
-    let (tx_relay_manager_to_feed, rx_feed_from_relay_manager): (Sender<bool>, Receiver<bool>) =
-        mpsc::channel();
-    // *******************************
-
-    // *** balling <=> relay_manager ***
-    let (tx_balling_to_relay_manager, rx_relay_manager_from_balling): (
-        Sender<InternalCommand>,
-        Receiver<InternalCommand>,
-    ) = mpsc::channel();
-    let (tx_relay_manager_to_balling, rx_balling_from_relay_manager): (
-        Sender<bool>,
-        Receiver<bool>,
-    ) = mpsc::channel();
-    // *******************************
-
-    // *** balling <=> schedule_check ***
-    let (tx_balling_to_schedule_check, rx_schedule_check_from_balling): (
-        Sender<InternalCommand>,
-        Receiver<InternalCommand>,
-    ) = mpsc::channel();
-    let (tx_schedule_check_to_balling, rx_balling_from_schedule_check): (
-        Sender<bool>,
-        Receiver<bool>,
-    ) = mpsc::channel();
-    // *******************************
-
-    // *** refill => monitors ***
-    let (tx_refill_to_monitors, rx_monitors_from_refill): (
-        Sender<RefillMonitorView>,
-        Receiver<RefillMonitorView>,
-    ) = mpsc::channel();
-    //********************************
-
-    // *** signal handler <=> refill ***
-    let (tx_signal_handler_to_refill, rx_refill_from_signal_handler): (
-        Sender<InternalCommand>,
-        Receiver<InternalCommand>,
-    ) = mpsc::channel();
-    let (tx_refill_to_signal_handler, rx_signal_handler_from_refill): (
-        Sender<bool>,
-        Receiver<bool>,
-    ) = mpsc::channel();
-    // ***********************************
-
-    // *** signal handler <=> heating ***
-    let (tx_signal_handler_to_heating, rx_heating_from_signal_handler): (
-        Sender<InternalCommand>,
-        Receiver<InternalCommand>,
-    ) = mpsc::channel();
-    let (tx_heating_to_signal_handler, rx_signal_handler_from_heating): (
-        Sender<bool>,
-        Receiver<bool>,
-    ) = mpsc::channel();
-    // ***********************************
-
-    // *** signal handler <=> feed ***
-    let (tx_signal_handler_to_feed, rx_feed_from_signal_handler): (
-        Sender<InternalCommand>,
-        Receiver<InternalCommand>,
-    ) = mpsc::channel();
-    let (tx_feed_to_signal_handler, rx_signal_handler_from_feed): (Sender<bool>, Receiver<bool>) =
-        mpsc::channel();
-    // ***********************************
-
-    // *** signal handler <=> balling ***
-    let (tx_signal_handler_to_balling, rx_balling_from_signal_handler): (
-        Sender<InternalCommand>,
-        Receiver<InternalCommand>,
-    ) = mpsc::channel();
-    let (tx_balling_to_signal_handler, rx_signal_handler_from_balling): (
-        Sender<bool>,
-        Receiver<bool>,
-    ) = mpsc::channel();
-    // ***********************************
-
-    // *** signal handler <=> monitors ***
-    let (tx_signal_handler_to_monitors, rx_monitors_from_signal_handler): (
-        Sender<InternalCommand>,
-        Receiver<InternalCommand>,
-    ) = mpsc::channel();
-    let (tx_monitors_to_signal_handler, rx_signal_handler_from_monitors): (
-        Sender<bool>,
-        Receiver<bool>,
-    ) = mpsc::channel();
-    // ***********************************
-
-    // *** signal handler <=> ventilation ***
-    let (tx_signal_handler_to_ventilation, rx_ventilation_from_signal_handler): (
-        Sender<InternalCommand>,
-        Receiver<InternalCommand>,
-    ) = mpsc::channel();
-    let (tx_ventilation_to_signal_handler, rx_signal_handler_from_ventilation): (
-        Sender<bool>,
-        Receiver<bool>,
-    ) = mpsc::channel();
-    // ***********************************
-
-    // *** signal handler <=> schedule_check ***
-    let (tx_signal_handler_to_schedule_check, rx_schedule_check_from_signal_handler): (
-        Sender<InternalCommand>,
-        Receiver<InternalCommand>,
-    ) = mpsc::channel();
-    let (tx_schedule_check_to_signal_handler, rx_signal_handler_from_schedule_check): (
-        Sender<bool>,
-        Receiver<bool>,
-    ) = mpsc::channel();
-    // ***********************************
-
-    // *** signal handler <=> gpio ***
-    let (tx_signal_handler_to_tank_level_switch, rx_tank_level_switch_from_signal_handler): (
-        Sender<InternalCommand>,
-        Receiver<InternalCommand>,
-    ) = mpsc::channel();
-    let (tx_tank_level_switch_to_signal_handler, rx_signal_handler_from_tank_level_switch): (
-        Sender<bool>,
-        Receiver<bool>,
-    ) = mpsc::channel();
-    // *********************************
-
-    // *** signal handler <=> relay_manager ***
-    let (tx_signal_handler_to_relay_manager, rx_relay_manager_from_signal_handler): (
-        Sender<InternalCommand>,
-        Receiver<InternalCommand>,
-    ) = mpsc::channel();
-    let (tx_relay_manager_to_signal_handler, rx_signal_handler_from_relay_manager): (
-        Sender<bool>,
-        Receiver<bool>,
-    ) = mpsc::channel();
-    // ***************************************
-
-    // *** signal handler <=> data_logger ***
-    let (tx_signal_handler_to_data_logger, rx_data_logger_from_signal_handler): (
-        Sender<InternalCommand>,
-        Receiver<InternalCommand>,
-    ) = mpsc::channel();
-    let (tx_data_logger_to_signal_handler, rx_signal_handler_from_data_logger): (
-        Sender<bool>,
-        Receiver<bool>,
-    ) = mpsc::channel();
-    // **************************************
-
-    // *** signal handler <=> atlas_scientific ***
-    let (tx_signal_handler_to_atlas_scientific, rx_atlas_scientific_from_signal_handler): (
-        Sender<InternalCommand>,
-        Receiver<InternalCommand>,
-    ) = mpsc::channel();
-    let (tx_atlas_scientific_to_signal_handler, rx_signal_handler_from_atlas_scientific): (
-        Sender<bool>,
-        Receiver<bool>,
-    ) = mpsc::channel();
-    // **************************************
-
-    // *** signal handler <=> watchdog ***
-    let (tx_signal_handler_to_watchdog, rx_watchdog_from_signal_handler): (
-        Sender<InternalCommand>,
-        Receiver<InternalCommand>,
-    ) = mpsc::channel();
-    let (tx_watchdog_to_signal_handler, rx_signal_handler_from_watchdog): (
-        Sender<bool>,
-        Receiver<bool>,
-    ) = mpsc::channel();
-    // **************************************
-
-    // *** signal handler <=> sensor_manager ***
-    let (tx_signal_handler_to_sensor_manager, rx_sensor_manager_from_signal_handler): (
-        Sender<InternalCommand>,
-        Receiver<InternalCommand>,
-    ) = mpsc::channel();
-    let (tx_sensor_manager_to_signal_handler, rx_signal_handler_from_sensor_manager): (
-        Sender<bool>,
-        Receiver<bool>,
-    ) = mpsc::channel();
-    // **************************************
-
-    // *** signal handler <=> tcp ***
-    let (tx_signal_handler_to_tcp, rx_tcp_communication_from_signal_handler): (
-        Sender<InternalCommand>,
-        Receiver<InternalCommand>,
-    ) = mpsc::channel();
-    let (tx_tcp_communication_to_signal_handler, rx_signal_handler_from_tcp): (
-        Sender<bool>,
-        Receiver<bool>,
-    ) = mpsc::channel();
-    // *******************************
-
-    // *** signal handler => ds18b20 ***
-    let (tx_signal_handler_to_ds18b20, rx_ds18b20_from_signal_handler): (
-        Sender<InternalCommand>,
-        Receiver<InternalCommand>,
-    ) = mpsc::channel();
-    // *******************************
-
-    // *** relay_manager => tcp ***
-    let (tx_relay_manager_to_tcp, rx_tcp_communication_from_relay_manager): (
-        Sender<InternalCommand>,
-        Receiver<InternalCommand>,
-    ) = mpsc::channel();
-    // ****************************
-
-    // *** sensor_manager <=> tcp ***
-    let (tx_sensor_manager_to_tcp, rx_tcp_communication_from_sensor_manager): (
-        Sender<InternalCommand>,
-        Receiver<InternalCommand>,
-    ) = mpsc::channel();
-    let (tx_tcp_communication_to_sensor_manager, rx_sensor_manager_from_tcp): TcpCommunicationChannelPair = mpsc::channel();
-    // **********************
-
-    // *** tank_level_switch <=> tcp ***
-    let (tx_tank_level_switch_to_tcp, rx_tcp_communication_from_tank_level_switch): (
-        Sender<InternalCommand>,
-        Receiver<InternalCommand>,
-    ) = mpsc::channel();
-    let (tx_tcp_communication_to_tank_level_switch, rx_tank_level_switch_from_tcp): TcpCommunicationChannelPair = mpsc::channel();
-    // **********************
-
-    // wrapping sender/receiver for communication with TCP thread
-    let tx_signal_handler_to_tcp_opt: Option<Sender<InternalCommand>> = match use_simulator {
-        true => Some(tx_signal_handler_to_tcp),
-        false => None,
-    };
-
-    let rx_signal_handler_from_tcp_opt: Option<Receiver<bool>> = match use_simulator {
-        true => Some(rx_signal_handler_from_tcp),
-        false => None,
-    };
-
-    let tx_relay_manager_to_tcp_opt: Option<Sender<InternalCommand>> =
-        match config.relay_manager.use_simulator {
-            true => Some(tx_relay_manager_to_tcp),
-            false => None,
-        };
-
-    let rx_tcp_communication_from_relay_manager_opt: Option<Receiver<InternalCommand>> =
-        match config.relay_manager.use_simulator {
-            true => Some(rx_tcp_communication_from_relay_manager),
-            false => None,
-        };
-
-    let tx_tank_level_switch_to_tcp_opt: Option<Sender<InternalCommand>> =
-        match config.tank_level_switch.use_simulator {
-            true => Some(tx_tank_level_switch_to_tcp),
-            false => None,
-        };
-
-    let rx_tcp_communication_from_tank_level_switch_opt: Option<Receiver<InternalCommand>> =
-        match config.tank_level_switch.use_simulator {
-            true => Some(rx_tcp_communication_from_tank_level_switch),
-            false => None,
-        };
-
-    let tx_tcp_communication_to_tank_level_switch_opt: Option<
-        Sender<Result<f32, TcpCommunicationError>>,
-    > = match config.tank_level_switch.use_simulator {
-        true => Some(tx_tcp_communication_to_tank_level_switch),
-        false => None,
-    };
-
-    let rx_tank_level_switch_from_tcp_opt: Option<Receiver<Result<f32, TcpCommunicationError>>> =
-        match config.tank_level_switch.use_simulator {
-            true => Some(rx_tank_level_switch_from_tcp),
-            false => None,
-        };
-
-    let tx_sensor_manager_to_tcp_opt: Option<Sender<InternalCommand>> =
-        match config.sensor_manager.use_simulator {
-            true => Some(tx_sensor_manager_to_tcp),
-            false => None,
-        };
-
-    let rx_tcp_communication_from_sensor_manager_opt: Option<Receiver<InternalCommand>> =
-        match config.sensor_manager.use_simulator {
-            true => Some(rx_tcp_communication_from_sensor_manager),
-            false => None,
-        };
-
-    let tx_tcp_communication_to_sensor_manager_opt: Option<
-        Sender<Result<f32, TcpCommunicationError>>,
-    > = match config.sensor_manager.use_simulator {
-        true => Some(tx_tcp_communication_to_sensor_manager),
-        false => None,
-    };
-
-    let rx_sensor_manager_from_tcp_opt: Option<Receiver<Result<f32, TcpCommunicationError>>> =
-        match config.sensor_manager.use_simulator {
-            true => Some(rx_sensor_manager_from_tcp),
-            false => None,
-        };
-
-    let (tx_signal_handler_to_dht, rx_dht_from_signal_handler): (
-        Sender<InternalCommand>,
-        Receiver<InternalCommand>,
-    ) = mpsc::channel();
-
-    #[allow(unused)] // channel used in conditionally compiled code
-    let (tx_signal_handler_to_i2c_interface, rx_i2c_interface_from_signal_handler): (
-        Sender<InternalCommand>,
-        Receiver<InternalCommand>,
-    ) = mpsc::channel();
-
-    // Atlas Scientific <=> i2c_interface
-    #[allow(unused)] // channel used in conditionally compiled code
-    let (tx_atlas_scientific_to_i2c_interface, rx_i2c_interface_from_atlas_scientific): (
-        Sender<I2cRequest>,
-        Receiver<I2cRequest>,
-    ) = mpsc::channel();
-    #[allow(unused)] // channel used in conditionally compiled code
-    let (tx_i2c_interface_to_atlas_scientific, rx_atlas_scientific_from_i2c_interface): (
-        Sender<I2cResult>,
-        Receiver<I2cResult>,
-    ) = mpsc::channel();
+    let mut channels = Channels::new(
+        config.relay_manager.use_simulator,
+        config.sensor_manager.use_simulator,
+        config.tank_level_switch.use_simulator
+    );
 
     #[cfg(target_os = "linux")]
     let mut messaging =
@@ -1378,453 +896,24 @@ fn run() -> Result<(), StartupError> {
     let mut ds18b20 = Ds18b20::new(config.ds18b20)
         .map_err(|e| StartupError::Ds18b20SetupFailure { source: e })?;
 
-    let mut relay_manager_channels = RelayManagerChannels {
-        tx_relay_manager_to_refill,
-        #[cfg(feature = "debug_channels")]
-        cnt_tx_relay_manager_to_refill: 0,
+    let mut tcp_communication_opt = None;
+    if use_simulator {
+        let tcp_communication = TcpCommunication::new(&config.tcp_connection)
+            .map_err(|e| StartupError::TcpConnection { source: e })?;
+        tcp_communication_opt = Some(tcp_communication);
+    }
 
-        rx_relay_manager_from_refill,
-        #[cfg(feature = "debug_channels")]
-        cnt_rx_relay_manager_from_refill: 0,
-
-        tx_relay_manager_to_heating,
-        #[cfg(feature = "debug_channels")]
-        cnt_tx_relay_manager_to_heating: 0,
-
-        rx_relay_manager_from_heating,
-        #[cfg(feature = "debug_channels")]
-        cnt_rx_relay_manager_from_heating: 0,
-
-        tx_relay_manager_to_ventilation,
-        #[cfg(feature = "debug_channels")]
-        cnt_tx_relay_manager_to_ventilation: 0,
-
-        rx_relay_manager_from_ventilation,
-        #[cfg(feature = "debug_channels")]
-        cnt_rx_relay_manager_from_ventilation: 0,
-
-        tx_relay_manager_to_balling,
-        #[cfg(feature = "debug_channels")]
-        cnt_tx_relay_manager_to_balling: 0,
-
-        rx_relay_manager_from_balling,
-        #[cfg(feature = "debug_channels")]
-        cnt_rx_relay_manager_from_balling: 0,
-
-        tx_relay_manager_to_feed,
-        #[cfg(feature = "debug_channels")]
-        cnt_tx_relay_manager_to_feed: 0,
-
-        rx_relay_manager_from_feed,
-        #[cfg(feature = "debug_channels")]
-        cnt_rx_relay_manager_from_feed: 0,
-
-        tx_relay_manager_to_signal_handler,
-        #[cfg(feature = "debug_channels")]
-        cnt_tx_relay_manager_to_signal_handler: 0,
-
-        rx_relay_manager_from_signal_handler,
-        #[cfg(feature = "debug_channels")]
-        cnt_rx_relay_manager_from_signal_handler: 0,
-    };
-
-    let mut atlas_scientific_channels = AtlasScientificChannels {
-        tx_atlas_scientific_to_i2c_interface,
-        #[cfg(feature = "debug_channels")]
-        cnt_tx_atlas_scientific_to_i2c_interface: 0,
-
-        rx_atlas_scientific_from_i2c_interface,
-        #[cfg(feature = "debug_channels")]
-        cnt_rx_atlas_scientific_from_i2c_interface: 0,
-
-        tx_atlas_scientific_to_signal_handler,
-        #[cfg(feature = "debug_channels")]
-        cnt_tx_atlas_scientific_to_signal_handler: 0,
-
-        rx_atlas_scientific_from_signal_handler,
-        #[cfg(feature = "debug_channels")]
-        cnt_rx_atlas_scientific_from_signal_handler: 0,
-    };
-
-    let mut refill_channels = RefillChannels {
-        tx_refill_to_relay_manager,
-        #[cfg(feature = "debug_channels")]
-        cnt_tx_refill_to_relay_manager: 0,
-
-        rx_refill_from_relay_manager,
-        #[cfg(feature = "debug_channels")]
-        cnt_rx_refill_from_relay_manager: 0,
-
-        tx_refill_to_signal_handler,
-        #[cfg(feature = "debug_channels")]
-        cnt_tx_refill_to_signal_handler: 0,
-
-        rx_refill_from_signal_handler,
-        #[cfg(feature = "debug_channels")]
-        cnt_rx_refill_from_signal_handler: 0,
-
-        tx_refill_to_schedule_check,
-        #[cfg(feature = "debug_channels")]
-        cnt_tx_refill_to_schedule_check: 0,
-
-        rx_refill_from_schedule_check,
-        #[cfg(feature = "debug_channels")]
-        cnt_rx_refill_from_schedule_check: 0,
-
-        tx_refill_to_monitors,
-        #[cfg(feature = "debug_channels")]
-        cnt_tx_refill_to_monitors: 0,
-
-        rx_refill_from_messaging_opt,
-        #[cfg(feature = "debug_channels")]
-        cnt_rx_refill_from_messaging_opt: 0,
-    };
-
-    let mut balling_channels = BallingChannels {
-        tx_balling_to_relay_manager,
-        #[cfg(feature = "debug_channels")]
-        cnt_tx_balling_to_relay_manager: 0,
-
-        rx_balling_from_relay_manager,
-        #[cfg(feature = "debug_channels")]
-        cnt_rx_balling_from_relay_manager: 0,
-
-        tx_balling_to_signal_handler,
-        #[cfg(feature = "debug_channels")]
-        cnt_tx_balling_to_signal_handler: 0,
-
-        rx_balling_from_signal_handler,
-        #[cfg(feature = "debug_channels")]
-        cnt_rx_balling_from_signal_handler: 0,
-
-        tx_balling_to_schedule_check,
-        #[cfg(feature = "debug_channels")]
-        cnt_tx_balling_to_schedule_check: 0,
-
-        rx_balling_from_schedule_check,
-        #[cfg(feature = "debug_channels")]
-        cnt_rx_balling_from_schedule_check: 0,
-
-        rx_balling_from_messaging_opt,
-        #[cfg(feature = "debug_channels")]
-        cnt_rx_balling_from_messaging_opt: 0,
-    };
-
-    let mut ventilation_channels = VentilationChannels {
-        tx_ventilation_to_relay_manager,
-        #[cfg(feature = "debug_channels")]
-        cnt_tx_ventilation_to_relay_manager: 0,
-
-        rx_ventilation_from_relay_manager,
-        #[cfg(feature = "debug_channels")]
-        cnt_rx_ventilation_from_relay_manager: 0,
-
-        tx_ventilation_to_signal_handler,
-        #[cfg(feature = "debug_channels")]
-        cnt_tx_ventilation_to_signal_handler: 0,
-
-        rx_ventilation_from_signal_handler,
-        #[cfg(feature = "debug_channels")]
-        cnt_rx_ventilation_from_signal_handler: 0,
-
-        tx_ventilation_to_schedule_check,
-        #[cfg(feature = "debug_channels")]
-        cnt_tx_ventilation_to_schedule_check: 0,
-
-        rx_ventilation_from_schedule_check,
-        #[cfg(feature = "debug_channels")]
-        cnt_rx_ventilation_from_schedule_check: 0,
-
-        rx_ventilation_from_messaging_opt,
-        #[cfg(feature = "debug_channels")]
-        cnt_rx_ventilation_from_messaging_opt: 0,
-    };
-
-    let mut feed_channels = FeedChannels {
-        tx_feed_to_relay_manager,
-        #[cfg(feature = "debug_channels")]
-        cnt_tx_feed_to_relay_manager: 0,
-
-        rx_feed_from_relay_manager,
-        #[cfg(feature = "debug_channels")]
-        cnt_rx_feed_from_relay_manager: 0,
-
-        tx_feed_to_signal_handler,
-        #[cfg(feature = "debug_channels")]
-        cnt_tx_feed_to_signal_handler: 0,
-
-        rx_feed_from_signal_handler,
-        #[cfg(feature = "debug_channels")]
-        cnt_rx_feed_from_signal_handler: 0,
-
-        rx_feed_from_messaging_opt,
-        #[cfg(feature = "debug_channels")]
-        cnt_rx_feed_from_messaging_opt: 0,
-    };
-
-    let mut heating_channels = HeatingChannels {
-        tx_heating_to_relay_manager,
-        #[cfg(feature = "debug_channels")]
-        cnt_tx_heating_to_relay_manager: 0,
-
-        rx_heating_from_relay_manager,
-        #[cfg(feature = "debug_channels")]
-        cnt_rx_heating_from_relay_manager: 0,
-
-        tx_heating_to_signal_handler,
-        #[cfg(feature = "debug_channels")]
-        cnt_tx_heating_to_signal_handler: 0,
-
-        rx_heating_from_signal_handler,
-        #[cfg(feature = "debug_channels")]
-        cnt_rx_heating_from_signal_handler: 0,
-
-        tx_heating_to_schedule_check,
-        #[cfg(feature = "debug_channels")]
-        cnt_tx_heating_to_schedule_check: 0,
-
-        rx_heating_from_schedule_check,
-        #[cfg(feature = "debug_channels")]
-        cnt_rx_heating_from_schedule_check: 0,
-
-        rx_heating_from_messaging_opt,
-        #[cfg(feature = "debug_channels")]
-        cnt_rx_heating_from_messaging_opt: 0,
-    };
-
-    let mut tcp_communication_channels = TcpCommunicationChannels {
-        rx_tcp_communication_from_relay_manager_opt,
-        #[cfg(feature = "debug_channels")]
-        cnt_rx_tcp_communication_from_relay_manager_opt: 0,
-
-        rx_tcp_communication_from_sensor_manager_opt,
-        #[cfg(feature = "debug_channels")]
-        cnt_rx_tcp_communication_from_sensor_manager_opt: 0,
-
-        tx_tcp_communication_to_sensor_manager_opt,
-        #[cfg(feature = "debug_channels")]
-        cnt_tx_tcp_communication_to_sensor_manager_opt: 0,
-
-        rx_tcp_communication_from_tank_level_switch_opt,
-        #[cfg(feature = "debug_channels")]
-        cnt_rx_tcp_communication_from_tank_level_switch_opt: 0,
-
-        tx_tcp_communication_to_tank_level_switch_opt,
-        #[cfg(feature = "debug_channels")]
-        cnt_tx_tcp_communication_to_tank_level_switch_opt: 0,
-
-        tx_tcp_communication_to_signal_handler,
-        #[cfg(feature = "debug_channels")]
-        cnt_tx_tcp_communication_to_signal_handler: 0,
-
-        rx_tcp_communication_from_signal_handler,
-        #[cfg(feature = "debug_channels")]
-        cnt_rx_tcp_communication_from_signal_handler: 0,
-    };
-
-    let mut schedule_check_channels = ScheduleCheckChannels {
-        tx_schedule_check_to_ventilation,
-        #[cfg(feature = "debug_channels")]
-        cnt_tx_schedule_check_to_ventilation: 0,
-
-        rx_schedule_check_from_ventilation,
-        #[cfg(feature = "debug_channels")]
-        cnt_rx_schedule_check_from_ventilation: 0,
-
-        tx_schedule_check_to_heating,
-        #[cfg(feature = "debug_channels")]
-        cnt_tx_schedule_check_to_heating: 0,
-
-        rx_schedule_check_from_heating,
-        #[cfg(feature = "debug_channels")]
-        cnt_rx_schedule_check_from_heating: 0,
-
-        tx_schedule_check_to_refill,
-        #[cfg(feature = "debug_channels")]
-        cnt_tx_schedule_check_to_refill: 0,
-
-        rx_schedule_check_from_refill,
-        #[cfg(feature = "debug_channels")]
-        cnt_rx_schedule_check_from_refill: 0,
-
-        tx_schedule_check_to_balling,
-        #[cfg(feature = "debug_channels")]
-        cnt_tx_schedule_check_to_balling: 0,
-
-        rx_schedule_check_from_balling,
-        #[cfg(feature = "debug_channels")]
-        cnt_rx_schedule_check_from_balling: 0,
-
-        tx_schedule_check_to_signal_handler,
-        #[cfg(feature = "debug_channels")]
-        cnt_tx_schedule_check_to_signal_handler: 0,
-
-        rx_schedule_check_from_signal_handler,
-        #[cfg(feature = "debug_channels")]
-        cnt_rx_schedule_check_from_signal_handler: 0,
-    };
-
-    #[cfg(all(target_os = "linux", feature = "target_hw"))]
-    let mut i2c_interface_channels = I2cInterfaceChannels {
-        tx_i2c_interface_to_atlas_scientific,
-        #[cfg(feature = "debug_channels")]
-        cnt_tx_i2c_interface_to_atlas_scientific: 0,
-
-        rx_i2c_interface_from_atlas_scientific,
-        #[cfg(feature = "debug_channels")]
-        cnt_rx_i2c_interface_from_atlas_scientific: 0,
-
-        rx_i2c_interface_from_signal_handler,
-        #[cfg(feature = "debug_channels")]
-        cnt_rx_i2c_interface_from_signal_handler: 0,
-    };
-
-    let signal_handler_channels = SignalHandlerChannels {
-        tx_signal_handler_to_messaging_opt,
-        rx_signal_handler_from_messaging_opt,
-        tx_signal_handler_to_refill,
-        rx_signal_handler_from_refill,
-        tx_signal_handler_to_tank_level_switch,
-        rx_signal_handler_from_tank_level_switch,
-        tx_signal_handler_to_heating,
-        rx_signal_handler_from_heating,
-        tx_signal_handler_to_relay_manager,
-        rx_signal_handler_from_relay_manager,
-        tx_signal_handler_to_atlas_scientific,
-        rx_signal_handler_from_atlas_scientific,
-        tx_signal_handler_to_sensor_manager,
-        rx_signal_handler_from_sensor_manager,
-        tx_signal_handler_to_data_logger,
-        rx_signal_handler_from_data_logger,
-        tx_signal_handler_to_balling,
-        rx_signal_handler_from_balling,
-        tx_signal_handler_to_ventilation,
-        rx_signal_handler_from_ventilation,
-        tx_signal_handler_to_monitors,
-        rx_signal_handler_from_monitors,
-        tx_signal_handler_to_feed,
-        rx_signal_handler_from_feed,
-        tx_signal_handler_to_schedule_check,
-        rx_signal_handler_from_schedule_check,
-        tx_signal_handler_to_tcp_opt,
-        rx_signal_handler_from_tcp_opt,
-        tx_signal_handler_to_dht,
-        tx_signal_handler_to_i2c_interface,
-        tx_signal_handler_to_watchdog,
-        rx_signal_handler_from_watchdog,
-        tx_signal_handler_to_ds18b20,
-    };
-
-    let mut monitors_channels = MonitorsChannels {
-        rx_monitors_from_refill,
-        #[cfg(feature = "debug_channels")]
-        cnt_rx_monitors_from_refill: 0,
-
-        tx_monitors_to_signal_handler,
-        #[cfg(feature = "debug_channels")]
-        cnt_tx_monitors_to_signal_handler: 0,
-
-        rx_monitors_from_signal_handler,
-        #[cfg(feature = "debug_channels")]
-        cnt_rx_monitors_from_signal_handler: 0,
-
-        rx_monitors_from_messaging_opt,
-        #[cfg(feature = "debug_channels")]
-        cnt_rx_monitors_from_messaging_opt: 0,
-    };
-
-    #[cfg(target_os = "linux")]
-    let mut messaging_channels = MessagingChannels {
-        tx_to_signal_handler: tx_messaging_to_signal_handler,
-        #[cfg(feature = "debug_channels")]
-        cnt_tx_to_signal_handler: 0,
-
-        rx_from_signal_handler: rx_messaging_from_signal_handler,
-        #[cfg(feature = "debug_channels")]
-        cnt_rx_from_signal_handler: 0,
-
-        tx_to_refill: tx_messaging_to_refill,
-        #[cfg(feature = "debug_channels")]
-        cnt_tx_to_refill: 0,
-
-        tx_to_ventilation: tx_messaging_to_ventilation,
-        #[cfg(feature = "debug_channels")]
-        cnt_tx_to_ventilation: 0,
-
-        tx_to_heating: tx_messaging_to_heating,
-        #[cfg(feature = "debug_channels")]
-        cnt_tx_to_heating: 0,
-
-        tx_to_feed: tx_messaging_to_feed,
-        #[cfg(feature = "debug_channels")]
-        cnt_tx_to_feed: 0,
-
-        tx_to_balling: tx_messaging_to_balling,
-        #[cfg(feature = "debug_channels")]
-        cnt_tx_to_balling: 0,
-
-        tx_to_monitors: tx_messaging_to_monitors,
-        #[cfg(feature = "debug_channels")]
-        cnt_tx_to_monitors: 0,
-
-        tx_to_watchdog: tx_messaging_to_watchdog,
-        #[cfg(feature = "debug_channels")]
-        cnt_tx_to_watchdog: 0,
-    };
-
-    let mut tank_level_switch_channels = TankLevelSwitchChannels {
-        tx_tank_level_switch_to_tcp_opt,
-        #[cfg(feature = "debug_channels")]
-        cnt_tx_tank_level_switch_to_tcp_opt: 0,
-
-        rx_tank_level_switch_from_tcp_opt,
-        #[cfg(feature = "debug_channels")]
-        cnt_rx_tank_level_switch_from_tcp_opt: 0,
-
-        tx_tank_level_switch_to_signal_handler,
-        #[cfg(feature = "debug_channels")]
-        cnt_tx_tank_level_switch_to_signal_handler: 0,
-
-        rx_tank_level_switch_from_signal_handler,
-        #[cfg(feature = "debug_channels")]
-        cnt_rx_tank_level_switch_from_signal_handler: 0,
-    };
-
-    let mut watchdog_channels = WatchDogChannels {
-        tx_watchdog_to_signal_handler,
-        #[cfg(feature = "debug_channels")]
-        cnt_tx_watchdog_to_signal_handler: 0,
-
-        rx_watchdog_from_signal_handler,
-        #[cfg(feature = "debug_channels")]
-        cnt_rx_watchdog_from_signal_handler: 0,
-
-        rx_watchdog_from_messaging_opt,
-        #[cfg(feature = "debug_channels")]
-        cnt_rx_watchdog_from_messaging_opt: 0,
-    };
-    
-    let mut ds18b20_channels = Ds18b20Channels {
-        rx_ds18b20_from_signal_handler,
-        #[cfg(feature = "debug_channels")]
-        cnt_rx_ds18b20_from_signal_handler: 0,
-    };
-
-    let mut dht_channels = DhtChannels {
-        rx_dht_from_signal_handler,
-        #[cfg(feature = "debug_channels")]
-        cnt_rx_dht_from_signal_handler: 0,
-    };
-    
     scope(|scope| {
         // open tcp connection only if configuration requires use of simulator instead of HW
         if use_simulator {
             // src/main.rs
-            let mut tcp_communication = TcpCommunication::new(&config.tcp_connection)
-                .map_err(|e| StartupError::TcpConnection { source: e })?;
 
             scope.spawn(move || {
-                tcp_communication.execute(&mut tcp_communication_channels);
+                if let Some(mut tcp_communication) = tcp_communication_opt {
+                    tcp_communication.execute(&mut channels.tcp_communication_channels);
+                }
+                #[cfg(feature = "debug_channels")]
+                debug!(target: module_path!(), "{0}", channels.tcp_communication_channels);
             });
             #[cfg(feature = "debug_main")]
             debug!(target: module_path!(), "TcpCommunication terminated.");
@@ -1832,15 +921,17 @@ fn run() -> Result<(), StartupError> {
 
         if config.relay_manager.use_simulator {
             scope.spawn(move || {
-                let mut actuate_simulator =
-                    ActuateSimulator::new(tx_relay_manager_to_tcp_opt, config.controllino_relay);
-                relay_manager.execute(&mut relay_manager_channels, &mut actuate_simulator);
-
+                let mut actuate_simulator = ActuateSimulator::new(
+                    &mut channels.actuate_simulator_channels,
+                    config.controllino_relay,
+                );
+                relay_manager.execute(&mut channels.relay_manager_channels, &mut actuate_simulator);
+                #[cfg(feature = "debug_channels")]
+                debug!(target: module_path!(), "{0}", channels.actuate_simulator_channels);
+                #[cfg(feature = "debug_channels")]
+                debug!(target: module_path!(), "{0}", channels.relay_manager_channels);
                 #[cfg(feature = "debug_main")]
                 debug!(target: module_path!(), "Controllino (simulator) terminated.");
-
-                #[cfg(feature = "debug_channels")]
-                debug!(target: module_path!(), "{relay_manager_channels}");
             });
         } else {
             scope.spawn(move || {
@@ -1851,34 +942,29 @@ fn run() -> Result<(), StartupError> {
                         &mut actuate_gpio_opt.expect("Internal error: Illegal configuration (unwrapping of GPIO actuator failed)")
                     );
                 } else {
-                    relay_manager.execute(&mut relay_manager_channels, &mut actuate_controllino);
+                    relay_manager.execute(&mut channels.relay_manager_channels, &mut actuate_controllino);
                 }
-
+                #[cfg(feature = "debug_channels")]
+                debug!(target: module_path!(), "{0}", channels.relay_manager_channels);
                 #[cfg(feature = "debug_main")]
                 debug!(target: module_path!(), "Controllino (with hardware) terminated.");
-
-                #[cfg(feature = "debug_channels")]
-                debug!(target: module_path!(), "{relay_manager_channels}");
             });
         }
 
         scope.spawn(move || {
             let term = Arc::new(AtomicBool::new(false));
 
-            handle_signals(term, signal_handler_channels);
-
+            handle_signals(term, channels.signal_handler_channels);
             #[cfg(feature = "debug_main")]
             debug!(target: module_path!(), "Signal handler terminated.");
         });
 
         scope.spawn(move || {
-            schedule_check.execute(&mut schedule_check_channels);
-
+            schedule_check.execute(&mut channels.schedule_check_channels);
+            #[cfg(feature = "debug_channels")]
+            debug!(target: module_path!(), "{0}", channels.schedule_check_channels);
             #[cfg(feature = "debug_main")]
             debug!(target: module_path!(), "Schedule checker terminated.");
-
-            #[cfg(feature = "debug_channels")]
-            debug!(target: module_path!(), "{schedule_check_channels}");
         });
 
         #[cfg(all(target_os = "linux", feature = "target_hw"))]
@@ -1888,59 +974,35 @@ fn run() -> Result<(), StartupError> {
 
             scope.spawn(move || {
                 i2c_interface.execute(&mut i2c_interface_channels);
-
+                #[cfg(all(target_os = "linux", feature = "target_hw", feature = "debug_channels"))]
+                debug!(target: module_path!(), "{0}", channels.i2c_interface_channels);
                 #[cfg(feature = "debug_main")]
                 debug!(target: module_path!(), "i2c_interface terminated.");
-
-                #[cfg(feature = "debug_channels")]
-                debug!(target: module_path!(), "{i2c_interface_channels}");
             });
         }
 
         scope.spawn(move || {
             atlas_scientific.execute(
-                &mut atlas_scientific_channels,
+                &mut channels.atlas_scientific_channels,
                 mutex_atlas_scientific_temperature,
                 mutex_atlas_scientific_ph,
                 mutex_atlas_scientific_conductivity,
             );
-
+            #[cfg(feature = "debug_channels")]
+            debug!(target: module_path!(), "{0}", channels.atlas_scientific_channels);
             #[cfg(feature = "debug_main")]
             debug!(target: module_path!(), "Atlas Scientific terminated.");
-
-            #[cfg(feature = "debug_channels")]
-            debug!(target: module_path!(), "{atlas_scientific_channels}");
         });
 
         scope.spawn(move || {
-            dht.execute(mutex_dht, &mut dht_channels);
-
+            dht.execute(mutex_dht, &mut channels.dht_channels);
+            #[cfg(feature = "debug_channels")]
+            debug!(target: module_path!(), "{0}", channels.dht_channels);
             #[cfg(feature = "debug_main")]
             debug!(target: module_path!(), "Dht terminated.");
-            
-            #[cfg(feature = "debug_channels")]
-            debug!(target: module_path!(), "{dht_channels}");
         });
 
         scope.spawn(move || {
-            let mut sensor_manager_channels = SensorManagerChannels {
-                tx_sensor_manager_to_tcp_opt,
-                #[cfg(feature = "debug_channels")]
-                cnt_tx_sensor_manager_to_tcp_opt: 0,
-
-                rx_sensor_manager_from_tcp_opt,
-                #[cfg(feature = "debug_channels")]
-                cnt_rx_sensor_manager_from_tcp_opt: 0,
-
-                tx_sensor_manager_to_signal_handler,
-                #[cfg(feature = "debug_channels")]
-                cnt_tx_sensor_manager_to_signal_handler: 0,
-
-                rx_sensor_manager_from_signal_handler,
-                #[cfg(feature = "debug_channels")]
-                cnt_rx_sensor_manager_from_signal_handler: 0,
-            };
-
             let mutexes_sensor_manager = SensorManagerMutexes {
                 mutex_ds18b20_ambient_temperature:
                     mutex_ds18b20_ambient_temperature_clone_for_sensor_manager,
@@ -1955,13 +1017,11 @@ fn run() -> Result<(), StartupError> {
                 mutex_sensor_manager_signals,
             };
 
-            sensor_manager.execute(&mut sensor_manager_channels, mutexes_sensor_manager);
-
+            sensor_manager.execute(&mut channels.sensor_manager_channels, mutexes_sensor_manager);
+            #[cfg(feature = "debug_channels")]
+            debug!(target: module_path!(), "{0}", channels.sensor_manager_channels);
             #[cfg(feature = "debug_main")]
             debug!(target: module_path!(), "SensorManager terminated.");
-
-            #[cfg(feature = "debug_channels")]
-            debug!(target: module_path!(), "{sensor_manager_channels}");
         });
 
         // give sensor reading components some time so that they can acquire a first data set
@@ -1975,16 +1035,6 @@ fn run() -> Result<(), StartupError> {
         println!("starting control...");
 
         scope.spawn(move || {
-            let mut data_logger_channels = DataLoggerChannels {
-                tx_to_signal_handler: tx_data_logger_to_signal_handler,
-                #[cfg(feature = "debug_channels")]
-                cnt_tx_to_signal_handler: 0,
-
-                rx_from_signal_handler: rx_data_logger_from_signal_handler,
-                #[cfg(feature = "debug_channels")]
-                cnt_rx_from_signal_handler: 0,
-            };
-
             let data_logger_mutexes = DataLoggerMutexes {
                 mutex_sensor_manager_signals: mutex_sensor_manager_signals_clone_for_data_logger,
                 mutex_tank_level_switch_signals:
@@ -1997,28 +1047,24 @@ fn run() -> Result<(), StartupError> {
             data_logger.execute(
                 &mut data_injection,
                 sql_interface_data,
-                &mut data_logger_channels,
+                &mut channels.data_logger_channels,
                 data_logger_mutexes,
             );
-
+            #[cfg(feature = "debug_channels")]
+            debug!(target: module_path!(), "{0}", channels.data_logger_channels);
             #[cfg(feature = "debug_main")]
             debug!(target: module_path!(), "Data logger terminated.");
-
-            #[cfg(feature = "debug_channels")]
-            debug!(target: module_path!(), "{data_logger_channels}");
         });
 
         scope.spawn(move || {
             let _ = tank_level_switch.execute(
-                &mut tank_level_switch_channels,
+                &mut channels.tank_level_switch_channels,
                 mutex_tank_level_switch_signals,
             );
-
+            #[cfg(feature = "debug_channels")]
+            debug!(target: module_path!(), "{0}", channels.tank_level_switch_channels);
             #[cfg(feature = "debug_main")]
             debug!(target: module_path!(), "Tank level switch calculation terminated.");
-
-            #[cfg(feature = "debug_channels")]
-            debug!(target: module_path!(), "{tank_level_switch_channels}");
         });
 
         // Refill needs actuation of relay
@@ -2027,17 +1073,15 @@ fn run() -> Result<(), StartupError> {
         scope.spawn(move || {
             refill.execute(
                 mutex_device_scheduler_refill,
-                &mut refill_channels,
+                &mut channels.refill_channels,
                 &mut water_injection,
                 mutex_tank_level_switch_signals_clone_for_refill,
                 mutex_refill_status,
             );
-
+            #[cfg(feature = "debug_channels")]
+            debug!(target: module_path!(), "{0}", channels.refill_channels);
             #[cfg(feature = "debug_main")]
             debug!(target: module_path!(), "Refill terminated.");
-
-            #[cfg(feature = "debug_channels")]
-            debug!(target: module_path!(), "{refill_channels}");
         });
 
         // Heating needs actuation of relay
@@ -2054,17 +1098,15 @@ fn run() -> Result<(), StartupError> {
         scope.spawn(move || {
             heating.execute(
                 mutex_device_scheduler_heating,
-                &mut heating_channels,
+                &mut channels.heating_channels,
                 &mut heating_stats_transfer,
                 &mut heating_set_value_updater,
                 heating_mutexes,
             );
-
+            #[cfg(feature = "debug_channels")]
+            debug!(target: module_path!(), "{0}", channels.heating_channels);
             #[cfg(feature = "debug_main")]
             debug!(target: module_path!(), "Heating terminated.");
-
-            #[cfg(feature = "debug_channels")]
-            debug!(target: module_path!(), "{heating_channels}");
         });
 
         // Ventilation needs actuation of relay
@@ -2073,25 +1115,24 @@ fn run() -> Result<(), StartupError> {
         scope.spawn(move || {
             ventilation.execute(
                 mutex_device_scheduler_ventilation,
-                &mut ventilation_channels,
+                &mut channels.ventilation_channels,
                 &mut ventilation_set_value_updater,
                 mutex_sensor_manager_signals_clone_for_ventilation,
                 mutex_ventilation_status,
             );
-
+            #[cfg(feature = "debug_channels")]
+            debug!(target: module_path!(), "{0}", channels.ventilation_channels);
             #[cfg(feature = "debug_main")]
             debug!(target: module_path!(), "Ventilation terminated.");
-
-            #[cfg(feature = "debug_channels")]
-            debug!(target: module_path!(), "{ventilation_channels}");
         });
 
         // Monitors needs communication with the Controllino device
         let mutex_device_scheduler_monitors = Arc::clone(&mutex_device_scheduler);
 
         scope.spawn(move || {
-            monitors.execute(mutex_device_scheduler_monitors, &mut monitors_channels);
-
+            monitors.execute(mutex_device_scheduler_monitors, &mut channels.monitors_channels);
+            #[cfg(feature = "debug_channels")]
+            debug!(target: module_path!(), "{0}", channels.monitors_channels);
             #[cfg(feature = "debug_main")]
             debug!(target: module_path!(), "Monitors terminated.");
         });
@@ -2102,15 +1143,13 @@ fn run() -> Result<(), StartupError> {
         scope.spawn(move || {
             feed.execute(
                 mutex_device_scheduler_feed,
-                &mut feed_channels,
+                &mut channels.feed_channels,
                 &mut food_injection,
             );
-
+            #[cfg(feature = "debug_channels")]
+            debug!(target: module_path!(), "{0}", channels.feed_channels);
             #[cfg(feature = "debug_main")]
             debug!(target: module_path!(), "Feed terminated.");
-
-            #[cfg(feature = "debug_channels")]
-            debug!(target: module_path!(), "{feed_channels}");
         });
 
         // Balling dosing needs actuation of relays
@@ -2119,15 +1158,13 @@ fn run() -> Result<(), StartupError> {
         scope.spawn(move || {
             balling.execute(
                 mutex_device_scheduler_balling,
-                &mut balling_channels,
+                &mut channels.balling_channels,
                 &mut mineral_injection,
             );
-
+            #[cfg(feature = "debug_channels")]
+            debug!(target: module_path!(), "{0}", channels.balling_channels);
             #[cfg(feature = "debug_main")]
             debug!(target: module_path!(), "Balling terminated.");
-
-            #[cfg(feature = "debug_channels")]
-            debug!(target: module_path!(), "{balling_channels}");
         });
 
         // IPC via messages
@@ -2145,45 +1182,36 @@ fn run() -> Result<(), StartupError> {
                     e,
                 );
             }
-
+            #[cfg(all(target_os = "linux", feature = "debug_channels"))]
+            debug!(target: module_path!(), "{0}", channels.messaging_channels);
             #[cfg(feature = "debug_main")]
             debug!(target: module_path!(), "Messaging terminated.");
-
-            #[cfg(all(feature = "debug_channels", target_os = "linux"))]
-            debug!(target: module_path!(), "{messaging_channels}");
         });
 
         // Watchdog communication
         scope.spawn(move || {
-            watchdog.execute(
-                &mut watchdog_channels,
-                &mut petting,
-            );
-
+            watchdog.execute(&mut channels.watchdog_channels, &mut petting);
+            #[cfg(all(target_os = "linux", feature = "target_hw", feature = "debug_channels"))]
+            debug!(target: module_path!(), "{0}", channels.watchdog_channels);
             #[cfg(feature = "debug_main")]
             debug!(target: module_path!(), "Watchdog terminated.");
-
-            #[cfg(feature = "debug_channels")]
-            debug!(target: module_path!(), "{watchdog_channels}");
         });
 
         // Ds18b20 communication
         scope.spawn(move || {
             ds18b20.execute(
-                &mut ds18b20_channels,
+                &mut channels.ds18b20_channels,
                 mutex_ds18b20_water_temperature,
                 mutex_ds18b20_ambient_temperature,
             );
-            
+            #[cfg(all(target_os = "linux", feature = "target_hw", feature = "debug_channels"))]
+            debug!(target: module_path!(), "{0}", channels.ds18b20_channels);
             #[cfg(feature = "debug_main")]
             debug!(target: module_path!(), "Ds18b20 terminated");
-            
-            #[cfg(feature = "debug_channels")]
-            debug!(target: module_path!(), "{ds18b20_channels}");
         });
+    });
 
-        Ok(())
-    })
+    Ok(())
 }
 
 /// The main function is a simple error handler.

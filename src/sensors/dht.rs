@@ -14,16 +14,16 @@ use log::info;
 #[cfg(not(test))]
 use log::warn;
 
+use crate::sensors::dht_channels::DhtChannels;
+use crate::sensors::dht_error::DhtError;
+use crate::utilities::logger::log_error_chain;
 #[cfg(all(not(test), target_os = "linux"))]
 use nix::unistd::gettid;
 use serde_derive::Deserialize;
 use spin_sleep::SpinSleeper;
-use std::sync::mpsc::{TryRecvError};
+use std::sync::mpsc::TryRecvError;
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
-use crate::sensors::dht_channels::DhtChannels;
-use crate::sensors::dht_error::DhtError;
-use crate::utilities::logger::log_error_chain;
 
 cfg_if::cfg_if! {
     if #[cfg(all(target_os = "linux", feature = "target_hw"))] {
@@ -759,11 +759,7 @@ impl Dht {
     /// # Arguments
     /// * `mutex_dht` - Mutex to store the result of the measurement
     /// * `dht_channels` - Mutable reference to the struct containing the channel
-    pub fn execute(
-        &mut self,
-        mutex_dht: Arc<Mutex<DhtResult>>,
-        dht_channels: &mut DhtChannels,
-    ) {
+    pub fn execute(&mut self, mutex_dht: Arc<Mutex<DhtResult>>, dht_channels: &mut DhtChannels) {
         #[cfg(all(target_os = "linux", not(test)))]
         info!(target: module_path!(), "Thread started with TID: {}", gettid());
 

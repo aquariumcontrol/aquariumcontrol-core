@@ -6,9 +6,9 @@ The above copyright notice and this permission notice shall be included in all c
 
 THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
+use crate::utilities::proc_ext_req::ProcessExternalRequestTrait;
 use crate::watchmen::petting::PettingTrait;
 use crate::watchmen::watchdog_channels::WatchDogChannels;
-use crate::utilities::proc_ext_req::ProcessExternalRequestTrait;
 use log::error;
 use serde_derive::Deserialize;
 use spin_sleep::SpinSleeper;
@@ -147,7 +147,7 @@ impl Watchdog {
     ///   responsible for the actual writing of heartbeat/deactivation messages to the watchdog file.
     pub fn execute(
         &mut self,
-        watchdog_channels: &mut WatchDogChannels, 
+        watchdog_channels: &mut WatchDogChannels,
         petting: &mut impl PettingTrait,
     ) {
         #[cfg(all(target_os = "linux", not(test)))]
@@ -173,8 +173,10 @@ impl Watchdog {
                 quit_command_received,
                 start_command_received,
                 stop_command_received,
-            ) = self
-                .process_external_request(&watchdog_channels.rx_watchdog_from_signal_handler, watchdog_channels.rx_watchdog_from_messaging_opt.as_ref());
+            ) = self.process_external_request(
+                &watchdog_channels.rx_watchdog_from_signal_handler,
+                watchdog_channels.rx_watchdog_from_messaging_opt.as_ref(),
+            );
 
             if quit_command_received {
                 // Deactivate the watchdog functionality
@@ -335,7 +337,7 @@ pub mod tests {
             #[cfg(feature = "debug_channels")]
             cnt_rx_watchdog_from_messaging_opt: 0,
         };
-        
+
         let min_duration = Duration::from_millis(config.watchdog.heartbeat_duration_millis - 50);
         let max_duration = Duration::from_millis(config.watchdog.heartbeat_duration_millis + 50);
 
@@ -491,10 +493,7 @@ pub mod tests {
 
             // thread for the test object
             scope.spawn(move || {
-                watchdog.execute(
-                    &mut watchdog_channels,
-                    &mut petting,
-                );
+                watchdog.execute(&mut watchdog_channels, &mut petting);
             });
         });
     }
