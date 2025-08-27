@@ -18,10 +18,10 @@ use log::warn;
 use nix::unistd::gettid;
 use serde_derive::Deserialize;
 use spin_sleep::SpinSleeper;
-use std::sync::mpsc::{Receiver, TryRecvError};
+use std::sync::mpsc::{TryRecvError};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
-
+use crate::sensors::dht_channels::DhtChannels;
 use crate::sensors::dht_error::DhtError;
 use crate::utilities::logger::log_error_chain;
 
@@ -757,14 +757,12 @@ impl Dht {
     /// `Quit` commands for graceful shutdown and logs errors/warnings for invalid commands or channel issues.
     ///
     /// # Arguments
-    /// * `tx_to_ambient` - The sender channel for sending `Result<(f32, f32), DhtError>`
-    ///   measurement data back to the `Ambient` module.
-    /// * `rx_from_ambient_or_signal_handler` - The receiver channel for getting `InternalCommand`s
-    ///   (e.g., `RequestSignal`, `Quit`) from the `Ambient` module or the `SignalHandler`.
+    /// * `mutex_dht` - Mutex to store the result of the measurement
+    /// * `dht_channels` - Mutable reference to the struct containing the channel
     pub fn execute(
         &mut self,
         mutex_dht: Arc<Mutex<DhtResult>>,
-        rx_from_signal_handler: Receiver<InternalCommand>,
+        dht_channels: &mut DhtChannels,
     ) {
         #[cfg(all(target_os = "linux", not(test)))]
         info!(target: module_path!(), "Thread started with TID: {}", gettid());
@@ -777,7 +775,7 @@ impl Dht {
         let sleep_duration_100_millis = Duration::from_millis(100);
 
         loop {
-            match rx_from_signal_handler.try_recv() {
+            match dht_channels.rx_dht_from_signal_handler.try_recv() {
                 Ok(c) => {
                     lock_error_receive = false;
                     match c {

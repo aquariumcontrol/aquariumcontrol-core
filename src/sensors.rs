@@ -54,3 +54,6 @@ pub mod tank_level_switch_channels;
 
 /// Container for channels used by Ds18b20 module
 pub mod ds18b20_channels;
+
+/// Container for channels used by Dht module
+pub mod dht_channels;

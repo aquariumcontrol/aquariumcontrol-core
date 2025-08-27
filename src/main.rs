@@ -147,6 +147,7 @@ use spin_sleep::SpinSleeper;
 use std::sync::mpsc::{self, Receiver, Sender};
 use std::sync::{atomic::AtomicBool, Arc, Mutex};
 use std::{env, panic, path::Path, thread::scope, time::Duration};
+use crate::sensors::dht_channels::DhtChannels;
 use crate::sensors::ds18b20_channels::Ds18b20Channels;
 use crate::sensors::tank_level_switch_channels::TankLevelSwitchChannels;
 
@@ -1809,6 +1810,12 @@ fn run() -> Result<(), StartupError> {
         cnt_rx_ds18b20_from_signal_handler: 0,
     };
 
+    let mut dht_channels = DhtChannels {
+        rx_dht_from_signal_handler,
+        #[cfg(feature = "debug_channels")]
+        cnt_rx_dht_from_signal_handler: 0,
+    };
+    
     scope(|scope| {
         // open tcp connection only if configuration requires use of simulator instead of HW
         if use_simulator {
@@ -1906,10 +1913,13 @@ fn run() -> Result<(), StartupError> {
         });
 
         scope.spawn(move || {
-            dht.execute(mutex_dht, rx_dht_from_signal_handler);
+            dht.execute(mutex_dht, &mut dht_channels);
 
             #[cfg(feature = "debug_main")]
             debug!(target: module_path!(), "Dht terminated.");
+            
+            #[cfg(feature = "debug_channels")]
+            debug!(target: module_path!(), "{dht_channels}");
         });
 
         scope.spawn(move || {
