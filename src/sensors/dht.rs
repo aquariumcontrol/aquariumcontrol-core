@@ -47,6 +47,7 @@ pub type DhtResult = Result<(f32, f32), DhtError>; // Temperature and Humidity
 #[derive(Deserialize, Debug)]
 pub struct DhtConfig {
     /// allows deactivation of the data acquisition
+    #[allow(unused)] // used in conditionally compiled code
     pub active: bool,
 
     /// duration to keep pin down during start signal in microseconds
@@ -78,6 +79,7 @@ pub struct DhtConfig {
     sensor_pause_duration_millis: u64,
 
     /// duration in milliseconds between two measurements
+    #[allow(unused)] // used in conditionally compiled code
     measurement_interval_millis: u64,
 }
 
@@ -199,15 +201,19 @@ pub struct Dht {
     gpio_dht22_vcc: u8,
 
     /// time instance of the last recording
+    #[allow(unused)] // used in conditionally compiled code
     instant_last_measurement: Instant,
 
     /// flag to avoid flooding the log file in case mutex cannot be locked
+    #[allow(unused)] // used in conditionally compiled code
     lock_error_mutex: bool,
 
     /// inhibition flag to avoid flooding the log file with repeated messages about excessive access time to mutex
+    #[allow(unused)] // used in conditionally compiled code
     lock_warn_max_mutex_access_duration: bool,
 
     /// inhibition flag to avoid flooding the log file with repeated messages about failure to read from DHT sensor
+    #[allow(unused)] // used in conditionally compiled code
     lock_error_failed_after_retries: bool,
 
     // for testing purposes: record when mutex access time is exceeded without resetting it
@@ -231,6 +237,7 @@ impl Dht {
     ///
     /// # Returns
     /// A new **`Dht` struct**, ready to read temperature and humidity.
+    #[allow(unused)] // used in conditionally compiled code
     pub fn new(
         config: DhtConfig,
         gpio_opt: Option<Gpio>,
@@ -677,6 +684,7 @@ impl Dht {
         Self::calc_signals(byte_vals)
     }
 
+    #[allow(unused)] // used in conditionally compiled code
     #[cfg(not(all(target_os = "linux", feature = "target_hw")))]
     /// Stub function for non-target platforms to allow compilation.
     ///
@@ -705,6 +713,7 @@ impl Dht {
     /// Returns a `DhtError` if the reading fails permanently or after all retries:
     /// - `DhtError::FailedAfterRetries`: If all attempts fail due to recoverable errors.
     /// - Any other `DhtError` variant for non-recoverable hardware or configuration failures.
+    #[allow(unused)] // used in conditionally compiled code
     pub fn get_data(&mut self) -> DhtResult {
         // read one sample from DHT sensor to verify SW and HW are working ok
         let mut retry_counter = 0;
@@ -759,6 +768,7 @@ impl Dht {
     /// # Arguments
     /// * `mutex_dht` - Mutex to store the result of the measurement
     /// * `dht_channels` - Mutable reference to the struct containing the channel
+    #[allow(unused)] // used in conditionally compiled code
     pub fn execute(&mut self, mutex_dht: Arc<Mutex<DhtResult>>, dht_channels: &mut DhtChannels) {
         #[cfg(all(target_os = "linux", not(test)))]
         info!(target: module_path!(), "Thread started with TID: {}", gettid());

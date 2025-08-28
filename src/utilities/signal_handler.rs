@@ -79,7 +79,10 @@ fn send_command(
         None => {
             /* do nothing */
             #[cfg(feature = "debug_signal_handler")]
-            debug!(target: module_path!(), "not sending QUIT to i2c_interface");
+            {
+                let message = format!("not sending QUIT to {thread_name}");
+                debug!(target: module_path!(), "{message}");
+            }
         }
     }
 }

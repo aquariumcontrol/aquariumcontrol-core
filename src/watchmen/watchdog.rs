@@ -199,7 +199,7 @@ impl Watchdog {
 
         // The application received the request to terminate. That is why the loop was left.
         // Answer to the thread which sent the request for termination, so that shutdown can proceed further.
-        match watchdog_channels.tx_watchdog_to_signal_handler.send(true) {
+        match watchdog_channels.send_to_signal_handler(true) {
             Ok(()) => {}
             Err(e) => {
                 error!(

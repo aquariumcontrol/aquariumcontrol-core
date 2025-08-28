@@ -111,7 +111,11 @@ use crate::relays::relay_manager::RelayManager;
 use crate::sensors::atlas_scientific::AtlasScientific;
 
 use crate::sensors::atlas_scientific::AtlasScientificResultData;
-use crate::sensors::dht::{Dht, DhtResult};
+
+#[cfg(all(feature = "target_hw", target_os = "linux"))]
+use crate::sensors::dht::Dht;
+
+use crate::sensors::dht::DhtResult;
 use crate::sensors::ds18b20::{Ds18b20, Ds18b20ResultData};
 use crate::sensors::sensor_manager::{SensorManager, SensorManagerMutexes, SensorManagerSignals};
 use crate::sensors::tank_level_switch::{TankLevelSwitch, TankLevelSwitchSignals};
@@ -701,12 +705,10 @@ fn run() -> Result<(), StartupError> {
     // The following structs have a high amount of platform-specific code:
     let mut tank_level_switch: TankLevelSwitch;
 
-    let mut dht: Dht;
-    let gpio_dht22_io = config.gpio_handler.dht22_io;
-    let gpio_dht22_vcc = config.gpio_handler.dht22_vcc;
-
     cfg_if::cfg_if! {
         if #[cfg(all(target_os = "linux", feature = "target_hw"))] {
+            let gpio_dht22_io = config.gpio_handler.dht22_io;
+            let gpio_dht22_vcc = config.gpio_handler.dht22_vcc;
             let mut actuate_gpio_opt: Option<ActuateGpio> = None;
 
             // clone information from config before giving config to GpioHandler
@@ -743,7 +745,7 @@ fn run() -> Result<(), StartupError> {
                      Some(gpio_lib_handle_cloned_for_tank_level_switch),
                      gpio_tank_level_switch
                 ).map_err(|e| StartupError::TankLevelSwitchSetupFailure { source: e })?;
-                dht = Dht::new(config.dht, Some(gpio_lib_handle.clone()), gpio_dht22_io, gpio_dht22_vcc);
+                let mut dht = Dht::new(config.dht, Some(gpio_lib_handle.clone()), gpio_dht22_io, gpio_dht22_vcc);
                 if config.relay_manager.use_gpio {
                     let actuate_gpio = ActuateGpio::new(
                         gpio_lib_handle_cloned_for_relay_manager,
@@ -758,9 +760,6 @@ fn run() -> Result<(), StartupError> {
                 config.tank_level_switch,
                 true,
             ).map_err(|e| StartupError::TankLevelSwitchSetupFailure { source: e })?;
-
-            // Actual DHT sensor reading is not required in this case. Use a stub version.
-            dht = Dht::new(config.dht, None, gpio_dht22_io, gpio_dht22_vcc);
         }
     }
 
@@ -998,6 +997,7 @@ fn run() -> Result<(), StartupError> {
             });
         }
 
+        #[cfg(all(target_os = "linux", feature = "target_hw"))]
         scope.spawn(move || {
             dht.execute(mutex_dht, &mut channels.dht);
             #[cfg(feature = "debug_channels")]

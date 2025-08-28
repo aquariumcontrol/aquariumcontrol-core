@@ -87,10 +87,12 @@ pub enum DhtError {
     HumidityOutOfRange(String, f32, f32, f32),
 
     /// reported from low-level reading when called without gpio lib handle available
+    #[allow(unused)] // used in conditionally compiled code
     #[error("[{0}] This SW is not compiled for this platform.")]
     IncorrectPlatform(String),
 
     /// The measurement has been repeated several times without success.
+    #[allow(unused)] // used in conditionally compiled code
     #[error("[{location}] Failed to read from DHT sensor (after {retry_counter} retries")]
     FailedAfterRetries {
         location: String,

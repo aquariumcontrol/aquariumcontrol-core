@@ -75,6 +75,7 @@ pub struct ConfigData {
     pub gpio_handler: GpioHandlerConfig,
 
     /// configuration of the DHT driver
+    #[allow(unused)] // used in conditionally compiled code
     pub dht: DhtConfig,
 
     /// configuration of the fresh water refill control

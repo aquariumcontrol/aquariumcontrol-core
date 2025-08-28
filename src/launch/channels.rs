@@ -48,6 +48,7 @@ pub struct Channels {
     pub relay_manager: RelayManagerChannels,
     #[cfg(all(feature = "target_hw", target_os = "linux"))]
     pub atlas_scientific: AtlasScientificChannels,
+    #[allow(unused)] // used in conditionally compiled code
     pub dht: DhtChannels,
     pub ds18b20: Ds18b20Channels,
     pub balling: BallingChannels,
