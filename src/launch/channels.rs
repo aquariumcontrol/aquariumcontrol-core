@@ -557,7 +557,7 @@ impl Channels {
             Receiver<I2cResult>,
         ) = mpsc::channel();
 
-        let relay_manager_channels = RelayManagerChannels {
+        let relay_manager = RelayManagerChannels {
             tx_relay_manager_to_refill,
             #[cfg(feature = "debug_channels")]
             cnt_tx_relay_manager_to_refill: 0,
@@ -607,7 +607,7 @@ impl Channels {
             cnt_rx_relay_manager_from_signal_handler: 0,
         };
 
-        let atlas_scientific_channels = AtlasScientificChannels {
+        let atlas_scientific = AtlasScientificChannels {
             tx_atlas_scientific_to_i2c_interface,
             #[cfg(feature = "debug_channels")]
             cnt_tx_atlas_scientific_to_i2c_interface: 0,
@@ -625,7 +625,7 @@ impl Channels {
             cnt_rx_atlas_scientific_from_signal_handler: 0,
         };
 
-        let refill_channels = RefillChannels {
+        let refill = RefillChannels {
             tx_refill_to_relay_manager,
             #[cfg(feature = "debug_channels")]
             cnt_tx_refill_to_relay_manager: 0,
@@ -659,7 +659,7 @@ impl Channels {
             cnt_rx_refill_from_messaging_opt: 0,
         };
 
-        let balling_channels = BallingChannels {
+        let balling = BallingChannels {
             tx_balling_to_relay_manager,
             #[cfg(feature = "debug_channels")]
             cnt_tx_balling_to_relay_manager: 0,
@@ -689,7 +689,7 @@ impl Channels {
             cnt_rx_balling_from_messaging_opt: 0,
         };
 
-        let ventilation_channels = VentilationChannels {
+        let ventilation = VentilationChannels {
             tx_ventilation_to_relay_manager,
             #[cfg(feature = "debug_channels")]
             cnt_tx_ventilation_to_relay_manager: 0,
@@ -719,7 +719,7 @@ impl Channels {
             cnt_rx_ventilation_from_messaging_opt: 0,
         };
 
-        let feed_channels = FeedChannels {
+        let feed = FeedChannels {
             tx_feed_to_relay_manager,
             #[cfg(feature = "debug_channels")]
             cnt_tx_feed_to_relay_manager: 0,
@@ -741,7 +741,7 @@ impl Channels {
             cnt_rx_feed_from_messaging_opt: 0,
         };
 
-        let heating_channels = HeatingChannels {
+        let heating = HeatingChannels {
             tx_heating_to_relay_manager,
             #[cfg(feature = "debug_channels")]
             cnt_tx_heating_to_relay_manager: 0,
@@ -771,7 +771,7 @@ impl Channels {
             cnt_rx_heating_from_messaging_opt: 0,
         };
 
-        let tcp_communication_channels = TcpCommunicationChannels {
+        let tcp_communication = TcpCommunicationChannels {
             rx_tcp_communication_from_relay_manager_opt,
             #[cfg(feature = "debug_channels")]
             cnt_rx_tcp_communication_from_relay_manager_opt: 0,
@@ -801,7 +801,7 @@ impl Channels {
             cnt_rx_tcp_communication_from_signal_handler: 0,
         };
 
-        let schedule_check_channels = ScheduleCheckChannels {
+        let schedule_check = ScheduleCheckChannels {
             tx_schedule_check_to_ventilation,
             #[cfg(feature = "debug_channels")]
             cnt_tx_schedule_check_to_ventilation: 0,
@@ -844,7 +844,7 @@ impl Channels {
         };
 
         #[cfg(all(target_os = "linux", feature = "target_hw"))]
-        let mut i2c_interface_channels = I2cInterfaceChannels {
+        let mut i2c_interface = I2cInterfaceChannels {
             tx_i2c_interface_to_atlas_scientific,
             #[cfg(feature = "debug_channels")]
             cnt_tx_i2c_interface_to_atlas_scientific: 0,
@@ -858,7 +858,7 @@ impl Channels {
             cnt_rx_i2c_interface_from_signal_handler: 0,
         };
 
-        let signal_handler_channels = SignalHandlerChannels {
+        let signal_handler = SignalHandlerChannels {
             tx_signal_handler_to_messaging_opt,
             #[cfg(feature = "debug_channels")]
             cnt_tx_signal_handler_to_messaging_opt: 0,
@@ -994,7 +994,7 @@ impl Channels {
             cnt_tx_signal_handler_to_ds18b20: 0,
         };
 
-        let monitors_channels = MonitorsChannels {
+        let monitors = MonitorsChannels {
             rx_monitors_from_refill,
             #[cfg(feature = "debug_channels")]
             cnt_rx_monitors_from_refill: 0,
@@ -1013,7 +1013,7 @@ impl Channels {
         };
 
         #[cfg(target_os = "linux")]
-        let mut messaging_channels = MessagingChannels {
+        let mut messaging = MessagingChannels {
             tx_to_signal_handler: tx_messaging_to_signal_handler,
             #[cfg(feature = "debug_channels")]
             cnt_tx_to_signal_handler: 0,
@@ -1051,7 +1051,7 @@ impl Channels {
             cnt_tx_to_watchdog: 0,
         };
 
-        let tank_level_switch_channels = TankLevelSwitchChannels {
+        let tank_level_switch = TankLevelSwitchChannels {
             tx_tank_level_switch_to_tcp_opt,
             #[cfg(feature = "debug_channels")]
             cnt_tx_tank_level_switch_to_tcp_opt: 0,
@@ -1069,7 +1069,7 @@ impl Channels {
             cnt_rx_tank_level_switch_from_signal_handler: 0,
         };
 
-        let watchdog_channels = WatchDogChannels {
+        let watchdog = WatchDogChannels {
             tx_watchdog_to_signal_handler,
             #[cfg(feature = "debug_channels")]
             cnt_tx_watchdog_to_signal_handler: 0,
@@ -1083,25 +1083,25 @@ impl Channels {
             cnt_rx_watchdog_from_messaging_opt: 0,
         };
 
-        let ds18b20_channels = Ds18b20Channels {
+        let ds18b20 = Ds18b20Channels {
             rx_ds18b20_from_signal_handler,
             #[cfg(feature = "debug_channels")]
             cnt_rx_ds18b20_from_signal_handler: 0,
         };
 
-        let dht_channels = DhtChannels {
+        let dht = DhtChannels {
             rx_dht_from_signal_handler,
             #[cfg(feature = "debug_channels")]
             cnt_rx_dht_from_signal_handler: 0,
         };
 
-        let actuate_simulator_channels = ActuateSimulatorChannels {
+        let actuate_simulator = ActuateSimulatorChannels {
             tx_actuate_simulator_to_tcp_opt,
             #[cfg(feature = "debug_channels")]
             cnt_tx_actuate_simulator_to_tcp_opt: 0,
         };
 
-        let sensor_manager_channels = SensorManagerChannels {
+        let sensor_manager = SensorManagerChannels {
             tx_sensor_manager_to_tcp_opt,
             #[cfg(feature = "debug_channels")]
             cnt_tx_sensor_manager_to_tcp_opt: 0,
@@ -1119,7 +1119,7 @@ impl Channels {
             cnt_rx_sensor_manager_from_signal_handler: 0,
         };
 
-        let data_logger_channels = DataLoggerChannels {
+        let data_logger = DataLoggerChannels {
             tx_data_logger_to_signal_handler,
             #[cfg(feature = "debug_channels")]
             cnt_tx_to_signal_handler: 0,
@@ -1130,24 +1130,24 @@ impl Channels {
         };
 
         Channels {
-            feed: feed_channels,
-            schedule_check: schedule_check_channels,
-            actuate_simulator: actuate_simulator_channels,
-            relay_manager: relay_manager_channels,
-            atlas_scientific: atlas_scientific_channels,
-            dht: dht_channels,
-            ds18b20: ds18b20_channels,
-            balling: balling_channels,
-            data_logger: data_logger_channels,
-            tank_level_switch: tank_level_switch_channels,
-            tcp_communication: tcp_communication_channels,
-            heating: heating_channels,
-            ventilation: ventilation_channels,
-            signal_handler: signal_handler_channels,
-            monitors: monitors_channels,
-            watchdog: watchdog_channels,
-            refill: refill_channels,
-            sensor_manager: sensor_manager_channels,
+            feed: feed,
+            schedule_check: schedule_check,
+            actuate_simulator: actuate_simulator,
+            relay_manager: relay_manager,
+            atlas_scientific: atlas_scientific,
+            dht: dht,
+            ds18b20: ds18b20,
+            balling: balling,
+            data_logger: data_logger,
+            tank_level_switch: tank_level_switch,
+            tcp_communication: tcp_communication,
+            heating: heating,
+            ventilation: ventilation,
+            signal_handler: signal_handler,
+            monitors: monitors,
+            watchdog: watchdog,
+            refill: refill,
+            sensor_manager: sensor_manager,
         }
     }
 }
