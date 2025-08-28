@@ -41,32 +41,32 @@ use std::sync::mpsc;
 use std::sync::mpsc::{Receiver, Sender};
 
 pub struct Channels {
-    pub feed_channels: FeedChannels,
-    pub schedule_check_channels: ScheduleCheckChannels,
-    pub actuate_simulator_channels: ActuateSimulatorChannels,
-    pub relay_manager_channels: RelayManagerChannels,
-    pub atlas_scientific_channels: AtlasScientificChannels,
-    pub dht_channels: DhtChannels,
-    pub ds18b20_channels: Ds18b20Channels,
-    pub balling_channels: BallingChannels,
-    pub data_logger_channels: DataLoggerChannels,
+    pub feed: FeedChannels,
+    pub schedule_check: ScheduleCheckChannels,
+    pub actuate_simulator: ActuateSimulatorChannels,
+    pub relay_manager: RelayManagerChannels,
+    pub atlas_scientific: AtlasScientificChannels,
+    pub dht: DhtChannels,
+    pub ds18b20: Ds18b20Channels,
+    pub balling: BallingChannels,
+    pub data_logger: DataLoggerChannels,
 
     #[cfg(all(feature = "target_hw", target_os = "linux"))]
-    pub i2c_interface_channels: I2cInterfaceChannels,
-    pub tank_level_switch_channels: TankLevelSwitchChannels,
+    pub i2c_interface: I2cInterfaceChannels,
+    pub tank_level_switch: TankLevelSwitchChannels,
 
-    pub tcp_communication_channels: TcpCommunicationChannels,
-    pub heating_channels: HeatingChannels,
-    pub ventilation_channels: VentilationChannels,
+    pub tcp_communication: TcpCommunicationChannels,
+    pub heating: HeatingChannels,
+    pub ventilation: VentilationChannels,
 
-    pub signal_handler_channels: SignalHandlerChannels,
-    pub monitors_channels: MonitorsChannels,
-    pub watchdog_channels: WatchDogChannels,
-    pub refill_channels: RefillChannels,
-    pub sensor_manager_channels: SensorManagerChannels,
+    pub signal_handler: SignalHandlerChannels,
+    pub monitors: MonitorsChannels,
+    pub watchdog: WatchDogChannels,
+    pub refill: RefillChannels,
+    pub sensor_manager: SensorManagerChannels,
 
     #[cfg(target_os = "linux")]
-    pub messaging_channels: MessagingChannels,
+    pub messaging: MessagingChannels,
 }
 
 impl Channels {
@@ -1130,24 +1130,24 @@ impl Channels {
         };
 
         Channels {
-            feed_channels,
-            schedule_check_channels,
-            actuate_simulator_channels,
-            relay_manager_channels,
-            atlas_scientific_channels,
-            dht_channels,
-            ds18b20_channels,
-            balling_channels,
-            data_logger_channels,
-            tank_level_switch_channels,
-            tcp_communication_channels,
-            heating_channels,
-            ventilation_channels,
-            signal_handler_channels,
-            monitors_channels,
-            watchdog_channels,
-            refill_channels,
-            sensor_manager_channels,
+            feed: feed_channels,
+            schedule_check: schedule_check_channels,
+            actuate_simulator: actuate_simulator_channels,
+            relay_manager: relay_manager_channels,
+            atlas_scientific: atlas_scientific_channels,
+            dht: dht_channels,
+            ds18b20: ds18b20_channels,
+            balling: balling_channels,
+            data_logger: data_logger_channels,
+            tank_level_switch: tank_level_switch_channels,
+            tcp_communication: tcp_communication_channels,
+            heating: heating_channels,
+            ventilation: ventilation_channels,
+            signal_handler: signal_handler_channels,
+            monitors: monitors_channels,
+            watchdog: watchdog_channels,
+            refill: refill_channels,
+            sensor_manager: sensor_manager_channels,
         }
     }
 }
