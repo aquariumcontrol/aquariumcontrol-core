@@ -1029,8 +1029,10 @@ impl DataLogger {
             < self.config.initial_sleep_time_millis.into()
         {
             spin_sleeper.sleep(sleep_duration_hundred_millis);
-            (quit_command_received, _, _) =
-                self.process_external_request(&data_logger_channels.rx_data_logger_from_signal_handler, None);
+            (quit_command_received, _, _) = self.process_external_request(
+                &data_logger_channels.rx_data_logger_from_signal_handler,
+                None,
+            );
             if quit_command_received {
                 self.confirm_quit_and_wait_for_termination_command(data_logger_channels);
                 return;
@@ -1139,8 +1141,10 @@ impl DataLogger {
             while i < remaining_sleep_time_millis || cycle_time_exceeded {
                 i += 100;
                 spin_sleeper.sleep(sleep_duration_hundred_millis);
-                (quit_command_received, _, _) = self
-                    .process_external_request(&data_logger_channels.rx_data_logger_from_signal_handler, None);
+                (quit_command_received, _, _) = self.process_external_request(
+                    &data_logger_channels.rx_data_logger_from_signal_handler,
+                    None,
+                );
                 if quit_command_received {
                     #[cfg(feature = "debug_data_logger")]
                     debug!(

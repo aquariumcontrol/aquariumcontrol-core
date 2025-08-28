@@ -11,7 +11,11 @@ use log::error;
 #[cfg(any(target_os = "linux", feature = "debug_signal_handler", not(test)))]
 use log::info;
 
-#[cfg(any(target_os = "linux", feature = "debug_signal_handler", feature = "debug_channels"))]
+#[cfg(any(
+    target_os = "linux",
+    feature = "debug_signal_handler",
+    feature = "debug_channels"
+))]
 use log::debug;
 
 #[cfg(target_os = "linux")]
@@ -767,12 +771,20 @@ pub mod tests {
 
                     #[cfg(all(feature = "target_hw", target_os = "linux"))]
                     tx_signal_handler_to_dht,
-                    #[cfg(all(feature = "target_hw", target_os = "linux", feature = "debug_channels"))]
+                    #[cfg(all(
+                        feature = "target_hw",
+                        target_os = "linux",
+                        feature = "debug_channels"
+                    ))]
                     cnt_tx_signal_handler_to_dht: 0,
 
                     #[cfg(all(feature = "target_hw", target_os = "linux"))]
                     tx_signal_handler_to_i2c_interface,
-                    #[cfg(all(feature = "target_hw", target_os = "linux", feature = "debug_channels"))]
+                    #[cfg(all(
+                        feature = "target_hw",
+                        target_os = "linux",
+                        feature = "debug_channels"
+                    ))]
                     cnt_tx_signal_handler_to_i2c_interface: 0,
 
                     tx_signal_handler_to_watchdog,
@@ -785,7 +797,7 @@ pub mod tests {
 
                     tx_signal_handler_to_ds18b20,
                     #[cfg(feature = "debug_channels")]
-                    cnt_tx_signal_handler_to_ds18b20: 0
+                    cnt_tx_signal_handler_to_ds18b20: 0,
                 };
 
                 handle_signals(term_clone, signal_handler_channels);
@@ -864,6 +876,7 @@ pub mod tests {
             InternalCommand::Quit
         );
         _ = tx_schedule_check_to_signal_handler.send(true);
+        #[cfg(all(target_os = "linux", feature = "target_hw"))]
         assert_eq!(
             rx_i2c_interface_from_signal_handler.recv().unwrap(),
             InternalCommand::Quit

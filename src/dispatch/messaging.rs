@@ -393,19 +393,6 @@ impl Messaging {
                         if (domain != MessagingDomain::Unknown)
                             && (command != InternalCommand::Unknown)
                         {
-                            let tx_to_domain = match domain {
-                                MessagingDomain::Refill => &messaging_channels.tx_to_refill,
-                                MessagingDomain::Ventilation => {
-                                    &messaging_channels.tx_to_ventilation
-                                }
-                                MessagingDomain::Feed => &messaging_channels.tx_to_feed,
-                                MessagingDomain::Heating => &messaging_channels.tx_to_heating,
-                                MessagingDomain::Balling => &messaging_channels.tx_to_balling,
-                                MessagingDomain::Monitors => &messaging_channels.tx_to_monitors,
-                                MessagingDomain::Watchdog => &messaging_channels.tx_to_watchdog,
-                                MessagingDomain::Unknown => unreachable!(),
-                            };
-
                             #[cfg(not(test))]
                             info!(
                                 target: module_path!(),
@@ -413,7 +400,7 @@ impl Messaging {
                                 domain
                             );
 
-                            match tx_to_domain.send(command) {
+                            match messaging_channels.send_to_domain(command, domain) {
                                 Ok(_) => { /* do nothing */ }
                                 Err(e) => {
                                     error!(
@@ -423,28 +410,6 @@ impl Messaging {
                                     );
                                 }
                             }
-
-                            let counter = match domain {
-                                MessagingDomain::Refill => &mut messaging_channels.cnt_tx_to_refill,
-                                MessagingDomain::Ventilation => {
-                                    &mut messaging_channels.cnt_tx_to_ventilation
-                                }
-                                MessagingDomain::Feed => &mut messaging_channels.cnt_tx_to_feed,
-                                MessagingDomain::Heating => {
-                                    &mut messaging_channels.cnt_tx_to_heating
-                                }
-                                MessagingDomain::Balling => {
-                                    &mut messaging_channels.cnt_tx_to_balling
-                                }
-                                MessagingDomain::Monitors => {
-                                    &mut messaging_channels.cnt_tx_to_monitors
-                                }
-                                MessagingDomain::Watchdog => {
-                                    &mut messaging_channels.cnt_tx_to_watchdog
-                                }
-                                MessagingDomain::Unknown => unreachable!(),
-                            };
-                            *counter += 1;
                         }
                     } else {
                         error!(

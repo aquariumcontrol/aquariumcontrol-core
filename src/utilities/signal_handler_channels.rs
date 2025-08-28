@@ -152,14 +152,16 @@ impl SignalHandlerChannels {
 
     #[allow(unused)]
     pub fn receive_from_messaging(&mut self) -> Option<Result<bool, RecvError>> {
-        self.rx_signal_handler_from_messaging_opt.as_ref().map(|rx| {
-            let result = rx.recv();
-            #[cfg(feature = "debug_channels")]
-            if result.is_ok() {
-                self.cnt_rx_signal_handler_from_messaging_opt += 1;
-            }
-            result
-        })
+        self.rx_signal_handler_from_messaging_opt
+            .as_ref()
+            .map(|rx| {
+                let result = rx.recv();
+                #[cfg(feature = "debug_channels")]
+                if result.is_ok() {
+                    self.cnt_rx_signal_handler_from_messaging_opt += 1;
+                }
+                result
+            })
     }
 
     #[allow(unused)]
@@ -536,42 +538,174 @@ impl SignalHandlerChannels {
 impl fmt::Display for SignalHandlerChannels {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         writeln!(f, "--- Signal Handler Channel Status ---")?;
-        writeln!(f, "cnt_tx_signal_handler_to_messaging_opt: {}", self.cnt_tx_signal_handler_to_messaging_opt)?;
-        writeln!(f, "cnt_rx_signal_handler_from_messaging_opt: {}", self.cnt_rx_signal_handler_from_messaging_opt)?;
-        writeln!(f, "cnt_tx_signal_handler_to_refill: {}", self.cnt_tx_signal_handler_to_refill)?;
-        writeln!(f, "cnt_rx_signal_handler_from_refill: {}", self.cnt_rx_signal_handler_from_refill)?;
-        writeln!(f, "cnt_tx_signal_handler_to_tank_level_switch: {}", self.cnt_tx_signal_handler_to_tank_level_switch)?;
-        writeln!(f, "cnt_rx_signal_handler_from_tank_level_switch: {}", self.cnt_rx_signal_handler_from_tank_level_switch)?;
-        writeln!(f, "cnt_tx_signal_handler_to_heating: {}", self.cnt_tx_signal_handler_to_heating)?;
-        writeln!(f, "cnt_rx_signal_handler_from_heating: {}", self.cnt_rx_signal_handler_from_heating)?;
-        writeln!(f, "cnt_tx_signal_handler_to_relay_manager: {}", self.cnt_tx_signal_handler_to_relay_manager)?;
-        writeln!(f, "cnt_rx_signal_handler_from_relay_manager: {}", self.cnt_rx_signal_handler_from_relay_manager)?;
-        writeln!(f, "cnt_tx_signal_handler_to_atlas_scientific: {}", self.cnt_tx_signal_handler_to_atlas_scientific)?;
-        writeln!(f, "cnt_rx_signal_handler_from_atlas_scientific: {}", self.cnt_rx_signal_handler_from_atlas_scientific)?;
-        writeln!(f, "cnt_tx_signal_handler_to_sensor_manager: {}", self.cnt_tx_signal_handler_to_sensor_manager)?;
-        writeln!(f, "cnt_rx_signal_handler_from_sensor_manager: {}", self.cnt_rx_signal_handler_from_sensor_manager)?;
-        writeln!(f, "cnt_tx_signal_handler_to_data_logger: {}", self.cnt_tx_signal_handler_to_data_logger)?;
-        writeln!(f, "cnt_rx_signal_handler_from_data_logger: {}", self.cnt_rx_signal_handler_from_data_logger)?;
-        writeln!(f, "cnt_tx_signal_handler_to_balling: {}", self.cnt_tx_signal_handler_to_balling)?;
-        writeln!(f, "cnt_rx_signal_handler_from_balling: {}", self.cnt_rx_signal_handler_from_balling)?;
-        writeln!(f, "cnt_tx_signal_handler_to_ventilation: {}", self.cnt_tx_signal_handler_to_ventilation)?;
-        writeln!(f, "cnt_rx_signal_handler_from_ventilation: {}", self.cnt_rx_signal_handler_from_ventilation)?;
-        writeln!(f, "cnt_tx_signal_handler_to_monitors: {}", self.cnt_tx_signal_handler_to_monitors)?;
-        writeln!(f, "cnt_rx_signal_handler_from_monitors: {}", self.cnt_rx_signal_handler_from_monitors)?;
-        writeln!(f, "cnt_tx_signal_handler_to_feed: {}", self.cnt_tx_signal_handler_to_feed)?;
-        writeln!(f, "cnt_rx_signal_handler_from_feed: {}", self.cnt_rx_signal_handler_from_feed)?;
-        writeln!(f, "cnt_tx_signal_handler_to_schedule_check: {}", self.cnt_tx_signal_handler_to_schedule_check)?;
-        writeln!(f, "cnt_rx_signal_handler_from_schedule_check: {}", self.cnt_rx_signal_handler_from_schedule_check)?;
-        writeln!(f, "cnt_tx_signal_handler_to_tcp_opt: {}", self.cnt_tx_signal_handler_to_tcp_opt)?;
-        writeln!(f, "cnt_rx_signal_handler_from_tcp_opt: {}", self.cnt_rx_signal_handler_from_tcp_opt)?;
-        writeln!(f, "cnt_tx_signal_handler_to_watchdog: {}", self.cnt_tx_signal_handler_to_watchdog)?;
-        writeln!(f, "cnt_rx_signal_handler_from_watchdog: {}", self.cnt_rx_signal_handler_from_watchdog)?;
+        writeln!(
+            f,
+            "cnt_tx_signal_handler_to_messaging_opt: {}",
+            self.cnt_tx_signal_handler_to_messaging_opt
+        )?;
+        writeln!(
+            f,
+            "cnt_rx_signal_handler_from_messaging_opt: {}",
+            self.cnt_rx_signal_handler_from_messaging_opt
+        )?;
+        writeln!(
+            f,
+            "cnt_tx_signal_handler_to_refill: {}",
+            self.cnt_tx_signal_handler_to_refill
+        )?;
+        writeln!(
+            f,
+            "cnt_rx_signal_handler_from_refill: {}",
+            self.cnt_rx_signal_handler_from_refill
+        )?;
+        writeln!(
+            f,
+            "cnt_tx_signal_handler_to_tank_level_switch: {}",
+            self.cnt_tx_signal_handler_to_tank_level_switch
+        )?;
+        writeln!(
+            f,
+            "cnt_rx_signal_handler_from_tank_level_switch: {}",
+            self.cnt_rx_signal_handler_from_tank_level_switch
+        )?;
+        writeln!(
+            f,
+            "cnt_tx_signal_handler_to_heating: {}",
+            self.cnt_tx_signal_handler_to_heating
+        )?;
+        writeln!(
+            f,
+            "cnt_rx_signal_handler_from_heating: {}",
+            self.cnt_rx_signal_handler_from_heating
+        )?;
+        writeln!(
+            f,
+            "cnt_tx_signal_handler_to_relay_manager: {}",
+            self.cnt_tx_signal_handler_to_relay_manager
+        )?;
+        writeln!(
+            f,
+            "cnt_rx_signal_handler_from_relay_manager: {}",
+            self.cnt_rx_signal_handler_from_relay_manager
+        )?;
+        writeln!(
+            f,
+            "cnt_tx_signal_handler_to_atlas_scientific: {}",
+            self.cnt_tx_signal_handler_to_atlas_scientific
+        )?;
+        writeln!(
+            f,
+            "cnt_rx_signal_handler_from_atlas_scientific: {}",
+            self.cnt_rx_signal_handler_from_atlas_scientific
+        )?;
+        writeln!(
+            f,
+            "cnt_tx_signal_handler_to_sensor_manager: {}",
+            self.cnt_tx_signal_handler_to_sensor_manager
+        )?;
+        writeln!(
+            f,
+            "cnt_rx_signal_handler_from_sensor_manager: {}",
+            self.cnt_rx_signal_handler_from_sensor_manager
+        )?;
+        writeln!(
+            f,
+            "cnt_tx_signal_handler_to_data_logger: {}",
+            self.cnt_tx_signal_handler_to_data_logger
+        )?;
+        writeln!(
+            f,
+            "cnt_rx_signal_handler_from_data_logger: {}",
+            self.cnt_rx_signal_handler_from_data_logger
+        )?;
+        writeln!(
+            f,
+            "cnt_tx_signal_handler_to_balling: {}",
+            self.cnt_tx_signal_handler_to_balling
+        )?;
+        writeln!(
+            f,
+            "cnt_rx_signal_handler_from_balling: {}",
+            self.cnt_rx_signal_handler_from_balling
+        )?;
+        writeln!(
+            f,
+            "cnt_tx_signal_handler_to_ventilation: {}",
+            self.cnt_tx_signal_handler_to_ventilation
+        )?;
+        writeln!(
+            f,
+            "cnt_rx_signal_handler_from_ventilation: {}",
+            self.cnt_rx_signal_handler_from_ventilation
+        )?;
+        writeln!(
+            f,
+            "cnt_tx_signal_handler_to_monitors: {}",
+            self.cnt_tx_signal_handler_to_monitors
+        )?;
+        writeln!(
+            f,
+            "cnt_rx_signal_handler_from_monitors: {}",
+            self.cnt_rx_signal_handler_from_monitors
+        )?;
+        writeln!(
+            f,
+            "cnt_tx_signal_handler_to_feed: {}",
+            self.cnt_tx_signal_handler_to_feed
+        )?;
+        writeln!(
+            f,
+            "cnt_rx_signal_handler_from_feed: {}",
+            self.cnt_rx_signal_handler_from_feed
+        )?;
+        writeln!(
+            f,
+            "cnt_tx_signal_handler_to_schedule_check: {}",
+            self.cnt_tx_signal_handler_to_schedule_check
+        )?;
+        writeln!(
+            f,
+            "cnt_rx_signal_handler_from_schedule_check: {}",
+            self.cnt_rx_signal_handler_from_schedule_check
+        )?;
+        writeln!(
+            f,
+            "cnt_tx_signal_handler_to_tcp_opt: {}",
+            self.cnt_tx_signal_handler_to_tcp_opt
+        )?;
+        writeln!(
+            f,
+            "cnt_rx_signal_handler_from_tcp_opt: {}",
+            self.cnt_rx_signal_handler_from_tcp_opt
+        )?;
+        writeln!(
+            f,
+            "cnt_tx_signal_handler_to_watchdog: {}",
+            self.cnt_tx_signal_handler_to_watchdog
+        )?;
+        writeln!(
+            f,
+            "cnt_rx_signal_handler_from_watchdog: {}",
+            self.cnt_rx_signal_handler_from_watchdog
+        )?;
 
         #[cfg(all(target_os = "linux", feature = "target_hw"))]
         {
-            writeln!(f, "cnt_tx_signal_handler_to_dht: {}", self.cnt_tx_signal_handler_to_dht)?;
-            writeln!(f, "cnt_tx_signal_handler_to_i2c_interface: {}", self.cnt_tx_signal_handler_to_i2c_interface)?;
-            writeln!(f, "cnt_tx_signal_handler_to_ds18b20: {}", self.cnt_tx_signal_handler_to_ds18b20)?;
+            writeln!(
+                f,
+                "cnt_tx_signal_handler_to_dht: {}",
+                self.cnt_tx_signal_handler_to_dht
+            )?;
+            writeln!(
+                f,
+                "cnt_tx_signal_handler_to_i2c_interface: {}",
+                self.cnt_tx_signal_handler_to_i2c_interface
+            )?;
+            writeln!(
+                f,
+                "cnt_tx_signal_handler_to_ds18b20: {}",
+                self.cnt_tx_signal_handler_to_ds18b20
+            )?;
         }
 
         Ok(())

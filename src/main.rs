@@ -94,12 +94,13 @@ use crate::dispatch::messaging::Messaging;
 #[cfg(target_os = "linux")]
 use crate::dispatch::messaging_channels::MessagingChannels;
 
-use crate::food::feed::{Feed};
+use crate::food::feed::Feed;
 use crate::food::food_injection::FoodInjection;
+use crate::launch::channels::Channels;
 use crate::launch::startup_error::StartupError;
-use crate::mineral::balling::{Balling};
+use crate::mineral::balling::Balling;
 use crate::mineral::mineral_injection::MineralInjection;
-use crate::permission::schedule_check::{ScheduleCheck};
+use crate::permission::schedule_check::ScheduleCheck;
 use crate::recorder::data_injection::DataInjection;
 use crate::recorder::data_logger::{DataLogger, DataLoggerMutexes};
 use crate::relays::actuate_controllino::ActuateControllino;
@@ -107,9 +108,7 @@ use crate::relays::actuate_controllino::ActuateControllino;
 use crate::relays::actuate_gpio::{ActuateGpio, ActuateGpioConfig};
 use crate::relays::actuate_simulator::ActuateSimulator;
 use crate::relays::relay_manager::RelayManager;
-use crate::sensors::atlas_scientific::{
-    AtlasScientific, AtlasScientificResultData,
-};
+use crate::sensors::atlas_scientific::{AtlasScientific, AtlasScientificResultData};
 use crate::sensors::dht::{Dht, DhtResult};
 use crate::sensors::ds18b20::{Ds18b20, Ds18b20ResultData};
 use crate::sensors::sensor_manager::{SensorManager, SensorManagerMutexes, SensorManagerSignals};
@@ -117,13 +116,13 @@ use crate::sensors::tank_level_switch::{TankLevelSwitch, TankLevelSwitchSignals}
 use crate::simulator::tcp_communication::TcpCommunication;
 use crate::thermal::distinct_interval_check::distinct_thermal_control_interval_check;
 use crate::thermal::heating::{Heating, HeatingMutexes};
-use crate::thermal::ventilation::{Ventilation};
+use crate::thermal::ventilation::Ventilation;
 use crate::utilities::config::read_config_file;
 use crate::utilities::config_file_definition_error::ConfigFileDefinitionError;
 use crate::utilities::logger::{log_error_chain, setup_logger, LoggerConfig};
 use crate::utilities::memory_config_check::memory_config_check;
 use crate::utilities::publish_pid::PublishPid;
-use crate::utilities::signal_handler::{handle_signals};
+use crate::utilities::signal_handler::handle_signals;
 use crate::utilities::version_information::{VersionInformation, VersionInformationError};
 use crate::watchmen::monitors::Monitors;
 use crate::watchmen::petting::Petting;
@@ -133,7 +132,6 @@ use crate::water::water_injection::WaterInjection;
 use spin_sleep::SpinSleeper;
 pub use std::sync::{atomic::AtomicBool, Arc, Mutex};
 use std::{env, panic, path::Path, thread::scope, time::Duration};
-use crate::launch::channels::Channels;
 
 cfg_if::cfg_if! {
     if #[cfg(all(target_os = "linux", feature = "target_hw"))] {
@@ -684,7 +682,7 @@ fn run() -> Result<(), StartupError> {
     let mut channels = Channels::new(
         config.relay_manager.use_simulator,
         config.sensor_manager.use_simulator,
-        config.tank_level_switch.use_simulator
+        config.tank_level_switch.use_simulator,
     );
 
     #[cfg(target_os = "linux")]
@@ -1017,7 +1015,10 @@ fn run() -> Result<(), StartupError> {
                 mutex_sensor_manager_signals,
             };
 
-            sensor_manager.execute(&mut channels.sensor_manager_channels, mutexes_sensor_manager);
+            sensor_manager.execute(
+                &mut channels.sensor_manager_channels,
+                mutexes_sensor_manager,
+            );
             #[cfg(feature = "debug_channels")]
             debug!(target: module_path!(), "{0}", channels.sensor_manager_channels);
             #[cfg(feature = "debug_main")]
@@ -1130,7 +1131,10 @@ fn run() -> Result<(), StartupError> {
         let mutex_device_scheduler_monitors = Arc::clone(&mutex_device_scheduler);
 
         scope.spawn(move || {
-            monitors.execute(mutex_device_scheduler_monitors, &mut channels.monitors_channels);
+            monitors.execute(
+                mutex_device_scheduler_monitors,
+                &mut channels.monitors_channels,
+            );
             #[cfg(feature = "debug_channels")]
             debug!(target: module_path!(), "{0}", channels.monitors_channels);
             #[cfg(feature = "debug_main")]

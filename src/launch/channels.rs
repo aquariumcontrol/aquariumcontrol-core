@@ -54,11 +54,11 @@ pub struct Channels {
     #[cfg(all(feature = "target_hw", target_os = "linux"))]
     pub i2c_interface_channels: I2cInterfaceChannels,
     pub tank_level_switch_channels: TankLevelSwitchChannels,
-    
+
     pub tcp_communication_channels: TcpCommunicationChannels,
     pub heating_channels: HeatingChannels,
     pub ventilation_channels: VentilationChannels,
-    
+
     pub signal_handler_channels: SignalHandlerChannels,
     pub monitors_channels: MonitorsChannels,
     pub watchdog_channels: WatchDogChannels,
@@ -73,9 +73,11 @@ impl Channels {
     pub fn new(
         relay_manager_use_simulator: bool,
         sensor_manager_use_simulator: bool,
-        tank_level_switch_use_simulator: bool
+        tank_level_switch_use_simulator: bool,
     ) -> Channels {
-        let use_simulator = relay_manager_use_simulator | sensor_manager_use_simulator | tank_level_switch_use_simulator;
+        let use_simulator = relay_manager_use_simulator
+            | sensor_manager_use_simulator
+            | tank_level_switch_use_simulator;
 
         // create channels for communication between threads
         let tx_signal_handler_to_messaging_opt: Option<Sender<InternalCommand>>;
@@ -989,7 +991,7 @@ impl Channels {
 
             tx_signal_handler_to_ds18b20,
             #[cfg(feature = "debug_channels")]
-            cnt_tx_signal_handler_to_ds18b20: 0
+            cnt_tx_signal_handler_to_ds18b20: 0,
         };
 
         let monitors_channels = MonitorsChannels {

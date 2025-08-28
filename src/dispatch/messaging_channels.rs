@@ -7,6 +7,8 @@ The above copyright notice and this permission notice shall be included in all c
 THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 #[cfg(target_os = "linux")]
+use crate::dispatch::messaging::{MessagingDomain, MessagingError};
+#[cfg(target_os = "linux")]
 use crate::utilities::channel_content::InternalCommand;
 #[cfg(target_os = "linux")]
 use std::fmt;
@@ -14,51 +16,138 @@ use std::fmt;
 use std::sync::mpsc::{Receiver, Sender};
 
 #[cfg(target_os = "linux")]
+/// Collects all `mpsc` channels used by the `Messaging` module for IPC.
+///
+/// This struct acts as a central container for all the communication endpoints
+/// that the `Messaging` module uses to dispatch commands received via a POSIX
+/// message queue to the appropriate application threads (domains). It also
+/// includes channels for communicating with the `SignalHandler` for graceful shutdown.
+///
+/// This entire struct is conditionally compiled and is only available on Linux
+/// systems, as POSIX message queues are a platform-specific feature.
 pub struct MessagingChannels {
-    pub tx_to_signal_handler: Sender<bool>,
+    /// Sender for sending acknowledgments back to the `SignalHandler`.
+    pub tx_messaging_to_signal_handler: Sender<bool>,
     #[cfg(feature = "debug_channels")]
-    /// Counter for messages sent to the signal handler
+    /// Counter for messages sent to the signal handler.
     pub cnt_tx_messaging_to_signal_handler: u64,
 
-    pub rx_from_signal_handler: Receiver<InternalCommand>,
+    /// Receiver for commands from the `SignalHandler` (e.g., `Quit`, `Terminate`).
+    pub rx_messaging_from_signal_handler: Receiver<InternalCommand>,
     #[cfg(feature = "debug_channels")]
-    /// Counter for messages received from the signal handler
+    /// Counter for messages received from the signal handler.
     pub cnt_rx_messaging_from_signal_handler: u64,
 
-    pub tx_to_refill: Sender<InternalCommand>,
+    /// Sender for dispatching commands to the `Refill` module.
+    pub tx_messaging_to_refill: Sender<InternalCommand>,
     #[cfg(feature = "debug_channels")]
-    /// Counter for messages sent to refill
+    /// Counter for messages sent to refill.
     pub cnt_tx_messaging_to_refill: u64,
 
-    pub tx_to_ventilation: Sender<InternalCommand>,
+    /// Sender for dispatching commands to the `Ventilation` module.
+    pub tx_messaging_to_ventilation: Sender<InternalCommand>,
     #[cfg(feature = "debug_channels")]
-    /// Counter for messages sent to ventilation
+    /// Counter for messages sent to ventilation.
     pub cnt_tx_messaging_to_ventilation: u64,
 
-    pub tx_to_heating: Sender<InternalCommand>,
+    /// Sender for dispatching commands to the `Heating` module.
+    pub tx_messaging_to_heating: Sender<InternalCommand>,
     #[cfg(feature = "debug_channels")]
-    /// Counter for messages sent to heating
+    /// Counter for messages sent to heating.
     pub cnt_tx_messaging_to_heating: u64,
 
-    pub tx_to_feed: Sender<InternalCommand>,
+    /// Sender for dispatching commands to the `Feed` module.
+    pub tx_messaging_to_feed: Sender<InternalCommand>,
     #[cfg(feature = "debug_channels")]
-    /// Counter for messages sent to feed
+    /// Counter for messages sent to feed.
     pub cnt_tx_messaging_to_feed: u64,
 
-    pub tx_to_balling: Sender<InternalCommand>,
+    /// Sender for dispatching commands to the `Balling` module.
+    pub tx_messaging_to_balling: Sender<InternalCommand>,
     #[cfg(feature = "debug_channels")]
-    /// Counter for messages sent to balling
+    /// Counter for messages sent to balling.
     pub cnt_tx_messaging_to_balling: u64,
 
-    pub tx_to_monitors: Sender<InternalCommand>,
+    /// Sender for dispatching commands to the `Monitors` module.
+    pub tx_messaging_to_monitors: Sender<InternalCommand>,
     #[cfg(feature = "debug_channels")]
-    /// Counter for messages sent to monitors
+    /// Counter for messages sent to monitors.
     pub cnt_tx_messaging_to_monitors: u64,
 
-    pub tx_to_watchdog: Sender<InternalCommand>,
+    /// Sender for dispatching commands to the `Watchdog` module.
+    pub tx_messaging_to_watchdog: Sender<InternalCommand>,
     #[cfg(feature = "debug_channels")]
-    /// Counter for messages sent to watchdog
+    /// Counter for messages sent to watchdog.
     pub cnt_tx_messaging_to_watchdog: u64,
+}
+
+#[cfg(target_os = "linux")]
+impl MessagingChannels {
+    /// Dispatches a command to the appropriate application domain (thread).
+    ///
+    /// This function acts as a router, taking a generic `InternalCommand` and a
+    /// `MessagingDomain` and sending the command to the correct channel based on
+    /// the specified domain. It also handles the conditional incrementing of debug
+    /// counters when the `debug_channels` feature is enabled.
+    ///
+    /// # Arguments
+    /// * `command` - The `InternalCommand` (e.g., `Start`, `Stop`) to be sent.
+    /// * `domain` - The target `MessagingDomain` (e.g., `Refill`, `Heating`) that
+    ///   should receive the command.
+    ///
+    /// # Returns
+    /// An empty `Result` (`Ok(())`) if the command was successfully sent.
+    ///
+    /// # Errors
+    /// Returns a `MessagingError` if:
+    /// - The `domain` is `MessagingDomain::Unknown`.
+    /// - The target channel is disconnected (i.e., the receiving thread has terminated),
+    ///   wrapped in `MessagingError::ChannelSendError`.
+    pub fn send_command_to_domain(
+        &mut self,
+        command: InternalCommand,
+        domain: MessagingDomain,
+    ) -> Result<(), MessagingError> {
+        // Select the correct sender channel based on the domain.
+        let tx_messaging_to_domain = match domain {
+            MessagingDomain::Refill => &self.tx_messaging_to_refill,
+            MessagingDomain::Ventilation => &self.tx_messaging_to_ventilation,
+            MessagingDomain::Feed => &self.tx_messaging_to_feed,
+            MessagingDomain::Heating => &self.tx_messaging_to_heating,
+            MessagingDomain::Balling => &self.tx_messaging_to_balling,
+            MessagingDomain::Monitors => &self.tx_messaging_to_monitors,
+            MessagingDomain::Watchdog => &self.tx_messaging_to_watchdog,
+            _ => {
+                return Err(MessagingError::UnknownDomain(
+                    module_path!().to_string(),
+                    domain.to_string(),
+                ));
+            }
+        };
+
+        // Send the command and capture the result.
+        tx_messaging_to_domain
+            .send(command)
+            .map_err(|e| MessagingError::ChannelSendError {
+                location: module_path!().to_string(),
+                source: e,
+            })?;
+
+        // Conditionally increment the counter for the corresponding channel on success.
+        #[cfg(feature = "debug_channels")]
+        let counter = match domain {
+            MessagingDomain::Refill => &mut self.cnt_tx_messaging_to_refill,
+            MessagingDomain::Ventilation => &mut self.cnt_tx_messaging_to_ventilation,
+            MessagingDomain::Feed => &mut self.cnt_tx_messaging_to_feed,
+            MessagingDomain::Heating => &mut self.cnt_tx_messaging_to_heating,
+            MessagingDomain::Balling => &mut self.cnt_tx_messaging_to_balling,
+            MessagingDomain::Monitors => &mut self.cnt_tx_messaging_to_monitors,
+            MessagingDomain::Watchdog => &mut self.cnt_tx_messaging_to_watchdog,
+        };
+        *counter += 1;
+
+        result
+    }
 }
 
 #[cfg(all(target_os = "linux", feature = "debug_channels"))]

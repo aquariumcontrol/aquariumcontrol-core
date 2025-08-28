@@ -8,6 +8,9 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 */
 use thiserror::Error;
 
+#[cfg(target_os = "linux")]
+use std::sync::mpsc::SendError;
+
 #[derive(Debug, Error)]
 /// Enum codifies the errors which the program may encounter in communication with the Linux messaging system.
 pub enum MessagingError {
@@ -28,5 +31,19 @@ pub enum MessagingError {
         location: String,
         #[source]
         source: std::io::Error,
+    },
+
+    /// Unknown domain: Internal logic error
+    #[cfg(target_os = "linux")]
+    #[error("[{0}] Internal error: Domain {1} is unknown.")]
+    UnknownDomain(String, String),
+
+    /// Error occurred when trying to send the message via the channel
+    #[cfg(target_os = "linux")]
+    #[error("[{location}] Error occurred when trying send message via channel.")]
+    ChannelSendError {
+        location: String,
+        #[source]
+        source: SendError<InternalCommand>,
     },
 }
