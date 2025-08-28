@@ -83,6 +83,7 @@ pub enum I2cError {
     IncorrectResponseLength(String, usize, usize),
 
     /// Command is too long for buffer
+    #[allow(unused)] // used in conditionally compiled code
     #[error("[{location}]: I2C command (length: {actual_len}) exceeds the maximum allowed length ({max_len}).")]
     CommandTooLong {
         location: String,

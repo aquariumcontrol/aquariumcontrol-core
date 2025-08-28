@@ -157,6 +157,7 @@ impl AquariumSignal {
     }
 
     /// Defines the sequence of measurement used by AtlasScientific
+    #[allow(unused)] // used in conditionally compiled code
     pub fn get_next_atlas_scientific_signal(&self) -> AquariumSignal {
         match self {
             AquariumSignal::WaterTemperature => AquariumSignal::pH,

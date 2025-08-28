@@ -106,7 +106,11 @@ use crate::relays::actuate_controllino::ActuateControllino;
 use crate::relays::actuate_gpio::{ActuateGpio, ActuateGpioConfig};
 use crate::relays::actuate_simulator::ActuateSimulator;
 use crate::relays::relay_manager::RelayManager;
-use crate::sensors::atlas_scientific::{AtlasScientific, AtlasScientificResultData};
+
+#[cfg(all(feature = "target_hw", target_os = "linux"))]
+use crate::sensors::atlas_scientific::AtlasScientific;
+
+use crate::sensors::atlas_scientific::AtlasScientificResultData;
 use crate::sensors::dht::{Dht, DhtResult};
 use crate::sensors::ds18b20::{Ds18b20, Ds18b20ResultData};
 use crate::sensors::sensor_manager::{SensorManager, SensorManagerMutexes, SensorManagerSignals};
@@ -828,6 +832,7 @@ fn run() -> Result<(), StartupError> {
     let mutex_sensor_manager_signals_clone_for_ventilation = mutex_sensor_manager_signals.clone();
     //**********************************************************************************************
 
+    #[cfg(all(target_os = "linux", feature = "target_hw"))]
     let mut atlas_scientific = AtlasScientific::new(config.atlas_scientific);
 
     let mut sensor_manager = SensorManager::new(config.sensor_manager)
@@ -977,18 +982,21 @@ fn run() -> Result<(), StartupError> {
             });
         }
 
-        scope.spawn(move || {
-            atlas_scientific.execute(
-                &mut channels.atlas_scientific,
-                mutex_atlas_scientific_temperature,
-                mutex_atlas_scientific_ph,
-                mutex_atlas_scientific_conductivity,
-            );
-            #[cfg(feature = "debug_channels")]
-            debug!(target: module_path!(), "{0}", channels.atlas_scientific);
-            #[cfg(feature = "debug_main")]
-            debug!(target: module_path!(), "Atlas Scientific terminated.");
-        });
+        #[cfg(all(target_os = "linux", feature = "target_hw"))]
+        if !use_simulator {
+            scope.spawn(move || {
+                atlas_scientific.execute(
+                    &mut channels.atlas_scientific,
+                    mutex_atlas_scientific_temperature,
+                    mutex_atlas_scientific_ph,
+                    mutex_atlas_scientific_conductivity,
+                );
+                #[cfg(feature = "debug_channels")]
+                debug!(target: module_path!(), "{0}", channels.atlas_scientific);
+                #[cfg(feature = "debug_main")]
+                debug!(target: module_path!(), "Atlas Scientific terminated.");
+            });
+        }
 
         scope.spawn(move || {
             dht.execute(mutex_dht, &mut channels.dht);

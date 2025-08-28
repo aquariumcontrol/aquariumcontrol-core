@@ -21,6 +21,7 @@ use crate::mineral::balling::BallingConfig;
 use crate::recorder::data_logger::DataLoggerConfig;
 use crate::relays::actuate_controllino::ActuateControllinoConfig;
 use crate::relays::relay_manager::RelayManagerConfig;
+#[allow(unused)] // used in conditionally compiled code
 use crate::sensors::atlas_scientific::AtlasScientificConfig;
 use crate::sensors::dht::DhtConfig;
 use crate::sensors::gpio_handler::GpioHandlerConfig;
@@ -64,6 +65,7 @@ pub struct ConfigData {
     pub data_logger: DataLoggerConfig,
 
     /// configuration for AtlasScientific
+    #[allow(unused)] // used in conditionally compiled code
     pub atlas_scientific: AtlasScientificConfig,
 
     /// configuration for Ambient
@@ -152,7 +154,7 @@ pub struct ConfigData {
 /// - `ConfigError::FileRead`: If the specified file cannot be read from the filesystem.
 ///   This can be caused by the file not existing, or the application lacking the
 ///   necessary permissions to access it.
-/// - `ConfigError::TomlParse`: If the file's content is not valid TOML or if its
+/// - `ConfigError::TomlParse`: If the file's content is not valid TOML, or if its
 ///   structure does not match the `ConfigData` struct, preventing deserialization.
 pub fn read_config_file(filename: String) -> Result<ConfigData, ConfigError> {
     #[cfg(not(test))]

@@ -11,6 +11,7 @@ use crate::mineral::balling_channels::BallingChannels;
 use crate::permission::schedule_check_channels::ScheduleCheckChannels;
 use crate::relays::actuate_simulator_channels::ActuateSimulatorChannels;
 use crate::relays::relay_manager_channels::RelayManagerChannels;
+#[allow(unused)] // used in conditionally compiled code
 use crate::sensors::atlas_scientific_channels::AtlasScientificChannels;
 use crate::sensors::dht_channels::DhtChannels;
 use crate::sensors::ds18b20_channels::Ds18b20Channels;
@@ -45,6 +46,7 @@ pub struct Channels {
     pub schedule_check: ScheduleCheckChannels,
     pub actuate_simulator: ActuateSimulatorChannels,
     pub relay_manager: RelayManagerChannels,
+    #[cfg(all(feature = "target_hw", target_os = "linux"))]
     pub atlas_scientific: AtlasScientificChannels,
     pub dht: DhtChannels,
     pub ds18b20: Ds18b20Channels,
@@ -386,10 +388,12 @@ impl Channels {
         // **************************************
 
         // *** signal handler <=> atlas_scientific ***
+        #[allow(unused)] // used in conditionally compiled code
         let (tx_signal_handler_to_atlas_scientific, rx_atlas_scientific_from_signal_handler): (
             Sender<InternalCommand>,
             Receiver<InternalCommand>,
         ) = mpsc::channel();
+        #[allow(unused)] // used in conditionally compiled code
         let (tx_atlas_scientific_to_signal_handler, rx_signal_handler_from_atlas_scientific): (
             Sender<bool>,
             Receiver<bool>,
@@ -607,6 +611,7 @@ impl Channels {
             cnt_rx_relay_manager_from_signal_handler: 0,
         };
 
+        #[cfg(all(feature = "target_hw", target_os = "linux"))]
         let atlas_scientific = AtlasScientificChannels {
             tx_atlas_scientific_to_i2c_interface,
             #[cfg(feature = "debug_channels")]
@@ -1130,24 +1135,27 @@ impl Channels {
         };
 
         Channels {
-            feed: feed,
-            schedule_check: schedule_check,
-            actuate_simulator: actuate_simulator,
-            relay_manager: relay_manager,
-            atlas_scientific: atlas_scientific,
-            dht: dht,
-            ds18b20: ds18b20,
-            balling: balling,
-            data_logger: data_logger,
-            tank_level_switch: tank_level_switch,
-            tcp_communication: tcp_communication,
-            heating: heating,
-            ventilation: ventilation,
-            signal_handler: signal_handler,
-            monitors: monitors,
-            watchdog: watchdog,
-            refill: refill,
-            sensor_manager: sensor_manager,
+            feed,
+            schedule_check,
+            actuate_simulator,
+            relay_manager,
+
+            #[cfg(all(feature = "target_hw", target_os = "linux"))]
+            atlas_scientific,
+
+            dht,
+            ds18b20,
+            balling,
+            data_logger,
+            tank_level_switch,
+            tcp_communication,
+            heating,
+            ventilation,
+            signal_handler,
+            monitors,
+            watchdog,
+            refill,
+            sensor_manager,
 
             #[cfg(target_os = "linux")]
             messaging,

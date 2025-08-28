@@ -31,6 +31,7 @@ use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
 // max loops for receiving when the quit command has been received
+#[allow(unused)] // used in conditionally compiled code
 pub const RECEIVE_COUNTER_MAX: u32 = 10;
 
 /// Holds the configuration data for the Atlas Scientific sensor communication.
@@ -39,6 +40,7 @@ pub const RECEIVE_COUNTER_MAX: u32 = 10;
 #[derive(Deserialize, Debug)]
 pub struct AtlasScientificConfig {
     /// allows deactivation of the data acquisition
+    #[allow(unused)] // used in conditionally compiled code
     pub active: bool,
 
     /// I2C address of Atlas Scientific pH sensor unit
@@ -117,6 +119,7 @@ impl AtlasScientificResultData {
     }
 }
 
+#[allow(unused)] // used in conditionally compiled code
 pub type AtlasScientificResult = Result<AtlasScientificResultData, AtlasScientificError>;
 
 #[allow(dead_code)]
@@ -178,12 +181,15 @@ mod atlas_scientific_constants {
 /// ```
 pub struct AtlasScientific {
     /// configuration data for AtlasScientific
+    #[allow(unused)] // used in conditionally compiled code
     config: AtlasScientificConfig,
 
     /// inhibition flag to avoid flooding the log file with repeated messages about failure to receive termination signal via the channel
+    #[allow(unused)] // used in conditionally compiled code
     lock_error_channel_receive_termination: bool,
 
     /// inhibition flag to avoid flooding the log file with repeated messages about having received inapplicable command via the channel from the signal handler thread
+    #[allow(unused)] // used in conditionally compiled code
     lock_warn_inapplicable_command_signal_handler: bool,
 
     /// inhibition flag to avoid flooding the log file with repeated messages about to send request via the channel to I2cInterface thread
@@ -207,9 +213,11 @@ pub struct AtlasScientific {
     mutex_conductivity_access_duration_exceeded: bool,
 
     /// instant when the last measurement took place
+    #[allow(unused)] // used in conditionally compiled code
     pub last_measurement_instant: Instant,
 
     /// duration of the measurement interval calculated from the configuration data
+    #[allow(unused)] // used in conditionally compiled code
     pub measurement_interval: Duration,
 }
 impl ProcessExternalRequestTrait for AtlasScientific {}
@@ -230,6 +238,7 @@ impl AtlasScientific {
     ///
     /// # Returns
     /// A new `AtlasScientific` struct, ready to manage sensor data acquisition.
+    #[allow(unused)] // used in conditionally compiled code
     pub fn new(config: AtlasScientificConfig) -> AtlasScientific {
         let measurement_interval = Duration::from_millis(config.measurement_interval_millis);
 
@@ -269,6 +278,7 @@ impl AtlasScientific {
     ///
     /// # Returns
     /// `true` if the character is a valid numeric component based on the rules; `false` otherwise.
+    #[allow(unused)] // used in conditionally compiled code
     fn is_numeric(character: u8, negative_allowed: bool) -> bool {
         match character {
             atlas_scientific_constants::ASCII_VAL_ZERO
@@ -302,6 +312,7 @@ impl AtlasScientific {
     /// - `ContainsInvalidCharacter`: If the data section contains non-numeric characters.
     /// - `InvalidUtf8Sequence`: If the numeric byte sequence is not valid UTF-8.
     /// - `ConversionFailure`: If the valid numeric string cannot be parsed into an `f32`.
+    #[allow(unused)] // used in conditionally compiled code
     fn check_response(
         buffer: [u8; atlas_scientific_constants::MESSAGE_SIZE],
         is_ph: bool,
@@ -376,6 +387,7 @@ impl AtlasScientific {
     /// - `SignalRequestCreationFailure`: If the underlying `I2cRequest::new` call fails (e.g., command too long).
     /// - `SendingRequestToI2cInterfaceFailed`: If sending the request over the channel fails, which
     ///   typically means the receiver (the I2C thread) has been dropped.
+    #[allow(unused)] // used in conditionally compiled code
     fn send_request_to_i2c_interface(
         &mut self,
         signal: &AquariumSignal,
@@ -493,6 +505,7 @@ impl AtlasScientific {
     ///
     /// # Arguments
     /// * `signal` - The `AquariumSignal` identifying which sensor's warning lock to reset.
+    #[allow(unused)] // used in conditionally compiled code
     fn reset_warning_flag(&mut self, signal: &AquariumSignal) {
         let lock_flag = match signal {
             AquariumSignal::WaterTemperature => {
@@ -526,6 +539,7 @@ impl AtlasScientific {
     /// # Errors
     /// Returns `Err(AtlasScientificError::CouldNotLockMutex)` if the target mutex is
     /// poisoned and cannot be locked.
+    #[allow(unused)] // used in conditionally compiled code
     fn write_result_to_mutex(
         &self,
         signal: &AquariumSignal,
@@ -584,6 +598,7 @@ impl AtlasScientific {
     ///   - `I2cCommunicationFailure`: The I2C thread reported a hardware-level communication error.
     ///   - `ResponseCheckFailed` / `IncorrectBufferLength`: The received data payload was malformed.
     ///   - `CouldNotLockMutex`: The target mutex was poisoned and could not be updated.
+    #[allow(unused)] // used in conditionally compiled code
     fn receive_response_from_i2c_interface(
         &mut self,
         signal: &AquariumSignal,
@@ -703,6 +718,7 @@ impl AtlasScientific {
     ///   temperature result.
     /// * `mutex_atlas_scientific_ph` - The shared `Mutex` for storing the pH result.
     /// * `mutex_atlas_scientific_conductivity` - The shared `Mutex` for storing the conductivity result.
+    #[allow(unused)] // used in conditionally compiled code
     pub fn execute(
         &mut self,
         atlas_scientific_channels: &mut AtlasScientificChannels,

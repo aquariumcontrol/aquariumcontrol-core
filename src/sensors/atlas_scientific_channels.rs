@@ -14,24 +14,28 @@ use std::sync::mpsc::{Receiver, SendError, Sender, TryRecvError};
 /// Struct collects the channels for the communication between AtlasScientific and other components.
 pub struct AtlasScientificChannels {
     /// Sender part of the channel for communication to I2CInterface
+    #[allow(unused)] // used in conditionally compiled code
     pub tx_atlas_scientific_to_i2c_interface: Sender<I2cRequest>,
     #[cfg(feature = "debug_channels")]
     /// Counter for messages sent to the I2C interface
     pub cnt_tx_atlas_scientific_to_i2c_interface: u64,
 
     /// Receiver part of the channel for communication from I2CInterface
+    #[allow(unused)] // used in conditionally compiled code
     pub rx_atlas_scientific_from_i2c_interface: Receiver<I2cResult>,
     #[cfg(feature = "debug_channels")]
     /// Counter for messages received from the I2C interface
     pub cnt_rx_atlas_scientific_from_i2c_interface: u64,
 
     /// Sender part of the channel for communication to the signal handler
+    #[allow(unused)] // used in conditionally compiled code
     pub tx_atlas_scientific_to_signal_handler: Sender<bool>,
     #[cfg(feature = "debug_channels")]
     /// Counter for messages sent to the signal handler
     pub cnt_tx_atlas_scientific_to_signal_handler: u64,
 
     /// Receiver part of the channel for communication from the signal handler
+    #[allow(unused)] // used in conditionally compiled code
     pub rx_atlas_scientific_from_signal_handler: Receiver<InternalCommand>,
     #[cfg(feature = "debug_channels")]
     /// Counter for messages received from the signal handler
@@ -40,6 +44,7 @@ pub struct AtlasScientificChannels {
 
 impl AtlasScientificChannels {
     /// Sends a request to the I2C interface.
+    #[allow(unused)] // used in conditionally compiled code
     pub fn send_to_i2c_interface(
         &mut self,
         request: I2cRequest,
@@ -53,6 +58,7 @@ impl AtlasScientificChannels {
     }
 
     /// Receives a result from the I2C interface.
+    #[allow(unused)] // used in conditionally compiled code
     pub fn receive_from_i2c_interface(&mut self) -> Result<I2cResult, TryRecvError> {
         let result = self.rx_atlas_scientific_from_i2c_interface.try_recv();
         #[cfg(feature = "debug_channels")]

@@ -155,6 +155,7 @@ pub fn handle_signals(term: Arc<AtomicBool>, signal_handler_channels: SignalHand
             module_path!()
         );
     }
+    let use_simulator = signal_handler_channels.tx_signal_handler_to_tcp_opt.is_some();
 
     let spin_sleeper = SpinSleeper::default();
     let sleep_interval_millis = 100;
@@ -255,12 +256,14 @@ pub fn handle_signals(term: Arc<AtomicBool>, signal_handler_channels: SignalHand
         Some(&signal_handler_channels.rx_signal_handler_from_tank_level_switch),
         "tank_level_switch",
     );
-    send_command(
-        InternalCommand::Quit,
-        Some(&signal_handler_channels.tx_signal_handler_to_atlas_scientific),
-        Some(&signal_handler_channels.rx_signal_handler_from_atlas_scientific),
-        "atlas_scientific",
-    );
+    if !use_simulator {
+        send_command(
+            InternalCommand::Quit,
+            Some(&signal_handler_channels.tx_signal_handler_to_atlas_scientific),
+            Some(&signal_handler_channels.rx_signal_handler_from_atlas_scientific),
+            "atlas_scientific",
+        );
+    }
     send_command(
         InternalCommand::Quit,
         Some(&signal_handler_channels.tx_signal_handler_to_sensor_manager),
@@ -380,12 +383,15 @@ pub fn handle_signals(term: Arc<AtomicBool>, signal_handler_channels: SignalHand
         None,
         "ds18b20",
     );
-    send_command(
-        InternalCommand::Terminate,
-        Some(&signal_handler_channels.tx_signal_handler_to_atlas_scientific),
-        None,
-        "atlas_scientific",
-    );
+    #[cfg(all(feature = "target_hw", target_os = "linux"))]
+    {
+        send_command(
+            InternalCommand::Terminate,
+            Some(&signal_handler_channels.tx_signal_handler_to_atlas_scientific),
+            None,
+            "atlas_scientific",
+        );
+    }
     send_command(
         InternalCommand::Terminate,
         Some(&signal_handler_channels.tx_signal_handler_to_sensor_manager),
@@ -570,10 +576,12 @@ pub mod tests {
         // **************************************
 
         // *** signal handler <=> atlas_scientific ***
+        #[allow(unused)]
         let (tx_signal_handler_to_atlas_scientific, rx_atlas_scientific_from_signal_handler): (
             Sender<InternalCommand>,
             Receiver<InternalCommand>,
         ) = mpsc::channel();
+        #[allow(unused)]
         let (tx_atlas_scientific_to_signal_handler, rx_signal_handler_from_atlas_scientific): (
             Sender<bool>,
             Receiver<bool>,
@@ -856,11 +864,14 @@ pub mod tests {
             InternalCommand::Quit
         );
         _ = tx_tank_level_switch_to_signal_handler.send(true);
-        assert_eq!(
-            rx_atlas_scientific_from_signal_handler.recv().unwrap(),
-            InternalCommand::Quit
-        );
-        _ = tx_atlas_scientific_to_signal_handler.send(true);
+        #[cfg(all(feature = "target_hw", target_os = "linux"))]
+        {
+            assert_eq!(
+                rx_atlas_scientific_from_signal_handler.recv().unwrap(),
+                InternalCommand::Quit
+            );
+            _ = tx_atlas_scientific_to_signal_handler.send(true);
+        }
         assert_eq!(
             rx_sensor_manager_from_signal_handler.recv().unwrap(),
             InternalCommand::Quit
@@ -945,10 +956,12 @@ pub mod tests {
         );
         // no response to quit signal from ds18b20
 
-        assert_eq!(
-            rx_atlas_scientific_from_signal_handler.recv().unwrap(),
-            InternalCommand::Terminate
-        );
+        #[cfg(all(feature = "target_hw", target_os = "linux"))] {
+            assert_eq!(
+                rx_atlas_scientific_from_signal_handler.recv().unwrap(),
+                InternalCommand::Terminate
+            );
+        }
         // no response to termination request
 
         assert_eq!(

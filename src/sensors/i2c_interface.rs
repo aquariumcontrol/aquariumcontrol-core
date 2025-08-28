@@ -96,6 +96,7 @@ impl I2cRequest {
     /// Returns an `I2cError` if the provided command is too large for the buffer:
     /// - `I2cError::CommandTooLong`: If the length of `send_slice` exceeds the
     ///   `MAX_I2C_COMMAND_LENGTH` constant.
+    #[allow(unused)] // used in conditionally compiled code
     pub fn new(
         i2c_address: u16,
         send_slice: &[u8],
