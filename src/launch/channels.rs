@@ -31,7 +31,7 @@ use crate::water::refill_channels::RefillChannels;
 use crate::water::refill_monitor_view::RefillMonitorView;
 
 #[cfg(target_os = "linux")]
-use crate::water::refill_channels::MessagingChannels;
+use crate::dispatch::messaging_channels::MessagingChannels;
 
 #[cfg(all(feature = "target_hw", target_os = "linux"))]
 use crate::sensors::i2c_interface_channels::I2cInterfaceChannels;
@@ -1013,42 +1013,42 @@ impl Channels {
         };
 
         #[cfg(target_os = "linux")]
-        let mut messaging = MessagingChannels {
-            tx_to_signal_handler: tx_messaging_to_signal_handler,
+        let messaging = MessagingChannels {
+            tx_messaging_to_signal_handler: tx_messaging_to_signal_handler,
             #[cfg(feature = "debug_channels")]
-            cnt_tx_to_signal_handler: 0,
+            cnt_tx_messaging_to_signal_handler: 0,
 
-            rx_from_signal_handler: rx_messaging_from_signal_handler,
+            rx_messaging_from_signal_handler: rx_messaging_from_signal_handler,
             #[cfg(feature = "debug_channels")]
-            cnt_rx_from_signal_handler: 0,
+            cnt_rx_messaging_from_signal_handler: 0,
 
-            tx_to_refill: tx_messaging_to_refill,
+            tx_messaging_to_refill: tx_messaging_to_refill,
             #[cfg(feature = "debug_channels")]
-            cnt_tx_to_refill: 0,
+            cnt_tx_messaging_to_refill: 0,
 
-            tx_to_ventilation: tx_messaging_to_ventilation,
+            tx_messaging_to_ventilation: tx_messaging_to_ventilation,
             #[cfg(feature = "debug_channels")]
-            cnt_tx_to_ventilation: 0,
+            cnt_tx_messaging_to_ventilation: 0,
 
-            tx_to_heating: tx_messaging_to_heating,
+            tx_messaging_to_heating: tx_messaging_to_heating,
             #[cfg(feature = "debug_channels")]
-            cnt_tx_to_heating: 0,
+            cnt_tx_messaging_to_heating: 0,
 
-            tx_to_feed: tx_messaging_to_feed,
+            tx_messaging_to_feed: tx_messaging_to_feed,
             #[cfg(feature = "debug_channels")]
-            cnt_tx_to_feed: 0,
+            cnt_tx_messaging_to_feed: 0,
 
-            tx_to_balling: tx_messaging_to_balling,
+            tx_messaging_to_balling: tx_messaging_to_balling,
             #[cfg(feature = "debug_channels")]
-            cnt_tx_to_balling: 0,
+            cnt_tx_messaging_to_balling: 0,
 
-            tx_to_monitors: tx_messaging_to_monitors,
+            tx_messaging_to_monitors: tx_messaging_to_monitors,
             #[cfg(feature = "debug_channels")]
-            cnt_tx_to_monitors: 0,
+            cnt_tx_messaging_to_monitors: 0,
 
-            tx_to_watchdog: tx_messaging_to_watchdog,
+            tx_messaging_to_watchdog: tx_messaging_to_watchdog,
             #[cfg(feature = "debug_channels")]
-            cnt_tx_to_watchdog: 0,
+            cnt_tx_messaging_to_watchdog: 0,
         };
 
         let tank_level_switch = TankLevelSwitchChannels {
@@ -1122,11 +1122,11 @@ impl Channels {
         let data_logger = DataLoggerChannels {
             tx_data_logger_to_signal_handler,
             #[cfg(feature = "debug_channels")]
-            cnt_tx_to_signal_handler: 0,
+            cnt_tx_data_logger_to_signal_handler: 0,
 
             rx_data_logger_from_signal_handler,
             #[cfg(feature = "debug_channels")]
-            cnt_rx_from_signal_handler: 0,
+            cnt_rx_data_logger_from_signal_handler: 0,
         };
 
         Channels {
@@ -1148,6 +1148,9 @@ impl Channels {
             watchdog: watchdog,
             refill: refill,
             sensor_manager: sensor_manager,
+            
+            #[cfg(target_os = "linux")]
+            messaging,
         }
     }
 }

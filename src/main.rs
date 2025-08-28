@@ -91,8 +91,6 @@ use crate::database::sql_interface_schedule::SqlInterfaceSchedule;
 use crate::database::sql_interface_ventilation_setvals::SqlInterfaceVentilationSetVals;
 #[cfg(target_os = "linux")]
 use crate::dispatch::messaging::Messaging;
-#[cfg(target_os = "linux")]
-use crate::dispatch::messaging::MessagingChannels;
 
 use crate::food::feed::Feed;
 use crate::food::food_injection::FoodInjection;
@@ -1175,7 +1173,7 @@ fn run() -> Result<(), StartupError> {
         scope.spawn(move || {
             // read/send messages
             #[cfg(target_os = "linux")]
-            messaging.execute(&mut messaging);
+            messaging.execute(&mut channels.messaging);
 
             // remove PID from the file
             let publish_pid_result = publish_pid.erase_pid();

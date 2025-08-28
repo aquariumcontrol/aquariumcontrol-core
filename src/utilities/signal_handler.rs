@@ -10,12 +10,7 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 use log::error;
 #[cfg(any(target_os = "linux", feature = "debug_signal_handler", not(test)))]
 use log::info;
-
-#[cfg(any(
-    target_os = "linux",
-    feature = "debug_signal_handler",
-    feature = "debug_channels"
-))]
+#[cfg(any(feature = "debug_signal_handler", feature = "debug_channels"))]
 use log::debug;
 
 #[cfg(target_os = "linux")]

@@ -17,12 +17,12 @@ pub struct DataLoggerChannels {
     /// Sender part of the channel for communication to the signal handler
     pub tx_data_logger_to_signal_handler: Sender<bool>,
     #[cfg(feature = "debug_channels")]
-    pub cnt_tx_to_signal_handler: u64,
+    pub cnt_tx_data_logger_to_signal_handler: u64,
 
     /// Receiver part of the channel for communication from the signal handler                
     pub rx_data_logger_from_signal_handler: Receiver<InternalCommand>,
     #[cfg(feature = "debug_channels")]
-    pub cnt_rx_from_signal_handler: u64,
+    pub cnt_rx_data_logger_from_signal_handler: u64,
 }
 
 impl DataLoggerChannels {
@@ -34,7 +34,7 @@ impl DataLoggerChannels {
         let result = self.tx_data_logger_to_signal_handler.send(ack);
         #[cfg(feature = "debug_channels")]
         if result.is_ok() {
-            self.cnt_tx_to_signal_handler += 1;
+            self.cnt_tx_data_logger_to_signal_handler += 1;
         }
         result
     }
@@ -47,7 +47,7 @@ impl DataLoggerChannels {
         let result = self.rx_data_logger_from_signal_handler.try_recv();
         #[cfg(feature = "debug_channels")]
         if result.is_ok() {
-            self.cnt_rx_from_signal_handler += 1;
+            self.cnt_rx_data_logger_from_signal_handler += 1;
         }
         result
     }
@@ -59,12 +59,12 @@ impl fmt::Display for DataLoggerChannels {
         writeln!(
             f,
             "cnt_tx_to_signal_handler: {}",
-            self.cnt_tx_to_signal_handler
+            self.cnt_tx_data_logger_to_signal_handler
         )?;
         write!(
             f,
             "cnt_rx_from_signal_handler: {}",
-            self.cnt_rx_from_signal_handler
+            self.cnt_rx_data_logger_from_signal_handler
         )
     }
 }

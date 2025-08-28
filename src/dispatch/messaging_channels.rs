@@ -7,7 +7,8 @@ The above copyright notice and this permission notice shall be included in all c
 THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 #[cfg(target_os = "linux")]
-use crate::dispatch::messaging::{MessagingDomain, MessagingError};
+use crate::dispatch::messaging::MessagingDomain;
+use crate::dispatch::messaging_error::MessagingError;
 #[cfg(target_os = "linux")]
 use crate::utilities::channel_content::InternalCommand;
 #[cfg(target_os = "linux")]
@@ -126,7 +127,7 @@ impl MessagingChannels {
         };
 
         // Send the command and capture the result.
-        tx_messaging_to_domain
+        let result = tx_messaging_to_domain
             .send(command)
             .map_err(|e| MessagingError::ChannelSendError {
                 location: module_path!().to_string(),
@@ -135,18 +136,26 @@ impl MessagingChannels {
 
         // Conditionally increment the counter for the corresponding channel on success.
         #[cfg(feature = "debug_channels")]
-        let counter = match domain {
-            MessagingDomain::Refill => &mut self.cnt_tx_messaging_to_refill,
-            MessagingDomain::Ventilation => &mut self.cnt_tx_messaging_to_ventilation,
-            MessagingDomain::Feed => &mut self.cnt_tx_messaging_to_feed,
-            MessagingDomain::Heating => &mut self.cnt_tx_messaging_to_heating,
-            MessagingDomain::Balling => &mut self.cnt_tx_messaging_to_balling,
-            MessagingDomain::Monitors => &mut self.cnt_tx_messaging_to_monitors,
-            MessagingDomain::Watchdog => &mut self.cnt_tx_messaging_to_watchdog,
-        };
-        *counter += 1;
-
-        result
+        {
+            let counter = match domain {
+                MessagingDomain::Refill => &mut self.cnt_tx_messaging_to_refill,
+                MessagingDomain::Ventilation => &mut self.cnt_tx_messaging_to_ventilation,
+                MessagingDomain::Feed => &mut self.cnt_tx_messaging_to_feed,
+                MessagingDomain::Heating => &mut self.cnt_tx_messaging_to_heating,
+                MessagingDomain::Balling => &mut self.cnt_tx_messaging_to_balling,
+                MessagingDomain::Monitors => &mut self.cnt_tx_messaging_to_monitors,
+                MessagingDomain::Watchdog => &mut self.cnt_tx_messaging_to_watchdog,
+                _ => {
+                    return Err(MessagingError::UnknownDomain(
+                        module_path!().to_string(),
+                        domain.to_string(),
+                    ));
+                }
+            };
+            *counter += 1;
+        }
+        
+        Ok(result)
     }
 }
 

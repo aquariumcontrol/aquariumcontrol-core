@@ -6,6 +6,7 @@ The above copyright notice and this permission notice shall be included in all c
 
 THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
+#[cfg(target_os = "linux")]
 #[cfg(feature = "debug_messaging")]
 use log::debug;
 
@@ -21,10 +22,10 @@ cfg_if::cfg_if! {
         #[cfg(not(test))]
         use nix::unistd::gettid;
 
-        use crate::MessagingChannels;
+        use crate::utilities::channel_content::InternalCommand;
+        use crate::dispatch::messaging_channels::MessagingChannels;
         use crate::dispatch::messaging_error::MessagingError;
         use crate::utilities::proc_ext_req::ProcessExternalRequestTrait;
-        use crate::InternalCommand;
         use std::fmt;
         use std::io::ErrorKind;
     }
@@ -57,7 +58,7 @@ pub mod messaging_domains {
     pub const WATCHDOG: i32 = 13;
 }
 
-#[derive(PartialEq)]
+#[derive(PartialEq, Debug, Clone)]
 /// Identifies the addressee of the message
 #[cfg(target_os = "linux")]
 pub enum MessagingDomain {
@@ -400,7 +401,7 @@ impl Messaging {
                                 domain
                             );
 
-                            match messaging_channels.send_to_domain(command, domain) {
+                            match messaging_channels.send_command_to_domain(command, domain.clone()) {
                                 Ok(_) => { /* do nothing */ }
                                 Err(e) => {
                                     error!(
@@ -432,7 +433,7 @@ impl Messaging {
                 }
             }
             let (quit_command_received, _, _) =
-                self.process_external_request(&messaging_channels.rx_from_signal_handler, None);
+                self.process_external_request(&messaging_channels.rx_messaging_from_signal_handler, None);
             if quit_command_received {
                 #[cfg(feature = "debug_messaging")]
                 debug!(
@@ -440,7 +441,7 @@ impl Messaging {
                     "received QUIT command from signal handler"
                 );
 
-                match messaging_channels.tx_to_signal_handler.send(true) {
+                match messaging_channels.tx_messaging_to_signal_handler.send(true) {
                     Ok(_) => { /* do nothing */ }
                     Err(e) => {
                         error!(
@@ -459,7 +460,7 @@ impl Messaging {
         let mut lock_error_invalid_command = false;
 
         loop {
-            match messaging_channels.rx_from_signal_handler.recv() {
+            match messaging_channels.rx_messaging_from_signal_handler.recv() {
                 Ok(command) => match command {
                     InternalCommand::Terminate => {
                         break;
@@ -569,19 +570,45 @@ pub mod tests {
         thread::Builder::new()
             .name("test_object".to_string())
             .spawn(move || {
-                let messaging_channels = MessagingChannels {
-                    tx_to_signal_handler: tx_messaging_to_signal_handler,
-                    rx_from_signal_handler: rx_messaging_from_signal_handler,
-                    tx_to_refill: tx_messaging_to_refill,
-                    tx_to_ventilation: tx_messaging_to_ventilation,
-                    tx_to_heating: tx_messaging_to_heating,
-                    tx_to_feed: tx_messaging_to_feed,
-                    tx_to_balling: tx_messaging_to_balling,
-                    tx_to_monitors: tx_messaging_to_monitors,
-                    tx_to_watchdog: tx_messaging_to_watchdog,
+                let mut messaging_channels = MessagingChannels {
+                    tx_messaging_to_signal_handler: tx_messaging_to_signal_handler,
+                    #[cfg(feature = "debug_channels")]
+                    cnt_tx_messaging_to_signal_handler: 0,
+                    
+                    rx_messaging_from_signal_handler: rx_messaging_from_signal_handler,
+                    #[cfg(feature = "debug_channels")]
+                    cnt_rx_messaging_from_signal_handler: 0,
+                    
+                    tx_messaging_to_refill: tx_messaging_to_refill,
+                    #[cfg(feature = "debug_channels")]
+                    cnt_tx_messaging_to_refill: 0,
+                    
+                    tx_messaging_to_ventilation: tx_messaging_to_ventilation,
+                    #[cfg(feature = "debug_channels")]
+                    cnt_tx_messaging_to_ventilation: 0,
+                    
+                    tx_messaging_to_heating: tx_messaging_to_heating,
+                    #[cfg(feature = "debug_channels")]
+                    cnt_tx_messaging_to_heating: 0,
+                    
+                    tx_messaging_to_feed: tx_messaging_to_feed,
+                    #[cfg(feature = "debug_channels")]
+                    cnt_tx_messaging_to_feed: 0,
+                    
+                    tx_messaging_to_balling: tx_messaging_to_balling,
+                    #[cfg(feature = "debug_channels")]
+                    cnt_tx_messaging_to_balling: 0,
+                    
+                    tx_messaging_to_monitors: tx_messaging_to_monitors,
+                    #[cfg(feature = "debug_channels")]
+                    cnt_tx_messaging_to_monitors: 0,
+                    
+                    tx_messaging_to_watchdog: tx_messaging_to_watchdog,
+                    #[cfg(feature = "debug_channels")]
+                    cnt_tx_messaging_to_watchdog: 0,
                 };
 
-                messaging.execute(messaging_channels);
+                messaging.execute(&mut messaging_channels);
             })
             .unwrap()
     }
