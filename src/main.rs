@@ -1013,10 +1013,7 @@ fn run() -> Result<(), StartupError> {
                 mutex_sensor_manager_signals,
             };
 
-            sensor_manager.execute(
-                &mut channels.sensor_manager,
-                mutexes_sensor_manager,
-            );
+            sensor_manager.execute(&mut channels.sensor_manager, mutexes_sensor_manager);
             #[cfg(feature = "debug_channels")]
             debug!(target: module_path!(), "{0}", channels.sensor_manager);
             #[cfg(feature = "debug_main")]
@@ -1129,10 +1126,7 @@ fn run() -> Result<(), StartupError> {
         let mutex_device_scheduler_monitors = Arc::clone(&mutex_device_scheduler);
 
         scope.spawn(move || {
-            monitors.execute(
-                mutex_device_scheduler_monitors,
-                &mut channels.monitors,
-            );
+            monitors.execute(mutex_device_scheduler_monitors, &mut channels.monitors);
             #[cfg(feature = "debug_channels")]
             debug!(target: module_path!(), "{0}", channels.monitors);
             #[cfg(feature = "debug_main")]

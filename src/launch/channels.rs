@@ -1148,7 +1148,7 @@ impl Channels {
             watchdog: watchdog,
             refill: refill,
             sensor_manager: sensor_manager,
-            
+
             #[cfg(target_os = "linux")]
             messaging,
         }

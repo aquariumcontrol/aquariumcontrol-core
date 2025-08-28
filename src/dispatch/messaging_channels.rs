@@ -6,15 +6,15 @@ The above copyright notice and this permission notice shall be included in all c
 
 THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
-#[cfg(target_os = "linux")]
-use crate::dispatch::messaging::MessagingDomain;
-use crate::dispatch::messaging_error::MessagingError;
-#[cfg(target_os = "linux")]
-use crate::utilities::channel_content::InternalCommand;
-#[cfg(target_os = "linux")]
-use std::fmt;
-#[cfg(target_os = "linux")]
-use std::sync::mpsc::{Receiver, Sender};
+cfg_if::cfg_if! {
+    if #[cfg(target_os = "linux")] {
+        use crate::dispatch::messaging::MessagingDomain;
+        use crate::dispatch::messaging_error::MessagingError;
+        use crate::utilities::channel_content::InternalCommand;
+        use std::fmt;
+        use std::sync::mpsc::{Receiver, Sender};
+    }
+}
 
 #[cfg(target_os = "linux")]
 /// Collects all `mpsc` channels used by the `Messaging` module for IPC.
@@ -127,12 +127,13 @@ impl MessagingChannels {
         };
 
         // Send the command and capture the result.
-        let result = tx_messaging_to_domain
-            .send(command)
-            .map_err(|e| MessagingError::ChannelSendError {
-                location: module_path!().to_string(),
-                source: e,
-            })?;
+        let result =
+            tx_messaging_to_domain
+                .send(command)
+                .map_err(|e| MessagingError::ChannelSendError {
+                    location: module_path!().to_string(),
+                    source: e,
+                })?;
 
         // Conditionally increment the counter for the corresponding channel on success.
         #[cfg(feature = "debug_channels")]
@@ -154,7 +155,7 @@ impl MessagingChannels {
             };
             *counter += 1;
         }
-        
+
         Ok(result)
     }
 }
