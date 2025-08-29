@@ -850,7 +850,7 @@ impl Channels {
         };
 
         #[cfg(all(target_os = "linux", feature = "target_hw"))]
-        let mut i2c_interface = I2cInterfaceChannels {
+        let i2c_interface = I2cInterfaceChannels {
             tx_i2c_interface_to_atlas_scientific,
             #[cfg(feature = "debug_channels")]
             cnt_tx_i2c_interface_to_atlas_scientific: 0,
@@ -1151,6 +1151,10 @@ impl Channels {
             tank_level_switch,
             tcp_communication,
             heating,
+            
+            #[cfg(all(feature = "target_hw", target_os = "linux"))]
+            i2c_interface,
+            
             ventilation,
             signal_handler,
             monitors,

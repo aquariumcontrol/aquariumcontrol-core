@@ -707,6 +707,7 @@ fn run() -> Result<(), StartupError> {
 
     cfg_if::cfg_if! {
         if #[cfg(all(target_os = "linux", feature = "target_hw"))] {
+            let mut dht;
             let gpio_dht22_io = config.gpio_handler.dht22_io;
             let gpio_dht22_vcc = config.gpio_handler.dht22_vcc;
             let mut actuate_gpio_opt: Option<ActuateGpio> = None;
@@ -745,7 +746,7 @@ fn run() -> Result<(), StartupError> {
                      Some(gpio_lib_handle_cloned_for_tank_level_switch),
                      gpio_tank_level_switch
                 ).map_err(|e| StartupError::TankLevelSwitchSetupFailure { source: e })?;
-                let mut dht = Dht::new(config.dht, Some(gpio_lib_handle.clone()), gpio_dht22_io, gpio_dht22_vcc);
+                dht = Dht::new(config.dht, Some(gpio_lib_handle.clone()), gpio_dht22_io, gpio_dht22_vcc);
                 if config.relay_manager.use_gpio {
                     let actuate_gpio = ActuateGpio::new(
                         gpio_lib_handle_cloned_for_relay_manager,
@@ -754,6 +755,8 @@ fn run() -> Result<(), StartupError> {
                     actuate_gpio_opt = Some(actuate_gpio);
                 }
             }
+            let mut i2c_interface = I2cInterface::new(config.i2c_interface)
+                .map_err(|e| StartupError::I2cSetupFailure { source: e })?;
         }
         else {
             tank_level_switch = TankLevelSwitch::new(
@@ -902,7 +905,7 @@ fn run() -> Result<(), StartupError> {
             .map_err(|e| StartupError::TcpConnection { source: e })?;
         tcp_communication_opt = Some(tcp_communication);
     }
-
+    
     scope(|scope| {
         // open tcp connection only if configuration requires use of simulator instead of HW
         if use_simulator {
@@ -938,7 +941,7 @@ fn run() -> Result<(), StartupError> {
                 if config.relay_manager.use_gpio {
                     #[cfg(all(feature = "target_hw", target_os = "linux"))]
                     relay_manager.execute(
-                        relay_manager,
+                        &mut channels.relay_manager,
                         &mut actuate_gpio_opt.expect("Internal error: Illegal configuration (unwrapping of GPIO actuator failed)")
                     );
                 } else {
@@ -969,11 +972,8 @@ fn run() -> Result<(), StartupError> {
 
         #[cfg(all(target_os = "linux", feature = "target_hw"))]
         if !use_simulator {
-            let mut i2c_interface = I2cInterface::new(config.i2c_interface)
-                .map_err(|e| StartupError::I2cSetupFailure { source: e })?;
-
             scope.spawn(move || {
-                i2c_interface.execute(&mut i2c_interface);
+                i2c_interface.execute(&mut channels.i2c_interface);
                 #[cfg(all(target_os = "linux", feature = "target_hw", feature = "debug_channels"))]
                 debug!(target: module_path!(), "{0}", channels.i2c_interface);
                 #[cfg(feature = "debug_main")]
