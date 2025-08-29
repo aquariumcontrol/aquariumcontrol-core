@@ -69,7 +69,14 @@ impl<'a> RelayActuationTrait for ActuateSimulator<'a> {
                     }
                 };
                 match tx_actuate_simulator_to_tcp.send(relay_command.clone()) {
-                    Ok(()) => Ok(()),
+                    Ok(()) => {
+                        #[cfg(feature = "debug_channels")]
+                        {
+                            self.actuate_simulator_channels
+                                .cnt_tx_actuate_simulator_to_tcp_opt += 1;
+                        }
+                        Ok(())
+                    }
                     Err(e) => {
                         panic!(
                             "Controllino: error when sending relay command {relay_command} to TCP thread: {e:?}"

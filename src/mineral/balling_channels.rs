@@ -14,43 +14,42 @@ use std::sync::mpsc::{Receiver, RecvError, SendError, Sender, TryRecvError};
 pub struct BallingChannels {
     /// sender part of the channel for communication to relay manager
     pub tx_balling_to_relay_manager: Sender<InternalCommand>,
-
-    /// receiver part of the channel for communication from the relay manager
-    pub rx_balling_from_relay_manager: Receiver<bool>,
-
-    /// sender part of the channel for communication to the signal handler
-    pub tx_balling_to_signal_handler: Sender<bool>,
-
-    /// receiver part of the channel for communication from the signal handler
-    pub rx_balling_from_signal_handler: Receiver<InternalCommand>,
-
-    /// sender part of the channel for communication to the schedule checker
-    pub tx_balling_to_schedule_check: Sender<InternalCommand>,
-
-    /// receiver part of the channel for communication from the schedule checker
-    pub rx_balling_from_schedule_check: Receiver<bool>,
-
-    /// receiver part of the channel communication wrapped in Option from Messaging
-    pub rx_balling_from_messaging_opt: Option<Receiver<InternalCommand>>,
-
     #[cfg(feature = "debug_channels")]
     /// Counter for messages sent to the relay manager
     pub cnt_tx_balling_to_relay_manager: u64,
+
+    /// receiver part of the channel for communication from the relay manager
+    pub rx_balling_from_relay_manager: Receiver<bool>,
     #[cfg(feature = "debug_channels")]
     /// Counter for messages received from the relay manager
     pub cnt_rx_balling_from_relay_manager: u64,
+
+    /// sender part of the channel for communication to the signal handler
+    pub tx_balling_to_signal_handler: Sender<bool>,
     #[cfg(feature = "debug_channels")]
     /// Counter for messages sent to the signal handler
     pub cnt_tx_balling_to_signal_handler: u64,
+
+    /// receiver part of the channel for communication from the signal handler
+    pub rx_balling_from_signal_handler: Receiver<InternalCommand>,
     #[cfg(feature = "debug_channels")]
     /// Counter for messages received from the signal handler
     pub cnt_rx_balling_from_signal_handler: u64,
+
+    /// sender part of the channel for communication to the schedule checker
+    pub tx_balling_to_schedule_check: Sender<InternalCommand>,
     #[cfg(feature = "debug_channels")]
     /// Counter for messages sent to the schedule checker
     pub cnt_tx_balling_to_schedule_check: u64,
+
+    /// receiver part of the channel for communication from the schedule checker
+    pub rx_balling_from_schedule_check: Receiver<bool>,
     #[cfg(feature = "debug_channels")]
     /// Counter for messages received from the schedule checker
     pub cnt_rx_balling_from_schedule_check: u64,
+
+    /// receiver part of the channel communication wrapped in Option from Messaging
+    pub rx_balling_from_messaging_opt: Option<Receiver<InternalCommand>>,
     #[cfg(feature = "debug_channels")]
     /// Counter for messages received from messaging
     pub cnt_rx_balling_from_messaging_opt: u64,
