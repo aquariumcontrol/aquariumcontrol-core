@@ -158,7 +158,9 @@ pub fn handle_signals(term: Arc<AtomicBool>, signal_handler_channels: SignalHand
             module_path!()
         );
     }
-    let use_simulator = signal_handler_channels.tx_signal_handler_to_tcp_opt.is_some();
+    let use_simulator = signal_handler_channels
+        .tx_signal_handler_to_tcp_opt
+        .is_some();
 
     let spin_sleeper = SpinSleeper::default();
     let sleep_interval_millis = 100;
@@ -959,7 +961,8 @@ pub mod tests {
         );
         // no response to quit signal from ds18b20
 
-        #[cfg(all(feature = "target_hw", target_os = "linux"))] {
+        #[cfg(all(feature = "target_hw", target_os = "linux"))]
+        {
             assert_eq!(
                 rx_atlas_scientific_from_signal_handler.recv().unwrap(),
                 InternalCommand::Terminate
