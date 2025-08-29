@@ -9,7 +9,7 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 
 use log::{error, info};
 
-#[cfg(test)]
+#[cfg(any(feature = "debug_channels", test))]
 use log::debug;
 
 #[cfg(all(not(test), target_os = "linux"))]
@@ -98,6 +98,9 @@ impl Monitors {
     pub fn append_refill_monitor_view(&mut self, refill_monitor_view: RefillMonitorView) {
         // Check if the vector has reached or exceeded its maximum allowed length.
         if self.refill_monitor_views.len() >= self.config.max_length_refill_monitor_views {
+            #[cfg(feature = "debug_channels")]
+            debug!(target: module_path!(), "CAUTION: Reached size limit for monitor views.");
+
             // If it has, remove the oldest element (at index 0).
             // This shifts all further elements to the left.
             self.refill_monitor_views.remove(0);
