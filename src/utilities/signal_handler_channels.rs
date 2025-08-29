@@ -537,7 +537,7 @@ impl SignalHandlerChannels {
 #[cfg(feature = "debug_channels")]
 impl fmt::Display for SignalHandlerChannels {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        writeln!(f, "--- Signal Handler Channel Status ---")?;
+        writeln!(f, "=== Signal Handler Channel Status ===")?;
         writeln!(
             f,
             "cnt_tx_signal_handler_to_messaging_opt: {}",

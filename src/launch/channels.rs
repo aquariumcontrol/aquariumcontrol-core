@@ -1020,39 +1020,39 @@ impl Channels {
 
         #[cfg(target_os = "linux")]
         let messaging = MessagingChannels {
-            tx_messaging_to_signal_handler: tx_messaging_to_signal_handler,
+            tx_messaging_to_signal_handler,
             #[cfg(feature = "debug_channels")]
             cnt_tx_messaging_to_signal_handler: 0,
 
-            rx_messaging_from_signal_handler: rx_messaging_from_signal_handler,
+            rx_messaging_from_signal_handler,
             #[cfg(feature = "debug_channels")]
             cnt_rx_messaging_from_signal_handler: 0,
 
-            tx_messaging_to_refill: tx_messaging_to_refill,
+            tx_messaging_to_refill,
             #[cfg(feature = "debug_channels")]
             cnt_tx_messaging_to_refill: 0,
 
-            tx_messaging_to_ventilation: tx_messaging_to_ventilation,
+            tx_messaging_to_ventilation,
             #[cfg(feature = "debug_channels")]
             cnt_tx_messaging_to_ventilation: 0,
 
-            tx_messaging_to_heating: tx_messaging_to_heating,
+            tx_messaging_to_heating,
             #[cfg(feature = "debug_channels")]
             cnt_tx_messaging_to_heating: 0,
 
-            tx_messaging_to_feed: tx_messaging_to_feed,
+            tx_messaging_to_feed,
             #[cfg(feature = "debug_channels")]
             cnt_tx_messaging_to_feed: 0,
 
-            tx_messaging_to_balling: tx_messaging_to_balling,
+            tx_messaging_to_balling,
             #[cfg(feature = "debug_channels")]
             cnt_tx_messaging_to_balling: 0,
 
-            tx_messaging_to_monitors: tx_messaging_to_monitors,
+            tx_messaging_to_monitors,
             #[cfg(feature = "debug_channels")]
             cnt_tx_messaging_to_monitors: 0,
 
-            tx_messaging_to_watchdog: tx_messaging_to_watchdog,
+            tx_messaging_to_watchdog,
             #[cfg(feature = "debug_channels")]
             cnt_tx_messaging_to_watchdog: 0,
         };

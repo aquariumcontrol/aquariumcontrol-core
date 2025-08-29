@@ -75,7 +75,7 @@ impl fmt::Display for AtlasScientificChannels {
         writeln!(f, "=== AtlasScientificChannels ===")?;
         writeln!(
             f,
-            "\ncnt_tx_atlas_scientific_to_i2c_interface: {}",
+            "cnt_tx_atlas_scientific_to_i2c_interface: {}",
             self.cnt_tx_atlas_scientific_to_i2c_interface
         )?;
         writeln!(
