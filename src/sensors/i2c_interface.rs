@@ -18,16 +18,16 @@ use crate::sensors::i2c_error::I2cError;
 cfg_if::cfg_if! {
     if #[cfg(all(target_os = "linux", feature = "target_hw"))] {
         use log::error;
-        use std::sync::mpsc::{Sender, Receiver, TryRecvError};
+        use std::sync::mpsc::{TryRecvError};
         use rppal::i2c::I2c; // required for communication with AtlasScientific sensors
 
         #[cfg(feature = "debug_i2c_interface")]
         use log::debug;
 
         use std::time::Duration;
-        use crate::utilities::channel_content::InternalCommand;
         use crate::utilities::proc_ext_req::ProcessExternalRequestTrait;
         use crate::sensors::i2c_error::I2cError::{InitializationFailure, SetTimeoutError};
+        use crate::sensors::i2c_interface_channels::I2cInterfaceChannels;
         use nix::unistd::gettid;
     }
 }
@@ -374,7 +374,7 @@ impl I2cInterface {
 
         loop {
             let (quit_command_received, _, _) =
-                self.process_external_request(&rx_from_signal_handler, None);
+                self.process_external_request(&i2c_interface_channels.rx_i2c_interface_from_signal_handler, None);
             if quit_command_received {
                 break;
             }
