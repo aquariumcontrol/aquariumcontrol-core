@@ -56,14 +56,15 @@ impl DataLoggerChannels {
 #[cfg(feature = "debug_channels")]
 impl fmt::Display for DataLoggerChannels {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        writeln!(f, "=== DataLoggerChannels ===")?;
         writeln!(
             f,
-            "cnt_tx_to_signal_handler: {}",
+            "cnt_tx_data_logger_to_signal_handler: {}",
             self.cnt_tx_data_logger_to_signal_handler
         )?;
         write!(
             f,
-            "cnt_rx_from_signal_handler: {}",
+            "cnt_rx_data_logger_from_signal_handler: {}",
             self.cnt_rx_data_logger_from_signal_handler
         )
     }

@@ -36,6 +36,7 @@ impl Ds18b20Channels {
 #[cfg(feature = "debug_channels")]
 impl fmt::Display for Ds18b20Channels {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        writeln!(f, "=== Ds18b20Channels ===")?;
         write!(
             f,
             "\ncnt_rx_ds18b20_from_signal_handler: {}",

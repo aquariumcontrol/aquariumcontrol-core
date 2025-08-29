@@ -210,9 +210,10 @@ impl RelayManagerChannels {
 #[cfg(feature = "debug_channels")]
 impl fmt::Display for RelayManagerChannels {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        writeln!(f, "=== RelayManagerChannels ===")?;
         writeln!(
             f,
-            "\ncnt_tx_relay_manager_to_refill: {}",
+            "cnt_tx_relay_manager_to_refill: {}",
             self.cnt_tx_relay_manager_to_refill
         )?;
         writeln!(

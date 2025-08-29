@@ -352,7 +352,7 @@ impl I2cInterface {
     /// It listens on the `rx_from_atlas_scientific` channel for an `I2cRequest`. Upon
     /// receiving a request, it calls `get_response_from_i2c` to perform the hardware
     /// communication and sends the resulting `I2cResult` back to the caller via the
-    /// `tx_to_atlas_scientific` channel.
+    /// channel.
     ///
     /// The loop also listens for a `Quit` command on the `rx_from_signal_handler` channel
     /// to enable graceful shutdown. It uses internal lock flags to prevent log flooding

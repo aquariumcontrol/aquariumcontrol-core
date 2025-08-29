@@ -72,6 +72,7 @@ impl AtlasScientificChannels {
 #[cfg(feature = "debug_channels")]
 impl fmt::Display for AtlasScientificChannels {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        writeln!(f, "=== AtlasScientificChannels ===")?;
         writeln!(
             f,
             "\ncnt_tx_atlas_scientific_to_i2c_interface: {}",

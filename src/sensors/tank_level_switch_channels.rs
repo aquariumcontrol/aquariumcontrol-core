@@ -87,9 +87,10 @@ impl TankLevelSwitchChannels {
 #[cfg(feature = "debug_channels")]
 impl fmt::Display for TankLevelSwitchChannels {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        writeln!(f, "=== TankLevelSwitchChannels ===")?;
         writeln!(
             f,
-            "\ncnt_tx_tank_level_switch_to_tcp_opt: {}",
+            "cnt_tx_tank_level_switch_to_tcp_opt: {}",
             self.cnt_tx_tank_level_switch_to_tcp_opt
         )?;
         writeln!(

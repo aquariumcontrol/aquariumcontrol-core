@@ -60,7 +60,7 @@ impl I2cInterfaceChannels {
 #[cfg(all(target_os = "linux", feature = "debug_channels", feature = "target_hw"))]
 impl fmt::Display for I2cInterfaceChannels {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        writeln!(f, "")?;
+        writeln!(f, "=== I2cInterfaceChannels ===")?;
         writeln!(
             f,
             "cnt_tx_i2c_interface_to_atlas_scientific: {}",

@@ -158,9 +158,10 @@ impl TcpCommunicationChannels {
 #[cfg(feature = "debug_channels")]
 impl fmt::Display for TcpCommunicationChannels {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        writeln!(f, "=== TcpCommunicationChannels ===")?;
         writeln!(
             f,
-            "\ncnt_rx_tcp_communication_from_relay_manager_opt: {}",
+            "cnt_rx_tcp_communication_from_relay_manager_opt: {}",
             self.cnt_rx_tcp_communication_from_relay_manager_opt
         )?;
         writeln!(

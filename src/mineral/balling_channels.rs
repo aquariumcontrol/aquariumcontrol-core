@@ -126,9 +126,10 @@ impl BallingChannels {
 #[cfg(feature = "debug_channels")]
 impl fmt::Display for BallingChannels {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        writeln!(f, "=== BallingChannels ===")?;
         writeln!(
             f,
-            "\ncnt_tx_balling_to_relay_manager: {}",
+            "cnt_tx_balling_to_relay_manager: {}",
             self.cnt_tx_balling_to_relay_manager
         )?;
         writeln!(

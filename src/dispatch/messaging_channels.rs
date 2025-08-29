@@ -163,7 +163,7 @@ impl MessagingChannels {
 #[cfg(all(target_os = "linux", feature = "debug_channels"))]
 impl fmt::Display for MessagingChannels {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        writeln!(f, "")?;
+        writeln!(f, "=== MessagingChannels ===")?;
         writeln!(
             f,
             "cnt_tx_to_signal_handler: {}",
@@ -174,15 +174,15 @@ impl fmt::Display for MessagingChannels {
             "cnt_rx_from_signal_handler: {}",
             self.cnt_rx_messaging_from_signal_handler
         )?;
-        writeln!(f, "cnt_tx_to_refill: {}", self.cnt_tx_messaging_to_refill)?;
+        writeln!(f, "cnt_tx_messaging_to_refill: {}", self.cnt_tx_messaging_to_refill)?;
         writeln!(
             f,
-            "cnt_tx_to_ventilation: {}",
+            "cnt_tx_messaging_to_ventilation: {}",
             self.cnt_tx_messaging_to_ventilation
         )?;
-        writeln!(f, "cnt_tx_to_heating: {}", self.cnt_tx_messaging_to_heating)?;
-        writeln!(f, "cnt_tx_to_feed: {}", self.cnt_tx_messaging_to_feed)?;
-        writeln!(f, "cnt_tx_to_balling: {}", self.cnt_tx_messaging_to_balling)?;
+        writeln!(f, "cnt_tx_messaging_to_heating: {}", self.cnt_tx_messaging_to_heating)?;
+        writeln!(f, "cnt_tx_messaging_to_feed: {}", self.cnt_tx_messaging_to_feed)?;
+        writeln!(f, "cnt_tx_messaging_to_balling: {}", self.cnt_tx_messaging_to_balling)?;
         writeln!(
             f,
             "cnt_tx_to_monitors: {}",

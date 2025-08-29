@@ -97,9 +97,10 @@ impl MonitorsChannels {
 #[cfg(feature = "debug_channels")]
 impl fmt::Display for MonitorsChannels {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        writeln!(f, "=== MonitorsChannels ===")?;
         writeln!(
             f,
-            "\ncnt_rx_monitors_from_refill: {}",
+            "cnt_rx_monitors_from_refill: {}",
             self.cnt_rx_monitors_from_refill
         )?;
         writeln!(

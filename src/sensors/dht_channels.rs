@@ -36,9 +36,10 @@ impl DhtChannels {
 #[cfg(feature = "debug_channels")]
 impl fmt::Display for DhtChannels {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        writeln!(f, "=== DhtChannels ===")?;
         write!(
             f,
-            "\ncnt_rx_dht_from_signal_handler: {}",
+            "cnt_rx_dht_from_signal_handler: {}",
             self.cnt_rx_dht_from_signal_handler
         )
     }

@@ -76,19 +76,20 @@ impl WatchDogChannels {
 #[cfg(feature = "debug_channels")]
 impl fmt::Display for WatchDogChannels {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        writeln!(f, "=== WatchDogChannels ===")?;
         writeln!(
             f,
-            "\ncnt_tx_to_signal_handler: {}",
+            "cnt_tx_watchdog_to_signal_handler: {}",
             self.cnt_tx_watchdog_to_signal_handler
         )?;
         writeln!(
             f,
-            "cnt_rx_from_signal_handler: {}",
+            "cnt_rx_watchdog_from_signal_handler: {}",
             self.cnt_rx_watchdog_from_signal_handler
         )?;
         write!(
             f,
-            "cnt_rx_from_messaging_opt: {}",
+            "cnt_rx_watchdog_from_messaging_opt: {}",
             self.cnt_rx_watchdog_from_messaging_opt
         )
     }

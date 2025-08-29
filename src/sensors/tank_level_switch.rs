@@ -319,8 +319,8 @@ impl TankLevelSwitch {
     /// based on the `use_simulator` configuration.
     ///
     /// # Arguments
-    /// * `tx_to_tcp_opt` - An `Option` containing the sender channel to the TCP simulator.
-    /// * `rx_from_tcp_opt` - An `Option` containing the receiver channel from the TCP simulator.
+    /// * `tx_tank_level_switch_to_tcp_opt` - An `Option` containing the sender channel to the TCP simulator.
+    /// * `rx_tank_level_switch_from_tcp_opt` - An `Option` containing the receiver channel from the TCP simulator.
     ///
     /// # Returns
     /// An empty `Result` (`Ok(())`) on success.
@@ -335,15 +335,15 @@ impl TankLevelSwitch {
     ///   input pin is not available.
     pub fn update_tank_level_switch_signals(
         &mut self,
-        tx_to_tcp_opt: &Option<Sender<InternalCommand>>,
-        rx_from_tcp_opt: &Option<Receiver<Result<f32, TcpCommunicationError>>>,
+        tx_tank_level_switch_to_tcp_opt: &Option<Sender<InternalCommand>>,
+        rx_tank_level_switch_from_tcp_opt: &Option<Receiver<Result<f32, TcpCommunicationError>>>,
     ) -> Result<(), TankLevelSwitchError> {
         if self.config.use_simulator {
             // Ensure channels are present before proceeding.
-            let tx_to_tcp = tx_to_tcp_opt.as_ref().ok_or_else(|| {
+            let tx_tank_level_switch_to_tcp = tx_tank_level_switch_to_tcp_opt.as_ref().ok_or_else(|| {
                 TankLevelSwitchError::SimulatorChannelNotProvided(module_path!().to_string())
             })?;
-            let rx_from_tcp = rx_from_tcp_opt.as_ref().ok_or_else(|| {
+            let rx_tank_level_switch_from_tcp = rx_tank_level_switch_from_tcp_opt.as_ref().ok_or_else(|| {
                 TankLevelSwitchError::SimulatorChannelNotProvided(module_path!().to_string())
             })?;
 
@@ -351,8 +351,8 @@ impl TankLevelSwitch {
             let position_signal = AquariumSignal::TankLevelSwitchPosition;
             let position_val = Self::get_response_from_simulator(
                 module_path!().to_string(),
-                tx_to_tcp,
-                rx_from_tcp,
+                tx_tank_level_switch_to_tcp,
+                rx_tank_level_switch_from_tcp,
                 InternalCommand::RequestSignal(position_signal.clone()),
             )
             .map_err(|e| TankLevelSwitchError::SimulatorCommunicationError {
@@ -366,8 +366,8 @@ impl TankLevelSwitch {
             let invalid_signal = AquariumSignal::TankLevelSwitchInvalid;
             let invalid_val = Self::get_response_from_simulator(
                 module_path!().to_string(),
-                tx_to_tcp,
-                rx_from_tcp,
+                tx_tank_level_switch_to_tcp,
+                rx_tank_level_switch_from_tcp,
                 InternalCommand::RequestSignal(invalid_signal.clone()),
             )
             .map_err(|e| TankLevelSwitchError::SimulatorCommunicationError {

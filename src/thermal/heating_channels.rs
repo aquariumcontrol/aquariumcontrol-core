@@ -126,9 +126,10 @@ impl HeatingChannels {
 #[cfg(feature = "debug_channels")]
 impl fmt::Display for HeatingChannels {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        writeln!(f, "=== HeatingChannels ===")?;
         writeln!(
             f,
-            "\ncnt_tx_heating_to_relay_manager: {}",
+            "cnt_tx_heating_to_relay_manager: {}",
             self.cnt_tx_heating_to_relay_manager
         )?;
         writeln!(

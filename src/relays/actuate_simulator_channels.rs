@@ -39,6 +39,7 @@ impl ActuateSimulatorChannels {
 #[cfg(feature = "debug_channels")]
 impl fmt::Display for ActuateSimulatorChannels {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        writeln!(f, "=== ActuateSimulatorChannels ===")?;
         write!(
             f,
             "\ncnt_tx_actuate_simulator_to_tcp_opt: {}",

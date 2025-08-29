@@ -91,9 +91,10 @@ impl SensorManagerChannels {
 #[cfg(feature = "debug_channels")]
 impl fmt::Display for SensorManagerChannels {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        writeln!(f, "=== SensorManagerChannels ===")?;
         writeln!(
             f,
-            "\ncnt_tx_sensor_manager_to_tcp_opt: {}",
+            "cnt_tx_sensor_manager_to_tcp_opt: {}",
             self.cnt_tx_sensor_manager_to_tcp_opt
         )?;
         writeln!(
