@@ -34,7 +34,7 @@ use crate::recorder::data_logger_channels::DataLoggerChannels;
 use crate::recorder::recorder_data_frame::RecorderDataFrame;
 use crate::sensors::sensor_manager::SensorManagerSignals;
 use crate::sensors::tank_level_switch::TankLevelSwitchSignals;
-use crate::utilities::channel_content::{AquariumSignal};
+use crate::utilities::channel_content::AquariumSignal;
 use crate::utilities::iir_filter::{IIRFilter, IIRFilterConfig};
 use crate::utilities::proc_ext_req::ProcessExternalRequestTrait;
 use crate::utilities::wait_for_termination::WaitForTerminationTrait;
@@ -903,7 +903,7 @@ impl DataLogger {
         self.wait_for_termination(
             &data_logger_channels.rx_data_logger_from_signal_handler,
             sleep_duration_hundred_millis,
-            module_path!()
+            module_path!(),
         );
     }
 

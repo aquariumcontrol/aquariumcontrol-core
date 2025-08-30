@@ -126,7 +126,7 @@ pub struct Balling {
     pub lock_warn_inapplicable_command_signal_handler: bool,
 
     /// inhibition flag to avoid flooding the log file with repeated messages about failure to receive termination signal via the channel
-    pub lock_error_channel_receive_termination: bool
+    pub lock_error_channel_receive_termination: bool,
 }
 
 impl fmt::Display for Balling {
@@ -856,7 +856,7 @@ impl Balling {
         self.wait_for_termination(
             &balling_channels.rx_balling_from_signal_handler,
             sleep_duration_hundred_millis,
-            module_path!()
+            module_path!(),
         );
     }
 }

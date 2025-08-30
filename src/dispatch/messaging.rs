@@ -473,7 +473,7 @@ impl Messaging {
         self.wait_for_termination(
             &messaging_channels.rx_messaging_from_signal_handler,
             sleep_duration,
-            module_path!()
+            module_path!(),
         );
     }
 }

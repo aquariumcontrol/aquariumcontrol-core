@@ -101,7 +101,7 @@ pub struct Feed {
     pub lock_warn_inapplicable_command_signal_handler: bool,
 
     /// Inhibition flag to avoid flooding the log file with repeated messages about failure to receive termination signal via the channel
-    pub lock_error_channel_receive_termination: bool
+    pub lock_error_channel_receive_termination: bool,
 }
 
 impl Feed {
@@ -623,7 +623,7 @@ impl Feed {
         self.wait_for_termination(
             &feed_channels.rx_feed_from_signal_handler,
             sleep_duration_hundred_millis,
-            module_path!()
+            module_path!(),
         );
     }
 }

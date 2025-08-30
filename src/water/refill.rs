@@ -1048,7 +1048,7 @@ impl Refill {
         self.wait_for_termination(
             &refill_channels.rx_refill_from_signal_handler,
             sleep_duration_hundred_millis,
-            module_path!()
+            module_path!(),
         );
     }
 }

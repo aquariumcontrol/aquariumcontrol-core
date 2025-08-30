@@ -667,7 +667,7 @@ impl TankLevelSwitch {
         self.wait_for_termination(
             &tank_level_switch_channels.rx_tank_level_switch_from_signal_handler,
             sleep_duration_one_millis,
-            module_path!()
+            module_path!(),
         );
         Ok(())
     }

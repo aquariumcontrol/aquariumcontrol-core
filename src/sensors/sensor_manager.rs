@@ -32,9 +32,9 @@ use crate::simulator::tcp_communication_error::TcpCommunicationError;
 use crate::utilities::channel_content::{AquariumSignal, InternalCommand};
 use crate::utilities::logger::log_error_chain;
 use crate::utilities::proc_ext_req::ProcessExternalRequestTrait;
+use crate::utilities::wait_for_termination::WaitForTerminationTrait;
 use std::time::{Duration, Instant};
 use thiserror::Error;
-use crate::utilities::wait_for_termination::WaitForTerminationTrait;
 
 #[derive(Deserialize, Debug)]
 /// Holds the configuration data for the measurement of ambient signals from DHT sensor
@@ -668,9 +668,8 @@ impl SensorManager {
 
             spin_sleeper.sleep(sleep_duration_hundred_millis);
         }
-        
-        match sensor_manager_channels.send_to_signal_handler(true)
-        {
+
+        match sensor_manager_channels.send_to_signal_handler(true) {
             Ok(()) => {}
             Err(e) => {
                 error!(
@@ -686,7 +685,7 @@ impl SensorManager {
         self.wait_for_termination(
             &sensor_manager_channels.rx_sensor_manager_from_signal_handler,
             sleep_duration_one_millis,
-            module_path!()
+            module_path!(),
         );
     }
 }

@@ -8,9 +8,9 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 */
 #![allow(non_snake_case)]
 
+use log::error;
 #[cfg(all(not(test), target_os = "linux"))]
 use log::info;
-use log::error;
 
 #[cfg(not(test))]
 use log::warn;
@@ -22,9 +22,10 @@ use crate::sensors::atlas_scientific_error::AtlasScientificError::{
 };
 use crate::sensors::i2c_interface::I2cRequest;
 use crate::simulator::get_resp_sim::GetResponseFromSimulatorTrait;
-use crate::utilities::channel_content::{AquariumSignal};
+use crate::utilities::channel_content::AquariumSignal;
 use crate::utilities::logger::log_error_chain;
 use crate::utilities::proc_ext_req::ProcessExternalRequestTrait;
+use crate::utilities::wait_for_termination::WaitForTerminationTrait;
 #[cfg(all(not(test), target_os = "linux"))]
 use nix::unistd::gettid;
 use serde_derive::Deserialize;
@@ -32,7 +33,6 @@ use spin_sleep::SpinSleeper;
 use std::sync::mpsc::TryRecvError;
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
-use crate::utilities::wait_for_termination::WaitForTerminationTrait;
 
 // max loops for receiving when the quit command has been received
 #[allow(unused)] // used in conditionally compiled code
@@ -877,7 +877,7 @@ impl AtlasScientific {
         self.wait_for_termination(
             &atlas_scientific_channels.rx_atlas_scientific_from_signal_handler,
             sleep_duration_one_millis,
-            module_path!()
+            module_path!(),
         );
     }
 }

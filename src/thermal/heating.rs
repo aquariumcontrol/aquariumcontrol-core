@@ -267,7 +267,7 @@ pub struct Heating {
     pub lock_warn_inapplicable_command_signal_handler: bool,
 
     /// Inhibition flag to avoid flooding the log with errors about the channel communication not working
-    pub lock_error_channel_receive_termination: bool
+    pub lock_error_channel_receive_termination: bool,
 }
 
 impl ProcessExternalRequestTrait for Heating {}
@@ -866,7 +866,7 @@ impl Heating {
         self.wait_for_termination(
             &heating_channels.rx_heating_from_signal_handler,
             sleep_duration_hundred_millis,
-            module_path!()
+            module_path!(),
         );
     }
 }

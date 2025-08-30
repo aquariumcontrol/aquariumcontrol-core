@@ -123,7 +123,6 @@ impl RefillChannels {
         }
         result
     }
-
 }
 
 #[cfg(feature = "debug_channels")]

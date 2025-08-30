@@ -103,10 +103,7 @@ impl VentilationChannels {
     }
 
     /// Sends a command to the schedule checker.
-    pub fn send_to_signal_handler(
-        &mut self,
-        status: bool,
-    ) -> Result<(), SendError<bool>> {
+    pub fn send_to_signal_handler(&mut self, status: bool) -> Result<(), SendError<bool>> {
         let result = self.tx_ventilation_to_signal_handler.send(status);
         #[cfg(feature = "debug_channels")]
         if result.is_ok() {
@@ -114,7 +111,6 @@ impl VentilationChannels {
         }
         result
     }
-
 }
 
 #[cfg(feature = "debug_channels")]

@@ -6,16 +6,16 @@ The above copyright notice and this permission notice shall be included in all c
 
 THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
-use crate::sensors::tank_level_switch::TankLevelSwitch;
-use crate::utilities::channel_content::InternalCommand;
-use log::{error, warn};
-use spin_sleep::SpinSleeper;
-use std::sync::mpsc::Receiver;
-use std::time::Duration;
 use crate::food::feed::Feed;
 use crate::mineral::balling::Balling;
 use crate::recorder::data_logger::DataLogger;
 use crate::sensors::atlas_scientific::AtlasScientific;
+use crate::sensors::tank_level_switch::TankLevelSwitch;
+use crate::utilities::channel_content::InternalCommand;
+use log::{error, warn};
+use spin_sleep::SpinSleeper;
+use std::sync::mpsc::{Receiver, TryRecvError};
+use std::time::Duration;
 
 #[cfg(target_os = "linux")]
 use crate::dispatch::messaging::Messaging;
@@ -36,7 +36,7 @@ pub trait WaitForTerminationTrait {
     fn get_warn_lock_mut(&mut self) -> &mut bool;
 
     /// Provides a mutable reference to the component's error lock flag.
-    /// This flag is used to prevent log-flooding with channel receive errors.
+    /// This flag is used to prevent log-flooding with the channel receive errors.
     fn get_error_lock_mut(&mut self) -> &mut bool;
 
     /// Implements the graceful shutdown wait loop for several threads (default implementation).
@@ -86,12 +86,17 @@ pub trait WaitForTerminationTrait {
                     }
                 },
                 Err(e) => {
-                    if !*self.get_error_lock_mut() {
-                        error!(
-                            target: origin,
-                            "receiving termination signal from signal handler failed ({e:?})"
-                        );
-                        *self.get_warn_lock_mut() = true;
+                    match e {
+                        TryRecvError::Empty => { /* do nothing */ }
+                        TryRecvError::Disconnected => {
+                            if !*self.get_error_lock_mut() {
+                                error!(
+                                    target: origin,
+                                    "receiving termination signal from signal handler failed ({e:?})"
+                                );
+                                *self.get_warn_lock_mut() = true;
+                            }
+                        }
                     }
                     false
                 }

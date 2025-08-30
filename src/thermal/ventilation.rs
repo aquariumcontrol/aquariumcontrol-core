@@ -27,9 +27,9 @@ use std::time::{Duration, Instant};
 
 pub(crate) use crate::thermal::ventilation_channels::VentilationChannels;
 use crate::utilities::logger::log_error_chain;
+use crate::utilities::wait_for_termination::WaitForTerminationTrait;
 #[cfg(all(not(test), target_os = "linux"))]
 use nix::unistd::gettid;
-use crate::utilities::wait_for_termination::WaitForTerminationTrait;
 
 const CYCLE_TIME_VENTILATION_MILLIS: u64 = 500;
 
@@ -195,7 +195,7 @@ pub struct Ventilation {
     pub lock_warn_inapplicable_command_signal_handler: bool,
 
     /// inhibition flag to avoid flooding the log file with repeated messages about the channel being disconnected
-    pub lock_error_channel_receive_termination: bool
+    pub lock_error_channel_receive_termination: bool,
 }
 
 impl ProcessExternalRequestTrait for Ventilation {}
@@ -618,8 +618,7 @@ impl Ventilation {
 
         // The application received a request to terminate. That is why the loop was left.
         // Answer to the thread which sent the request for termination, so that shutdown can proceed further.
-        match ventilation_channels.send_to_signal_handler(true)
-        {
+        match ventilation_channels.send_to_signal_handler(true) {
             Ok(()) => {}
             Err(e) => {
                 error!(
@@ -635,7 +634,7 @@ impl Ventilation {
         self.wait_for_termination(
             &ventilation_channels.rx_ventilation_from_signal_handler,
             sleep_duration_hundred_millis,
-            module_path!()
+            module_path!(),
         );
     }
 }
