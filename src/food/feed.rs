@@ -10,8 +10,6 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 #[cfg(not(test))]
 use log::info;
 
-use log::warn;
-
 #[cfg(all(feature = "debug_feed", not(test)))]
 use log::debug;
 
@@ -23,7 +21,6 @@ use nix::unistd::gettid;
 
 use serde_derive::Deserialize;
 use spin_sleep::SpinSleeper;
-use std::sync::mpsc::TryRecvError;
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
@@ -31,9 +28,9 @@ use crate::database::sql_interface_feed::DatabaseInterfaceFeedTrait;
 pub(crate) use crate::food::feed_channels::FeedChannels;
 use crate::food::feed_schedule_entry::FeedScheduleEntry;
 use crate::food::food_injection::FoodInjectionTrait;
-use crate::utilities::channel_content::InternalCommand;
 use crate::utilities::logger::log_error_chain;
 use crate::utilities::proc_ext_req::ProcessExternalRequestTrait;
+use crate::utilities::wait_for_termination::WaitForTerminationTrait;
 
 /// Holds the configuration data for the feed control.
 /// The configuration is loaded from the .toml configuration file.
@@ -94,17 +91,17 @@ pub struct Feed {
     /// Inhibition flag to avoid flooding the log file with repeated messages about failure to read feed schedule entry from the database
     lock_error_get_feedschedule_entry: bool,
 
-    /// Inhibition flag to avoid flooding the log file with repeated messages about having received inapplicable command
-    lock_warn_inapplicable_command: bool,
-
-    /// Inhibition flag to avoid flooding the log file with repeated messages about failure to receive termination signal via the channel
-    lock_error_channel_receive_termination_signal: bool,
-
     /// recording when the last database ping happened
     pub last_ping_instant: Instant,
 
     /// database ping interval
     pub database_ping_interval: Duration,
+
+    /// Inhibition flag to avoid flooding the log file with repeated messages about having received inapplicable command
+    pub lock_warn_inapplicable_command_signal_handler: bool,
+
+    /// Inhibition flag to avoid flooding the log file with repeated messages about failure to receive termination signal via the channel
+    pub lock_error_channel_receive_termination: bool
 }
 
 impl Feed {
@@ -136,10 +133,10 @@ impl Feed {
             profile_id_requested: -1,
             execution_blocked: false,
             lock_error_get_feedschedule_entry: false,
-            lock_warn_inapplicable_command: false,
-            lock_error_channel_receive_termination_signal: false,
             last_ping_instant: Instant::now(),
             database_ping_interval,
+            lock_warn_inapplicable_command_signal_handler: false,
+            lock_error_channel_receive_termination: false,
         }
     }
 
@@ -620,50 +617,14 @@ impl Feed {
             }
         };
 
-        // This thread has channel connections to underlying threads (relay manager).
+        // This thread has channel connections to underlying threads.
         // Those threads have to stop receiving commands from this thread.
         // The shutdown sequence is handled by the signal_handler module.
-        let mut termination_command_received = false;
-        while !termination_command_received {
-            termination_command_received = match feed_channels.receive_from_signal_handler() {
-                Ok(c) => {
-                    self.lock_error_channel_receive_termination_signal = false;
-                    match c {
-                        InternalCommand::Terminate => {
-                            self.lock_warn_inapplicable_command = false;
-                            true
-                        }
-                        _ => {
-                            if !self.lock_warn_inapplicable_command {
-                                warn!(
-                                    target: module_path!(),
-                                    "ignoring inapplicable command from signal handler ({c})"
-                                );
-                                self.lock_warn_inapplicable_command = true;
-                            }
-                            false
-                        }
-                    }
-                }
-                Err(e) => {
-                    match e {
-                        TryRecvError::Empty => { /* do nothing */ }
-                        TryRecvError::Disconnected => {
-                            if !self.lock_error_channel_receive_termination_signal {
-                                log_error_chain(
-                                    module_path!(),
-                                    "Receiving termination signal failed.",
-                                    e,
-                                );
-                                self.lock_error_channel_receive_termination_signal = true;
-                            }
-                        }
-                    }
-                    false
-                }
-            };
-            spin_sleeper.sleep(sleep_duration_hundred_millis);
-        }
+        self.wait_for_termination(
+            &feed_channels.rx_feed_from_signal_handler,
+            sleep_duration_hundred_millis,
+            module_path!()
+        );
     }
 }
 

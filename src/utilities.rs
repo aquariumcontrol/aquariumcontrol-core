@@ -48,3 +48,6 @@ pub mod version_information;
 
 /// Container for channels used by signal handler
 pub mod signal_handler_channels;
+
+/// Trait for multiple threads which have to wait for termination signal
+pub mod wait_for_termination;

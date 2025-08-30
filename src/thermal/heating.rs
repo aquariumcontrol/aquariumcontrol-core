@@ -7,10 +7,13 @@ The above copyright notice and this permission notice shall be included in all c
 THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
-use log::{error, warn};
+use log::error;
+
+#[cfg(not(test))]
+use log::warn;
+
 use serde_derive::Deserialize;
 use spin_sleep::SpinSleeper;
-use std::sync::mpsc::TryRecvError;
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
@@ -31,10 +34,9 @@ use crate::utilities::common::check_if_mutex_is_blocked;
 use crate::utilities::logger::log_error_chain;
 use crate::utilities::proc_ext_req::ProcessExternalRequestTrait;
 use crate::utilities::sawtooth_profile::{SawToothProfile, SawToothProfileConfig};
+use crate::utilities::wait_for_termination::WaitForTerminationTrait;
 
 const CYCLE_TIME_HEATING_MILLIS: u64 = 500;
-
-const SLEEP_TIME_TERMINATION: u64 = 100;
 
 const CYCLE_TIME_HEATING_DIVISOR: u64 = 1000 / CYCLE_TIME_HEATING_MILLIS;
 
@@ -245,12 +247,6 @@ pub struct Heating {
     /// inhibition flag to avoid flooding the log file with repeated messages about failure to send information to schedule check
     lock_error_channel_send_schedule_check: bool,
 
-    /// inhibition flag to avoid flooding the log file with repeated messages about failure to receive termination signal via the channel
-    lock_error_channel_receive_termination_signal: bool,
-
-    /// inhibition flag to avoid flooding the log file with repeated messages about having received inapplicable command via the channel
-    lock_warn_inapplicable_command: bool,
-
     /// recording when the last database ping happened
     pub last_ping_instant: Instant,
 
@@ -266,6 +262,12 @@ pub struct Heating {
     // for testing purposes: record when mutex access time is exceeded without resetting it
     #[cfg(test)]
     mutex_access_duration_exceeded: bool,
+
+    /// Inhibition flag to avoid flooding the log with warning about having received inapplicable command from the signal handler
+    pub lock_warn_inapplicable_command_signal_handler: bool,
+
+    /// Inhibition flag to avoid flooding the log with errors about the channel communication not working
+    pub lock_error_channel_receive_termination: bool
 }
 
 impl ProcessExternalRequestTrait for Heating {}
@@ -299,14 +301,14 @@ impl Heating {
             sql_interface_heating,
             lock_error_channel_send_schedule_check: false,
             lock_error_channel_receive_schedule_check: false,
-            lock_error_channel_receive_termination_signal: false,
-            lock_warn_inapplicable_command: false,
             last_ping_instant: Instant::now(),
             database_ping_interval,
             lock_warn_max_mutex_access_duration: false,
             lock_error_heating_set_value_read_failure: false,
             #[cfg(test)]
             mutex_access_duration_exceeded: false,
+            lock_warn_inapplicable_command_signal_handler: false,
+            lock_error_channel_receive_termination: false,
         }
     }
 
@@ -406,6 +408,7 @@ impl Heating {
         let max_mutex_access_duration = Duration::from_millis(MAX_MUTEX_ACCESS_DURATION_MILLIS);
         let _refill_error = false;
         let spin_sleeper = SpinSleeper::default();
+        let sleep_duration_hundred_millis = Duration::from_millis(100);
         let mut saw_tooth_profile = SawToothProfile::new(&self.config.saw_tooth_profile_config);
         let mut measured_water_temperature = 0.0;
         let mut measurement_error: bool;
@@ -857,50 +860,14 @@ impl Heating {
             }
         };
 
-        // This thread has channel connections to underlying threads (relay manager, AtlasScientific, TankLevelSwitch).
+        // This thread has channel connections to underlying threads.
         // Those threads have to stop receiving commands from this thread.
         // The shutdown sequence is handled by the signal_handler module.
-        let mut termination_command_received = false;
-        while !termination_command_received {
-            termination_command_received = match heating_channels.receive_from_signal_handler() {
-                Ok(c) => {
-                    self.lock_error_channel_receive_termination_signal = false;
-                    match c {
-                        InternalCommand::Terminate => {
-                            self.lock_warn_inapplicable_command = false;
-                            true
-                        }
-                        _ => {
-                            if !self.lock_warn_inapplicable_command {
-                                warn!(
-                                    target: module_path!(),
-                                    "ignoring not applicable command from signal handler (c)"
-                                );
-                                self.lock_warn_inapplicable_command = true;
-                            }
-                            false
-                        }
-                    }
-                }
-                Err(e) => {
-                    match e {
-                        TryRecvError::Empty => { /* do nothing */ }
-                        TryRecvError::Disconnected => {
-                            if !self.lock_error_channel_receive_termination_signal {
-                                error!(
-                                    target: module_path!(),
-                                    "receiving termination signal from signal handler failed ({e:?})"
-                                );
-                                self.lock_error_channel_receive_termination_signal = true;
-                            }
-                        }
-                    }
-                    false
-                }
-            };
-            let sleep_duration = Duration::from_millis(SLEEP_TIME_TERMINATION);
-            spin_sleeper.sleep(sleep_duration);
-        }
+        self.wait_for_termination(
+            &heating_channels.rx_heating_from_signal_handler,
+            sleep_duration_hundred_millis,
+            module_path!()
+        );
     }
 }
 

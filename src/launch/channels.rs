@@ -1151,10 +1151,10 @@ impl Channels {
             tank_level_switch,
             tcp_communication,
             heating,
-            
+
             #[cfg(all(feature = "target_hw", target_os = "linux"))]
             i2c_interface,
-            
+
             ventilation,
             signal_handler,
             monitors,

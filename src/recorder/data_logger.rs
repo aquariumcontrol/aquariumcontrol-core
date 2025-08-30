@@ -34,9 +34,10 @@ use crate::recorder::data_logger_channels::DataLoggerChannels;
 use crate::recorder::recorder_data_frame::RecorderDataFrame;
 use crate::sensors::sensor_manager::SensorManagerSignals;
 use crate::sensors::tank_level_switch::TankLevelSwitchSignals;
-use crate::utilities::channel_content::{AquariumSignal, InternalCommand};
+use crate::utilities::channel_content::{AquariumSignal};
 use crate::utilities::iir_filter::{IIRFilter, IIRFilterConfig};
 use crate::utilities::proc_ext_req::ProcessExternalRequestTrait;
+use crate::utilities::wait_for_termination::WaitForTerminationTrait;
 use crate::water::refill::RefillStatus;
 
 const MILLIS_PER_SEC: u64 = 1000;
@@ -221,10 +222,10 @@ pub struct DataLogger {
     lock_error_output_timestamp: bool,
 
     /// an inhibition flag to avoid flooding the log file with repeated messages about having received an inapplicable command
-    lock_warn_inapplicable_command: bool,
+    pub lock_warn_inapplicable_command_signal_handler: bool,
 
     /// an inhibition flag to avoid flooding the log file with repeated messages about failure to receive termination signal via the channel
-    lock_error_channel_receive_termination: bool,
+    pub lock_error_channel_receive_termination: bool,
 
     /// recording when the last database ping happened
     pub last_ping_instant: Instant,
@@ -348,7 +349,7 @@ impl DataLogger {
             lock_error_output_signal_pH_filtered: false,
             lock_error_output_signal_conductivity_filtered: false,
             lock_error_output_timestamp: false,
-            lock_warn_inapplicable_command: false,
+            lock_warn_inapplicable_command_signal_handler: false,
             lock_error_channel_receive_termination: false,
             last_ping_instant: Instant::now(),
             database_ping_interval,
@@ -882,7 +883,6 @@ impl DataLogger {
         &mut self,
         data_logger_channels: &mut DataLoggerChannels,
     ) {
-        let spin_sleeper = SpinSleeper::default();
         let sleep_duration_hundred_millis = Duration::from_millis(100);
 
         // Application received request to terminate. That is why the loop was left.
@@ -900,39 +900,11 @@ impl DataLogger {
         // This thread has channel connections to underlying threads.
         // Those threads have to stop receiving commands from this thread.
         // The shutdown sequence is handled by the signal_handler module.
-        let mut termination_command_received = false;
-        while !termination_command_received {
-            termination_command_received = match data_logger_channels.receive_from_signal_handler()
-            {
-                Ok(c) => match c {
-                    InternalCommand::Terminate => {
-                        self.lock_warn_inapplicable_command = false;
-                        true
-                    }
-                    _ => {
-                        if !self.lock_warn_inapplicable_command {
-                            warn!(
-                                target: module_path!(),
-                                "ignoring inapplicable command from signal handler ({c})"
-                            );
-                            self.lock_warn_inapplicable_command = true;
-                        }
-                        false
-                    }
-                },
-                Err(e) => {
-                    if !self.lock_error_channel_receive_termination {
-                        error!(
-                            target: module_path!(),
-                            "receiving termination signal from signal handler failed ({e:?})"
-                        );
-                        self.lock_error_channel_receive_termination = true;
-                    }
-                    false
-                }
-            };
-            spin_sleeper.sleep(sleep_duration_hundred_millis);
-        }
+        self.wait_for_termination(
+            &data_logger_channels.rx_data_logger_from_signal_handler,
+            sleep_duration_hundred_millis,
+            module_path!()
+        );
     }
 
     /// Executes the main control loop for the data logger module.
@@ -1581,11 +1553,11 @@ pub mod tests {
             .name("test_object".to_string())
             .spawn(move || {
                 let mut data_logger_channels = DataLoggerChannels {
-                    tx_data_logger_to_signal_handler: tx_data_logger_to_signal_handler,
+                    tx_data_logger_to_signal_handler,
                     #[cfg(feature = "debug_channels")]
                     cnt_tx_data_logger_to_signal_handler: 0,
 
-                    rx_data_logger_from_signal_handler: rx_data_logger_from_signal_handler,
+                    rx_data_logger_from_signal_handler,
                     #[cfg(feature = "debug_channels")]
                     cnt_rx_data_logger_from_signal_handler: 0,
                 };

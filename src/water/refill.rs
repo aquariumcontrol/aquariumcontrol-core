@@ -27,6 +27,7 @@ use crate::log_error_chain;
 use crate::sensors::tank_level_switch::TankLevelSwitchSignals;
 use crate::utilities::channel_content::InternalCommand;
 use crate::utilities::proc_ext_req::ProcessExternalRequestTrait;
+use crate::utilities::wait_for_termination::WaitForTerminationTrait;
 pub(crate) use crate::water::refill_channels::RefillChannels;
 use crate::water::refill_error_states::RefillErrorStates;
 use crate::water::refill_monitor_view::RefillMonitorView;
@@ -191,10 +192,10 @@ pub struct Refill {
     lock_error_channel_send_monitors: bool,
 
     /// inhibition flag to avoid flooding the log file with repeated messages about having received not applicable command from the signal handler
-    lock_warn_not_applicable_command: bool,
+    pub lock_warn_inapplicable_command_signal_handler: bool,
 
     /// inhibition flag to avoid flooding the log file with repeated messages about failure to receive from the signal handler via the channel
-    lock_error_channel_receive_termination_command: bool,
+    pub lock_error_channel_receive_termination: bool,
 
     /// recording when the last database ping happened
     pub last_ping_instant: Instant,
@@ -252,8 +253,8 @@ impl Refill {
             lock_error_channel_send_schedule_check: false,
             lock_error_channel_receive_schedule_check: false,
             lock_error_channel_send_monitors: false,
-            lock_warn_not_applicable_command: false,
-            lock_error_channel_receive_termination_command: false,
+            lock_warn_inapplicable_command_signal_handler: false,
+            lock_error_channel_receive_termination: false,
             last_ping_instant: Instant::now(),
             database_ping_interval,
         }
@@ -302,8 +303,8 @@ impl Refill {
             lock_error_channel_send_schedule_check: false,
             lock_error_channel_receive_schedule_check: false,
             lock_error_channel_send_monitors: false,
-            lock_warn_not_applicable_command: false,
-            lock_error_channel_receive_termination_command: false,
+            lock_warn_inapplicable_command_signal_handler: false,
+            lock_error_channel_receive_termination: false,
             last_ping_instant: Instant::now(),
             database_ping_interval: Duration::from_secs(1000),
         }
@@ -1030,7 +1031,7 @@ impl Refill {
             module_path!()
         );
 
-        match refill_channels.tx_refill_to_signal_handler.send(true) {
+        match refill_channels.send_to_signal_handler(true) {
             Ok(()) => {}
             Err(e) => {
                 log_error_chain(
@@ -1044,45 +1045,11 @@ impl Refill {
         // This thread has channel connections to underlying threads (relay manager, tank level switch).
         // Those threads have to stop receiving commands from this thread.
         // The shutdown sequence is handled by the signal_handler module.
-        let mut termination_command_received = false;
-        while !termination_command_received {
-            termination_command_received = match refill_channels
-                .rx_refill_from_signal_handler
-                .recv() // @todo: change to try_recv
-            {
-                Ok(c) => {
-                    self.lock_error_channel_receive_termination_command = false;
-                    match c {
-                        InternalCommand::Terminate => {
-                            self.lock_warn_not_applicable_command = false;
-                            true
-                        }
-                        _ => {
-                            if !self.lock_warn_not_applicable_command {
-                                warn!(
-                                    target: module_path!(),
-                                    "ignoring not applicable command {c} from the signal handler"
-                                );
-                                self.lock_warn_not_applicable_command = true;
-                            }
-                            false
-                        }
-                    }
-                }
-                Err(e) => {
-                    if !self.lock_error_channel_receive_termination_command {
-                        log_error_chain(
-                            module_path!(),
-                            "receiving termination signal from the signal handler failed",
-                            e,
-                        );
-                        self.lock_error_channel_receive_termination_command = true;
-                    }
-                    false
-                }
-            };
-            spin_sleeper.sleep(sleep_duration_hundred_millis);
-        }
+        self.wait_for_termination(
+            &refill_channels.rx_refill_from_signal_handler,
+            sleep_duration_hundred_millis,
+            module_path!()
+        );
     }
 }
 

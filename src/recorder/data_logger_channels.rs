@@ -8,7 +8,7 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 */
 use crate::utilities::channel_content::InternalCommand;
 use std::fmt;
-use std::sync::mpsc::{Receiver, SendError, Sender, TryRecvError};
+use std::sync::mpsc::{Receiver, SendError, Sender};
 
 /// Struct acts as a central hub for communication channels used by the DataLogger.
 /// It's a way to bundle together all the necessary mpsc (Multi-Producer, Single-Consumer) channel
@@ -35,19 +35,6 @@ impl DataLoggerChannels {
         #[cfg(feature = "debug_channels")]
         if result.is_ok() {
             self.cnt_tx_data_logger_to_signal_handler += 1;
-        }
-        result
-    }
-
-    /// Receives a command from the signal handler.
-    ///
-    /// This wrapper function performs a blocking receive for a command and increments
-    /// the associated debug counter if the `debug_channels` feature is enabled.
-    pub fn receive_from_signal_handler(&mut self) -> Result<InternalCommand, TryRecvError> {
-        let result = self.rx_data_logger_from_signal_handler.try_recv();
-        #[cfg(feature = "debug_channels")]
-        if result.is_ok() {
-            self.cnt_rx_data_logger_from_signal_handler += 1;
         }
         result
     }

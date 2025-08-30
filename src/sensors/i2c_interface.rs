@@ -373,8 +373,10 @@ impl I2cInterface {
         let mut read_buffer = [0u8; MAX_I2C_RESPONSE_LENGTH];
 
         loop {
-            let (quit_command_received, _, _) =
-                self.process_external_request(&i2c_interface_channels.rx_i2c_interface_from_signal_handler, None);
+            let (quit_command_received, _, _) = self.process_external_request(
+                &i2c_interface_channels.rx_i2c_interface_from_signal_handler,
+                None,
+            );
             if quit_command_received {
                 break;
             }

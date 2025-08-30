@@ -905,7 +905,7 @@ fn run() -> Result<(), StartupError> {
             .map_err(|e| StartupError::TcpConnection { source: e })?;
         tcp_communication_opt = Some(tcp_communication);
     }
-    
+
     scope(|scope| {
         // open tcp connection only if configuration requires use of simulator instead of HW
         if use_simulator {

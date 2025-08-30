@@ -7,7 +7,7 @@ The above copyright notice and this permission notice shall be included in all c
 THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 use chrono::Local;
-use log::{error, info, warn};
+use log::{error, info};
 use std::fmt;
 
 #[cfg(feature = "debug_balling")]
@@ -18,7 +18,6 @@ use nix::unistd::gettid;
 
 use serde_derive::Deserialize;
 use spin_sleep::SpinSleeper;
-use std::sync::mpsc::TryRecvError;
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
@@ -28,6 +27,7 @@ use crate::mineral::balling_error::BallingError;
 use crate::mineral::mineral_injection::MineralInjectionTrait;
 use crate::utilities::channel_content::{AquariumDevice, InternalCommand};
 use crate::utilities::proc_ext_req::ProcessExternalRequestTrait;
+use crate::utilities::wait_for_termination::WaitForTerminationTrait;
 
 /// Holds the configuration data for the balling dosing control.
 /// The configuration is loaded from the .toml configuration file.
@@ -104,12 +104,6 @@ pub struct Balling {
     /// Count down in seconds until the next Balling dosing for pump 4
     countdown_dosing_pump4: u32,
 
-    /// inhibition flag to avoid flooding the log file with repeated messages about failure to receive termination signal via the channel
-    lock_error_channel_receive_termination_signal: bool,
-
-    /// inhibition flag to avoid flooding the log file with repeated messages about having received inapplicable command via the channel
-    lock_warn_inapplicable_command: bool,
-
     /// inhibition flag to avoid flooding the log file with repeated messages to send request via the channel to schedule check
     lock_error_channel_send_schedule_check: bool,
 
@@ -127,6 +121,12 @@ pub struct Balling {
 
     /// database ping interval
     pub database_ping_interval: Duration,
+
+    /// inhibition flag to avoid flooding the log file with repeated messages about having received inapplicable command via the channel
+    pub lock_warn_inapplicable_command_signal_handler: bool,
+
+    /// inhibition flag to avoid flooding the log file with repeated messages about failure to receive termination signal via the channel
+    pub lock_error_channel_receive_termination: bool
 }
 
 impl fmt::Display for Balling {
@@ -201,14 +201,14 @@ impl Balling {
             countdown_dosing_pump2,
             countdown_dosing_pump3,
             countdown_dosing_pump4,
-            lock_error_channel_receive_termination_signal: false,
-            lock_warn_inapplicable_command: false,
             lock_error_channel_send_schedule_check: false,
             lock_error_channel_receive_schedule_check: false,
             execute_command_received: false,
             pump_id_requested: 0,
             last_ping_instant: Instant::now(),
             database_ping_interval,
+            lock_warn_inapplicable_command_signal_handler: false,
+            lock_error_channel_receive_termination: false,
         })
     }
 
@@ -850,46 +850,14 @@ impl Balling {
             }
         };
 
-        // This thread has channel connections to underlying threads (relay manager).
+        // This thread has channel connections to underlying threads.
         // Those threads have to stop receiving commands from this thread.
         // The shutdown sequence is handled by the signal_handler module.
-        let mut termination_command_received = false;
-        while !termination_command_received {
-            termination_command_received = match balling_channels.receive_from_signal_handler() {
-                Ok(c) => {
-                    self.lock_error_channel_receive_termination_signal = false;
-                    match c {
-                        InternalCommand::Terminate => {
-                            self.lock_warn_inapplicable_command = false;
-                            true
-                        }
-                        _ => {
-                            if !self.lock_warn_inapplicable_command {
-                                warn!(
-                                    target: module_path!(),
-                                    "ignoring inapplicable command {c} from signal handler.");
-                                self.lock_warn_inapplicable_command = true;
-                            }
-                            false
-                        }
-                    }
-                }
-                Err(e) => {
-                    match e {
-                        TryRecvError::Empty => { /* do nothing */ }
-                        TryRecvError::Disconnected => {
-                            if !self.lock_error_channel_receive_termination_signal {
-                                error!(target: module_path!(),
-                                    "error when trying to receive termination signal. ({e:?})");
-                                self.lock_error_channel_receive_termination_signal = true;
-                            }
-                        }
-                    }
-                    false
-                }
-            };
-            spin_sleeper.sleep(sleep_duration_hundred_millis);
-        }
+        self.wait_for_termination(
+            &balling_channels.rx_balling_from_signal_handler,
+            sleep_duration_hundred_millis,
+            module_path!()
+        );
     }
 }
 

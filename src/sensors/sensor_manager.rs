@@ -34,6 +34,7 @@ use crate::utilities::logger::log_error_chain;
 use crate::utilities::proc_ext_req::ProcessExternalRequestTrait;
 use std::time::{Duration, Instant};
 use thiserror::Error;
+use crate::utilities::wait_for_termination::WaitForTerminationTrait;
 
 #[derive(Deserialize, Debug)]
 /// Holds the configuration data for the measurement of ambient signals from DHT sensor
@@ -200,10 +201,10 @@ pub struct SensorManager {
     pH: f32,
 
     /// inhibition flag to avoid flooding the log file with repeated messages about failure to receive termination signal via the channel
-    lock_error_channel_receive_termination: bool,
+    pub lock_error_channel_receive_termination: bool,
 
     /// inhibition flag to avoid flooding the log file with repeated messages about having received inapplicable command via the channel from the signal handler thread
-    lock_warn_inapplicable_command_signal_handler: bool,
+    pub lock_warn_inapplicable_command_signal_handler: bool,
 
     /// Recording when the last measurement took place
     pub instant_last_measurement: Instant,
@@ -667,9 +668,8 @@ impl SensorManager {
 
             spin_sleeper.sleep(sleep_duration_hundred_millis);
         }
-        match sensor_manager_channels
-            .tx_sensor_manager_to_signal_handler
-            .send(true)
+        
+        match sensor_manager_channels.send_to_signal_handler(true)
         {
             Ok(()) => {}
             Err(e) => {
@@ -680,44 +680,14 @@ impl SensorManager {
             }
         };
 
-        // This thread has channel connections to underlying threads (GpioHandler).
+        // This thread has channel connections to underlying threads.
         // Those threads have to stop receiving commands from this thread.
         // The shutdown sequence is handled by the signal_handler module.
-        let mut termination_command_received = false;
-        while !termination_command_received {
-            termination_command_received = match sensor_manager_channels
-                .rx_sensor_manager_from_signal_handler
-                .recv()
-            {
-                Ok(c) => match c {
-                    InternalCommand::Terminate => {
-                        self.lock_warn_inapplicable_command_signal_handler = false;
-                        true
-                    }
-                    _ => {
-                        if !self.lock_warn_inapplicable_command_signal_handler {
-                            warn!(
-                                target: module_path!(),
-                                "ignoring inapplicable command from signal handler ({c})"
-                            );
-                            self.lock_warn_inapplicable_command_signal_handler = true;
-                        }
-                        false
-                    }
-                },
-                Err(e) => {
-                    if !self.lock_error_channel_receive_termination {
-                        error!(
-                            target: module_path!(),
-                            "receiving termination signal from signal handler failed ({e:?})"
-                        );
-                        self.lock_error_channel_receive_termination = true;
-                    }
-                    false
-                }
-            };
-            spin_sleeper.sleep(sleep_duration_one_millis);
-        }
+        self.wait_for_termination(
+            &sensor_manager_channels.rx_sensor_manager_from_signal_handler,
+            sleep_duration_one_millis,
+            module_path!()
+        );
     }
 }
 

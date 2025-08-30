@@ -8,7 +8,7 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 */
 use crate::utilities::channel_content::InternalCommand;
 use std::fmt;
-use std::sync::mpsc::{Receiver, RecvError, SendError, Sender, TryRecvError};
+use std::sync::mpsc::{Receiver, RecvError, SendError, Sender};
 
 /// Struct collects the channels for communication between the feed control and the other components.
 pub struct FeedChannels {
@@ -73,16 +73,6 @@ impl FeedChannels {
         #[cfg(feature = "debug_channels")]
         if result.is_ok() {
             self.cnt_tx_feed_to_signal_handler += 1;
-        }
-        result
-    }
-
-    /// Receives a command from the signal handler.
-    pub fn receive_from_signal_handler(&mut self) -> Result<InternalCommand, TryRecvError> {
-        let result = self.rx_feed_from_signal_handler.try_recv();
-        #[cfg(feature = "debug_channels")]
-        if result.is_ok() {
-            self.cnt_rx_feed_from_signal_handler += 1;
         }
         result
     }

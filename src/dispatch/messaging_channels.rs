@@ -173,15 +173,31 @@ impl fmt::Display for MessagingChannels {
             "cnt_rx_messaging_from_signal_handler: {}",
             self.cnt_rx_messaging_from_signal_handler
         )?;
-        writeln!(f, "cnt_tx_messaging_to_refill: {}", self.cnt_tx_messaging_to_refill)?;
+        writeln!(
+            f,
+            "cnt_tx_messaging_to_refill: {}",
+            self.cnt_tx_messaging_to_refill
+        )?;
         writeln!(
             f,
             "cnt_tx_messaging_to_ventilation: {}",
             self.cnt_tx_messaging_to_ventilation
         )?;
-        writeln!(f, "cnt_tx_messaging_to_heating: {}", self.cnt_tx_messaging_to_heating)?;
-        writeln!(f, "cnt_tx_messaging_to_feed: {}", self.cnt_tx_messaging_to_feed)?;
-        writeln!(f, "cnt_tx_messaging_to_balling: {}", self.cnt_tx_messaging_to_balling)?;
+        writeln!(
+            f,
+            "cnt_tx_messaging_to_heating: {}",
+            self.cnt_tx_messaging_to_heating
+        )?;
+        writeln!(
+            f,
+            "cnt_tx_messaging_to_feed: {}",
+            self.cnt_tx_messaging_to_feed
+        )?;
+        writeln!(
+            f,
+            "cnt_tx_messaging_to_balling: {}",
+            self.cnt_tx_messaging_to_balling
+        )?;
         writeln!(
             f,
             "cnt_tx_messaging_to_monitors: {}",

@@ -225,6 +225,12 @@ pub struct Messaging {
     // Message queue
     mq: PosixMq,
     mq_max_msg_len: usize,
+
+    /// an inhibition flag to avoid flooding the log file with repeated messages about having received an inapplicable command
+    pub lock_warn_inapplicable_command_signal_handler: bool,
+
+    /// an inhibition flag to avoid flooding the log file with repeated messages about failure to receive termination signal via the channel
+    pub lock_error_channel_receive_termination: bool,
 }
 
 #[cfg(target_os = "linux")]
@@ -258,6 +264,8 @@ impl Messaging {
                 location: module_path!().to_string(),
                 mq_name: mq_file_name_clone_for_error,
                 source: e,
+                lock_warn_inapplicable_command_signal_handler: false,
+                lock_error_channel_receive_termination: false,
             }
         })?;
 
@@ -459,35 +467,14 @@ impl Messaging {
             spin_sleeper.sleep(sleep_duration);
         }
 
-        // wait for Terminate command
-        let mut lock_error_invalid_command = false;
-
-        loop {
-            match messaging_channels.rx_messaging_from_signal_handler.recv() {
-                Ok(command) => match command {
-                    InternalCommand::Terminate => {
-                        break;
-                    }
-                    _ => {
-                        if !lock_error_invalid_command {
-                            error!(
-                                target: module_path!(),
-                                "Received invalid command {} when waiting for Terminate command",
-                                command
-                            );
-                            lock_error_invalid_command = true;
-                        }
-                    }
-                },
-                Err(e) => {
-                    panic!(
-                        "{}: Receiving Terminate command from signal handler failed ({e:?}).",
-                        module_path!(),
-                    );
-                }
-            }
-            spin_sleeper.sleep(sleep_duration);
-        }
+        // This thread has channel connections to underlying threads.
+        // Those threads have to stop receiving commands from this thread.
+        // The shutdown sequence is handled by the signal_handler module.
+        self.wait_for_termination(
+            &messaging_channels.rx_messaging_from_signal_handler,
+            sleep_duration,
+            module_path!()
+        );
     }
 }
 

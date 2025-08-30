@@ -10,7 +10,10 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 
 #[cfg(all(not(test), target_os = "linux"))]
 use log::info;
-use log::{error, warn};
+use log::error;
+
+#[cfg(not(test))]
+use log::warn;
 
 pub(crate) use crate::sensors::atlas_scientific_channels::AtlasScientificChannels;
 use crate::sensors::atlas_scientific_error::AtlasScientificError;
@@ -19,7 +22,7 @@ use crate::sensors::atlas_scientific_error::AtlasScientificError::{
 };
 use crate::sensors::i2c_interface::I2cRequest;
 use crate::simulator::get_resp_sim::GetResponseFromSimulatorTrait;
-use crate::utilities::channel_content::{AquariumSignal, InternalCommand};
+use crate::utilities::channel_content::{AquariumSignal};
 use crate::utilities::logger::log_error_chain;
 use crate::utilities::proc_ext_req::ProcessExternalRequestTrait;
 #[cfg(all(not(test), target_os = "linux"))]
@@ -29,6 +32,7 @@ use spin_sleep::SpinSleeper;
 use std::sync::mpsc::TryRecvError;
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
+use crate::utilities::wait_for_termination::WaitForTerminationTrait;
 
 // max loops for receiving when the quit command has been received
 #[allow(unused)] // used in conditionally compiled code
@@ -186,11 +190,11 @@ pub struct AtlasScientific {
 
     /// inhibition flag to avoid flooding the log file with repeated messages about failure to receive termination signal via the channel
     #[allow(unused)] // used in conditionally compiled code
-    lock_error_channel_receive_termination: bool,
+    pub(crate) lock_error_channel_receive_termination: bool,
 
     /// inhibition flag to avoid flooding the log file with repeated messages about having received inapplicable command via the channel from the signal handler thread
     #[allow(unused)] // used in conditionally compiled code
-    lock_warn_inapplicable_command_signal_handler: bool,
+    pub(crate) lock_warn_inapplicable_command_signal_handler: bool,
 
     /// inhibition flag to avoid flooding the log file with repeated messages about to send request via the channel to I2cInterface thread
     lock_error_channel_send_i2c_interface: bool,
@@ -867,44 +871,14 @@ impl AtlasScientific {
             }
         };
 
-        // This thread has channel connections to underlying threads (GpioHandler).
+        // This thread has channel connections to underlying threads.
         // Those threads have to stop receiving commands from this thread.
         // The shutdown sequence is handled by the signal_handler module.
-        let mut termination_command_received = false;
-        while !termination_command_received {
-            termination_command_received = match atlas_scientific_channels
-                .rx_atlas_scientific_from_signal_handler
-                .recv() // @todo: change to try_recv
-            {
-                Ok(c) => match c {
-                    InternalCommand::Terminate => {
-                        self.lock_warn_inapplicable_command_signal_handler = false;
-                        true
-                    }
-                    _ => {
-                        if !self.lock_warn_inapplicable_command_signal_handler {
-                            warn!(
-                                target: module_path!(),
-                                "ignoring inapplicable command from signal handler ({c})"
-                            );
-                            self.lock_warn_inapplicable_command_signal_handler = true;
-                        }
-                        false
-                    }
-                },
-                Err(e) => {
-                    if !self.lock_error_channel_receive_termination {
-                        error!(
-                            target: module_path!(),
-                            "receiving termination signal from signal handler failed ({e:?})"
-                        );
-                        self.lock_error_channel_receive_termination = true;
-                    }
-                    false
-                }
-            };
-            spin_sleeper.sleep(sleep_duration_one_millis);
-        }
+        self.wait_for_termination(
+            &atlas_scientific_channels.rx_atlas_scientific_from_signal_handler,
+            sleep_duration_one_millis,
+            module_path!()
+        );
     }
 }
 

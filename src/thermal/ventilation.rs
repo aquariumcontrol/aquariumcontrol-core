@@ -7,7 +7,9 @@ The above copyright notice and this permission notice shall be included in all c
 THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
-use log::{error, warn};
+use log::error;
+#[cfg(not(test))]
+use log::warn;
 
 #[cfg(not(test))]
 use log::info;
@@ -27,6 +29,7 @@ pub(crate) use crate::thermal::ventilation_channels::VentilationChannels;
 use crate::utilities::logger::log_error_chain;
 #[cfg(all(not(test), target_os = "linux"))]
 use nix::unistd::gettid;
+use crate::utilities::wait_for_termination::WaitForTerminationTrait;
 
 const CYCLE_TIME_VENTILATION_MILLIS: u64 = 500;
 
@@ -174,12 +177,6 @@ fn switch_off_ventilation(
 pub struct Ventilation {
     config: VentilationConfig,
 
-    /// inhibition flag to avoid flooding the log file with repeated messages about failure to receive termination signal via the channel
-    lock_error_channel_receive_termination_signal: bool,
-
-    /// inhibition flag to avoid flooding the log file with repeated messages about having received inapplicable command via the channel
-    lock_warn_inapplicable_command: bool,
-
     /// inhibition flag to avoid flooding the log file with repeated messages to send request via the channel to schedule check
     lock_error_channel_send_schedule_check: bool,
 
@@ -193,6 +190,12 @@ pub struct Ventilation {
     #[cfg(test)]
     mutex_access_duration_exceeded: bool,
     lock_error_ventilation_set_value_read_failure: bool,
+
+    /// inhibition flag to avoid flooding the log file with repeated messages about having received inapplicable command via the channel
+    pub lock_warn_inapplicable_command_signal_handler: bool,
+
+    /// inhibition flag to avoid flooding the log file with repeated messages about the channel being disconnected
+    pub lock_error_channel_receive_termination: bool
 }
 
 impl ProcessExternalRequestTrait for Ventilation {}
@@ -215,15 +218,15 @@ impl Ventilation {
     pub fn new(config: VentilationConfig) -> Ventilation {
         Self {
             config,
-            lock_error_channel_receive_termination_signal: false,
-            lock_warn_inapplicable_command: false,
             lock_error_channel_send_schedule_check: false,
             lock_error_channel_receive_schedule_check: false,
             lock_warn_max_mutex_access_duration: false,
             lock_error_ventilation_set_value_read_failure: false,
 
+            lock_warn_inapplicable_command_signal_handler: false,
             #[cfg(test)]
             mutex_access_duration_exceeded: false,
+            lock_error_channel_receive_termination: false,
         }
     }
 
@@ -615,9 +618,7 @@ impl Ventilation {
 
         // The application received a request to terminate. That is why the loop was left.
         // Answer to the thread which sent the request for termination, so that shutdown can proceed further.
-        match ventilation_channels
-            .tx_ventilation_to_signal_handler
-            .send(true)
+        match ventilation_channels.send_to_signal_handler(true)
         {
             Ok(()) => {}
             Err(e) => {
@@ -631,44 +632,11 @@ impl Ventilation {
         // This thread has channel connections to underlying threads (relay manager, Atlas Scientific).
         // Those threads have to stop receiving commands from this thread.
         // The shutdown sequence is handled by the signal_handler module.
-        let mut termination_command_received = false;
-        while !termination_command_received {
-            termination_command_received = match ventilation_channels // @todo: change to try_recv
-                .rx_ventilation_from_signal_handler
-                .recv()
-            {
-                Ok(c) => {
-                    self.lock_error_channel_receive_termination_signal = false;
-                    match c {
-                        InternalCommand::Terminate => {
-                            self.lock_warn_inapplicable_command = false;
-                            true
-                        }
-                        _ => {
-                            if !self.lock_warn_inapplicable_command {
-                                warn!(
-                                    target: module_path!(),
-                                    "ignoring inapplicable command ({c}) from signal handler."
-                                );
-                                self.lock_warn_inapplicable_command = true;
-                            }
-                            false
-                        }
-                    }
-                }
-                Err(e) => {
-                    if !self.lock_error_channel_receive_termination_signal {
-                        error!(
-                            target: module_path!(),
-                            "receiving termination signal failed ({e:?})"
-                        );
-                        self.lock_error_channel_receive_termination_signal = true;
-                    }
-                    false
-                }
-            };
-            spin_sleeper.sleep(sleep_duration_hundred_millis);
-        }
+        self.wait_for_termination(
+            &ventilation_channels.rx_ventilation_from_signal_handler,
+            sleep_duration_hundred_millis,
+            module_path!()
+        );
     }
 }
 

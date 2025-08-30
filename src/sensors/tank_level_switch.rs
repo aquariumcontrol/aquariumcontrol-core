@@ -13,9 +13,12 @@ use std::sync::{Arc, Mutex};
 #[cfg(all(target_os = "linux", not(test)))]
 use nix::unistd::gettid;
 
+use log::error;
 #[cfg(all(target_os = "linux", not(test)))]
 use log::info;
-use log::{error, warn};
+
+#[cfg(not(test))]
+use log::warn;
 
 use crate::sensors::tank_level_switch_channels::TankLevelSwitchChannels;
 use serde_derive::Deserialize;
@@ -33,7 +36,9 @@ cfg_if::cfg_if! {
 use crate::simulator::get_resp_sim::GetResponseFromSimulatorTrait;
 use crate::simulator::tcp_communication_error::TcpCommunicationError;
 use crate::utilities::channel_content::{AquariumSignal, InternalCommand};
+use crate::utilities::logger::log_error_chain;
 use crate::utilities::proc_ext_req::ProcessExternalRequestTrait;
+use crate::utilities::wait_for_termination::WaitForTerminationTrait;
 
 /// Holds the configuration data for the tank level switch calculation.
 /// The configuration is loaded from the .toml configuration file.
@@ -175,10 +180,10 @@ pub struct TankLevelSwitch {
     tank_level_switch_position_low_stabilization_counter: u32,
 
     /// inhibition flag to avoid flooding the log file with repeated messages about having received inapplicable command from the signal handler
-    lock_warn_inapplicable_command_signal_handler: bool,
+    pub(crate) lock_warn_inapplicable_command_signal_handler: bool,
 
     /// inhibition flag to avoid flooding the log file with repeated messages about failure to receive termination signal via the channel
-    lock_error_channel_receive_termination: bool,
+    pub(crate) lock_error_channel_receive_termination: bool,
 
     /// inhibition flag to avoid flooding the log file with repeated messages about excessive access time to mutex
     lock_warn_max_mutex_access_duration: bool,
@@ -192,6 +197,12 @@ pub struct TankLevelSwitch {
 
     /// inhibition flag to avoid flooding the log file with repeated messages about not having received an input pin
     lock_error_input_pin_none: bool,
+
+    /// inhibition flag to avoid flooding the log file with repeated messages about simulator communication error
+    lock_error_simulator_communication: bool,
+
+    /// inhibition flag to avoid flooding the log file with repeated messages about channel(s) not being provided
+    lock_error_channel_not_provided: bool,
 
     #[cfg(all(target_os = "linux", feature = "target_hw"))]
     // interface to GPIO pin wrapped as optional
@@ -243,6 +254,8 @@ impl TankLevelSwitch {
             #[cfg(test)]
             mutex_access_duration_exceeded: false,
             lock_error_input_pin_none: false,
+            lock_error_simulator_communication: false,
+            lock_error_channel_not_provided: false,
         })
     }
 
@@ -340,12 +353,14 @@ impl TankLevelSwitch {
     ) -> Result<(), TankLevelSwitchError> {
         if self.config.use_simulator {
             // Ensure channels are present before proceeding.
-            let tx_tank_level_switch_to_tcp = tx_tank_level_switch_to_tcp_opt.as_ref().ok_or_else(|| {
-                TankLevelSwitchError::SimulatorChannelNotProvided(module_path!().to_string())
-            })?;
-            let rx_tank_level_switch_from_tcp = rx_tank_level_switch_from_tcp_opt.as_ref().ok_or_else(|| {
-                TankLevelSwitchError::SimulatorChannelNotProvided(module_path!().to_string())
-            })?;
+            let tx_tank_level_switch_to_tcp =
+                tx_tank_level_switch_to_tcp_opt.as_ref().ok_or_else(|| {
+                    TankLevelSwitchError::SimulatorChannelNotProvided(module_path!().to_string())
+                })?;
+            let rx_tank_level_switch_from_tcp =
+                rx_tank_level_switch_from_tcp_opt.as_ref().ok_or_else(|| {
+                    TankLevelSwitchError::SimulatorChannelNotProvided(module_path!().to_string())
+                })?;
 
             // Fetch the position signal.
             let position_signal = AquariumSignal::TankLevelSwitchPosition;
@@ -515,11 +530,41 @@ impl TankLevelSwitch {
                     &tank_level_switch_channels.tx_tank_level_switch_to_tcp_opt,
                     &tank_level_switch_channels.rx_tank_level_switch_from_tcp_opt,
                 ) {
-                    if matches!(e, TankLevelSwitchError::InputPinNotProvided(_))
-                        && !self.lock_error_input_pin_none
+                    if matches!(e, TankLevelSwitchError::InputPinNotProvided(_)) {
+                        if !self.lock_error_input_pin_none {
+                            log_error_chain(
+                                module_path!(),
+                                "Failed to update tank level switch signals.",
+                                e,
+                            );
+                            self.lock_error_input_pin_none = true;
+                        }
+                    } else if matches!(e, TankLevelSwitchError::SimulatorCommunicationError { .. })
                     {
-                        error!(target: module_path!(),"Tank level switch signal could not be read (e:?).");
-                        self.lock_error_input_pin_none = true;
+                        if !self.lock_error_simulator_communication {
+                            log_error_chain(
+                                module_path!(),
+                                "Failed to update tank level switch signals.",
+                                e,
+                            );
+                            self.lock_error_simulator_communication = true;
+                        }
+                    } else if matches!(e, TankLevelSwitchError::SimulatorChannelNotProvided(_)) {
+                        if !self.lock_error_channel_not_provided {
+                            log_error_chain(
+                                module_path!(),
+                                "Failed to update tank level switch signals.",
+                                e,
+                            );
+                            self.lock_error_channel_not_provided = true;
+                        }
+                    } else {
+                        // Protection for future error variants
+                        log_error_chain(
+                            module_path!(),
+                            "Failed to update tank level switch signals.",
+                            e,
+                        );
                     }
                 } else {
                     self.lock_error_input_pin_none = false;
@@ -618,43 +663,12 @@ impl TankLevelSwitch {
         // This thread has channel connections to underlying threads (GpioHandler).
         // Those threads have to stop receiving commands from this thread.
         // The shutdown sequence is handled by the signal_handler module.
-        let mut termination_command_received = false;
         let sleep_duration_one_millis = Duration::from_millis(1);
-        while !termination_command_received {
-            termination_command_received = match tank_level_switch_channels
-                .rx_tank_level_switch_from_signal_handler
-                .recv()
-            {
-                // @todo: change to try_recv
-                Ok(c) => match c {
-                    InternalCommand::Terminate => {
-                        self.lock_warn_inapplicable_command_signal_handler = false;
-                        true
-                    }
-                    _ => {
-                        if !self.lock_warn_inapplicable_command_signal_handler {
-                            warn!(
-                                target: module_path!(),
-                                "ignoring inapplicable command from signal handler ({c})"
-                            );
-                            self.lock_warn_inapplicable_command_signal_handler = true;
-                        }
-                        false
-                    }
-                },
-                Err(e) => {
-                    if !self.lock_error_channel_receive_termination {
-                        error!(
-                            target: module_path!(),
-                            "receiving termination signal from signal handler failed ({e:?})"
-                        );
-                        self.lock_error_channel_receive_termination = true;
-                    }
-                    false
-                }
-            };
-            spin_sleeper.sleep(sleep_duration_one_millis);
-        }
+        self.wait_for_termination(
+            &tank_level_switch_channels.rx_tank_level_switch_from_signal_handler,
+            sleep_duration_one_millis,
+            module_path!()
+        );
         Ok(())
     }
 }

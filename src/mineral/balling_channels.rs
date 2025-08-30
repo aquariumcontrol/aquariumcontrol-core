@@ -8,7 +8,7 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 */
 use crate::utilities::channel_content::InternalCommand;
 use std::fmt;
-use std::sync::mpsc::{Receiver, RecvError, SendError, Sender, TryRecvError};
+use std::sync::mpsc::{Receiver, RecvError, SendError, Sender};
 
 /// Container for the channels used by Balling for inter-thread communication
 pub struct BallingChannels {
@@ -85,16 +85,6 @@ impl BallingChannels {
         #[cfg(feature = "debug_channels")]
         if result.is_ok() {
             self.cnt_tx_balling_to_signal_handler += 1;
-        }
-        result
-    }
-
-    /// Receives a command from the signal handler.
-    pub fn receive_from_signal_handler(&mut self) -> Result<InternalCommand, TryRecvError> {
-        let result = self.rx_balling_from_signal_handler.try_recv();
-        #[cfg(feature = "debug_channels")]
-        if result.is_ok() {
-            self.cnt_rx_balling_from_signal_handler += 1;
         }
         result
     }
