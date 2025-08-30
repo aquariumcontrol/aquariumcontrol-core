@@ -726,17 +726,18 @@ impl Heating {
                     }
 
                     // check if midnight has arrived
-                    if duration_until_midnight <= 0 && heating_stats_opt.is_some() {
-                        if let Err(e) = heating_stats_transfer.transfer_heating_stats(
-                            heating_stats_opt.clone().unwrap(),
-                            &mut self.sql_interface_heating,
-                        ) {
-                            error!("Error occurred when trying to store heating stats data in database: {e:?}")
+                    if duration_until_midnight <= 0 {
+                        // Use take() to move the value out of the Option without cloning.
+                        if let Some(stats) = heating_stats_opt.take() {
+                            if let Err(e) =
+                                heating_stats_transfer.transfer_heating_stats(stats, &mut self.sql_interface_heating)
+                            {
+                                error!("Error occurred when trying to store heating stats data in database: {e:?}");
+                            }
+                            // Reset heating stats
+                            heating_stats_opt = Some(HeatingStatsEntry::new(&mut self.sql_interface_heating.conn));
+                            duration_until_midnight = self.get_duration_until_midnight();
                         }
-                        // reset heating stats
-                        heating_stats_opt =
-                            Some(HeatingStatsEntry::new(&mut self.sql_interface_heating.conn));
-                        duration_until_midnight = self.get_duration_until_midnight();
                     }
                 }
             }
@@ -833,12 +834,11 @@ impl Heating {
 
         // update the database with the heating stats data recorded
         // so far for this date
-        if heating_stats_opt.is_some() {
-            if let Err(e) = heating_stats_transfer.transfer_heating_stats(
-                heating_stats_opt.clone().unwrap(),
-                &mut self.sql_interface_heating,
-            ) {
-                error!("Error occurred when trying to store heating stats data in database (during termination): {e:?}")
+        if let Some(stats) = heating_stats_opt.take() {
+            if let Err(e) =
+                heating_stats_transfer.transfer_heating_stats(stats, &mut self.sql_interface_heating)
+            {
+                error!("Error occurred when trying to store heating stats data in database (during termination): {e:?}");
             }
         }
 

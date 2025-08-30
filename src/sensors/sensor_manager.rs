@@ -10,7 +10,10 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 
 #[cfg(all(target_os = "linux", not(test)))]
 use log::info;
-use log::{error, warn};
+use log::error;
+
+#[cfg(not(test))]
+use log::warn;
 
 use std::sync::{Arc, Mutex};
 
@@ -342,7 +345,7 @@ impl SensorManager {
     ///
     /// # Panics
     /// This function will **panic** if either `tx_sensor_manager_to_tcp_opt` or `rx_sensor_manager_from_tcp_opt`
-    /// are `None`. This case is not possible, because the `SensorManager` module performs checks beforehand to ensure
+    /// are `None`. This case is not possible because the `SensorManager` module performs checks beforehand to ensure
     /// these channels are `Some` when running in simulator mode.
     fn communicate_with_simulator(
         &mut self,
