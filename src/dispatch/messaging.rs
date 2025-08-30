@@ -26,6 +26,7 @@ cfg_if::cfg_if! {
         use crate::dispatch::messaging_channels::MessagingChannels;
         use crate::dispatch::messaging_error::MessagingError;
         use crate::utilities::proc_ext_req::ProcessExternalRequestTrait;
+        use crate::utilities::wait_for_termination::WaitForTerminationTrait;
         use std::fmt;
         use std::io::ErrorKind;
     }
@@ -264,8 +265,6 @@ impl Messaging {
                 location: module_path!().to_string(),
                 mq_name: mq_file_name_clone_for_error,
                 source: e,
-                lock_warn_inapplicable_command_signal_handler: false,
-                lock_error_channel_receive_termination: false,
             }
         })?;
 
@@ -285,7 +284,8 @@ impl Messaging {
 
         Ok(Messaging {
             config,
-
+            lock_warn_inapplicable_command_signal_handler: false,
+            lock_error_channel_receive_termination: false,
             mq,
             mq_max_msg_len,
         })
