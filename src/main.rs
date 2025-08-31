@@ -149,6 +149,12 @@ cfg_if::cfg_if! {
         use crate::sensors::i2c_interface::I2cInterface;
     }
 }
+#[cfg(not(target_env = "msvc"))]
+use tikv_jemallocator::Jemalloc;
+
+#[cfg(not(target_env = "msvc"))]
+#[global_allocator]
+static GLOBAL: Jemalloc = Jemalloc;
 
 /// Displays the valid command line parameter combinations
 fn display_usage() {
