@@ -189,11 +189,8 @@ impl ScheduleCheck {
         locks: (&mut bool, &mut bool, &mut bool),
         module_name: &str,
     ) -> (bool, bool) {
-        let (
-            lock_error_channel_receive,
-            lock_error_channel_send,
-            lock_warn_inapplicable_command
-        ) = locks;
+        let (lock_error_channel_receive, lock_error_channel_send, lock_warn_inapplicable_command) =
+            locks;
 
         let mut send_success = false;
         let mut receive_success = false;
@@ -229,11 +226,7 @@ impl ScheduleCheck {
                     TryRecvError::Disconnected => {
                         if !*lock_error_channel_receive {
                             let context = format!("receiving command from {module_name} failed");
-                            log_error_chain(
-                                module_path!(),
-                                &context,
-                                e,
-                            );
+                            log_error_chain(module_path!(), &context, e);
                             *lock_error_channel_receive = true;
                         }
                     }
@@ -273,18 +266,24 @@ impl ScheduleCheck {
     ///   other application modules and the signal handler.
     /// * `execution_config` - An `ExecutionConfig` struct containing information about which threads
     ///   have been started.
-    pub fn execute(&mut self, schedule_check_channels: &mut ScheduleCheckChannels, execution_config: ExecutionConfig) {
+    pub fn execute(
+        &mut self,
+        schedule_check_channels: &mut ScheduleCheckChannels,
+        execution_config: ExecutionConfig,
+    ) {
         #[cfg(all(target_os = "linux", not(test)))]
         info!(target: module_path!(), "Thread started with TID: {}", gettid());
 
         let sleep_duration_hundred_millis = Duration::from_millis(100);
         let spin_sleeper = SpinSleeper::default();
 
-        let duration_schedule_check_interval = Duration::from_secs(self.config.schedule_check_interval.into());
+        let duration_schedule_check_interval =
+            Duration::from_secs(self.config.schedule_check_interval.into());
         let mut last_check_instant = Instant::now();
 
         loop {
-            if self.config.active &&  last_check_instant.elapsed() > duration_schedule_check_interval {
+            if self.config.active && last_check_instant.elapsed() > duration_schedule_check_interval
+            {
                 last_check_instant = Instant::now();
                 if let Err(errors) = self.sql_interface_schedule.read_schedule() {
                     if !self.lock_error_database_read {
@@ -344,7 +343,7 @@ impl ScheduleCheck {
                         &mut self.lock_error_channel_send_ventilation,
                         &mut self.lock_warn_inapplicable_command_ventilation,
                     ),
-                    "ventilation"
+                    "ventilation",
                 );
                 #[cfg(feature = "debug_channels")]
                 {
@@ -370,7 +369,11 @@ impl ScheduleCheck {
                     }
                     Err(e) => {
                         if !self.lock_error_find_heating_schedule {
-                            log_error_chain(module_path!(), "could not find schedule for heating", e);
+                            log_error_chain(
+                                module_path!(),
+                                "could not find schedule for heating",
+                                e,
+                            );
                             self.lock_error_find_heating_schedule = true;
                         }
                         None
@@ -386,7 +389,7 @@ impl ScheduleCheck {
                         &mut self.lock_error_channel_send_heating,
                         &mut self.lock_warn_inapplicable_command_heating,
                     ),
-                    "heating"
+                    "heating",
                 );
                 #[cfg(feature = "debug_channels")]
                 {
@@ -412,7 +415,11 @@ impl ScheduleCheck {
                     }
                     Err(e) => {
                         if !self.lock_error_find_refill_schedule {
-                            log_error_chain(module_path!(), "could not find schedule for refill", e);
+                            log_error_chain(
+                                module_path!(),
+                                "could not find schedule for refill",
+                                e,
+                            );
                             self.lock_error_find_refill_schedule = true;
                         }
                         None
@@ -428,7 +435,7 @@ impl ScheduleCheck {
                         &mut self.lock_error_channel_send_refill,
                         &mut self.lock_warn_inapplicable_command_refill,
                     ),
-                    "refill"
+                    "refill",
                 );
                 #[cfg(feature = "debug_channels")]
                 {
@@ -454,7 +461,11 @@ impl ScheduleCheck {
                     }
                     Err(e) => {
                         if !self.lock_error_find_balling_schedule {
-                            log_error_chain(module_path!(), "could not find schedule for balling", e);
+                            log_error_chain(
+                                module_path!(),
+                                "could not find schedule for balling",
+                                e,
+                            );
                             self.lock_error_find_balling_schedule = true;
                         }
                         None
@@ -470,7 +481,7 @@ impl ScheduleCheck {
                         &mut self.lock_error_channel_send_balling,
                         &mut self.lock_warn_inapplicable_command_balling,
                     ),
-                    "balling"
+                    "balling",
                 );
                 #[cfg(feature = "debug_channels")]
                 {

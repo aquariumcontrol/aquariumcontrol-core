@@ -853,7 +853,10 @@ fn run() -> Result<(), StartupError> {
     let mut sensor_manager = SensorManager::new(config.sensor_manager)
         .map_err(|e| StartupError::SensorManagerSetupFailure { source: e })?;
 
-    let mut relay_manager = RelayManager::new(config.relay_manager.clone(), execution_config_clone_for_relay_manager);
+    let mut relay_manager = RelayManager::new(
+        config.relay_manager.clone(),
+        execution_config_clone_for_relay_manager,
+    );
     let mut schedule_check = ScheduleCheck::new(
         config.schedule_check,
         sql_interface_schedule,
@@ -981,7 +984,10 @@ fn run() -> Result<(), StartupError> {
 
         if execution_config.schedule_check {
             scope.spawn(move || {
-                schedule_check.execute(&mut channels.schedule_check, execution_config_clone_for_schedule_check);
+                schedule_check.execute(
+                    &mut channels.schedule_check,
+                    execution_config_clone_for_schedule_check,
+                );
                 #[cfg(feature = "debug_channels")]
                 debug!(target: module_path!(), "{0}", channels.schedule_check);
                 #[cfg(feature = "debug_main")]

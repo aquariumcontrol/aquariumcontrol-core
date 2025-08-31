@@ -20,9 +20,6 @@ use log::debug;
 #[cfg(all(not(test), target_os = "linux"))]
 use nix::unistd::gettid;
 
-use spin_sleep::SpinSleeper;
-use std::sync::mpsc::{Receiver, Sender, TryRecvError};
-use std::time::{Duration, Instant};
 use crate::launch::execution_config::ExecutionConfig;
 use crate::relays::relay_error::RelayError;
 use crate::relays::relay_manager_channels::RelayManagerChannels;
@@ -30,6 +27,9 @@ use crate::relays::relay_manager_config::RelayManagerConfig;
 use crate::utilities::channel_content::InternalCommand;
 use crate::utilities::logger::log_error_chain;
 use crate::utilities::proc_ext_req::ProcessExternalRequestTrait;
+use spin_sleep::SpinSleeper;
+use std::sync::mpsc::{Receiver, Sender, TryRecvError};
+use std::time::{Duration, Instant};
 
 /// Trait for the execution of relay actuation on either simulator or real hardware.
 /// This trait allows running the main control with a mock implementation for testing.
@@ -530,6 +530,7 @@ impl RelayManager {
 
 #[cfg(test)]
 pub mod tests {
+    use crate::launch::execution_config::ExecutionConfig;
     use crate::relays::relay_manager::{
         RelayActuationTrait, RelayError, RelayManager, RelayManagerChannels,
     };
@@ -539,7 +540,6 @@ pub mod tests {
     use std::sync::mpsc;
     use std::thread::scope;
     use std::time::Duration;
-    use crate::launch::execution_config::ExecutionConfig;
 
     // Contains mock trait implementation for unit testing purposes.
     pub struct ActuateVoid {
