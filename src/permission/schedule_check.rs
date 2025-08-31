@@ -186,11 +186,15 @@ impl ScheduleCheck {
         tx: &Sender<bool>,
         rx: &Receiver<InternalCommand>,
         schedule_entry: Option<&ScheduleEntry>,
-        lock_error_channel_receive: &mut bool,
-        lock_error_channel_send: &mut bool,
-        lock_warn_inapplicable_command: &mut bool,
+        locks: (&mut bool, &mut bool, &mut bool),
         module_name: &str,
     ) -> (bool, bool) {
+        let (
+            lock_error_channel_receive,
+            lock_error_channel_send,
+            lock_warn_inapplicable_command
+        ) = locks;
+
         let mut send_success = false;
         let mut receive_success = false;
         match tx.send(match rx.try_recv() {
@@ -209,7 +213,7 @@ impl ScheduleCheck {
                     if !*lock_warn_inapplicable_command {
                         warn!(
                             target: module_path!(),
-                            "ignoring inapplicable command ({}) from {}", c, module_name
+                            "ignoring inapplicable command ({c}) from {module_name}"
                         );
                         *lock_warn_inapplicable_command = true;
                     }
@@ -224,7 +228,7 @@ impl ScheduleCheck {
                     }
                     TryRecvError::Disconnected => {
                         if !*lock_error_channel_receive {
-                            let context = format!("receiving command from {} failed", module_name);
+                            let context = format!("receiving command from {module_name} failed");
                             log_error_chain(
                                 module_path!(),
                                 &context,
@@ -335,9 +339,11 @@ impl ScheduleCheck {
                     &schedule_check_channels.tx_schedule_check_to_ventilation,
                     &schedule_check_channels.rx_schedule_check_from_ventilation,
                     schedule_entry_ventilation_opt,
-                    &mut self.lock_error_channel_receive_ventilation,
-                    &mut self.lock_error_channel_send_ventilation,
-                    &mut self.lock_warn_inapplicable_command_ventilation,
+                    (
+                        &mut self.lock_error_channel_receive_ventilation,
+                        &mut self.lock_error_channel_send_ventilation,
+                        &mut self.lock_warn_inapplicable_command_ventilation,
+                    ),
                     "ventilation"
                 );
                 #[cfg(feature = "debug_channels")]
@@ -375,9 +381,11 @@ impl ScheduleCheck {
                     &schedule_check_channels.tx_schedule_check_to_heating,
                     &schedule_check_channels.rx_schedule_check_from_heating,
                     schedule_entry_heating_opt,
-                    &mut self.lock_error_channel_receive_heating,
-                    &mut self.lock_error_channel_send_heating,
-                    &mut self.lock_warn_inapplicable_command_heating,
+                    (
+                        &mut self.lock_error_channel_receive_heating,
+                        &mut self.lock_error_channel_send_heating,
+                        &mut self.lock_warn_inapplicable_command_heating,
+                    ),
                     "heating"
                 );
                 #[cfg(feature = "debug_channels")]
@@ -415,9 +423,11 @@ impl ScheduleCheck {
                     &schedule_check_channels.tx_schedule_check_to_refill,
                     &schedule_check_channels.rx_schedule_check_from_refill,
                     schedule_entry_refill_opt,
-                    &mut self.lock_error_channel_receive_refill,
-                    &mut self.lock_error_channel_send_refill,
-                    &mut self.lock_warn_inapplicable_command_refill,
+                    (
+                        &mut self.lock_error_channel_receive_refill,
+                        &mut self.lock_error_channel_send_refill,
+                        &mut self.lock_warn_inapplicable_command_refill,
+                    ),
                     "refill"
                 );
                 #[cfg(feature = "debug_channels")]
@@ -455,9 +465,11 @@ impl ScheduleCheck {
                     &schedule_check_channels.tx_schedule_check_to_balling,
                     &schedule_check_channels.rx_schedule_check_from_balling,
                     schedule_entry_balling_opt,
-                    &mut self.lock_error_channel_receive_balling,
-                    &mut self.lock_error_channel_send_balling,
-                    &mut self.lock_warn_inapplicable_command_balling,
+                    (
+                        &mut self.lock_error_channel_receive_balling,
+                        &mut self.lock_error_channel_send_balling,
+                        &mut self.lock_warn_inapplicable_command_balling,
+                    ),
                     "balling"
                 );
                 #[cfg(feature = "debug_channels")]

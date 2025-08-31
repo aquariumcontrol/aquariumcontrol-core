@@ -23,7 +23,7 @@ use nix::unistd::gettid;
 use spin_sleep::SpinSleeper;
 use std::sync::mpsc::{Receiver, Sender, TryRecvError};
 use std::time::{Duration, Instant};
-
+use crate::launch::execution_config::ExecutionConfig;
 use crate::relays::relay_error::RelayError;
 use crate::relays::relay_manager_channels::RelayManagerChannels;
 use crate::relays::relay_manager_config::RelayManagerConfig;
@@ -145,6 +145,9 @@ pub struct RelayManager {
 
     /// inhibition flag to avoid flooding the log file with repeated messages of failure to receive from balling mineral dosing via the channel
     lock_error_channel_receive_balling: bool,
+
+    /// information about which threads have been started
+    execution_config: ExecutionConfig,
 }
 
 impl RelayManager {
@@ -161,7 +164,7 @@ impl RelayManager {
     /// # Returns
     /// A new `RelayManager` struct, ready to handle relay actuation commands
     /// and communicate with other modules.    
-    pub fn new(config: RelayManagerConfig) -> RelayManager {
+    pub fn new(config: RelayManagerConfig, execution_config: ExecutionConfig) -> RelayManager {
         RelayManager {
             config,
             lock_error_channel_send_refill: false,
@@ -174,6 +177,7 @@ impl RelayManager {
             lock_error_channel_receive_balling: false,
             lock_error_channel_send_feed: false,
             lock_error_channel_receive_feed: false,
+            execution_config,
         }
     }
 
@@ -303,95 +307,105 @@ impl RelayManager {
                 break;
             }
 
-            (
-                self.lock_error_channel_receive_refill,
-                self.lock_error_channel_send_refill,
-            ) = self.process_actuation_request(
-                (
-                    &relay_manager_channels.rx_relay_manager_from_refill,
-                    &relay_manager_channels.tx_relay_manager_to_refill,
-                ),
+            if self.execution_config.refill {
                 (
                     self.lock_error_channel_receive_refill,
                     self.lock_error_channel_send_refill,
-                ),
-                "refill",
-                actuator,
-                &mut spin_sleeper,
-                sleep_duration_between_retries,
-            );
+                ) = self.process_actuation_request(
+                    (
+                        &relay_manager_channels.rx_relay_manager_from_refill,
+                        &relay_manager_channels.tx_relay_manager_to_refill,
+                    ),
+                    (
+                        self.lock_error_channel_receive_refill,
+                        self.lock_error_channel_send_refill,
+                    ),
+                    "refill",
+                    actuator,
+                    &mut spin_sleeper,
+                    sleep_duration_between_retries,
+                );
+            }
 
-            (
-                self.lock_error_channel_receive_heating,
-                self.lock_error_channel_send_heating,
-            ) = self.process_actuation_request(
-                (
-                    &relay_manager_channels.rx_relay_manager_from_heating,
-                    &relay_manager_channels.tx_relay_manager_to_heating,
-                ),
+            if self.execution_config.heating {
                 (
                     self.lock_error_channel_receive_heating,
                     self.lock_error_channel_send_heating,
-                ),
-                "heating",
-                actuator,
-                &mut spin_sleeper,
-                sleep_duration_between_retries,
-            );
+                ) = self.process_actuation_request(
+                    (
+                        &relay_manager_channels.rx_relay_manager_from_heating,
+                        &relay_manager_channels.tx_relay_manager_to_heating,
+                    ),
+                    (
+                        self.lock_error_channel_receive_heating,
+                        self.lock_error_channel_send_heating,
+                    ),
+                    "heating",
+                    actuator,
+                    &mut spin_sleeper,
+                    sleep_duration_between_retries,
+                );
+            }
 
-            (
-                self.lock_error_channel_receive_ventilation,
-                self.lock_error_channel_send_ventilation,
-            ) = self.process_actuation_request(
-                (
-                    &relay_manager_channels.rx_relay_manager_from_ventilation,
-                    &relay_manager_channels.tx_relay_manager_to_ventilation,
-                ),
+            if self.execution_config.ventilation {
                 (
                     self.lock_error_channel_receive_ventilation,
                     self.lock_error_channel_send_ventilation,
-                ),
-                "ventilation",
-                actuator,
-                &mut spin_sleeper,
-                sleep_duration_between_retries,
-            );
+                ) = self.process_actuation_request(
+                    (
+                        &relay_manager_channels.rx_relay_manager_from_ventilation,
+                        &relay_manager_channels.tx_relay_manager_to_ventilation,
+                    ),
+                    (
+                        self.lock_error_channel_receive_ventilation,
+                        self.lock_error_channel_send_ventilation,
+                    ),
+                    "ventilation",
+                    actuator,
+                    &mut spin_sleeper,
+                    sleep_duration_between_retries,
+                );
+            }
 
-            (
-                self.lock_error_channel_receive_balling,
-                self.lock_error_channel_send_balling,
-            ) = self.process_actuation_request(
-                (
-                    &relay_manager_channels.rx_relay_manager_from_balling,
-                    &relay_manager_channels.tx_relay_manager_to_balling,
-                ),
+            if self.execution_config.balling {
                 (
                     self.lock_error_channel_receive_balling,
                     self.lock_error_channel_send_balling,
-                ),
-                "Balling dosing",
-                actuator,
-                &mut spin_sleeper,
-                sleep_duration_between_retries,
-            );
+                ) = self.process_actuation_request(
+                    (
+                        &relay_manager_channels.rx_relay_manager_from_balling,
+                        &relay_manager_channels.tx_relay_manager_to_balling,
+                    ),
+                    (
+                        self.lock_error_channel_receive_balling,
+                        self.lock_error_channel_send_balling,
+                    ),
+                    "Balling dosing",
+                    actuator,
+                    &mut spin_sleeper,
+                    sleep_duration_between_retries,
+                );
+            }
 
-            (
-                self.lock_error_channel_receive_feed,
-                self.lock_error_channel_send_feed,
-            ) = self.process_actuation_request(
-                (
-                    &relay_manager_channels.rx_relay_manager_from_feed,
-                    &relay_manager_channels.tx_relay_manager_to_feed,
-                ),
+            if self.execution_config.feed {
                 (
                     self.lock_error_channel_receive_feed,
                     self.lock_error_channel_send_feed,
-                ),
-                "feed",
-                actuator,
-                &mut spin_sleeper,
-                sleep_duration_between_retries,
-            );
+                ) = self.process_actuation_request(
+                    (
+                        &relay_manager_channels.rx_relay_manager_from_feed,
+                        &relay_manager_channels.tx_relay_manager_to_feed,
+                    ),
+                    (
+                        self.lock_error_channel_receive_feed,
+                        self.lock_error_channel_send_feed,
+                    ),
+                    "feed",
+                    actuator,
+                    &mut spin_sleeper,
+                    sleep_duration_between_retries,
+                );
+            }
 
             // *** send heartbeat ***
             if let Some(interval_secs) = actuator.get_heartbeat_interval_seconds() {
@@ -525,6 +539,7 @@ pub mod tests {
     use std::sync::mpsc;
     use std::thread::scope;
     use std::time::Duration;
+    use crate::launch::execution_config::ExecutionConfig;
 
     // Contains mock trait implementation for unit testing purposes.
     pub struct ActuateVoid {
@@ -599,7 +614,7 @@ pub mod tests {
         let spin_sleeper = SpinSleeper::default();
         let sleep_duration = Duration::from_secs(2);
 
-        let mut relay_manager = RelayManager::new(config.relay_manager);
+        let mut relay_manager = RelayManager::new(config.relay_manager, ExecutionConfig::default());
 
         let (tx_relay_manager_to_refill, rx_refill_from_relay_manager) = mpsc::channel();
         let (tx_refill_to_relay_manager, rx_relay_manager_from_refill) = mpsc::channel();
@@ -917,7 +932,7 @@ pub mod tests {
         let config: ConfigData =
             read_config_file("/config/aquarium_control_test_simulator.toml".to_string()).unwrap();
 
-        let mut relay_manager = RelayManager::new(config.relay_manager);
+        let mut relay_manager = RelayManager::new(config.relay_manager, ExecutionConfig::default());
 
         let (tx_relay_manager_to_refill, rx_refill_from_relay_manager) = mpsc::channel();
         let (tx_refill_to_relay_manager, rx_relay_manager_from_refill) = mpsc::channel();
@@ -1040,7 +1055,7 @@ pub mod tests {
 
         let target_repeat_times = config.relay_manager.actuation_retries;
 
-        let mut relay_manager = RelayManager::new(config.relay_manager);
+        let mut relay_manager = RelayManager::new(config.relay_manager, ExecutionConfig::default());
 
         let (tx_relay_manager_to_refill, rx_refill_from_relay_manager) = mpsc::channel();
         let (tx_refill_to_relay_manager, rx_relay_manager_from_refill) = mpsc::channel();

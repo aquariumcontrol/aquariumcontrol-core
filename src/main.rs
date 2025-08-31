@@ -437,6 +437,7 @@ fn run() -> Result<(), StartupError> {
     let execution_config = ExecutionConfig::new(&config);
     let execution_config_clone_for_signal_handler = execution_config.clone();
     let execution_config_clone_for_schedule_check = execution_config.clone();
+    let execution_config_clone_for_relay_manager = execution_config.clone();
     #[cfg(target_os = "linux")]
     let execution_config_clone_for_messaging = execution_config.clone();
 
@@ -852,7 +853,7 @@ fn run() -> Result<(), StartupError> {
     let mut sensor_manager = SensorManager::new(config.sensor_manager)
         .map_err(|e| StartupError::SensorManagerSetupFailure { source: e })?;
 
-    let mut relay_manager = RelayManager::new(config.relay_manager.clone());
+    let mut relay_manager = RelayManager::new(config.relay_manager.clone(), execution_config_clone_for_relay_manager);
     let mut schedule_check = ScheduleCheck::new(
         config.schedule_check,
         sql_interface_schedule,
