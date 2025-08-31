@@ -15,33 +15,16 @@ use log::warn;
 
 #[cfg(all(target_os = "linux", not(test)))]
 use nix::unistd::gettid;
-use serde_derive::Deserialize;
 use spin_sleep::SpinSleeper;
 use std::sync::mpsc::{Receiver, Sender, TryRecvError};
 use std::time::{Duration, Instant};
 
 use crate::database::sql_interface_schedule::{ScheduleEntry, ScheduleType, SqlInterfaceSchedule};
 pub(crate) use crate::permission::schedule_check_channels::ScheduleCheckChannels;
+use crate::permission::schedule_check_config::ScheduleCheckConfig;
 use crate::utilities::channel_content::InternalCommand;
 use crate::utilities::logger::log_error_chain;
 use crate::utilities::proc_ext_req::ProcessExternalRequestTrait;
-
-/// Holds the configuration data for the schedule checker.
-/// The configuration is loaded from the .toml configuration file.
-/// This struct does not contain any implementation.
-#[derive(Deserialize)]
-pub struct ScheduleCheckConfig {
-    /// reading from the database only happens when the flag is true
-    active: bool,
-
-    /// interval for polling the SQL database
-    schedule_check_interval: u32,
-
-    /// strategy if entry could not be found in the database:
-    /// - true allows actuation
-    /// - false inhibits actuation
-    strategy_if_schedule_not_found: bool,
-}
 
 #[cfg_attr(doc, aquamarine::aquamarine)]
 /// Contains the configuration and the implementation for the schedule checker.

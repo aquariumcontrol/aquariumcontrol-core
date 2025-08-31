@@ -10,7 +10,7 @@ use crate::database::sql_query_strings;
 use crate::database::sql_query_strings::{
     SQL_QUERY_CHECK_HEATING_SETVALS_COUNT, SQL_QUERY_CHECK_HEATING_SETVALS_NULL,
 };
-use crate::thermal::heating::HeatingConfig;
+use crate::thermal::heating_config::HeatingConfig;
 use mysql::prelude::Queryable;
 
 /// Contains the heating set values which can be set by the user.

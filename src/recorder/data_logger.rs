@@ -20,7 +20,6 @@ use log::debug;
 use nix::unistd::gettid;
 
 use mysql::PooledConn;
-use serde_derive::Deserialize;
 use spin_sleep::SpinSleeper;
 use std::fs;
 use std::sync::{Arc, Mutex};
@@ -31,91 +30,17 @@ use crate::database::sql_interface::SqlInterface;
 use crate::database::sql_interface_data::SqlInterfaceData;
 use crate::recorder::data_injection::DataInjectionTrait;
 use crate::recorder::data_logger_channels::DataLoggerChannels;
+use crate::recorder::data_logger_config::DataLoggerConfig;
 use crate::recorder::recorder_data_frame::RecorderDataFrame;
 use crate::sensors::sensor_manager::SensorManagerSignals;
 use crate::sensors::tank_level_switch::TankLevelSwitchSignals;
 use crate::utilities::channel_content::AquariumSignal;
-use crate::utilities::iir_filter::{IIRFilter, IIRFilterConfig};
+use crate::utilities::iir_filter::IIRFilter;
 use crate::utilities::proc_ext_req::ProcessExternalRequestTrait;
 use crate::utilities::wait_for_termination::WaitForTerminationTrait;
 use crate::water::refill::RefillStatus;
 
 const MILLIS_PER_SEC: u64 = 1000;
-
-/// Holds the configuration data for the regular data logging to SQL database.
-/// The configuration is loaded from the .toml configuration file.
-/// This struct does not contain any implementation.
-#[derive(Deserialize)]
-pub struct DataLoggerConfig {
-    /// data logging will only be active when the flag is set to true
-    active: bool,
-
-    /// switch indicating if a self-generated timestamp or the database-generated timestamp shall be used
-    use_sql_timestamp: bool,
-
-    /// interval of the data logger in seconds
-    logging_interval: u64,
-
-    /// filter coefficient for the filtered version of the water temperature signal
-    filter_coefficient_water_temperature: IIRFilterConfig<()>,
-
-    /// filter coefficient for the filtered version of the pH signal
-    filter_coefficient_pH: IIRFilterConfig<()>,
-
-    /// filter coefficient for the filtered version of the conductivity signal
-    filter_coefficient_conductivity: IIRFilterConfig<()>,
-
-    /// switch if output to file (in ramdisk) shall be written
-    output_to_disk: bool,
-
-    /// output file name (in ramdisk) for the current timestamp
-    output_file_name_timestamp: String,
-
-    /// output file name (in ramdisk) for current value of water temperature
-    output_file_name_water_temperature: String,
-
-    /// output file name (in ramdisk) for current value of water temperature filtered
-    output_file_name_water_temperature_filtered: String,
-
-    /// output file name (in ramdisk) for the current value of pH
-    output_file_name_pH: String,
-
-    /// output file name (in ramdisk) for the current value of pH filtered
-    output_file_name_pH_filtered: String,
-
-    /// output file name (in ramdisk) for the current value of conductivity
-    output_file_name_conductivity: String,
-
-    /// output file name (in ramdisk) for the current value of conductivity filtered
-    output_file_name_conductivity_filtered: String,
-
-    /// output file name (in ramdisk) for the current value of tank level switch position
-    output_file_name_tank_level_switch_position: String,
-
-    /// output file name (in ramdisk) for the current value of tank level switch invalid
-    output_file_name_tank_level_switch_invalid: String,
-
-    /// output file name (in ramdisk) for the current value of tank level switch position stabilized
-    output_file_name_tank_level_switch_position_stabilized: String,
-
-    /// output file name (in ramdisk) for the current value of ventilation
-    output_file_name_ventilation_is_on: String,
-
-    /// output file name (in ramdisk) for the current value of heating
-    output_file_name_heating_is_on: String,
-
-    /// output file name (in ramdisk) for the current value of ambient air temperature
-    output_file_name_ambient_temperature: String,
-
-    /// output file name (in ramdisk) for the current value of air humidity
-    output_file_name_humidity: String,
-
-    /// output file name (in ramdisk) for the current refill pump status
-    output_file_name_refill_in_progress: String,
-
-    /// sleep time in milliseconds before starting the data recording
-    initial_sleep_time_millis: u64,
-}
 
 /// Contains `Arc<Mutex>`-wrapped shared data points accessed by the data logger.
 ///

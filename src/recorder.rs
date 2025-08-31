@@ -18,3 +18,6 @@ pub mod recorder_data_frame;
 
 /// Container for channels used by data logger module
 pub mod data_logger_channels;
+
+/// Configuration data for DataLogger
+pub mod data_logger_config;

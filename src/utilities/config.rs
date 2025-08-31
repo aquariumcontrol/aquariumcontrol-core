@@ -16,40 +16,40 @@ use std::fs;
 #[cfg(all(target_os = "linux", feature = "target_hw"))]
 use crate::beacon::ws2812b::Ws2812BConfig;
 
-use crate::food::feed::FeedConfig;
-use crate::mineral::balling::BallingConfig;
-use crate::recorder::data_logger::DataLoggerConfig;
-use crate::relays::actuate_controllino::ActuateControllinoConfig;
-use crate::relays::relay_manager::RelayManagerConfig;
+use crate::food::feed_config::FeedConfig;
+use crate::mineral::balling_config::BallingConfig;
+use crate::recorder::data_logger_config::DataLoggerConfig;
+use crate::relays::actuate_controllino_config::ActuateControllinoConfig;
+use crate::relays::relay_manager_config::RelayManagerConfig;
 #[allow(unused)] // used in conditionally compiled code
-use crate::sensors::atlas_scientific::AtlasScientificConfig;
-use crate::sensors::dht::DhtConfig;
-use crate::sensors::gpio_handler::GpioHandlerConfig;
-use crate::sensors::sensor_manager::SensorManagerConfig;
-use crate::thermal::heating::HeatingConfig;
+use crate::sensors::atlas_scientific_config::AtlasScientificConfig;
+use crate::sensors::dht_config::DhtConfig;
+use crate::sensors::gpio_handler_config::GpioHandlerConfig;
+use crate::sensors::sensor_manager_config::SensorManagerConfig;
+use crate::thermal::heating_config::HeatingConfig;
 #[cfg(test)]
 use std::env;
 
 #[cfg(feature = "target_hw")]
 use crate::sensors::i2c_interface::I2cInterfaceConfig;
 
-use crate::sensors::tank_level_switch::TankLevelSwitchConfig;
+use crate::sensors::tank_level_switch_config::TankLevelSwitchConfig;
 
 #[cfg(target_os = "linux")]
 use crate::dispatch::messaging::MessagingConfig;
 
-use crate::database::sql_interface::SqlInterfaceConfig;
-use crate::permission::schedule_check::ScheduleCheckConfig;
-use crate::sensors::ds18b20::Ds18b20Config;
-use crate::simulator::tcp_communication::TcpConnectionConfig;
-use crate::thermal::ventilation::VentilationConfig;
+use crate::database::sql_interface_config::SqlInterfaceConfig;
+use crate::permission::schedule_check_config::ScheduleCheckConfig;
+use crate::sensors::ds18b20_config::Ds18b20Config;
+use crate::simulator::tcp_communication_config::TcpCommunicationConfig;
+use crate::thermal::ventilation_config::VentilationConfig;
 use crate::utilities::config_error::ConfigError;
-use crate::utilities::logger::LoggerConfig;
-use crate::utilities::memory_config_check::MemoryConfig;
-use crate::utilities::publish_pid::PublishPidConfig;
-use crate::watchmen::monitors::MonitorsConfig;
-use crate::watchmen::watchdog::WatchdogConfig;
-use crate::water::refill::RefillConfig;
+use crate::utilities::logger_config::LoggerConfig;
+use crate::utilities::memory_config_check_config::MemoryConfig;
+use crate::utilities::publish_pid_config::PublishPidConfig;
+use crate::watchmen::monitors_config::MonitorsConfig;
+use crate::watchmen::watchdog_config::WatchdogConfig;
+use crate::water::refill_config::RefillConfig;
 
 /// Top level struct to hold the configuration data read from .toml file.
 /// It does not contain any implementation.
@@ -59,7 +59,7 @@ pub struct ConfigData {
     pub sql_interface: SqlInterfaceConfig,
 
     /// configuration of the TCP connection (e.g., for simulator)
-    pub tcp_connection: TcpConnectionConfig,
+    pub tcp_communication: TcpCommunicationConfig,
 
     /// configuration of the data logger
     pub data_logger: DataLoggerConfig,

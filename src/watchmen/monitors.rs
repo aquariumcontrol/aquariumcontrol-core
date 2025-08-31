@@ -15,7 +15,6 @@ use log::debug;
 #[cfg(all(not(test), target_os = "linux"))]
 use nix::unistd::gettid;
 
-use serde_derive::Deserialize;
 use spin_sleep::SpinSleeper;
 use std::sync::mpsc::TryRecvError;
 use std::sync::{Arc, Mutex};
@@ -23,19 +22,8 @@ use std::time::Duration;
 
 use crate::utilities::proc_ext_req::ProcessExternalRequestTrait;
 use crate::watchmen::monitors_channels::MonitorsChannels;
+use crate::watchmen::monitors_config::MonitorsConfig;
 use crate::water::refill_monitor_view::RefillMonitorView;
-
-/// Holds the configuration data for the monitors.
-/// The configuration is loaded from the .toml configuration file.
-/// This struct does not contain any implementation.
-#[derive(Deserialize)]
-pub struct MonitorsConfig {
-    /// monitors will only be active when the flag is set to true
-    active: bool,
-
-    /// Maximum number of monitoring entries for refill
-    max_length_refill_monitor_views: usize,
-}
 
 #[cfg_attr(doc, aquamarine::aquamarine)]
 /// Contains the configuration and the implementation for the monitors.

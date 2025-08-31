@@ -51,3 +51,12 @@ pub mod signal_handler_channels;
 
 /// Trait for multiple threads which have to wait for termination signal
 pub mod wait_for_termination;
+
+/// Configuration of Logger
+pub mod logger_config;
+
+/// Configuration of memory configuration check
+pub mod memory_config_check_config;
+
+/// Configuration of PublishPid
+pub mod publish_pid_config;

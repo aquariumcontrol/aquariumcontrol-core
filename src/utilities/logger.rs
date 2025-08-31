@@ -6,26 +6,11 @@ The above copyright notice and this permission notice shall be included in all c
 
 THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
+use crate::utilities::logger_config::LoggerConfig;
 use log::error;
-use serde_derive::Deserialize;
 use std::error::Error;
 use std::path::Path;
 use thiserror::Error;
-
-/// Holds the configuration data for the general log file
-#[derive(Deserialize, Clone)]
-pub struct LoggerConfig {
-    /// path and file name of the log file
-    logfile: String,
-}
-
-impl LoggerConfig {
-    pub fn default() -> Self {
-        Self {
-            logfile: "/var/log/aquarium.log".to_string(),
-        }
-    }
-}
 
 #[derive(Debug, Error)]
 /// Contains the error definition for the logger setup.

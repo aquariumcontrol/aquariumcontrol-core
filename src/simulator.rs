@@ -21,3 +21,6 @@ pub mod tcp_data;
 
 /// Contains channels for communication between threads
 pub mod tcp_communication_channels;
+
+/// Configuration of TcpCommunication
+pub mod tcp_communication_config;

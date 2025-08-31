@@ -1,5 +1,6 @@
 [relay_manager]
 active = true			                    	        # used for testing purposes
+execute = true                                          # used for testing purposes
 use_simulator = false                                   # if true, then do not use real HW
 use_gpio = false                                        # if true, then use GPIO instead of Controllino
 actuation_retries = 3                                   # number of retries to write to Controllino
@@ -45,12 +46,14 @@ max_rows_refill = 1000                                  # maximum allowed number
 max_rows_balling_dosing_log = 10000                     # maximum allowed number of rows in Balling dosing log table. use a value of 0 to deactivate the check.
 max_rows_feed_log = 1000                                # maximum allowed number of rows in feed log table. use a value of 0 to deactivate the check.
 
-[tcp_connection]
+[tcp_communication]
+execute = true                                          # used for testing purposes
 ip_address = "127.0.0.1"                                # ipv4 address for communication with control application for testing purposes
 port = 35000                                            # port number for communication with control application for testing purposes
 
 [data_logger]
 active = true                                                                                   # used for testing purposes
+execute = true                                          # used for testing purposes
 use_sql_timestamp = true                                                                        # switch for defining the data source of timestamp
 logging_interval = 60                                                                           # log data every x seconds
 filter_coefficient_water_temperature = { filter_coefficient = 0.5 }                             # filter configuration for the water temperature
@@ -76,6 +79,7 @@ initial_sleep_time_millis = 2000                                                
 
 [refill]
 active = true
+execute = true                                          # used for testing purposes
 initial_wait_interval = 2                               # wait for x seconds before starting refill control
 check_interval = 60                                     # check tank level every x seconds
 max_refill_count_24h = 20                               # max. allowed refill operations per 24h
@@ -90,11 +94,13 @@ additional_refill_volume = 0.2                          # additional refill volu
 
 [tank_level_switch]
 active = true                                           # used for testing purposes
+execute = true                                          # used for testing purposes
 use_simulator = true                                   # if true, then do not use real HW
 tank_level_switch_position_low_stabilization_count = 5 # number of seconds before stabilized tank level switch turns low
 
 [heating]
 active = true
+execute = true                                          # used for testing purposes
 switch_on_temperature = 22.0                            # temperature, at which the heating shall be switched on 100% of the time
 switch_off_temperature = 28.0                           # temperature, at which the heating shall be switched off 100% of the time
 stop_on_refill_error = true                             # if true, then heating shall be switched off after a configurable time
@@ -108,12 +114,14 @@ set_value_check_interval = 300                          # interval in seconds fo
 
 [feed]
 active = true
+execute = true                                          # used for testing purposes
 schedule_check_interval = 1                             # for testing, check every second if there is a matching entry in the database ready to be executed
 device_switch_delay_millis = 150                        # waiting time in milliseconds before switching on or off a device during feed
 strategy_multiple_schedule_entries_in_past = 0          # strategy to apply when finding more than one feed schedule entry in the past
 
 [ventilation]
 active = true
+execute = true                                          # used for testing purposes
 switch_on_temperature = 28.0                            # temperature, at which the ventilation shall be switched on 100% of the time
 switch_off_temperature = 22.0                           # temperature, at which the ventilation shall be switched off 100% of the time
 switch_on_when_terminating = true           		    # behavior when terminating the application
@@ -124,6 +132,7 @@ set_value_check_interval = 300                          # interval in seconds fo
 
 [balling]
 active = true
+execute = true                                          # used for testing purposes
 pump1_active = true                                     # determines if pump 1 shall be used or not
 pump2_active = true                                     # determines if pump 2 shall be used or not
 pump3_active = true                                     # determines if pump 3 shall be used or not
@@ -137,10 +146,12 @@ pump_switch_delay_millis = 250                          # waiting period between
 
 [monitors]
 active = true                                           # allows deactivation of monitors
+execute = true                                          # used for testing purposes
 max_length_refill_monitor_views = 4096                  # maximum number of monitoring entries
 
 [sensor_manager]
 use_simulator = true                                    # if true, then do not use real HW
+execute = true                                          # used for testing purposes
 replacement_value_ambient_temperature = 24.0            # replacement value for ambient temperature in case reading from DHT22 fails
 replacement_value_ambient_humidity = 60.0               # replacement value for ambient humidity in case reading from DHT22 fails
 replacement_value_water_temperature = 25.0              # replacement value for water temperature in case reading from I2C fails
@@ -151,6 +162,7 @@ source_ambient_temperature = "dht"                      # valid values are "dht"
 
 [atlas_scientific]
 active = true                                           # allows deactivation of data acquisition
+execute = true                                          # used for testing purposes
 address_atlas_scientific_ph = 99                        # I2C address for Atlas Scientific sensor unit for reading ph
 address_atlas_scientific_conductivity = 100             # I2C address for Atlas Scientific sensor unit for reading conductivity
 address_atlas_scientific_temperature = 102              # I2C address for Atlas Scientific sensor unit for reading temperature
@@ -186,6 +198,7 @@ peristaltic_pump4 = 15                                  # GPIO of the peristalti
 
 [dht]
 active = true                                           # allows deactivation of data acquisition
+execute = true                                          # used for testing purposes
 sensor_reset_duration_millis = 500                      # duration to interrupt power supply to sensor in milliseconds
 sensor_startup_duration_millis = 1000                   # duration to wait for sensor after reset in milliseconds
 sensor_pause_duration_millis = 500                      # duration to wait between measurements in milliseconds
@@ -196,11 +209,13 @@ timeout_duration_micros = 10000				            # maximum permissible duration fo
 measurement_interval_millis = 2000                      # interval in milliseconds between two measurements
 
 [i2c_interface]
+execute = true                                          # used for testing purposes
 timeout_transaction = 100                               # timeout for transactions in milliseconds
 max_read_attempts = 10                                  # maximum number of read attempts
 
 [schedule_check]
 active = true                                           # used for testing purposes only
+execute = true                                          # used for testing purposes
 schedule_check_interval = 300                           # interval in seconds for polling the database
 strategy_if_schedule_not_found = true                   # strategy for allowing (true) or inhibiting (false) actuation when schedule could not be found in the database
 
@@ -213,6 +228,7 @@ pid_filename = "/var/local/aquarium-ctrl-test.pid"      # filename for publishin
 
 [watchdog]
 active = true                                           # used for testing purposes only
+execute = true                                          # used for testing purposes
 watchdog_filename = "/dev/watchdog"                     # filename for sending heartbeat to system watchdog
 watchdog_heartbeat = "1"                                # content to be written to watchdog file
 heartbeat_duration_millis = 1000                        # duration between two hearbeats in milliseconds
@@ -220,6 +236,7 @@ watchdog_deactivation = "V"                             # deactivation code for 
 
 [ds18b20]
 active = true
+execute = true                                          # used for testing purposes
 measurement_pause_duration_millis = 10000               # 10 seconds between each measurement
 system_driver_base_path = "/sys/bus/w1/devices/"        # base system driver path
 system_driver_sensor_path_prefix = "28-"                # sensor-specific path prefix
@@ -231,6 +248,7 @@ ambient_temperature_sensor_id = ""                      # sensor is not used
 
 [ws2812b]
 active = true
+execute = true                                          # used for testing purposes
 device_name = "/dev/spidev0.0"                          # device name required by low-level SPI driver
 number_leds = 3                                         # number of LEDs
 

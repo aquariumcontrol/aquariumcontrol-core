@@ -8,7 +8,6 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 */
 #[cfg(all(not(test), target_os = "linux"))]
 use nix::unistd::gettid;
-use serde_derive::Deserialize;
 use spin_sleep::SpinSleeper;
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
@@ -18,6 +17,7 @@ use std::path::PathBuf;
 use std::thread::sleep;
 
 use crate::sensors::ds18b20_channels::Ds18b20Channels;
+use crate::sensors::ds18b20_config::Ds18b20Config;
 use crate::sensors::ds18b20_error::Ds18b20Error;
 use crate::utilities::proc_ext_req::ProcessExternalRequestTrait;
 #[cfg(feature = "debug_ds18b20")]
@@ -36,40 +36,6 @@ mod ds18b20_constants {
 
     /// allow max. 10 milliseconds for mutex to be blocked by any other thread
     pub const MAX_MUTEX_ACCESS_DURATION_MILLIS: u64 = 10;
-}
-/// Holds the configuration data for DS18B20 sensor communication.
-/// The configuration is loaded from the .toml configuration file.
-/// This struct does not contain any implementation.
-#[derive(Deserialize, Debug)]
-pub struct Ds18b20Config {
-    /// used primarily for testing purposes
-    pub active: bool,
-
-    /// pause duration between two measurements in milliseconds
-    measurement_pause_duration_millis: u64,
-
-    /// system driver base path
-    pub system_driver_base_path: String,
-
-    /// system driver sensor-specific path
-    pub system_driver_sensor_path_prefix: String,
-
-    /// system driver file name
-    pub system_driver_file_name: String,
-
-    #[allow(unused)]
-    /// max. number of retries
-    pub max_retries: u32,
-
-    #[allow(unused)]
-    /// duration between retries in milliseconds
-    pub retry_pause_duration_millis: u64,
-
-    /// unique 64-bit ID of water temperature sensor
-    pub water_temperature_sensor_id: String,
-
-    /// unique 64-bit ID of ambient temperature sensor
-    pub ambient_temperature_sensor_id: String,
 }
 
 #[derive(Clone)]
@@ -511,6 +477,7 @@ pub mod tests {
             max_retries: 3,
             retry_pause_duration_millis: 100,
             measurement_pause_duration_millis: 1000,
+            execute: true,
         };
 
         // Act: Attempt to create a new Ds18b20 instance with the invalid config.

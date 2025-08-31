@@ -113,6 +113,7 @@ use crate::sensors::atlas_scientific::AtlasScientificResultData;
 #[cfg(all(feature = "target_hw", target_os = "linux"))]
 use crate::sensors::dht::Dht;
 
+use crate::launch::execution_config::ExecutionConfig;
 use crate::sensors::dht::DhtResult;
 use crate::sensors::ds18b20::{Ds18b20, Ds18b20ResultData};
 use crate::sensors::sensor_manager::{SensorManager, SensorManagerMutexes, SensorManagerSignals};
@@ -123,7 +124,8 @@ use crate::thermal::heating::{Heating, HeatingMutexes};
 use crate::thermal::ventilation::Ventilation;
 use crate::utilities::config::read_config_file;
 use crate::utilities::config_file_definition_error::ConfigFileDefinitionError;
-use crate::utilities::logger::{log_error_chain, setup_logger, LoggerConfig};
+use crate::utilities::logger::{log_error_chain, setup_logger};
+use crate::utilities::logger_config::LoggerConfig;
 use crate::utilities::memory_config_check::memory_config_check;
 use crate::utilities::publish_pid::PublishPid;
 use crate::utilities::signal_handler::handle_signals;
@@ -426,6 +428,11 @@ fn run() -> Result<(), StartupError> {
     // read the configuration file for operating the control system
     let config = read_config_file(config_file_name)?;
 
+    let execution_config = ExecutionConfig::new(&config);
+    let execution_config_clone_for_signal_handler = execution_config.clone();
+    #[cfg(target_os = "linux")]
+    let execution_config_clone_for_messaging = execution_config.clone();
+
     // setup logging to write to the log output file and stdout
     setup_logger(config.logger).map_err(|e| StartupError::LoggingSetupFailure { source: e })?;
 
@@ -690,8 +697,8 @@ fn run() -> Result<(), StartupError> {
     );
 
     #[cfg(target_os = "linux")]
-    let mut messaging =
-        Messaging::new(config.messaging).map_err(|e| StartupError::Messaging { source: e })?;
+    let mut messaging = Messaging::new(config.messaging, execution_config_clone_for_messaging)
+        .map_err(|e| StartupError::Messaging { source: e })?;
 
     let mut food_injection = FoodInjection::new(&config.feed);
     let mut mineral_injection = MineralInjection::new();
@@ -899,16 +906,14 @@ fn run() -> Result<(), StartupError> {
 
     let mut tcp_communication_opt = None;
     if use_simulator {
-        let tcp_communication = TcpCommunication::new(&config.tcp_connection)
+        let tcp_communication = TcpCommunication::new(&config.tcp_communication)
             .map_err(|e| StartupError::TcpConnection { source: e })?;
         tcp_communication_opt = Some(tcp_communication);
     }
 
     scope(|scope| {
         // open tcp connection only if configuration requires use of simulator instead of HW
-        if use_simulator {
-            // src/main.rs
-
+        if use_simulator && execution_config.tcp_communication {
             scope.spawn(move || {
                 if let Some(mut tcp_communication) = tcp_communication_opt {
                     tcp_communication.execute(&mut channels.tcp_communication);
@@ -920,7 +925,7 @@ fn run() -> Result<(), StartupError> {
             debug!(target: module_path!(), "TcpCommunication terminated.");
         };
 
-        if config.relay_manager.use_simulator {
+        if config.relay_manager.use_simulator && execution_config.relay_manager {
             scope.spawn(move || {
                 let mut actuate_simulator = ActuateSimulator::new(
                     &mut channels.actuate_simulator,
@@ -934,42 +939,48 @@ fn run() -> Result<(), StartupError> {
                 #[cfg(feature = "debug_main")]
                 debug!(target: module_path!(), "Controllino (simulator) terminated.");
             });
-        } else {
+        } else if execution_config.relay_manager {
             scope.spawn(move || {
-                if config.relay_manager.use_gpio {
-                    #[cfg(all(feature = "target_hw", target_os = "linux"))]
-                    relay_manager.execute(
-                        &mut channels.relay_manager,
-                        &mut actuate_gpio_opt.expect("Internal error: Illegal configuration (unwrapping of GPIO actuator failed)")
-                    );
-                } else {
-                    relay_manager.execute(&mut channels.relay_manager, &mut actuate_controllino);
-                }
-                #[cfg(feature = "debug_channels")]
-                debug!(target: module_path!(), "{0}", channels.relay_manager);
-                #[cfg(feature = "debug_main")]
-                debug!(target: module_path!(), "Controllino (with hardware) terminated.");
-            });
+                    if config.relay_manager.use_gpio {
+                        #[cfg(all(feature = "target_hw", target_os = "linux"))]
+                        relay_manager.execute(
+                            &mut channels.relay_manager,
+                            &mut actuate_gpio_opt.expect("Internal error: Illegal configuration (unwrapping of GPIO actuator failed)")
+                        );
+                    } else {
+                        relay_manager.execute(&mut channels.relay_manager, &mut actuate_controllino);
+                    }
+                    #[cfg(feature = "debug_channels")]
+                    debug!(target: module_path!(), "{0}", channels.relay_manager);
+                    #[cfg(feature = "debug_main")]
+                    debug!(target: module_path!(), "Controllino (with hardware) terminated.");
+                });
         }
 
         scope.spawn(move || {
             let term = Arc::new(AtomicBool::new(false));
 
-            handle_signals(term, channels.signal_handler);
+            handle_signals(
+                term,
+                channels.signal_handler,
+                execution_config_clone_for_signal_handler,
+            );
             #[cfg(feature = "debug_main")]
             debug!(target: module_path!(), "Signal handler terminated.");
         });
 
-        scope.spawn(move || {
-            schedule_check.execute(&mut channels.schedule_check);
-            #[cfg(feature = "debug_channels")]
-            debug!(target: module_path!(), "{0}", channels.schedule_check);
-            #[cfg(feature = "debug_main")]
-            debug!(target: module_path!(), "Schedule checker terminated.");
-        });
+        if execution_config.schedule_check {
+            scope.spawn(move || {
+                schedule_check.execute(&mut channels.schedule_check);
+                #[cfg(feature = "debug_channels")]
+                debug!(target: module_path!(), "{0}", channels.schedule_check);
+                #[cfg(feature = "debug_main")]
+                debug!(target: module_path!(), "Schedule checker terminated.");
+            });
+        }
 
         #[cfg(all(target_os = "linux", feature = "target_hw"))]
-        if !use_simulator {
+        if !use_simulator && execution_config.i2c_interface {
             scope.spawn(move || {
                 i2c_interface.execute(&mut channels.i2c_interface);
                 #[cfg(all(target_os = "linux", feature = "target_hw", feature = "debug_channels"))]
@@ -980,7 +991,7 @@ fn run() -> Result<(), StartupError> {
         }
 
         #[cfg(all(target_os = "linux", feature = "target_hw"))]
-        if !use_simulator {
+        if !use_simulator && execution_config.atlas_scientific {
             scope.spawn(move || {
                 atlas_scientific.execute(
                     &mut channels.atlas_scientific,
@@ -996,35 +1007,39 @@ fn run() -> Result<(), StartupError> {
         }
 
         #[cfg(all(target_os = "linux", feature = "target_hw"))]
-        scope.spawn(move || {
-            dht.execute(mutex_dht, &mut channels.dht);
-            #[cfg(feature = "debug_channels")]
-            debug!(target: module_path!(), "{0}", channels.dht);
-            #[cfg(feature = "debug_main")]
-            debug!(target: module_path!(), "Dht terminated.");
-        });
+        if execution_config.dht {
+            scope.spawn(move || {
+                dht.execute(mutex_dht, &mut channels.dht);
+                #[cfg(feature = "debug_channels")]
+                debug!(target: module_path!(), "{0}", channels.dht);
+                #[cfg(feature = "debug_main")]
+                debug!(target: module_path!(), "Dht terminated.");
+            });
+        }
 
-        scope.spawn(move || {
-            let mutexes_sensor_manager = SensorManagerMutexes {
-                mutex_ds18b20_ambient_temperature:
-                    mutex_ds18b20_ambient_temperature_clone_for_sensor_manager,
-                mutex_ds18b20_water_temperature:
-                    mutex_ds18b20_water_temperature_clone_for_sensor_manager,
-                mutex_dht: mutex_dht_clone_for_sensor_manager,
-                mutex_atlas_scientific_temperature:
-                    mutex_atlas_scientific_temperature_clone_for_sensor_manager,
-                mutex_atlas_scientific_ph: mutex_atlas_scientific_ph_clone_for_sensor_manager,
-                mutex_atlas_scientific_conductivity:
-                    mutex_atlas_scientific_conductivity_clone_for_sensor_manager,
-                mutex_sensor_manager_signals,
-            };
+        if execution_config.sensor_manager {
+            scope.spawn(move || {
+                let mutexes_sensor_manager = SensorManagerMutexes {
+                    mutex_ds18b20_ambient_temperature:
+                        mutex_ds18b20_ambient_temperature_clone_for_sensor_manager,
+                    mutex_ds18b20_water_temperature:
+                        mutex_ds18b20_water_temperature_clone_for_sensor_manager,
+                    mutex_dht: mutex_dht_clone_for_sensor_manager,
+                    mutex_atlas_scientific_temperature:
+                        mutex_atlas_scientific_temperature_clone_for_sensor_manager,
+                    mutex_atlas_scientific_ph: mutex_atlas_scientific_ph_clone_for_sensor_manager,
+                    mutex_atlas_scientific_conductivity:
+                        mutex_atlas_scientific_conductivity_clone_for_sensor_manager,
+                    mutex_sensor_manager_signals,
+                };
 
-            sensor_manager.execute(&mut channels.sensor_manager, mutexes_sensor_manager);
-            #[cfg(feature = "debug_channels")]
-            debug!(target: module_path!(), "{0}", channels.sensor_manager);
-            #[cfg(feature = "debug_main")]
-            debug!(target: module_path!(), "SensorManager terminated.");
-        });
+                sensor_manager.execute(&mut channels.sensor_manager, mutexes_sensor_manager);
+                #[cfg(feature = "debug_channels")]
+                debug!(target: module_path!(), "{0}", channels.sensor_manager);
+                #[cfg(feature = "debug_main")]
+                debug!(target: module_path!(), "SensorManager terminated.");
+            });
+        }
 
         // give sensor reading components some time so that they can acquire a first data set
         let duration_one_second = Duration::from_secs(1);
@@ -1036,144 +1051,164 @@ fn run() -> Result<(), StartupError> {
         spin_sleeper.sleep(duration_one_second);
         println!("starting control...");
 
-        scope.spawn(move || {
-            let data_logger_mutexes = DataLoggerMutexes {
-                mutex_sensor_manager_signals: mutex_sensor_manager_signals_clone_for_data_logger,
-                mutex_tank_level_switch_signals:
-                    mutex_tank_level_switch_signals_clone_for_data_logger,
-                mutex_heating_status: mutex_heating_status_clone_for_data_logger,
-                mutex_ventilation_status: mutex_ventilation_status_clone_for_data_logger,
-                mutex_refill_status: mutex_refill_status_clone_for_data_logger,
+        if execution_config.data_logger {
+            scope.spawn(move || {
+                let data_logger_mutexes = DataLoggerMutexes {
+                    mutex_sensor_manager_signals:
+                        mutex_sensor_manager_signals_clone_for_data_logger,
+                    mutex_tank_level_switch_signals:
+                        mutex_tank_level_switch_signals_clone_for_data_logger,
+                    mutex_heating_status: mutex_heating_status_clone_for_data_logger,
+                    mutex_ventilation_status: mutex_ventilation_status_clone_for_data_logger,
+                    mutex_refill_status: mutex_refill_status_clone_for_data_logger,
+                };
+
+                data_logger.execute(
+                    &mut data_injection,
+                    sql_interface_data,
+                    &mut channels.data_logger,
+                    data_logger_mutexes,
+                );
+                #[cfg(feature = "debug_channels")]
+                debug!(target: module_path!(), "{0}", channels.data_logger);
+                #[cfg(feature = "debug_main")]
+                debug!(target: module_path!(), "Data logger terminated.");
+            });
+        }
+
+        if execution_config.tank_level_switch {
+            scope.spawn(move || {
+                let _ = tank_level_switch.execute(
+                    &mut channels.tank_level_switch,
+                    mutex_tank_level_switch_signals,
+                );
+                #[cfg(feature = "debug_channels")]
+                debug!(target: module_path!(), "{0}", channels.tank_level_switch);
+                #[cfg(feature = "debug_main")]
+                debug!(target: module_path!(), "Tank level switch calculation terminated.");
+            });
+        }
+
+        if execution_config.refill {
+            // Refill needs actuation of relay
+            let mutex_device_scheduler_refill = Arc::clone(&mutex_device_scheduler);
+
+            scope.spawn(move || {
+                refill.execute(
+                    mutex_device_scheduler_refill,
+                    &mut channels.refill,
+                    &mut water_injection,
+                    mutex_tank_level_switch_signals_clone_for_refill,
+                    mutex_refill_status,
+                );
+                #[cfg(feature = "debug_channels")]
+                debug!(target: module_path!(), "{0}", channels.refill);
+                #[cfg(feature = "debug_main")]
+                debug!(target: module_path!(), "Refill terminated.");
+            });
+        }
+
+        if execution_config.heating {
+            // Heating needs actuation of relay
+            let mutex_device_scheduler_heating = Arc::clone(&mutex_device_scheduler);
+
+            let mut heating_stats_transfer = HeatingStatsDataTransfer;
+
+            let heating_mutexes = HeatingMutexes {
+                mutex_sensor_manager_signals: mutex_sensor_manager_signals_clone_for_heating,
+                mutex_tank_level_switch_signals: mutex_tank_level_switch_signals_clone_for_heating,
+                mutex_heating_status,
             };
 
-            data_logger.execute(
-                &mut data_injection,
-                sql_interface_data,
-                &mut channels.data_logger,
-                data_logger_mutexes,
-            );
-            #[cfg(feature = "debug_channels")]
-            debug!(target: module_path!(), "{0}", channels.data_logger);
-            #[cfg(feature = "debug_main")]
-            debug!(target: module_path!(), "Data logger terminated.");
-        });
+            scope.spawn(move || {
+                heating.execute(
+                    mutex_device_scheduler_heating,
+                    &mut channels.heating,
+                    &mut heating_stats_transfer,
+                    &mut heating_set_value_updater,
+                    heating_mutexes,
+                );
+                #[cfg(feature = "debug_channels")]
+                debug!(target: module_path!(), "{0}", channels.heating);
+                #[cfg(feature = "debug_main")]
+                debug!(target: module_path!(), "Heating terminated.");
+            });
+        }
 
-        scope.spawn(move || {
-            let _ = tank_level_switch.execute(
-                &mut channels.tank_level_switch,
-                mutex_tank_level_switch_signals,
-            );
-            #[cfg(feature = "debug_channels")]
-            debug!(target: module_path!(), "{0}", channels.tank_level_switch);
-            #[cfg(feature = "debug_main")]
-            debug!(target: module_path!(), "Tank level switch calculation terminated.");
-        });
+        if execution_config.ventilation {
+            // Ventilation needs actuation of relay
+            let mutex_device_scheduler_ventilation = Arc::clone(&mutex_device_scheduler);
 
-        // Refill needs actuation of relay
-        let mutex_device_scheduler_refill = Arc::clone(&mutex_device_scheduler);
+            scope.spawn(move || {
+                ventilation.execute(
+                    mutex_device_scheduler_ventilation,
+                    &mut channels.ventilation,
+                    &mut ventilation_set_value_updater,
+                    mutex_sensor_manager_signals_clone_for_ventilation,
+                    mutex_ventilation_status,
+                );
+                #[cfg(feature = "debug_channels")]
+                debug!(target: module_path!(), "{0}", channels.ventilation);
+                #[cfg(feature = "debug_main")]
+                debug!(target: module_path!(), "Ventilation terminated.");
+            });
+        }
 
-        scope.spawn(move || {
-            refill.execute(
-                mutex_device_scheduler_refill,
-                &mut channels.refill,
-                &mut water_injection,
-                mutex_tank_level_switch_signals_clone_for_refill,
-                mutex_refill_status,
-            );
-            #[cfg(feature = "debug_channels")]
-            debug!(target: module_path!(), "{0}", channels.refill);
-            #[cfg(feature = "debug_main")]
-            debug!(target: module_path!(), "Refill terminated.");
-        });
+        if execution_config.monitors {
+            // Monitors needs communication with the Controllino device
+            let mutex_device_scheduler_monitors = Arc::clone(&mutex_device_scheduler);
 
-        // Heating needs actuation of relay
-        let mutex_device_scheduler_heating = Arc::clone(&mutex_device_scheduler);
+            scope.spawn(move || {
+                monitors.execute(mutex_device_scheduler_monitors, &mut channels.monitors);
+                #[cfg(feature = "debug_channels")]
+                debug!(target: module_path!(), "{0}", channels.monitors);
+                #[cfg(feature = "debug_main")]
+                debug!(target: module_path!(), "Monitors terminated.");
+            });
+        }
 
-        let mut heating_stats_transfer = HeatingStatsDataTransfer;
+        if execution_config.feed {
+            // Feed needs actuation of relay
+            let mutex_device_scheduler_feed = Arc::clone(&mutex_device_scheduler);
 
-        let heating_mutexes = HeatingMutexes {
-            mutex_sensor_manager_signals: mutex_sensor_manager_signals_clone_for_heating,
-            mutex_tank_level_switch_signals: mutex_tank_level_switch_signals_clone_for_heating,
-            mutex_heating_status,
-        };
+            scope.spawn(move || {
+                feed.execute(
+                    mutex_device_scheduler_feed,
+                    &mut channels.feed,
+                    &mut food_injection,
+                );
+                #[cfg(feature = "debug_channels")]
+                debug!(target: module_path!(), "{0}", channels.feed);
+                #[cfg(feature = "debug_main")]
+                debug!(target: module_path!(), "Feed terminated.");
+            });
+        }
 
-        scope.spawn(move || {
-            heating.execute(
-                mutex_device_scheduler_heating,
-                &mut channels.heating,
-                &mut heating_stats_transfer,
-                &mut heating_set_value_updater,
-                heating_mutexes,
-            );
-            #[cfg(feature = "debug_channels")]
-            debug!(target: module_path!(), "{0}", channels.heating);
-            #[cfg(feature = "debug_main")]
-            debug!(target: module_path!(), "Heating terminated.");
-        });
+        if execution_config.balling {
+            // Balling dosing needs actuation of relays
+            let mutex_device_scheduler_balling = Arc::clone(&mutex_device_scheduler);
 
-        // Ventilation needs actuation of relay
-        let mutex_device_scheduler_ventilation = Arc::clone(&mutex_device_scheduler);
-
-        scope.spawn(move || {
-            ventilation.execute(
-                mutex_device_scheduler_ventilation,
-                &mut channels.ventilation,
-                &mut ventilation_set_value_updater,
-                mutex_sensor_manager_signals_clone_for_ventilation,
-                mutex_ventilation_status,
-            );
-            #[cfg(feature = "debug_channels")]
-            debug!(target: module_path!(), "{0}", channels.ventilation);
-            #[cfg(feature = "debug_main")]
-            debug!(target: module_path!(), "Ventilation terminated.");
-        });
-
-        // Monitors needs communication with the Controllino device
-        let mutex_device_scheduler_monitors = Arc::clone(&mutex_device_scheduler);
-
-        scope.spawn(move || {
-            monitors.execute(mutex_device_scheduler_monitors, &mut channels.monitors);
-            #[cfg(feature = "debug_channels")]
-            debug!(target: module_path!(), "{0}", channels.monitors);
-            #[cfg(feature = "debug_main")]
-            debug!(target: module_path!(), "Monitors terminated.");
-        });
-
-        // Feed needs actuation of relay
-        let mutex_device_scheduler_feed = Arc::clone(&mutex_device_scheduler);
-
-        scope.spawn(move || {
-            feed.execute(
-                mutex_device_scheduler_feed,
-                &mut channels.feed,
-                &mut food_injection,
-            );
-            #[cfg(feature = "debug_channels")]
-            debug!(target: module_path!(), "{0}", channels.feed);
-            #[cfg(feature = "debug_main")]
-            debug!(target: module_path!(), "Feed terminated.");
-        });
-
-        // Balling dosing needs actuation of relays
-        let mutex_device_scheduler_balling = Arc::clone(&mutex_device_scheduler);
-
-        scope.spawn(move || {
-            balling.execute(
-                mutex_device_scheduler_balling,
-                &mut channels.balling,
-                &mut mineral_injection,
-            );
-            #[cfg(feature = "debug_channels")]
-            debug!(target: module_path!(), "{0}", channels.balling);
-            #[cfg(feature = "debug_main")]
-            debug!(target: module_path!(), "Balling terminated.");
-        });
+            scope.spawn(move || {
+                balling.execute(
+                    mutex_device_scheduler_balling,
+                    &mut channels.balling,
+                    &mut mineral_injection,
+                );
+                #[cfg(feature = "debug_channels")]
+                debug!(target: module_path!(), "{0}", channels.balling);
+                #[cfg(feature = "debug_main")]
+                debug!(target: module_path!(), "Balling terminated.");
+            });
+        }
 
         // IPC via messages
         scope.spawn(move || {
             // read/send messages
             #[cfg(target_os = "linux")]
-            messaging.execute(&mut channels.messaging);
+            messaging.execute(
+                &mut channels.messaging,
+                execution_config_clone_for_messaging,
+            );
 
             // remove PID from the file
             let publish_pid_result = publish_pid.erase_pid();
@@ -1190,27 +1225,31 @@ fn run() -> Result<(), StartupError> {
             debug!(target: module_path!(), "Messaging terminated.");
         });
 
-        // Watchdog communication
-        scope.spawn(move || {
-            watchdog.execute(&mut channels.watchdog, &mut petting);
-            #[cfg(all(target_os = "linux", feature = "target_hw", feature = "debug_channels"))]
-            debug!(target: module_path!(), "{0}", channels.watchdog);
-            #[cfg(feature = "debug_main")]
-            debug!(target: module_path!(), "Watchdog terminated.");
-        });
+        if execution_config.watchdog {
+            // Watchdog communication
+            scope.spawn(move || {
+                watchdog.execute(&mut channels.watchdog, &mut petting);
+                #[cfg(all(target_os = "linux", feature = "target_hw", feature = "debug_channels"))]
+                debug!(target: module_path!(), "{0}", channels.watchdog);
+                #[cfg(feature = "debug_main")]
+                debug!(target: module_path!(), "Watchdog terminated.");
+            });
+        }
 
-        // Ds18b20 communication
-        scope.spawn(move || {
-            ds18b20.execute(
-                &mut channels.ds18b20,
-                mutex_ds18b20_water_temperature,
-                mutex_ds18b20_ambient_temperature,
-            );
-            #[cfg(all(target_os = "linux", feature = "target_hw", feature = "debug_channels"))]
-            debug!(target: module_path!(), "{0}", channels.ds18b20);
-            #[cfg(feature = "debug_main")]
-            debug!(target: module_path!(), "Ds18b20 terminated");
-        });
+        if execution_config.ds18b20 {
+            // Ds18b20 communication
+            scope.spawn(move || {
+                ds18b20.execute(
+                    &mut channels.ds18b20,
+                    mutex_ds18b20_water_temperature,
+                    mutex_ds18b20_ambient_temperature,
+                );
+                #[cfg(all(target_os = "linux", feature = "target_hw", feature = "debug_channels"))]
+                debug!(target: module_path!(), "{0}", channels.ds18b20);
+                #[cfg(feature = "debug_main")]
+                debug!(target: module_path!(), "Ds18b20 terminated");
+            });
+        }
     });
 
     Ok(())

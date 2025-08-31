@@ -16,6 +16,7 @@ use log::info;
 use log::warn;
 
 pub(crate) use crate::sensors::atlas_scientific_channels::AtlasScientificChannels;
+use crate::sensors::atlas_scientific_config::AtlasScientificConfig;
 use crate::sensors::atlas_scientific_error::AtlasScientificError;
 use crate::sensors::atlas_scientific_error::AtlasScientificError::{
     InvalidSignal, SignalRequestCreationFailure,
@@ -28,7 +29,6 @@ use crate::utilities::proc_ext_req::ProcessExternalRequestTrait;
 use crate::utilities::wait_for_termination::WaitForTerminationTrait;
 #[cfg(all(not(test), target_os = "linux"))]
 use nix::unistd::gettid;
-use serde_derive::Deserialize;
 use spin_sleep::SpinSleeper;
 use std::sync::mpsc::TryRecvError;
 use std::sync::{Arc, Mutex};
@@ -37,67 +37,6 @@ use std::time::{Duration, Instant};
 // max loops for receiving when the quit command has been received
 #[allow(unused)] // used in conditionally compiled code
 pub const RECEIVE_COUNTER_MAX: u32 = 10;
-
-/// Holds the configuration data for the Atlas Scientific sensor communication.
-/// The configuration is loaded from the .toml configuration file.
-/// This struct does not contain any implementation.
-#[derive(Deserialize, Debug)]
-pub struct AtlasScientificConfig {
-    /// allows deactivation of the data acquisition
-    #[allow(unused)] // used in conditionally compiled code
-    pub active: bool,
-
-    /// I2C address of Atlas Scientific pH sensor unit
-    #[allow(unused)]
-    pub address_atlas_scientific_ph: u16,
-
-    /// I2C address of Atlas Scientific conductivity sensor unit
-    #[allow(unused)]
-    pub address_atlas_scientific_conductivity: u16,
-
-    /// I2C address of Atlas Scientific temperature sensor unit    
-    #[allow(unused)]
-    pub address_atlas_scientific_temperature: u16,
-
-    /// sleep time in milliseconds before after writing before reading from the pH sensor unit
-    #[allow(unused)]
-    sleep_time_millis_ph: u64,
-
-    /// sleep time in milliseconds before after writing before reading from the conductivity sensor unit
-    #[allow(unused)]
-    sleep_time_millis_conductivity: u64,
-
-    /// sleep time in milliseconds before after writing before reading from the temperature sensor unit
-    #[allow(unused)]
-    sleep_time_millis_temperature: u64,
-
-    /// maximum allowed value for pH used to assess if the temperature sensor reading is valid
-    #[allow(unused)]
-    max_val_atlas_scientific_ph: f32,
-
-    /// minimum allowed value for pH used to assess if the temperature sensor reading is valid
-    #[allow(unused)]
-    min_val_atlas_scientific_ph: f32,
-
-    /// maximum allowed value for temperature used to assess if the temperature sensor reading is valid
-    #[allow(unused)]
-    max_val_atlas_scientific_temperature: f32,
-
-    /// minimum allowed value for temperature used to assess if the temperature sensor reading is valid
-    #[allow(unused)]
-    min_val_atlas_scientific_temperature: f32,
-
-    /// maximum allowed value for conductivity used to assess if the conductivity sensor reading is valid
-    #[allow(unused)]
-    max_val_atlas_scientific_conductivity: f32,
-
-    /// minimum allowed value for conductivity used to assess if the conductivity sensor reading is valid
-    #[allow(unused)]
-    min_val_atlas_scientific_conductivity: f32,
-
-    /// measurement interval in milliseconds
-    measurement_interval_millis: u64,
-}
 
 #[derive(Clone, Debug)]
 pub struct AtlasScientificResultData {

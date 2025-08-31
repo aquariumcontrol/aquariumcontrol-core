@@ -27,90 +27,11 @@ cfg_if::cfg_if! {
         use crate::dispatch::messaging_error::MessagingError;
         use crate::utilities::proc_ext_req::ProcessExternalRequestTrait;
         use crate::utilities::wait_for_termination::WaitForTerminationTrait;
+        use crate::dispatch::messaging_domains::messaging_domains;
+        use crate::dispatch::messaging_domains::MessagingDomain;
+        use crate::dispatch::messaging_config::MessagingConfig;
         use std::fmt;
         use std::io::ErrorKind;
-    }
-}
-
-use serde_derive::Deserialize;
-
-#[cfg(target_os = "linux")]
-/// Contains constants of all domains addressed in IPC messages
-pub mod messaging_domains {
-    /// value represents the refill control as a domain
-    pub const REFILL: i32 = 1;
-
-    /// value represents the ventilation control as a domain
-    pub const VENTILATION: i32 = 3;
-
-    /// value represents the feed control as a domain
-    pub const FEED: i32 = 8;
-
-    /// value represents the heating control as a domain
-    pub const HEATING: i32 = 9;
-
-    /// value represents the Balling dosing control as a domain
-    pub const BALLING: i32 = 11;
-
-    /// value represents the monitoring as a domain
-    pub const MONITORS: i32 = 12;
-
-    /// value represents the watchdog communication as a domain
-    pub const WATCHDOG: i32 = 13;
-}
-
-#[derive(PartialEq, Debug, Clone)]
-/// Identifies the addressee of the message
-#[cfg(target_os = "linux")]
-pub enum MessagingDomain {
-    /// refill control
-    Refill,
-
-    /// ventilation control
-    Ventilation,
-
-    /// feed control
-    Feed,
-
-    /// heating control
-    Heating,
-
-    /// Balling dosing control
-    Balling,
-
-    /// monitors
-    Monitors,
-
-    /// watchdog communication
-    Watchdog,
-
-    /// in case the numeric value in the message could not be assigned to one of the above
-    Unknown,
-}
-
-#[cfg(target_os = "linux")]
-impl fmt::Display for MessagingDomain {
-    /// Formats the `MessagingDomain` enum into its human-readable string representation.
-    ///
-    /// This implementation allows `MessagingDomain` variants to be displayed directly
-    /// using macros like `println!` or `format!`, returning the name of the domain.
-    ///
-    /// # Arguments
-    /// * `f` - A mutable reference to the formatter, as required by the `fmt::Display` trait.
-    ///
-    /// # Returns
-    /// A `fmt::Result` indicating whether the formatting operation was successful.
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        match self {
-            MessagingDomain::Refill => write!(f, "Refill"),
-            MessagingDomain::Ventilation => write!(f, "Ventilation"),
-            MessagingDomain::Feed => write!(f, "Feed"),
-            MessagingDomain::Heating => write!(f, "Heating"),
-            MessagingDomain::Balling => write!(f, "Balling"),
-            MessagingDomain::Monitors => write!(f, "Monitors"),
-            MessagingDomain::Watchdog => write!(f, "Watchdog"),
-            MessagingDomain::Unknown => write!(f, "Unknown"),
-        }
     }
 }
 
@@ -190,21 +111,6 @@ impl Message {
     }
 }
 
-/// Holds the configuration data for the messaging.
-/// The configuration is loaded from the .toml configuration file.
-/// This struct does not contain any implementation.
-#[derive(Deserialize)]
-pub struct MessagingConfig {
-    /// filename used for generating the message queue identifier
-    #[allow(unused)]
-    mq_filename: String,
-
-    /// timeout for receiving messages in milliseconds
-    /// after each timeout, the application checks if a shutdown has been requested
-    #[allow(unused)]
-    timeout_millis: u64,
-}
-
 #[cfg_attr(doc, aquamarine::aquamarine)]
 /// Struct provides data structure and implementation for IPC message queue communication.
 /// Thread communication of this component is as follows:
@@ -232,6 +138,9 @@ pub struct Messaging {
 
     /// an inhibition flag to avoid flooding the log file with repeated messages about failure to receive termination signal via the channel
     pub lock_error_channel_receive_termination: bool,
+
+    /// configuration data indicating which threads are started
+    execution_config: ExecutionConfig,
 }
 
 #[cfg(target_os = "linux")]
@@ -247,6 +156,7 @@ impl Messaging {
     /// # Arguments
     /// * `config` - Configuration data for the messaging module, primarily containing
     ///   the `mq_filename` (the name of the POSIX message queue).
+    /// * `execution_config` - Configuration data indicating which threads are started.
     ///
     /// # Returns
     /// A `Result` containing a new, initialized `Messaging` struct on success.
@@ -257,7 +167,10 @@ impl Messaging {
     ///   be a `MessagingError::PosixMessageQueueOpeningError`.
     /// - It fails to retrieve the attributes (like max message length) of the opened
     ///   message queue. This will be a `MessagingError::PosixMessageQueueAttributesError`.
-    pub fn new(config: MessagingConfig) -> Result<Messaging, MessagingError> {
+    pub fn new(
+        config: MessagingConfig,
+        execution_config: ExecutionConfig,
+    ) -> Result<Messaging, MessagingError> {
         let mq_file_name_clone_for_error = config.mq_filename.clone();
 
         let mq = PosixMq::open(&config.mq_filename).map_err(|e| {
@@ -288,6 +201,7 @@ impl Messaging {
             lock_error_channel_receive_termination: false,
             mq,
             mq_max_msg_len,
+            execution_config,
         })
     }
 
@@ -401,6 +315,7 @@ impl Messaging {
                         // prepare and execute communication to domain
                         if (domain != MessagingDomain::Unknown)
                             && (command != InternalCommand::Unknown)
+                            && (domain.is_domain_thread_executed(&self.execution_config))
                         {
                             #[cfg(not(test))]
                             info!(

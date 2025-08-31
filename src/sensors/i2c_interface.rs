@@ -9,11 +9,11 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 
 #[cfg(all(target_os = "linux", feature = "target_hw"))]
 use log::info;
-use serde_derive::Deserialize;
 use spin_sleep::SpinSleeper;
-use std::{fmt, str};
+use std::fmt;
 
 use crate::sensors::i2c_error::I2cError;
+use crate::sensors::i2c_interface_config::I2cInterfaceConfig;
 
 cfg_if::cfg_if! {
     if #[cfg(all(target_os = "linux", feature = "target_hw"))] {
@@ -30,21 +30,6 @@ cfg_if::cfg_if! {
         use crate::sensors::i2c_interface_channels::I2cInterfaceChannels;
         use nix::unistd::gettid;
     }
-}
-
-/// Holds the configuration data for the I2C interface.
-/// The configuration is loaded from the .toml configuration file.
-/// This struct does not contain any implementation.
-/// Struct is intentionally placed here instead of creating i2c_interface.
-#[derive(Deserialize, Debug)]
-pub struct I2cInterfaceConfig {
-    /// maximum number of read attempts
-    #[allow(unused)]
-    max_read_attempts: u16,
-
-    /// timeout for transactions in milliseconds
-    #[allow(unused)]
-    timeout_transaction: u32,
 }
 
 /// A constant for the maximum command length considering future applications as well.

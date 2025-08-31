@@ -12,68 +12,11 @@ use chrono::LocalResult::{Ambiguous, None, Single};
 use chrono::*;
 use mysql::prelude::*;
 use mysql::*;
-use serde_derive::Deserialize;
 
+use crate::database::sql_interface_config::SqlInterfaceConfig;
 use crate::database::sql_query_strings::{SQL_QUERY_PING, SQL_QUERY_READ_TIMEOUT};
 use crate::database::{sql_interface_error::SqlInterfaceError, sql_query_strings};
 use crate::utilities::version_information::VersionInformation;
-
-/// This struct holds the configuration data for the SQL interface.
-/// The configuration is loaded from the .toml configuration file.
-/// This struct does not contain any implementation.
-#[derive(Deserialize, Clone)]
-pub struct SqlInterfaceConfig {
-    /// database user
-    pub db_user: String,
-
-    /// database password
-    pub db_password: String,
-
-    /// hostname of the database
-    pub db_host: String,
-
-    /// port name of the database
-    pub db_port: u16,
-
-    /// database name
-    pub db_name: String,
-
-    /// array of required tables
-    pub db_tables: Vec<String>,
-
-    /// minimum wait timout - application checks server variable before execution
-    pub db_min_wait_timeout: u64,
-
-    /// the database-ping interval in seconds
-    pub db_ping_interval: u64,
-
-    /// maximum allowed rows for balling set value table
-    pub max_rows_balling_set_values: u64,
-
-    /// maximum allowed rows for feed pattern table
-    pub max_rows_feed_pattern: u64,
-
-    /// maximum allowed rows for feed schedule table
-    pub max_rows_feed_schedule: u64,
-
-    /// maximum allowed rows for heating stats table
-    pub max_rows_heating_stats: u64,
-
-    /// maximum allowed rows for schedule table
-    pub max_rows_schedule: u64,
-
-    /// maximum allowed rows for data table
-    pub max_rows_data: u64,
-
-    /// maximum allowed rows for refill log
-    pub max_rows_refill: u64,
-
-    /// maximum allowed rows for Balling dosing log
-    pub max_rows_balling_dosing_log: u64,
-
-    /// maximum allowed rows for Feed log
-    pub max_rows_feed_log: u64,
-}
 
 /// Struct is used to retrieve a single integer value from the SQL database.
 struct SingleInteger {
@@ -521,7 +464,7 @@ impl SqlInterface {
     ///
     /// # Errors
     /// This function will return an error if:
-    /// - If there's any issue retrieving the database name, such as a communication
+    /// - there is any issue retrieving the database name, such as a communication
     ///   error or an unexpected response from the database `(SqlInterfaceError::DatabaseNameRequestFailure)`.
     pub fn get_database(&mut self) -> Result<String, SqlInterfaceError> {
         // trigger SQL call
@@ -603,7 +546,7 @@ impl SqlInterface {
         conn: &mut PooledConn,
         sql_query_string: &str,
     ) -> Result<Option<NaiveDateTime>, SqlInterfaceError> {
-        // Request (optional) timestamp from database, wrapping any potential error.
+        // Request (optional) timestamp from the database, wrapping any potential error.
         let timestamp_string_opt =
             Self::get_single_optional_string_from_database(conn, sql_query_string).map_err(
                 |e| SqlInterfaceError::OptionalTimestampRequestFailure {
@@ -872,7 +815,7 @@ impl SqlInterface {
     ///
     /// # Errors
     /// This function will return an `Err(SqlInterfaceError::TruncateTableFailure)` if the
-    /// `TRUNCATE TABLE` command fails. This can happen for several reasons, including:
+    /// `TRUNCATE TABLE` command fails. This can happen for several reasons, including
     /// - The specified table does not exist.
     /// - The database user lacks the necessary permissions to truncate the table.
     /// - The database connection has been lost.

@@ -21,7 +21,7 @@ use log::info;
 use log::warn;
 
 use crate::sensors::tank_level_switch_channels::TankLevelSwitchChannels;
-use serde_derive::Deserialize;
+use crate::sensors::tank_level_switch_config::TankLevelSwitchConfig;
 use spin_sleep::SpinSleeper;
 use std::sync::mpsc::{Receiver, Sender};
 use std::time::{Duration, Instant};
@@ -39,21 +39,6 @@ use crate::utilities::channel_content::{AquariumSignal, InternalCommand};
 use crate::utilities::logger::log_error_chain;
 use crate::utilities::proc_ext_req::ProcessExternalRequestTrait;
 use crate::utilities::wait_for_termination::WaitForTerminationTrait;
-
-/// Holds the configuration data for the tank level switch calculation.
-/// The configuration is loaded from the .toml configuration file.
-/// This struct does not contain any implementation.
-#[derive(Deserialize, Clone)]
-pub struct TankLevelSwitchConfig {
-    /// signal processing is only active when the flag is set to true
-    active: bool,
-
-    /// flag to determine if the application shall communicate with hardware directly or via TCP with a simulator
-    pub use_simulator: bool,
-
-    /// the number of seconds which need to indicate a low level before the refill control assumes that the water level is low
-    tank_level_switch_position_low_stabilization_count: u32,
-}
 
 /// application is monitoring if execution duration can maintain this limit
 /// sleep time is adjusted accordingly to run at fixed execution time

@@ -6,12 +6,12 @@ The above copyright notice and this permission notice shall be included in all c
 
 THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
+use crate::relays::actuate_controllino_config::ActuateControllinoConfig;
 use crate::relays::controllino_message::{ControllinoMessage, ControllinoMessageContent};
 use crate::relays::relay_error::RelayError;
 use crate::relays::relay_manager::RelayActuationTrait;
 use crate::utilities::channel_content::{AquariumDevice, InternalCommand};
 use log::{error, warn};
-use serde_derive::Deserialize;
 use serialport::{ClearBuffer, SerialPort};
 use spin_sleep::SpinSleeper;
 use std::collections::HashSet;
@@ -92,76 +92,6 @@ fn check_controllino_checksums(data: &[u8]) -> bool {
         );
     }
     ok_result
-}
-
-#[derive(Clone, Deserialize, Debug)]
-/// Configuration settings for direct hardware actuation via the Controllino device.
-///
-/// This struct holds all parameters required to establish and manage communication
-/// with the Controllino (e.g., serial port settings) and maps application-level
-/// devices to their specific relay IDs on the Controllino board.
-pub struct ActuateControllinoConfig {
-    /// Disables the functionality - required for certain testing scenarios
-    active: bool,
-
-    /// Baud rate for communication via serial port
-    baud_rate: u32,
-
-    /// Port name for communication via serial port
-    port_name: String,
-
-    /// timeout in milliseconds for serial port communication
-    timeout_millis: u64,
-
-    /// time in milliseconds to wait for response
-    controllino_processing_millis: u64,
-
-    /// Relay id of the protein skimmer
-    /// - Caution: relay login (true/false) and device logic (off/on) is reverse.
-    pub skimmer_id: u8,
-
-    /// Relay id of the main pump #1
-    /// - Caution: relay login (true/false) and device logic (off/on) is reverse.
-    pub main_pump1_id: u8,
-
-    /// Relay id of the main pump #2
-    /// - Caution: relay login (true/false) and device logic (off/on) is reverse.
-    pub main_pump2_id: u8,
-
-    /// Relay id of the auxiliary pump #1
-    /// - Caution: relay login (true/false) and device logic (off/on) is reverse.
-    pub aux_pump1_id: u8,
-
-    /// Relay id of the auxiliary pump #2
-    /// - Caution: relay login (true/false) and device logic (off/on) is reverse.
-    pub aux_pump2_id: u8,
-
-    /// Relay id of the refill pump
-    pub refill_pump_id: u8,
-
-    /// Relay id of the heater
-    pub heater_id: u8,
-
-    /// Relay id of ventilation
-    pub ventilation_id: u8,
-
-    /// Relay id feeder
-    pub feeder_id: u8,
-
-    /// Relay id of peristaltic pump #1
-    pub peristaltic_pump1_id: u8,
-
-    /// Relay id of peristaltic pump #2
-    pub peristaltic_pump2_id: u8,
-
-    /// Relay id of peristaltic pump #3
-    pub peristaltic_pump3_id: u8,
-
-    /// Relay id of peristaltic pump #4
-    pub peristaltic_pump4_id: u8,
-
-    /// Heartbeat interval
-    pub heartbeat_interval_seconds: u64,
 }
 
 /// Contains error definitions for ActuateControllino

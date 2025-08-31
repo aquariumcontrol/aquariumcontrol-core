@@ -19,3 +19,9 @@ pub mod messaging_error;
 
 /// Container for channels
 pub mod messaging_channels;
+
+/// Definition of messaging domains including related functionality
+pub mod messaging_domains;
+
+/// Configuration of Messaging
+pub mod messaging_config;

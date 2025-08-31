@@ -10,7 +10,6 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 use log::error;
 #[cfg(all(not(test), target_os = "linux"))]
 use log::info;
-use std::fmt;
 
 #[cfg(not(test))]
 use log::warn;
@@ -21,13 +20,13 @@ use log::debug;
 #[cfg(all(not(test), target_os = "linux"))]
 use nix::unistd::gettid;
 
-use serde_derive::Deserialize;
 use spin_sleep::SpinSleeper;
 use std::sync::mpsc::{Receiver, Sender, TryRecvError};
 use std::time::{Duration, Instant};
 
 use crate::relays::relay_error::RelayError;
 use crate::relays::relay_manager_channels::RelayManagerChannels;
+use crate::relays::relay_manager_config::RelayManagerConfig;
 use crate::utilities::channel_content::InternalCommand;
 use crate::utilities::logger::log_error_chain;
 use crate::utilities::proc_ext_req::ProcessExternalRequestTrait;
@@ -92,48 +91,6 @@ pub trait RelayActuationTrait {
     /// Returns a `RelayError` if the flush operation fails, which could indicate
     /// a deeper issue with the serial port or hardware driver.
     fn flush_buffer(&mut self) -> Result<(), RelayError>;
-}
-
-/// Holds the configuration data for the relay manager.
-/// The configuration is loaded from the .toml configuration file.
-/// This struct does not contain any implementation.
-#[derive(Clone, Deserialize, Debug)]
-pub struct RelayManagerConfig {
-    /// Switch for testing purposes
-    pub active: bool,
-
-    /// Flag to determine if the application shall communicate with hardware directly or via TCP with a simulator
-    pub use_simulator: bool,
-
-    /// Flag to determine if the application shall use GPIO or Controllino
-    pub use_gpio: bool,
-
-    /// The number of retries in case write operation to actuator fails
-    /// Applicable only to Controllino, because GPIO actuation does not execute a write operation
-    pub actuation_retries: u64,
-
-    /// Pause time in milliseconds between retries
-    pub pause_between_retries_millis: u64,
-}
-
-impl fmt::Display for RelayManagerConfig {
-    /// Formats the `RelayManagerConfig` for display purposes.
-    ///
-    /// This implementation provides a clean, multi-line string representation of the
-    /// relay manager's configuration, which is ideal for logging at startup or
-    /// for debugging purposes.
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        writeln!(f, "Relay Manager Configuration:")?;
-        writeln!(f, "  Active: {}", self.active)?;
-        writeln!(f, "  Use Simulator: {}", self.use_simulator)?;
-        writeln!(f, "  Use GPIO: {}", self.use_gpio)?;
-        writeln!(f, "  Actuation Retries: {}", self.actuation_retries)?;
-        write!(
-            f,
-            "  Pause Between Retries: {} ms",
-            self.pause_between_retries_millis
-        )
-    }
 }
 
 #[cfg_attr(doc, aquamarine::aquamarine)]

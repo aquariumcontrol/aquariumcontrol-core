@@ -12,7 +12,6 @@ use log::error;
 #[cfg(not(test))]
 use log::warn;
 
-use serde_derive::Deserialize;
 use spin_sleep::SpinSleeper;
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
@@ -28,12 +27,13 @@ use crate::database::sql_interface_heating_setvals::HeatingSetValueUpdaterTrait;
 use crate::database::sql_interface_heating_stats::{HeatingStatsEntry, SqlInterfaceHeatingStats};
 use crate::sensors::sensor_manager::SensorManagerSignals;
 use crate::sensors::tank_level_switch::TankLevelSwitchSignals;
-pub(crate) use crate::thermal::heating_channels::HeatingChannels;
+use crate::thermal::heating_channels::HeatingChannels;
+use crate::thermal::heating_config::HeatingConfig;
 use crate::utilities::channel_content::{ActuatorState, AquariumDevice, InternalCommand};
 use crate::utilities::common::check_if_mutex_is_blocked;
 use crate::utilities::logger::log_error_chain;
 use crate::utilities::proc_ext_req::ProcessExternalRequestTrait;
-use crate::utilities::sawtooth_profile::{SawToothProfile, SawToothProfileConfig};
+use crate::utilities::sawtooth_profile::SawToothProfile;
 use crate::utilities::wait_for_termination::WaitForTerminationTrait;
 
 const CYCLE_TIME_HEATING_MILLIS: u64 = 500;
@@ -70,56 +70,6 @@ pub trait HeatingStatsDataTransferTrait {
         data: HeatingStatsEntry,
         sql_interface_heating: &mut SqlInterfaceHeatingStats,
     ) -> Result<(), SqlInterfaceError>;
-}
-
-/// Holds the configuration data for the heating control.
-/// The configuration is loaded from the .toml configuration file.
-/// This struct does not contain any implementation.
-#[derive(Deserialize, Clone)]
-pub struct HeatingConfig {
-    /// Control will only be active when the flag is set to true.
-    pub active: bool,
-
-    /// The temperature at which the heater is switched on for 100% of the time.
-    /// This temperature must be lower than switch_off_temperature.
-    /// It is overwritten with valid database values once obtained.
-    switch_on_temperature: f32,
-
-    /// The temperature at which the heater is switched off for 100% of the time.
-    /// This temperature must be higher than switch_on_temperature.
-    /// It is overwritten with valid database values once obtained.
-    pub switch_off_temperature: f32,
-
-    /// Flag to determine behavior in case the refill control has a problem
-    /// and the water level stays low for longer periods of time.
-    /// If this flag is true, then the heating control will switch off the heater
-    /// regardless of measured temperature to avoid overheating
-    /// of the fish tank or the heater itself.
-    /// Background: If the water level is too low, the temperature sensor may be exposed to ambient air instead of water.
-    /// This condition results in a wrong temperature reading and thus in the wrong actuation of the heater.
-    /// Furthermore, exposing the heater to air instead of water and switching it on
-    /// will not allow the heater to dissipate the heat, and it therefore might suffer damage.
-    stop_on_refill_error: bool,
-
-    /// Number of seconds which need to pass with low water level before the heater is switched off
-    stop_on_refill_error_delay: u32,
-
-    /// Configuration of saw tooth profile for generation of low-frequency PWM signal
-    saw_tooth_profile_config: SawToothProfileConfig,
-
-    /// Electrical power consumption of heater in Watt
-    heater_power: f32,
-
-    /// strategy when schedule check does not allow operation:
-    /// true=heating will be switched on; false=heating will be switched off
-    switch_on_when_out_of_schedule: bool,
-
-    /// strategy when the external request for stopping heating control has been received:
-    /// true=heating will be switched on; false=heating will be switched off
-    switch_on_when_external_stop: bool,
-
-    /// interval in seconds for polling the database
-    pub set_value_check_interval: u64,
 }
 
 /// Sends a command to the relay manager to actuate the heater and waits for a response.
@@ -729,13 +679,14 @@ impl Heating {
                     if duration_until_midnight <= 0 {
                         // Use take() to move the value out of the Option without cloning.
                         if let Some(stats) = heating_stats_opt.take() {
-                            if let Err(e) =
-                                heating_stats_transfer.transfer_heating_stats(stats, &mut self.sql_interface_heating)
+                            if let Err(e) = heating_stats_transfer
+                                .transfer_heating_stats(stats, &mut self.sql_interface_heating)
                             {
                                 error!("Error occurred when trying to store heating stats data in database: {e:?}");
                             }
                             // Reset heating stats
-                            heating_stats_opt = Some(HeatingStatsEntry::new(&mut self.sql_interface_heating.conn));
+                            heating_stats_opt =
+                                Some(HeatingStatsEntry::new(&mut self.sql_interface_heating.conn));
                             duration_until_midnight = self.get_duration_until_midnight();
                         }
                     }
@@ -835,8 +786,8 @@ impl Heating {
         // update the database with the heating stats data recorded
         // so far for this date
         if let Some(stats) = heating_stats_opt.take() {
-            if let Err(e) =
-                heating_stats_transfer.transfer_heating_stats(stats, &mut self.sql_interface_heating)
+            if let Err(e) = heating_stats_transfer
+                .transfer_heating_stats(stats, &mut self.sql_interface_heating)
             {
                 error!("Error occurred when trying to store heating stats data in database (during termination): {e:?}");
             }

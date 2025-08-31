@@ -538,7 +538,7 @@ impl Channels {
                 false => None,
             };
 
-        #[allow(unused)] // channel used in conditionally compiled code]
+        #[allow(unused)] // channel used in conditionally compiled code
         let (tx_signal_handler_to_dht, rx_dht_from_signal_handler): (
             Sender<InternalCommand>,
             Receiver<InternalCommand>,

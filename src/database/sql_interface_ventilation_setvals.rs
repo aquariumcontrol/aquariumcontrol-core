@@ -18,7 +18,7 @@ use crate::database::sql_query_strings;
 use crate::database::sql_query_strings::{
     SQL_QUERY_CHECK_VENTILATION_SETVALS_COUNT, SQL_QUERY_CHECK_VENTILATION_SETVALS_NULL,
 };
-use crate::thermal::ventilation::VentilationConfig;
+use crate::thermal::ventilation_config::VentilationConfig;
 use mysql::prelude::Queryable;
 
 /// Contains the ventilation set values which can be set by the user.

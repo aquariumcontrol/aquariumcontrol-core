@@ -9,7 +9,8 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 
 use log::warn;
 
-use crate::relays::actuate_controllino::{get_relay_command, ActuateControllinoConfig};
+use crate::relays::actuate_controllino::get_relay_command;
+use crate::relays::actuate_controllino_config::ActuateControllinoConfig;
 use crate::relays::actuate_simulator_channels::ActuateSimulatorChannels;
 use crate::relays::relay_error::RelayError;
 use crate::relays::relay_manager::RelayActuationTrait;

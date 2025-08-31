@@ -24,3 +24,6 @@ pub mod refill_stats_data;
 
 /// Container for channels
 pub mod refill_channels;
+
+/// Configuration of Refill
+pub mod refill_config;

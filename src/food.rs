@@ -22,3 +22,6 @@ pub mod feed_schedule_entry;
 pub mod feed_channels;
 /// Contains error definition for food injection
 pub mod food_injection_error;
+
+/// Configuration data for feed control
+pub mod feed_config;

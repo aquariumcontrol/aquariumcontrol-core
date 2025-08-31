@@ -10,7 +10,7 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 use log::error;
 use std::collections::HashSet;
 
-use serde_derive::Deserialize;
+use crate::sensors::gpio_handler_config::GpioHandlerConfig;
 use thiserror::Error;
 
 cfg_if::cfg_if! {
@@ -28,63 +28,6 @@ pub const GPIO_MIN: u8 = 3;
 
 /// Maximum permissible GPIO value. The configuration is checked against this value.
 pub const GPIO_MAX: u8 = 28;
-
-/// Holds the configuration data for the GPIO handler.
-/// The configuration is loaded from the .toml configuration file.
-/// This struct does not contain any implementation.
-#[derive(Deserialize, Debug)]
-pub struct GpioHandlerConfig {
-    /// Flag to determine if the application shall communicate with hardware directly or via TCP with a simulator
-    pub use_simulator: bool,
-
-    /// GPIO for the tank level sensor
-    pub tank_level_switch: u8,
-
-    /// GPIO for communication with the DHT22 sensor
-    pub dht22_io: u8,
-
-    /// GPIO for providing power to the DHT22 sensor
-    pub dht22_vcc: u8,
-
-    /// GPIO of the protein skimmer
-    pub skimmer: u8,
-
-    /// GPIO of the main pump #1
-    pub main_pump1: u8,
-
-    /// GPIO of the main pump #2
-    pub main_pump2: u8,
-
-    /// GPIO of the auxiliary pump #1
-    pub aux_pump1: u8,
-
-    /// GPIO of the auxiliary pump #2
-    pub aux_pump2: u8,
-
-    /// GPIO of the feeder
-    pub feeder: u8,
-
-    /// GPIO of the refill pump
-    pub refill_pump: u8,
-
-    /// GPIO of the heater
-    pub heater: u8,
-
-    /// GPIO of the surface ventilation
-    pub ventilation: u8,
-
-    /// GPIO of the peristaltic pump #1
-    pub peristaltic_pump1: u8,
-
-    /// GPIO of the peristaltic pump #2
-    pub peristaltic_pump2: u8,
-
-    /// GPIO of the peristaltic pump #3
-    pub peristaltic_pump3: u8,
-
-    /// GPIO of the peristaltic pump #4
-    pub peristaltic_pump4: u8,
-}
 
 /// Contains error definition for GpioHandler
 #[derive(Error, Debug)]

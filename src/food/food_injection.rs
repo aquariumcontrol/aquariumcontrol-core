@@ -12,7 +12,7 @@ use std::time::{Duration, Instant};
 
 use crate::food::feed::FeedChannels;
 use crate::food::food_injection_error::FoodInjectionError;
-use crate::food::{feed::FeedConfig, feed_pattern::Feedpattern};
+use crate::food::{feed_config::FeedConfig, feed_pattern::Feedpattern};
 use crate::utilities::channel_content::{ActuatorState, AquariumDevice, InternalCommand};
 use crate::utilities::proc_ext_req::ProcessExternalRequestTrait;
 

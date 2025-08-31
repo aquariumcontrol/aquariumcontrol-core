@@ -45,3 +45,6 @@ pub mod sql_interface_ventilation_setvals;
 
 /// Contains data structure for transfer of heating statistics to the database
 pub mod sql_interface_heating_stats_data_transfer;
+
+/// Configuration of SqlInterface
+pub mod sql_interface_config;

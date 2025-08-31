@@ -11,3 +11,6 @@ pub mod startup_error;
 
 /// Generates all channels used by the application.
 pub mod channels;
+
+/// Configuration of execution: determines which threads shall be started
+pub mod execution_config;

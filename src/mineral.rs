@@ -18,3 +18,6 @@ pub mod mineral_injection;
 
 /// Container for the channels of the Balling module
 pub mod balling_channels;
+
+/// Configuration data for the Balling module
+pub mod balling_config;

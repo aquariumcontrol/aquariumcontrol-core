@@ -16,13 +16,13 @@ use log::info;
 #[cfg(target_os = "linux")]
 use nix::unistd::gettid;
 
+use crate::launch::execution_config::ExecutionConfig;
+use crate::utilities::channel_content::InternalCommand;
+pub(crate) use crate::utilities::signal_handler_channels::SignalHandlerChannels;
 use spin_sleep::SpinSleeper;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::{Receiver, Sender};
 use std::{sync::Arc, time::Duration};
-
-use crate::utilities::channel_content::InternalCommand;
-pub(crate) use crate::utilities::signal_handler_channels::SignalHandlerChannels;
 
 /// Sends a specified `InternalCommand` to a target thread's channel and optionally waits for an acknowledgment.
 ///
@@ -142,7 +142,11 @@ fn send_command(
 ///     signal_handler --> watchdog[Watchdog]
 ///     watchdog --> signal_handler
 /// ```
-pub fn handle_signals(term: Arc<AtomicBool>, signal_handler_channels: SignalHandlerChannels) {
+pub fn handle_signals(
+    term: Arc<AtomicBool>,
+    signal_handler_channels: SignalHandlerChannels,
+    execution_config: ExecutionConfig,
+) {
     #[cfg(target_os = "linux")]
     info!(target: module_path!(), "Thread started with TID: {}", gettid());
 
@@ -193,12 +197,14 @@ pub fn handle_signals(term: Arc<AtomicBool>, signal_handler_channels: SignalHand
 
     // phase 1: shut down highest level controls: data_logger
     // data logger initiates communication to heating, refill, atlas_scientific, ambient
-    send_command(
-        InternalCommand::Quit,
-        Some(&signal_handler_channels.tx_signal_handler_to_data_logger),
-        Some(&signal_handler_channels.rx_signal_handler_from_data_logger),
-        "data_logger",
-    );
+    if execution_config.data_logger {
+        send_command(
+            InternalCommand::Quit,
+            Some(&signal_handler_channels.tx_signal_handler_to_data_logger),
+            Some(&signal_handler_channels.rx_signal_handler_from_data_logger),
+            "data_logger",
+        );
+    }
     send_command(
         InternalCommand::Quit,
         signal_handler_channels
@@ -217,36 +223,46 @@ pub fn handle_signals(term: Arc<AtomicBool>, signal_handler_channels: SignalHand
 
     // phase 2: shut down high-level controls: heating, ventilation, feed, refill, balling
     // these controls access the Controllino, Atlas Scientific and Dht
-    send_command(
-        InternalCommand::Quit,
-        Some(&signal_handler_channels.tx_signal_handler_to_refill),
-        Some(&signal_handler_channels.rx_signal_handler_from_refill),
-        "refill",
-    );
-    send_command(
-        InternalCommand::Quit,
-        Some(&signal_handler_channels.tx_signal_handler_to_heating),
-        Some(&signal_handler_channels.rx_signal_handler_from_heating),
-        "heating",
-    );
-    send_command(
-        InternalCommand::Quit,
-        Some(&signal_handler_channels.tx_signal_handler_to_ventilation),
-        Some(&signal_handler_channels.rx_signal_handler_from_ventilation),
-        "ventilation",
-    );
-    send_command(
-        InternalCommand::Quit,
-        Some(&signal_handler_channels.tx_signal_handler_to_feed),
-        Some(&signal_handler_channels.rx_signal_handler_from_feed),
-        "feed",
-    );
-    send_command(
-        InternalCommand::Quit,
-        Some(&signal_handler_channels.tx_signal_handler_to_balling),
-        Some(&signal_handler_channels.rx_signal_handler_from_balling),
-        "balling",
-    );
+    if execution_config.refill {
+        send_command(
+            InternalCommand::Quit,
+            Some(&signal_handler_channels.tx_signal_handler_to_refill),
+            Some(&signal_handler_channels.rx_signal_handler_from_refill),
+            "refill",
+        );
+    }
+    if execution_config.heating {
+        send_command(
+            InternalCommand::Quit,
+            Some(&signal_handler_channels.tx_signal_handler_to_heating),
+            Some(&signal_handler_channels.rx_signal_handler_from_heating),
+            "heating",
+        );
+    }
+    if execution_config.ventilation {
+        send_command(
+            InternalCommand::Quit,
+            Some(&signal_handler_channels.tx_signal_handler_to_ventilation),
+            Some(&signal_handler_channels.rx_signal_handler_from_ventilation),
+            "ventilation",
+        );
+    }
+    if execution_config.feed {
+        send_command(
+            InternalCommand::Quit,
+            Some(&signal_handler_channels.tx_signal_handler_to_feed),
+            Some(&signal_handler_channels.rx_signal_handler_from_feed),
+            "feed",
+        );
+    }
+    if execution_config.balling {
+        send_command(
+            InternalCommand::Quit,
+            Some(&signal_handler_channels.tx_signal_handler_to_balling),
+            Some(&signal_handler_channels.rx_signal_handler_from_balling),
+            "balling",
+        );
+    }
     #[cfg(feature = "debug_signal_handler")]
     debug!(
         target: module_path!(),
@@ -255,13 +271,15 @@ pub fn handle_signals(term: Arc<AtomicBool>, signal_handler_channels: SignalHand
 
     // phase 3: shut down medium level controls
     // these controls receive commands from upper level controls and communicate to i2c_interface and dht
-    send_command(
-        InternalCommand::Quit,
-        Some(&signal_handler_channels.tx_signal_handler_to_tank_level_switch),
-        Some(&signal_handler_channels.rx_signal_handler_from_tank_level_switch),
-        "tank_level_switch",
-    );
-    if !use_simulator {
+    if execution_config.tank_level_switch {
+        send_command(
+            InternalCommand::Quit,
+            Some(&signal_handler_channels.tx_signal_handler_to_tank_level_switch),
+            Some(&signal_handler_channels.rx_signal_handler_from_tank_level_switch),
+            "tank_level_switch",
+        );
+    }
+    if !use_simulator && execution_config.atlas_scientific {
         send_command(
             InternalCommand::Quit,
             Some(&signal_handler_channels.tx_signal_handler_to_atlas_scientific),
@@ -269,18 +287,22 @@ pub fn handle_signals(term: Arc<AtomicBool>, signal_handler_channels: SignalHand
             "atlas_scientific",
         );
     }
-    send_command(
-        InternalCommand::Quit,
-        Some(&signal_handler_channels.tx_signal_handler_to_sensor_manager),
-        Some(&signal_handler_channels.rx_signal_handler_from_sensor_manager),
-        "ambient",
-    );
-    send_command(
-        InternalCommand::Quit,
-        Some(&signal_handler_channels.tx_signal_handler_to_schedule_check),
-        Some(&signal_handler_channels.rx_signal_handler_from_schedule_check),
-        "schedule_check",
-    );
+    if execution_config.sensor_manager {
+        send_command(
+            InternalCommand::Quit,
+            Some(&signal_handler_channels.tx_signal_handler_to_sensor_manager),
+            Some(&signal_handler_channels.rx_signal_handler_from_sensor_manager),
+            "ambient",
+        );
+    }
+    if execution_config.schedule_check {
+        send_command(
+            InternalCommand::Quit,
+            Some(&signal_handler_channels.tx_signal_handler_to_schedule_check),
+            Some(&signal_handler_channels.rx_signal_handler_from_schedule_check),
+            "schedule_check",
+        );
+    }
     #[cfg(feature = "debug_signal_handler")]
     debug!(
         target: module_path!(),
@@ -290,25 +312,31 @@ pub fn handle_signals(term: Arc<AtomicBool>, signal_handler_channels: SignalHand
     // phase 4: shut down low-level controls
     #[cfg(all(feature = "target_hw", target_os = "linux"))]
     {
+        if execution_config.i2c_interface {
+            send_command(
+                InternalCommand::Quit,
+                Some(&signal_handler_channels.tx_signal_handler_to_i2c_interface),
+                None,
+                "i2c_interface",
+            );
+        }
+        if execution_config.dht {
+            send_command(
+                InternalCommand::Quit,
+                Some(&signal_handler_channels.tx_signal_handler_to_dht),
+                None,
+                "dht",
+            );
+        }
+    }
+    if execution_config.relay_manager {
         send_command(
             InternalCommand::Quit,
-            Some(&signal_handler_channels.tx_signal_handler_to_i2c_interface),
-            None,
-            "i2c_interface",
-        );
-        send_command(
-            InternalCommand::Quit,
-            Some(&signal_handler_channels.tx_signal_handler_to_dht),
-            None,
-            "dht",
+            Some(&signal_handler_channels.tx_signal_handler_to_relay_manager),
+            Some(&signal_handler_channels.rx_signal_handler_from_relay_manager),
+            "relay_manager",
         );
     }
-    send_command(
-        InternalCommand::Quit,
-        Some(&signal_handler_channels.tx_signal_handler_to_relay_manager),
-        Some(&signal_handler_channels.rx_signal_handler_from_relay_manager),
-        "relay_manager",
-    );
     send_command(
         InternalCommand::Quit,
         signal_handler_channels
@@ -319,12 +347,14 @@ pub fn handle_signals(term: Arc<AtomicBool>, signal_handler_channels: SignalHand
             .as_ref(),
         "tcp",
     );
-    send_command(
-        InternalCommand::Quit,
-        Some(&signal_handler_channels.tx_signal_handler_to_monitors),
-        Some(&signal_handler_channels.rx_signal_handler_from_monitors),
-        "monitors",
-    );
+    if execution_config.monitors {
+        send_command(
+            InternalCommand::Quit,
+            Some(&signal_handler_channels.tx_signal_handler_to_monitors),
+            Some(&signal_handler_channels.rx_signal_handler_from_monitors),
+            "monitors",
+        );
+    }
     #[cfg(feature = "debug_signal_handler")]
     debug!(
         target: module_path!(),
@@ -332,12 +362,14 @@ pub fn handle_signals(term: Arc<AtomicBool>, signal_handler_channels: SignalHand
     );
 
     // phase 5: send termination command to the highest level controls
-    send_command(
-        InternalCommand::Terminate,
-        Some(&signal_handler_channels.tx_signal_handler_to_data_logger),
-        None,
-        "data_logger",
-    );
+    if execution_config.data_logger {
+        send_command(
+            InternalCommand::Terminate,
+            Some(&signal_handler_channels.tx_signal_handler_to_data_logger),
+            None,
+            "data_logger",
+        );
+    }
     #[cfg(feature = "debug_signal_handler")]
     debug!(
         target: module_path!(),
@@ -345,36 +377,46 @@ pub fn handle_signals(term: Arc<AtomicBool>, signal_handler_channels: SignalHand
     );
 
     // phase 6: send termination command to high-level controls
-    send_command(
-        InternalCommand::Terminate,
-        Some(&signal_handler_channels.tx_signal_handler_to_heating),
-        None,
-        "heating",
-    );
-    send_command(
-        InternalCommand::Terminate,
-        Some(&signal_handler_channels.tx_signal_handler_to_ventilation),
-        None,
-        "ventilation",
-    );
-    send_command(
-        InternalCommand::Terminate,
-        Some(&signal_handler_channels.tx_signal_handler_to_feed),
-        None,
-        "feed",
-    );
-    send_command(
-        InternalCommand::Terminate,
-        Some(&signal_handler_channels.tx_signal_handler_to_refill),
-        None,
-        "refill",
-    );
-    send_command(
-        InternalCommand::Terminate,
-        Some(&signal_handler_channels.tx_signal_handler_to_balling),
-        None,
-        "balling",
-    );
+    if execution_config.heating {
+        send_command(
+            InternalCommand::Terminate,
+            Some(&signal_handler_channels.tx_signal_handler_to_heating),
+            None,
+            "heating",
+        );
+    }
+    if execution_config.ventilation {
+        send_command(
+            InternalCommand::Terminate,
+            Some(&signal_handler_channels.tx_signal_handler_to_ventilation),
+            None,
+            "ventilation",
+        );
+    }
+    if execution_config.feed {
+        send_command(
+            InternalCommand::Terminate,
+            Some(&signal_handler_channels.tx_signal_handler_to_feed),
+            None,
+            "feed",
+        );
+    }
+    if execution_config.refill {
+        send_command(
+            InternalCommand::Terminate,
+            Some(&signal_handler_channels.tx_signal_handler_to_refill),
+            None,
+            "refill",
+        );
+    }
+    if execution_config.balling {
+        send_command(
+            InternalCommand::Terminate,
+            Some(&signal_handler_channels.tx_signal_handler_to_balling),
+            None,
+            "balling",
+        );
+    }
     #[cfg(feature = "debug_signal_handler")]
     debug!(
         target: module_path!(),
@@ -382,33 +424,42 @@ pub fn handle_signals(term: Arc<AtomicBool>, signal_handler_channels: SignalHand
     );
 
     // phase 7: send quit/termination command to medium level controls
-    send_command(
-        InternalCommand::Quit,
-        Some(&signal_handler_channels.tx_signal_handler_to_ds18b20),
-        None,
-        "ds18b20",
-    );
-    #[cfg(all(feature = "target_hw", target_os = "linux"))]
-    {
+    if execution_config.ds18b20 {
         send_command(
-            InternalCommand::Terminate,
-            Some(&signal_handler_channels.tx_signal_handler_to_atlas_scientific),
+            InternalCommand::Quit,
+            Some(&signal_handler_channels.tx_signal_handler_to_ds18b20),
             None,
-            "atlas_scientific",
+            "ds18b20",
         );
     }
-    send_command(
-        InternalCommand::Terminate,
-        Some(&signal_handler_channels.tx_signal_handler_to_sensor_manager),
-        None,
-        "ambient",
-    );
-    send_command(
-        InternalCommand::Terminate,
-        Some(&signal_handler_channels.tx_signal_handler_to_tank_level_switch),
-        None,
-        "tank_level_switch",
-    );
+    #[cfg(all(feature = "target_hw", target_os = "linux"))]
+    {
+        if execution_config.atlas_scientific {
+            send_command(
+                InternalCommand::Terminate,
+                Some(&signal_handler_channels.tx_signal_handler_to_atlas_scientific),
+                None,
+                "atlas_scientific",
+            );
+        }
+    }
+
+    if execution_config.sensor_manager {
+        send_command(
+            InternalCommand::Terminate,
+            Some(&signal_handler_channels.tx_signal_handler_to_sensor_manager),
+            None,
+            "ambient",
+        );
+    }
+    if execution_config.tank_level_switch {
+        send_command(
+            InternalCommand::Terminate,
+            Some(&signal_handler_channels.tx_signal_handler_to_tank_level_switch),
+            None,
+            "tank_level_switch",
+        );
+    }
     #[cfg(feature = "debug_signal_handler")]
     debug!(
         target: module_path!(),
@@ -416,13 +467,14 @@ pub fn handle_signals(term: Arc<AtomicBool>, signal_handler_channels: SignalHand
     );
 
     // phase 8: allow messaging thread and watchdog to close
-    send_command(
-        InternalCommand::Terminate,
-        Some(&signal_handler_channels.tx_signal_handler_to_watchdog),
-        Some(&signal_handler_channels.rx_signal_handler_from_watchdog),
-        "watchdog",
-    );
-
+    if execution_config.watchdog {
+        send_command(
+            InternalCommand::Terminate,
+            Some(&signal_handler_channels.tx_signal_handler_to_watchdog),
+            Some(&signal_handler_channels.rx_signal_handler_from_watchdog),
+            "watchdog",
+        );
+    }
     send_command(
         InternalCommand::Terminate,
         signal_handler_channels
@@ -440,14 +492,14 @@ pub fn handle_signals(term: Arc<AtomicBool>, signal_handler_channels: SignalHand
 
 #[cfg(test)]
 pub mod tests {
+    use crate::launch::execution_config::ExecutionConfig;
+    use crate::utilities::channel_content::InternalCommand;
+    use crate::utilities::signal_handler::{handle_signals, SignalHandlerChannels};
     use spin_sleep::SpinSleeper;
     use std::sync::atomic::{AtomicBool, Ordering};
     use std::sync::mpsc::{self, Receiver, Sender};
     use std::time::Duration;
     use std::{process::Command, sync::Arc, thread};
-
-    use crate::utilities::channel_content::InternalCommand;
-    use crate::utilities::signal_handler::{handle_signals, SignalHandlerChannels};
 
     // helper function to send a signal to the application
     fn send_signal(pid: u32, signal: i32) {
@@ -808,7 +860,11 @@ pub mod tests {
                     cnt_tx_signal_handler_to_ds18b20: 0,
                 };
 
-                handle_signals(term_clone, signal_handler_channels);
+                handle_signals(
+                    term_clone,
+                    signal_handler_channels,
+                    ExecutionConfig::default(),
+                );
             })
             .unwrap();
 

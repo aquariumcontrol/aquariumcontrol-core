@@ -17,8 +17,8 @@ use crate::database::sql_interface_refill::DatabaseInterfaceRefillTrait;
 use crate::sensors::tank_level_switch::TankLevelSwitchSignals;
 use crate::utilities::channel_content::{AquariumDevice, InternalCommand};
 use crate::utilities::proc_ext_req::ProcessExternalRequestTrait;
-use crate::water::refill::RefillConfig;
 use crate::water::refill_channels::RefillChannels;
+use crate::water::refill_config::RefillConfig;
 use crate::water::refill_error_states::RefillErrorStates;
 
 /// Trait for the execution of the refill once control has detected that the water level is low.

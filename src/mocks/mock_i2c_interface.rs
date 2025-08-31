@@ -9,7 +9,7 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 
 #[cfg(test)]
 pub mod tests {
-    use crate::sensors::atlas_scientific::AtlasScientificConfig;
+    use crate::sensors::atlas_scientific_config::AtlasScientificConfig;
     use crate::sensors::i2c_interface::{I2cRequest, I2cResponse, I2cResult};
     use crate::utilities::channel_content::InternalCommand;
     use crate::utilities::proc_ext_req::ProcessExternalRequestTrait;

@@ -14,3 +14,6 @@ pub mod schedule_check;
 
 /// Container for channels
 pub mod schedule_check_channels;
+
+/// Configuration data for the schedule checker
+pub mod schedule_check_config;

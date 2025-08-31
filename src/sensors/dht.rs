@@ -15,11 +15,11 @@ use log::info;
 use log::warn;
 
 use crate::sensors::dht_channels::DhtChannels;
+use crate::sensors::dht_config::DhtConfig;
 use crate::sensors::dht_error::DhtError;
 use crate::utilities::logger::log_error_chain;
 #[cfg(all(not(test), target_os = "linux"))]
 use nix::unistd::gettid;
-use serde_derive::Deserialize;
 use spin_sleep::SpinSleeper;
 use std::sync::mpsc::TryRecvError;
 use std::sync::{Arc, Mutex};
@@ -40,48 +40,6 @@ cfg_if::cfg_if! {
 
 /// Type definition to avoid linter warnings about complex return types
 pub type DhtResult = Result<(f32, f32), DhtError>; // Temperature and Humidity
-
-/// Holds the configuration data for interacting with GPIO
-/// The configuration is loaded from the .toml configuration file.
-/// This struct does not contain any implementation.
-#[derive(Deserialize, Debug)]
-pub struct DhtConfig {
-    /// allows deactivation of the data acquisition
-    #[allow(unused)] // used in conditionally compiled code
-    pub active: bool,
-
-    /// duration to keep pin down during start signal in microseconds
-    #[allow(unused)]
-    sensor_init_pin_down_duration_micros: u64,
-
-    /// duration to keep pin up during start signal in microseconds
-    #[allow(unused)]
-    sensor_init_pin_up_duration_micros: u64,
-
-    /// duration for sensor to respond after sending start signal in microseconds
-    #[allow(unused)]
-    sensor_init_input_duration_micros: u64,
-
-    /// maximum permissible duration for the sensor to respond in microseconds
-    #[allow(unused)]
-    timeout_duration_micros: u64,
-
-    /// duration in milliseconds the sensor is switched off before requesting transmission
-    #[allow(unused)]
-    sensor_reset_duration_millis: u64,
-
-    /// duration in milliseconds the sensor is given to initialize
-    #[allow(unused)]
-    sensor_startup_duration_millis: u64,
-
-    /// duration in milliseconds the sensor is given to pause between transmissions
-    #[allow(unused)]
-    sensor_pause_duration_millis: u64,
-
-    /// duration in milliseconds between two measurements
-    #[allow(unused)] // used in conditionally compiled code
-    measurement_interval_millis: u64,
-}
 
 /// Contains constants for communication with the DHT22 sensor.
 pub mod dht22_constants {
@@ -915,7 +873,8 @@ pub mod tests {
     use assert_float_eq::*;
 
     use crate::sensors::dht::{dht22_constants, Dht, DhtError};
-    use crate::utilities::logger::{setup_logger, LoggerConfig};
+    use crate::utilities::logger::setup_logger;
+    use crate::utilities::logger_config::LoggerConfig;
 
     // feature-specific imports
     cfg_if::cfg_if! {

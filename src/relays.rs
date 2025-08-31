@@ -31,5 +31,11 @@ pub mod relay_error;
 /// Container for channels used by relay manager
 pub mod relay_manager_channels;
 
-/// Container for channel used by ActuateSimulator
+/// Container for the channel used by ActuateSimulator
 pub mod actuate_simulator_channels;
+
+/// Configuration data for RelayManager
+pub mod relay_manager_config;
+
+/// Configuration of ActuateControllino
+pub mod actuate_controllino_config;

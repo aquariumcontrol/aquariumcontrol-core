@@ -17,7 +17,6 @@ use log::info;
 #[cfg(all(not(test), target_os = "linux"))]
 use nix::unistd::gettid;
 
-use serde_derive::Deserialize;
 use spin_sleep::SpinSleeper;
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
@@ -29,58 +28,11 @@ use crate::utilities::channel_content::InternalCommand;
 use crate::utilities::proc_ext_req::ProcessExternalRequestTrait;
 use crate::utilities::wait_for_termination::WaitForTerminationTrait;
 pub(crate) use crate::water::refill_channels::RefillChannels;
+use crate::water::refill_config::RefillConfig;
 use crate::water::refill_error_states::RefillErrorStates;
 use crate::water::refill_monitor_view::RefillMonitorView;
 use crate::water::refill_stats_data::RefillStatsData;
 use crate::water::water_injection::WaterInjectionTrait;
-
-/// Holds the configuration data for the refill control.
-/// The configuration is loaded from the .toml configuration file.
-/// This struct does not contain any implementation.
-#[derive(Deserialize, Clone)]
-pub struct RefillConfig {
-    /// control will only be active when the flag is set to true
-    active: bool,
-
-    /// time interval in seconds which need to pass after initialization of the application before refill control is becoming active
-    pub initial_wait_interval: u64,
-
-    /// interval for the main control in seconds    
-    pub check_interval: u64,
-
-    /// the maximum number of permitted refill operations within the last 24h
-    /// - If this number is exceeded, then the refill control will not further refill even if the water level sensor signal value is low.
-    max_refill_count_24h: u64,
-
-    /// maximum permitted refill volume within the last 24h
-    /// - If this number is exceeded, then the refill control will not further refill even if the water level sensor signal value is low.
-    max_refill_volume_24h: f64,
-
-    /// the maximum number of permitted refill operations within the last hour
-    /// - If this number is exceeded, then the refill control will not further refill even if the water level sensor signal value is low.
-    max_refill_count_hour: u64,
-
-    /// maximum permitted refill volume within the last hour
-    /// - If this number is exceeded, then the refill control will not further refill even if the water level sensor signal value is low.
-    max_refill_volume_hour: f64,
-
-    /// minimum time which has to pass after a refill operation before a further refill operation is started
-    min_interval_last_refill: u64,
-
-    /// time interval in seconds which need to pass before the application recognizes a potential tank level switch fault
-    max_duration_since_last_refill: u64,
-
-    /// flow of the refill pump in liters / second
-    pub refill_pump_flow: f64,
-
-    /// maximum permitted refill volume in one refill operation
-    pub max_refill_volume: f64,
-
-    /// Refill volume which is added to the tank in a refill operation after the application recognizes tank level position high
-    /// Background: This volume shall avoid too frequent refill operations. Too high values may lead to unstable water level.
-    /// It is recommended to calibrate a value, which is a fraction of max_refill_volume.
-    pub additional_refill_volume: f64,
-}
 
 const MILLIS_PER_SEC: u64 = 1000;
 
@@ -1077,7 +1029,8 @@ pub mod tests {
     use crate::mocks::mock_water_injection::tests::MockWaterInjection;
     use crate::mocks::test_command::tests::TestCommand;
 
-    use crate::utilities::logger::{setup_logger, LoggerConfig};
+    use crate::utilities::logger::setup_logger;
+    use crate::utilities::logger_config::LoggerConfig;
     use crate::water::refill_stats_data::RefillStatsData;
 
     // Prepares and returns a configured `Refill` control instance along with its associated interfaces for testing.

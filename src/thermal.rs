@@ -20,4 +20,10 @@ pub mod ventilation;
 pub mod heating_channels;
 
 /// Container for the channels of ventilation control used to communicate with other threads
-mod ventilation_channels;
+pub mod ventilation_channels;
+
+/// Configuration of Heating
+pub mod heating_config;
+
+/// Configuration of Ventilation
+pub mod ventilation_config;

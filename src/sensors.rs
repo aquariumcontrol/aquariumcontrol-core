@@ -57,3 +57,24 @@ pub mod ds18b20_channels;
 
 /// Container for channels used by Dht module
 pub mod dht_channels;
+
+/// Configuration of AtlasScientific
+pub mod atlas_scientific_config;
+
+/// Configuration of Dht
+pub mod dht_config;
+
+/// Configuration of Ds18b20
+pub mod ds18b20_config;
+
+/// Configuration of I2cInterface
+pub mod i2c_interface_config;
+
+/// Configuration of SensorManager
+pub mod sensor_manager_config;
+
+/// Configuration of TankLevelSwitch
+pub mod tank_level_switch_config;
+
+/// Configuration of GpioHandler
+pub mod gpio_handler_config;

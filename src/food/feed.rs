@@ -19,43 +19,18 @@ use log::debug;
 #[cfg(all(target_os = "linux", not(test)))]
 use nix::unistd::gettid;
 
-use serde_derive::Deserialize;
 use spin_sleep::SpinSleeper;
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
 use crate::database::sql_interface_feed::DatabaseInterfaceFeedTrait;
 pub(crate) use crate::food::feed_channels::FeedChannels;
+use crate::food::feed_config::FeedConfig;
 use crate::food::feed_schedule_entry::FeedScheduleEntry;
 use crate::food::food_injection::FoodInjectionTrait;
 use crate::utilities::logger::log_error_chain;
 use crate::utilities::proc_ext_req::ProcessExternalRequestTrait;
 use crate::utilities::wait_for_termination::WaitForTerminationTrait;
-
-/// Holds the configuration data for the feed control.
-/// The configuration is loaded from the .toml configuration file.
-/// This struct does not contain any implementation.
-#[derive(Deserialize)]
-pub struct FeedConfig {
-    /// control will only be active when the flag is set to true
-    active: bool,
-
-    /// interval for the main control in seconds    
-    schedule_check_interval: u32,
-
-    /// waiting time in milliseconds before switching on or off a device during feed
-    pub device_switch_delay_millis: u32,
-
-    /// Describes the strategy to use when there are multiple feed schedule entries in the past.
-    /// Using strategy_multiple_schedule_entries_in_past:
-    /// negative value: execute none of them
-    /// positive value: execute the xth entry according to how they are stacked in time
-    /// Example 0: Execute the first entry which has a timestamp closest to the current time.
-    /// Example 1: Execute the second last entry which lies closest to the current time.
-    /// Example 99: Numbers higher than the number of entries found in the past will trigger execution of the
-    /// last entry which has a timestamp furthest from the current time.
-    strategy_multiple_schedule_entries_in_past: i32,
-}
 
 #[cfg_attr(doc, aquamarine::aquamarine)]
 /// Contains the configuration and the implementation for the feed control.
@@ -648,7 +623,8 @@ pub mod tests {
     use crate::utilities::config::{
         read_config_file, read_config_file_with_test_database, ConfigData,
     };
-    use crate::utilities::logger::{setup_logger, LoggerConfig};
+    use crate::utilities::logger::setup_logger;
+    use crate::utilities::logger_config::LoggerConfig;
 
     use crate::database::sql_interface_feed::tests::insert_feed_patterns;
     use crate::database::sql_query_strings::{SQL_TABLE_FEEDLOG, SQL_TABLE_FEEDSCHEDULE};

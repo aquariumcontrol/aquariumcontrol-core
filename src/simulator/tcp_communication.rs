@@ -11,7 +11,6 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 use log::info;
 use log::{debug, error, warn};
 
-use serde_derive::Deserialize;
 use spin_sleep::SpinSleeper;
 use std::sync::mpsc::{Receiver, Sender, TryRecvError};
 use std::{
@@ -21,6 +20,7 @@ use std::{
 };
 
 use crate::simulator::tcp_communication_channels::TcpCommunicationChannels;
+use crate::simulator::tcp_communication_config::TcpCommunicationConfig;
 pub(crate) use crate::simulator::tcp_communication_error::TcpCommunicationError;
 use crate::simulator::tcp_data::*;
 use crate::utilities::channel_content::{AquariumSignal, InternalCommand};
@@ -28,18 +28,6 @@ use crate::utilities::logger::log_error_chain;
 use crate::utilities::proc_ext_req::ProcessExternalRequestTrait;
 #[cfg(all(not(test), target_os = "linux"))]
 use nix::unistd::gettid;
-
-/// Holds the configuration data for the TCP connection.
-/// The configuration is loaded from the .toml configuration file.
-/// This struct does not contain any implementation.
-#[derive(Deserialize)]
-pub struct TcpConnectionConfig {
-    /// host address (either IP address or DNS entry)
-    ip_address: String,
-
-    /// numeric port number
-    port: u16,
-}
 
 #[cfg_attr(doc, aquamarine::aquamarine)]
 /// Contains configuration of implementation for opening, reading, and closing TCP channel.
@@ -85,7 +73,7 @@ impl TcpCommunication {
     /// - `TcpCommunicationError::StreamCloneFailed`: If the underlying `TcpStream` cannot
     ///   be cloned, which is a necessary step for creating separate read and write handles.
     pub fn new(
-        tcp_connection: &TcpConnectionConfig,
+        tcp_connection: &TcpCommunicationConfig,
     ) -> Result<TcpCommunication, TcpCommunicationError> {
         let stream = TcpStream::connect(
             tcp_connection.ip_address.clone() + ":" + &tcp_connection.port.to_string(),

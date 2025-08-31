@@ -16,57 +16,18 @@ use log::debug;
 #[cfg(all(not(test), target_os = "linux"))]
 use nix::unistd::gettid;
 
-use serde_derive::Deserialize;
 use spin_sleep::SpinSleeper;
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
 use crate::database::sql_interface_balling::{BallingSetVal, SqlInterfaceBalling};
 pub(crate) use crate::mineral::balling_channels::BallingChannels;
+use crate::mineral::balling_config::BallingConfig;
 use crate::mineral::balling_error::BallingError;
 use crate::mineral::mineral_injection::MineralInjectionTrait;
 use crate::utilities::channel_content::{AquariumDevice, InternalCommand};
 use crate::utilities::proc_ext_req::ProcessExternalRequestTrait;
 use crate::utilities::wait_for_termination::WaitForTerminationTrait;
-
-/// Holds the configuration data for the balling dosing control.
-/// The configuration is loaded from the .toml configuration file.
-/// This struct does not contain any implementation.
-#[derive(Deserialize)]
-pub struct BallingConfig {
-    /// control will only be active when the flag is set to true
-    active: bool,
-
-    /// pump #1 will only be used when the flag is set to true
-    pump1_active: bool,
-
-    /// pump #2 will only be used when the flag is set to true
-    pump2_active: bool,
-
-    /// pump #3 will only be used when the flag is set to true
-    pump3_active: bool,
-
-    /// pump #4 will only be used when the flag is set to true
-    pump4_active: bool,
-
-    /// interval for the main control in seconds
-    schedule_check_interval: u32,
-
-    /// inject Balling minerals with pump 1 after each period    
-    dosing_interval_pump1: u32,
-
-    /// inject Balling minerals with pump 2 after each period    
-    dosing_interval_pump2: u32,
-
-    /// inject Balling minerals with pump 3 after each period    
-    dosing_interval_pump3: u32,
-
-    /// inject Balling minerals with pump 4 after each period    
-    dosing_interval_pump4: u32,
-
-    /// wait for a fixed period between dosings from different pumps
-    pub pump_switch_delay_millis: u32,
-}
 
 #[cfg_attr(doc, aquamarine::aquamarine)]
 /// Contains the configuration and the implementation for the Balling dosing control.
@@ -866,6 +827,7 @@ pub mod tests {
     use crate::database::sql_interface::SqlInterface;
     use crate::database::sql_interface_balling::{BallingSetVal, SqlInterfaceBalling};
     use crate::database::sql_interface_error::SqlInterfaceError;
+    use crate::database::sql_query_strings::SQL_TABLE_BALLING_DOSING_LOG;
     use crate::mineral::balling::{Balling, BallingChannels, BallingError};
     use crate::mocks::mock_mineral_injection::tests::MockMineralInjection;
     use crate::mocks::mock_schedule_check::tests::mock_schedule_check;
@@ -964,7 +926,7 @@ pub mod tests {
         .unwrap();
 
         // empty the Balling dosing log table
-        SqlInterface::truncate_table(&mut sql_interface, "ballingdosinglog".to_string())
+        SqlInterface::truncate_table(&mut sql_interface, SQL_TABLE_BALLING_DOSING_LOG.to_string())
             .expect("Could not prepare test case");
 
         // insert balling pump configuration
@@ -1014,7 +976,8 @@ pub mod tests {
         sql_interface_balling: &mut SqlInterfaceBalling,
     ) {
         // empty the Balling dosing log table
-        match SqlInterface::truncate_table(sql_interface, "ballingdosinglog".to_string()) {
+        match SqlInterface::truncate_table(sql_interface, SQL_TABLE_BALLING_DOSING_LOG.to_string())
+        {
             Ok(_) => {}
             Err(e) => {
                 panic!("Could not prepare test case: {e:?}")
@@ -1613,6 +1576,16 @@ pub mod tests {
                 panic!("Could not connect to SQL database: {e:?}");
             }
         };
+        match SqlInterface::truncate_table(
+            &mut sql_interface,
+            SQL_TABLE_BALLING_DOSING_LOG.to_string(),
+        ) {
+            Ok(_) => {}
+            Err(e) => {
+                panic!("Could not prepare test case: {e:?}")
+            }
+        }
+
         let mut sql_interface_balling = SqlInterfaceBalling::new(
             sql_interface.get_connection().unwrap(),
             max_rows_balling_set_values,
@@ -1621,7 +1594,10 @@ pub mod tests {
         .unwrap();
 
         // empty the Balling dosing log table
-        match SqlInterface::truncate_table(&mut sql_interface, "ballingdosinglog".to_string()) {
+        match SqlInterface::truncate_table(
+            &mut sql_interface,
+            SQL_TABLE_BALLING_DOSING_LOG.to_string(),
+        ) {
             Ok(_) => {}
             Err(e) => {
                 panic!("Could not prepare test case: {e:?}")
@@ -1835,6 +1811,15 @@ pub mod tests {
                 panic!("Could not connect to SQL database: {e:?}");
             }
         };
+        match SqlInterface::truncate_table(
+            &mut sql_interface,
+            SQL_TABLE_BALLING_DOSING_LOG.to_string(),
+        ) {
+            Ok(_) => {}
+            Err(e) => {
+                panic!("Could not prepare test case: {e:?}")
+            }
+        }
         let mut sql_interface_balling = SqlInterfaceBalling::new(
             sql_interface.get_connection().unwrap(),
             max_rows_balling_set_values,
@@ -1898,6 +1883,15 @@ pub mod tests {
                 panic!("Could not connect to SQL database: {e:?}");
             }
         };
+        match SqlInterface::truncate_table(
+            &mut sql_interface,
+            SQL_TABLE_BALLING_DOSING_LOG.to_string(),
+        ) {
+            Ok(_) => {}
+            Err(e) => {
+                panic!("Could not prepare test case: {e:?}")
+            }
+        }
         let mut sql_interface_balling = SqlInterfaceBalling::new(
             sql_interface.get_connection().unwrap(),
             max_rows_balling_set_values,
@@ -2066,12 +2060,21 @@ pub mod tests {
 
         let max_rows_balling_set_values = config.sql_interface.max_rows_balling_set_values;
         let max_rows_balling_dosing_log = config.sql_interface.max_rows_balling_dosing_log;
-        let sql_interface = match SqlInterface::new(config.sql_interface) {
+        let mut sql_interface = match SqlInterface::new(config.sql_interface) {
             Ok(c) => c,
             Err(e) => {
                 panic!("Could not connect to SQL database: {e:?}");
             }
         };
+        match SqlInterface::truncate_table(
+            &mut sql_interface,
+            SQL_TABLE_BALLING_DOSING_LOG.to_string(),
+        ) {
+            Ok(_) => {}
+            Err(e) => {
+                panic!("Could not prepare test case: {e:?}")
+            }
+        }
         let sql_interface_balling = SqlInterfaceBalling::new(
             sql_interface.get_connection().unwrap(),
             max_rows_balling_set_values,
@@ -2111,7 +2114,16 @@ pub mod tests {
 
         let max_rows_balling_set_values = config.sql_interface.max_rows_balling_set_values;
         let max_rows_balling_dosing_log = config.sql_interface.max_rows_balling_dosing_log;
-        let sql_interface = SqlInterface::new(config.sql_interface).unwrap();
+        let mut sql_interface = SqlInterface::new(config.sql_interface).unwrap();
+        match SqlInterface::truncate_table(
+            &mut sql_interface,
+            SQL_TABLE_BALLING_DOSING_LOG.to_string(),
+        ) {
+            Ok(_) => {}
+            Err(e) => {
+                panic!("Could not prepare test case: {e:?}")
+            }
+        }
         let sql_interface_balling = SqlInterfaceBalling::new(
             sql_interface.get_connection().unwrap(),
             max_rows_balling_set_values,

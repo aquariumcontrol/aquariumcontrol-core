@@ -7,19 +7,10 @@ The above copyright notice and this permission notice shall be included in all c
 THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
-use serde_derive::Deserialize;
+use crate::utilities::publish_pid_config::PublishPidConfig;
 use std::num::ParseIntError;
 use std::{fs, process};
 use thiserror::Error;
-
-/// Holds the configuration data for the PID publication.
-/// The configuration is loaded from the .toml configuration file.
-/// This struct does not contain any implementation.
-#[derive(Deserialize, Clone)]
-pub struct PublishPidConfig {
-    /// filename used for publishing the PID
-    pid_filename: String,
-}
 
 /// Contains the error definition for PublishPid
 #[derive(Debug, Error)]

@@ -8,9 +8,9 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 */
 #![allow(non_snake_case)]
 
+use log::error;
 #[cfg(all(target_os = "linux", not(test)))]
 use log::info;
-use log::error;
 
 #[cfg(not(test))]
 use log::warn;
@@ -23,13 +23,13 @@ use log::debug;
 #[cfg(all(target_os = "linux", not(test)))]
 use nix::unistd::gettid;
 
-use serde_derive::Deserialize;
 use spin_sleep::SpinSleeper;
 
 use crate::sensors::atlas_scientific::AtlasScientificResultData;
 use crate::sensors::dht::DhtResult;
 use crate::sensors::ds18b20::Ds18b20Result;
 use crate::sensors::sensor_manager_channels::SensorManagerChannels;
+use crate::sensors::sensor_manager_config::SensorManagerConfig;
 use crate::simulator::get_resp_sim::GetResponseFromSimulatorTrait;
 use crate::simulator::tcp_communication_error::TcpCommunicationError;
 use crate::utilities::channel_content::{AquariumSignal, InternalCommand};
@@ -38,36 +38,6 @@ use crate::utilities::proc_ext_req::ProcessExternalRequestTrait;
 use crate::utilities::wait_for_termination::WaitForTerminationTrait;
 use std::time::{Duration, Instant};
 use thiserror::Error;
-
-#[derive(Deserialize, Debug)]
-/// Holds the configuration data for the measurement of ambient signals from DHT sensor
-/// The configuration is loaded from the .toml configuration file.
-/// This struct does not contain any implementation.
-pub struct SensorManagerConfig {
-    /// flag to determine if the application shall communicate with hardware directly or via TCP with a simulator
-    pub use_simulator: bool,
-
-    /// replacement value for ambient temperature in case reading from DHT22 sensor fails
-    pub replacement_value_ambient_temperature: f32,
-
-    /// replacement value for ambient humidity in case reading from DHT22 sensor fails
-    pub replacement_value_ambient_humidity: f32,
-
-    /// replacement value for water temperature in case reading from I2C fails
-    pub replacement_value_water_temperature: f32,
-
-    /// replacement value for pH in case reading from I2C fails
-    pub replacement_value_ph: f32,
-
-    /// replacement value for conductivity in case reading from I2C fails
-    pub replacement_value_conductivity: f32,
-
-    /// definition of the source for the water temperature - valid values are "ds18b20" or "atlas_scientific".
-    pub source_water_temperature: String,
-
-    /// definition of the source for the ambient temperature - valid values are "ds18b20" or "dht".
-    pub source_ambient_temperature: String,
-}
 
 mod sensor_manager_constants {
     pub const SOURCE_WATER_TEMPERATURE_ATLAS_SCIENTIFIC: &str = "atlas_scientific";

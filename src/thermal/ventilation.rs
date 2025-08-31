@@ -19,13 +19,13 @@ use crate::sensors::sensor_manager::SensorManagerSignals;
 use crate::utilities::channel_content::{ActuatorState, AquariumDevice, InternalCommand};
 use crate::utilities::common::check_if_mutex_is_blocked;
 use crate::utilities::proc_ext_req::ProcessExternalRequestTrait;
-use crate::utilities::sawtooth_profile::{SawToothProfile, SawToothProfileConfig};
-use serde_derive::Deserialize;
+use crate::utilities::sawtooth_profile::SawToothProfile;
 use spin_sleep::SpinSleeper;
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
 pub(crate) use crate::thermal::ventilation_channels::VentilationChannels;
+use crate::thermal::ventilation_config::VentilationConfig;
 use crate::utilities::logger::log_error_chain;
 use crate::utilities::wait_for_termination::WaitForTerminationTrait;
 #[cfg(all(not(test), target_os = "linux"))]
@@ -37,41 +37,6 @@ const TIME_INCREMENT_VENTILATION_SECS: f32 = CYCLE_TIME_VENTILATION_MILLIS as f3
 
 /// allow max. 10 milliseconds for mutex to be blocked by any other thread
 const MAX_MUTEX_ACCESS_DURATION_MILLIS: u64 = 10;
-
-/// Holds the configuration data for the ventilation control.
-/// The configuration is loaded from the .toml configuration file.
-/// This struct does not contain any implementation.
-#[derive(Deserialize)]
-pub struct VentilationConfig {
-    pub active: bool,
-    /// The temperature at which the ventilation is switched on for 100% of the time.
-    /// This temperature must be higher than switch_off_temperature.
-    /// It is overwritten with valid database values once obtained.
-    switch_on_temperature: f32,
-
-    /// The temperature at which the ventilation is switched off for 100% of the time.
-    /// This temperature must be lower than switch_on_temperature.
-    /// It is overwritten with valid database values once obtained.
-    pub switch_off_temperature: f32,
-
-    /// A flag to determine the behavior of the control when the application is terminating
-    /// If this flag is true, the application will switch on the ventilation when exiting.    
-    switch_on_when_terminating: bool,
-
-    /// The configuration of saw tooth profile for generation of low-frequency PWM signal
-    saw_tooth_profile_config: SawToothProfileConfig,
-
-    /// The strategy when schedule check does not allow operation:
-    /// true=ventilation will be switched on; false=ventilation will be switched off
-    switch_on_when_out_of_schedule: bool,
-
-    /// The strategy when an external request for stopping ventilation control has been received:
-    /// true=ventilation will be switched on; false=ventilation will be switched off
-    switch_on_when_external_stop: bool,
-
-    /// interval in seconds for polling the database
-    pub set_value_check_interval: u64,
-}
 
 /// Sends a command to the relay manager to actuate the ventilation and waits for a response.
 ///

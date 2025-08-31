@@ -10,37 +10,16 @@ use crate::utilities::proc_ext_req::ProcessExternalRequestTrait;
 use crate::watchmen::petting::PettingTrait;
 use crate::watchmen::watchdog_channels::WatchDogChannels;
 use log::error;
-use serde_derive::Deserialize;
 use spin_sleep::SpinSleeper;
 use std::time::Duration;
 
 #[cfg(all(target_os = "linux", not(test)))]
 use log::info;
 
+use crate::watchmen::watchdog_config::WatchdogConfig;
 #[cfg(all(target_os = "linux", not(test)))]
 use nix::unistd::gettid;
 use thiserror::Error;
-
-/// Holds the configuration data for the watchdog communication.
-/// The configuration is loaded from the .toml configuration file.
-/// This struct does not contain any implementation.
-#[derive(Deserialize)]
-pub struct WatchdogConfig {
-    /// communication will only be active when the flag is set to true
-    active: bool,
-
-    /// filename for sending heartbeat to system watchdog
-    watchdog_filename: String,
-
-    /// heartbeat to be written to watchdog file
-    watchdog_heartbeat: String,
-
-    /// duration between two heartbeats in milliseconds
-    heartbeat_duration_millis: u64,
-
-    /// deactivation code to be written to watchdog file upon termination of the application
-    watchdog_deactivation: String,
-}
 
 /// Contains the error definition for Watchdog
 #[derive(Error, Debug)]
