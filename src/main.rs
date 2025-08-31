@@ -917,9 +917,11 @@ fn run() -> Result<(), StartupError> {
         tcp_communication_opt = Some(tcp_communication);
     }
 
+    let tcp_communication_thread_started = execution_config.tcp_communication;
+    let relay_manager_thread_started = execution_config.relay_manager;
     scope(|scope| {
         // open tcp connection only if configuration requires use of simulator instead of HW
-        if use_simulator && execution_config.tcp_communication {
+        if use_simulator && tcp_communication_thread_started {
             scope.spawn(move || {
                 if let Some(mut tcp_communication) = tcp_communication_opt {
                     tcp_communication.execute(&mut channels.tcp_communication);
@@ -931,7 +933,7 @@ fn run() -> Result<(), StartupError> {
             debug!(target: module_path!(), "TcpCommunication terminated.");
         };
 
-        if config.relay_manager.use_simulator && execution_config.relay_manager {
+        if config.relay_manager.use_simulator && relay_manager_thread_started {
             scope.spawn(move || {
                 let mut actuate_simulator = ActuateSimulator::new(
                     &mut channels.actuate_simulator,
@@ -945,7 +947,7 @@ fn run() -> Result<(), StartupError> {
                 #[cfg(feature = "debug_main")]
                 debug!(target: module_path!(), "Controllino (simulator) terminated.");
             });
-        } else if execution_config.relay_manager {
+        } else if relay_manager_thread_started {
             scope.spawn(move || {
                     if config.relay_manager.use_gpio {
                         #[cfg(all(feature = "target_hw", target_os = "linux"))]
@@ -1211,10 +1213,7 @@ fn run() -> Result<(), StartupError> {
         scope.spawn(move || {
             // read/send messages
             #[cfg(target_os = "linux")]
-            messaging.execute(
-                &mut channels.messaging,
-                execution_config_clone_for_messaging,
-            );
+            messaging.execute(&mut channels.messaging);
 
             // remove PID from the file
             let publish_pid_result = publish_pid.erase_pid();

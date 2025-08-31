@@ -8,7 +8,7 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 */
 cfg_if::cfg_if! {
     if #[cfg(target_os = "linux")] {
-        use crate::dispatch::messaging::MessagingDomain;
+        use crate::dispatch::messaging_domain::MessagingDomain;
         use crate::dispatch::messaging_error::MessagingError;
         use crate::utilities::channel_content::InternalCommand;
         use std::fmt;

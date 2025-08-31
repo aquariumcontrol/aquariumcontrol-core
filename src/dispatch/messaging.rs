@@ -6,7 +6,6 @@ The above copyright notice and this permission notice shall be included in all c
 
 THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
-#[cfg(target_os = "linux")]
 #[cfg(feature = "debug_messaging")]
 use log::debug;
 
@@ -27,10 +26,10 @@ cfg_if::cfg_if! {
         use crate::dispatch::messaging_error::MessagingError;
         use crate::utilities::proc_ext_req::ProcessExternalRequestTrait;
         use crate::utilities::wait_for_termination::WaitForTerminationTrait;
-        use crate::dispatch::messaging_domains::messaging_domains;
-        use crate::dispatch::messaging_domains::MessagingDomain;
+        use crate::dispatch::messaging_domain::messaging_domains;
+        use crate::dispatch::messaging_domain::MessagingDomain;
         use crate::dispatch::messaging_config::MessagingConfig;
-        use std::fmt;
+        use crate::launch::execution_config::ExecutionConfig;
         use std::io::ErrorKind;
     }
 }
@@ -404,6 +403,7 @@ pub mod tests {
     use crate::dispatch::messaging::{
         messaging_commands, messaging_domains, Message, Messaging, MessagingChannels,
     };
+    use crate::launch::execution_config::ExecutionConfig;
     use crate::mocks::mock_message_command_receiver::tests::mock_message_command_receiver;
     use crate::utilities::channel_content::InternalCommand;
     use crate::utilities::config::{read_config_file, ConfigData};
@@ -619,7 +619,7 @@ pub mod tests {
         msg_stop.domain = messaging_domains::VENTILATION;
         msg_stop.command = messaging_commands::STOP;
 
-        let messaging = Messaging::new(config.messaging).unwrap();
+        let messaging = Messaging::new(config.messaging, ExecutionConfig::default()).unwrap();
 
         let (tx_signal_handler_to_messaging, rx_messaging_from_signal_handler) = mpsc::channel();
         let (tx_messaging_to_refill, _rx_refill_from_messaging) = mpsc::channel();
@@ -692,7 +692,7 @@ pub mod tests {
         msg_stop.domain = messaging_domains::HEATING;
         msg_stop.command = messaging_commands::STOP;
 
-        let messaging = Messaging::new(config.messaging).unwrap();
+        let messaging = Messaging::new(config.messaging, ExecutionConfig::default()).unwrap();
 
         let (tx_signal_handler_to_messaging, rx_messaging_from_signal_handler) = mpsc::channel();
         let (tx_messaging_to_refill, _rx_refill_from_messaging) = mpsc::channel();
@@ -769,7 +769,7 @@ pub mod tests {
         msg_stop.domain = messaging_domains::REFILL;
         msg_stop.command = messaging_commands::STOP;
 
-        let messaging = Messaging::new(config.messaging).unwrap();
+        let messaging = Messaging::new(config.messaging, ExecutionConfig::default()).unwrap();
 
         let (tx_signal_handler_to_messaging, rx_messaging_from_signal_handler) = mpsc::channel();
         let (tx_messaging_to_refill, rx_refill_from_messaging) = mpsc::channel();
@@ -861,7 +861,7 @@ pub mod tests {
         msg_stop.domain = messaging_domains::FEED;
         msg_stop.command = messaging_commands::STOP;
 
-        let messaging = Messaging::new(config.messaging).unwrap();
+        let messaging = Messaging::new(config.messaging, ExecutionConfig::default()).unwrap();
 
         let (tx_signal_handler_to_messaging, rx_messaging_from_signal_handler) = mpsc::channel();
         let (tx_messaging_to_refill, _rx_refill_from_messaging) = mpsc::channel();
@@ -949,7 +949,7 @@ pub mod tests {
         msg_stop.domain = messaging_domains::BALLING;
         msg_stop.command = messaging_commands::STOP;
 
-        let messaging = Messaging::new(config.messaging).unwrap();
+        let messaging = Messaging::new(config.messaging, ExecutionConfig::default()).unwrap();
 
         let (tx_signal_handler_to_messaging, rx_messaging_from_signal_handler) = mpsc::channel();
         let (tx_messaging_to_refill, _rx_refill_from_messaging) = mpsc::channel();
@@ -1022,7 +1022,7 @@ pub mod tests {
         msg_stop.domain = messaging_domains::WATCHDOG;
         msg_stop.command = messaging_commands::STOP;
 
-        let messaging = Messaging::new(config.messaging).unwrap();
+        let messaging = Messaging::new(config.messaging, ExecutionConfig::default()).unwrap();
 
         let (tx_signal_handler_to_messaging, rx_messaging_from_signal_handler) = mpsc::channel();
         let (tx_messaging_to_refill, _rx_refill_from_messaging) = mpsc::channel();

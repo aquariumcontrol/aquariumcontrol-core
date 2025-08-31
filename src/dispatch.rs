@@ -21,7 +21,7 @@ pub mod messaging_error;
 pub mod messaging_channels;
 
 /// Definition of messaging domains including related functionality
-pub mod messaging_domains;
+pub mod messaging_domain;
 
 /// Configuration of Messaging
 pub mod messaging_config;

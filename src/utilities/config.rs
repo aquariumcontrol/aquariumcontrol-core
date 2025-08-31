@@ -36,7 +36,7 @@ use crate::sensors::i2c_interface::I2cInterfaceConfig;
 use crate::sensors::tank_level_switch_config::TankLevelSwitchConfig;
 
 #[cfg(target_os = "linux")]
-use crate::dispatch::messaging::MessagingConfig;
+use crate::dispatch::messaging_config::MessagingConfig;
 
 use crate::database::sql_interface_config::SqlInterfaceConfig;
 use crate::permission::schedule_check_config::ScheduleCheckConfig;
