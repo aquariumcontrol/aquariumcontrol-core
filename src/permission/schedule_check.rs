@@ -20,6 +20,7 @@ use std::sync::mpsc::{Receiver, Sender, TryRecvError};
 use std::time::{Duration, Instant};
 
 use crate::database::sql_interface_schedule::{ScheduleEntry, ScheduleType, SqlInterfaceSchedule};
+use crate::launch::execution_config::ExecutionConfig;
 pub(crate) use crate::permission::schedule_check_channels::ScheduleCheckChannels;
 use crate::permission::schedule_check_config::ScheduleCheckConfig;
 use crate::utilities::channel_content::InternalCommand;
@@ -188,6 +189,7 @@ impl ScheduleCheck {
         lock_error_channel_receive: &mut bool,
         lock_error_channel_send: &mut bool,
         lock_warn_inapplicable_command: &mut bool,
+        module_name: &str,
     ) -> (bool, bool) {
         let mut send_success = false;
         let mut receive_success = false;
@@ -207,7 +209,7 @@ impl ScheduleCheck {
                     if !*lock_warn_inapplicable_command {
                         warn!(
                             target: module_path!(),
-                            "ignoring not applicable command ({c:?}) from signal handler"
+                            "ignoring inapplicable command ({}) from {}", c, module_name
                         );
                         *lock_warn_inapplicable_command = true;
                     }
@@ -222,9 +224,10 @@ impl ScheduleCheck {
                     }
                     TryRecvError::Disconnected => {
                         if !*lock_error_channel_receive {
+                            let context = format!("receiving command from {} failed", module_name);
                             log_error_chain(
                                 module_path!(),
-                                "receiving command from signal handler failed",
+                                &context,
                                 e,
                             );
                             *lock_error_channel_receive = true;
@@ -264,16 +267,21 @@ impl ScheduleCheck {
     /// * `schedule_check_channels` - A `ScheduleCheckChannels` struct containing all
     ///   necessary `mpsc` sender and receiver channels for communication with
     ///   other application modules and the signal handler.
-    pub fn execute(&mut self, schedule_check_channels: &mut ScheduleCheckChannels) {
+    /// * `execution_config` - An `ExecutionConfig` struct containing information about which threads
+    ///   have been started.
+    pub fn execute(&mut self, schedule_check_channels: &mut ScheduleCheckChannels, execution_config: ExecutionConfig) {
         #[cfg(all(target_os = "linux", not(test)))]
         info!(target: module_path!(), "Thread started with TID: {}", gettid());
 
         let sleep_duration_hundred_millis = Duration::from_millis(100);
         let spin_sleeper = SpinSleeper::default();
-        let mut loop_counter = 0;
+
+        let duration_schedule_check_interval = Duration::from_secs(self.config.schedule_check_interval.into());
+        let mut last_check_instant = Instant::now();
 
         loop {
-            if self.config.active && loop_counter % self.config.schedule_check_interval * 10 == 0 {
+            if self.config.active &&  last_check_instant.elapsed() > duration_schedule_check_interval {
+                last_check_instant = Instant::now();
                 if let Err(errors) = self.sql_interface_schedule.read_schedule() {
                     if !self.lock_error_database_read {
                         for e in errors {
@@ -301,168 +309,173 @@ impl ScheduleCheck {
             }
 
             //*********** ventilation ***********
-            let schedule_entry_ventilation_opt = match self
-                .sql_interface_schedule
-                .find_schedule(ScheduleType::Ventilation)
-            {
-                Ok(c) => {
-                    self.lock_error_find_ventilation_schedule = false;
-                    Some(c)
-                }
-                Err(e) => {
-                    if !self.lock_error_find_ventilation_schedule {
-                        log_error_chain(
-                            module_path!(),
-                            "could not find schedule for ventilation",
-                            e,
-                        );
-                        self.lock_error_find_ventilation_schedule = true;
+            if execution_config.ventilation {
+                let schedule_entry_ventilation_opt = match self
+                    .sql_interface_schedule
+                    .find_schedule(ScheduleType::Ventilation)
+                {
+                    Ok(c) => {
+                        self.lock_error_find_ventilation_schedule = false;
+                        Some(c)
                     }
-                    None
-                }
-            };
-            let (_send_success, _receive_success) = Self::check_pending_schedule_request(
-                &self.config,
-                &schedule_check_channels.tx_schedule_check_to_ventilation,
-                &schedule_check_channels.rx_schedule_check_from_ventilation,
-                schedule_entry_ventilation_opt,
-                &mut self.lock_error_channel_receive_ventilation,
-                &mut self.lock_error_channel_send_ventilation,
-                &mut self.lock_warn_inapplicable_command_ventilation,
-            );
-            #[cfg(feature = "debug_channels")]
-            {
-                if _send_success {
-                    schedule_check_channels.cnt_rx_schedule_check_from_ventilation += 1;
-                }
-                if _receive_success {
-                    schedule_check_channels.cnt_tx_schedule_check_to_ventilation += 1;
+                    Err(e) => {
+                        if !self.lock_error_find_ventilation_schedule {
+                            log_error_chain(
+                                module_path!(),
+                                "could not find schedule for ventilation",
+                                e,
+                            );
+                            self.lock_error_find_ventilation_schedule = true;
+                        }
+                        None
+                    }
+                };
+                let (_send_success, _receive_success) = Self::check_pending_schedule_request(
+                    &self.config,
+                    &schedule_check_channels.tx_schedule_check_to_ventilation,
+                    &schedule_check_channels.rx_schedule_check_from_ventilation,
+                    schedule_entry_ventilation_opt,
+                    &mut self.lock_error_channel_receive_ventilation,
+                    &mut self.lock_error_channel_send_ventilation,
+                    &mut self.lock_warn_inapplicable_command_ventilation,
+                    "ventilation"
+                );
+                #[cfg(feature = "debug_channels")]
+                {
+                    if _send_success {
+                        schedule_check_channels.cnt_rx_schedule_check_from_ventilation += 1;
+                    }
+                    if _receive_success {
+                        schedule_check_channels.cnt_tx_schedule_check_to_ventilation += 1;
+                    }
                 }
             }
             //***************************************
 
             //*********** heating ***********
-            let schedule_entry_heating_opt = match self
-                .sql_interface_schedule
-                .find_schedule(ScheduleType::Heating)
-            {
-                Ok(c) => {
-                    self.lock_error_find_heating_schedule = false;
-                    Some(c)
-                }
-                Err(e) => {
-                    if !self.lock_error_find_heating_schedule {
-                        log_error_chain(module_path!(), "could not find schedule for heating", e);
-                        self.lock_error_find_heating_schedule = true;
+            if execution_config.heating {
+                let schedule_entry_heating_opt = match self
+                    .sql_interface_schedule
+                    .find_schedule(ScheduleType::Heating)
+                {
+                    Ok(c) => {
+                        self.lock_error_find_heating_schedule = false;
+                        Some(c)
                     }
-                    None
-                }
-            };
-            let (_send_success, _receive_success) = Self::check_pending_schedule_request(
-                &self.config,
-                &schedule_check_channels.tx_schedule_check_to_heating,
-                &schedule_check_channels.rx_schedule_check_from_heating,
-                schedule_entry_heating_opt,
-                &mut self.lock_error_channel_receive_heating,
-                &mut self.lock_error_channel_send_heating,
-                &mut self.lock_warn_inapplicable_command_heating,
-            );
-            #[cfg(feature = "debug_channels")]
-            {
-                if _send_success {
-                    schedule_check_channels.cnt_rx_schedule_check_from_heating += 1;
-                }
-                if _receive_success {
-                    schedule_check_channels.cnt_tx_schedule_check_to_heating += 1;
+                    Err(e) => {
+                        if !self.lock_error_find_heating_schedule {
+                            log_error_chain(module_path!(), "could not find schedule for heating", e);
+                            self.lock_error_find_heating_schedule = true;
+                        }
+                        None
+                    }
+                };
+                let (_send_success, _receive_success) = Self::check_pending_schedule_request(
+                    &self.config,
+                    &schedule_check_channels.tx_schedule_check_to_heating,
+                    &schedule_check_channels.rx_schedule_check_from_heating,
+                    schedule_entry_heating_opt,
+                    &mut self.lock_error_channel_receive_heating,
+                    &mut self.lock_error_channel_send_heating,
+                    &mut self.lock_warn_inapplicable_command_heating,
+                    "heating"
+                );
+                #[cfg(feature = "debug_channels")]
+                {
+                    if _send_success {
+                        schedule_check_channels.cnt_rx_schedule_check_from_heating += 1;
+                    }
+                    if _receive_success {
+                        schedule_check_channels.cnt_tx_schedule_check_to_heating += 1;
+                    }
                 }
             }
             //***************************************
 
             //*********** refill ***********
-            let schedule_entry_refill_opt = match self
-                .sql_interface_schedule
-                .find_schedule(ScheduleType::Refill)
-            {
-                Ok(c) => {
-                    self.lock_error_find_refill_schedule = false;
-                    Some(c)
-                }
-                Err(e) => {
-                    if !self.lock_error_find_refill_schedule {
-                        log_error_chain(module_path!(), "could not find schedule for refill", e);
-                        self.lock_error_find_refill_schedule = true;
+            if execution_config.refill {
+                let schedule_entry_refill_opt = match self
+                    .sql_interface_schedule
+                    .find_schedule(ScheduleType::Refill)
+                {
+                    Ok(c) => {
+                        self.lock_error_find_refill_schedule = false;
+                        Some(c)
                     }
-                    None
-                }
-            };
-            let (_send_success, _receive_success) = Self::check_pending_schedule_request(
-                &self.config,
-                &schedule_check_channels.tx_schedule_check_to_refill,
-                &schedule_check_channels.rx_schedule_check_from_refill,
-                schedule_entry_refill_opt,
-                &mut self.lock_error_channel_receive_refill,
-                &mut self.lock_error_channel_send_refill,
-                &mut self.lock_warn_inapplicable_command_refill,
-            );
-            #[cfg(feature = "debug_channels")]
-            {
-                if _send_success {
-                    schedule_check_channels.cnt_rx_schedule_check_from_refill += 1;
-                }
-                if _receive_success {
-                    schedule_check_channels.cnt_tx_schedule_check_to_refill += 1;
+                    Err(e) => {
+                        if !self.lock_error_find_refill_schedule {
+                            log_error_chain(module_path!(), "could not find schedule for refill", e);
+                            self.lock_error_find_refill_schedule = true;
+                        }
+                        None
+                    }
+                };
+                let (_send_success, _receive_success) = Self::check_pending_schedule_request(
+                    &self.config,
+                    &schedule_check_channels.tx_schedule_check_to_refill,
+                    &schedule_check_channels.rx_schedule_check_from_refill,
+                    schedule_entry_refill_opt,
+                    &mut self.lock_error_channel_receive_refill,
+                    &mut self.lock_error_channel_send_refill,
+                    &mut self.lock_warn_inapplicable_command_refill,
+                    "refill"
+                );
+                #[cfg(feature = "debug_channels")]
+                {
+                    if _send_success {
+                        schedule_check_channels.cnt_rx_schedule_check_from_refill += 1;
+                    }
+                    if _receive_success {
+                        schedule_check_channels.cnt_tx_schedule_check_to_refill += 1;
+                    }
                 }
             }
             //***************************************
 
             //*********** Balling ***********
-            let schedule_entry_balling_opt = match self
-                .sql_interface_schedule
-                .find_schedule(ScheduleType::Balling)
-            {
-                Ok(c) => {
-                    self.lock_error_find_balling_schedule = false;
-                    Some(c)
-                }
-                Err(e) => {
-                    if !self.lock_error_find_balling_schedule {
-                        log_error_chain(module_path!(), "could not find schedule for balling", e);
-                        self.lock_error_find_balling_schedule = true;
+            if execution_config.balling {
+                let schedule_entry_balling_opt = match self
+                    .sql_interface_schedule
+                    .find_schedule(ScheduleType::Balling)
+                {
+                    Ok(c) => {
+                        self.lock_error_find_balling_schedule = false;
+                        Some(c)
                     }
-                    None
-                }
-            };
-            let (_send_success, _receive_success) = Self::check_pending_schedule_request(
-                &self.config,
-                &schedule_check_channels.tx_schedule_check_to_balling,
-                &schedule_check_channels.rx_schedule_check_from_balling,
-                schedule_entry_balling_opt,
-                &mut self.lock_error_channel_receive_balling,
-                &mut self.lock_error_channel_send_balling,
-                &mut self.lock_warn_inapplicable_command_balling,
-            );
-            #[cfg(feature = "debug_channels")]
-            {
-                if _send_success {
-                    schedule_check_channels.cnt_rx_schedule_check_from_balling += 1;
-                }
-                if _receive_success {
-                    schedule_check_channels.cnt_tx_schedule_check_to_balling += 1;
+                    Err(e) => {
+                        if !self.lock_error_find_balling_schedule {
+                            log_error_chain(module_path!(), "could not find schedule for balling", e);
+                            self.lock_error_find_balling_schedule = true;
+                        }
+                        None
+                    }
+                };
+                let (_send_success, _receive_success) = Self::check_pending_schedule_request(
+                    &self.config,
+                    &schedule_check_channels.tx_schedule_check_to_balling,
+                    &schedule_check_channels.rx_schedule_check_from_balling,
+                    schedule_entry_balling_opt,
+                    &mut self.lock_error_channel_receive_balling,
+                    &mut self.lock_error_channel_send_balling,
+                    &mut self.lock_warn_inapplicable_command_balling,
+                    "balling"
+                );
+                #[cfg(feature = "debug_channels")]
+                {
+                    if _send_success {
+                        schedule_check_channels.cnt_rx_schedule_check_from_balling += 1;
+                    }
+                    if _receive_success {
+                        schedule_check_channels.cnt_tx_schedule_check_to_balling += 1;
+                    }
                 }
             }
             //***************************************
 
             spin_sleeper.sleep(sleep_duration_hundred_millis);
 
-            loop_counter += 1;
-
-            // avoid overflow
-            if loop_counter == 1_000_000 {
-                loop_counter = 0;
-            }
-
             // Check for how long ago the last database ping happened.
-            if Instant::now().duration_since(self.last_ping_instant) > self.database_ping_interval {
+            if self.last_ping_instant.elapsed() > self.database_ping_interval {
                 self.sql_interface_schedule.ping();
                 self.last_ping_instant = Instant::now();
             }

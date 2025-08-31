@@ -436,6 +436,7 @@ fn run() -> Result<(), StartupError> {
 
     let execution_config = ExecutionConfig::new(&config);
     let execution_config_clone_for_signal_handler = execution_config.clone();
+    let execution_config_clone_for_schedule_check = execution_config.clone();
     #[cfg(target_os = "linux")]
     let execution_config_clone_for_messaging = execution_config.clone();
 
@@ -979,7 +980,7 @@ fn run() -> Result<(), StartupError> {
 
         if execution_config.schedule_check {
             scope.spawn(move || {
-                schedule_check.execute(&mut channels.schedule_check);
+                schedule_check.execute(&mut channels.schedule_check, execution_config_clone_for_schedule_check);
                 #[cfg(feature = "debug_channels")]
                 debug!(target: module_path!(), "{0}", channels.schedule_check);
                 #[cfg(feature = "debug_main")]
