@@ -739,7 +739,7 @@ impl Dht {
         let sleep_duration_100_millis = Duration::from_millis(100);
 
         loop {
-            match dht_channels.rx_dht_from_signal_handler.try_recv() {
+            match dht_channels.receive_from_signal_handler() {
                 Ok(c) => {
                     lock_error_receive = false;
                     match c {

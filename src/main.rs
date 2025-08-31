@@ -438,6 +438,7 @@ fn run() -> Result<(), StartupError> {
     let execution_config_clone_for_signal_handler = execution_config.clone();
     let execution_config_clone_for_schedule_check = execution_config.clone();
     let execution_config_clone_for_relay_manager = execution_config.clone();
+    let execution_config_clone_for_tcp_communication = execution_config.clone();
     #[cfg(target_os = "linux")]
     let execution_config_clone_for_messaging = execution_config.clone();
 
@@ -917,8 +918,11 @@ fn run() -> Result<(), StartupError> {
 
     let mut tcp_communication_opt = None;
     if use_simulator {
-        let tcp_communication = TcpCommunication::new(&config.tcp_communication)
-            .map_err(|e| StartupError::TcpConnection { source: e })?;
+        let tcp_communication = TcpCommunication::new(
+            &config.tcp_communication,
+            execution_config_clone_for_tcp_communication,
+        )
+        .map_err(|e| StartupError::TcpConnection { source: e })?;
         tcp_communication_opt = Some(tcp_communication);
     }
 

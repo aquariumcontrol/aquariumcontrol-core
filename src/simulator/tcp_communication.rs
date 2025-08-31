@@ -19,6 +19,7 @@ use std::{
     time::Duration,
 };
 
+use crate::launch::execution_config::ExecutionConfig;
 use crate::simulator::tcp_communication_channels::TcpCommunicationChannels;
 use crate::simulator::tcp_communication_config::TcpCommunicationConfig;
 pub(crate) use crate::simulator::tcp_communication_error::TcpCommunicationError;
@@ -48,6 +49,9 @@ pub struct TcpCommunication {
 
     /// buffered reader for TCP stream
     buf_reader: BufReader<TcpStream>,
+
+    /// information about which threads are started
+    execution_config: ExecutionConfig,
 }
 
 impl TcpCommunication {
@@ -60,6 +64,7 @@ impl TcpCommunication {
     /// # Arguments
     /// * `tcp_connection` - Configuration data for the TCP connection, including the
     ///   target `ip_address` and `port` of the simulator.
+    /// * `execution_config` - Information about which threads are started
     ///
     /// # Returns
     /// A `Result` containing a new `TcpCommunication` struct with an established
@@ -74,6 +79,7 @@ impl TcpCommunication {
     ///   be cloned, which is a necessary step for creating separate read and write handles.
     pub fn new(
         tcp_connection: &TcpCommunicationConfig,
+        execution_config: ExecutionConfig,
     ) -> Result<TcpCommunication, TcpCommunicationError> {
         let stream = TcpStream::connect(
             tcp_connection.ip_address.clone() + ":" + &tcp_connection.port.to_string(),
@@ -96,6 +102,7 @@ impl TcpCommunication {
         Ok(TcpCommunication {
             write_stream,
             buf_reader: BufReader::new(stream),
+            execution_config,
         })
     }
 
@@ -408,48 +415,52 @@ impl TcpCommunication {
                 break;
             }
 
-            // *** communication with Ambient ***
-            if let Some(ref rx_tcp_communication_from_sensor_manager) =
-                tcp_communication_channels.rx_tcp_communication_from_sensor_manager_opt
-            {
-                if let Some(ref tx_tcp_communication_to_sensor_manager) =
-                    tcp_communication_channels.tx_tcp_communication_to_sensor_manager_opt
+            // *** communication with sensor manager ***
+            if self.execution_config.sensor_manager {
+                if let Some(ref rx_tcp_communication_from_sensor_manager) =
+                    tcp_communication_channels.rx_tcp_communication_from_sensor_manager_opt
                 {
-                    if let Err(e) = self.receive_and_answer(
-                        rx_tcp_communication_from_sensor_manager,
-                        tx_tcp_communication_to_sensor_manager,
-                    ) {
-                        log_error_chain(
-                            module_path!(),
-                            "Error in communication with simulator for ambient signals",
-                            e,
-                        );
+                    if let Some(ref tx_tcp_communication_to_sensor_manager) =
+                        tcp_communication_channels.tx_tcp_communication_to_sensor_manager_opt
+                    {
+                        if let Err(e) = self.receive_and_answer(
+                            rx_tcp_communication_from_sensor_manager,
+                            tx_tcp_communication_to_sensor_manager,
+                        ) {
+                            log_error_chain(
+                                module_path!(),
+                                "Error in communication with sensor manager",
+                                e,
+                            );
+                        }
                     }
                 }
             }
 
             // *** communication with Tank level switch ***
-            if let Some(ref rx_tcp_communication_from_tank_level_switch) =
-                tcp_communication_channels.rx_tcp_communication_from_tank_level_switch_opt
-            {
-                if let Some(ref tx_tcp_communication_to_tank_level_switch) =
-                    tcp_communication_channels.tx_tcp_communication_to_tank_level_switch_opt
+            if self.execution_config.tank_level_switch {
+                if let Some(ref rx_tcp_communication_from_tank_level_switch) =
+                    tcp_communication_channels.rx_tcp_communication_from_tank_level_switch_opt
                 {
-                    if let Err(e) = self.receive_and_answer(
-                        rx_tcp_communication_from_tank_level_switch,
-                        tx_tcp_communication_to_tank_level_switch,
-                    ) {
-                        log_error_chain(
-                            module_path!(),
-                            "Error in communication with simulator for ambient signals",
-                            e,
-                        );
+                    if let Some(ref tx_tcp_communication_to_tank_level_switch) =
+                        tcp_communication_channels.tx_tcp_communication_to_tank_level_switch_opt
+                    {
+                        if let Err(e) = self.receive_and_answer(
+                            rx_tcp_communication_from_tank_level_switch,
+                            tx_tcp_communication_to_tank_level_switch,
+                        ) {
+                            log_error_chain(
+                                module_path!(),
+                                "Error in communication with tank level switch thread",
+                                e,
+                            );
+                        }
                     }
                 }
             }
 
             // *** communication with relay manager - no response required ***
-            if !lock_relay_manager_channel_disconnected {
+            if !lock_relay_manager_channel_disconnected && self.execution_config.relay_manager {
                 match tcp_communication_channels.rx_tcp_communication_from_relay_manager_opt {
                     Some(ref rx_tcp_communication_from_relay_manager) => {
                         match rx_tcp_communication_from_relay_manager.try_recv() {
@@ -459,7 +470,7 @@ impl TcpCommunication {
                                     if let Err(response_err) = response {
                                         log_error_chain(
                                             module_path!(),
-                                            "Error in communication with relay manager",
+                                            "Error in communication to relay manager",
                                             response_err,
                                         );
                                     }
@@ -469,7 +480,7 @@ impl TcpCommunication {
                                     if let Err(response_err) = response {
                                         log_error_chain(
                                             module_path!(),
-                                            "Error in communication with relay manager",
+                                            "Error in communication to relay manager",
                                             response_err,
                                         );
                                     }
@@ -478,7 +489,8 @@ impl TcpCommunication {
                             },
                             Err(e) => {
                                 match e {
-                                    TryRecvError::Empty => { /* empty buffer - no action required */
+                                    TryRecvError::Empty => {
+                                        /* empty buffer - no action required */
                                     }
                                     TryRecvError::Disconnected => {
                                         lock_relay_manager_channel_disconnected = true;
