@@ -33,8 +33,6 @@ tempfile = "3.20.0"
 [target.'cfg(all(target_os = "linux"))'.dependencies]
 nix = { version = "0.30.1", features = ["user", "process"] }
 ws2818-rgb-led-spi-driver = "=2.0.0"
-
-[target.'cfg(target_os = "linux")'.dependencies]
 rppal = "0.22.1"
 signal-hook = "0.3.17"
 aquamarine = "0.6.0"

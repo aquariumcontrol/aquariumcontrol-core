@@ -1014,13 +1014,12 @@ impl DataLogger {
                         execution_duration.as_millis(),
                         cycle_time_duration.as_millis());
                     lock_warn_cycle_time_exceeded = true;
-                } else {
-                    lock_warn_cycle_time_exceeded = false;
                 }
                 remaining_sleep_time_millis = 0;
                 cycle_time_exceeded = true;
             } else {
                 // underflow cannot happen because the else statement requires that the first operand is higher than the second
+                lock_warn_cycle_time_exceeded = false;
                 let remaining_sleep_time_duration = cycle_time_duration - execution_duration;
                 remaining_sleep_time_millis = remaining_sleep_time_duration.as_millis() as u64;
                 cycle_time_exceeded = false;
@@ -1320,6 +1319,7 @@ pub mod tests {
         let mutex_ds18b20_ambient_temperature = Arc::new(Mutex::new(16.0));
         let mutex_tank_level_switch_signals =
             Arc::new(Mutex::new(TankLevelSwitchSignals::new(false, false, false)));
+        let mutex_tank_level_switch_signals_clone = mutex_tank_level_switch_signals.clone();
         let mutex_heating_status = Arc::new(Mutex::new(false));
         let mutex_heating_status_clone_for_data_logger = mutex_heating_status.clone();
         let mutex_ventilation_status = Arc::new(Mutex::new(false));
@@ -1465,9 +1465,6 @@ pub mod tests {
             })
             .unwrap();
 
-        let mutex_tank_level_switch_signals =
-            Arc::new(Mutex::new(TankLevelSwitchSignals::new(true, true, false)));
-
         // give mock threads some time to establish
         let spin_sleeper = SpinSleeper::default();
         let sleep_duration_100_millis = Duration::from_millis(100);
@@ -1490,7 +1487,7 @@ pub mod tests {
                 let data_logger_mutexes = DataLoggerMutexes {
                     mutex_sensor_manager_signals:
                         mutex_sensor_manager_signals_clone_for_data_logger,
-                    mutex_tank_level_switch_signals,
+                    mutex_tank_level_switch_signals: mutex_tank_level_switch_signals_clone,
                     mutex_heating_status: mutex_heating_status_clone_for_data_logger,
                     mutex_ventilation_status: mutex_ventilation_status_clone_for_data_logger,
                     mutex_refill_status: mutex_refill_status_clone_for_data_logger,
@@ -1529,7 +1526,7 @@ pub mod tests {
                     Some(false),    // target_refill_in_progress
                     Some(true),     // target_tank_level_switch_position
                     Some(true),     // target_tank_level_switch_position_stabilized
-                    Some(false),    // target_tank_level_switch_invalid
+                    Some(true),     // target_tank_level_switch_invalid
                     Some(true),     // target_surface_ventilation_status
                     Some(35.0),     // target_ambient_temperature
                     Some(66.0),     // target_ambient_humidity
@@ -1549,8 +1546,8 @@ pub mod tests {
                     None,           // target_water_conductivity_compensated
                     Some(false),    // target_refill_in_progress
                     Some(true),     // target_tank_level_switch_position
-                    Some(true),     // target_tank_level_switch_position_stabilized
-                    Some(false),    // target_tank_level_switch_invalid
+                    Some(false),     // target_tank_level_switch_position_stabilized
+                    Some(true),    // target_tank_level_switch_invalid
                     Some(true),     // target_surface_ventilation_status
                     Some(35.0),     // target_ambient_temperature
                     Some(66.0),     // target_ambient_humidity
@@ -1569,9 +1566,9 @@ pub mod tests {
                     Some(37503.0),  // target_water_conductivity_filtered
                     None,           // target_water_conductivity_compensated
                     Some(true),     // target_refill_in_progress
-                    Some(true),     // target_tank_level_switch_position
-                    Some(true),     // target_tank_level_switch_position_stabilized
-                    Some(false),    // target_tank_level_switch_invalid
+                    Some(false),    // target_tank_level_switch_position
+                    Some(false),    // target_tank_level_switch_position_stabilized
+                    Some(true),    // target_tank_level_switch_invalid
                     Some(true),     // target_surface_ventilation_status
                     Some(35.0),     // target_ambient_temperature
                     Some(14.0),     // target_ambient_humidity
@@ -1590,8 +1587,8 @@ pub mod tests {
                     Some(25006.0),  // target_water_conductivity_filtered
                     None,           // target_water_conductivity_compensated
                     Some(false),    // target_refill_in_progress
-                    Some(true),     // target_tank_level_switch_position
-                    Some(true),     // target_tank_level_switch_position_stabilized
+                    Some(false),     // target_tank_level_switch_position
+                    Some(false),     // target_tank_level_switch_position_stabilized
                     Some(false),    // target_tank_level_switch_invalid
                     Some(true),     // target_surface_ventilation_status
                     Some(13.0),     // target_ambient_temperature
@@ -1611,8 +1608,8 @@ pub mod tests {
                     Some(12.0),  // target_water_conductivity_filtered
                     None,        // target_water_conductivity_compensated
                     Some(false), // target_refill_in_progress
-                    Some(true),  // target_tank_level_switch_position
-                    Some(true),  // target_tank_level_switch_position_stabilized
+                    Some(false),  // target_tank_level_switch_position
+                    Some(false),  // target_tank_level_switch_position_stabilized
                     Some(false), // target_tank_level_switch_invalid
                     Some(true),  // target_surface_ventilation_status
                     Some(13.0),  // target_ambient_temperature
@@ -1623,22 +1620,22 @@ pub mod tests {
                 assert!(mock_data_injection.data_frames.is_empty());
 
                 assert_output_file_contents(
-                    &config2.data_logger, // data_logger_config,
+                    &config2.data_logger,                      // data_logger_config,
                     29.0,                 // target_water_temperature
-                    28.4,                 // target_water_temperature_filtered
-                    7.0,                  // target_water_ph
-                    7.12,                 // target_water_ph_filtered
+                    28.4,           // target_water_temperature_filtered
+                    7.0,                         // target_water_ph
+                    7.12,                  // target_water_ph_filtered
                     50_000.0,             // target_water_conductivity
-                    46876.0,              // target_water_conductivity_filtered
-                    0.0,                  // target_water_conductivity_compensated
-                    false,                // target_refill_in_progress
-                    true,                 // target_tank_level_switch_position
-                    false,                // target_tank_level_switch_invalid
-                    true,                 // target_tank_level_switch_position_stabilized
-                    true,                 // target_surface_ventilation_status
-                    35.0,                 // target_ambient_temperature
+                    46876.0,        // target_water_conductivity_filtered
+                    0.0,      // target_water_conductivity_compensated
+                    false,                 // target_refill_in_progress
+                    true,           // target_tank_level_switch_position
+                    true,            // target_tank_level_switch_invalid
+                    true,   // target_tank_level_switch_position_stabilized
+                    true,           // target_surface_ventilation_status
+                    35.0,              // target_ambient_temperature
                     66.0,                 // target_ambient_humidity
-                    true,                 // target_heater_status
+                    true,                    // target_heater_status
                 );
             })
             .unwrap();
