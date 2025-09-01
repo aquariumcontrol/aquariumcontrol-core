@@ -11,8 +11,6 @@ use crate::sensors::tank_level_switch::TankLevelSwitch;
 use log::warn;
 use std::time::{Duration, Instant};
 
-#[cfg(target_os = "linux")]
-use crate::dispatch::messaging::Messaging;
 use crate::sensors::dht::Dht;
 use crate::sensors::ds18b20::Ds18b20;
 use crate::sensors::sensor_manager::SensorManager;
