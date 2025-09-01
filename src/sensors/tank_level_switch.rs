@@ -22,6 +22,7 @@ use log::warn;
 
 use crate::sensors::tank_level_switch_channels::TankLevelSwitchChannels;
 use crate::sensors::tank_level_switch_config::TankLevelSwitchConfig;
+use crate::utilities::check_mutex_access_duration::CheckMutexAccessDurationTrait;
 use spin_sleep::SpinSleeper;
 use std::sync::mpsc::{Receiver, Sender};
 use std::time::{Duration, Instant};
@@ -165,20 +166,20 @@ pub struct TankLevelSwitch {
     tank_level_switch_position_low_stabilization_counter: u32,
 
     /// inhibition flag to avoid flooding the log file with repeated messages about having received inapplicable command from the signal handler
-    pub(crate) lock_warn_inapplicable_command_signal_handler: bool,
+    pub lock_warn_inapplicable_command_signal_handler: bool,
 
     /// inhibition flag to avoid flooding the log file with repeated messages about failure to receive termination signal via the channel
-    pub(crate) lock_error_channel_receive_termination: bool,
+    pub lock_error_channel_receive_termination: bool,
 
     /// inhibition flag to avoid flooding the log file with repeated messages about excessive access time to mutex
-    lock_warn_max_mutex_access_duration: bool,
+    pub lock_warn_max_mutex_access_duration: bool,
 
     /// inhibition flag to avoid flooding the log file with repeated messages about mutex not being accessible.
     lock_error_mutex_poisoned: bool,
 
     // for testing purposes: record when mutex access time is exceeded without resetting it
     #[cfg(test)]
-    mutex_access_duration_exceeded: bool,
+    pub mutex_access_duration_exceeded: bool,
 
     /// inhibition flag to avoid flooding the log file with repeated messages about not having received an input pin
     lock_error_input_pin_none: bool,
@@ -192,6 +193,9 @@ pub struct TankLevelSwitch {
     #[cfg(all(target_os = "linux", feature = "target_hw"))]
     // interface to GPIO pin wrapped as optional
     input_pin_opt: Option<InputPin>,
+
+    /// Maximum permissible access duration for Mutex
+    pub max_mutex_access_duration: Duration,
 }
 
 impl ProcessExternalRequestTrait for TankLevelSwitch {}
@@ -241,6 +245,7 @@ impl TankLevelSwitch {
             lock_error_input_pin_none: false,
             lock_error_simulator_communication: false,
             lock_error_channel_not_provided: false,
+            max_mutex_access_duration: Duration::from_millis(MAX_MUTEX_ACCESS_DURATION_MILLIS),
         })
     }
 
@@ -476,7 +481,6 @@ impl TankLevelSwitch {
         #[cfg(all(target_os = "linux", not(test)))]
         info!(target: module_path!(), "Thread started with TID: {}", gettid());
 
-        let max_mutex_access_duration = Duration::from_millis(MAX_MUTEX_ACCESS_DURATION_MILLIS);
         let spin_sleeper = SpinSleeper::default();
         let mut lock_warn_cycle_time_exceeded: bool = false;
         let cycle_time_duration = Duration::from_millis(CYCLE_TIME_TANK_LEVEL_SWITCH_MILLIS);
@@ -581,28 +585,10 @@ impl TankLevelSwitch {
                 }
 
                 // check if access to mutex took too long
-                let measured_mutex_access_duration =
-                    instant_after_locking_mutex.duration_since(instant_before_locking_mutex);
-                if measured_mutex_access_duration > max_mutex_access_duration {
-                    if !self.lock_warn_max_mutex_access_duration {
-                        self.lock_warn_max_mutex_access_duration = true;
-                        #[cfg(not(test))]
-                        warn!(target: module_path!(),
-                            "Access to mutex took too long. Allowed={}ms, Measured={}ms",
-                            max_mutex_access_duration.as_millis(),
-                            measured_mutex_access_duration.as_millis(),
-                        );
-
-                        // record for testing purposes only
-                        cfg_if::cfg_if! {
-                            if #[cfg(test)] {
-                                self.mutex_access_duration_exceeded = true;
-                            }
-                        }
-                    }
-                } else {
-                    self.lock_warn_max_mutex_access_duration = false;
-                }
+                self.check_mutex_access_duration(
+                    instant_after_locking_mutex,
+                    instant_before_locking_mutex,
+                );
             }
 
             let stop_time = Instant::now();

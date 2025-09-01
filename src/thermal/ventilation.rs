@@ -26,6 +26,7 @@ use std::time::{Duration, Instant};
 
 pub(crate) use crate::thermal::ventilation_channels::VentilationChannels;
 use crate::thermal::ventilation_config::VentilationConfig;
+use crate::utilities::check_mutex_access_duration::CheckMutexAccessDurationTrait;
 use crate::utilities::logger::log_error_chain;
 use crate::utilities::wait_for_termination::WaitForTerminationTrait;
 #[cfg(all(not(test), target_os = "linux"))]
@@ -149,11 +150,13 @@ pub struct Ventilation {
     lock_error_channel_receive_schedule_check: bool,
 
     /// inhibition flag to avoid flooding the log file with repeated messages about excessive access time to mutex
-    lock_warn_max_mutex_access_duration: bool,
+    pub lock_warn_max_mutex_access_duration: bool,
 
-    // for testing purposes: record when mutex access time is exceeded without resetting it
+    /// for testing purposes: record when mutex access time is exceeded without resetting it
     #[cfg(test)]
-    mutex_access_duration_exceeded: bool,
+    pub mutex_access_duration_exceeded: bool,
+
+    /// inhibition flag to avoid flooding the log file about failure to update the set values
     lock_error_ventilation_set_value_read_failure: bool,
 
     /// inhibition flag to avoid flooding the log file with repeated messages about having received inapplicable command via the channel
@@ -161,6 +164,9 @@ pub struct Ventilation {
 
     /// inhibition flag to avoid flooding the log file with repeated messages about the channel being disconnected
     pub lock_error_channel_receive_termination: bool,
+
+    /// Maximum permissible access duration for Mutex
+    pub max_mutex_access_duration: Duration,
 }
 
 impl ProcessExternalRequestTrait for Ventilation {}
@@ -192,6 +198,7 @@ impl Ventilation {
             #[cfg(test)]
             mutex_access_duration_exceeded: false,
             lock_error_channel_receive_termination: false,
+            max_mutex_access_duration: Duration::from_millis(MAX_MUTEX_ACCESS_DURATION_MILLIS),
         }
     }
 
@@ -305,7 +312,6 @@ impl Ventilation {
         #[cfg(all(target_os = "linux", not(test)))]
         info!(target: module_path!(), "Thread started with TID: {}", gettid());
 
-        let max_mutex_access_duration = Duration::from_millis(MAX_MUTEX_ACCESS_DURATION_MILLIS);
         let cycle_time_duration = Duration::from_millis(CYCLE_TIME_VENTILATION_MILLIS);
         let sleep_duration_hundred_millis = Duration::from_millis(100);
         let spin_sleeper = SpinSleeper::default();
@@ -513,28 +519,10 @@ impl Ventilation {
             }
 
             // check if access to mutex took too long
-            let measured_mutex_access_duration =
-                instant_after_locking_mutex.duration_since(instant_before_locking_mutex);
-            if measured_mutex_access_duration > max_mutex_access_duration {
-                if !self.lock_warn_max_mutex_access_duration {
-                    self.lock_warn_max_mutex_access_duration = true;
-                    #[cfg(not(test))]
-                    warn!(target: module_path!(),
-                        "Access to mutex took too long. Allowed={}ms, Measured={}ms",
-                        max_mutex_access_duration.as_millis(),
-                        measured_mutex_access_duration.as_millis(),
-                    );
-
-                    // record for testing purposes only
-                    cfg_if::cfg_if! {
-                        if #[cfg(test)] {
-                            self.mutex_access_duration_exceeded = true;
-                        }
-                    }
-                }
-            } else {
-                self.lock_warn_max_mutex_access_duration = false;
-            }
+            self.check_mutex_access_duration(
+                instant_after_locking_mutex,
+                instant_before_locking_mutex,
+            );
 
             saw_tooth_profile.execute_with(TIME_INCREMENT_VENTILATION_SECS);
 

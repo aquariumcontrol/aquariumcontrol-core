@@ -11,12 +11,10 @@ use log::error;
 #[cfg(all(not(test), target_os = "linux"))]
 use log::info;
 
-#[cfg(not(test))]
-use log::warn;
-
 use crate::sensors::dht_channels::DhtChannels;
 use crate::sensors::dht_config::DhtConfig;
 use crate::sensors::dht_error::DhtError;
+use crate::utilities::check_mutex_access_duration::CheckMutexAccessDurationTrait;
 use crate::utilities::logger::log_error_chain;
 #[cfg(all(not(test), target_os = "linux"))]
 use nix::unistd::gettid;
@@ -40,6 +38,9 @@ cfg_if::cfg_if! {
 
 /// Type definition to avoid linter warnings about complex return types
 pub type DhtResult = Result<(f32, f32), DhtError>; // Temperature and Humidity
+
+/// allow max. 10 milliseconds for mutex to be blocked by any other thread
+const MAX_MUTEX_ACCESS_DURATION_MILLIS: u64 = 10;
 
 /// Contains constants for communication with the DHT22 sensor.
 pub mod dht22_constants {
@@ -168,7 +169,7 @@ pub struct Dht {
 
     /// inhibition flag to avoid flooding the log file with repeated messages about excessive access time to mutex
     #[allow(unused)] // used in conditionally compiled code
-    lock_warn_max_mutex_access_duration: bool,
+    pub(crate) lock_warn_max_mutex_access_duration: bool,
 
     /// inhibition flag to avoid flooding the log file with repeated messages about failure to read from DHT sensor
     #[allow(unused)] // used in conditionally compiled code
@@ -176,7 +177,10 @@ pub struct Dht {
 
     // for testing purposes: record when mutex access time is exceeded without resetting it
     #[cfg(test)]
-    mutex_access_duration_exceeded: bool,
+    pub(crate) mutex_access_duration_exceeded: bool,
+
+    /// Maximum permissible access duration for Mutex
+    pub max_mutex_access_duration: Duration,
 }
 
 impl Dht {
@@ -214,6 +218,7 @@ impl Dht {
 
             #[cfg(test)]
             mutex_access_duration_exceeded: false,
+            max_mutex_access_duration: Duration::from_millis(MAX_MUTEX_ACCESS_DURATION_MILLIS),
         }
     }
 
@@ -837,29 +842,12 @@ impl Dht {
                             }
                         };
                     }
-                    // check if access to mutex took too long
-                    let measured_mutex_access_duration =
-                        instant_after_locking_mutex.duration_since(instant_before_locking_mutex);
-                    if measured_mutex_access_duration > max_mutex_access_duration {
-                        if !self.lock_warn_max_mutex_access_duration {
-                            self.lock_warn_max_mutex_access_duration = true;
-                            #[cfg(not(test))]
-                            warn!(target: module_path!(),
-                                "Access to mutex took too long. Allowed={}ms, Measured={}ms",
-                                max_mutex_access_duration.as_millis(),
-                                measured_mutex_access_duration.as_millis(),
-                            );
 
-                            // record for testing purposes only
-                            cfg_if::cfg_if! {
-                                if #[cfg(test)] {
-                                    self.mutex_access_duration_exceeded = true;
-                                }
-                            }
-                        }
-                    } else {
-                        self.lock_warn_max_mutex_access_duration = false;
-                    }
+                    // check if access to mutex took too long
+                    self.check_mutex_access_duration(
+                        instant_after_locking_mutex,
+                        instant_before_locking_mutex,
+                    );
 
                     self.instant_last_measurement = current_instant;
                 }

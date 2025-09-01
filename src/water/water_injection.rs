@@ -11,15 +11,19 @@ use chrono::Local;
 use log::error;
 use spin_sleep::SpinSleeper;
 use std::sync::{Arc, Mutex};
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use crate::database::sql_interface_refill::DatabaseInterfaceRefillTrait;
 use crate::sensors::tank_level_switch::TankLevelSwitchSignals;
 use crate::utilities::channel_content::{AquariumDevice, InternalCommand};
+use crate::utilities::check_mutex_access_duration::CheckMutexAccessDurationTrait;
 use crate::utilities::proc_ext_req::ProcessExternalRequestTrait;
 use crate::water::refill_channels::RefillChannels;
 use crate::water::refill_config::RefillConfig;
 use crate::water::refill_error_states::RefillErrorStates;
+
+/// allow max. 10 milliseconds for mutex to be blocked by any other thread
+const MAX_MUTEX_ACCESS_DURATION_MILLIS: u64 = 10;
 
 /// Trait for the execution of the refill once control has detected that the water level is low.
 /// This trait allows running the main control with a mock implementation for testing.
@@ -47,12 +51,39 @@ pub trait WaterInjectionTrait {
 ///     signal_handler[Signal Handler] --> water_injection
 /// ```
 pub struct WaterInjection {
-    refill_increment: f64,         // value is calculated based on RefillConfig
-    additional_refill_volume: f64, // value is copied from RefillConfig
-    max_refill_volume: f64,        // value is copied from RefillConfig
+    /// The volume of water (in Liters) injected during a single control loop cycle.
+    /// This value is calculated at initialization from the pump's flow rate and the loop's sleep interval.
+    refill_increment: f64,
+
+    /// The extra volume of water to add after the tank level switch first reports `high`.
+    /// This acts as a hysteresis to prevent the pump from cycling too frequently.
+    additional_refill_volume: f64,
+
+    /// The maximum total volume of water (in Liters) allowed for a single refill operation.
+    /// This serves as a safety cutoff to prevent overfilling if the level switch fails.
+    max_refill_volume: f64,
+
+    /// A high-precision sleeper utility to pause the control loop for a consistent duration.
     spin_sleeper: SpinSleeper,
+
+    /// The `Duration` for which the control loop sleeps on each iteration (e.g., 100ms).
     sleep_duration_hundred_milli_sec: Duration,
+
+    /// The sleep interval of the control loop, expressed in seconds as a floating-point number
+    /// for use in volume calculations.
     sleep_interval_seconds: f64,
+
+    /// An inhibition flag to prevent flooding the log file with repeated warnings
+    /// about excessive mutex access times.
+    pub lock_warn_max_mutex_access_duration: bool,
+
+    /// A flag used for testing purposes to record if the mutex access time was ever exceeded.
+    /// Unlike the lock flag, this is not reset.
+    #[cfg(test)]
+    pub mutex_access_duration_exceeded: bool,
+
+    /// The maximum permissible duration for a mutex lock to be held before a warning is issued.
+    pub max_mutex_access_duration: Duration,
 }
 
 impl WaterInjection {
@@ -82,6 +113,10 @@ impl WaterInjection {
             spin_sleeper: SpinSleeper::default(),
             sleep_duration_hundred_milli_sec: Duration::from_millis(sleep_interval_millis),
             sleep_interval_seconds,
+            lock_warn_max_mutex_access_duration: false,
+            #[cfg(test)]
+            mutex_access_duration_exceeded: false,
+            max_mutex_access_duration: Duration::from_millis(MAX_MUTEX_ACCESS_DURATION_MILLIS),
         }
     }
 }
@@ -159,6 +194,8 @@ impl WaterInjectionTrait for WaterInjection {
                 .sleep(self.sleep_duration_hundred_milli_sec);
             refill_time_seconds += self.sleep_interval_seconds;
 
+            let instant_before_locking_mutex = Instant::now();
+
             // access mutex for reading tank level switch signals
             {
                 match mutex_tank_level_switch_signals.lock() {
@@ -171,6 +208,9 @@ impl WaterInjectionTrait for WaterInjection {
                     }
                 }
             }
+
+            // check if access to mutex took too long
+            self.check_mutex_access_duration(Instant::now(), instant_before_locking_mutex);
 
             if tank_level_switch_position
                 && additional_refill_volume_executed > self.additional_refill_volume

@@ -30,6 +30,7 @@ use crate::sensors::tank_level_switch::TankLevelSwitchSignals;
 use crate::thermal::heating_channels::HeatingChannels;
 use crate::thermal::heating_config::HeatingConfig;
 use crate::utilities::channel_content::{ActuatorState, AquariumDevice, InternalCommand};
+use crate::utilities::check_mutex_access_duration::CheckMutexAccessDurationTrait;
 use crate::utilities::common::check_if_mutex_is_blocked;
 use crate::utilities::logger::log_error_chain;
 use crate::utilities::proc_ext_req::ProcessExternalRequestTrait;
@@ -204,20 +205,23 @@ pub struct Heating {
     pub database_ping_interval: Duration,
 
     /// inhibition flag to avoid flooding the log file with repeated messages about excessive access time to mutex
-    lock_warn_max_mutex_access_duration: bool,
+    pub(crate) lock_warn_max_mutex_access_duration: bool,
 
     /// Flag to avoid flooding the log with warnings when the heating set values could not be read from the database
     lock_error_heating_set_value_read_failure: bool,
 
     // for testing purposes: record when mutex access time is exceeded without resetting it
     #[cfg(test)]
-    mutex_access_duration_exceeded: bool,
+    pub mutex_access_duration_exceeded: bool,
 
     /// Inhibition flag to avoid flooding the log with warning about having received inapplicable command from the signal handler
     pub lock_warn_inapplicable_command_signal_handler: bool,
 
     /// Inhibition flag to avoid flooding the log with errors about the channel communication not working
     pub lock_error_channel_receive_termination: bool,
+
+    /// Maximum permissible access duration for Mutex
+    pub max_mutex_access_duration: Duration,
 }
 
 impl ProcessExternalRequestTrait for Heating {}
@@ -259,6 +263,7 @@ impl Heating {
             mutex_access_duration_exceeded: false,
             lock_warn_inapplicable_command_signal_handler: false,
             lock_error_channel_receive_termination: false,
+            max_mutex_access_duration: Duration::from_millis(MAX_MUTEX_ACCESS_DURATION_MILLIS),
         }
     }
 
@@ -355,7 +360,6 @@ impl Heating {
         #[cfg(all(target_os = "linux", not(test)))]
         info!(target: module_path!(), "Thread started with TID: {}", gettid());
 
-        let max_mutex_access_duration = Duration::from_millis(MAX_MUTEX_ACCESS_DURATION_MILLIS);
         let _refill_error = false;
         let spin_sleeper = SpinSleeper::default();
         let sleep_duration_hundred_millis = Duration::from_millis(100);
@@ -714,28 +718,10 @@ impl Heating {
             }
 
             // check if access to mutex took too long
-            let measured_mutex_access_duration =
-                instant_after_locking_mutex.duration_since(instant_before_locking_mutex);
-            if measured_mutex_access_duration > max_mutex_access_duration {
-                if !self.lock_warn_max_mutex_access_duration {
-                    self.lock_warn_max_mutex_access_duration = true;
-                    #[cfg(not(test))]
-                    warn!(target: module_path!(),
-                        "Access to mutex for heating status took too long. Allowed={}ms, Measured={}ms",
-                        max_mutex_access_duration.as_millis(),
-                        measured_mutex_access_duration.as_millis(),
-                    );
-
-                    // record for testing purposes only
-                    cfg_if::cfg_if! {
-                        if #[cfg(test)] {
-                            self.mutex_access_duration_exceeded = true;
-                        }
-                    }
-                }
-            } else {
-                self.lock_warn_max_mutex_access_duration = false;
-            }
+            self.check_mutex_access_duration(
+                instant_after_locking_mutex,
+                instant_before_locking_mutex,
+            );
 
             loop_counter += 1;
 

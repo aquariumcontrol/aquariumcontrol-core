@@ -12,9 +12,6 @@ use log::error;
 #[cfg(all(target_os = "linux", not(test)))]
 use log::info;
 
-#[cfg(not(test))]
-use log::warn;
-
 use std::sync::{Arc, Mutex};
 
 #[cfg(feature = "debug_sensor_manager")]
@@ -33,6 +30,7 @@ use crate::sensors::sensor_manager_config::SensorManagerConfig;
 use crate::simulator::get_resp_sim::GetResponseFromSimulatorTrait;
 use crate::simulator::tcp_communication_error::TcpCommunicationError;
 use crate::utilities::channel_content::{AquariumSignal, InternalCommand};
+use crate::utilities::check_mutex_access_duration::CheckMutexAccessDurationTrait;
 use crate::utilities::logger::log_error_chain;
 use crate::utilities::proc_ext_req::ProcessExternalRequestTrait;
 use crate::utilities::wait_for_termination::WaitForTerminationTrait;
@@ -204,11 +202,14 @@ pub struct SensorManager {
     lock_error_ds18b20_ambient_temperature_mutex: bool,
 
     /// inhibition flag to avoid flooding the log file with repeated messages about excessive access time to mutex
-    lock_warn_max_mutex_access_duration: bool,
+    pub lock_warn_max_mutex_access_duration: bool,
 
     // for testing purposes: record when mutex access time is exceeded without resetting it
     #[cfg(test)]
-    mutex_access_duration_exceeded: bool,
+    pub mutex_access_duration_exceeded: bool,
+
+    /// Maximum permissible duration for accessing the mutex
+    pub max_mutex_access_duration: Duration,
 }
 
 impl ProcessExternalRequestTrait for SensorManager {}
@@ -290,6 +291,9 @@ impl SensorManager {
             lock_warn_max_mutex_access_duration: false,
             #[cfg(test)]
             mutex_access_duration_exceeded: false,
+            max_mutex_access_duration: Duration::from_millis(
+                sensor_manager_constants::MAX_MUTEX_ACCESS_DURATION_MILLIS,
+            ),
         })
     }
 
@@ -421,8 +425,6 @@ impl SensorManager {
         #[cfg(all(target_os = "linux", not(test)))]
         info!(target: module_path!(), "Thread started with TID: {}", gettid());
 
-        let max_mutex_access_duration =
-            Duration::from_millis(sensor_manager_constants::MAX_MUTEX_ACCESS_DURATION_MILLIS);
         if (self.config.use_simulator)
             && (sensor_manager_channels
                 .tx_sensor_manager_to_tcp_opt
@@ -440,6 +442,7 @@ impl SensorManager {
         let sleep_duration_hundred_millis = Duration::from_millis(100);
         let sleep_duration_one_millis = Duration::from_millis(1);
         let spin_sleeper = SpinSleeper::default();
+        let mut mutex_poisoned = false;
 
         // initialize signals with replacement values
         self.ambient_temperature = self.config.replacement_value_ambient_temperature;
@@ -594,51 +597,37 @@ impl SensorManager {
                     }
                 }
 
-                let instant_before_locking_mutex = Instant::now();
-                let mut instant_after_locking_mutex = Instant::now(); // initialization is overwritten
+                if !mutex_poisoned {
+                    let instant_before_locking_mutex = Instant::now();
+                    let mut instant_after_locking_mutex = Instant::now(); // initialization is overwritten
 
-                // write the measurement result to Mutex
-                {
-                    match mutexes.mutex_sensor_manager_signals.lock() {
-                        Ok(mut sensor_manager_signals) => {
-                            instant_after_locking_mutex = Instant::now();
-                            sensor_manager_signals.ambient_humidity = self.ambient_humidity;
-                            sensor_manager_signals.ambient_temperature = self.ambient_temperature;
-                            sensor_manager_signals.water_temperature = self.water_temperature;
-                            sensor_manager_signals.conductivity = self.conductivity;
-                            sensor_manager_signals.ph = self.pH;
-                            sensor_manager_signals.instant_last_recording = Instant::now();
-                        }
-                        Err(_) => {
-                            // do nothing
-                        }
-                    }
-                }
-
-                // check if access to mutex took too long
-                let measured_mutex_access_duration =
-                    instant_after_locking_mutex.duration_since(instant_before_locking_mutex);
-                if measured_mutex_access_duration > max_mutex_access_duration {
-                    if !self.lock_warn_max_mutex_access_duration {
-                        self.lock_warn_max_mutex_access_duration = true;
-                        #[cfg(not(test))]
-                        warn!(target: module_path!(),
-                            "Access to mutex took too long. Allowed={}ms, Measured={}ms",
-                            max_mutex_access_duration.as_millis(),
-                            measured_mutex_access_duration.as_millis(),
-                        );
-                        // record for testing purposes only
-                        cfg_if::cfg_if! {
-                            if #[cfg(test)] {
-                                self.mutex_access_duration_exceeded = true;
+                    // write the measurement result to Mutex
+                    {
+                        match mutexes.mutex_sensor_manager_signals.lock() {
+                            Ok(mut sensor_manager_signals) => {
+                                instant_after_locking_mutex = Instant::now();
+                                sensor_manager_signals.ambient_humidity = self.ambient_humidity;
+                                sensor_manager_signals.ambient_temperature =
+                                    self.ambient_temperature;
+                                sensor_manager_signals.water_temperature = self.water_temperature;
+                                sensor_manager_signals.conductivity = self.conductivity;
+                                sensor_manager_signals.ph = self.pH;
+                                sensor_manager_signals.instant_last_recording = Instant::now();
+                            }
+                            Err(e) => {
+                                log_error_chain(module_path!(), "error when trying to lock mutex for writing sensor manager data", e);
+                                mutex_poisoned = true;
                             }
                         }
                     }
-                } else {
-                    self.lock_warn_max_mutex_access_duration = false;
+
+                    // check if access to mutex took too long
+                    self.check_mutex_access_duration(
+                        instant_after_locking_mutex,
+                        instant_before_locking_mutex,
+                    );
                 }
             }
-
             spin_sleeper.sleep(sleep_duration_hundred_millis);
         }
 

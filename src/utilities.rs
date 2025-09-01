@@ -60,3 +60,6 @@ pub mod memory_config_check_config;
 
 /// Configuration of PublishPid
 pub mod publish_pid_config;
+
+/// Trait incl. implementation for checking maximum permissible access duration
+pub mod check_mutex_access_duration;
