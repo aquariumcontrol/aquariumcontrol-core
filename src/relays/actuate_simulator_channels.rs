@@ -42,7 +42,7 @@ impl fmt::Display for ActuateSimulatorChannels {
         writeln!(f, "=== ActuateSimulatorChannels ===")?;
         write!(
             f,
-            "\ncnt_tx_actuate_simulator_to_tcp_opt: {}",
+            "cnt_tx_actuate_simulator_to_tcp_opt: {}",
             self.cnt_tx_actuate_simulator_to_tcp_opt
         )
     }

@@ -172,8 +172,8 @@ pub enum SqlInterfaceError {
     ScheduleStopTimeConversionFailure(String, String),
 
     /// Type-specific schedule could not be found in the database.
-    #[error("[{0}] Schedule of type {1} could not be found in database.")]
-    ScheduleTypeNotFound(String, String),
+    #[error("[{0}] Schedule of type {1} could not be found in database. Existing entries are: {2}.")]
+    ScheduleTypeNotFound(String, String, String),
 
     /// Error when trying to convert string to timestamp.
     #[error("[{location}] Error when trying to convert string to timestamp: {timestamp_string}")]
