@@ -195,6 +195,7 @@ impl WaterInjectionTrait for WaterInjection {
             refill_time_seconds += self.sleep_interval_seconds;
 
             let instant_before_locking_mutex = Instant::now();
+            let mut instant_after_locking_mutex = Instant::now(); // initialization is overwritten
 
             // access mutex for reading tank level switch signals
             {
@@ -202,6 +203,7 @@ impl WaterInjectionTrait for WaterInjection {
                     Ok(c) => {
                         tank_level_switch_position = c.tank_level_switch_position;
                         tank_level_switch_invalid = c.tank_level_switch_invalid;
+                        instant_after_locking_mutex = Instant::now();
                     }
                     Err(_) => {
                         // Do nothing, keep values as they are.
@@ -210,7 +212,11 @@ impl WaterInjectionTrait for WaterInjection {
             }
 
             // check if access to mutex took too long
-            self.check_mutex_access_duration(Instant::now(), instant_before_locking_mutex);
+            self.check_mutex_access_duration(
+                None,
+                instant_after_locking_mutex,
+                instant_before_locking_mutex
+            );
 
             if tank_level_switch_position
                 && additional_refill_volume_executed > self.additional_refill_volume

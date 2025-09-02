@@ -589,6 +589,7 @@ impl TankLevelSwitch {
 
                 // check if access to mutex took too long
                 self.check_mutex_access_duration(
+                    None,
                     instant_after_locking_mutex,
                     instant_before_locking_mutex,
                 );

@@ -8,6 +8,7 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 */
 #![allow(non_snake_case)]
 
+use std::fmt;
 use log::error;
 #[cfg(all(not(test), target_os = "linux"))]
 use log::info;
@@ -15,7 +16,7 @@ use log::info;
 #[cfg(not(test))]
 use log::warn;
 
-pub(crate) use crate::sensors::atlas_scientific_channels::AtlasScientificChannels;
+use crate::sensors::atlas_scientific_channels::AtlasScientificChannels;
 use crate::sensors::atlas_scientific_config::AtlasScientificConfig;
 use crate::sensors::atlas_scientific_error::AtlasScientificError;
 use crate::sensors::atlas_scientific_error::AtlasScientificError::{
@@ -27,6 +28,7 @@ use crate::utilities::channel_content::AquariumSignal;
 use crate::utilities::logger::log_error_chain;
 use crate::utilities::proc_ext_req::ProcessExternalRequestTrait;
 use crate::utilities::wait_for_termination::WaitForTerminationTrait;
+use crate::utilities::check_mutex_access_duration::CheckMutexAccessDurationTrait;
 #[cfg(all(not(test), target_os = "linux"))]
 use nix::unistd::gettid;
 use spin_sleep::SpinSleeper;
@@ -59,6 +61,13 @@ impl AtlasScientificResultData {
             invalid: false,
             measurement_instant: Instant::now(),
         }
+    }
+}
+
+impl fmt::Display for AtlasScientificResultData {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        // Write the floating-point sensor value directly to the formatter.
+        write!(f, "{}", self.value)
     }
 }
 
@@ -139,21 +148,21 @@ pub struct AtlasScientific {
     lock_error_channel_send_i2c_interface: bool,
 
     /// inhibition flag to avoid flooding the log file with repeated messages about excessive access time to mutex for water temperature
-    lock_warn_max_mutex_access_duration_temperature: bool,
+    pub lock_warn_max_mutex_access_duration_temperature: bool,
 
     /// inhibition flag to avoid flooding the log file with repeated messages about excessive access time to mutex for pH
-    lock_warn_max_mutex_access_duration_ph: bool,
+    pub lock_warn_max_mutex_access_duration_ph: bool,
 
     /// inhibition flag to avoid flooding the log file with repeated messages about excessive access time to mutex for conductivity
-    lock_warn_max_mutex_access_duration_conductivity: bool,
+    pub lock_warn_max_mutex_access_duration_conductivity: bool,
 
     // for testing purposes: record when mutex access time is exceeded without resetting it
     #[cfg(test)]
-    mutex_temperature_access_duration_exceeded: bool,
+    pub(crate) mutex_temperature_access_duration_exceeded: bool,
     #[cfg(test)]
-    mutex_ph_access_duration_exceeded: bool,
+    pub(crate) mutex_ph_access_duration_exceeded: bool,
     #[cfg(test)]
-    mutex_conductivity_access_duration_exceeded: bool,
+    pub(crate) mutex_conductivity_access_duration_exceeded: bool,
 
     /// instant when the last measurement took place
     #[allow(unused)] // used in conditionally compiled code
@@ -162,6 +171,9 @@ pub struct AtlasScientific {
     /// duration of the measurement interval calculated from the configuration data
     #[allow(unused)] // used in conditionally compiled code
     pub measurement_interval: Duration,
+
+    /// maximum allowed duration for access to mutex
+    pub max_mutex_access_duration_millis: Duration,
 }
 impl ProcessExternalRequestTrait for AtlasScientific {}
 
@@ -205,6 +217,7 @@ impl AtlasScientific {
 
             last_measurement_instant: Instant::now(),
             measurement_interval,
+            max_mutex_access_duration_millis: Duration::from_millis(atlas_scientific_constants::MAX_MUTEX_ACCESS_DURATION_MILLIS),
         }
     }
 
@@ -384,85 +397,6 @@ impl AtlasScientific {
         }
     }
 
-    /// Logs a warning if acquiring a sensor's mutex takes longer than the configured maximum.
-    ///
-    /// This helper function is invoked when the time spent waiting to lock a mutex
-    /// exceeds a predefined threshold. To avoid log flooding, it uses an internal
-    /// lock flag for each signal, logging the warning only once per sustained issue.
-    ///
-    /// # Arguments
-    /// * `signal` - The `AquariumSignal` identifying which sensor's mutex was slow.
-    /// * `measured_mutex_access_duration` - The `Duration` that was actually measured.
-    /// * `max_mutex_access_duration` - The maximum `Duration` allowed before a warning.
-    #[allow(unused)]
-    fn warn_about_long_mutex_wait(
-        &mut self,
-        signal: &AquariumSignal,
-        measured_mutex_access_duration: Duration,
-        max_mutex_access_duration: Duration,
-    ) {
-        let lock_flag = match signal {
-            AquariumSignal::WaterTemperature => {
-                &mut self.lock_warn_max_mutex_access_duration_temperature
-            }
-            AquariumSignal::pH => &mut self.lock_warn_max_mutex_access_duration_ph,
-            AquariumSignal::Conductivity => {
-                &mut self.lock_warn_max_mutex_access_duration_conductivity
-            }
-            _ => return, // Do nothing for other signals
-        };
-
-        if !*lock_flag {
-            *lock_flag = true;
-            #[cfg(not(test))]
-            warn!(
-                target: module_path!(),
-                "Access to {} mutex took too long. Allowed={}ms, Measured={}ms",
-                signal, // Display is implemented for AquariumSignal
-                max_mutex_access_duration.as_millis(),
-                measured_mutex_access_duration.as_millis(),
-            );
-
-            // This block handles the test-only flags
-            #[cfg(test)]
-            {
-                match signal {
-                    AquariumSignal::WaterTemperature => {
-                        self.mutex_temperature_access_duration_exceeded = true
-                    }
-                    AquariumSignal::pH => self.mutex_ph_access_duration_exceeded = true,
-                    AquariumSignal::Conductivity => {
-                        self.mutex_conductivity_access_duration_exceeded = true
-                    }
-                    _ => {}
-                }
-            }
-        }
-    }
-
-    // Resets the warning lock flag for a given sensor's mutex.
-    ///
-    /// This function is called after a mutex has been successfully and quickly acquired,
-    /// re-enabling the `warn_about_long_mutex_wait` function to log a new warning
-    /// if the mutex becomes slow to acquire again in the future.
-    ///
-    /// # Arguments
-    /// * `signal` - The `AquariumSignal` identifying which sensor's warning lock to reset.
-    #[allow(unused)] // used in conditionally compiled code
-    fn reset_warning_flag(&mut self, signal: &AquariumSignal) {
-        let lock_flag = match signal {
-            AquariumSignal::WaterTemperature => {
-                &mut self.lock_warn_max_mutex_access_duration_temperature
-            }
-            AquariumSignal::Conductivity => {
-                &mut self.lock_warn_max_mutex_access_duration_conductivity
-            }
-            AquariumSignal::pH => &mut self.lock_warn_max_mutex_access_duration_ph,
-            _ => return, // Do nothing for other signals
-        };
-        *lock_flag = false;
-    }
-
     /// Atomically writes a sensor measurement result to the appropriate shared mutex.
     ///
     /// This helper function directs an `AtlasScientificResultData` to its corresponding
@@ -550,8 +484,6 @@ impl AtlasScientific {
         mutex_ph: &Arc<Mutex<AtlasScientificResultData>>,
         mutex_conductivity: &Arc<Mutex<AtlasScientificResultData>>,
     ) -> AtlasScientificResult {
-        let max_mutex_access_duration =
-            Duration::from_millis(atlas_scientific_constants::MAX_MUTEX_ACCESS_DURATION_MILLIS);
         let is_ph = matches!(signal, AquariumSignal::pH);
         let result: AtlasScientificResult;
 
@@ -588,6 +520,7 @@ impl AtlasScientific {
                         if let Ok(result_data) = parsed_result {
                             let instant_before_locking_mutex = Instant::now();
                             let result_data_clone = result_data.clone();
+                            println!("Writing result to mutex: {}", result_data);
                             let instant_after_locking_mutex = self.write_result_to_mutex(
                                 signal,
                                 result_data,
@@ -597,17 +530,11 @@ impl AtlasScientific {
                             )?; // The '?' will propagate a mutex lock error.
 
                             // Check if access to mutex took too long.
-                            let measured_mutex_access_duration = instant_after_locking_mutex
-                                .duration_since(instant_before_locking_mutex);
-                            if measured_mutex_access_duration > max_mutex_access_duration {
-                                self.warn_about_long_mutex_wait(
-                                    signal,
-                                    measured_mutex_access_duration,
-                                    max_mutex_access_duration,
-                                );
-                            } else {
-                                self.reset_warning_flag(signal);
-                            }
+                            self.check_mutex_access_duration(
+                                Some(signal),
+                                instant_after_locking_mutex,
+                                instant_before_locking_mutex,
+                            );
 
                             // The final result of this arm is the successfully parsed data.
                             result = Ok(result_data_clone);
