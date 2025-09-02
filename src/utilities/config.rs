@@ -31,7 +31,7 @@ use crate::thermal::heating_config::HeatingConfig;
 use std::env;
 
 #[cfg(feature = "target_hw")]
-use crate::sensors::i2c_interface::I2cInterfaceConfig;
+use crate::sensors::i2c_interface_config::I2cInterfaceConfig;
 
 use crate::sensors::tank_level_switch_config::TankLevelSwitchConfig;
 

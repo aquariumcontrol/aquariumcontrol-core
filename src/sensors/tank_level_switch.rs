@@ -313,6 +313,9 @@ impl TankLevelSwitch {
             mutex_access_duration_exceeded: false,
             lock_error_input_pin_none: false,
             input_pin_opt,
+            lock_error_channel_not_provided: false,
+            lock_error_simulator_communication: false,
+            max_mutex_access_duration: Duration::from_millis(MAX_MUTEX_ACCESS_DURATION_MILLIS),
         })
     }
 

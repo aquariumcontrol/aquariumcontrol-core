@@ -16,7 +16,7 @@ use crate::utilities::channel_content::InternalCommand;
 
 cfg_if::cfg_if! {
     if #[cfg(all(target_os = "linux", feature = "target_hw"))] {
-        use crate::sensors::gpio_handler::GpioHandlerConfig;
+        use crate::sensors::gpio_handler_config::GpioHandlerConfig;
         use rppal::gpio::{Gpio, OutputPin};
         use crate::utilities::channel_content::AquariumDevice;
     }
