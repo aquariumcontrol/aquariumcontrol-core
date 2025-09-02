@@ -196,18 +196,18 @@ impl Monitors {
                 );
                 monitors_inhibited = false;
             }
+        }
 
-            // The application received request to terminate. That is why the loop was left.
-            // Answer to the thread which sent the request for termination, so that shutdown can proceed further.
-            match monitors_channels.tx_monitors_to_signal_handler.send(true) {
-                Ok(()) => {}
-                Err(e) => {
-                    error!(
+        // The application received request to terminate. That is why the loop was left.
+        // Answer to the thread which sent the request for termination, so that shutdown can proceed further.
+        match monitors_channels.send_to_signal_handler(true) {
+            Ok(()) => {}
+            Err(e) => {
+                error!(
                         target: module_path!(),
                         "sending quit confirmation back to signal handler failed ({e:?})"
                     );
-                }
-            };
-        }
+            }
+        };
     }
 }
