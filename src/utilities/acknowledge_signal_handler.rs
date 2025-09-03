@@ -23,6 +23,9 @@ use crate::watchmen::monitors_channels::MonitorsChannels;
 use crate::watchmen::watchdog_channels::WatchDogChannels;
 use crate::water::refill_channels::RefillChannels;
 
+#[cfg(target_os = "linux")]
+use crate::dispatch::messaging_channels::MessagingChannels;
+
 /// A trait for objects that can send a shutdown acknowledgment to the `SignalHandler`.
 ///
 /// This trait abstracts the boilerplate logic required for a thread to confirm that it has
@@ -194,5 +197,16 @@ impl AcknowledgeSignalHandlerTrait for RefillChannels {
 
     fn location(&self) -> String {
         "refill".to_string()
+    }
+}
+
+#[cfg(target_os = "linux")]
+impl AcknowledgeSignalHandlerTrait for MessagingChannels {
+    fn send_true_to_signal_handler(&mut self) -> Result<(), SendError<bool>> {
+        self.send_to_signal_handler(true)
+    }
+
+    fn location(&self) -> String {
+        "messaging".to_string()
     }
 }

@@ -26,6 +26,7 @@ cfg_if::cfg_if! {
         use crate::dispatch::messaging_error::MessagingError;
         use crate::utilities::proc_ext_req::ProcessExternalRequestTrait;
         use crate::utilities::wait_for_termination::WaitForTerminationTrait;
+        use crate::utilities::acknowledge_signal_handler::AcknowledgeSignalHandlerTrait;
         use crate::dispatch::messaging_domain::messaging_domains;
         use crate::dispatch::messaging_domain::MessagingDomain;
         use crate::dispatch::messaging_config::MessagingConfig;
@@ -366,20 +367,13 @@ impl Messaging {
                     "received QUIT command from signal handler"
                 );
 
-                match messaging_channels.tx_messaging_to_signal_handler.send(true) {
-                    Ok(_) => { /* do nothing */ }
-                    Err(e) => {
-                        error!(
-                            target: module_path!(),
-                            "Error occurred when responding to Quit command from signal handler ({e:?})"
-                        );
-                    }
-                }
                 break;
             }
 
             spin_sleeper.sleep(sleep_duration);
         }
+
+        messaging_channels.acknowledge_signal_handler();
 
         // This thread has channel connections to underlying threads.
         // Those threads have to stop receiving commands from this thread.
