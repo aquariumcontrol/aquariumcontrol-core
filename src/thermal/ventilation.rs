@@ -31,6 +31,7 @@ use crate::utilities::logger::log_error_chain;
 use crate::utilities::wait_for_termination::WaitForTerminationTrait;
 #[cfg(all(not(test), target_os = "linux"))]
 use nix::unistd::gettid;
+use crate::utilities::acknowledge_signal_handler::AcknowledgeSignalHandlerTrait;
 
 const CYCLE_TIME_VENTILATION_MILLIS: u64 = 500;
 
@@ -570,18 +571,8 @@ impl Ventilation {
             }
         }
 
-        // The application received a request to terminate. That is why the loop was left.
-        // Answer to the thread which sent the request for termination, so that shutdown can proceed further.
-        match ventilation_channels.send_to_signal_handler(true) {
-            Ok(()) => {}
-            Err(e) => {
-                error!(
-                    target: module_path!(),
-                    "sending quit confirmation back to signal handler failed ({e:?})"
-                );
-            }
-        };
-
+        ventilation_channels.acknowledge_signal_handler();
+        
         // This thread has channel connections to underlying threads (relay manager, Atlas Scientific).
         // Those threads have to stop receiving commands from this thread.
         // The shutdown sequence is handled by the signal_handler module.

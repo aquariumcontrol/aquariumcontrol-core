@@ -34,6 +34,7 @@ use crate::utilities::check_mutex_access_duration::CheckMutexAccessDurationTrait
 use crate::utilities::logger::log_error_chain;
 use crate::utilities::proc_ext_req::ProcessExternalRequestTrait;
 use crate::utilities::wait_for_termination::WaitForTerminationTrait;
+use crate::utilities::acknowledge_signal_handler::AcknowledgeSignalHandlerTrait;
 use std::time::{Duration, Instant};
 use thiserror::Error;
 
@@ -632,15 +633,7 @@ impl SensorManager {
             spin_sleeper.sleep(sleep_duration_hundred_millis);
         }
 
-        match sensor_manager_channels.send_to_signal_handler(true) {
-            Ok(()) => {}
-            Err(e) => {
-                error!(
-                    target: module_path!(),
-                    "sending quit confirmation back to signal handler failed ({e:?})"
-                );
-            }
-        };
+        sensor_manager_channels.acknowledge_signal_handler();
 
         // This thread has channel connections to underlying threads.
         // Those threads have to stop receiving commands from this thread.

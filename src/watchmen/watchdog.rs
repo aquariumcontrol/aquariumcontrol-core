@@ -20,6 +20,7 @@ use crate::watchmen::watchdog_config::WatchdogConfig;
 #[cfg(all(target_os = "linux", not(test)))]
 use nix::unistd::gettid;
 use thiserror::Error;
+use crate::utilities::acknowledge_signal_handler::AcknowledgeSignalHandlerTrait;
 
 /// Contains the error definition for Watchdog
 #[derive(Error, Debug)]
@@ -176,17 +177,7 @@ impl Watchdog {
             }
         }
 
-        // The application received the request to terminate. That is why the loop was left.
-        // Answer to the thread which sent the request for termination, so that shutdown can proceed further.
-        match watchdog_channels.send_to_signal_handler(true) {
-            Ok(()) => {}
-            Err(e) => {
-                error!(
-                    target: module_path!(),
-                    "Error in trying to send quit confirmation back to signal handler: {e:?}"
-                );
-            }
-        };
+        watchdog_channels.acknowledge_signal_handler();
     }
 }
 

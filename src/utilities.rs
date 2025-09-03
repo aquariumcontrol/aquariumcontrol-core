@@ -63,3 +63,6 @@ pub mod publish_pid_config;
 
 /// Trait incl. implementation for checking maximum permissible access duration
 pub mod check_mutex_access_duration;
+
+/// Trait incl. implementation for acknowledging to signal handler
+pub mod acknowledge_signal_handler;

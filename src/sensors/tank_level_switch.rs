@@ -36,6 +36,7 @@ cfg_if::cfg_if! {
 
 use crate::simulator::get_resp_sim::GetResponseFromSimulatorTrait;
 use crate::simulator::tcp_communication_error::TcpCommunicationError;
+use crate::utilities::acknowledge_signal_handler::AcknowledgeSignalHandlerTrait;
 use crate::utilities::channel_content::{AquariumSignal, InternalCommand};
 use crate::utilities::logger::log_error_chain;
 use crate::utilities::proc_ext_req::ProcessExternalRequestTrait;
@@ -622,18 +623,7 @@ impl TankLevelSwitch {
             start_time = Instant::now();
         }
 
-        match tank_level_switch_channels
-            .tx_tank_level_switch_to_signal_handler
-            .send(true)
-        {
-            Ok(()) => {}
-            Err(e) => {
-                error!(
-                    target: module_path!(),
-                    "sending quit confirmation back to signal handler failed ({e:?})"
-                );
-            }
-        };
+        tank_level_switch_channels.acknowledge_signal_handler();
 
         // This thread has channel connections to underlying threads (GpioHandler).
         // Those threads have to stop receiving commands from this thread.

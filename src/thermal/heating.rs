@@ -29,6 +29,7 @@ use crate::sensors::sensor_manager::SensorManagerSignals;
 use crate::sensors::tank_level_switch::TankLevelSwitchSignals;
 use crate::thermal::heating_channels::HeatingChannels;
 use crate::thermal::heating_config::HeatingConfig;
+use crate::utilities::acknowledge_signal_handler::AcknowledgeSignalHandlerTrait;
 use crate::utilities::channel_content::{ActuatorState, AquariumDevice, InternalCommand};
 use crate::utilities::check_mutex_access_duration::CheckMutexAccessDurationTrait;
 use crate::utilities::common::check_if_mutex_is_blocked;
@@ -780,23 +781,7 @@ impl Heating {
             }
         }
 
-        // The application received request to terminate. That is why the loop was left.
-        // Answer to the thread which sent the request for termination, so that shutdown can proceed further.
-        match heating_channels.send_to_signal_handler(true) {
-            Ok(()) => {
-                #[cfg(test)]
-                println!(
-                    "{}: sent quit confirmation to signal handler.",
-                    module_path!()
-                );
-            }
-            Err(e) => {
-                error!(
-                    target: module_path!(),
-                    "sending quit confirmation back to signal handler failed ({e:?})"
-                );
-            }
-        };
+        heating_channels.acknowledge_signal_handler();
 
         // This thread has channel connections to underlying threads.
         // Those threads have to stop receiving commands from this thread.

@@ -34,6 +34,7 @@ use crate::recorder::data_logger_config::DataLoggerConfig;
 use crate::recorder::recorder_data_frame::RecorderDataFrame;
 use crate::sensors::sensor_manager::SensorManagerSignals;
 use crate::sensors::tank_level_switch::TankLevelSwitchSignals;
+use crate::utilities::acknowledge_signal_handler::AcknowledgeSignalHandlerTrait;
 use crate::utilities::channel_content::AquariumSignal;
 use crate::utilities::iir_filter::IIRFilter;
 use crate::utilities::proc_ext_req::ProcessExternalRequestTrait;
@@ -810,17 +811,7 @@ impl DataLogger {
     ) {
         let sleep_duration_hundred_millis = Duration::from_millis(100);
 
-        // Application received request to terminate. That is why the loop was left.
-        // Answer to the thread which sent the request for termination, so that shutdown can proceed further.
-        match data_logger_channels.send_to_signal_handler(true) {
-            Ok(()) => {}
-            Err(e) => {
-                error!(
-                    target: module_path!(),
-                    "sending confirmation back to signal handler failed ({e:?})"
-                );
-            }
-        };
+        data_logger_channels.acknowledge_signal_handler();
 
         // This thread has channel connections to underlying threads.
         // Those threads have to stop receiving commands from this thread.

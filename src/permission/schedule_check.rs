@@ -23,6 +23,7 @@ use crate::database::sql_interface_schedule::{ScheduleEntry, ScheduleType, SqlIn
 use crate::launch::execution_config::ExecutionConfig;
 pub(crate) use crate::permission::schedule_check_channels::ScheduleCheckChannels;
 use crate::permission::schedule_check_config::ScheduleCheckConfig;
+use crate::utilities::acknowledge_signal_handler::AcknowledgeSignalHandlerTrait;
 use crate::utilities::channel_content::InternalCommand;
 use crate::utilities::logger::log_error_chain;
 use crate::utilities::proc_ext_req::ProcessExternalRequestTrait;
@@ -508,23 +509,6 @@ impl ScheduleCheck {
             }
         }
 
-        // The application received the request to terminate. That is why the loop was left.
-        // Answer to the thread which sent the request for termination, so that shutdown can proceed further.
-        match schedule_check_channels.send_to_signal_handler(true) {
-            Ok(()) => {
-                #[cfg(feature = "debug_schedule_check")]
-                debug!(
-                    target: module_path!(),
-                    "sent back confirmation to schedule checker"
-                );
-            }
-            Err(e) => {
-                log_error_chain(
-                    module_path!(),
-                    "sending quit confirmation back to signal handler failed",
-                    e,
-                );
-            }
-        };
+        schedule_check_channels.acknowledge_signal_handler();
     }
 }

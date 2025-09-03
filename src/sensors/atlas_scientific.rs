@@ -8,7 +8,6 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 */
 #![allow(non_snake_case)]
 
-use log::error;
 #[cfg(all(not(test), target_os = "linux"))]
 use log::info;
 use std::fmt;
@@ -29,6 +28,7 @@ use crate::utilities::check_mutex_access_duration::CheckMutexAccessDurationTrait
 use crate::utilities::logger::log_error_chain;
 use crate::utilities::proc_ext_req::ProcessExternalRequestTrait;
 use crate::utilities::wait_for_termination::WaitForTerminationTrait;
+use crate::utilities::acknowledge_signal_handler::AcknowledgeSignalHandlerTrait;
 #[cfg(all(not(test), target_os = "linux"))]
 use nix::unistd::gettid;
 use spin_sleep::SpinSleeper;
@@ -725,18 +725,7 @@ impl AtlasScientific {
             spin_sleeper.sleep(sleep_duration_ten_millis);
         }
 
-        match atlas_scientific_channels
-            .tx_atlas_scientific_to_signal_handler
-            .send(true)
-        {
-            Ok(()) => {}
-            Err(e) => {
-                error!(
-                    target: module_path!(),
-                    "sending quit confirmation back to signal handler failed ({e:?})"
-                );
-            }
-        };
+        atlas_scientific_channels.acknowledge_signal_handler();
 
         // This thread has channel connections to underlying threads.
         // Those threads have to stop receiving commands from this thread.

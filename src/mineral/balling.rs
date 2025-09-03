@@ -25,6 +25,7 @@ pub(crate) use crate::mineral::balling_channels::BallingChannels;
 use crate::mineral::balling_config::BallingConfig;
 use crate::mineral::balling_error::BallingError;
 use crate::mineral::mineral_injection::MineralInjectionTrait;
+use crate::utilities::acknowledge_signal_handler::AcknowledgeSignalHandlerTrait;
 use crate::utilities::channel_content::{AquariumDevice, InternalCommand};
 use crate::utilities::proc_ext_req::ProcessExternalRequestTrait;
 use crate::utilities::wait_for_termination::WaitForTerminationTrait;
@@ -799,17 +800,8 @@ impl Balling {
                 self.last_ping_instant = Instant::now();
             }
         }
-        // The application received the request to terminate. That is why the loop was left.
-        // Answer to the thread which sent the request for termination, so that shutdown can proceed further.
-        match balling_channels.send_to_signal_handler(true) {
-            Ok(()) => {}
-            Err(e) => {
-                error!(
-                    target: module_path!(),
-                    "Error in trying to send quit confirmation back to signal handler: {e:?}"
-                );
-            }
-        };
+        
+        balling_channels.acknowledge_signal_handler();
 
         // This thread has channel connections to underlying threads.
         // Those threads have to stop receiving commands from this thread.

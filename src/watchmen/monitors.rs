@@ -24,6 +24,7 @@ use crate::utilities::proc_ext_req::ProcessExternalRequestTrait;
 use crate::watchmen::monitors_channels::MonitorsChannels;
 use crate::watchmen::monitors_config::MonitorsConfig;
 use crate::water::refill_monitor_view::RefillMonitorView;
+use crate::utilities::acknowledge_signal_handler::AcknowledgeSignalHandlerTrait;
 
 #[cfg_attr(doc, aquamarine::aquamarine)]
 /// Contains the configuration and the implementation for the monitors.
@@ -197,17 +198,7 @@ impl Monitors {
                 monitors_inhibited = false;
             }
         }
-
-        // The application received request to terminate. That is why the loop was left.
-        // Answer to the thread which sent the request for termination, so that shutdown can proceed further.
-        match monitors_channels.send_to_signal_handler(true) {
-            Ok(()) => {}
-            Err(e) => {
-                error!(
-                    target: module_path!(),
-                    "sending quit confirmation back to signal handler failed ({e:?})"
-                );
-            }
-        };
+        
+        monitors_channels.acknowledge_signal_handler();
     }
 }

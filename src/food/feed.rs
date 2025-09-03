@@ -28,6 +28,7 @@ pub(crate) use crate::food::feed_channels::FeedChannels;
 use crate::food::feed_config::FeedConfig;
 use crate::food::feed_schedule_entry::FeedScheduleEntry;
 use crate::food::food_injection::FoodInjectionTrait;
+use crate::utilities::acknowledge_signal_handler::AcknowledgeSignalHandlerTrait;
 use crate::utilities::logger::log_error_chain;
 use crate::utilities::proc_ext_req::ProcessExternalRequestTrait;
 use crate::utilities::wait_for_termination::WaitForTerminationTrait;
@@ -581,16 +582,7 @@ impl Feed {
             "Sending Quit confirmation to signal handler."
         );
 
-        match feed_channels.send_to_signal_handler(true) {
-            Ok(()) => {}
-            Err(e) => {
-                log_error_chain(
-                    module_path!(),
-                    "Sending quit confirmation back to signal handler failed.",
-                    e,
-                );
-            }
-        };
+        feed_channels.acknowledge_signal_handler();
 
         // This thread has channel connections to underlying threads.
         // Those threads have to stop receiving commands from this thread.

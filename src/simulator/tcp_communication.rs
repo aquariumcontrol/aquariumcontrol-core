@@ -29,6 +29,7 @@ use crate::utilities::logger::log_error_chain;
 use crate::utilities::proc_ext_req::ProcessExternalRequestTrait;
 #[cfg(all(not(test), target_os = "linux"))]
 use nix::unistd::gettid;
+use crate::utilities::acknowledge_signal_handler::AcknowledgeSignalHandlerTrait;
 
 #[cfg_attr(doc, aquamarine::aquamarine)]
 /// Contains configuration of implementation for opening, reading, and closing TCP channel.
@@ -512,16 +513,6 @@ impl TcpCommunication {
             spin_sleeper.sleep(sleep_duration_ten_milli_sec);
         }
 
-        // The application received request to terminate. That is why the loop was left.
-        // Answer to the thread which sent the request for termination, so that shutdown can proceed further.
-        match tcp_communication_channels.send_to_signal_handler(true) {
-            Ok(()) => {}
-            Err(e) => {
-                error!(
-                    target: module_path!(),
-                    "sending confirmation back to signal handler failed ({e:?})"
-                );
-            }
-        };
+        tcp_communication_channels.acknowledge_signal_handler();
     }
 }

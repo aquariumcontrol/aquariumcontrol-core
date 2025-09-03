@@ -24,6 +24,7 @@ use std::time::{Duration, Instant};
 use crate::database::sql_interface_refill::DatabaseInterfaceRefillTrait;
 use crate::log_error_chain;
 use crate::sensors::tank_level_switch::TankLevelSwitchSignals;
+use crate::utilities::acknowledge_signal_handler::AcknowledgeSignalHandlerTrait;
 use crate::utilities::channel_content::InternalCommand;
 use crate::utilities::proc_ext_req::ProcessExternalRequestTrait;
 use crate::utilities::wait_for_termination::WaitForTerminationTrait;
@@ -983,17 +984,8 @@ impl Refill {
             module_path!()
         );
 
-        match refill_channels.send_to_signal_handler(true) {
-            Ok(()) => {}
-            Err(e) => {
-                log_error_chain(
-                    module_path!(),
-                    "sending quit confirmation back to signal handler failed",
-                    e,
-                );
-            }
-        };
-
+        refill_channels.acknowledge_signal_handler();
+        
         // This thread has channel connections to underlying threads (relay manager, tank level switch).
         // Those threads have to stop receiving commands from this thread.
         // The shutdown sequence is handled by the signal_handler module.
