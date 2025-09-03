@@ -286,6 +286,7 @@ impl Ds18b20 {
         // Use an Instant to track time since the last measurement.
         // Start with a measurement due to ensure the first loop iteration triggers a read.
         let mut last_measurement_instant = Instant::now() - measurement_interval;
+        let mut first_iteration = true;
 
         loop {
             // Check for quit command first for faster shutdown.
@@ -293,13 +294,11 @@ impl Ds18b20 {
                 .process_external_request(&ds18b20_channels.rx_ds18b20_from_signal_handler, None)
                 .0
             {
-                #[cfg(test)]
-                println!("Quitting Ds18b20");
                 break;
             }
 
-            if self.config.active && last_measurement_instant.elapsed() >= measurement_interval {
-                // --- Refactoring: Read values BEFORE locking mutexes ---
+            if self.config.active && (last_measurement_instant.elapsed() >= measurement_interval || first_iteration) {
+                first_iteration = false;
                 let water_temp_result = if !self.config.water_temperature_sensor_id.is_empty() {
                     Some(self.read(self.config.water_temperature_sensor_id.as_str()))
                 } else {

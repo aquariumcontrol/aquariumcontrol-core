@@ -284,9 +284,9 @@ impl ScheduleCheck {
         let mut first_iteration = true;
 
         loop {
-            if (self.config.active
-                && last_check_instant.elapsed() > duration_schedule_check_interval)
-                || first_iteration
+            if self.config.active
+                && (last_check_instant.elapsed() > duration_schedule_check_interval
+                    || first_iteration)
             {
                 first_iteration = false;
                 last_check_instant = Instant::now();
