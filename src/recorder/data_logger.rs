@@ -1546,8 +1546,8 @@ pub mod tests {
                     None,           // target_water_conductivity_compensated
                     Some(false),    // target_refill_in_progress
                     Some(true),     // target_tank_level_switch_position
-                    Some(false),     // target_tank_level_switch_position_stabilized
-                    Some(true),    // target_tank_level_switch_invalid
+                    Some(false),    // target_tank_level_switch_position_stabilized
+                    Some(true),     // target_tank_level_switch_invalid
                     Some(true),     // target_surface_ventilation_status
                     Some(35.0),     // target_ambient_temperature
                     Some(66.0),     // target_ambient_humidity
@@ -1568,7 +1568,7 @@ pub mod tests {
                     Some(true),     // target_refill_in_progress
                     Some(false),    // target_tank_level_switch_position
                     Some(false),    // target_tank_level_switch_position_stabilized
-                    Some(true),    // target_tank_level_switch_invalid
+                    Some(true),     // target_tank_level_switch_invalid
                     Some(true),     // target_surface_ventilation_status
                     Some(35.0),     // target_ambient_temperature
                     Some(14.0),     // target_ambient_humidity
@@ -1587,8 +1587,8 @@ pub mod tests {
                     Some(25006.0),  // target_water_conductivity_filtered
                     None,           // target_water_conductivity_compensated
                     Some(false),    // target_refill_in_progress
-                    Some(false),     // target_tank_level_switch_position
-                    Some(false),     // target_tank_level_switch_position_stabilized
+                    Some(false),    // target_tank_level_switch_position
+                    Some(false),    // target_tank_level_switch_position_stabilized
                     Some(false),    // target_tank_level_switch_invalid
                     Some(true),     // target_surface_ventilation_status
                     Some(13.0),     // target_ambient_temperature
@@ -1608,8 +1608,8 @@ pub mod tests {
                     Some(12.0),  // target_water_conductivity_filtered
                     None,        // target_water_conductivity_compensated
                     Some(false), // target_refill_in_progress
-                    Some(false),  // target_tank_level_switch_position
-                    Some(false),  // target_tank_level_switch_position_stabilized
+                    Some(false), // target_tank_level_switch_position
+                    Some(false), // target_tank_level_switch_position_stabilized
                     Some(false), // target_tank_level_switch_invalid
                     Some(true),  // target_surface_ventilation_status
                     Some(13.0),  // target_ambient_temperature
@@ -1620,22 +1620,22 @@ pub mod tests {
                 assert!(mock_data_injection.data_frames.is_empty());
 
                 assert_output_file_contents(
-                    &config2.data_logger,                      // data_logger_config,
+                    &config2.data_logger, // data_logger_config,
                     29.0,                 // target_water_temperature
-                    28.4,           // target_water_temperature_filtered
-                    7.0,                         // target_water_ph
-                    7.12,                  // target_water_ph_filtered
+                    28.4,                 // target_water_temperature_filtered
+                    7.0,                  // target_water_ph
+                    7.12,                 // target_water_ph_filtered
                     50_000.0,             // target_water_conductivity
-                    46876.0,        // target_water_conductivity_filtered
-                    0.0,      // target_water_conductivity_compensated
-                    false,                 // target_refill_in_progress
-                    true,           // target_tank_level_switch_position
-                    true,            // target_tank_level_switch_invalid
-                    true,   // target_tank_level_switch_position_stabilized
-                    true,           // target_surface_ventilation_status
-                    35.0,              // target_ambient_temperature
+                    46876.0,              // target_water_conductivity_filtered
+                    0.0,                  // target_water_conductivity_compensated
+                    false,                // target_refill_in_progress
+                    true,                 // target_tank_level_switch_position
+                    true,                 // target_tank_level_switch_invalid
+                    true,                 // target_tank_level_switch_position_stabilized
+                    true,                 // target_surface_ventilation_status
+                    35.0,                 // target_ambient_temperature
                     66.0,                 // target_ambient_humidity
-                    true,                    // target_heater_status
+                    true,                 // target_heater_status
                 );
             })
             .unwrap();

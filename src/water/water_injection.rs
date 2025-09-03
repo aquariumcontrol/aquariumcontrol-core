@@ -215,7 +215,7 @@ impl WaterInjectionTrait for WaterInjection {
             self.check_mutex_access_duration(
                 None,
                 instant_after_locking_mutex,
-                instant_before_locking_mutex
+                instant_before_locking_mutex,
             );
 
             if tank_level_switch_position

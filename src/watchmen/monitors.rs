@@ -204,9 +204,9 @@ impl Monitors {
             Ok(()) => {}
             Err(e) => {
                 error!(
-                        target: module_path!(),
-                        "sending quit confirmation back to signal handler failed ({e:?})"
-                    );
+                    target: module_path!(),
+                    "sending quit confirmation back to signal handler failed ({e:?})"
+                );
             }
         };
     }

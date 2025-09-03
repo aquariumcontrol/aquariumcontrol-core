@@ -132,25 +132,33 @@ impl ScheduleEntry {
     /// - The `stop_time` string cannot be parsed into a valid `NaiveTime`
     ///   (`ScheduleStopTimeConversionFailure`).
     pub fn new(sql_schedule_entry: SqlScheduleEntry) -> Result<ScheduleEntry, SqlInterfaceError> {
-        let schedule_type = ScheduleType::from_str(&sql_schedule_entry.schedule_type)
-            .map_err(|_|{SqlInterfaceError::ScheduleTypeConversionFailure(
-                module_path!().to_string(),
-                sql_schedule_entry.schedule_type,
-        )})?;
+        let schedule_type =
+            ScheduleType::from_str(&sql_schedule_entry.schedule_type).map_err(|_| {
+                SqlInterfaceError::ScheduleTypeConversionFailure(
+                    module_path!().to_string(),
+                    sql_schedule_entry.schedule_type,
+                )
+            })?;
 
-        let start_time = NaiveTime::parse_from_str(
-            sql_schedule_entry.start_time.as_str(), "%H:%M:%S"
-        ).map_err(|_| {SqlInterfaceError::ScheduleStartTimeConversionFailure(
-            module_path!().to_string(),
-            sql_schedule_entry.start_time,
-        )})?;
+        let start_time =
+            NaiveTime::parse_from_str(sql_schedule_entry.start_time.as_str(), "%H:%M:%S").map_err(
+                |_| {
+                    SqlInterfaceError::ScheduleStartTimeConversionFailure(
+                        module_path!().to_string(),
+                        sql_schedule_entry.start_time,
+                    )
+                },
+            )?;
 
-        let stop_time = NaiveTime::parse_from_str(
-            sql_schedule_entry.stop_time.as_str(), "%H:%M:%S"
-        ).map_err(|_| { SqlInterfaceError::ScheduleStopTimeConversionFailure(
-            module_path!().to_string(),
-            sql_schedule_entry.stop_time,
-        )})?;
+        let stop_time =
+            NaiveTime::parse_from_str(sql_schedule_entry.stop_time.as_str(), "%H:%M:%S").map_err(
+                |_| {
+                    SqlInterfaceError::ScheduleStopTimeConversionFailure(
+                        module_path!().to_string(),
+                        sql_schedule_entry.stop_time,
+                    )
+                },
+            )?;
 
         let is_active = sql_schedule_entry.is_active > 0;
 
@@ -376,15 +384,17 @@ impl SqlInterfaceSchedule {
 
 #[cfg(test)]
 pub mod tests {
-    use std::collections::HashMap;
     use crate::database::sql_interface::SqlInterface;
     use crate::database::sql_interface_error::SqlInterfaceError;
-    use crate::database::sql_interface_schedule::{ScheduleEntry, ScheduleType, SqlInterfaceSchedule, SqlScheduleEntry};
+    use crate::database::sql_interface_schedule::{
+        ScheduleEntry, ScheduleType, SqlInterfaceSchedule, SqlScheduleEntry,
+    };
     use crate::database::sql_query_strings;
     use crate::database::sql_query_strings::SQL_TABLE_SCHEDULE;
     use crate::utilities::config::{read_config_file_with_test_database, ConfigData};
     use mysql::params;
     use mysql::prelude::Queryable;
+    use std::collections::HashMap;
 
     #[test]
     // Test case reads entries from the SQL database.
@@ -445,7 +455,7 @@ pub mod tests {
                     stop_time: stop.to_string(),
                     is_active: 1,
                 })
-                    .unwrap();
+                .unwrap();
                 (name.to_string(), entry)
             })
             .collect();
@@ -512,7 +522,7 @@ pub mod tests {
             sql_interface.get_connection().unwrap(),
             config.sql_interface.max_rows_schedule,
         )
-            .unwrap();
+        .unwrap();
 
         sql_interface_schedule
             .read_schedule()
@@ -573,7 +583,7 @@ pub mod tests {
             sql_interface.get_connection().unwrap(),
             config.sql_interface.max_rows_schedule,
         )
-            .unwrap();
+        .unwrap();
 
         // read_schedule should return an error
         let read_result = sql_interface_schedule.read_schedule();
@@ -584,7 +594,10 @@ pub mod tests {
         if let Err(errors) = read_result {
             assert_eq!(errors.len(), 1);
             let error = &errors[0];
-            assert!(matches!(error, SqlInterfaceError::ScheduleProcessingFailure { .. }));
+            assert!(matches!(
+                error,
+                SqlInterfaceError::ScheduleProcessingFailure { .. }
+            ));
 
             // Check the nested error source
             if let SqlInterfaceError::ScheduleProcessingFailure { source, .. } = error {
@@ -592,9 +605,14 @@ pub mod tests {
                     **source, // Dereference the Box<SqlInterfaceError>
                     SqlInterfaceError::ScheduleStartTimeConversionFailure(_, _)
                 ));
-                if let SqlInterfaceError::ScheduleStartTimeConversionFailure(_, time_str) = &**source {
+                if let SqlInterfaceError::ScheduleStartTimeConversionFailure(_, time_str) =
+                    &**source
+                {
                     assert_eq!(time_str, malformed_start_time);
-                    println!("Correctly received ScheduleStartTimeConversionFailure for time '{}'", time_str);
+                    println!(
+                        "Correctly received ScheduleStartTimeConversionFailure for time '{}'",
+                        time_str
+                    );
                 }
             }
         }
@@ -634,7 +652,7 @@ pub mod tests {
             sql_interface.get_connection().unwrap(),
             config.sql_interface.max_rows_schedule,
         )
-            .unwrap();
+        .unwrap();
 
         // read_schedule should return an error
         let read_result = sql_interface_schedule.read_schedule();
@@ -645,7 +663,10 @@ pub mod tests {
         if let Err(errors) = read_result {
             assert_eq!(errors.len(), 1);
             let error = &errors[0];
-            assert!(matches!(error, SqlInterfaceError::ScheduleProcessingFailure { .. }));
+            assert!(matches!(
+                error,
+                SqlInterfaceError::ScheduleProcessingFailure { .. }
+            ));
 
             // Check the nested error source
             if let SqlInterfaceError::ScheduleProcessingFailure { source, .. } = error {
@@ -653,9 +674,13 @@ pub mod tests {
                     **source, // Dereference the Box<SqlInterfaceError>
                     SqlInterfaceError::ScheduleStopTimeConversionFailure(_, _)
                 ));
-                if let SqlInterfaceError::ScheduleStopTimeConversionFailure(_, time_str) = &**source {
+                if let SqlInterfaceError::ScheduleStopTimeConversionFailure(_, time_str) = &**source
+                {
                     assert_eq!(time_str, malformed_stop_time);
-                    println!("Correctly received ScheduleStopTimeConversionFailure for time '{}'", time_str);
+                    println!(
+                        "Correctly received ScheduleStopTimeConversionFailure for time '{}'",
+                        time_str
+                    );
                 }
             }
         }

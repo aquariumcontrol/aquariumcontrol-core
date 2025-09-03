@@ -8,10 +8,10 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 */
 #![allow(non_snake_case)]
 
-use std::fmt;
 use log::error;
 #[cfg(all(not(test), target_os = "linux"))]
 use log::info;
+use std::fmt;
 
 #[cfg(not(test))]
 use log::warn;
@@ -25,10 +25,10 @@ use crate::sensors::atlas_scientific_error::AtlasScientificError::{
 use crate::sensors::i2c_interface::I2cRequest;
 use crate::simulator::get_resp_sim::GetResponseFromSimulatorTrait;
 use crate::utilities::channel_content::AquariumSignal;
+use crate::utilities::check_mutex_access_duration::CheckMutexAccessDurationTrait;
 use crate::utilities::logger::log_error_chain;
 use crate::utilities::proc_ext_req::ProcessExternalRequestTrait;
 use crate::utilities::wait_for_termination::WaitForTerminationTrait;
-use crate::utilities::check_mutex_access_duration::CheckMutexAccessDurationTrait;
 #[cfg(all(not(test), target_os = "linux"))]
 use nix::unistd::gettid;
 use spin_sleep::SpinSleeper;
@@ -217,7 +217,9 @@ impl AtlasScientific {
 
             last_measurement_instant: Instant::now(),
             measurement_interval,
-            max_mutex_access_duration_millis: Duration::from_millis(atlas_scientific_constants::MAX_MUTEX_ACCESS_DURATION_MILLIS),
+            max_mutex_access_duration_millis: Duration::from_millis(
+                atlas_scientific_constants::MAX_MUTEX_ACCESS_DURATION_MILLIS,
+            ),
         }
     }
 
@@ -520,7 +522,6 @@ impl AtlasScientific {
                         if let Ok(result_data) = parsed_result {
                             let instant_before_locking_mutex = Instant::now();
                             let result_data_clone = result_data.clone();
-                            println!("Writing result to mutex: {}", result_data);
                             let instant_after_locking_mutex = self.write_result_to_mutex(
                                 signal,
                                 result_data,

@@ -6,18 +6,18 @@ The above copyright notice and this permission notice shall be included in all c
 
 THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
-use crate::sensors::tank_level_switch::TankLevelSwitch;
-#[cfg(not(test))]
-use log::warn;
-use std::time::{Duration, Instant};
 use crate::sensors::atlas_scientific::AtlasScientific;
 use crate::sensors::dht::Dht;
 use crate::sensors::ds18b20::Ds18b20;
 use crate::sensors::sensor_manager::SensorManager;
+use crate::sensors::tank_level_switch::TankLevelSwitch;
 use crate::thermal::heating::Heating;
 use crate::thermal::ventilation::Ventilation;
 use crate::utilities::channel_content::AquariumSignal;
 use crate::water::water_injection::WaterInjection;
+#[cfg(not(test))]
+use log::warn;
+use std::time::{Duration, Instant};
 
 pub trait CheckMutexAccessDurationTrait {
     /// Reads the warn-lock.
@@ -305,13 +305,16 @@ impl CheckMutexAccessDurationTrait for AtlasScientific {
     fn get_warn_lock(&self, key_opt: &Option<&AquariumSignal>) -> bool {
         if key_opt.is_some() {
             match key_opt.as_ref().unwrap() {
-                AquariumSignal::WaterTemperature => self.lock_warn_max_mutex_access_duration_temperature,
+                AquariumSignal::WaterTemperature => {
+                    self.lock_warn_max_mutex_access_duration_temperature
+                }
                 AquariumSignal::pH => self.lock_warn_max_mutex_access_duration_ph,
-                AquariumSignal::Conductivity => self.lock_warn_max_mutex_access_duration_conductivity,
+                AquariumSignal::Conductivity => {
+                    self.lock_warn_max_mutex_access_duration_conductivity
+                }
                 _ => false, // Default for unhandled signals
             }
-        }
-        else {
+        } else {
             // defensive programming: this case should not occur
             true
         }
@@ -320,9 +323,13 @@ impl CheckMutexAccessDurationTrait for AtlasScientific {
     fn set_warn_lock(&mut self, key_opt: &Option<&AquariumSignal>, value: bool) {
         if key_opt.is_some() {
             match key_opt.as_ref().unwrap() {
-                AquariumSignal::WaterTemperature => self.lock_warn_max_mutex_access_duration_temperature = value,
+                AquariumSignal::WaterTemperature => {
+                    self.lock_warn_max_mutex_access_duration_temperature = value
+                }
                 AquariumSignal::pH => self.lock_warn_max_mutex_access_duration_ph = value,
-                AquariumSignal::Conductivity => self.lock_warn_max_mutex_access_duration_conductivity = value,
+                AquariumSignal::Conductivity => {
+                    self.lock_warn_max_mutex_access_duration_conductivity = value
+                }
                 _ => {} // Do nothing for unhandled signals
             }
         }
@@ -335,9 +342,13 @@ impl CheckMutexAccessDurationTrait for AtlasScientific {
     fn record_access_duration_violation(&mut self, key_opt: &Option<&AquariumSignal>) {
         if key_opt.is_some() {
             match key_opt.as_ref().unwrap() {
-                AquariumSignal::WaterTemperature => self.mutex_temperature_access_duration_exceeded = true,
+                AquariumSignal::WaterTemperature => {
+                    self.mutex_temperature_access_duration_exceeded = true
+                }
                 AquariumSignal::pH => self.mutex_ph_access_duration_exceeded = true,
-                AquariumSignal::Conductivity => self.mutex_conductivity_access_duration_exceeded = true,
+                AquariumSignal::Conductivity => {
+                    self.mutex_conductivity_access_duration_exceeded = true
+                }
                 _ => { /* do nothing for unrecognized signal */ }
             }
         }
@@ -345,9 +356,13 @@ impl CheckMutexAccessDurationTrait for AtlasScientific {
 
     /// Method connects the default trait implementation with the specific implementation
     /// for getting maximum permissible access duration
-    fn get_max_mutex_access_duration(&self) -> Duration { self.max_mutex_access_duration_millis }
+    fn get_max_mutex_access_duration(&self) -> Duration {
+        self.max_mutex_access_duration_millis
+    }
 
     /// inform the location of the warning for logging purposes
     #[cfg(not(test))]
-    fn get_location(&self) -> &str { "atlas_scientific" }
+    fn get_location(&self) -> &str {
+        "atlas_scientific"
+    }
 }

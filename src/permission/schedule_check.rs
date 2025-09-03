@@ -280,10 +280,14 @@ impl ScheduleCheck {
         let duration_schedule_check_interval =
             Duration::from_secs(self.config.schedule_check_interval.into());
         let mut last_check_instant = Instant::now();
+        let mut first_iteration = true;
 
         loop {
-            if self.config.active && last_check_instant.elapsed() > duration_schedule_check_interval
+            if (self.config.active
+                && last_check_instant.elapsed() > duration_schedule_check_interval)
+                || first_iteration
             {
+                first_iteration = false;
                 last_check_instant = Instant::now();
                 if let Err(errors) = self.sql_interface_schedule.read_schedule() {
                     if !self.lock_error_database_read {

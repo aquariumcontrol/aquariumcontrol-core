@@ -19,12 +19,12 @@ use std::thread::sleep;
 use crate::sensors::ds18b20_channels::Ds18b20Channels;
 use crate::sensors::ds18b20_config::Ds18b20Config;
 use crate::sensors::ds18b20_error::Ds18b20Error;
+use crate::utilities::check_mutex_access_duration::CheckMutexAccessDurationTrait;
 use crate::utilities::proc_ext_req::ProcessExternalRequestTrait;
 #[cfg(feature = "debug_ds18b20")]
 use log::debug;
 #[cfg(all(not(test), target_os = "linux"))]
 use log::info;
-use crate::utilities::check_mutex_access_duration::CheckMutexAccessDurationTrait;
 
 mod ds18b20_constants {
     /// minimum viable temperature used for health check of sensor signal
@@ -72,7 +72,7 @@ pub struct Ds18b20 {
     pub mutex_access_duration_exceeded: bool,
 
     /// maximum allowed duration of access to mutex
-    pub max_mutex_access_duration: Duration
+    pub max_mutex_access_duration: Duration,
 }
 
 impl ProcessExternalRequestTrait for Ds18b20 {}
@@ -138,7 +138,9 @@ impl Ds18b20 {
             lock_warn_max_mutex_access_duration: false,
             #[cfg(test)]
             mutex_access_duration_exceeded: false,
-            max_mutex_access_duration: Duration::from_millis(ds18b20_constants::MAX_MUTEX_ACCESS_DURATION_MILLIS),
+            max_mutex_access_duration: Duration::from_millis(
+                ds18b20_constants::MAX_MUTEX_ACCESS_DURATION_MILLIS,
+            ),
         })
     }
 
