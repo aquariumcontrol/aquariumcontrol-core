@@ -6,8 +6,10 @@ The above copyright notice and this permission notice shall be included in all c
 
 THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
+
 cfg_if::cfg_if! {
     if #[cfg(target_os = "linux")] {
+        use std::sync::mpsc::SendError;
         use crate::dispatch::messaging_domain::MessagingDomain;
         use crate::dispatch::messaging_error::MessagingError;
         use crate::utilities::channel_content::InternalCommand;
@@ -156,6 +158,16 @@ impl MessagingChannels {
         }
 
         Ok(())
+    }
+
+    /// Sends an acknowledgment to the signal handler.
+    pub fn send_to_signal_handler(&mut self, ack: bool) -> Result<(), SendError<bool>> {
+        let result = self.tx_messaging_to_signal_handler.send(ack);
+        #[cfg(feature = "debug_channels")]
+        if result.is_ok() {
+            self.cnt_tx_messaging_to_signal_handler += 1;
+        }
+        result
     }
 }
 
