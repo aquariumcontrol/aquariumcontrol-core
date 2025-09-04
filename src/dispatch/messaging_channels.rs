@@ -7,18 +7,21 @@ The above copyright notice and this permission notice shall be included in all c
 THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
+#[cfg(any(test, target_os = "linux"))]
+use std::sync::mpsc::{Receiver, Sender};
+#[cfg(any(test, target_os = "linux"))]
+use crate::utilities::channel_content::InternalCommand;
+
 cfg_if::cfg_if! {
     if #[cfg(target_os = "linux")] {
         use std::sync::mpsc::SendError;
         use crate::dispatch::messaging_domain::MessagingDomain;
         use crate::dispatch::messaging_error::MessagingError;
-        use crate::utilities::channel_content::InternalCommand;
         use std::fmt;
-        use std::sync::mpsc::{Receiver, Sender};
     }
 }
 
-#[cfg(target_os = "linux")]
+#[cfg(any(test, target_os = "linux"))]
 /// Collects all `mpsc` channels used by the `Messaging` module for IPC.
 ///
 /// This struct acts as a central container for all the communication endpoints
@@ -29,12 +32,14 @@ cfg_if::cfg_if! {
 /// This entire struct is conditionally compiled and is only available on Linux
 /// systems, as POSIX message queues are a platform-specific feature.
 pub struct MessagingChannels {
+    #[allow(unused)]
     /// Sender for sending acknowledgments back to the `SignalHandler`.
     pub tx_messaging_to_signal_handler: Sender<bool>,
     #[cfg(feature = "debug_channels")]
     /// Counter for messages sent to the signal handler.
     pub cnt_tx_messaging_to_signal_handler: u64,
 
+    #[allow(unused)]
     /// Receiver for commands from the `SignalHandler` (e.g., `Quit`, `Terminate`).
     pub rx_messaging_from_signal_handler: Receiver<InternalCommand>,
     #[cfg(feature = "debug_channels")]
@@ -47,36 +52,42 @@ pub struct MessagingChannels {
     /// Counter for messages sent to refill.
     pub cnt_tx_messaging_to_refill: u64,
 
+    #[allow(unused)]
     /// Sender for dispatching commands to the `Ventilation` module.
     pub tx_messaging_to_ventilation: Sender<InternalCommand>,
     #[cfg(feature = "debug_channels")]
     /// Counter for messages sent to ventilation.
     pub cnt_tx_messaging_to_ventilation: u64,
 
+    #[allow(unused)]
     /// Sender for dispatching commands to the `Heating` module.
     pub tx_messaging_to_heating: Sender<InternalCommand>,
     #[cfg(feature = "debug_channels")]
     /// Counter for messages sent to heating.
     pub cnt_tx_messaging_to_heating: u64,
 
+    #[allow(unused)]
     /// Sender for dispatching commands to the `Feed` module.
     pub tx_messaging_to_feed: Sender<InternalCommand>,
     #[cfg(feature = "debug_channels")]
     /// Counter for messages sent to feed.
     pub cnt_tx_messaging_to_feed: u64,
 
+    #[allow(unused)]
     /// Sender for dispatching commands to the `Balling` module.
     pub tx_messaging_to_balling: Sender<InternalCommand>,
     #[cfg(feature = "debug_channels")]
     /// Counter for messages sent to balling.
     pub cnt_tx_messaging_to_balling: u64,
 
+    #[allow(unused)]
     /// Sender for dispatching commands to the `Monitors` module.
     pub tx_messaging_to_monitors: Sender<InternalCommand>,
     #[cfg(feature = "debug_channels")]
     /// Counter for messages sent to monitors.
     pub cnt_tx_messaging_to_monitors: u64,
 
+    #[allow(unused)]
     /// Sender for dispatching commands to the `Watchdog` module.
     pub tx_messaging_to_watchdog: Sender<InternalCommand>,
     #[cfg(feature = "debug_channels")]
