@@ -16,7 +16,7 @@ use crate::database::sql_query_strings::{
     SQL_QUERY_CHECK_HEATING_STATS_COUNT, SQL_QUERY_CHECK_HEATING_STATS_NULL,
 };
 use chrono::*;
-use log::{error, warn};
+use log::warn;
 use mysql::prelude::*;
 use mysql::*;
 use std::fmt;
@@ -496,18 +496,6 @@ impl SqlInterfaceHeatingStats {
     pub fn get_duration_until_midnight(&mut self) -> Result<i64, SqlInterfaceError> {
         self.sql_interface_heating_midnight_calculator
             .get_duration_until_midnight()
-    }
-
-    /// Pings the database to check connection health and prevent timeouts.
-    ///
-    /// This function executes a lightweight query to ensure the connection is still
-    /// active. If the ping fails, it logs an error using `log::error!` but does
-    /// not propagate the error to the caller. This is a "fire-and-forget"
-    /// keep-alive mechanism.
-    pub fn ping(&mut self) {
-        if let Err(e) = SqlInterface::ping_database(&mut self.conn) {
-            error!(target: module_path!(), "Encountered error while pinging database: {e:?}");
-        }
     }
 }
 

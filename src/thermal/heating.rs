@@ -21,7 +21,6 @@ use nix::unistd::gettid;
 
 #[cfg(not(test))]
 use log::info;
-
 use crate::database::sql_interface_error::SqlInterfaceError;
 use crate::database::sql_interface_heating_setvals::HeatingSetValueUpdaterTrait;
 use crate::database::sql_interface_heating_stats::{HeatingStatsEntry, SqlInterfaceHeatingStats};
@@ -37,6 +36,7 @@ use crate::utilities::logger::log_error_chain;
 use crate::utilities::proc_ext_req::ProcessExternalRequestTrait;
 use crate::utilities::sawtooth_profile::SawToothProfile;
 use crate::utilities::wait_for_termination::WaitForTerminationTrait;
+use crate::utilities::database_ping_trait::DatabasePingTrait;
 
 const CYCLE_TIME_HEATING_MILLIS: u64 = 500;
 
@@ -190,9 +190,6 @@ pub struct Heating {
     /// configuration data for heating control
     config: HeatingConfig,
 
-    /// SQL interface for heating control
-    sql_interface_heating: SqlInterfaceHeatingStats,
-
     /// inhibition flag to avoid flooding the log file with repeated messages about failure to receive information from schedule check
     lock_error_channel_receive_schedule_check: bool,
 
@@ -206,7 +203,7 @@ pub struct Heating {
     pub database_ping_interval: Duration,
 
     /// inhibition flag to avoid flooding the log file with repeated messages about excessive access time to mutex
-    pub(crate) lock_warn_max_mutex_access_duration: bool,
+    pub lock_warn_max_mutex_access_duration: bool,
 
     /// Flag to avoid flooding the log with warnings when the heating set values could not be read from the database
     lock_error_heating_set_value_read_failure: bool,
@@ -248,12 +245,10 @@ impl Heating {
     /// A new **`Heating` struct**, ready to manage the aquarium's heating system.
     pub fn new(
         config: HeatingConfig,
-        sql_interface_heating: SqlInterfaceHeatingStats,
         database_ping_interval: Duration,
     ) -> Heating {
         Self {
             config,
-            sql_interface_heating,
             lock_error_channel_send_schedule_check: false,
             lock_error_channel_receive_schedule_check: false,
             last_ping_instant: Instant::now(),
@@ -307,8 +302,8 @@ impl Heating {
     /// This function handles errors internally. If the database call fails, it logs
     /// the error and returns a default fallback value of 24 hours (86.400 seconds).
     /// This prevents a crash and suspends statistics recording until the next day.
-    fn get_duration_until_midnight(&mut self) -> i64 {
-        self.sql_interface_heating
+    fn get_duration_until_midnight(&mut self, sql_interface_heating: &mut SqlInterfaceHeatingStats) -> i64 {
+        sql_interface_heating
             .get_duration_until_midnight()
             .unwrap_or_else(|e| {
                 log_error_chain(module_path!(), "Could not get duration until midnight.", e);
@@ -357,6 +352,7 @@ impl Heating {
         heating_stats_transfer: &mut impl HeatingStatsDataTransferTrait,
         heating_set_val_updater: &mut impl HeatingSetValueUpdaterTrait,
         heating_mutexes: HeatingMutexes,
+        mut sql_interface_heating: SqlInterfaceHeatingStats,
     ) {
         #[cfg(all(target_os = "linux", not(test)))]
         info!(target: module_path!(), "Thread started with TID: {}", gettid());
@@ -373,7 +369,7 @@ impl Heating {
         let mut loop_counter = 0;
         let mut heater_state: ActuatorState = ActuatorState::Undefined;
         let mut schedule_check_result: bool = false;
-        let mut duration_until_midnight = self.get_duration_until_midnight();
+        let mut duration_until_midnight = self.get_duration_until_midnight(&mut sql_interface_heating);
         let mut tank_level_low_counter = 0;
         let mut energy_increment: f64 = 0.0;
         let mut heating_inhibited: bool = false; // state of heating control determined by if the start/stop command has been received
@@ -381,8 +377,7 @@ impl Heating {
         let mut actuation_mutex_was_blocked_during_actuation: bool = false;
         let cycle_time_duration = Duration::from_millis(CYCLE_TIME_HEATING_MILLIS);
 
-        let mut heating_stats_opt = match self
-            .sql_interface_heating
+        let mut heating_stats_opt = match sql_interface_heating
             .get_single_heating_stats_from_database()
         {
             Ok(c) => Some(c),
@@ -393,7 +388,7 @@ impl Heating {
                     module_path!()
                 );
 
-                Some(HeatingStatsEntry::new(&mut self.sql_interface_heating.conn))
+                Some(HeatingStatsEntry::new(&mut sql_interface_heating.conn))
             }
         };
 
@@ -685,14 +680,14 @@ impl Heating {
                         // Use take() to move the value out of the Option without cloning.
                         if let Some(stats) = heating_stats_opt.take() {
                             if let Err(e) = heating_stats_transfer
-                                .transfer_heating_stats(stats, &mut self.sql_interface_heating)
+                                .transfer_heating_stats(stats, &mut sql_interface_heating)
                             {
                                 error!("Error occurred when trying to store heating stats data in database: {e:?}");
                             }
                             // Reset heating stats
                             heating_stats_opt =
-                                Some(HeatingStatsEntry::new(&mut self.sql_interface_heating.conn));
-                            duration_until_midnight = self.get_duration_until_midnight();
+                                Some(HeatingStatsEntry::new(&mut sql_interface_heating.conn));
+                            duration_until_midnight = self.get_duration_until_midnight(&mut sql_interface_heating);
                         }
                     }
                 }
@@ -753,11 +748,7 @@ impl Heating {
             }
             actuation_mutex_was_blocked_during_actuation = false; // reset for the next cycle
 
-            // Check for how long ago the last database ping happened.
-            if Instant::now().duration_since(self.last_ping_instant) > self.database_ping_interval {
-                self.sql_interface_heating.ping();
-                self.last_ping_instant = Instant::now();
-            }
+            self.check_timing_and_ping_database(&mut sql_interface_heating);
 
             start_time = Instant::now(); // start time for the next cycle
         }
@@ -775,7 +766,7 @@ impl Heating {
         // so far for this date
         if let Some(stats) = heating_stats_opt.take() {
             if let Err(e) = heating_stats_transfer
-                .transfer_heating_stats(stats, &mut self.sql_interface_heating)
+                .transfer_heating_stats(stats, &mut sql_interface_heating)
             {
                 error!("Error occurred when trying to store heating stats data in database (during termination): {e:?}");
             }
@@ -946,7 +937,7 @@ pub mod tests {
         seconds_to_midnight: i64,
         test_db_number: u32,
         saw_tooth_profile_config_opt: Option<SawToothProfileConfig>,
-    ) -> (ConfigData, Heating, SqlInterface) {
+    ) -> (ConfigData, Heating, SqlInterface, SqlInterfaceHeatingStats) {
         // prepare struct Heating for further tests
         let mut config: ConfigData = read_config_file_with_test_database(
             "/config/aquarium_control_test_generic.toml".to_string(),
@@ -996,10 +987,10 @@ pub mod tests {
             config,
             Heating::new(
                 heating_config,
-                sql_interface_heating_stats,
                 Duration::from_secs(1000),
             ),
             sql_interface,
+            sql_interface_heating_stats,
         )
     }
 
@@ -1011,7 +1002,7 @@ pub mod tests {
         let sleep_duration_100_millis = Duration::from_millis(100);
         let spin_sleeper = SpinSleeper::default();
 
-        let (mut config, mut heating, sql_interface) =
+        let (mut config, mut heating, sql_interface, sql_interface_heating_stats) =
             prepare_heating_tests_mock_midnight_calculator(3600, 11, None);
 
         // replacement values are used to initialize the mutexes
@@ -1161,6 +1152,7 @@ pub mod tests {
                     &mut heating_stats_transfer,
                     &mut heating_set_value_updater,
                     heating_mutexes,
+                    sql_interface_heating_stats,
                 );
 
                 // send Quit signal to mock threads because the test object has terminated
@@ -1201,7 +1193,7 @@ pub mod tests {
         let sleep_duration_100_millis = Duration::from_millis(100);
         let spin_sleeper = SpinSleeper::default();
 
-        let (mut config, mut heating, sql_interface) =
+        let (mut config, mut heating, sql_interface, sql_interface_heating_stats) =
             prepare_heating_tests_mock_midnight_calculator(3600, 12, None);
 
         // replacement values are used to initialize the mutexes
@@ -1333,6 +1325,7 @@ pub mod tests {
                     &mut heating_stats_transfer,
                     &mut heating_set_value_updater,
                     heating_mutexes,
+                    sql_interface_heating_stats
                 );
 
                 // send Quit signal to mock threads because the test object has terminated
@@ -1368,7 +1361,7 @@ pub mod tests {
         let sleep_duration_100_millis = Duration::from_millis(100);
         let spin_sleeper = SpinSleeper::default();
 
-        let (mut config, mut heating, sql_interface) =
+        let (mut config, mut heating, sql_interface, sql_interface_heating_stats) =
             prepare_heating_tests_mock_midnight_calculator(
                 3600,
                 13,
@@ -1618,6 +1611,7 @@ pub mod tests {
                     &mut heating_stats_transfer,
                     &mut heating_set_value_updater,
                     heating_mutexes,
+                    sql_interface_heating_stats
                 );
 
                 // send Quit signal to mock threads because the test object has terminated
@@ -1652,7 +1646,7 @@ pub mod tests {
         let sleep_duration_100_millis = Duration::from_millis(100);
         let spin_sleeper = SpinSleeper::default();
 
-        let (mut config, mut heating, sql_interface) =
+        let (mut config, mut heating, sql_interface, sql_interface_heating_stats) =
             prepare_heating_tests_mock_midnight_calculator(3, 14, None);
 
         // replacement values are used to initialize the mutexes
@@ -1777,7 +1771,8 @@ pub mod tests {
                     &mut heating_channels,
                     &mut heating_stats_transfer,
                     &mut heating_set_value_updater,
-                    heating_mutexes
+                    heating_mutexes,
+                    sql_interface_heating_stats
                 );
 
                 // send Quit signal to mock threads because the test object has terminated
@@ -1818,7 +1813,7 @@ pub mod tests {
         let sleep_duration_100_millis = Duration::from_millis(100);
         let spin_sleeper = SpinSleeper::default();
 
-        let (mut config, mut heating, sql_interface) =
+        let (mut config, mut heating, sql_interface, mut sql_interface_heating_stats) =
             prepare_heating_tests_mock_midnight_calculator(3, 15, None);
 
         // replacement values are used to initialize the mutexes
@@ -1838,8 +1833,7 @@ pub mod tests {
             Arc::new(Mutex::new(TankLevelSwitchSignals::new(true, true, false)));
 
         // get initial data for calculation of reference value
-        let initial_heating_stats_entry = heating
-            .sql_interface_heating
+        let initial_heating_stats_entry = sql_interface_heating_stats
             .get_single_heating_stats_from_database()
             .unwrap_or_else(|_| {
                 // database responded with an empty response - let's create an empty entry
@@ -1947,7 +1941,8 @@ pub mod tests {
                     &mut heating_channels,
                     &mut heating_stats_transfer,
                     &mut heating_set_value_updater,
-                    heating_mutexes
+                    heating_mutexes,
+                    sql_interface_heating_stats
                 );
 
                 // send Quit signal to mock threads because the test object has terminated
@@ -2088,7 +2083,7 @@ pub mod tests {
         let sleep_duration_100_millis = Duration::from_millis(100);
         let spin_sleeper = SpinSleeper::default();
 
-        let (mut config, mut heating, sql_interface) =
+        let (mut config, mut heating, sql_interface, mut sql_interface_heating_stats) =
             prepare_heating_tests_mock_midnight_calculator(3, 16, None);
 
         // replacement values are used to initialize the mutexes
@@ -2104,8 +2099,7 @@ pub mod tests {
         let (tx_heating_to_schedule_check, rx_schedule_check_from_heating) = mpsc::channel();
 
         // get initial data for calculation of reference value
-        let initial_heating_stats_entry = heating
-            .sql_interface_heating
+        let initial_heating_stats_entry = sql_interface_heating_stats
             .get_single_heating_stats_from_database()
             .unwrap_or_else(|_| {
                 // database responded with an empty response - let's create an empty entry
@@ -2217,7 +2211,8 @@ pub mod tests {
                     &mut heating_channels,
                     &mut heating_stats_transfer,
                     &mut heating_set_value_updater,
-                    heating_mutexes
+                    heating_mutexes,
+                    sql_interface_heating_stats
                 );
 
                 // send Quit signal to mock threads because the test object has terminated
@@ -2358,7 +2353,7 @@ pub mod tests {
         let sleep_duration_100_millis = Duration::from_millis(100);
         let spin_sleeper = SpinSleeper::default();
 
-        let (mut config, mut heating, sql_interface) =
+        let (mut config, mut heating, sql_interface, sql_interface_heating_stats) =
             prepare_heating_tests_mock_midnight_calculator(3600, 17, None);
 
         // replacement values are used to initialize the mutexes
@@ -2485,6 +2480,7 @@ pub mod tests {
                     &mut heating_stats_transfer,
                     &mut heating_set_value_updater,
                     heating_mutexes,
+                    sql_interface_heating_stats
                 );
 
                 // send Quit signal to mock threads because the test object has terminated
@@ -2517,7 +2513,7 @@ pub mod tests {
         let sleep_duration_100_millis = Duration::from_millis(100);
         let spin_sleeper = SpinSleeper::default();
 
-        let (mut config, mut heating, sql_interface) =
+        let (mut config, mut heating, sql_interface, sql_interface_heating_stats) =
             prepare_heating_tests_mock_midnight_calculator(3, 18, None);
         // replacement values are used to initialize the mutexes
         config.sensor_manager.replacement_value_water_temperature = 20.0;
@@ -2648,6 +2644,7 @@ pub mod tests {
                     &mut heating_stats_transfer,
                     &mut heating_set_value_updater,
                     heating_mutexes,
+                    sql_interface_heating_stats
                 );
 
                 // send Quit signal to mock threads because the test object has terminated
@@ -2681,7 +2678,7 @@ pub mod tests {
     // resumes operation.
     // Test case uses test database #19.
     pub fn test_messaging_stops_starts_heating() {
-        let (mut config, mut heating, sql_interface) =
+        let (mut config, mut heating, sql_interface, sql_interface_heating_stats) =
             prepare_heating_tests_mock_midnight_calculator(3600, 19, None);
 
         // replacement values are used to initialize the mutexes
@@ -2890,6 +2887,7 @@ pub mod tests {
                     &mut heating_stats_transfer,
                     &mut heating_set_value_updater,
                     heating_mutexes,
+                    sql_interface_heating_stats
                 );
 
                 // send Quit signal to mock threads because the test object has terminated
@@ -2925,7 +2923,7 @@ pub mod tests {
         let sleep_duration_100_millis = Duration::from_millis(100);
         let spin_sleeper = SpinSleeper::default();
 
-        let (mut config, mut heating, sql_interface) =
+        let (mut config, mut heating, sql_interface, sql_interface_heating_stats) =
             prepare_heating_tests_mock_midnight_calculator(3600, 50, None);
         // replacement values are used to initialize the mutexes
         config.sensor_manager.replacement_value_water_temperature = 30.0;
@@ -3090,6 +3088,7 @@ pub mod tests {
                     &mut heating_stats_transfer,
                     &mut heating_set_value_updater,
                     heating_mutexes,
+                    sql_interface_heating_stats
                 );
 
                 // send Quit signal to mock threads because the test object has terminated
@@ -3131,7 +3130,7 @@ pub mod tests {
         let sleep_duration_100_millis = Duration::from_millis(100);
         let spin_sleeper = SpinSleeper::default();
 
-        let (mut config, mut heating, sql_interface) =
+        let (mut config, mut heating, sql_interface, sql_interface_heating_stats) =
             prepare_heating_tests_mock_midnight_calculator(3600, 12, None);
 
         // replacement values are used to initialize the mutexes
@@ -3281,6 +3280,7 @@ pub mod tests {
                     &mut heating_stats_transfer,
                     &mut heating_set_value_updater,
                     heating_mutexes,
+                    sql_interface_heating_stats
                 );
 
                 // send Quit signal to mock threads because the test object has terminated

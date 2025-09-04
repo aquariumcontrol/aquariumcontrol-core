@@ -27,6 +27,7 @@ use crate::utilities::acknowledge_signal_handler::AcknowledgeSignalHandlerTrait;
 use crate::utilities::channel_content::InternalCommand;
 use crate::utilities::logger::log_error_chain;
 use crate::utilities::proc_ext_req::ProcessExternalRequestTrait;
+use crate::database::pingable::Pingable;
 
 #[cfg_attr(doc, aquamarine::aquamarine)]
 /// Contains the configuration and the implementation for the schedule checker.

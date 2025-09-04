@@ -40,6 +40,7 @@ use crate::utilities::iir_filter::IIRFilter;
 use crate::utilities::proc_ext_req::ProcessExternalRequestTrait;
 use crate::utilities::wait_for_termination::WaitForTerminationTrait;
 use crate::water::refill::RefillStatus;
+use crate::utilities::database_ping_trait::DatabasePingTrait;
 
 const MILLIS_PER_SEC: u64 = 1000;
 
@@ -1084,11 +1085,7 @@ impl DataLogger {
                 "finished idling restarting loop"
             );
 
-            // Check for how long ago the last database ping happened.
-            if Instant::now().duration_since(self.last_ping_instant) > self.database_ping_interval {
-                sql_interface_data.ping();
-                self.last_ping_instant = Instant::now();
-            }
+            self.check_timing_and_ping_database(&mut sql_interface_data);
 
             start_time = Instant::now(); // start time for the next cycle
         }

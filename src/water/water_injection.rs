@@ -305,6 +305,7 @@ pub mod tests {
     use std::sync::mpsc::{Receiver, Sender};
     use std::sync::{Arc, Mutex};
     use std::{sync::mpsc, thread, time::Duration};
+    use crate::database::sql_interface_refill::SqlInterfaceRefill;
 
     // Creates a thread to run `WaterInjection::inject_water` and assert its outcome.
     //
@@ -335,6 +336,7 @@ pub mod tests {
         rx_refill_from_relay_manager: Receiver<bool>,
         rx_refill_from_signal_handler: Receiver<InternalCommand>,
         mut refill: Refill,
+        sql_interface_refill: SqlInterfaceRefill,
         mutex_tank_level_switch_signals: Arc<Mutex<TankLevelSwitchSignals>>,
         target_result: bool,
         target_refill_has_errors: bool,
@@ -385,10 +387,12 @@ pub mod tests {
                     cnt_tx_refill_to_monitors: 0,
                 };
 
+                let mut boxed_sql_interface_refill: Box<dyn crate::database::sql_interface_refill::DatabaseInterfaceRefillTrait + Sync + Send> = Box::new(sql_interface_refill);
+
                 let result = water_injection.inject_water(
                     &mut refill_channels,
                     &mut refill.refill_errors,
-                    &mut refill.sql_interface_refill,
+                    &mut boxed_sql_interface_refill,
                     &mutex_tank_level_switch_signals,
                 );
                 assert_eq!(result, target_result);
@@ -404,7 +408,7 @@ pub mod tests {
         let sleep_duration_100_millis = Duration::from_millis(100);
         let spin_sleeper = SpinSleeper::default();
 
-        let (_, refill, _) = prepare_refill_tests(None, 2, 60, Some(39));
+        let (_, refill, _, sql_interface_refill) = prepare_refill_tests(None, 2, 60, Some(39));
 
         let (tx_water_injection_to_relay_manager, rx_relay_manager_from_water_injection) =
             mpsc::channel();
@@ -477,6 +481,7 @@ pub mod tests {
             rx_water_injection_from_relay_manager,
             rx_water_injection_from_signal_handler,
             refill,
+            sql_interface_refill,
             mutex_tank_level_switch_signals,
             false,
             false,
@@ -539,7 +544,7 @@ pub mod tests {
         let sleep_duration_100_millis = Duration::from_millis(100);
         let spin_sleeper = SpinSleeper::default();
 
-        let (_, refill, _) = prepare_refill_tests(None, 2, 60, Some(40));
+        let (_, refill, _, sql_interface_refill) = prepare_refill_tests(None, 2, 60, Some(40));
 
         let (tx_water_injection_to_relay_manager, rx_relay_manager_from_water_injection) =
             mpsc::channel();
@@ -580,6 +585,7 @@ pub mod tests {
             rx_water_injection_from_relay_manager,
             rx_water_injection_from_signal_handler,
             refill,
+            sql_interface_refill,
             mutex_tank_level_switch_signals,
             true,
             false,
@@ -652,7 +658,7 @@ pub mod tests {
         let sleep_duration_100_millis = Duration::from_millis(100);
         let spin_sleeper = SpinSleeper::default();
 
-        let (_, refill, _) = prepare_refill_tests(None, 2, 60, Some(41));
+        let (_, refill, _, sql_interface_refill) = prepare_refill_tests(None, 2, 60, Some(41));
 
         let (tx_water_injection_to_relay_manager, rx_relay_manager_from_water_injection) =
             mpsc::channel();
@@ -687,6 +693,7 @@ pub mod tests {
             rx_water_injection_from_relay_manager,
             rx_water_injection_from_signal_handler,
             refill,
+            sql_interface_refill,
             mutex_tank_level_switch_signals,
             false,
             false,
@@ -711,7 +718,7 @@ pub mod tests {
         let sleep_duration_100_millis = Duration::from_millis(100);
         let spin_sleeper = SpinSleeper::default();
 
-        let (_, refill, _) = prepare_refill_tests(None, 2, 60, Some(42));
+        let (_, refill, _, sql_interface_refill) = prepare_refill_tests(None, 2, 60, Some(42));
 
         let (tx_water_injection_to_relay_manager, rx_relay_manager_from_water_injection) =
             mpsc::channel();
@@ -802,6 +809,7 @@ pub mod tests {
             rx_water_injection_from_relay_manager,
             rx_water_injection_from_signal_handler,
             refill,
+            sql_interface_refill,
             mutex_tank_level_switch_signals,
             false,
             false,
@@ -825,7 +833,7 @@ pub mod tests {
         let sleep_duration_100_millis = Duration::from_millis(100);
         let spin_sleeper = SpinSleeper::default();
 
-        let (_, mut refill, _) = prepare_refill_tests(None, 2, 60, Some(43));
+        let (_, mut refill, _, sql_interface_refill) = prepare_refill_tests(None, 2, 60, Some(43));
         let mut water_injection = WaterInjection::new(&refill.config);
 
         let (tx_refill_to_relay_manager, rx_relay_manager_from_refill) =
@@ -927,10 +935,13 @@ pub mod tests {
                     #[cfg(feature = "debug_channels")]
                     cnt_tx_refill_to_monitors: 0,
                 };
+
+                let mut boxed_sql_interface_refill: Box<dyn crate::database::sql_interface_refill::DatabaseInterfaceRefillTrait + Sync + Send> = Box::new(sql_interface_refill);
+
                 let result = water_injection.inject_water(
                     &mut refill_channels,
                     &mut refill.refill_errors,
-                    &mut refill.sql_interface_refill,
+                    &mut boxed_sql_interface_refill,
                     &mutex_tank_level_switch_signals,
                 );
                 assert_eq!(result, false);
@@ -958,7 +969,7 @@ pub mod tests {
         let sleep_duration_100_millis = Duration::from_millis(100);
         let spin_sleeper = SpinSleeper::default();
 
-        let (_, mut refill, _) = prepare_refill_tests(None, 10, 60, Some(44));
+        let (_, mut refill, _, sql_interface_refill) = prepare_refill_tests(None, 10, 60, Some(44));
         let mut water_injection = WaterInjection::new(&refill.config);
 
         let (tx_refill_to_relay_manager, rx_relay_manager_from_refill) =
@@ -1055,10 +1066,11 @@ pub mod tests {
                     cnt_tx_refill_to_monitors: 0,
                 };
 
+                let mut boxed_sql_interface_refill: Box<dyn crate::database::sql_interface_refill::DatabaseInterfaceRefillTrait + Sync + Send> = Box::new(sql_interface_refill);
                 let result = water_injection.inject_water(
                     &mut refill_channels,
                     &mut refill.refill_errors,
-                    &mut refill.sql_interface_refill,
+                    &mut boxed_sql_interface_refill,
                     &mutex_tank_level_switch_signals,
                 );
                 assert_eq!(result, true);

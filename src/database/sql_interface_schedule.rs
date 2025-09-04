@@ -8,7 +8,6 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 */
 
 use chrono::*;
-use log::error;
 use mysql::prelude::*;
 use mysql::*;
 use std::fmt;
@@ -187,7 +186,7 @@ impl ScheduleEntry {
 /// Contains the configuration and the implementation of the SQL interface for Schedule.
 pub struct SqlInterfaceSchedule {
     /// Connection to the database
-    conn: PooledConn,
+    pub conn: PooledConn,
 
     /// Result of the post-processed SQL query    
     schedules: Vec<ScheduleEntry>,
@@ -367,18 +366,6 @@ impl SqlInterfaceSchedule {
                     available_types,
                 )
             })
-    }
-
-    /// Pings the database to check connection health and prevent timeouts.
-    ///
-    /// This function executes a lightweight query to ensure the connection is still
-    /// active. If the ping fails, it logs an error using `log::error!` but does
-    /// not propagate the error to the caller. This is a "fire-and-forget"
-    /// keep-alive mechanism.
-    pub fn ping(&mut self) {
-        if let Err(e) = SqlInterface::ping_database(&mut self.conn) {
-            error!(target: module_path!(), "Encountered error while pinging database: {e:?}");
-        }
     }
 }
 

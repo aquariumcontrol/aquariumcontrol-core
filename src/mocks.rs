@@ -28,3 +28,4 @@ pub mod mock_tcp;
 pub mod mock_ventilation;
 pub mod mock_water_injection;
 pub mod test_command;
+pub mod mock_food_injection;

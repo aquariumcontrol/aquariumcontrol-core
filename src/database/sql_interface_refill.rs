@@ -8,7 +8,6 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 */
 
 use chrono::*;
-use log::error;
 use mysql::prelude::*;
 use mysql::*;
 
@@ -16,10 +15,11 @@ use crate::database::sql_query_strings::SQL_QUERY_CHECK_REFILL_COUNT;
 use crate::database::{
     sql_interface::SqlInterface, sql_interface_error::SqlInterfaceError, sql_query_strings,
 };
+use crate::database::pingable::Pingable;
 
 /// Trait for interfacing between refill and SQL database
 /// This trait is prerequisite to use mock implementation for testing
-pub trait DatabaseInterfaceRefillTrait {
+pub trait DatabaseInterfaceRefillTrait: Pingable {
     fn get_duration_since_last_refill(&mut self) -> Result<u64, SqlInterfaceError>;
 
     fn get_positive_integer_value_from_database(
@@ -44,14 +44,6 @@ pub trait DatabaseInterfaceRefillTrait {
         volume: f64,
         error_code: i32,
     ) -> Result<(), SqlInterfaceError>;
-
-    /// Pings the database to check connection health and prevent timeouts.
-    ///
-    /// This function executes a lightweight query to ensure the connection is still
-    /// active. If the ping fails, it logs an error using `log::error!` but does
-    /// not propagate the error to the caller. This is a "fire-and-forget"
-    /// keep-alive mechanism.
-    fn ping(&mut self);
 }
 
 /// Contains the configuration and the implementation of the SQL interface for Refill.
@@ -360,18 +352,6 @@ impl DatabaseInterfaceRefillTrait for SqlInterfaceRefill {
                 sql_query_string,
                 source: e,
             })
-    }
-
-    /// Pings the database to check connection health and prevent timeouts.
-    ///
-    /// This function executes a lightweight query to ensure the connection is still
-    /// active. If the ping fails, it logs an error using `log::error!` but does
-    /// not propagate the error to the caller. This is a "fire-and-forget"
-    /// keep-alive mechanism.
-    fn ping(&mut self) {
-        if let Err(e) = SqlInterface::ping_database(&mut self.conn) {
-            error!(target: module_path!(), "Encountered error while pinging database: {e:?}");
-        }
     }
 }
 

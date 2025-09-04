@@ -66,3 +66,6 @@ pub mod check_mutex_access_duration;
 
 /// Trait incl. implementation for acknowledging to signal handler
 pub mod acknowledge_signal_handler;
+
+/// A trait for components that need to periodically ping a `Pingable` resource.
+pub mod database_ping_trait;

@@ -10,11 +10,17 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 #[cfg(test)]
 pub mod tests {
     use chrono::NaiveDateTime;
-
+    use crate::database::pingable::Pingable;
     use crate::database::sql_interface_error::SqlInterfaceError;
     use crate::database::sql_interface_refill::DatabaseInterfaceRefillTrait;
 
     pub struct MockSqlInterfaceRefill {}
+
+    impl Pingable for MockSqlInterfaceRefill {
+        fn ping(&mut self) {
+            // do nothing
+        }
+    }
 
     impl DatabaseInterfaceRefillTrait for MockSqlInterfaceRefill {
         fn get_duration_since_last_refill(&mut self) -> Result<u64, SqlInterfaceError> {
@@ -56,10 +62,6 @@ pub mod tests {
             _error_code: i32,
         ) -> Result<(), SqlInterfaceError> {
             Err(SqlInterfaceError::MockError(module_path!().to_string()))
-        }
-
-        fn ping(&mut self) {
-            // do nothing
         }
     }
 }

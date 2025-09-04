@@ -23,7 +23,7 @@ use crate::database::{
 /// Contains the configuration and the implementation of the SQL interface for Balling.
 pub struct SqlInterfaceBalling {
     /// Connection to the database
-    conn: PooledConn,
+    pub conn: PooledConn,
 }
 
 /// Contains set value data for each pump.

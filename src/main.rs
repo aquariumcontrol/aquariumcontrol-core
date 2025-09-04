@@ -79,7 +79,8 @@ use crate::database::sql_interface::SqlInterface;
 use crate::database::sql_interface_balling::SqlInterfaceBalling;
 use crate::database::sql_interface_data::SqlInterfaceData;
 use crate::database::sql_interface_error::SqlInterfaceError;
-use crate::database::sql_interface_feed::{DatabaseInterfaceFeedTrait, SqlInterfaceFeed};
+use crate::database::sql_interface_feed::SqlInterfaceFeed;
+use crate::database::database_interface_feed_trait::DatabaseInterfaceFeedTrait;
 use crate::database::sql_interface_heating_setvals::SqlInterfaceHeatingSetVals;
 use crate::database::sql_interface_heating_stats::SqlInterfaceHeatingStats;
 use crate::database::sql_interface_heating_stats_data_transfer::HeatingStatsDataTransfer;
@@ -868,7 +869,7 @@ fn run() -> Result<(), StartupError> {
     let mut data_logger = DataLogger::new(config.data_logger, database_ping_duration)
         .map_err(|e| StartupError::DataLoggerSetupFailure { source: e })?;
 
-    let mut refill = Refill::new(config.refill, sql_interface_refill, database_ping_duration);
+    let mut refill = Refill::new(config.refill, database_ping_duration);
 
     let database_connection_heating_setvals =
         sql_interface
@@ -884,11 +885,10 @@ fn run() -> Result<(), StartupError> {
 
     let mut heating = Heating::new(
         config.heating,
-        sql_interface_heating,
         database_ping_duration,
     );
 
-    let mut feed = Feed::new(config.feed, sql_interface_feed, database_ping_duration);
+    let mut feed = Feed::new(config.feed, database_ping_duration);
 
     let database_connection_ventilation =
         sql_interface
@@ -1120,6 +1120,7 @@ fn run() -> Result<(), StartupError> {
                     &mut water_injection,
                     mutex_tank_level_switch_signals_clone_for_refill,
                     mutex_refill_status,
+                    sql_interface_refill
                 );
                 #[cfg(feature = "debug_channels")]
                 debug!(target: module_path!(), "{0}", channels.refill);
@@ -1147,6 +1148,7 @@ fn run() -> Result<(), StartupError> {
                     &mut heating_stats_transfer,
                     &mut heating_set_value_updater,
                     heating_mutexes,
+                    sql_interface_heating,
                 );
                 #[cfg(feature = "debug_channels")]
                 debug!(target: module_path!(), "{0}", channels.heating);
@@ -1196,6 +1198,7 @@ fn run() -> Result<(), StartupError> {
                     mutex_device_scheduler_feed,
                     &mut channels.feed,
                     &mut food_injection,
+                    sql_interface_feed
                 );
                 #[cfg(feature = "debug_channels")]
                 debug!(target: module_path!(), "{0}", channels.feed);

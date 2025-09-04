@@ -12,7 +12,8 @@ pub mod tests {
     use chrono::NaiveDateTime;
 
     use crate::database::sql_interface_error::SqlInterfaceError;
-    use crate::database::sql_interface_feed::DatabaseInterfaceFeedTrait;
+    use crate::database::database_interface_feed_trait::DatabaseInterfaceFeedTrait;
+    use crate::database::pingable::Pingable;
     use crate::food::feed_pattern::Feedpattern;
     use crate::food::feed_schedule_entry::FeedScheduleEntry;
 
@@ -23,6 +24,13 @@ pub mod tests {
     impl MockSqlInterfaceFeed {
         pub fn new() -> MockSqlInterfaceFeed {
             MockSqlInterfaceFeed {}
+        }
+    }
+
+    /// implementation of super trait
+    impl Pingable for MockSqlInterfaceFeed {
+        fn ping(&mut self) {
+            // do nothing
         }
     }
 
@@ -59,16 +67,6 @@ pub mod tests {
             _feedschedule_entry: &mut Vec<FeedScheduleEntry>,
         ) -> Result<(), SqlInterfaceError> {
             Err(SqlInterfaceError::MockError(module_path!().to_string()))
-        }
-
-        /// Pings the database to check connection health and prevent timeouts.
-        ///
-        /// This function executes a lightweight query to ensure the connection is still
-        /// active. If the ping fails, it logs an error using `log::error!` but does
-        /// not propagate the error to the caller. This is a "fire-and-forget"
-        /// keep-alive mechanism.
-        fn ping(&mut self) {
-            // do nothing
         }
 
         #[cfg(test)]

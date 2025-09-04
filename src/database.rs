@@ -48,3 +48,9 @@ pub mod sql_interface_heating_stats_data_transfer;
 
 /// Configuration of SqlInterface
 pub mod sql_interface_config;
+
+/// Represents a component that can be "pinged" to keep a connection alive.
+pub mod pingable;
+
+/// Trait and implementation for database interface of Feed allowing mocking
+pub mod database_interface_feed_trait;
