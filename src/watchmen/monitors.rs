@@ -20,11 +20,11 @@ use std::sync::mpsc::TryRecvError;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
+use crate::utilities::acknowledge_signal_handler::AcknowledgeSignalHandlerTrait;
 use crate::utilities::proc_ext_req::ProcessExternalRequestTrait;
 use crate::watchmen::monitors_channels::MonitorsChannels;
 use crate::watchmen::monitors_config::MonitorsConfig;
 use crate::water::refill_monitor_view::RefillMonitorView;
-use crate::utilities::acknowledge_signal_handler::AcknowledgeSignalHandlerTrait;
 
 #[cfg_attr(doc, aquamarine::aquamarine)]
 /// Contains the configuration and the implementation for the monitors.
@@ -198,7 +198,7 @@ impl Monitors {
                 monitors_inhibited = false;
             }
         }
-        
+
         monitors_channels.acknowledge_signal_handler();
     }
 }

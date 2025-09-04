@@ -19,19 +19,19 @@ use log::debug;
 #[cfg(all(target_os = "linux", not(test)))]
 use nix::unistd::gettid;
 
-use spin_sleep::SpinSleeper;
-use std::sync::{Arc, Mutex};
-use std::time::{Duration, Instant};
 use crate::database::database_interface_feed_trait::DatabaseInterfaceFeedTrait;
 use crate::food::feed_channels::FeedChannels;
 use crate::food::feed_config::FeedConfig;
 use crate::food::feed_schedule_entry::FeedScheduleEntry;
 use crate::food::food_injection::FoodInjectionTrait;
 use crate::utilities::acknowledge_signal_handler::AcknowledgeSignalHandlerTrait;
+use crate::utilities::database_ping_trait::DatabasePingTrait;
 use crate::utilities::logger::log_error_chain;
 use crate::utilities::proc_ext_req::ProcessExternalRequestTrait;
 use crate::utilities::wait_for_termination::WaitForTerminationTrait;
-use crate::utilities::database_ping_trait::DatabasePingTrait;
+use spin_sleep::SpinSleeper;
+use std::sync::{Arc, Mutex};
+use std::time::{Duration, Instant};
 
 #[cfg_attr(doc, aquamarine::aquamarine)]
 /// Contains the configuration and the implementation for the feed control.
@@ -91,10 +91,7 @@ impl Feed {
     ///
     /// # Returns
     /// A new `Feed` struct, ready for operation within the application loop.
-    pub fn new(
-        config: FeedConfig,
-        database_ping_interval: Duration,
-    ) -> Feed {
+    pub fn new(config: FeedConfig, database_ping_interval: Duration) -> Feed {
         Self {
             config,
             execute_command_received: false,
@@ -175,8 +172,7 @@ impl Feed {
         sql_interface_feed: &mut Box<dyn DatabaseInterfaceFeedTrait + Sync + Send>,
     ) -> (Result<(), ()>, bool) {
         // First, load the feed pattern from the database.
-        let feed_pattern = match sql_interface_feed
-            .get_single_feedpattern_from_database(profile_id)
+        let feed_pattern = match sql_interface_feed.get_single_feedpattern_from_database(profile_id)
         {
             Ok(pattern) => pattern,
             Err(e) => {
@@ -330,8 +326,12 @@ impl Feed {
             profile_id
         );
 
-        let (result, quit_command_received_during_feed) =
-            self.execute_feed(profile_id, food_injection, feed_channels, sql_interface_feed);
+        let (result, quit_command_received_during_feed) = self.execute_feed(
+            profile_id,
+            food_injection,
+            feed_channels,
+            sql_interface_feed,
+        );
 
         match result {
             Ok(_) => { /* do nothing */ }
@@ -342,9 +342,7 @@ impl Feed {
         }
 
         //*** update schedule ***
-        match sql_interface_feed
-            .update_feedschedule_entries_in_database(feed_schedule_entries)
-        {
+        match sql_interface_feed.update_feedschedule_entries_in_database(feed_schedule_entries) {
             Ok(()) => {
                 // do nothing
             }
@@ -414,9 +412,7 @@ impl Feed {
                     "Starting feed control cycle"
                 );
 
-                match sql_interface_feed
-                    .get_past_feedschedule_entries_from_database()
-                {
+                match sql_interface_feed.get_past_feedschedule_entries_from_database() {
                     Ok(c) => match c {
                         Some(mut feed_schedule_entries) => {
                             #[cfg(all(feature = "debug_feed", not(test)))]
@@ -452,7 +448,7 @@ impl Feed {
                                                     food_injection,
                                                     feed_channels,
                                                     &mut feed_schedule_entries,
-                                                    &mut sql_interface_feed
+                                                    &mut sql_interface_feed,
                                                 );
 
                                             *mutex_data = mutex_data.saturating_add(1);
@@ -543,8 +539,12 @@ impl Feed {
                     // scope to limit the lifetime of unlocked mutex
                     let mut mutex_data = mutex_device_scheduler_feed.lock().unwrap();
 
-                    let (result, quit_command_received_during_requested_feed) =
-                        self.execute_feed(self.profile_id_requested, food_injection, feed_channels, &mut sql_interface_feed);
+                    let (result, quit_command_received_during_requested_feed) = self.execute_feed(
+                        self.profile_id_requested,
+                        food_injection,
+                        feed_channels,
+                        &mut sql_interface_feed,
+                    );
                     match result {
                         Ok(_) => { /* do nothing */ }
                         Err(_) => {
@@ -602,9 +602,9 @@ pub mod tests {
     use std::thread::scope;
     use std::time::Duration;
 
+    use crate::database::database_interface_feed_trait::DatabaseInterfaceFeedTrait;
     use crate::database::sql_interface::SqlInterface;
     use crate::database::sql_interface_feed::SqlInterfaceFeed;
-    use crate::database::database_interface_feed_trait::DatabaseInterfaceFeedTrait;
     use crate::food::feed::{Feed, FeedChannels};
     use crate::food::feed_schedule_entry::FeedScheduleEntry;
     use crate::utilities::channel_content::InternalCommand;
@@ -1026,10 +1026,7 @@ pub mod tests {
             Box::new(MockSqlInterfaceFeed::new());
 
         // create the test object
-        let mut feed = Feed::new(
-            config.feed,
-            Duration::from_millis(1000),
-        );
+        let mut feed = Feed::new(config.feed, Duration::from_millis(1000));
 
         let (tx_feed_to_relay_manager, _rx_relay_manager_from_feed) = mpsc::channel();
         let (_tx_relay_manager_to_feed, rx_feed_from_relay_manager) = mpsc::channel();
@@ -1095,7 +1092,7 @@ pub mod tests {
                     mutex_device_scheduler_feed_test_object.clone(),
                     &mut feed_channels,
                     &mut mock_food_injection,
-                    mock_sql_interface_feed
+                    mock_sql_interface_feed,
                 );
                 println!("MockFoodInjection:\n{}", mock_food_injection);
 
@@ -1150,10 +1147,7 @@ pub mod tests {
         config.feed.strategy_multiple_schedule_entries_in_past = -1;
 
         // create the test object
-        let feed = Feed::new(
-            config.feed,
-            Duration::from_millis(1000),
-        );
+        let feed = Feed::new(config.feed, Duration::from_millis(1000));
 
         // input for the function to be tested
         let feedschedule_entries = create_mock_feedschedule_entries();
@@ -1175,10 +1169,7 @@ pub mod tests {
         config.feed.strategy_multiple_schedule_entries_in_past = 0;
 
         // create the test object
-        let feed = Feed::new(
-            config.feed,
-            Duration::from_millis(1000),
-        );
+        let feed = Feed::new(config.feed, Duration::from_millis(1000));
 
         // input for the function to be tested
         let feedschedule_entries = create_mock_feedschedule_entries();
@@ -1202,10 +1193,7 @@ pub mod tests {
         config.feed.strategy_multiple_schedule_entries_in_past = 1;
 
         // create the test object
-        let feed = Feed::new(
-            config.feed,
-            Duration::from_millis(1000),
-        );
+        let feed = Feed::new(config.feed, Duration::from_millis(1000));
 
         // input for the function to be tested
         let feedschedule_entries = create_mock_feedschedule_entries();
@@ -1228,10 +1216,7 @@ pub mod tests {
         config.feed.strategy_multiple_schedule_entries_in_past = 99;
 
         // create the test object
-        let feed = Feed::new(
-            config.feed,
-            Duration::from_millis(1000),
-        );
+        let feed = Feed::new(config.feed, Duration::from_millis(1000));
 
         // input for the function to be tested
         let feedschedule_entries = create_mock_feedschedule_entries();
@@ -1382,7 +1367,7 @@ pub mod tests {
                     mutex_device_scheduler_feed.clone(),
                     &mut feed_channels,
                     &mut mock_food_injection,
-                    sql_interface_feed
+                    sql_interface_feed,
                 );
 
                 // check if the right profiles have been executed in the right order
@@ -1532,7 +1517,7 @@ pub mod tests {
                     mutex_device_scheduler_feed.clone(),
                     &mut feed_channels,
                     &mut mock_food_injection,
-                    sql_interface_feed
+                    sql_interface_feed,
                 );
 
                 // check if the right profiles have been executed in the right order

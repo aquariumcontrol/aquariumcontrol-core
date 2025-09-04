@@ -285,7 +285,6 @@ impl SqlInterfaceData {
             }),
         }
     }
-
 }
 
 #[cfg(test)]

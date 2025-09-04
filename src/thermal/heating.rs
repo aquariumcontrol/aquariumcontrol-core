@@ -19,8 +19,6 @@ use std::time::{Duration, Instant};
 #[cfg(all(target_os = "linux", not(test)))]
 use nix::unistd::gettid;
 
-#[cfg(not(test))]
-use log::info;
 use crate::database::sql_interface_error::SqlInterfaceError;
 use crate::database::sql_interface_heating_setvals::HeatingSetValueUpdaterTrait;
 use crate::database::sql_interface_heating_stats::{HeatingStatsEntry, SqlInterfaceHeatingStats};
@@ -32,11 +30,13 @@ use crate::utilities::acknowledge_signal_handler::AcknowledgeSignalHandlerTrait;
 use crate::utilities::channel_content::{ActuatorState, AquariumDevice, InternalCommand};
 use crate::utilities::check_mutex_access_duration::CheckMutexAccessDurationTrait;
 use crate::utilities::common::check_if_mutex_is_blocked;
+use crate::utilities::database_ping_trait::DatabasePingTrait;
 use crate::utilities::logger::log_error_chain;
 use crate::utilities::proc_ext_req::ProcessExternalRequestTrait;
 use crate::utilities::sawtooth_profile::SawToothProfile;
 use crate::utilities::wait_for_termination::WaitForTerminationTrait;
-use crate::utilities::database_ping_trait::DatabasePingTrait;
+#[cfg(not(test))]
+use log::info;
 
 const CYCLE_TIME_HEATING_MILLIS: u64 = 500;
 
@@ -243,10 +243,7 @@ impl Heating {
     ///
     /// # Returns
     /// A new **`Heating` struct**, ready to manage the aquarium's heating system.
-    pub fn new(
-        config: HeatingConfig,
-        database_ping_interval: Duration,
-    ) -> Heating {
+    pub fn new(config: HeatingConfig, database_ping_interval: Duration) -> Heating {
         Self {
             config,
             lock_error_channel_send_schedule_check: false,
@@ -302,7 +299,10 @@ impl Heating {
     /// This function handles errors internally. If the database call fails, it logs
     /// the error and returns a default fallback value of 24 hours (86.400 seconds).
     /// This prevents a crash and suspends statistics recording until the next day.
-    fn get_duration_until_midnight(&mut self, sql_interface_heating: &mut SqlInterfaceHeatingStats) -> i64 {
+    fn get_duration_until_midnight(
+        &mut self,
+        sql_interface_heating: &mut SqlInterfaceHeatingStats,
+    ) -> i64 {
         sql_interface_heating
             .get_duration_until_midnight()
             .unwrap_or_else(|e| {
@@ -369,7 +369,8 @@ impl Heating {
         let mut loop_counter = 0;
         let mut heater_state: ActuatorState = ActuatorState::Undefined;
         let mut schedule_check_result: bool = false;
-        let mut duration_until_midnight = self.get_duration_until_midnight(&mut sql_interface_heating);
+        let mut duration_until_midnight =
+            self.get_duration_until_midnight(&mut sql_interface_heating);
         let mut tank_level_low_counter = 0;
         let mut energy_increment: f64 = 0.0;
         let mut heating_inhibited: bool = false; // state of heating control determined by if the start/stop command has been received
@@ -687,7 +688,8 @@ impl Heating {
                             // Reset heating stats
                             heating_stats_opt =
                                 Some(HeatingStatsEntry::new(&mut sql_interface_heating.conn));
-                            duration_until_midnight = self.get_duration_until_midnight(&mut sql_interface_heating);
+                            duration_until_midnight =
+                                self.get_duration_until_midnight(&mut sql_interface_heating);
                         }
                     }
                 }
@@ -765,8 +767,8 @@ impl Heating {
         // update the database with the heating stats data recorded
         // so far for this date
         if let Some(stats) = heating_stats_opt.take() {
-            if let Err(e) = heating_stats_transfer
-                .transfer_heating_stats(stats, &mut sql_interface_heating)
+            if let Err(e) =
+                heating_stats_transfer.transfer_heating_stats(stats, &mut sql_interface_heating)
             {
                 error!("Error occurred when trying to store heating stats data in database (during termination): {e:?}");
             }
@@ -985,10 +987,7 @@ pub mod tests {
         let heating_config = config.heating.clone();
         (
             config,
-            Heating::new(
-                heating_config,
-                Duration::from_secs(1000),
-            ),
+            Heating::new(heating_config, Duration::from_secs(1000)),
             sql_interface,
             sql_interface_heating_stats,
         )
@@ -1325,7 +1324,7 @@ pub mod tests {
                     &mut heating_stats_transfer,
                     &mut heating_set_value_updater,
                     heating_mutexes,
-                    sql_interface_heating_stats
+                    sql_interface_heating_stats,
                 );
 
                 // send Quit signal to mock threads because the test object has terminated
@@ -1611,7 +1610,7 @@ pub mod tests {
                     &mut heating_stats_transfer,
                     &mut heating_set_value_updater,
                     heating_mutexes,
-                    sql_interface_heating_stats
+                    sql_interface_heating_stats,
                 );
 
                 // send Quit signal to mock threads because the test object has terminated
@@ -2480,7 +2479,7 @@ pub mod tests {
                     &mut heating_stats_transfer,
                     &mut heating_set_value_updater,
                     heating_mutexes,
-                    sql_interface_heating_stats
+                    sql_interface_heating_stats,
                 );
 
                 // send Quit signal to mock threads because the test object has terminated
@@ -2644,7 +2643,7 @@ pub mod tests {
                     &mut heating_stats_transfer,
                     &mut heating_set_value_updater,
                     heating_mutexes,
-                    sql_interface_heating_stats
+                    sql_interface_heating_stats,
                 );
 
                 // send Quit signal to mock threads because the test object has terminated
@@ -2887,7 +2886,7 @@ pub mod tests {
                     &mut heating_stats_transfer,
                     &mut heating_set_value_updater,
                     heating_mutexes,
-                    sql_interface_heating_stats
+                    sql_interface_heating_stats,
                 );
 
                 // send Quit signal to mock threads because the test object has terminated
@@ -3088,7 +3087,7 @@ pub mod tests {
                     &mut heating_stats_transfer,
                     &mut heating_set_value_updater,
                     heating_mutexes,
-                    sql_interface_heating_stats
+                    sql_interface_heating_stats,
                 );
 
                 // send Quit signal to mock threads because the test object has terminated

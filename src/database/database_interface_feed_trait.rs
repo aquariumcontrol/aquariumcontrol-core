@@ -9,9 +9,6 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 #[cfg(test)]
 use log::error;
 
-use chrono::NaiveDateTime;
-use mysql::params;
-use mysql::prelude::Queryable;
 use crate::database::pingable::Pingable;
 use crate::database::sql_interface::SqlInterface;
 use crate::database::sql_interface_error::SqlInterfaceError;
@@ -19,6 +16,9 @@ use crate::database::sql_interface_feed::SqlInterfaceFeed;
 use crate::database::sql_query_strings;
 use crate::food::feed_pattern::{FeedPhase, Feedpattern};
 use crate::food::feed_schedule_entry::FeedScheduleEntry;
+use chrono::NaiveDateTime;
+use mysql::params;
+use mysql::prelude::Queryable;
 
 /// Trait for interfacing between feed and SQL database
 /// This trait is prerequisite to use mock implementation for testing

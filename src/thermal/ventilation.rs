@@ -26,12 +26,12 @@ use std::time::{Duration, Instant};
 
 pub(crate) use crate::thermal::ventilation_channels::VentilationChannels;
 use crate::thermal::ventilation_config::VentilationConfig;
+use crate::utilities::acknowledge_signal_handler::AcknowledgeSignalHandlerTrait;
 use crate::utilities::check_mutex_access_duration::CheckMutexAccessDurationTrait;
 use crate::utilities::logger::log_error_chain;
 use crate::utilities::wait_for_termination::WaitForTerminationTrait;
 #[cfg(all(not(test), target_os = "linux"))]
 use nix::unistd::gettid;
-use crate::utilities::acknowledge_signal_handler::AcknowledgeSignalHandlerTrait;
 
 const CYCLE_TIME_VENTILATION_MILLIS: u64 = 500;
 
@@ -572,7 +572,7 @@ impl Ventilation {
         }
 
         ventilation_channels.acknowledge_signal_handler();
-        
+
         // This thread has channel connections to underlying threads (relay manager, Atlas Scientific).
         // Those threads have to stop receiving commands from this thread.
         // The shutdown sequence is handled by the signal_handler module.

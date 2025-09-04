@@ -69,10 +69,7 @@ impl AtlasScientificChannels {
     }
 
     /// Sends a request to the I2C interface.
-    pub fn send_to_signal_handler(
-        &mut self,
-        status: bool,
-    ) -> Result<(), SendError<bool>> {
+    pub fn send_to_signal_handler(&mut self, status: bool) -> Result<(), SendError<bool>> {
         let result = self.tx_atlas_scientific_to_signal_handler.send(status);
         #[cfg(feature = "debug_channels")]
         if result.is_ok() {

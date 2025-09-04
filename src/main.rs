@@ -75,12 +75,12 @@ use log::debug;
 #[cfg(any(target_os = "linux", target_os = "macos"))]
 use nix::unistd;
 
+use crate::database::database_interface_feed_trait::DatabaseInterfaceFeedTrait;
 use crate::database::sql_interface::SqlInterface;
 use crate::database::sql_interface_balling::SqlInterfaceBalling;
 use crate::database::sql_interface_data::SqlInterfaceData;
 use crate::database::sql_interface_error::SqlInterfaceError;
 use crate::database::sql_interface_feed::SqlInterfaceFeed;
-use crate::database::database_interface_feed_trait::DatabaseInterfaceFeedTrait;
 use crate::database::sql_interface_heating_setvals::SqlInterfaceHeatingSetVals;
 use crate::database::sql_interface_heating_stats::SqlInterfaceHeatingStats;
 use crate::database::sql_interface_heating_stats_data_transfer::HeatingStatsDataTransfer;
@@ -859,10 +859,7 @@ fn run() -> Result<(), StartupError> {
         config.relay_manager.clone(),
         execution_config_clone_for_relay_manager,
     );
-    let mut schedule_check = ScheduleCheck::new(
-        config.schedule_check,
-        database_ping_duration,
-    );
+    let mut schedule_check = ScheduleCheck::new(config.schedule_check, database_ping_duration);
 
     let mut data_injection = DataInjection;
     let mut data_logger = DataLogger::new(config.data_logger, database_ping_duration)
@@ -882,10 +879,7 @@ fn run() -> Result<(), StartupError> {
                 source: Box::new(e),
             })?;
 
-    let mut heating = Heating::new(
-        config.heating,
-        database_ping_duration,
-    );
+    let mut heating = Heating::new(config.heating, database_ping_duration);
 
     let mut feed = Feed::new(config.feed, database_ping_duration);
 
@@ -905,8 +899,9 @@ fn run() -> Result<(), StartupError> {
     let mut balling = Balling::new(
         config.balling,
         database_ping_duration,
-        &mut sql_interface_balling
-    ).map_err(|e| StartupError::InvalidBallingConfiguration { source: e })?;
+        &mut sql_interface_balling,
+    )
+    .map_err(|e| StartupError::InvalidBallingConfiguration { source: e })?;
     let mut monitors = Monitors::new(config.monitors);
     let mut watchdog = Watchdog::new(config.watchdog)
         .map_err(|e| StartupError::WatchdogSetupFailure { source: e })?;
@@ -989,7 +984,7 @@ fn run() -> Result<(), StartupError> {
                 schedule_check.execute(
                     &mut channels.schedule_check,
                     execution_config_clone_for_schedule_check,
-                    sql_interface_schedule
+                    sql_interface_schedule,
                 );
                 #[cfg(feature = "debug_channels")]
                 debug!(target: module_path!(), "{0}", channels.schedule_check);
@@ -1119,7 +1114,7 @@ fn run() -> Result<(), StartupError> {
                     &mut water_injection,
                     mutex_tank_level_switch_signals_clone_for_refill,
                     mutex_refill_status,
-                    sql_interface_refill
+                    sql_interface_refill,
                 );
                 #[cfg(feature = "debug_channels")]
                 debug!(target: module_path!(), "{0}", channels.refill);
@@ -1197,7 +1192,7 @@ fn run() -> Result<(), StartupError> {
                     mutex_device_scheduler_feed,
                     &mut channels.feed,
                     &mut food_injection,
-                    sql_interface_feed
+                    sql_interface_feed,
                 );
                 #[cfg(feature = "debug_channels")]
                 debug!(target: module_path!(), "{0}", channels.feed);
@@ -1215,7 +1210,7 @@ fn run() -> Result<(), StartupError> {
                     mutex_device_scheduler_balling,
                     &mut channels.balling,
                     &mut mineral_injection,
-                    sql_interface_balling
+                    sql_interface_balling,
                 );
                 #[cfg(feature = "debug_channels")]
                 debug!(target: module_path!(), "{0}", channels.balling);

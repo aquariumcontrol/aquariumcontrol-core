@@ -133,7 +133,7 @@ impl Balling {
     pub fn new(
         config: BallingConfig,
         database_ping_interval: Duration,
-        sql_interface_balling: &mut SqlInterfaceBalling
+        sql_interface_balling: &mut SqlInterfaceBalling,
     ) -> Result<Balling, BallingError> {
         if config.schedule_check_interval == 0 {
             return Err(BallingError::ScheduleCheckIntervalZero(
@@ -446,14 +446,12 @@ impl Balling {
         pump_device: AquariumDevice,
         mineral_injection: &mut impl MineralInjectionTrait,
         balling_channels: &mut BallingChannels,
-        sql_interface_balling: &mut SqlInterfaceBalling
+        sql_interface_balling: &mut SqlInterfaceBalling,
     ) -> bool {
         let mut quit_command_received: bool = false;
         let actual_dosing_duration_millis: u32;
 
-        match sql_interface_balling
-            .get_single_balling_setval_from_database(pump_id.into())
-        {
+        match sql_interface_balling.get_single_balling_setval_from_database(pump_id.into()) {
             Ok(balling_setval) => {
                 let dosing_duration_millis =
                     Self::calc_target_dosing_duration_millis(&balling_setval);
@@ -626,7 +624,7 @@ impl Balling {
                                 AquariumDevice::PeristalticPump1,
                                 mineral_injection,
                                 balling_channels,
-                                &mut sql_interface_balling
+                                &mut sql_interface_balling,
                             );
                             *mutex_data = mutex_data.saturating_add(1);
                         }
@@ -654,7 +652,7 @@ impl Balling {
                                 AquariumDevice::PeristalticPump2,
                                 mineral_injection,
                                 balling_channels,
-                                &mut sql_interface_balling
+                                &mut sql_interface_balling,
                             );
                             *mutex_data = mutex_data.saturating_add(1);
                         }
@@ -682,7 +680,7 @@ impl Balling {
                                 AquariumDevice::PeristalticPump3,
                                 mineral_injection,
                                 balling_channels,
-                                &mut sql_interface_balling
+                                &mut sql_interface_balling,
                             );
                             *mutex_data = mutex_data.saturating_add(1);
                         }
@@ -710,7 +708,7 @@ impl Balling {
                                 AquariumDevice::PeristalticPump4,
                                 mineral_injection,
                                 balling_channels,
-                                &mut sql_interface_balling
+                                &mut sql_interface_balling,
                             );
                             *mutex_data = mutex_data.saturating_add(1);
                         }
@@ -753,7 +751,7 @@ impl Balling {
                                 pump_device,
                                 mineral_injection,
                                 balling_channels,
-                                &mut sql_interface_balling
+                                &mut sql_interface_balling,
                             );
                             *mutex_data = mutex_data.saturating_add(1);
                         }
@@ -803,7 +801,7 @@ impl Balling {
 
             self.check_timing_and_ping_database(&mut sql_interface_balling);
         }
-        
+
         balling_channels.acknowledge_signal_handler();
 
         // This thread has channel connections to underlying threads.
@@ -1296,7 +1294,7 @@ pub mod tests {
                     mutex_device_scheduler,
                     &mut balling_channels,
                     &mut mock_mineral_injection,
-                    sql_interface_balling
+                    sql_interface_balling,
                 );
 
                 let _ =
@@ -1838,7 +1836,7 @@ pub mod tests {
         let result = Balling::new(
             config.balling,
             Duration::from_millis(100),
-            &mut sql_interface_balling
+            &mut sql_interface_balling,
         );
         assert!(matches!(
             result,

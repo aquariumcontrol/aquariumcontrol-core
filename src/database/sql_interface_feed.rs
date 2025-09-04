@@ -535,10 +535,8 @@ pub mod tests {
     use chrono::{Duration, Local, NaiveDate, NaiveDateTime};
     use mysql::{params, prelude::Queryable};
 
-    use crate::database::sql_interface_feed::{
-        FeedScheduleEntry, SqlInterfaceFeed,
-    };
     use crate::database::database_interface_feed_trait::DatabaseInterfaceFeedTrait;
+    use crate::database::sql_interface_feed::{FeedScheduleEntry, SqlInterfaceFeed};
     use crate::database::sql_query_strings;
     use crate::database::sql_query_strings::{
         SQL_TABLE_FEEDLOG, SQL_TABLE_FEEDPATTERNS, SQL_TABLE_FEEDSCHEDULE,

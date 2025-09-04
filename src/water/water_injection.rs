@@ -294,6 +294,7 @@ impl WaterInjectionTrait for WaterInjection {
 
 #[cfg(test)]
 pub mod tests {
+    use crate::database::sql_interface_refill::SqlInterfaceRefill;
     use crate::mocks::mock_relay_manager::tests::mock_relay_manager;
     use crate::sensors::tank_level_switch::TankLevelSwitchSignals;
     use crate::utilities::channel_content::{ActuatorState, AquariumDevice, InternalCommand};
@@ -305,7 +306,6 @@ pub mod tests {
     use std::sync::mpsc::{Receiver, Sender};
     use std::sync::{Arc, Mutex};
     use std::{sync::mpsc, thread, time::Duration};
-    use crate::database::sql_interface_refill::SqlInterfaceRefill;
 
     // Creates a thread to run `WaterInjection::inject_water` and assert its outcome.
     //
@@ -387,7 +387,11 @@ pub mod tests {
                     cnt_tx_refill_to_monitors: 0,
                 };
 
-                let mut boxed_sql_interface_refill: Box<dyn crate::database::sql_interface_refill::DatabaseInterfaceRefillTrait + Sync + Send> = Box::new(sql_interface_refill);
+                let mut boxed_sql_interface_refill: Box<
+                    dyn crate::database::sql_interface_refill::DatabaseInterfaceRefillTrait
+                        + Sync
+                        + Send,
+                > = Box::new(sql_interface_refill);
 
                 let result = water_injection.inject_water(
                     &mut refill_channels,
@@ -936,7 +940,11 @@ pub mod tests {
                     cnt_tx_refill_to_monitors: 0,
                 };
 
-                let mut boxed_sql_interface_refill: Box<dyn crate::database::sql_interface_refill::DatabaseInterfaceRefillTrait + Sync + Send> = Box::new(sql_interface_refill);
+                let mut boxed_sql_interface_refill: Box<
+                    dyn crate::database::sql_interface_refill::DatabaseInterfaceRefillTrait
+                        + Sync
+                        + Send,
+                > = Box::new(sql_interface_refill);
 
                 let result = water_injection.inject_water(
                     &mut refill_channels,
@@ -1066,7 +1074,11 @@ pub mod tests {
                     cnt_tx_refill_to_monitors: 0,
                 };
 
-                let mut boxed_sql_interface_refill: Box<dyn crate::database::sql_interface_refill::DatabaseInterfaceRefillTrait + Sync + Send> = Box::new(sql_interface_refill);
+                let mut boxed_sql_interface_refill: Box<
+                    dyn crate::database::sql_interface_refill::DatabaseInterfaceRefillTrait
+                        + Sync
+                        + Send,
+                > = Box::new(sql_interface_refill);
                 let result = water_injection.inject_water(
                     &mut refill_channels,
                     &mut refill.refill_errors,

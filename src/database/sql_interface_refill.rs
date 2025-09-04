@@ -11,11 +11,11 @@ use chrono::*;
 use mysql::prelude::*;
 use mysql::*;
 
+use crate::database::pingable::Pingable;
 use crate::database::sql_query_strings::SQL_QUERY_CHECK_REFILL_COUNT;
 use crate::database::{
     sql_interface::SqlInterface, sql_interface_error::SqlInterfaceError, sql_query_strings,
 };
-use crate::database::pingable::Pingable;
 
 /// Trait for interfacing between refill and SQL database
 /// This trait is prerequisite to use mock implementation for testing

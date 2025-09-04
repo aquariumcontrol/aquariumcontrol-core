@@ -23,12 +23,12 @@ use crate::sensors::atlas_scientific_error::AtlasScientificError::{
 };
 use crate::sensors::i2c_interface::I2cRequest;
 use crate::simulator::get_resp_sim::GetResponseFromSimulatorTrait;
+use crate::utilities::acknowledge_signal_handler::AcknowledgeSignalHandlerTrait;
 use crate::utilities::channel_content::AquariumSignal;
 use crate::utilities::check_mutex_access_duration::CheckMutexAccessDurationTrait;
 use crate::utilities::logger::log_error_chain;
 use crate::utilities::proc_ext_req::ProcessExternalRequestTrait;
 use crate::utilities::wait_for_termination::WaitForTerminationTrait;
-use crate::utilities::acknowledge_signal_handler::AcknowledgeSignalHandlerTrait;
 #[cfg(all(not(test), target_os = "linux"))]
 use nix::unistd::gettid;
 use spin_sleep::SpinSleeper;

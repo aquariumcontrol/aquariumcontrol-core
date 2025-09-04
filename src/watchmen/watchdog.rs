@@ -16,11 +16,11 @@ use std::time::Duration;
 #[cfg(all(target_os = "linux", not(test)))]
 use log::info;
 
+use crate::utilities::acknowledge_signal_handler::AcknowledgeSignalHandlerTrait;
 use crate::watchmen::watchdog_config::WatchdogConfig;
 #[cfg(all(target_os = "linux", not(test)))]
 use nix::unistd::gettid;
 use thiserror::Error;
-use crate::utilities::acknowledge_signal_handler::AcknowledgeSignalHandlerTrait;
 
 /// Contains the error definition for Watchdog
 #[derive(Error, Debug)]

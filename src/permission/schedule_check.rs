@@ -25,9 +25,9 @@ use crate::permission::schedule_check_channels::ScheduleCheckChannels;
 use crate::permission::schedule_check_config::ScheduleCheckConfig;
 use crate::utilities::acknowledge_signal_handler::AcknowledgeSignalHandlerTrait;
 use crate::utilities::channel_content::InternalCommand;
+use crate::utilities::database_ping_trait::DatabasePingTrait;
 use crate::utilities::logger::log_error_chain;
 use crate::utilities::proc_ext_req::ProcessExternalRequestTrait;
-use crate::utilities::database_ping_trait::DatabasePingTrait;
 
 #[cfg_attr(doc, aquamarine::aquamarine)]
 /// Contains the configuration and the implementation for the schedule checker.
@@ -122,10 +122,7 @@ impl ScheduleCheck {
     ///
     /// # Returns
     /// A new `ScheduleCheck` struct, ready to monitor and evaluate schedules.
-    pub fn new(
-        config: ScheduleCheckConfig,
-        database_ping_interval: Duration,
-    ) -> ScheduleCheck {
+    pub fn new(config: ScheduleCheckConfig, database_ping_interval: Duration) -> ScheduleCheck {
         ScheduleCheck {
             config,
             lock_error_find_balling_schedule: false,
@@ -267,7 +264,7 @@ impl ScheduleCheck {
         &mut self,
         schedule_check_channels: &mut ScheduleCheckChannels,
         execution_config: ExecutionConfig,
-        mut sql_interface_schedule: SqlInterfaceSchedule
+        mut sql_interface_schedule: SqlInterfaceSchedule,
     ) {
         #[cfg(all(target_os = "linux", not(test)))]
         info!(target: module_path!(), "Thread started with TID: {}", gettid());
@@ -315,25 +312,24 @@ impl ScheduleCheck {
 
             //*********** ventilation ***********
             if execution_config.ventilation {
-                let schedule_entry_ventilation_opt = match sql_interface_schedule
-                    .find_schedule(ScheduleType::Ventilation)
-                {
-                    Ok(c) => {
-                        self.lock_error_find_ventilation_schedule = false;
-                        Some(c)
-                    }
-                    Err(e) => {
-                        if !self.lock_error_find_ventilation_schedule {
-                            log_error_chain(
-                                module_path!(),
-                                "could not find schedule for ventilation",
-                                e,
-                            );
-                            self.lock_error_find_ventilation_schedule = true;
+                let schedule_entry_ventilation_opt =
+                    match sql_interface_schedule.find_schedule(ScheduleType::Ventilation) {
+                        Ok(c) => {
+                            self.lock_error_find_ventilation_schedule = false;
+                            Some(c)
                         }
-                        None
-                    }
-                };
+                        Err(e) => {
+                            if !self.lock_error_find_ventilation_schedule {
+                                log_error_chain(
+                                    module_path!(),
+                                    "could not find schedule for ventilation",
+                                    e,
+                                );
+                                self.lock_error_find_ventilation_schedule = true;
+                            }
+                            None
+                        }
+                    };
                 let (_send_success, _receive_success) = Self::check_pending_schedule_request(
                     &self.config,
                     &schedule_check_channels.tx_schedule_check_to_ventilation,
@@ -360,25 +356,24 @@ impl ScheduleCheck {
 
             //*********** heating ***********
             if execution_config.heating {
-                let schedule_entry_heating_opt = match sql_interface_schedule
-                    .find_schedule(ScheduleType::Heating)
-                {
-                    Ok(c) => {
-                        self.lock_error_find_heating_schedule = false;
-                        Some(c)
-                    }
-                    Err(e) => {
-                        if !self.lock_error_find_heating_schedule {
-                            log_error_chain(
-                                module_path!(),
-                                "could not find schedule for heating",
-                                e,
-                            );
-                            self.lock_error_find_heating_schedule = true;
+                let schedule_entry_heating_opt =
+                    match sql_interface_schedule.find_schedule(ScheduleType::Heating) {
+                        Ok(c) => {
+                            self.lock_error_find_heating_schedule = false;
+                            Some(c)
                         }
-                        None
-                    }
-                };
+                        Err(e) => {
+                            if !self.lock_error_find_heating_schedule {
+                                log_error_chain(
+                                    module_path!(),
+                                    "could not find schedule for heating",
+                                    e,
+                                );
+                                self.lock_error_find_heating_schedule = true;
+                            }
+                            None
+                        }
+                    };
                 let (_send_success, _receive_success) = Self::check_pending_schedule_request(
                     &self.config,
                     &schedule_check_channels.tx_schedule_check_to_heating,
@@ -405,25 +400,24 @@ impl ScheduleCheck {
 
             //*********** refill ***********
             if execution_config.refill {
-                let schedule_entry_refill_opt = match sql_interface_schedule
-                    .find_schedule(ScheduleType::Refill)
-                {
-                    Ok(c) => {
-                        self.lock_error_find_refill_schedule = false;
-                        Some(c)
-                    }
-                    Err(e) => {
-                        if !self.lock_error_find_refill_schedule {
-                            log_error_chain(
-                                module_path!(),
-                                "could not find schedule for refill",
-                                e,
-                            );
-                            self.lock_error_find_refill_schedule = true;
+                let schedule_entry_refill_opt =
+                    match sql_interface_schedule.find_schedule(ScheduleType::Refill) {
+                        Ok(c) => {
+                            self.lock_error_find_refill_schedule = false;
+                            Some(c)
                         }
-                        None
-                    }
-                };
+                        Err(e) => {
+                            if !self.lock_error_find_refill_schedule {
+                                log_error_chain(
+                                    module_path!(),
+                                    "could not find schedule for refill",
+                                    e,
+                                );
+                                self.lock_error_find_refill_schedule = true;
+                            }
+                            None
+                        }
+                    };
                 let (_send_success, _receive_success) = Self::check_pending_schedule_request(
                     &self.config,
                     &schedule_check_channels.tx_schedule_check_to_refill,
@@ -450,25 +444,24 @@ impl ScheduleCheck {
 
             //*********** Balling ***********
             if execution_config.balling {
-                let schedule_entry_balling_opt = match sql_interface_schedule
-                    .find_schedule(ScheduleType::Balling)
-                {
-                    Ok(c) => {
-                        self.lock_error_find_balling_schedule = false;
-                        Some(c)
-                    }
-                    Err(e) => {
-                        if !self.lock_error_find_balling_schedule {
-                            log_error_chain(
-                                module_path!(),
-                                "could not find schedule for balling",
-                                e,
-                            );
-                            self.lock_error_find_balling_schedule = true;
+                let schedule_entry_balling_opt =
+                    match sql_interface_schedule.find_schedule(ScheduleType::Balling) {
+                        Ok(c) => {
+                            self.lock_error_find_balling_schedule = false;
+                            Some(c)
                         }
-                        None
-                    }
-                };
+                        Err(e) => {
+                            if !self.lock_error_find_balling_schedule {
+                                log_error_chain(
+                                    module_path!(),
+                                    "could not find schedule for balling",
+                                    e,
+                                );
+                                self.lock_error_find_balling_schedule = true;
+                            }
+                            None
+                        }
+                    };
                 let (_send_success, _receive_success) = Self::check_pending_schedule_request(
                     &self.config,
                     &schedule_check_channels.tx_schedule_check_to_balling,

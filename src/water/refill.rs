@@ -170,10 +170,7 @@ impl Refill {
     ///
     /// # Returns
     /// A new **`Refill` struct**, ready to manage the aquarium's freshwater refill system.
-    pub fn new(
-        config: RefillConfig,
-        database_ping_interval: Duration,
-    ) -> Refill {
+    pub fn new(config: RefillConfig, database_ping_interval: Duration) -> Refill {
         Self {
             config,
             refill_errors: RefillErrorStates {
@@ -222,10 +219,7 @@ impl Refill {
     //
     // # Returns
     // A new **`Refill` struct**, with its `refill_errors` field initialized to the provided value.
-    pub fn new_with_errors(
-        config: RefillConfig,
-        refill_errors: RefillErrorStates,
-    ) -> Refill {
+    pub fn new_with_errors(config: RefillConfig, refill_errors: RefillErrorStates) -> Refill {
         Self {
             config,
             refill_errors,
@@ -267,7 +261,11 @@ impl Refill {
     /// # Arguments
     /// * `refill_stats_data` - A mutable reference to a `RefillStatsData` struct, which will be
     ///   populated with the retrieved historical data.
-    fn get_refill_stats_data(&mut self, refill_stats_data: &mut RefillStatsData, sql_interface_refill: &mut dyn DatabaseInterfaceRefillTrait) {
+    fn get_refill_stats_data(
+        &mut self,
+        refill_stats_data: &mut RefillStatsData,
+        sql_interface_refill: &mut dyn DatabaseInterfaceRefillTrait,
+    ) {
         match sql_interface_refill.check_empty() {
             Ok(0) => {
                 self.lock_error_check_empty = false;
@@ -948,7 +946,7 @@ impl Refill {
                     }
                     spin_sleeper.sleep(sleep_duration_hundred_millis);
 
-                   self.check_timing_and_ping_database(&mut *sql_interface_refill);
+                    self.check_timing_and_ping_database(&mut *sql_interface_refill);
 
                     cycle_time_exceeded = false;
                 }
@@ -1074,14 +1072,8 @@ pub mod tests {
         (
             config,
             match refill_errors.is_some() {
-                true => Refill::new_with_errors(
-                    refill_config,
-                    refill_errors.unwrap(),
-                ),
-                false => Refill::new(
-                    refill_config,
-                    Duration::from_millis(1000),
-                ),
+                true => Refill::new_with_errors(refill_config, refill_errors.unwrap()),
+                false => Refill::new(refill_config, Duration::from_millis(1000)),
             },
             sql_interface,
             *Box::new(sql_interface_refill),
@@ -1137,16 +1129,10 @@ pub mod tests {
         (
             config,
             match refill_errors.is_some() {
-                true => Refill::new_with_errors(
-                    refill_config,
-                    refill_errors.unwrap(),
-                ),
-                false => Refill::new(
-                    refill_config,
-                    Duration::from_millis(1000),
-                ),
+                true => Refill::new_with_errors(refill_config, refill_errors.unwrap()),
+                false => Refill::new(refill_config, Duration::from_millis(1000)),
             },
-            sql_interface_refill
+            sql_interface_refill,
         )
     }
 
@@ -1189,7 +1175,9 @@ pub mod tests {
         let sleep_duration_50_millis = Duration::from_millis(50);
         let spin_sleeper = SpinSleeper::default();
 
-        let (_, mut refill, mut sql_interface, sql_interface_refill) = prepare_refill_tests(None, 1, 1, Some(20));
+        let (_, mut refill, mut sql_interface, sql_interface_refill) =
+            prepare_refill_tests(None, 1, 1, Some(20));
+
         let (tx_refill_to_relay_manager, _rx_relay_manager_from_refill) =
             mpsc::channel::<InternalCommand>();
         let (_tx_relay_manager_to_refill, rx_refill_from_relay_manager) = mpsc::channel::<bool>();
@@ -1199,6 +1187,7 @@ pub mod tests {
         let (tx_schedule_check_to_refill, rx_refill_from_schedule_check) = mpsc::channel::<bool>();
         let (tx_refill_to_schedule_check, rx_schedule_check_from_refill) =
             mpsc::channel::<InternalCommand>();
+
         let (
             tx_mock_water_injection_to_test_environment,
             rx_test_environment_from_mock_water_injection,
@@ -1350,7 +1339,7 @@ pub mod tests {
                     &mut mock_water_injection,
                     mutex_tank_level_switch_signals_for_refill,
                     mutex_refill_status,
-                    Box::new(sql_interface_refill)
+                    Box::new(sql_interface_refill),
                 );
 
                 // send Quit signal to mock threads because the test object has terminated
@@ -1380,7 +1369,8 @@ pub mod tests {
         let sleep_duration_50_millis = Duration::from_millis(50);
         let spin_sleeper = SpinSleeper::default();
 
-        let (_, mut refill, mut sql_interface, sql_interface_refill) = prepare_refill_tests(None, 1, 1, Some(47));
+        let (_, mut refill, mut sql_interface, sql_interface_refill) =
+            prepare_refill_tests(None, 1, 1, Some(47));
         let (tx_refill_to_relay_manager, _rx_relay_manager_from_refill) =
             mpsc::channel::<InternalCommand>();
         let (_tx_relay_manager_to_refill, rx_refill_from_relay_manager) = mpsc::channel::<bool>();
@@ -1539,7 +1529,7 @@ pub mod tests {
                     &mut mock_water_injection,
                     mutex_tank_level_switch_signals,
                     mutex_refill_status,
-                    Box::new(sql_interface_refill)
+                    Box::new(sql_interface_refill),
                 );
 
                 // send Quit signal to mock threads because the test object has terminated
@@ -1570,7 +1560,8 @@ pub mod tests {
         let sleep_duration_50_millis = Duration::from_millis(50);
         let spin_sleeper = SpinSleeper::default();
 
-        let (config, mut refill, mut sql_interface, sql_interface_refill) = prepare_refill_tests(None, 2, 60, Some(21));
+        let (config, mut refill, mut sql_interface, sql_interface_refill) =
+            prepare_refill_tests(None, 2, 60, Some(21));
 
         let (tx_refill_to_relay_manager, _) = mpsc::channel::<InternalCommand>();
         let (_tx_relay_manager_to_refill, rx_refill_from_relay_manager) = mpsc::channel::<bool>();
@@ -1729,7 +1720,7 @@ pub mod tests {
                     &mut mock_water_injection,
                     mutex_tank_level_switch_signals,
                     mutex_refill_status,
-                    Box::new(sql_interface_refill)
+                    Box::new(sql_interface_refill),
                 );
 
                 // send Quit signal to mock threads because the test object has terminated
@@ -1760,7 +1751,8 @@ pub mod tests {
     pub fn test_refill_conditions_historic_data_error_switch_stuck_low() {
         let sleep_duration_50_millis = Duration::from_millis(50);
         let spin_sleeper = SpinSleeper::default();
-        let (_, mut refill, mut sql_interface, sql_interface_refill) = prepare_refill_tests(None, 1, 1, Some(22));
+        let (_, mut refill, mut sql_interface, sql_interface_refill) =
+            prepare_refill_tests(None, 1, 1, Some(22));
 
         // set the error
         refill.refill_errors.error_switch_stuck_low = true;
@@ -1950,7 +1942,7 @@ pub mod tests {
                     &mut mock_water_injection,
                     mutex_tank_level_switch_signals,
                     mutex_refill_status,
-                    Box::new(sql_interface_refill)
+                    Box::new(sql_interface_refill),
                 );
 
                 // check if there was no water injection
@@ -1983,7 +1975,8 @@ pub mod tests {
     pub fn test_refill_conditions_error_sql_update_failed() {
         let sleep_duration_50_millis = Duration::from_millis(50);
         let spin_sleeper = SpinSleeper::default();
-        let (_, mut refill, mut sql_interface, sql_interface_refill) = prepare_refill_tests(None, 1, 1, Some(23));
+        let (_, mut refill, mut sql_interface, sql_interface_refill) =
+            prepare_refill_tests(None, 1, 1, Some(23));
 
         // set the error
         refill.refill_errors.error_sql_update_failed = true;
@@ -2140,7 +2133,7 @@ pub mod tests {
                     &mut mock_water_injection,
                     mutex_tank_level_switch_signals,
                     mutex_refill_status,
-                    Box::new(sql_interface_refill)
+                    Box::new(sql_interface_refill),
                 );
 
                 // check if there was no water injection
@@ -2340,7 +2333,7 @@ pub mod tests {
                     &mut mock_water_injection,
                     mutex_tank_level_switch_signals,
                     mutex_refill_status,
-                    Box::new(sql_interface_refill)
+                    Box::new(sql_interface_refill),
                 );
 
                 // send Quit signal to mock threads because the test object has terminated
@@ -2377,7 +2370,8 @@ pub mod tests {
     pub fn test_refill_blocked_by_schedule() {
         let sleep_duration_50_millis = Duration::from_millis(50);
         let spin_sleeper = SpinSleeper::default();
-        let (_, mut refill, mut sql_interface, sql_interface_refill) = prepare_refill_tests(None, 1, 1, Some(25));
+        let (_, mut refill, mut sql_interface, sql_interface_refill) =
+            prepare_refill_tests(None, 1, 1, Some(25));
 
         let (tx_refill_to_relay_manager, _rx_relay_manager_from_refill) =
             mpsc::channel::<InternalCommand>();
@@ -2530,7 +2524,7 @@ pub mod tests {
                     &mut mock_water_injection,
                     mutex_tank_level_switch_signals,
                     mutex_refill_status,
-                    Box::new(sql_interface_refill)
+                    Box::new(sql_interface_refill),
                 );
 
                 // check if there was no water injection
@@ -2566,7 +2560,8 @@ pub mod tests {
     pub fn test_messaging_stops_starts_refill() {
         let sleep_duration_50_millis = Duration::from_millis(50);
         let spin_sleeper = SpinSleeper::default();
-        let (_, mut refill, mut sql_interface, sql_interface_refill) = prepare_refill_tests(None, 10, 60, Some(26));
+        let (_, mut refill, mut sql_interface, sql_interface_refill) =
+            prepare_refill_tests(None, 10, 60, Some(26));
 
         let (tx_refill_to_relay_manager, _rx_relay_manager_from_refill) =
             mpsc::channel::<InternalCommand>();
@@ -2763,7 +2758,7 @@ pub mod tests {
                     &mut mock_water_injection,
                     mutex_tank_level_switch_signals,
                     mutex_refill_status,
-                    Box::new(sql_interface_refill)
+                    Box::new(sql_interface_refill),
                 );
 
                 // check if there was only one water injection
@@ -2799,7 +2794,8 @@ pub mod tests {
     pub fn test_refill_conditions_error_get_historic_data_failed() {
         let sleep_duration_50_millis = Duration::from_millis(50);
         let spin_sleeper = SpinSleeper::default();
-        let (_, mut refill, sql_interface_refill) = prepare_refill_tests_with_mock_database_interface(None, 1, 1, 27);
+        let (_, mut refill, sql_interface_refill) =
+            prepare_refill_tests_with_mock_database_interface(None, 1, 1, 27);
         // this test case does not use the SQL database, so no conflict arises
         // when concurrently executing other test cases on the same DB.
 
@@ -2947,7 +2943,7 @@ pub mod tests {
                     &mut mock_water_injection,
                     mutex_tank_level_switch_signals,
                     mutex_refill_status,
-                    Box::new(sql_interface_refill)
+                    Box::new(sql_interface_refill),
                 );
 
                 // check if there was no water injection

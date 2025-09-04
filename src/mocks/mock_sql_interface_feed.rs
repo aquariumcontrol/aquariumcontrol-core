@@ -11,9 +11,9 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 pub mod tests {
     use chrono::NaiveDateTime;
 
-    use crate::database::sql_interface_error::SqlInterfaceError;
     use crate::database::database_interface_feed_trait::DatabaseInterfaceFeedTrait;
     use crate::database::pingable::Pingable;
+    use crate::database::sql_interface_error::SqlInterfaceError;
     use crate::food::feed_pattern::Feedpattern;
     use crate::food::feed_schedule_entry::FeedScheduleEntry;
 

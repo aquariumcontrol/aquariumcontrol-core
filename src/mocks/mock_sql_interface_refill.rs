@@ -9,10 +9,10 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 
 #[cfg(test)]
 pub mod tests {
-    use chrono::NaiveDateTime;
     use crate::database::pingable::Pingable;
     use crate::database::sql_interface_error::SqlInterfaceError;
     use crate::database::sql_interface_refill::DatabaseInterfaceRefillTrait;
+    use chrono::NaiveDateTime;
 
     pub struct MockSqlInterfaceRefill {}
 

@@ -36,11 +36,11 @@ use crate::sensors::sensor_manager::SensorManagerSignals;
 use crate::sensors::tank_level_switch::TankLevelSwitchSignals;
 use crate::utilities::acknowledge_signal_handler::AcknowledgeSignalHandlerTrait;
 use crate::utilities::channel_content::AquariumSignal;
+use crate::utilities::database_ping_trait::DatabasePingTrait;
 use crate::utilities::iir_filter::IIRFilter;
 use crate::utilities::proc_ext_req::ProcessExternalRequestTrait;
 use crate::utilities::wait_for_termination::WaitForTerminationTrait;
 use crate::water::refill::RefillStatus;
-use crate::utilities::database_ping_trait::DatabasePingTrait;
 
 const MILLIS_PER_SEC: u64 = 1000;
 

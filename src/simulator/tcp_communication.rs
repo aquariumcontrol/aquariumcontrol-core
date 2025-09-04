@@ -24,12 +24,12 @@ use crate::simulator::tcp_communication_channels::TcpCommunicationChannels;
 use crate::simulator::tcp_communication_config::TcpCommunicationConfig;
 pub(crate) use crate::simulator::tcp_communication_error::TcpCommunicationError;
 use crate::simulator::tcp_data::*;
+use crate::utilities::acknowledge_signal_handler::AcknowledgeSignalHandlerTrait;
 use crate::utilities::channel_content::{AquariumSignal, InternalCommand};
 use crate::utilities::logger::log_error_chain;
 use crate::utilities::proc_ext_req::ProcessExternalRequestTrait;
 #[cfg(all(not(test), target_os = "linux"))]
 use nix::unistd::gettid;
-use crate::utilities::acknowledge_signal_handler::AcknowledgeSignalHandlerTrait;
 
 #[cfg_attr(doc, aquamarine::aquamarine)]
 /// Contains configuration of implementation for opening, reading, and closing TCP channel.

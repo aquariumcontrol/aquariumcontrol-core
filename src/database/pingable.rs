@@ -29,7 +29,11 @@ pub trait Pingable {
 impl Pingable for SqlInterfaceData {
     fn ping(&mut self) {
         if let Err(e) = SqlInterface::ping_database(&mut self.conn) {
-            log_error_chain(module_path!(), "Encountered error while pinging database.", e);
+            log_error_chain(
+                module_path!(),
+                "Encountered error while pinging database.",
+                e,
+            );
         }
     }
 }
@@ -37,7 +41,11 @@ impl Pingable for SqlInterfaceData {
 impl Pingable for SqlInterfaceBalling {
     fn ping(&mut self) {
         if let Err(e) = SqlInterface::ping_database(&mut self.conn) {
-            log_error_chain(module_path!(), "Encountered error while pinging database.", e);
+            log_error_chain(
+                module_path!(),
+                "Encountered error while pinging database.",
+                e,
+            );
         }
     }
 }
@@ -45,7 +53,11 @@ impl Pingable for SqlInterfaceBalling {
 impl Pingable for SqlInterfaceFeed {
     fn ping(&mut self) {
         if let Err(e) = SqlInterface::ping_database(&mut self.conn) {
-            log_error_chain(module_path!(), "Encountered error while pinging database.", e);
+            log_error_chain(
+                module_path!(),
+                "Encountered error while pinging database.",
+                e,
+            );
         }
     }
 }
@@ -53,7 +65,11 @@ impl Pingable for SqlInterfaceFeed {
 impl Pingable for SqlInterfaceHeatingStats {
     fn ping(&mut self) {
         if let Err(e) = SqlInterface::ping_database(&mut self.conn) {
-            log_error_chain(module_path!(), "Encountered error while pinging database.", e);
+            log_error_chain(
+                module_path!(),
+                "Encountered error while pinging database.",
+                e,
+            );
         }
     }
 }
@@ -61,7 +77,11 @@ impl Pingable for SqlInterfaceHeatingStats {
 impl Pingable for SqlInterfaceRefill {
     fn ping(&mut self) {
         if let Err(e) = SqlInterface::ping_database(&mut self.conn) {
-            log_error_chain(module_path!(), "Encountered error while pinging database.", e);
+            log_error_chain(
+                module_path!(),
+                "Encountered error while pinging database.",
+                e,
+            );
         }
     }
 }
@@ -69,7 +89,11 @@ impl Pingable for SqlInterfaceRefill {
 impl Pingable for SqlInterfaceSchedule {
     fn ping(&mut self) {
         if let Err(e) = SqlInterface::ping_database(&mut self.conn) {
-            log_error_chain(module_path!(), "Encountered error while pinging database.", e);
+            log_error_chain(
+                module_path!(),
+                "Encountered error while pinging database.",
+                e,
+            );
         }
     }
 }

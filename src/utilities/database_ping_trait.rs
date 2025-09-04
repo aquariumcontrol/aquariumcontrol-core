@@ -18,7 +18,10 @@ pub trait DatabasePingTrait {
     fn update_last_ping_instant(&mut self);
 
     /// Pings the database.
-    fn check_timing_and_ping_database(&mut self, database_interface: &mut (impl Pingable + ?Sized)) {
+    fn check_timing_and_ping_database(
+        &mut self,
+        database_interface: &mut (impl Pingable + ?Sized),
+    ) {
         if self.get_last_ping_instant().elapsed() > self.get_ping_interval() {
             database_interface.ping();
             self.update_last_ping_instant();
