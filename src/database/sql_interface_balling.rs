@@ -7,8 +7,10 @@ The above copyright notice and this permission notice shall be included in all c
 THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
-use chrono::*;
+#[cfg(test)]
 use log::error;
+
+use chrono::*;
 use mysql::prelude::*;
 use mysql::*;
 
@@ -361,18 +363,6 @@ impl SqlInterfaceBalling {
                     sql_query_string_for_error,
                 ))
             }
-        }
-    }
-
-    /// Pings the database to check connection health and prevent timeouts.
-    ///
-    /// This function executes a lightweight query to ensure the connection is still
-    /// active. If the ping fails, it logs an error using `log::error!` but does
-    /// not propagate the error to the caller. This is a "fire-and-forget"
-    /// keep-alive mechanism.
-    pub fn ping(&mut self) {
-        if let Err(e) = SqlInterface::ping_database(&mut self.conn) {
-            error!(target: module_path!(), "Encountered error while pinging database: {e:?}");
         }
     }
 }

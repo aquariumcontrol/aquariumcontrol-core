@@ -27,6 +27,7 @@ use crate::mineral::balling_error::BallingError;
 use crate::mineral::mineral_injection::MineralInjectionTrait;
 use crate::utilities::acknowledge_signal_handler::AcknowledgeSignalHandlerTrait;
 use crate::utilities::channel_content::{AquariumDevice, InternalCommand};
+use crate::utilities::database_ping_trait::DatabasePingTrait;
 use crate::utilities::proc_ext_req::ProcessExternalRequestTrait;
 use crate::utilities::wait_for_termination::WaitForTerminationTrait;
 
@@ -50,9 +51,6 @@ use crate::utilities::wait_for_termination::WaitForTerminationTrait;
 pub struct Balling {
     /// configuration data for Balling dosing control
     config: BallingConfig,
-
-    /// SQL database interface for Balling dosing control
-    sql_interface_balling: SqlInterfaceBalling,
 
     /// Count down in seconds until the next Balling dosing for pump 1
     countdown_dosing_pump1: u32,
@@ -116,8 +114,8 @@ impl Balling {
     ///
     /// # Arguments
     /// * `config` - Configuration data for the Balling dosing control, loaded from a TOML file.
-    /// * `sql_interface_balling` - A `SqlInterfaceBalling` instance, providing the
-    ///   specific SQL interface for Balling dosing operations. This is moved into the struct.
+    /// * `sql_interface_balling` - A mutable reference to a `SqlInterfaceBalling` instance, providing the
+    ///   specific SQL interface for Balling dosing operations.
     /// * `database_ping_interval` - A `Duration` instance, providing the interval to ping the database.
     ///
     /// # Returns
@@ -134,8 +132,8 @@ impl Balling {
     ///   or data conversion issue.
     pub fn new(
         config: BallingConfig,
-        mut sql_interface_balling: SqlInterfaceBalling,
         database_ping_interval: Duration,
+        sql_interface_balling: &mut SqlInterfaceBalling
     ) -> Result<Balling, BallingError> {
         if config.schedule_check_interval == 0 {
             return Err(BallingError::ScheduleCheckIntervalZero(
@@ -145,20 +143,19 @@ impl Balling {
 
         Self::check_valid_dosing_intervals(&config)?;
 
-        Self::check_database_vs_config(&mut sql_interface_balling, &config)?;
+        Self::check_database_vs_config(sql_interface_balling, &config)?;
 
         let countdown_dosing_pump1 =
-            Self::calc_countdown_next_dosing(&config, &mut sql_interface_balling, 1)?;
+            Self::calc_countdown_next_dosing(&config, sql_interface_balling, 1)?;
         let countdown_dosing_pump2 =
-            Self::calc_countdown_next_dosing(&config, &mut sql_interface_balling, 2)?;
+            Self::calc_countdown_next_dosing(&config, sql_interface_balling, 2)?;
         let countdown_dosing_pump3 =
-            Self::calc_countdown_next_dosing(&config, &mut sql_interface_balling, 3)?;
+            Self::calc_countdown_next_dosing(&config, sql_interface_balling, 3)?;
         let countdown_dosing_pump4 =
-            Self::calc_countdown_next_dosing(&config, &mut sql_interface_balling, 4)?;
+            Self::calc_countdown_next_dosing(&config, sql_interface_balling, 4)?;
 
         Ok(Balling {
             config,
-            sql_interface_balling,
             countdown_dosing_pump1,
             countdown_dosing_pump2,
             countdown_dosing_pump3,
@@ -437,6 +434,8 @@ impl Balling {
     /// * `mineral_injection` - A mutable reference to an object implementing `MineralInjectionTrait`,
     ///   responsible for the physical control of the pump.
     /// * `balling_channels` - A mutable reference to `BallingChannels` struct containing all necessary `mpsc`
+    /// * `sql_interface_balling` - A mutable reference to a `SqlInterfaceBalling` instance, providing the
+    ///   specific SQL interface for Balling dosing operations. This is moved into the struct.
     ///
     /// # Returns
     /// A `bool` which is `true` if a `Quit` command was received from the signal handler
@@ -447,12 +446,12 @@ impl Balling {
         pump_device: AquariumDevice,
         mineral_injection: &mut impl MineralInjectionTrait,
         balling_channels: &mut BallingChannels,
+        sql_interface_balling: &mut SqlInterfaceBalling
     ) -> bool {
         let mut quit_command_received: bool = false;
         let actual_dosing_duration_millis: u32;
 
-        match self
-            .sql_interface_balling
+        match sql_interface_balling
             .get_single_balling_setval_from_database(pump_id.into())
         {
             Ok(balling_setval) => {
@@ -474,7 +473,7 @@ impl Balling {
                         &balling_setval,
                         actual_dosing_duration_millis,
                     );
-                    if let Err(e) = self.sql_interface_balling.insert_balling_event(
+                    if let Err(e) = sql_interface_balling.insert_balling_event(
                         Local::now().naive_local(),
                         pump_id.into(),
                         actual_dosing_volume.into(),
@@ -540,11 +539,14 @@ impl Balling {
     ///   the signal handler, relay manager, and schedule checker).
     /// * `mineral_injection` - A mutable reference to an object implementing the
     ///   `MineralInjectionTrait`, responsible for the physical control of the dosing pumps.
+    /// * `sql_interface_balling` - A `SqlInterfaceBalling` instance, providing the
+    ///   specific SQL interface for Balling dosing operations.
     pub fn execute(
         &mut self,
         mutex_device_scheduler_balling: Arc<Mutex<i32>>,
         balling_channels: &mut BallingChannels,
         mineral_injection: &mut impl MineralInjectionTrait,
+        mut sql_interface_balling: SqlInterfaceBalling,
     ) {
         #[cfg(all(target_os = "linux", not(test)))]
         info!(target: module_path!(), "Thread started with TID: {}", gettid());
@@ -624,6 +626,7 @@ impl Balling {
                                 AquariumDevice::PeristalticPump1,
                                 mineral_injection,
                                 balling_channels,
+                                &mut sql_interface_balling
                             );
                             *mutex_data = mutex_data.saturating_add(1);
                         }
@@ -651,6 +654,7 @@ impl Balling {
                                 AquariumDevice::PeristalticPump2,
                                 mineral_injection,
                                 balling_channels,
+                                &mut sql_interface_balling
                             );
                             *mutex_data = mutex_data.saturating_add(1);
                         }
@@ -678,6 +682,7 @@ impl Balling {
                                 AquariumDevice::PeristalticPump3,
                                 mineral_injection,
                                 balling_channels,
+                                &mut sql_interface_balling
                             );
                             *mutex_data = mutex_data.saturating_add(1);
                         }
@@ -705,6 +710,7 @@ impl Balling {
                                 AquariumDevice::PeristalticPump4,
                                 mineral_injection,
                                 balling_channels,
+                                &mut sql_interface_balling
                             );
                             *mutex_data = mutex_data.saturating_add(1);
                         }
@@ -747,6 +753,7 @@ impl Balling {
                                 pump_device,
                                 mineral_injection,
                                 balling_channels,
+                                &mut sql_interface_balling
                             );
                             *mutex_data = mutex_data.saturating_add(1);
                         }
@@ -794,11 +801,7 @@ impl Balling {
                 loop_counter = 0;
             }
 
-            // Check for how long ago the last database ping happened.
-            if Instant::now().duration_since(self.last_ping_instant) > self.database_ping_interval {
-                self.sql_interface_balling.ping();
-                self.last_ping_instant = Instant::now();
-            }
+            self.check_timing_and_ping_database(&mut sql_interface_balling);
         }
         
         balling_channels.acknowledge_signal_handler();
@@ -867,7 +870,7 @@ pub mod tests {
                 panic!("Could not connect to SQL database: {e:?}");
             }
         };
-        let sql_interface_balling = SqlInterfaceBalling::new(
+        let mut sql_interface_balling = SqlInterfaceBalling::new(
             sql_interface.get_connection().unwrap(),
             max_rows_balling_set_values,
             max_rows_balling_dosing_log,
@@ -877,8 +880,8 @@ pub mod tests {
         // create the test object
         let test_result = Balling::new(
             config.balling,
-            sql_interface_balling,
             Duration::from_millis(100),
+            &mut sql_interface_balling,
         );
         match test_result {
             Ok(balling_controller) => {
@@ -934,8 +937,8 @@ pub mod tests {
         // create the test object
         let balling = Balling::new(
             config.balling,
-            sql_interface_balling,
             Duration::from_millis(100),
+            &mut sql_interface_balling,
         )
         .unwrap();
 
@@ -1035,8 +1038,8 @@ pub mod tests {
         // create the test object
         let balling = Balling::new(
             config.balling,
-            sql_interface_balling,
             Duration::from_millis(100),
+            &mut sql_interface_balling,
         )
         .unwrap();
 
@@ -1214,8 +1217,8 @@ pub mod tests {
         // create the test object
         let mut balling = Balling::new(
             config.balling,
-            sql_interface_balling,
             Duration::from_millis(100),
+            &mut sql_interface_balling,
         )
         .unwrap();
 
@@ -1293,6 +1296,7 @@ pub mod tests {
                     mutex_device_scheduler,
                     &mut balling_channels,
                     &mut mock_mineral_injection,
+                    sql_interface_balling
                 );
 
                 let _ =
@@ -1609,8 +1613,8 @@ pub mod tests {
         // create test objects
         let mut balling = Balling::new(
             config.balling,
-            sql_interface_balling,
             Duration::from_millis(100),
+            &mut sql_interface_balling,
         )
         .unwrap();
 
@@ -1749,6 +1753,7 @@ pub mod tests {
                     mutex_device_scheduler,
                     &mut balling_channels,
                     &mut mock_mineral_injection,
+                    sql_interface_balling,
                 );
                 println!("MockMineralInjection:\n{}", mock_mineral_injection);
 
@@ -1832,8 +1837,8 @@ pub mod tests {
         // create test objects
         let result = Balling::new(
             config.balling,
-            sql_interface_balling,
             Duration::from_millis(100),
+            &mut sql_interface_balling
         );
         assert!(matches!(
             result,
@@ -1916,8 +1921,8 @@ pub mod tests {
         // create the test object
         let mut balling = Balling::new(
             config.balling,
-            sql_interface_balling,
             Duration::from_secs(1000),
+            &mut sql_interface_balling,
         )
         .unwrap();
 
@@ -2016,6 +2021,7 @@ pub mod tests {
                     mutex_device_scheduler,
                     &mut balling_channels,
                     &mut mock_mineral_injection,
+                    sql_interface_balling,
                 );
 
                 let _ =
@@ -2067,7 +2073,7 @@ pub mod tests {
                 panic!("Could not prepare test case: {e:?}")
             }
         }
-        let sql_interface_balling = SqlInterfaceBalling::new(
+        let mut sql_interface_balling = SqlInterfaceBalling::new(
             sql_interface.get_connection().unwrap(),
             max_rows_balling_set_values,
             max_rows_balling_dosing_log,
@@ -2077,8 +2083,8 @@ pub mod tests {
         // create the test object
         let test_result = Balling::new(
             config.balling,
-            sql_interface_balling,
             Duration::from_secs(1000),
+            &mut sql_interface_balling,
         );
         match test_result {
             Ok(balling_controller) => {
@@ -2116,7 +2122,7 @@ pub mod tests {
                 panic!("Could not prepare test case: {e:?}")
             }
         }
-        let sql_interface_balling = SqlInterfaceBalling::new(
+        let mut sql_interface_balling = SqlInterfaceBalling::new(
             sql_interface.get_connection().unwrap(),
             max_rows_balling_set_values,
             max_rows_balling_dosing_log,
@@ -2126,8 +2132,8 @@ pub mod tests {
         // create the test object
         let test_result = Balling::new(
             config.balling,
-            sql_interface_balling,
             Duration::from_secs(1000),
+            &mut sql_interface_balling,
         );
 
         match test_result {

@@ -563,7 +563,7 @@ fn run() -> Result<(), StartupError> {
             .map_err(|e| StartupError::Database {
                 source: Box::new(e),
             })?;
-    let sql_interface_balling = SqlInterfaceBalling::new(
+    let mut sql_interface_balling = SqlInterfaceBalling::new(
         database_connection_balling,
         max_rows_balling_set_values,
         max_rows_balling_dosing_log,
@@ -861,7 +861,6 @@ fn run() -> Result<(), StartupError> {
     );
     let mut schedule_check = ScheduleCheck::new(
         config.schedule_check,
-        sql_interface_schedule,
         database_ping_duration,
     );
 
@@ -905,10 +904,9 @@ fn run() -> Result<(), StartupError> {
     let mut ventilation = Ventilation::new(config.ventilation);
     let mut balling = Balling::new(
         config.balling,
-        sql_interface_balling,
         database_ping_duration,
-    )
-    .map_err(|e| StartupError::InvalidBallingConfiguration { source: e })?;
+        &mut sql_interface_balling
+    ).map_err(|e| StartupError::InvalidBallingConfiguration { source: e })?;
     let mut monitors = Monitors::new(config.monitors);
     let mut watchdog = Watchdog::new(config.watchdog)
         .map_err(|e| StartupError::WatchdogSetupFailure { source: e })?;
@@ -991,6 +989,7 @@ fn run() -> Result<(), StartupError> {
                 schedule_check.execute(
                     &mut channels.schedule_check,
                     execution_config_clone_for_schedule_check,
+                    sql_interface_schedule
                 );
                 #[cfg(feature = "debug_channels")]
                 debug!(target: module_path!(), "{0}", channels.schedule_check);
@@ -1216,6 +1215,7 @@ fn run() -> Result<(), StartupError> {
                     mutex_device_scheduler_balling,
                     &mut channels.balling,
                     &mut mineral_injection,
+                    sql_interface_balling
                 );
                 #[cfg(feature = "debug_channels")]
                 debug!(target: module_path!(), "{0}", channels.balling);

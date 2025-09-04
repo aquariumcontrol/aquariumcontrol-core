@@ -21,13 +21,13 @@ use std::time::{Duration, Instant};
 
 use crate::database::sql_interface_schedule::{ScheduleEntry, ScheduleType, SqlInterfaceSchedule};
 use crate::launch::execution_config::ExecutionConfig;
-pub(crate) use crate::permission::schedule_check_channels::ScheduleCheckChannels;
+use crate::permission::schedule_check_channels::ScheduleCheckChannels;
 use crate::permission::schedule_check_config::ScheduleCheckConfig;
 use crate::utilities::acknowledge_signal_handler::AcknowledgeSignalHandlerTrait;
 use crate::utilities::channel_content::InternalCommand;
 use crate::utilities::logger::log_error_chain;
 use crate::utilities::proc_ext_req::ProcessExternalRequestTrait;
-use crate::database::pingable::Pingable;
+use crate::utilities::database_ping_trait::DatabasePingTrait;
 
 #[cfg_attr(doc, aquamarine::aquamarine)]
 /// Contains the configuration and the implementation for the schedule checker.
@@ -48,9 +48,6 @@ use crate::database::pingable::Pingable;
 pub struct ScheduleCheck {
     /// configuration data for schedule checker
     config: ScheduleCheckConfig,
-
-    /// SQL database interface for Balling dosing control
-    sql_interface_schedule: SqlInterfaceSchedule,
 
     /// inhibition flag to avoid flooding the log file with repeated messages about not finding schedule entry for Balling mineral dosing
     lock_error_find_balling_schedule: bool,
@@ -121,20 +118,16 @@ impl ScheduleCheck {
     /// # Arguments
     /// * `config` - Configuration data for the schedule checker, dictating
     ///   behavior like check intervals and strategies for missing schedules.
-    /// * `sql_interface_schedule` - A `SqlInterfaceSchedule` instance providing
-    ///   the interface to the SQL database for retrieving schedule entries.
     /// * `database_ping_interval` - A `Duration` instance, providing the interval to ping the database.
     ///
     /// # Returns
     /// A new `ScheduleCheck` struct, ready to monitor and evaluate schedules.
     pub fn new(
         config: ScheduleCheckConfig,
-        sql_interface_schedule: SqlInterfaceSchedule,
         database_ping_interval: Duration,
     ) -> ScheduleCheck {
         ScheduleCheck {
             config,
-            sql_interface_schedule,
             lock_error_find_balling_schedule: false,
             lock_error_find_refill_schedule: false,
             lock_error_find_ventilation_schedule: false,
@@ -268,10 +261,13 @@ impl ScheduleCheck {
     ///   other application modules and the signal handler.
     /// * `execution_config` - An `ExecutionConfig` struct containing information about which threads
     ///   have been started.
+    /// * `sql_interface_schedule` - A `SqlInterfaceSchedule` instance providing
+    ///   the interface to the SQL database for retrieving schedule entries.
     pub fn execute(
         &mut self,
         schedule_check_channels: &mut ScheduleCheckChannels,
         execution_config: ExecutionConfig,
+        mut sql_interface_schedule: SqlInterfaceSchedule
     ) {
         #[cfg(all(target_os = "linux", not(test)))]
         info!(target: module_path!(), "Thread started with TID: {}", gettid());
@@ -291,7 +287,7 @@ impl ScheduleCheck {
             {
                 first_iteration = false;
                 last_check_instant = Instant::now();
-                if let Err(errors) = self.sql_interface_schedule.read_schedule() {
+                if let Err(errors) = sql_interface_schedule.read_schedule() {
                     if !self.lock_error_database_read {
                         for e in errors {
                             log_error_chain(module_path!(), "Reading schedule failed", e);
@@ -319,8 +315,7 @@ impl ScheduleCheck {
 
             //*********** ventilation ***********
             if execution_config.ventilation {
-                let schedule_entry_ventilation_opt = match self
-                    .sql_interface_schedule
+                let schedule_entry_ventilation_opt = match sql_interface_schedule
                     .find_schedule(ScheduleType::Ventilation)
                 {
                     Ok(c) => {
@@ -365,8 +360,7 @@ impl ScheduleCheck {
 
             //*********** heating ***********
             if execution_config.heating {
-                let schedule_entry_heating_opt = match self
-                    .sql_interface_schedule
+                let schedule_entry_heating_opt = match sql_interface_schedule
                     .find_schedule(ScheduleType::Heating)
                 {
                     Ok(c) => {
@@ -411,8 +405,7 @@ impl ScheduleCheck {
 
             //*********** refill ***********
             if execution_config.refill {
-                let schedule_entry_refill_opt = match self
-                    .sql_interface_schedule
+                let schedule_entry_refill_opt = match sql_interface_schedule
                     .find_schedule(ScheduleType::Refill)
                 {
                     Ok(c) => {
@@ -457,8 +450,7 @@ impl ScheduleCheck {
 
             //*********** Balling ***********
             if execution_config.balling {
-                let schedule_entry_balling_opt = match self
-                    .sql_interface_schedule
+                let schedule_entry_balling_opt = match sql_interface_schedule
                     .find_schedule(ScheduleType::Balling)
                 {
                     Ok(c) => {
@@ -503,11 +495,7 @@ impl ScheduleCheck {
 
             spin_sleeper.sleep(sleep_duration_hundred_millis);
 
-            // Check for how long ago the last database ping happened.
-            if self.last_ping_instant.elapsed() > self.database_ping_interval {
-                self.sql_interface_schedule.ping();
-                self.last_ping_instant = Instant::now();
-            }
+            self.check_timing_and_ping_database(&mut sql_interface_schedule);
         }
 
         schedule_check_channels.acknowledge_signal_handler();
