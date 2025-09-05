@@ -312,7 +312,8 @@ impl ScheduleCheck {
 
             //*********** ventilation ***********
             if execution_config.ventilation {
-                let schedule_entry_ventilation_opt =
+                let schedule_entry_ventilation_opt: Option<&ScheduleEntry> =
+                if self.config.active {
                     match sql_interface_schedule.find_schedule(ScheduleType::Ventilation) {
                         Ok(c) => {
                             self.lock_error_find_ventilation_schedule = false;
@@ -329,7 +330,10 @@ impl ScheduleCheck {
                             }
                             None
                         }
-                    };
+                    }
+                } else {
+                    None
+                };
                 let (_send_success, _receive_success) = Self::check_pending_schedule_request(
                     &self.config,
                     &schedule_check_channels.tx_schedule_check_to_ventilation,
@@ -356,7 +360,8 @@ impl ScheduleCheck {
 
             //*********** heating ***********
             if execution_config.heating {
-                let schedule_entry_heating_opt =
+                let schedule_entry_heating_opt: Option<&ScheduleEntry> =
+                if self.config.active {
                     match sql_interface_schedule.find_schedule(ScheduleType::Heating) {
                         Ok(c) => {
                             self.lock_error_find_heating_schedule = false;
@@ -373,7 +378,10 @@ impl ScheduleCheck {
                             }
                             None
                         }
-                    };
+                    }
+                } else {
+                    None
+                };
                 let (_send_success, _receive_success) = Self::check_pending_schedule_request(
                     &self.config,
                     &schedule_check_channels.tx_schedule_check_to_heating,
@@ -400,7 +408,8 @@ impl ScheduleCheck {
 
             //*********** refill ***********
             if execution_config.refill {
-                let schedule_entry_refill_opt =
+                let schedule_entry_refill_opt: Option<&ScheduleEntry> =
+                if self.config.active {
                     match sql_interface_schedule.find_schedule(ScheduleType::Refill) {
                         Ok(c) => {
                             self.lock_error_find_refill_schedule = false;
@@ -417,7 +426,10 @@ impl ScheduleCheck {
                             }
                             None
                         }
-                    };
+                    }
+                } else {
+                    None
+                };
                 let (_send_success, _receive_success) = Self::check_pending_schedule_request(
                     &self.config,
                     &schedule_check_channels.tx_schedule_check_to_refill,
@@ -444,7 +456,8 @@ impl ScheduleCheck {
 
             //*********** Balling ***********
             if execution_config.balling {
-                let schedule_entry_balling_opt =
+                let schedule_entry_balling_opt: Option<&ScheduleEntry> =
+                if self.config.active {
                     match sql_interface_schedule.find_schedule(ScheduleType::Balling) {
                         Ok(c) => {
                             self.lock_error_find_balling_schedule = false;
@@ -461,7 +474,10 @@ impl ScheduleCheck {
                             }
                             None
                         }
-                    };
+                    }
+                } else {
+                    None
+                };
                 let (_send_success, _receive_success) = Self::check_pending_schedule_request(
                     &self.config,
                     &schedule_check_channels.tx_schedule_check_to_balling,

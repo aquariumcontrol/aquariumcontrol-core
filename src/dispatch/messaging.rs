@@ -391,7 +391,7 @@ impl Messaging {
 pub mod tests {
     use posixmq::PosixMq;
     use spin_sleep::SpinSleeper;
-    use std::sync::mpsc::{Sender};
+    use std::sync::mpsc::Sender;
     use std::{thread, time::Duration};
 
     use crate::dispatch::messaging::{messaging_commands, messaging_domains, Message, Messaging};
@@ -440,15 +440,7 @@ pub mod tests {
     //
     // # Arguments
     // * `messaging` - The `Messaging` instance to be executed in the new thread. It is moved into the thread.
-    // * `tx_messaging_to_signal_handler` - The sender channel for `Messaging` to send acknowledgments to the signal handler.
-    // * `rx_messaging_from_signal_handler` - The receiver channel for `Messaging` to receive commands from the signal handler.
-    // * `tx_messaging_to_refill` - The sender channel for `Messaging` to send commands to the refill control.
-    // * `tx_messaging_to_ventilation` - The sender channel for `Messaging` to send commands to the ventilation control.
-    // * `tx_messaging_to_heating` - The sender channel for `Messaging` to send commands to the heating control.
-    // * `tx_messaging_to_feed` - The sender channel for `Messaging` to send commands to the feed control.
-    // * `tx_messaging_to_balling` - The sender channel for `Messaging` to send commands to the Balling dosing control.
-    // * `tx_messaging_to_monitors` - The sender channel for `Messaging` to send commands to the monitors module.
-    // * `tx_messaging_to_watchdog` - The sender channel for `Messaging` to send commands to the watchdog.
+    // * `messaging_channels` - Struct containing the channels for messaging
     //
     // # Returns
     // A `thread::JoinHandle<()>` which can be used to wait for the spawned thread to complete.
