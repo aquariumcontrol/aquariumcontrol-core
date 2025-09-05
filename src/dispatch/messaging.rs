@@ -397,10 +397,13 @@ pub mod tests {
     use crate::dispatch::messaging::{
         messaging_commands, messaging_domains, Message, Messaging, MessagingChannels,
     };
+    use crate::dispatch::messaging_channels::MessagingChannels;
+    use crate::launch::channels::Channels;
     use crate::launch::execution_config::ExecutionConfig;
     use crate::mocks::mock_message_command_receiver::tests::mock_message_command_receiver;
     use crate::utilities::channel_content::InternalCommand;
     use crate::utilities::config::{read_config_file, ConfigData};
+    use crate::utilities::signal_handler_channels::SignalHandlerChannels;
 
     // Opens a POSIX message queue for test purposes.
     //
@@ -456,57 +459,11 @@ pub mod tests {
     // This function will panic if the new thread cannot be spawned.
     fn create_test_object(
         mut messaging: Messaging,
-        tx_messaging_to_signal_handler: Sender<bool>,
-        rx_messaging_from_signal_handler: Receiver<InternalCommand>,
-        tx_messaging_to_refill: Sender<InternalCommand>,
-        tx_messaging_to_ventilation: Sender<InternalCommand>,
-        tx_messaging_to_heating: Sender<InternalCommand>,
-        tx_messaging_to_feed: Sender<InternalCommand>,
-        tx_messaging_to_balling: Sender<InternalCommand>,
-        tx_messaging_to_monitors: Sender<InternalCommand>,
-        tx_messaging_to_watchdog: Sender<InternalCommand>,
+        messaging_channels: MessagingChannels
     ) -> thread::JoinHandle<()> {
         thread::Builder::new()
             .name("test_object".to_string())
             .spawn(move || {
-                let mut messaging_channels = MessagingChannels {
-                    tx_messaging_to_signal_handler: tx_messaging_to_signal_handler,
-                    #[cfg(feature = "debug_channels")]
-                    cnt_tx_messaging_to_signal_handler: 0,
-
-                    rx_messaging_from_signal_handler: rx_messaging_from_signal_handler,
-                    #[cfg(feature = "debug_channels")]
-                    cnt_rx_messaging_from_signal_handler: 0,
-
-                    tx_messaging_to_refill: tx_messaging_to_refill,
-                    #[cfg(feature = "debug_channels")]
-                    cnt_tx_messaging_to_refill: 0,
-
-                    tx_messaging_to_ventilation: tx_messaging_to_ventilation,
-                    #[cfg(feature = "debug_channels")]
-                    cnt_tx_messaging_to_ventilation: 0,
-
-                    tx_messaging_to_heating: tx_messaging_to_heating,
-                    #[cfg(feature = "debug_channels")]
-                    cnt_tx_messaging_to_heating: 0,
-
-                    tx_messaging_to_feed: tx_messaging_to_feed,
-                    #[cfg(feature = "debug_channels")]
-                    cnt_tx_messaging_to_feed: 0,
-
-                    tx_messaging_to_balling: tx_messaging_to_balling,
-                    #[cfg(feature = "debug_channels")]
-                    cnt_tx_messaging_to_balling: 0,
-
-                    tx_messaging_to_monitors: tx_messaging_to_monitors,
-                    #[cfg(feature = "debug_channels")]
-                    cnt_tx_messaging_to_monitors: 0,
-
-                    tx_messaging_to_watchdog: tx_messaging_to_watchdog,
-                    #[cfg(feature = "debug_channels")]
-                    cnt_tx_messaging_to_watchdog: 0,
-                };
-
                 messaging.execute(&mut messaging_channels);
             })
             .unwrap()
@@ -535,8 +492,7 @@ pub mod tests {
     fn create_test_environment(
         msg_commands: Vec<Message>,
         tx_environment_to_object: Sender<InternalCommand>,
-        tx_signal_handler_to_messaging: Sender<InternalCommand>,
-        rx_signal_handler_from_messaging: Receiver<bool>,
+        signal_handler_channels: SignalHandlerChannels,
         mq_filename: String,
     ) -> thread::JoinHandle<()> {
         thread::Builder::new()
@@ -615,15 +571,7 @@ pub mod tests {
 
         let messaging = Messaging::new(config.messaging, ExecutionConfig::default()).unwrap();
 
-        let (tx_signal_handler_to_messaging, rx_messaging_from_signal_handler) = mpsc::channel();
-        let (tx_messaging_to_refill, _rx_refill_from_messaging) = mpsc::channel();
-        let (tx_messaging_to_ventilation, rx_ventilation_from_messaging) = mpsc::channel();
-        let (tx_messaging_to_heating, _rx_heating_from_messaging) = mpsc::channel();
-        let (tx_messaging_to_feed, _rx_feed_from_messaging) = mpsc::channel();
-        let (tx_messaging_to_balling, _rx_balling_from_messaging) = mpsc::channel();
-        let (tx_messaging_to_monitors, _rx_monitors_from_messaging) = mpsc::channel();
-        let (tx_messaging_to_watchdog, _rx_monitors_from_watchdog) = mpsc::channel();
-        let (tx_messaging_to_signal_handler, rx_signal_handler_from_messaging) = mpsc::channel();
+        let mut channels = Channels::new_for_test();
 
         let tx_test_environment_to_ventilation = tx_messaging_to_ventilation.clone();
 
@@ -640,23 +588,14 @@ pub mod tests {
         let join_handle_test_environment = create_test_environment(
             vec![msg_stop, msg_start], // first stop, then start ventilation
             tx_test_environment_to_ventilation,
-            tx_signal_handler_to_messaging,
-            rx_signal_handler_from_messaging,
+            channels.signal_handler,
             mq_filename_for_test_environment,
         );
 
         // thread for the test object
         let join_handle_test_object = create_test_object(
             messaging,
-            tx_messaging_to_signal_handler,
-            rx_messaging_from_signal_handler,
-            tx_messaging_to_refill,
-            tx_messaging_to_ventilation,
-            tx_messaging_to_heating,
-            tx_messaging_to_feed,
-            tx_messaging_to_balling,
-            tx_messaging_to_monitors,
-            tx_messaging_to_watchdog,
+            channels.messaging
         );
 
         join_handle_mock_ventilation
@@ -688,15 +627,7 @@ pub mod tests {
 
         let messaging = Messaging::new(config.messaging, ExecutionConfig::default()).unwrap();
 
-        let (tx_signal_handler_to_messaging, rx_messaging_from_signal_handler) = mpsc::channel();
-        let (tx_messaging_to_refill, _rx_refill_from_messaging) = mpsc::channel();
-        let (tx_messaging_to_ventilation, _rx_ventilation_from_messaging) = mpsc::channel();
-        let (tx_messaging_to_heating, rx_heating_from_messaging) = mpsc::channel();
-        let (tx_messaging_to_feed, _rx_feed_from_messaging) = mpsc::channel();
-        let (tx_messaging_to_balling, _rx_balling_from_messaging) = mpsc::channel();
-        let (tx_messaging_to_monitors, _rx_monitors_from_messaging) = mpsc::channel();
-        let (tx_messaging_to_watchdog, _rx_monitors_from_watchdog) = mpsc::channel();
-        let (tx_messaging_to_signal_handler, rx_signal_handler_from_messaging) = mpsc::channel();
+        let mut channels = Channels::new_for_test();
 
         let tx_test_environment_to_heating = tx_messaging_to_heating.clone();
 
@@ -713,23 +644,14 @@ pub mod tests {
         let join_handle_test_environment = create_test_environment(
             vec![msg_stop, msg_start], // first stop, then start heating
             tx_test_environment_to_heating,
-            tx_signal_handler_to_messaging,
-            rx_signal_handler_from_messaging,
+            channels.signal_handler,
             mq_filename_for_test_environment,
         );
 
         // thread for the test object
         let join_handle_test_object = create_test_object(
             messaging,
-            tx_messaging_to_signal_handler,
-            rx_messaging_from_signal_handler,
-            tx_messaging_to_refill,
-            tx_messaging_to_ventilation,
-            tx_messaging_to_heating,
-            tx_messaging_to_feed,
-            tx_messaging_to_balling,
-            tx_messaging_to_monitors,
-            tx_messaging_to_watchdog,
+            channels.messaging
         );
 
         join_handle_mock_heating
@@ -765,15 +687,7 @@ pub mod tests {
 
         let messaging = Messaging::new(config.messaging, ExecutionConfig::default()).unwrap();
 
-        let (tx_signal_handler_to_messaging, rx_messaging_from_signal_handler) = mpsc::channel();
-        let (tx_messaging_to_refill, rx_refill_from_messaging) = mpsc::channel();
-        let (tx_messaging_to_ventilation, _rx_ventilation_from_messaging) = mpsc::channel();
-        let (tx_messaging_to_heating, _rx_heating_from_messaging) = mpsc::channel();
-        let (tx_messaging_to_feed, _rx_feed_from_messaging) = mpsc::channel();
-        let (tx_messaging_to_balling, _rx_balling_from_messaging) = mpsc::channel();
-        let (tx_messaging_to_monitors, _rx_monitors_from_messaging) = mpsc::channel();
-        let (tx_messaging_to_watchdog, _rx_monitors_from_watchdog) = mpsc::channel();
-        let (tx_messaging_to_signal_handler, rx_signal_handler_from_messaging) = mpsc::channel();
+        let mut channels = Channels::new_for_test();
 
         let tx_test_environment_to_refill = tx_messaging_to_refill.clone();
 
@@ -804,23 +718,14 @@ pub mod tests {
         let join_handle_test_environment = create_test_environment(
             vec![msg_reset, msg_stop, msg_start], // first reset errors, then stop refill, then start refill
             tx_test_environment_to_refill,
-            tx_signal_handler_to_messaging,
-            rx_signal_handler_from_messaging,
+            channels.signal_handler,
             mq_file_name_for_test_environment,
         );
 
         // thread for the test object
         let join_handle_test_object = create_test_object(
             messaging,
-            tx_messaging_to_signal_handler,
-            rx_messaging_from_signal_handler,
-            tx_messaging_to_refill,
-            tx_messaging_to_ventilation,
-            tx_messaging_to_heating,
-            tx_messaging_to_feed,
-            tx_messaging_to_balling,
-            tx_messaging_to_monitors,
-            tx_messaging_to_watchdog,
+            channels.messaging
         );
 
         join_handle_mock_refill
@@ -857,15 +762,7 @@ pub mod tests {
 
         let messaging = Messaging::new(config.messaging, ExecutionConfig::default()).unwrap();
 
-        let (tx_signal_handler_to_messaging, rx_messaging_from_signal_handler) = mpsc::channel();
-        let (tx_messaging_to_refill, _rx_refill_from_messaging) = mpsc::channel();
-        let (tx_messaging_to_ventilation, _rx_ventilation_from_messaging) = mpsc::channel();
-        let (tx_messaging_to_heating, _rx_heating_from_messaging) = mpsc::channel();
-        let (tx_messaging_to_feed, rx_feed_from_messaging) = mpsc::channel();
-        let (tx_messaging_to_balling, _rx_balling_from_messaging) = mpsc::channel();
-        let (tx_messaging_to_monitors, _rx_monitors_from_messaging) = mpsc::channel();
-        let (tx_messaging_to_watchdog, _rx_monitors_from_watchdog) = mpsc::channel();
-        let (tx_messaging_to_signal_handler, rx_signal_handler_from_messaging) = mpsc::channel();
+       let mut channels = Channels::new_for_test();
 
         let tx_test_environment_to_feed = tx_messaging_to_feed.clone();
 
@@ -895,23 +792,14 @@ pub mod tests {
         let join_handle_test_environment = create_test_environment(
             vec![msg_exec, msg_stop, msg_start], // first execute a feed profile, then stop feed, then start feed
             tx_test_environment_to_feed,
-            tx_signal_handler_to_messaging,
-            rx_signal_handler_from_messaging,
+            channels.signal_handler,
             mq_filename_for_test_environment,
         );
 
         // thread for the test object
         let join_handle_test_object = create_test_object(
             messaging,
-            tx_messaging_to_signal_handler,
-            rx_messaging_from_signal_handler,
-            tx_messaging_to_refill,
-            tx_messaging_to_ventilation,
-            tx_messaging_to_heating,
-            tx_messaging_to_feed,
-            tx_messaging_to_balling,
-            tx_messaging_to_monitors,
-            tx_messaging_to_watchdog,
+            channels.messaging,
         );
 
         join_handle_mock_feed
@@ -945,15 +833,7 @@ pub mod tests {
 
         let messaging = Messaging::new(config.messaging, ExecutionConfig::default()).unwrap();
 
-        let (tx_signal_handler_to_messaging, rx_messaging_from_signal_handler) = mpsc::channel();
-        let (tx_messaging_to_refill, _rx_refill_from_messaging) = mpsc::channel();
-        let (tx_messaging_to_ventilation, _rx_ventilation_from_messaging) = mpsc::channel();
-        let (tx_messaging_to_heating, _rx_heating_from_messaging) = mpsc::channel();
-        let (tx_messaging_to_feed, _rx_feed_from_messaging) = mpsc::channel();
-        let (tx_messaging_to_balling, rx_balling_from_messaging) = mpsc::channel();
-        let (tx_messaging_to_monitors, _rx_monitors_from_messaging) = mpsc::channel();
-        let (tx_messaging_to_watchdog, _rx_monitors_from_watchdog) = mpsc::channel();
-        let (tx_messaging_to_signal_handler, rx_signal_handler_from_messaging) = mpsc::channel();
+        let mut channels = Channels::new_for_test();
 
         let tx_test_environment_to_balling = tx_messaging_to_balling.clone();
 
@@ -970,23 +850,14 @@ pub mod tests {
         let join_handle_test_environment = create_test_environment(
             vec![msg_stop, msg_start], // first stop, then start Balling dosing control
             tx_test_environment_to_balling,
-            tx_signal_handler_to_messaging,
-            rx_signal_handler_from_messaging,
+            channels.signal_handler,
             mq_filename_for_test_environment,
         );
 
         // thread for the test object
         let join_handle_test_object = create_test_object(
             messaging,
-            tx_messaging_to_signal_handler,
-            rx_messaging_from_signal_handler,
-            tx_messaging_to_refill,
-            tx_messaging_to_ventilation,
-            tx_messaging_to_heating,
-            tx_messaging_to_feed,
-            tx_messaging_to_balling,
-            tx_messaging_to_monitors,
-            tx_messaging_to_watchdog,
+            channels.messaging,
         );
 
         join_handle_mock_balling
@@ -1018,15 +889,7 @@ pub mod tests {
 
         let messaging = Messaging::new(config.messaging, ExecutionConfig::default()).unwrap();
 
-        let (tx_signal_handler_to_messaging, rx_messaging_from_signal_handler) = mpsc::channel();
-        let (tx_messaging_to_refill, _rx_refill_from_messaging) = mpsc::channel();
-        let (tx_messaging_to_ventilation, _rx_ventilation_from_messaging) = mpsc::channel();
-        let (tx_messaging_to_heating, _rx_heating_from_messaging) = mpsc::channel();
-        let (tx_messaging_to_feed, _rx_feed_from_messaging) = mpsc::channel();
-        let (tx_messaging_to_balling, _rx_balling_from_messaging) = mpsc::channel();
-        let (tx_messaging_to_monitors, _rx_monitors_from_messaging) = mpsc::channel();
-        let (tx_messaging_to_signal_handler, rx_signal_handler_from_messaging) = mpsc::channel();
-        let (tx_messaging_to_watchdog, rx_watchdog_from_messaging) = mpsc::channel();
+        let mut channels = Channels::new_for_test();
 
         let tx_test_environment_to_watchdog = tx_messaging_to_watchdog.clone();
 
@@ -1043,23 +906,14 @@ pub mod tests {
         let join_handle_test_environment = create_test_environment(
             vec![msg_stop, msg_start], // first stop, then start Watchdog
             tx_test_environment_to_watchdog,
-            tx_signal_handler_to_messaging,
-            rx_signal_handler_from_messaging,
+            channels.signal_handler,
             mq_filename_for_test_environment,
         );
 
         // thread for the test object
         let join_handle_test_object = create_test_object(
             messaging,
-            tx_messaging_to_signal_handler,
-            rx_messaging_from_signal_handler,
-            tx_messaging_to_refill,
-            tx_messaging_to_ventilation,
-            tx_messaging_to_heating,
-            tx_messaging_to_feed,
-            tx_messaging_to_balling,
-            tx_messaging_to_monitors,
-            tx_messaging_to_watchdog,
+            channels.messaging,
         );
 
         join_handle_mock_watchdog
