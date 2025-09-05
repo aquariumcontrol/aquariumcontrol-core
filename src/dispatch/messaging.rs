@@ -391,8 +391,8 @@ impl Messaging {
 pub mod tests {
     use posixmq::PosixMq;
     use spin_sleep::SpinSleeper;
-    use std::sync::mpsc::{Receiver, Sender};
-    use std::{sync::mpsc, thread, time::Duration};
+    use std::sync::mpsc::{Sender};
+    use std::{thread, time::Duration};
 
     use crate::dispatch::messaging::{messaging_commands, messaging_domains, Message, Messaging};
     use crate::dispatch::messaging_channels::MessagingChannels;
@@ -513,19 +513,20 @@ pub mod tests {
                 // requesting mock control to quit
                 let _ = tx_environment_to_object.send(InternalCommand::Quit);
 
+                let tx_signal_handler_to_messaging = signal_handler_channels
+                    .tx_signal_handler_to_messaging_opt
+                    .unwrap();
+                let rx_signal_handler_from_messaging = signal_handler_channels
+                    .rx_signal_handler_from_messaging_opt
+                    .unwrap();
+
                 // requesting messaging to quit
-                let _ = signal_handler_channels
-                    .tx_signal_handler_to_messaging
-                    .send(InternalCommand::Quit);
+                let _ = tx_signal_handler_to_messaging.send(InternalCommand::Quit);
 
                 // waiting for confirmation from messaging
-                let _ = signal_handler_channels
-                    .rx_signal_handler_from_messaging
-                    .recv();
+                let _ = rx_signal_handler_from_messaging.recv();
 
-                let _ = signal_handler_channels
-                    .tx_signal_handler_to_messaging
-                    .send(InternalCommand::Terminate);
+                let _ = tx_signal_handler_to_messaging.send(InternalCommand::Terminate);
             })
             .unwrap()
     }
@@ -575,15 +576,19 @@ pub mod tests {
 
         let messaging = Messaging::new(config.messaging, ExecutionConfig::default()).unwrap();
 
-        let mut channels = Channels::new_for_test();
+        let channels = Channels::new_for_test();
 
-        let tx_test_environment_to_ventilation = channels.messaging.tx_messaging_to_ventilation.clone();
+        let tx_test_environment_to_ventilation =
+            channels.messaging.tx_messaging_to_ventilation.clone();
 
         let join_handle_mock_ventilation = thread::Builder::new()
             .name("mock_ventilation".to_string())
             .spawn(move || {
                 assert_stop_start_sequence(mock_message_command_receiver(
-                    channels.ventilation.rx_ventilation_from_messaging_opt.unwrap(),
+                    channels
+                        .ventilation
+                        .rx_ventilation_from_messaging_opt
+                        .unwrap(),
                 ));
             })
             .unwrap();
@@ -628,7 +633,7 @@ pub mod tests {
 
         let messaging = Messaging::new(config.messaging, ExecutionConfig::default()).unwrap();
 
-        let mut channels = Channels::new_for_test();
+        let channels = Channels::new_for_test();
 
         let tx_test_environment_to_heating = channels.messaging.tx_messaging_to_heating.clone();
 
@@ -685,15 +690,16 @@ pub mod tests {
 
         let messaging = Messaging::new(config.messaging, ExecutionConfig::default()).unwrap();
 
-        let mut channels = Channels::new_for_test();
+        let channels = Channels::new_for_test();
 
         let tx_test_environment_to_refill = channels.messaging.tx_messaging_to_refill.clone();
 
         let join_handle_mock_refill = thread::Builder::new()
             .name("mock_refill".to_string())
             .spawn(move || {
-                let mut commands_received =
-                    mock_message_command_receiver(channels.refill.rx_refill_from_messaging_opt.unwrap());
+                let mut commands_received = mock_message_command_receiver(
+                    channels.refill.rx_refill_from_messaging_opt.unwrap(),
+                );
 
                 // assert the number of commands sent/received are identical
                 assert_eq!(3, commands_received.len());
@@ -758,15 +764,16 @@ pub mod tests {
 
         let messaging = Messaging::new(config.messaging, ExecutionConfig::default()).unwrap();
 
-        let mut channels = Channels::new_for_test();
+        let channels = Channels::new_for_test();
 
         let tx_test_environment_to_feed = channels.messaging.tx_messaging_to_feed.clone();
 
         let join_handle_mock_feed = thread::Builder::new()
             .name("mock_feed".to_string())
             .spawn(move || {
-                let mut commands_received =
-                    mock_message_command_receiver(channels.feed.rx_feed_from_messaging_opt.unwrap());
+                let mut commands_received = mock_message_command_receiver(
+                    channels.feed.rx_feed_from_messaging_opt.unwrap(),
+                );
 
                 // assert the number of commands sent/received are identical
                 assert_eq!(3, commands_received.len());
@@ -827,7 +834,7 @@ pub mod tests {
 
         let messaging = Messaging::new(config.messaging, ExecutionConfig::default()).unwrap();
 
-        let mut channels = Channels::new_for_test();
+        let channels = Channels::new_for_test();
 
         let tx_test_environment_to_balling = channels.messaging.tx_messaging_to_balling.clone();
 
@@ -880,7 +887,7 @@ pub mod tests {
 
         let messaging = Messaging::new(config.messaging, ExecutionConfig::default()).unwrap();
 
-        let mut channels = Channels::new_for_test();
+        let channels = Channels::new_for_test();
 
         let tx_test_environment_to_watchdog = channels.messaging.tx_messaging_to_watchdog.clone();
 
