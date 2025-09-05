@@ -596,7 +596,7 @@ impl Feed {
 #[cfg(test)]
 pub mod tests {
     use spin_sleep::SpinSleeper;
-    use std::sync::mpsc::{self, Receiver, Sender};
+    use std::sync::mpsc::{Receiver, Sender};
     use std::sync::{Arc, Mutex};
     use std::thread;
     use std::thread::scope;
@@ -605,7 +605,7 @@ pub mod tests {
     use crate::database::database_interface_feed_trait::DatabaseInterfaceFeedTrait;
     use crate::database::sql_interface::SqlInterface;
     use crate::database::sql_interface_feed::SqlInterfaceFeed;
-    use crate::food::feed::{Feed, FeedChannels};
+    use crate::food::feed::{Feed};
     use crate::food::feed_schedule_entry::FeedScheduleEntry;
     use crate::utilities::channel_content::InternalCommand;
     use crate::utilities::config::{
@@ -616,6 +616,7 @@ pub mod tests {
 
     use crate::database::sql_interface_feed::tests::insert_feed_patterns;
     use crate::database::sql_query_strings::{SQL_TABLE_FEEDLOG, SQL_TABLE_FEEDSCHEDULE};
+    use crate::launch::channels::Channels;
     use crate::mocks::mock_food_injection::MockFoodInjection;
     use crate::mocks::mock_sql_interface_feed::tests::MockSqlInterfaceFeed;
 
@@ -649,11 +650,7 @@ pub mod tests {
         let sleep_duration_8_seconds = Duration::from_millis(10000);
         let spin_sleeper = SpinSleeper::default();
 
-        // channels for the test object
-        let (_tx_relay_manager_to_feed, rx_feed_from_relay_manager) = mpsc::channel();
-        let (tx_feed_to_relay_manager, _rx_relay_manager_from_feed) = mpsc::channel();
-        let (tx_signal_handler_to_feed, rx_feed_from_signal_handler) = mpsc::channel();
-        let (tx_feed_to_signal_handler, rx_signal_handler_from_feed) = mpsc::channel();
+        let mut channels = Channels::new_for_test();
 
         let mut mock_food_injection = MockFoodInjection::new();
 
@@ -746,8 +743,8 @@ pub mod tests {
             // thread for mock signal handler
             scope.spawn(move || {
                 create_mock_signal_handler(
-                    &tx_signal_handler_to_feed,
-                    &rx_signal_handler_from_feed,
+                    &channels.signal_handler.tx_signal_handler_to_feed,
+                    &channels.signal_handler.rx_signal_handler_from_feed,
                     spin_sleeper,
                     sleep_duration_8_seconds,
                 );
@@ -755,33 +752,11 @@ pub mod tests {
 
             spin_sleeper.sleep(sleep_duration_100_millis);
 
-            let mut feed_channels = FeedChannels {
-                tx_feed_to_relay_manager,
-                #[cfg(feature = "debug_channels")]
-                cnt_tx_feed_to_relay_manager: 0,
-
-                rx_feed_from_relay_manager,
-                #[cfg(feature = "debug_channels")]
-                cnt_rx_feed_from_relay_manager: 0,
-
-                tx_feed_to_signal_handler,
-                #[cfg(feature = "debug_channels")]
-                cnt_tx_feed_to_signal_handler: 0,
-
-                rx_feed_from_signal_handler,
-                #[cfg(feature = "debug_channels")]
-                cnt_rx_feed_from_signal_handler: 0,
-
-                rx_feed_from_messaging_opt: None,
-                #[cfg(feature = "debug_channels")]
-                cnt_rx_feed_from_messaging_opt: 0,
-            };
-
             // thread for the test object
             scope.spawn(move || {
                 feed.execute(
                     mutex_device_scheduler_feed.clone(),
-                    &mut feed_channels,
+                    &mut channels.feed,
                     &mut mock_food_injection,
                     sql_interface_feed,
                 );
@@ -866,11 +841,7 @@ pub mod tests {
         // create the test object
         let mut feed = Feed::new(config.feed, Duration::from_millis(1000));
 
-        let (tx_feed_to_relay_manager, _rx_relay_manager_from_feed) = mpsc::channel();
-        let (_tx_relay_manager_to_feed, rx_feed_from_relay_manager) = mpsc::channel();
-        let (tx_signal_handler_to_feed, rx_feed_from_signal_handler) = mpsc::channel();
-        let (tx_feed_to_signal_handler, rx_signal_handler_from_feed) = mpsc::channel();
-        let (tx_messaging_to_feed, rx_feed_from_messaging) = mpsc::channel();
+        let mut channels = Channels::new_for_test();
 
         let mut mock_food_injection = MockFoodInjection::new();
 
@@ -886,7 +857,7 @@ pub mod tests {
                 spin_sleeper.sleep(sleep_duration_100_millis);
 
                 // sending the message requesting stop of feed control
-                match tx_messaging_to_feed.send(InternalCommand::Stop) {
+                match channels.messaging.tx_messaging_to_feed.send(InternalCommand::Stop) {
                     Ok(()) => { /* do nothing */ }
                     Err(e) => {
                         panic!(
@@ -907,7 +878,7 @@ pub mod tests {
                 assert_eq!(actuation_count_1, 0);
 
                 // sending the message requesting restart of feed control
-                match tx_messaging_to_feed.send(InternalCommand::Start) {
+                match channels.messaging.tx_messaging_to_feed.send(InternalCommand::Start) {
                     Ok(()) => { /* do nothing */ }
                     Err(e) => {
                         panic!(
@@ -929,7 +900,7 @@ pub mod tests {
                 assert_eq!(actuation_count_2, 1);
 
                 // sending the message requesting execution of the feed profile
-                match tx_messaging_to_feed.send(InternalCommand::Execute(1)) {
+                match channels.messaging.tx_messaging_to_feed.send(InternalCommand::Execute(1)) {
                     Ok(()) => { /* do nothing */ }
                     Err(e) => {
                         panic!(
@@ -951,9 +922,9 @@ pub mod tests {
                 assert_eq!(actuation_count_3, 2);
 
                 // requesting feed control to quit
-                let _ = tx_signal_handler_to_feed.send(InternalCommand::Quit);
-                rx_signal_handler_from_feed.recv().unwrap();
-                let _ = tx_signal_handler_to_feed.send(InternalCommand::Terminate);
+                let _ = channels.signal_handler.send_to_feed(InternalCommand::Quit);
+                channels.signal_handler.receive_from_feed().unwrap();
+                let _ = channels.signal_handler.send_to_feed(InternalCommand::Terminate);
             })
             .unwrap();
 
@@ -963,31 +934,10 @@ pub mod tests {
         let join_handle_test_object = thread::Builder::new()
             .name("test_object".to_string())
             .spawn(move || {
-                let mut feed_channels = FeedChannels {
-                    tx_feed_to_relay_manager,
-                    #[cfg(feature = "debug_channels")]
-                    cnt_tx_feed_to_relay_manager: 0,
-
-                    rx_feed_from_relay_manager,
-                    #[cfg(feature = "debug_channels")]
-                    cnt_rx_feed_from_relay_manager: 0,
-
-                    tx_feed_to_signal_handler,
-                    #[cfg(feature = "debug_channels")]
-                    cnt_tx_feed_to_signal_handler: 0,
-
-                    rx_feed_from_signal_handler,
-                    #[cfg(feature = "debug_channels")]
-                    cnt_rx_feed_from_signal_handler: 0,
-
-                    rx_feed_from_messaging_opt: Some(rx_feed_from_messaging),
-                    #[cfg(feature = "debug_channels")]
-                    cnt_rx_feed_from_messaging_opt: 0,
-                };
 
                 feed.execute(
                     mutex_device_scheduler_feed_test_object.clone(),
-                    &mut feed_channels,
+                    &mut channels.feed,
                     &mut mock_food_injection,
                     sql_interface_feed,
                 );
@@ -1028,10 +978,7 @@ pub mod tests {
         // create the test object
         let mut feed = Feed::new(config.feed, Duration::from_millis(1000));
 
-        let (tx_feed_to_relay_manager, _rx_relay_manager_from_feed) = mpsc::channel();
-        let (_tx_relay_manager_to_feed, rx_feed_from_relay_manager) = mpsc::channel();
-        let (tx_signal_handler_to_feed, rx_feed_from_signal_handler) = mpsc::channel();
-        let (tx_feed_to_signal_handler, rx_signal_handler_from_feed) = mpsc::channel();
+        let mut channels = Channels::new_for_test();
 
         let mut mock_food_injection = MockFoodInjection::new();
 
@@ -1054,9 +1001,9 @@ pub mod tests {
                 assert_eq!(actuation_count_1, 0);
 
                 // requesting feed control to quit
-                let _ = tx_signal_handler_to_feed.send(InternalCommand::Quit);
-                rx_signal_handler_from_feed.recv().unwrap();
-                let _ = tx_signal_handler_to_feed.send(InternalCommand::Terminate);
+                let _ = channels.signal_handler.send_to_feed(InternalCommand::Quit);
+                channels.signal_handler.receive_from_feed().unwrap();
+                let _ = channels.signal_handler.send_to_feed(InternalCommand::Terminate);
             })
             .unwrap();
 
@@ -1066,31 +1013,10 @@ pub mod tests {
         let join_handle_test_object = thread::Builder::new()
             .name("test_object".to_string())
             .spawn(move || {
-                let mut feed_channels = FeedChannels {
-                    tx_feed_to_relay_manager,
-                    #[cfg(feature = "debug_channels")]
-                    cnt_tx_feed_to_relay_manager: 0,
-
-                    rx_feed_from_relay_manager,
-                    #[cfg(feature = "debug_channels")]
-                    cnt_rx_feed_from_relay_manager: 0,
-
-                    tx_feed_to_signal_handler,
-                    #[cfg(feature = "debug_channels")]
-                    cnt_tx_feed_to_signal_handler: 0,
-
-                    rx_feed_from_signal_handler,
-                    #[cfg(feature = "debug_channels")]
-                    cnt_rx_feed_from_signal_handler: 0,
-
-                    rx_feed_from_messaging_opt: None,
-                    #[cfg(feature = "debug_channels")]
-                    cnt_rx_feed_from_messaging_opt: 0,
-                };
 
                 feed.execute(
                     mutex_device_scheduler_feed_test_object.clone(),
-                    &mut feed_channels,
+                    &mut channels.feed,
                     &mut mock_food_injection,
                     mock_sql_interface_feed,
                 );
@@ -1238,11 +1164,7 @@ pub mod tests {
         let sleep_duration_8_seconds = Duration::from_millis(10000);
         let spin_sleeper = SpinSleeper::default();
 
-        // channels for the test object
-        let (_tx_relay_manager_to_feed, rx_feed_from_relay_manager) = mpsc::channel();
-        let (tx_feed_to_relay_manager, _rx_relay_manager_from_feed) = mpsc::channel();
-        let (tx_signal_handler_to_feed, rx_feed_from_signal_handler) = mpsc::channel();
-        let (tx_feed_to_signal_handler, rx_signal_handler_from_feed) = mpsc::channel();
+        let mut channels = Channels::new_for_test();
 
         setup_logger(LoggerConfig::default()).unwrap();
 
@@ -1330,8 +1252,8 @@ pub mod tests {
             // thread for mock signal handler
             scope.spawn(move || {
                 create_mock_signal_handler(
-                    &tx_signal_handler_to_feed,
-                    &rx_signal_handler_from_feed,
+                    &channels.signal_handler.tx_signal_handler_to_feed,
+                    &channels.signal_handler.rx_signal_handler_from_feed,
                     spin_sleeper,
                     sleep_duration_8_seconds,
                 );
@@ -1341,31 +1263,10 @@ pub mod tests {
 
             // thread for the test object
             scope.spawn(move || {
-                let mut feed_channels = FeedChannels {
-                    tx_feed_to_relay_manager,
-                    #[cfg(feature = "debug_channels")]
-                    cnt_tx_feed_to_relay_manager: 0,
-
-                    rx_feed_from_relay_manager,
-                    #[cfg(feature = "debug_channels")]
-                    cnt_rx_feed_from_relay_manager: 0,
-
-                    tx_feed_to_signal_handler,
-                    #[cfg(feature = "debug_channels")]
-                    cnt_tx_feed_to_signal_handler: 0,
-
-                    rx_feed_from_signal_handler,
-                    #[cfg(feature = "debug_channels")]
-                    cnt_rx_feed_from_signal_handler: 0,
-
-                    rx_feed_from_messaging_opt: None,
-                    #[cfg(feature = "debug_channels")]
-                    cnt_rx_feed_from_messaging_opt: 0,
-                };
 
                 feed.execute(
                     mutex_device_scheduler_feed.clone(),
-                    &mut feed_channels,
+                    &mut channels.feed,
                     &mut mock_food_injection,
                     sql_interface_feed,
                 );
@@ -1386,11 +1287,7 @@ pub mod tests {
         let sleep_duration_8_seconds = Duration::from_millis(10000);
         let spin_sleeper = SpinSleeper::default();
 
-        // channels for the test object
-        let (_tx_relay_manager_to_feed, rx_feed_from_relay_manager) = mpsc::channel();
-        let (tx_feed_to_relay_manager, _rx_relay_manager_from_feed) = mpsc::channel();
-        let (tx_signal_handler_to_feed, rx_feed_from_signal_handler) = mpsc::channel();
-        let (tx_feed_to_signal_handler, rx_signal_handler_from_feed) = mpsc::channel();
+        let mut channels = Channels::new_for_test();
 
         setup_logger(LoggerConfig::default()).unwrap();
 
@@ -1480,8 +1377,8 @@ pub mod tests {
             // thread for mock signal handler
             scope.spawn(move || {
                 create_mock_signal_handler(
-                    &tx_signal_handler_to_feed,
-                    &rx_signal_handler_from_feed,
+                    &channels.signal_handler.tx_signal_handler_to_feed,
+                    &channels.signal_handler.rx_signal_handler_from_feed,
                     spin_sleeper,
                     sleep_duration_8_seconds,
                 );
@@ -1491,31 +1388,10 @@ pub mod tests {
 
             // thread for the test object
             scope.spawn(move || {
-                let mut feed_channels = FeedChannels {
-                    tx_feed_to_relay_manager,
-                    #[cfg(feature = "debug_channels")]
-                    cnt_tx_feed_to_relay_manager: 0,
-
-                    rx_feed_from_relay_manager,
-                    #[cfg(feature = "debug_channels")]
-                    cnt_rx_feed_from_relay_manager: 0,
-
-                    tx_feed_to_signal_handler,
-                    #[cfg(feature = "debug_channels")]
-                    cnt_tx_feed_to_signal_handler: 0,
-
-                    rx_feed_from_signal_handler,
-                    #[cfg(feature = "debug_channels")]
-                    cnt_rx_feed_from_signal_handler: 0,
-
-                    rx_feed_from_messaging_opt: None,
-                    #[cfg(feature = "debug_channels")]
-                    cnt_rx_feed_from_messaging_opt: 0,
-                };
 
                 feed.execute(
                     mutex_device_scheduler_feed.clone(),
-                    &mut feed_channels,
+                    &mut channels.feed,
                     &mut mock_food_injection,
                     sql_interface_feed,
                 );
