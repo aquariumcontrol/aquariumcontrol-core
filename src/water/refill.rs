@@ -152,6 +152,9 @@ pub struct Refill {
 
     /// database ping interval
     pub database_ping_interval: Duration,
+
+    /// The last monitor view sent, to avoid sending redundant data.
+    last_sent_monitor_view: Option<RefillMonitorView>
 }
 
 impl Refill {
@@ -200,6 +203,7 @@ impl Refill {
             lock_error_channel_receive_termination: false,
             last_ping_instant: Instant::now(),
             database_ping_interval,
+            last_sent_monitor_view: None,
         }
     }
 
@@ -243,6 +247,7 @@ impl Refill {
             lock_error_channel_receive_termination: false,
             last_ping_instant: Instant::now(),
             database_ping_interval: Duration::from_secs(1000),
+            last_sent_monitor_view: None,
         }
     }
 
@@ -578,14 +583,24 @@ impl Refill {
             refill_check_interval_last_refill,
         };
 
-        match refill_channels.send_to_monitor(refill_monitor_view) {
-            Ok(_) => {
-                self.lock_error_channel_send_monitors = false;
+        // Only send the view if it's different from the last one we sent.
+        let mut monitor_view_is_different = true;
+        if self.last_sent_monitor_view.is_some() {
+            let previous_monitor_view = self.last_sent_monitor_view.clone().unwrap();
+            if refill_monitor_view == previous_monitor_view {
+                monitor_view_is_different = false;
             }
-            Err(e) => {
-                if !self.lock_error_channel_send_monitors {
-                    log_error_chain(module_path!(), "sending view to monitor failed", e);
-                    self.lock_error_channel_send_monitors = true;
+        }
+        if monitor_view_is_different {
+            match refill_channels.send_to_monitor(refill_monitor_view) {
+                Ok(_) => {
+                    self.lock_error_channel_send_monitors = false;
+                }
+                Err(e) => {
+                    if !self.lock_error_channel_send_monitors {
+                        log_error_chain(module_path!(), "sending view to monitor failed", e);
+                        self.lock_error_channel_send_monitors = true;
+                    }
                 }
             }
         }
