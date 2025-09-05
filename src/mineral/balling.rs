@@ -821,7 +821,7 @@ pub mod tests {
     use crate::database::sql_interface_balling::{BallingSetVal, SqlInterfaceBalling};
     use crate::database::sql_interface_error::SqlInterfaceError;
     use crate::database::sql_query_strings::SQL_TABLE_BALLING_DOSING_LOG;
-    use crate::mineral::balling::{Balling, BallingChannels, BallingError};
+    use crate::mineral::balling::{Balling, BallingError};
     use crate::mocks::mock_mineral_injection::tests::MockMineralInjection;
     use crate::mocks::mock_schedule_check::tests::mock_schedule_check;
     use crate::utilities::channel_content::AquariumDevice::{
@@ -832,10 +832,10 @@ pub mod tests {
         read_config_file, read_config_file_with_test_database, ConfigData,
     };
     use spin_sleep::SpinSleeper;
-    use std::sync::mpsc::{self};
     use std::sync::{Arc, Mutex};
     use std::thread::scope;
     use std::time::Duration;
+    use crate::launch::channels::Channels;
 
     fn read_balling_config() -> ConfigData {
         read_config_file("/config/aquarium_control_test_generic.toml".to_string()).unwrap()
@@ -1202,13 +1202,8 @@ pub mod tests {
         );
         insert_past_dosing_events(&mut sql_interface, &mut sql_interface_balling);
 
-        let (tx_balling_to_relay_manager, _rx_relay_manager_from_balling) = mpsc::channel();
-        let (_tx_relay_manager_to_balling, rx_balling_from_relay_manager) = mpsc::channel();
-        let (tx_signal_handler_to_balling, rx_balling_from_signal_handler) = mpsc::channel();
-        let (tx_balling_to_signal_handler, rx_signal_handler_from_balling) = mpsc::channel();
-        let (tx_schedule_check_to_balling, rx_balling_from_schedule_check) = mpsc::channel();
-        let (tx_balling_to_schedule_check, rx_schedule_check_from_balling) = mpsc::channel();
-
+        let mut channels = Channels::new_for_test();
+        
         let mutex_device_scheduler = Arc::new(Mutex::new(0));
         let mutex_device_scheduler_environment = mutex_device_scheduler.clone();
 
@@ -1226,8 +1221,8 @@ pub mod tests {
             // thread for schedule check
             scope.spawn(move || {
                 mock_schedule_check(
-                    &tx_schedule_check_to_balling,
-                    &rx_schedule_check_from_balling,
+                    &channels.schedule_check.tx_schedule_check_to_balling,
+                    &channels.schedule_check.rx_schedule_check_from_balling,
                     None,
                     schedule_allows,
                 )
@@ -1247,52 +1242,22 @@ pub mod tests {
                 assert_eq!(execution_count, execution_count_reference);
 
                 // now we can send the quit command
-                let _ = tx_signal_handler_to_balling.send(InternalCommand::Quit);
-                rx_signal_handler_from_balling.recv().unwrap();
+                let _ = channels.signal_handler.send_to_balling(InternalCommand::Quit);
+                channels.signal_handler.receive_from_balling().unwrap();
                 println!(
                     "test_balling_dosing: Received confirmation of Quit command from test object."
                 );
-                let _ = tx_signal_handler_to_balling.send(InternalCommand::Terminate);
+                let _ = channels.signal_handler.send_to_balling(InternalCommand::Terminate);
             });
 
             // thread for the test object
             scope.spawn(move || {
                 let tx_balling_to_schedule_check_for_test_case_finish =
-                    tx_balling_to_schedule_check.clone();
-
-                let mut balling_channels = BallingChannels {
-                    tx_balling_to_relay_manager,
-                    #[cfg(feature = "debug_channels")]
-                    cnt_tx_balling_to_relay_manager: 0,
-
-                    rx_balling_from_relay_manager,
-                    #[cfg(feature = "debug_channels")]
-                    cnt_rx_balling_from_relay_manager: 0,
-
-                    tx_balling_to_signal_handler,
-                    #[cfg(feature = "debug_channels")]
-                    cnt_tx_balling_to_signal_handler: 0,
-
-                    rx_balling_from_signal_handler,
-                    #[cfg(feature = "debug_channels")]
-                    cnt_rx_balling_from_signal_handler: 0,
-
-                    tx_balling_to_schedule_check,
-                    #[cfg(feature = "debug_channels")]
-                    cnt_tx_balling_to_schedule_check: 0,
-
-                    rx_balling_from_schedule_check,
-                    #[cfg(feature = "debug_channels")]
-                    cnt_rx_balling_from_schedule_check: 0,
-
-                    rx_balling_from_messaging_opt: None,
-                    #[cfg(feature = "debug_channels")]
-                    cnt_rx_balling_from_messaging_opt: 0,
-                };
+                    channels.balling.tx_balling_to_schedule_check.clone();
 
                 balling.execute(
                     mutex_device_scheduler,
-                    &mut balling_channels,
+                    &mut channels.balling,
                     &mut mock_mineral_injection,
                     sql_interface_balling,
                 );
@@ -1616,17 +1581,10 @@ pub mod tests {
         )
         .unwrap();
 
-        let (tx_balling_to_relay_manager, _rx_relay_manager_from_balling) = mpsc::channel();
-        let (_tx_relay_manager_to_balling, rx_balling_from_relay_manager) = mpsc::channel();
-        let (tx_signal_handler_to_balling, rx_balling_from_signal_handler) = mpsc::channel();
-        let (tx_balling_to_signal_handler, rx_signal_handler_from_balling) = mpsc::channel();
-        let (tx_schedule_check_to_balling, rx_balling_from_schedule_check) = mpsc::channel();
-        let (tx_balling_to_schedule_check, rx_schedule_check_from_balling) = mpsc::channel();
-        let (tx_messaging_to_balling, rx_balling_from_messaging) = mpsc::channel();
-        let rx_balling_from_messaging_opt = Some(rx_balling_from_messaging);
+        let mut channels = Channels::new_for_test();
 
         let tx_balling_to_schedule_check_for_test_case_finish =
-            tx_balling_to_schedule_check.clone();
+            channels.balling.tx_balling_to_schedule_check.clone();
 
         let mutex_device_scheduler = Arc::new(Mutex::new(0));
 
@@ -1637,8 +1595,8 @@ pub mod tests {
             // thread for schedule check
             scope.spawn(move || {
                 mock_schedule_check(
-                    &tx_schedule_check_to_balling,
-                    &rx_schedule_check_from_balling,
+                    &channels.schedule_check.tx_schedule_check_to_balling,
+                    &channels.schedule_check.rx_schedule_check_from_balling,
                     None,
                     true,
                 )
@@ -1660,7 +1618,7 @@ pub mod tests {
                 assert_eq!(actuation_count_0, 1);
 
                 // sending the message requesting stop of Balling dosing control
-                match tx_messaging_to_balling.send(InternalCommand::Stop) {
+                match channels.messaging.tx_messaging_to_balling.send(InternalCommand::Stop) {
                     Ok(()) => { /* do nothing */ }
                     Err(e) => {
                         panic!(
@@ -1681,7 +1639,7 @@ pub mod tests {
                 assert_eq!(actuation_count_1, 1);
 
                 // sending the message requesting restart of Balling dosing control
-                match tx_messaging_to_balling.send(InternalCommand::Start) {
+                match channels.messaging.tx_messaging_to_balling.send(InternalCommand::Start) {
                     Ok(()) => { /* do nothing */ }
                     Err(e) => {
                         panic!(
@@ -1702,54 +1660,25 @@ pub mod tests {
                 assert_eq!(actuation_count_2, 2);
 
                 // requesting Balling dosing control to quit
-                let _ = tx_signal_handler_to_balling.send(InternalCommand::Quit);
-                rx_signal_handler_from_balling.recv().unwrap();
+                let _ = channels.signal_handler.send_to_balling(InternalCommand::Quit);
+                channels.signal_handler.receive_from_balling().unwrap();
 
                 let actuation_count_3 = *mutex_device_scheduler_balling_test_environment
                     .lock()
                     .unwrap();
                 // check the amount of actuation (after Quit command)
                 assert_eq!(actuation_count_3, 2);
-                let _ = tx_signal_handler_to_balling.send(InternalCommand::Terminate);
+                let _ = channels.signal_handler.send_to_balling(InternalCommand::Terminate);
             });
 
             spin_sleeper.sleep(sleep_duration_100_millis);
 
             // thread for the test object and assertions
             scope.spawn(move || {
-                let mut balling_channels = BallingChannels {
-                    tx_balling_to_relay_manager,
-                    #[cfg(feature = "debug_channels")]
-                    cnt_tx_balling_to_relay_manager: 0,
-
-                    rx_balling_from_relay_manager,
-                    #[cfg(feature = "debug_channels")]
-                    cnt_rx_balling_from_relay_manager: 0,
-
-                    tx_balling_to_signal_handler,
-                    #[cfg(feature = "debug_channels")]
-                    cnt_tx_balling_to_signal_handler: 0,
-
-                    rx_balling_from_signal_handler,
-                    #[cfg(feature = "debug_channels")]
-                    cnt_rx_balling_from_signal_handler: 0,
-
-                    tx_balling_to_schedule_check,
-                    #[cfg(feature = "debug_channels")]
-                    cnt_tx_balling_to_schedule_check: 0,
-
-                    rx_balling_from_schedule_check,
-                    #[cfg(feature = "debug_channels")]
-                    cnt_rx_balling_from_schedule_check: 0,
-
-                    rx_balling_from_messaging_opt,
-                    #[cfg(feature = "debug_channels")]
-                    cnt_rx_balling_from_messaging_opt: 0,
-                };
 
                 balling.execute(
                     mutex_device_scheduler,
-                    &mut balling_channels,
+                    &mut channels.balling,
                     &mut mock_mineral_injection,
                     sql_interface_balling,
                 );
@@ -1904,14 +1833,7 @@ pub mod tests {
         );
         insert_past_dosing_events(&mut sql_interface, &mut sql_interface_balling);
 
-        let (tx_balling_to_relay_manager, _rx_relay_manager_from_balling) = mpsc::channel();
-        let (_tx_relay_manager_to_balling, rx_balling_from_relay_manager) = mpsc::channel();
-        let (tx_signal_handler_to_balling, rx_balling_from_signal_handler) = mpsc::channel();
-        let (tx_balling_to_signal_handler, rx_signal_handler_from_balling) = mpsc::channel();
-        let (tx_schedule_check_to_balling, rx_balling_from_schedule_check) = mpsc::channel();
-        let (tx_balling_to_schedule_check, rx_schedule_check_from_balling) = mpsc::channel();
-        let (tx_messaging_to_balling, rx_balling_from_messaging) = mpsc::channel();
-        let rx_balling_from_messaging_opt = Some(rx_balling_from_messaging);
+        let mut channels = Channels::new_for_test();
 
         let mutex_device_scheduler = Arc::new(Mutex::new(0));
         let mutex_device_scheduler_environment = mutex_device_scheduler.clone();
@@ -1930,8 +1852,8 @@ pub mod tests {
             // thread for schedule check
             scope.spawn(move || {
                 mock_schedule_check(
-                    &tx_schedule_check_to_balling,
-                    &rx_schedule_check_from_balling,
+                    &channels.schedule_check.tx_schedule_check_to_balling,
+                    &channels.schedule_check.rx_schedule_check_from_balling,
                     None,
                     schedule_allows,
                 )
@@ -1949,16 +1871,16 @@ pub mod tests {
                 assert_eq!(execution_count1, 0);
 
                 // send the dosing requests to Balling
-                tx_messaging_to_balling
+                channels.messaging.tx_messaging_to_balling
                     .send(InternalCommand::Execute(2))
                     .unwrap();
-                tx_messaging_to_balling
+                channels.messaging.tx_messaging_to_balling
                     .send(InternalCommand::Execute(4))
                     .unwrap();
-                tx_messaging_to_balling
+                channels.messaging.tx_messaging_to_balling
                     .send(InternalCommand::Execute(3))
                     .unwrap();
-                tx_messaging_to_balling
+                channels.messaging.tx_messaging_to_balling
                     .send(InternalCommand::Execute(1))
                     .unwrap();
 
@@ -1972,52 +1894,22 @@ pub mod tests {
                 assert_eq!(execution_count2, execution_count_reference);
 
                 // now we can send the quit command
-                let _ = tx_signal_handler_to_balling.send(InternalCommand::Quit);
-                rx_signal_handler_from_balling.recv().unwrap();
+                let _ = channels.signal_handler.send_to_balling(InternalCommand::Quit);
+                channels.signal_handler.receive_from_balling().unwrap();
                 println!(
                     "test_balling_dosing: Received confirmation of Quit command from test object."
                 );
-                let _ = tx_signal_handler_to_balling.send(InternalCommand::Terminate);
+                let _ = channels.signal_handler.send_to_balling(InternalCommand::Terminate);
             });
 
             // thread for the test object
             scope.spawn(move || {
                 let tx_balling_to_schedule_check_for_test_case_finish =
-                    tx_balling_to_schedule_check.clone();
-
-                let mut balling_channels = BallingChannels {
-                    tx_balling_to_relay_manager,
-                    #[cfg(feature = "debug_channels")]
-                    cnt_tx_balling_to_relay_manager: 0,
-
-                    rx_balling_from_relay_manager,
-                    #[cfg(feature = "debug_channels")]
-                    cnt_rx_balling_from_relay_manager: 0,
-
-                    tx_balling_to_signal_handler,
-                    #[cfg(feature = "debug_channels")]
-                    cnt_tx_balling_to_signal_handler: 0,
-
-                    rx_balling_from_signal_handler,
-                    #[cfg(feature = "debug_channels")]
-                    cnt_rx_balling_from_signal_handler: 0,
-
-                    tx_balling_to_schedule_check,
-                    #[cfg(feature = "debug_channels")]
-                    cnt_tx_balling_to_schedule_check: 0,
-
-                    rx_balling_from_schedule_check,
-                    #[cfg(feature = "debug_channels")]
-                    cnt_rx_balling_from_schedule_check: 0,
-
-                    rx_balling_from_messaging_opt,
-                    #[cfg(feature = "debug_channels")]
-                    cnt_rx_balling_from_messaging_opt: 0,
-                };
+                    channels.balling.tx_balling_to_schedule_check.clone();
 
                 balling.execute(
                     mutex_device_scheduler,
-                    &mut balling_channels,
+                    &mut channels.balling,
                     &mut mock_mineral_injection,
                     sql_interface_balling,
                 );
