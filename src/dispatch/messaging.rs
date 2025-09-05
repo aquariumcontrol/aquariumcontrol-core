@@ -577,13 +577,13 @@ pub mod tests {
 
         let mut channels = Channels::new_for_test();
 
-        let tx_test_environment_to_ventilation = tx_messaging_to_ventilation.clone();
+        let tx_test_environment_to_ventilation = channels.messaging.tx_messaging_to_ventilation.clone();
 
         let join_handle_mock_ventilation = thread::Builder::new()
             .name("mock_ventilation".to_string())
             .spawn(move || {
                 assert_stop_start_sequence(mock_message_command_receiver(
-                    channels.ventilation.rx_ventilation_from_messaging,
+                    channels.ventilation.rx_ventilation_from_messaging_opt.unwrap(),
                 ));
             })
             .unwrap();
@@ -630,13 +630,13 @@ pub mod tests {
 
         let mut channels = Channels::new_for_test();
 
-        let tx_test_environment_to_heating = tx_messaging_to_heating.clone();
+        let tx_test_environment_to_heating = channels.messaging.tx_messaging_to_heating.clone();
 
         let join_handle_mock_heating = thread::Builder::new()
             .name("mock_heating".to_string())
             .spawn(move || {
                 assert_stop_start_sequence(mock_message_command_receiver(
-                    channels.heating.rx_heating_from_messaging,
+                    channels.heating.rx_heating_from_messaging_opt.unwrap(),
                 ));
             })
             .unwrap();
@@ -687,13 +687,13 @@ pub mod tests {
 
         let mut channels = Channels::new_for_test();
 
-        let tx_test_environment_to_refill = tx_messaging_to_refill.clone();
+        let tx_test_environment_to_refill = channels.messaging.tx_messaging_to_refill.clone();
 
         let join_handle_mock_refill = thread::Builder::new()
             .name("mock_refill".to_string())
             .spawn(move || {
                 let mut commands_received =
-                    mock_message_command_receiver(channels.refill.rx_refill_from_messaging);
+                    mock_message_command_receiver(channels.refill.rx_refill_from_messaging_opt.unwrap());
 
                 // assert the number of commands sent/received are identical
                 assert_eq!(3, commands_received.len());
@@ -760,13 +760,13 @@ pub mod tests {
 
         let mut channels = Channels::new_for_test();
 
-        let tx_test_environment_to_feed = tx_messaging_to_feed.clone();
+        let tx_test_environment_to_feed = channels.messaging.tx_messaging_to_feed.clone();
 
         let join_handle_mock_feed = thread::Builder::new()
             .name("mock_feed".to_string())
             .spawn(move || {
                 let mut commands_received =
-                    mock_message_command_receiver(channels.feed.rx_feed_from_messaging);
+                    mock_message_command_receiver(channels.feed.rx_feed_from_messaging_opt.unwrap());
 
                 // assert the number of commands sent/received are identical
                 assert_eq!(3, commands_received.len());
@@ -829,13 +829,13 @@ pub mod tests {
 
         let mut channels = Channels::new_for_test();
 
-        let tx_test_environment_to_balling = tx_messaging_to_balling.clone();
+        let tx_test_environment_to_balling = channels.messaging.tx_messaging_to_balling.clone();
 
         let join_handle_mock_balling = thread::Builder::new()
             .name("mock_balling".to_string())
             .spawn(move || {
                 assert_stop_start_sequence(mock_message_command_receiver(
-                    channels.balling.rx_balling_from_messaging,
+                    channels.balling.rx_balling_from_messaging_opt.unwrap(),
                 ));
             })
             .unwrap();
@@ -882,13 +882,13 @@ pub mod tests {
 
         let mut channels = Channels::new_for_test();
 
-        let tx_test_environment_to_watchdog = tx_messaging_to_watchdog.clone();
+        let tx_test_environment_to_watchdog = channels.messaging.tx_messaging_to_watchdog.clone();
 
         let join_handle_mock_watchdog = thread::Builder::new()
             .name("mock_watchdog".to_string())
             .spawn(move || {
                 assert_stop_start_sequence(mock_message_command_receiver(
-                    channels.watchdog.rx_watchdog_from_messaging,
+                    channels.watchdog.rx_watchdog_from_messaging_opt.unwrap(),
                 ));
             })
             .unwrap();
