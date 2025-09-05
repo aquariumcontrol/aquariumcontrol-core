@@ -619,13 +619,13 @@ impl FoodInjectionTrait for FoodInjection {
 
 #[cfg(test)]
 pub mod tests {
-    use crate::food::feed_channels::FeedChannels;
     use crate::food::feed_pattern::{FeedPhase, Feedpattern};
     use crate::food::food_injection::{FoodInjection, FoodInjectionTrait};
+    use crate::launch::channels::Channels;
     use crate::utilities::channel_content::{ActuatorState, AquariumDevice, InternalCommand};
     use crate::utilities::config::{read_config_file, ConfigData};
     use all_asserts::{assert_ge, assert_le};
-    use std::sync::mpsc::{self, Receiver, Sender};
+    use std::sync::mpsc::{Receiver, Sender};
     use std::thread::scope;
     use std::time::Instant;
 
@@ -757,32 +757,7 @@ pub mod tests {
             read_config_file("/config/aquarium_control_test_generic.toml".to_string()).unwrap();
         let mut food_injection = FoodInjection::new(&config.feed);
 
-        let (tx_feed_to_relay_manager, rx_relay_manager_from_feed) = mpsc::channel();
-        let (tx_relay_manager_to_feed, rx_feed_from_relay_manager) = mpsc::channel();
-        let (_tx_signal_handler_to_feed, rx_feed_from_signal_handler) = mpsc::channel();
-        let (tx_feed_to_signal_handler, _rx_signal_handler_from_feed) = mpsc::channel();
-
-        let mut feed_channels = FeedChannels {
-            tx_feed_to_relay_manager,
-            #[cfg(feature = "debug_channels")]
-            cnt_tx_feed_to_relay_manager: 0,
-
-            rx_feed_from_relay_manager,
-            #[cfg(feature = "debug_channels")]
-            cnt_rx_feed_from_relay_manager: 0,
-
-            tx_feed_to_signal_handler,
-            #[cfg(feature = "debug_channels")]
-            cnt_tx_feed_to_signal_handler: 0,
-
-            rx_feed_from_signal_handler,
-            #[cfg(feature = "debug_channels")]
-            cnt_rx_feed_from_signal_handler: 0,
-
-            rx_feed_from_messaging_opt: None,
-            #[cfg(feature = "debug_channels")]
-            cnt_rx_feed_from_messaging_opt: 0,
-        };
+        let mut channels = Channels::new_for_test();
 
         scope(|scope| {
             // this scope is providing the test environment
@@ -799,8 +774,8 @@ pub mod tests {
                 for i in 0..126 {
                     println!("test_food_injection: loop #{}", i);
                     let command = test_food_injection_receive_actuation_command_send_confirmation(
-                        &tx_relay_manager_to_feed,
-                        &rx_relay_manager_from_feed,
+                        &channels.relay_manager.tx_relay_manager_to_feed,
+                        &channels.relay_manager.rx_relay_manager_from_feed,
                         &mut counter_switch_on,
                         &mut counter_switch_off,
                     );
@@ -856,7 +831,7 @@ pub mod tests {
                 };
 
                 let start_time = Instant::now();
-                let result_tuple = food_injection.inject_food(&mut feed_channels, &feedpattern);
+                let result_tuple = food_injection.inject_food(&mut channels.feed, &feedpattern);
                 let end_time = Instant::now();
 
                 let execution_duration = end_time - start_time;
@@ -883,32 +858,7 @@ pub mod tests {
             read_config_file("/config/aquarium_control_test_generic.toml".to_string()).unwrap();
         let mut food_injection = FoodInjection::new(&config.feed);
 
-        let (tx_feed_to_relay_manager, rx_relay_manager_from_feed) = mpsc::channel();
-        let (tx_relay_manager_to_feed, rx_feed_from_relay_manager) = mpsc::channel();
-        let (tx_signal_handler_to_feed, rx_feed_from_signal_handler) = mpsc::channel();
-        let (tx_feed_to_signal_handler, _rx_signal_handler_from_feed) = mpsc::channel();
-
-        let mut feed_channels = FeedChannels {
-            tx_feed_to_relay_manager,
-            #[cfg(feature = "debug_channels")]
-            cnt_tx_feed_to_relay_manager: 0,
-
-            rx_feed_from_relay_manager,
-            #[cfg(feature = "debug_channels")]
-            cnt_rx_feed_from_relay_manager: 0,
-
-            tx_feed_to_signal_handler,
-            #[cfg(feature = "debug_channels")]
-            cnt_tx_feed_to_signal_handler: 0,
-
-            rx_feed_from_signal_handler,
-            #[cfg(feature = "debug_channels")]
-            cnt_rx_feed_from_signal_handler: 0,
-
-            rx_feed_from_messaging_opt: None,
-            #[cfg(feature = "debug_channels")]
-            cnt_rx_feed_from_messaging_opt: 0,
-        };
+        let mut channels = Channels::new_for_test();
 
         scope(|scope| {
             // this scope is providing the test environment
@@ -925,8 +875,8 @@ pub mod tests {
                 for i in 0..5 {
                     println!("test_food_injection: loop #{}", i);
                     let command = test_food_injection_receive_actuation_command_send_confirmation(
-                        &tx_relay_manager_to_feed,
-                        &rx_relay_manager_from_feed,
+                        &channels.relay_manager.tx_relay_manager_to_feed,
+                        &channels.relay_manager.rx_relay_manager_from_feed,
                         &mut counter_switch_on,
                         &mut counter_switch_off,
                     );
@@ -941,12 +891,12 @@ pub mod tests {
                     );
                 }
                 println!("test_food_injection_interrupted: sending Quit signal");
-                _ = tx_signal_handler_to_feed.send(InternalCommand::Quit);
+                _ = channels.signal_handler.send_to_feed(InternalCommand::Quit);
                 for i in 0..1 {
                     println!("test_food_injection: loop #{}", i);
                     let command = test_food_injection_receive_actuation_command_send_confirmation(
-                        &tx_relay_manager_to_feed,
-                        &rx_relay_manager_from_feed,
+                        &channels.relay_manager.tx_relay_manager_to_feed,
+                        &channels.relay_manager.rx_relay_manager_from_feed,
                         &mut counter_switch_on,
                         &mut counter_switch_off,
                     );
@@ -1002,7 +952,7 @@ pub mod tests {
                 };
 
                 let start_time = Instant::now();
-                let result_tuple = food_injection.inject_food(&mut feed_channels, &feedpattern);
+                let result_tuple = food_injection.inject_food(&mut channels.feed, &feedpattern);
                 let end_time = Instant::now();
 
                 let execution_duration = end_time - start_time;
