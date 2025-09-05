@@ -8,9 +8,9 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 */
 
 #[cfg(any(test, target_os = "linux"))]
-use std::sync::mpsc::{Receiver, Sender};
-#[cfg(any(test, target_os = "linux"))]
 use crate::utilities::channel_content::InternalCommand;
+#[cfg(any(test, target_os = "linux"))]
+use std::sync::mpsc::{Receiver, Sender};
 
 cfg_if::cfg_if! {
     if #[cfg(target_os = "linux")] {

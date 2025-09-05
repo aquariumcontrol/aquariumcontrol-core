@@ -394,9 +394,7 @@ pub mod tests {
     use std::sync::mpsc::{Receiver, Sender};
     use std::{sync::mpsc, thread, time::Duration};
 
-    use crate::dispatch::messaging::{
-        messaging_commands, messaging_domains, Message, Messaging, MessagingChannels,
-    };
+    use crate::dispatch::messaging::{messaging_commands, messaging_domains, Message, Messaging};
     use crate::dispatch::messaging_channels::MessagingChannels;
     use crate::launch::channels::Channels;
     use crate::launch::execution_config::ExecutionConfig;
@@ -459,7 +457,7 @@ pub mod tests {
     // This function will panic if the new thread cannot be spawned.
     fn create_test_object(
         mut messaging: Messaging,
-        messaging_channels: MessagingChannels
+        mut messaging_channels: MessagingChannels,
     ) -> thread::JoinHandle<()> {
         thread::Builder::new()
             .name("test_object".to_string())
@@ -516,12 +514,18 @@ pub mod tests {
                 let _ = tx_environment_to_object.send(InternalCommand::Quit);
 
                 // requesting messaging to quit
-                let _ = tx_signal_handler_to_messaging.send(InternalCommand::Quit);
+                let _ = signal_handler_channels
+                    .tx_signal_handler_to_messaging
+                    .send(InternalCommand::Quit);
 
                 // waiting for confirmation from messaging
-                let _ = rx_signal_handler_from_messaging.recv();
+                let _ = signal_handler_channels
+                    .rx_signal_handler_from_messaging
+                    .recv();
 
-                let _ = tx_signal_handler_to_messaging.send(InternalCommand::Terminate);
+                let _ = signal_handler_channels
+                    .tx_signal_handler_to_messaging
+                    .send(InternalCommand::Terminate);
             })
             .unwrap()
     }
@@ -579,7 +583,7 @@ pub mod tests {
             .name("mock_ventilation".to_string())
             .spawn(move || {
                 assert_stop_start_sequence(mock_message_command_receiver(
-                    rx_ventilation_from_messaging,
+                    channels.ventilation.rx_ventilation_from_messaging,
                 ));
             })
             .unwrap();
@@ -593,10 +597,7 @@ pub mod tests {
         );
 
         // thread for the test object
-        let join_handle_test_object = create_test_object(
-            messaging,
-            channels.messaging
-        );
+        let join_handle_test_object = create_test_object(messaging, channels.messaging);
 
         join_handle_mock_ventilation
             .join()
@@ -635,7 +636,7 @@ pub mod tests {
             .name("mock_heating".to_string())
             .spawn(move || {
                 assert_stop_start_sequence(mock_message_command_receiver(
-                    rx_heating_from_messaging,
+                    channels.heating.rx_heating_from_messaging,
                 ));
             })
             .unwrap();
@@ -649,10 +650,7 @@ pub mod tests {
         );
 
         // thread for the test object
-        let join_handle_test_object = create_test_object(
-            messaging,
-            channels.messaging
-        );
+        let join_handle_test_object = create_test_object(messaging, channels.messaging);
 
         join_handle_mock_heating
             .join()
@@ -694,7 +692,8 @@ pub mod tests {
         let join_handle_mock_refill = thread::Builder::new()
             .name("mock_refill".to_string())
             .spawn(move || {
-                let mut commands_received = mock_message_command_receiver(rx_refill_from_messaging);
+                let mut commands_received =
+                    mock_message_command_receiver(channels.refill.rx_refill_from_messaging);
 
                 // assert the number of commands sent/received are identical
                 assert_eq!(3, commands_received.len());
@@ -723,10 +722,7 @@ pub mod tests {
         );
 
         // thread for the test object
-        let join_handle_test_object = create_test_object(
-            messaging,
-            channels.messaging
-        );
+        let join_handle_test_object = create_test_object(messaging, channels.messaging);
 
         join_handle_mock_refill
             .join()
@@ -762,14 +758,15 @@ pub mod tests {
 
         let messaging = Messaging::new(config.messaging, ExecutionConfig::default()).unwrap();
 
-       let mut channels = Channels::new_for_test();
+        let mut channels = Channels::new_for_test();
 
         let tx_test_environment_to_feed = tx_messaging_to_feed.clone();
 
         let join_handle_mock_feed = thread::Builder::new()
             .name("mock_feed".to_string())
             .spawn(move || {
-                let mut commands_received = mock_message_command_receiver(rx_feed_from_messaging);
+                let mut commands_received =
+                    mock_message_command_receiver(channels.feed.rx_feed_from_messaging);
 
                 // assert the number of commands sent/received are identical
                 assert_eq!(3, commands_received.len());
@@ -797,10 +794,7 @@ pub mod tests {
         );
 
         // thread for the test object
-        let join_handle_test_object = create_test_object(
-            messaging,
-            channels.messaging,
-        );
+        let join_handle_test_object = create_test_object(messaging, channels.messaging);
 
         join_handle_mock_feed
             .join()
@@ -841,7 +835,7 @@ pub mod tests {
             .name("mock_balling".to_string())
             .spawn(move || {
                 assert_stop_start_sequence(mock_message_command_receiver(
-                    rx_balling_from_messaging,
+                    channels.balling.rx_balling_from_messaging,
                 ));
             })
             .unwrap();
@@ -855,10 +849,7 @@ pub mod tests {
         );
 
         // thread for the test object
-        let join_handle_test_object = create_test_object(
-            messaging,
-            channels.messaging,
-        );
+        let join_handle_test_object = create_test_object(messaging, channels.messaging);
 
         join_handle_mock_balling
             .join()
@@ -897,7 +888,7 @@ pub mod tests {
             .name("mock_watchdog".to_string())
             .spawn(move || {
                 assert_stop_start_sequence(mock_message_command_receiver(
-                    rx_watchdog_from_messaging,
+                    channels.watchdog.rx_watchdog_from_messaging,
                 ));
             })
             .unwrap();
@@ -911,10 +902,7 @@ pub mod tests {
         );
 
         // thread for the test object
-        let join_handle_test_object = create_test_object(
-            messaging,
-            channels.messaging,
-        );
+        let join_handle_test_object = create_test_object(messaging, channels.messaging);
 
         join_handle_mock_watchdog
             .join()

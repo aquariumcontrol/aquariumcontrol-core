@@ -6,6 +6,8 @@ The above copyright notice and this permission notice shall be included in all c
 
 THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
+#[cfg(any(test, target_os = "linux"))]
+use crate::dispatch::messaging_channels::MessagingChannels;
 use crate::food::feed_channels::FeedChannels;
 use crate::mineral::balling_channels::BallingChannels;
 use crate::permission::schedule_check_channels::ScheduleCheckChannels;
@@ -30,8 +32,6 @@ use crate::watchmen::monitors_channels::MonitorsChannels;
 use crate::watchmen::watchdog_channels::WatchDogChannels;
 use crate::water::refill_channels::RefillChannels;
 use crate::water::refill_monitor_view::RefillMonitorView;
-#[cfg(any(test, target_os = "linux"))]
-use crate::dispatch::messaging_channels::MessagingChannels;
 
 #[cfg(all(feature = "target_hw", target_os = "linux"))]
 use crate::sensors::i2c_interface_channels::I2cInterfaceChannels;
@@ -96,7 +96,7 @@ impl Channels {
         let rx_watchdog_from_messaging_opt: Option<Receiver<InternalCommand>>;
 
         // channels for messaging used in Linux implementation and on unit testing on any platform
-//        #[cfg(any(test, target_os = "linux"))] {
+        //        #[cfg(any(test, target_os = "linux"))] {
         cfg_if::cfg_if! {
             if #[cfg(any(test, target_os = "linux"))] {
                 // *** signal_handler <=> messaging ***
@@ -1169,7 +1169,6 @@ impl Channels {
     #[cfg(test)]
     // Version for unit testing with ALL channels created
     pub fn new_for_test() -> Channels {
-
         // create channels for communication between threads
         let tx_signal_handler_to_messaging_opt: Option<Sender<InternalCommand>>;
         let rx_signal_handler_from_messaging_opt: Option<Receiver<bool>>;

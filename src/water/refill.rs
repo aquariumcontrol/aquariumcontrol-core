@@ -154,7 +154,7 @@ pub struct Refill {
     pub database_ping_interval: Duration,
 
     /// The last monitor view sent, to avoid sending redundant data.
-    last_sent_monitor_view: Option<RefillMonitorView>
+    last_sent_monitor_view: Option<RefillMonitorView>,
 }
 
 impl Refill {
@@ -1242,7 +1242,10 @@ pub mod tests {
         let join_handle_mock_monitors = thread::Builder::new()
             .name("mock_monitor".to_string())
             .spawn(move || {
-                mock_monitors.execute(channels.monitors.rx_monitors_from_refill, rx_monitors_from_test_environment);
+                mock_monitors.execute(
+                    channels.monitors.rx_monitors_from_refill,
+                    rx_monitors_from_test_environment,
+                );
             })
             .unwrap();
 
@@ -1281,11 +1284,15 @@ pub mod tests {
                 let start_time = Instant::now();
                 spin_sleeper.sleep(sleep_duration_two_secs);
 
-                let _ = channels.signal_handler.send_to_refill(InternalCommand::Quit);
+                let _ = channels
+                    .signal_handler
+                    .send_to_refill(InternalCommand::Quit);
                 channels.signal_handler.receive_from_refill().unwrap();
 
                 let _ = tx_test_environment_to_monitors.send(InternalCommand::Quit);
-                let _ = channels.signal_handler.send_to_refill(InternalCommand::Terminate);
+                let _ = channels
+                    .signal_handler
+                    .send_to_refill(InternalCommand::Terminate);
                 let finish_time = Instant::now();
                 let finalization_duration_millis =
                     finish_time.duration_since(start_time).as_millis();
@@ -1395,7 +1402,10 @@ pub mod tests {
         let join_handle_mock_monitors = thread::Builder::new()
             .name("mock_monitor".to_string())
             .spawn(move || {
-                mock_monitors.execute(channels.monitors.rx_monitors_from_refill, rx_monitors_from_test_environment);
+                mock_monitors.execute(
+                    channels.monitors.rx_monitors_from_refill,
+                    rx_monitors_from_test_environment,
+                );
             })
             .unwrap();
 
@@ -1426,11 +1436,15 @@ pub mod tests {
                 let start_time = Instant::now();
                 spin_sleeper.sleep(sleep_duration_two_secs);
 
-                let _ = channels.signal_handler.send_to_refill(InternalCommand::Quit);
+                let _ = channels
+                    .signal_handler
+                    .send_to_refill(InternalCommand::Quit);
                 channels.signal_handler.receive_from_refill().unwrap();
                 let _ = tx_test_environment_to_monitors.send(InternalCommand::Quit);
 
-                let _ = channels.signal_handler.send_to_refill(InternalCommand::Terminate);
+                let _ = channels
+                    .signal_handler
+                    .send_to_refill(InternalCommand::Terminate);
                 let finish_time = Instant::now();
                 let finalization_duration_millis =
                     finish_time.duration_since(start_time).as_millis();
@@ -1543,7 +1557,10 @@ pub mod tests {
         let join_handle_mock_monitors = thread::Builder::new()
             .name("mock_monitor".to_string())
             .spawn(move || {
-                mock_monitors.execute(channels.monitors.rx_monitors_from_refill, rx_monitors_from_test_environment);
+                mock_monitors.execute(
+                    channels.monitors.rx_monitors_from_refill,
+                    rx_monitors_from_test_environment,
+                );
             })
             .unwrap();
 
@@ -1574,12 +1591,16 @@ pub mod tests {
                 let initial_waiting_time_passed = Instant::now();
 
                 // now we can send the quit command
-                let _ = channels.signal_handler.send_to_refill(InternalCommand::Quit);
+                let _ = channels
+                    .signal_handler
+                    .send_to_refill(InternalCommand::Quit);
                 channels.signal_handler.receive_from_refill().unwrap();
                 let _ = tx_test_environment_to_monitors.send(InternalCommand::Quit);
                 let _ = tx_test_environment_to_monitors.send(InternalCommand::Quit);
 
-                let _ = channels.signal_handler.send_to_refill(InternalCommand::Terminate);
+                let _ = channels
+                    .signal_handler
+                    .send_to_refill(InternalCommand::Terminate);
                 let finish_time = Instant::now();
                 let initial_wait_duration_millis = initial_waiting_time_passed
                     .duration_since(start_time)
@@ -1700,7 +1721,10 @@ pub mod tests {
         let join_handle_mock_monitors = thread::Builder::new()
             .name("mock_monitor".to_string())
             .spawn(move || {
-                mock_monitors.execute(channels.monitors.rx_monitors_from_refill, rx_monitors_from_test_environment);
+                mock_monitors.execute(
+                    channels.monitors.rx_monitors_from_refill,
+                    rx_monitors_from_test_environment,
+                );
             })
             .unwrap();
 
@@ -1736,7 +1760,11 @@ pub mod tests {
 
                 // reset errors
                 println!("resetting errors...");
-                match channels.messaging.tx_messaging_to_refill.send(InternalCommand::ResetAllErrors) {
+                match channels
+                    .messaging
+                    .tx_messaging_to_refill
+                    .send(InternalCommand::ResetAllErrors)
+                {
                     Ok(_) => { /* do nothing */ }
                     Err(e) => {
                         panic!(
@@ -1768,11 +1796,15 @@ pub mod tests {
                 spin_sleeper.sleep(sleep_duration_two_secs);
 
                 println!("sending quit signal to test object...");
-                let _ = channels.signal_handler.send_to_refill(InternalCommand::Quit);
+                let _ = channels
+                    .signal_handler
+                    .send_to_refill(InternalCommand::Quit);
                 channels.signal_handler.receive_from_refill().unwrap();
                 let _ = tx_test_environment_to_monitors.send(InternalCommand::Quit);
 
-                let _ = channels.signal_handler.send_to_refill(InternalCommand::Terminate);
+                let _ = channels
+                    .signal_handler
+                    .send_to_refill(InternalCommand::Terminate);
 
                 // wait for the test object to finish so that mock threads receive
                 // the termination request before the end of this (test environment) thread
@@ -1879,7 +1911,10 @@ pub mod tests {
         let join_handle_mock_monitors = thread::Builder::new()
             .name("mock_monitor".to_string())
             .spawn(move || {
-                mock_monitors.execute(channels.monitors.rx_monitors_from_refill, rx_monitors_from_test_environment);
+                mock_monitors.execute(
+                    channels.monitors.rx_monitors_from_refill,
+                    rx_monitors_from_test_environment,
+                );
             })
             .unwrap();
 
@@ -1915,11 +1950,15 @@ pub mod tests {
                 }
 
                 println!("sending quit signal to test object...");
-                let _ = channels.signal_handler.send_to_refill(InternalCommand::Quit);
+                let _ = channels
+                    .signal_handler
+                    .send_to_refill(InternalCommand::Quit);
                 channels.signal_handler.receive_from_refill().unwrap();
                 let _ = tx_test_environment_to_monitors.send(InternalCommand::Quit);
 
-                let _ = channels.signal_handler.send_to_refill(InternalCommand::Terminate);
+                let _ = channels
+                    .signal_handler
+                    .send_to_refill(InternalCommand::Terminate);
 
                 // wait for the test object to finish so that mock threads receive
                 // the termination request before the end of this (test environment) thread
@@ -2038,7 +2077,10 @@ pub mod tests {
         let join_handle_mock_monitors = thread::Builder::new()
             .name("mock_monitor".to_string())
             .spawn(move || {
-                mock_monitors.execute(channels.monitors.rx_monitors_from_refill, rx_monitors_from_test_environment);
+                mock_monitors.execute(
+                    channels.monitors.rx_monitors_from_refill,
+                    rx_monitors_from_test_environment,
+                );
             })
             .unwrap();
 
@@ -2063,16 +2105,23 @@ pub mod tests {
 
                 spin_sleeper.sleep(sleep_duration_two_secs);
                 assert_eq!(
-                    channels.messaging.tx_messaging_to_refill.send(InternalCommand::ResetAllErrors),
+                    channels
+                        .messaging
+                        .tx_messaging_to_refill
+                        .send(InternalCommand::ResetAllErrors),
                     Ok(())
                 );
                 spin_sleeper.sleep(sleep_duration_two_secs);
 
-                let _ = channels.signal_handler.send_to_refill(InternalCommand::Quit);
+                let _ = channels
+                    .signal_handler
+                    .send_to_refill(InternalCommand::Quit);
                 channels.signal_handler.receive_from_refill().unwrap();
                 let _ = tx_test_environment_to_monitors.send(InternalCommand::Quit);
 
-                let _ = channels.signal_handler.send_to_refill(InternalCommand::Terminate);
+                let _ = channels
+                    .signal_handler
+                    .send_to_refill(InternalCommand::Terminate);
 
                 // wait for the test object to finish so that mock threads receive
                 // the termination request before the end of this (test environment) thread
@@ -2185,7 +2234,10 @@ pub mod tests {
         let join_handle_mock_monitors = thread::Builder::new()
             .name("mock_monitor".to_string())
             .spawn(move || {
-                mock_monitors.execute(channels.monitors.rx_monitors_from_refill, rx_monitors_from_test_environment);
+                mock_monitors.execute(
+                    channels.monitors.rx_monitors_from_refill,
+                    rx_monitors_from_test_environment,
+                );
             })
             .unwrap();
 
@@ -2220,11 +2272,15 @@ pub mod tests {
                 }
 
                 println!("sending quit signal to test object...");
-                let _ = channels.signal_handler.send_to_refill(InternalCommand::Quit);
+                let _ = channels
+                    .signal_handler
+                    .send_to_refill(InternalCommand::Quit);
                 channels.signal_handler.receive_from_refill().unwrap();
                 let _ = tx_test_environment_to_monitors.send(InternalCommand::Quit);
 
-                let _ = channels.signal_handler.send_to_refill(InternalCommand::Terminate);
+                let _ = channels
+                    .signal_handler
+                    .send_to_refill(InternalCommand::Terminate);
 
                 // wait for the test object to finish so that mock threads receive
                 // the termination request before the end of this (test environment) thread
@@ -2335,7 +2391,10 @@ pub mod tests {
         let join_handle_mock_monitors = thread::Builder::new()
             .name("mock_monitor".to_string())
             .spawn(move || {
-                mock_monitors.execute(channels.monitors.rx_monitors_from_refill, rx_monitors_from_test_environment);
+                mock_monitors.execute(
+                    channels.monitors.rx_monitors_from_refill,
+                    rx_monitors_from_test_environment,
+                );
             })
             .unwrap();
 
@@ -2362,7 +2421,11 @@ pub mod tests {
 
                 spin_sleeper.sleep(sleep_duration_one_sec);
 
-                match channels.messaging.tx_messaging_to_refill.send(InternalCommand::Stop) {
+                match channels
+                    .messaging
+                    .tx_messaging_to_refill
+                    .send(InternalCommand::Stop)
+                {
                     Ok(()) => { /* do nothing */ }
                     Err(e) => {
                         panic!(
@@ -2394,7 +2457,11 @@ pub mod tests {
 
                 spin_sleeper.sleep(sleep_duration_one_sec);
 
-                match channels.messaging.tx_messaging_to_refill.send(InternalCommand::Start) {
+                match channels
+                    .messaging
+                    .tx_messaging_to_refill
+                    .send(InternalCommand::Start)
+                {
                     Ok(()) => { /* do nothing */ }
                     Err(e) => {
                         panic!(
@@ -2411,11 +2478,15 @@ pub mod tests {
                 );
 
                 println!("sending quit signal to test object...");
-                let _ = channels.signal_handler.send_to_refill(InternalCommand::Quit);
+                let _ = channels
+                    .signal_handler
+                    .send_to_refill(InternalCommand::Quit);
                 channels.signal_handler.receive_from_refill().unwrap();
                 let _ = tx_test_environment_to_monitors.send(InternalCommand::Quit);
 
-                let _ = channels.signal_handler.send_to_refill(InternalCommand::Terminate);
+                let _ = channels
+                    .signal_handler
+                    .send_to_refill(InternalCommand::Terminate);
 
                 // wait for the test object to finish so that mock threads receive
                 // the termination request before the end of this (test environment) thread
@@ -2518,7 +2589,10 @@ pub mod tests {
         let join_handle_mock_monitors = thread::Builder::new()
             .name("mock_monitor".to_string())
             .spawn(move || {
-                mock_monitors.execute(channels.monitors.rx_monitors_from_refill, rx_monitors_from_test_environment);
+                mock_monitors.execute(
+                    channels.monitors.rx_monitors_from_refill,
+                    rx_monitors_from_test_environment,
+                );
             })
             .unwrap();
 
@@ -2554,11 +2628,15 @@ pub mod tests {
                 }
 
                 println!("sending quit signal to test object...");
-                let _ = channels.signal_handler.send_to_refill(InternalCommand::Quit);
+                let _ = channels
+                    .signal_handler
+                    .send_to_refill(InternalCommand::Quit);
                 channels.signal_handler.receive_from_refill().unwrap();
                 let _ = tx_test_environment_to_monitors.send(InternalCommand::Quit);
 
-                let _ = channels.signal_handler.send_to_refill(InternalCommand::Terminate);
+                let _ = channels
+                    .signal_handler
+                    .send_to_refill(InternalCommand::Terminate);
 
                 // wait for the test object to finish so that mock threads receive
                 // the termination request before the end of this (test environment) thread
@@ -2630,7 +2708,10 @@ pub mod tests {
         let join_handle_mock_monitors = thread::Builder::new()
             .name("mock_monitor".to_string())
             .spawn(move || {
-                mock_monitors.execute(channels.monitors.rx_monitors_from_refill, rx_monitors_from_test_environment);
+                mock_monitors.execute(
+                    channels.monitors.rx_monitors_from_refill,
+                    rx_monitors_from_test_environment,
+                );
                 println!("{}", mock_monitors);
                 let (_, refill_monitor_view) = mock_monitors.refill_monitor_views.pop().unwrap();
                 refill_monitor_view.assert_refill_monitor_view(false, false, false, false, false);
