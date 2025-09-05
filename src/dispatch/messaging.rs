@@ -548,6 +548,9 @@ pub mod tests {
     // - The `commands_received` vector does not contain exactly two elements.
     // - The commands are not `InternalCommand::Stop` followed by `InternalCommand::Start` in that order.
     fn assert_stop_start_sequence(mut commands_received: Vec<InternalCommand>) {
+        for command in commands_received {
+            println!("assert_stop_start_sequence received command: {command:?}");
+        }
         // assert the number of commands sent/received are identical
         assert_eq!(2, commands_received.len());
 
