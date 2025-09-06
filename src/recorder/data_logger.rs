@@ -1410,15 +1410,23 @@ pub mod tests {
                 spin_sleeper.sleep(sleep_duration_1_second);
 
                 // cease operation of the test object
-                let _ = channels.signal_handler.send_to_data_logger(InternalCommand::Quit);
+                let _ = channels
+                    .signal_handler
+                    .send_to_data_logger(InternalCommand::Quit);
                 channels.signal_handler.receive_from_data_logger().unwrap();
 
                 // signal end of test case execution to mock threads
-                let _ = channels.signal_handler.send_to_heating(InternalCommand::Quit);
-                let _ = channels.signal_handler.send_to_ventilation(InternalCommand::Quit);
+                let _ = channels
+                    .signal_handler
+                    .send_to_heating(InternalCommand::Quit);
+                let _ = channels
+                    .signal_handler
+                    .send_to_ventilation(InternalCommand::Quit);
 
                 spin_sleeper.sleep(sleep_duration_1_second);
-                let _ = channels.signal_handler.send_to_data_logger(InternalCommand::Terminate);
+                let _ = channels
+                    .signal_handler
+                    .send_to_data_logger(InternalCommand::Terminate);
             })
             .unwrap();
 
@@ -1457,7 +1465,6 @@ pub mod tests {
         let join_handle_test_object = thread::Builder::new()
             .name("test_object".to_string())
             .spawn(move || {
-
                 let data_logger_mutexes = DataLoggerMutexes {
                     mutex_sensor_manager_signals:
                         mutex_sensor_manager_signals_clone_for_data_logger,

@@ -821,6 +821,7 @@ pub mod tests {
     use crate::database::sql_interface_balling::{BallingSetVal, SqlInterfaceBalling};
     use crate::database::sql_interface_error::SqlInterfaceError;
     use crate::database::sql_query_strings::SQL_TABLE_BALLING_DOSING_LOG;
+    use crate::launch::channels::Channels;
     use crate::mineral::balling::{Balling, BallingError};
     use crate::mocks::mock_mineral_injection::tests::MockMineralInjection;
     use crate::mocks::mock_schedule_check::tests::mock_schedule_check;
@@ -835,7 +836,6 @@ pub mod tests {
     use std::sync::{Arc, Mutex};
     use std::thread::scope;
     use std::time::Duration;
-    use crate::launch::channels::Channels;
 
     fn read_balling_config() -> ConfigData {
         read_config_file("/config/aquarium_control_test_generic.toml".to_string()).unwrap()
@@ -1203,7 +1203,7 @@ pub mod tests {
         insert_past_dosing_events(&mut sql_interface, &mut sql_interface_balling);
 
         let mut channels = Channels::new_for_test();
-        
+
         let mutex_device_scheduler = Arc::new(Mutex::new(0));
         let mutex_device_scheduler_environment = mutex_device_scheduler.clone();
 
@@ -1242,12 +1242,16 @@ pub mod tests {
                 assert_eq!(execution_count, execution_count_reference);
 
                 // now we can send the quit command
-                let _ = channels.signal_handler.send_to_balling(InternalCommand::Quit);
+                let _ = channels
+                    .signal_handler
+                    .send_to_balling(InternalCommand::Quit);
                 channels.signal_handler.receive_from_balling().unwrap();
                 println!(
                     "test_balling_dosing: Received confirmation of Quit command from test object."
                 );
-                let _ = channels.signal_handler.send_to_balling(InternalCommand::Terminate);
+                let _ = channels
+                    .signal_handler
+                    .send_to_balling(InternalCommand::Terminate);
             });
 
             // thread for the test object
@@ -1618,7 +1622,11 @@ pub mod tests {
                 assert_eq!(actuation_count_0, 1);
 
                 // sending the message requesting stop of Balling dosing control
-                match channels.messaging.tx_messaging_to_balling.send(InternalCommand::Stop) {
+                match channels
+                    .messaging
+                    .tx_messaging_to_balling
+                    .send(InternalCommand::Stop)
+                {
                     Ok(()) => { /* do nothing */ }
                     Err(e) => {
                         panic!(
@@ -1639,7 +1647,11 @@ pub mod tests {
                 assert_eq!(actuation_count_1, 1);
 
                 // sending the message requesting restart of Balling dosing control
-                match channels.messaging.tx_messaging_to_balling.send(InternalCommand::Start) {
+                match channels
+                    .messaging
+                    .tx_messaging_to_balling
+                    .send(InternalCommand::Start)
+                {
                     Ok(()) => { /* do nothing */ }
                     Err(e) => {
                         panic!(
@@ -1660,7 +1672,9 @@ pub mod tests {
                 assert_eq!(actuation_count_2, 2);
 
                 // requesting Balling dosing control to quit
-                let _ = channels.signal_handler.send_to_balling(InternalCommand::Quit);
+                let _ = channels
+                    .signal_handler
+                    .send_to_balling(InternalCommand::Quit);
                 channels.signal_handler.receive_from_balling().unwrap();
 
                 let actuation_count_3 = *mutex_device_scheduler_balling_test_environment
@@ -1668,14 +1682,15 @@ pub mod tests {
                     .unwrap();
                 // check the amount of actuation (after Quit command)
                 assert_eq!(actuation_count_3, 2);
-                let _ = channels.signal_handler.send_to_balling(InternalCommand::Terminate);
+                let _ = channels
+                    .signal_handler
+                    .send_to_balling(InternalCommand::Terminate);
             });
 
             spin_sleeper.sleep(sleep_duration_100_millis);
 
             // thread for the test object and assertions
             scope.spawn(move || {
-
                 balling.execute(
                     mutex_device_scheduler,
                     &mut channels.balling,
@@ -1871,16 +1886,24 @@ pub mod tests {
                 assert_eq!(execution_count1, 0);
 
                 // send the dosing requests to Balling
-                channels.messaging.tx_messaging_to_balling
+                channels
+                    .messaging
+                    .tx_messaging_to_balling
                     .send(InternalCommand::Execute(2))
                     .unwrap();
-                channels.messaging.tx_messaging_to_balling
+                channels
+                    .messaging
+                    .tx_messaging_to_balling
                     .send(InternalCommand::Execute(4))
                     .unwrap();
-                channels.messaging.tx_messaging_to_balling
+                channels
+                    .messaging
+                    .tx_messaging_to_balling
                     .send(InternalCommand::Execute(3))
                     .unwrap();
-                channels.messaging.tx_messaging_to_balling
+                channels
+                    .messaging
+                    .tx_messaging_to_balling
                     .send(InternalCommand::Execute(1))
                     .unwrap();
 
@@ -1894,12 +1917,16 @@ pub mod tests {
                 assert_eq!(execution_count2, execution_count_reference);
 
                 // now we can send the quit command
-                let _ = channels.signal_handler.send_to_balling(InternalCommand::Quit);
+                let _ = channels
+                    .signal_handler
+                    .send_to_balling(InternalCommand::Quit);
                 channels.signal_handler.receive_from_balling().unwrap();
                 println!(
                     "test_balling_dosing: Received confirmation of Quit command from test object."
                 );
-                let _ = channels.signal_handler.send_to_balling(InternalCommand::Terminate);
+                let _ = channels
+                    .signal_handler
+                    .send_to_balling(InternalCommand::Terminate);
             });
 
             // thread for the test object

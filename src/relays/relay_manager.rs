@@ -530,14 +530,14 @@ impl RelayManager {
 
 #[cfg(test)]
 pub mod tests {
+    use crate::launch::channels::Channels;
     use crate::launch::execution_config::ExecutionConfig;
     use crate::relays::relay_manager::{
-        RelayActuationTrait, RelayError, RelayManager, RelayManagerChannels,
+        RelayActuationTrait, RelayError, RelayManager,
     };
     use crate::utilities::channel_content::{AquariumDevice, InternalCommand};
     use crate::utilities::config::{read_config_file, ConfigData};
     use spin_sleep::SpinSleeper;
-    use std::sync::mpsc;
     use std::thread::scope;
     use std::time::Duration;
 
@@ -616,26 +616,13 @@ pub mod tests {
 
         let mut relay_manager = RelayManager::new(config.relay_manager, ExecutionConfig::default());
 
-        let (tx_relay_manager_to_refill, rx_refill_from_relay_manager) = mpsc::channel();
-        let (tx_refill_to_relay_manager, rx_relay_manager_from_refill) = mpsc::channel();
-        let (tx_relay_manager_to_heating, rx_heating_from_relay_manager) = mpsc::channel();
-        let (tx_heating_to_relay_manager, rx_relay_manager_from_heating) = mpsc::channel();
-        let (tx_relay_manager_to_ventilation, rx_ventilation_from_relay_manager) = mpsc::channel();
-        let (tx_ventilation_to_relay_manager, rx_relay_manager_from_ventilation) = mpsc::channel();
-        let (tx_relay_manager_to_balling, rx_balling_from_relay_manager) = mpsc::channel();
-        let (tx_balling_to_relay_manager, rx_relay_manager_from_balling) = mpsc::channel();
-        let (tx_relay_manager_to_feed, rx_feed_from_relay_manager) = mpsc::channel();
-        let (tx_feed_to_relay_manager, rx_relay_manager_from_feed) = mpsc::channel();
-        let (tx_relay_manager_to_signal_handler, rx_signal_handler_from_relay_manager) =
-            mpsc::channel();
-        let (tx_signal_handler_to_relay_manager, rx_relay_manager_from_signal_handler) =
-            mpsc::channel();
+        let mut channels = Channels::new_for_test();
 
         scope(|scope| {
             // thread for test environment
             scope.spawn(move || {
-                let _ = tx_refill_to_relay_manager.send(InternalCommand::SwitchOn(AquariumDevice::RefillPump));
-                match rx_refill_from_relay_manager.recv() {
+                let _ = channels.refill.send_to_relay_manager(InternalCommand::SwitchOn(AquariumDevice::RefillPump));
+                match channels.refill.receive_from_relay_manager() {
                     Ok(c) => {
                         assert_eq!(c, true);
                     },
@@ -643,8 +630,8 @@ pub mod tests {
                         panic!("test_relay_manager_channel_communication: error when receiving answer for refill thread: {e:?}");
                     }
                 }
-                let _ = tx_heating_to_relay_manager.send(InternalCommand::SwitchOn(AquariumDevice::Heater));
-                match rx_heating_from_relay_manager.recv() {
+                let _ = channels.heating.send_to_relay_manager(InternalCommand::SwitchOn(AquariumDevice::Heater));
+                match channels.heating.receive_from_relay_manager() {
                     Ok(c) => {
                         assert_eq!(c, true);
                     },
@@ -652,8 +639,8 @@ pub mod tests {
                         panic!("test_relay_manager_channel_communication: error when receiving answer for heating thread: {e:?}");
                     }
                 }
-                let _ = tx_ventilation_to_relay_manager.send(InternalCommand::SwitchOn(AquariumDevice::Ventilation));
-                match rx_ventilation_from_relay_manager.recv() {
+                let _ = channels.ventilation.send_to_relay_manager(InternalCommand::SwitchOn(AquariumDevice::Ventilation));
+                match channels.ventilation.receive_from_relay_manager() {
                     Ok(c) => {
                         assert_eq!(c, true);
                     },
@@ -661,8 +648,8 @@ pub mod tests {
                         panic!("test_relay_manager_channel_communication: error when receiving answer for ventilation thread: {e:?}");
                     }
                 }
-                let _ = tx_balling_to_relay_manager.send(InternalCommand::SwitchOn(AquariumDevice::PeristalticPump1));
-                match rx_balling_from_relay_manager.recv() {
+                let _ = channels.balling.send_to_relay_manager(InternalCommand::SwitchOn(AquariumDevice::PeristalticPump1));
+                match channels.balling.receive_from_relay_manager() {
                     Ok(c) => {
                         assert_eq!(c, true);
                     },
@@ -670,8 +657,8 @@ pub mod tests {
                         panic!("test_relay_manager_channel_communication: error when receiving answer for Balling dosing thread: {e:?}");
                     }
                 }
-                let _ = tx_balling_to_relay_manager.send(InternalCommand::SwitchOn(AquariumDevice::PeristalticPump2));
-                match rx_balling_from_relay_manager.recv() {
+                let _ = channels.balling.send_to_relay_manager(InternalCommand::SwitchOn(AquariumDevice::PeristalticPump2));
+                match channels.balling.receive_from_relay_manager() {
                     Ok(c) => {
                         assert_eq!(c, true);
                     },
@@ -679,8 +666,8 @@ pub mod tests {
                         panic!("test_relay_manager_channel_communication: error when receiving answer for Balling dosing thread: {e:?}");
                     }
                 }
-                let _ = tx_balling_to_relay_manager.send(InternalCommand::SwitchOn(AquariumDevice::PeristalticPump3));
-                match rx_balling_from_relay_manager.recv() {
+                let _ = channels.balling.send_to_relay_manager(InternalCommand::SwitchOn(AquariumDevice::PeristalticPump3));
+                match channels.balling.receive_from_relay_manager() {
                     Ok(c) => {
                         assert_eq!(c, true);
                     },
@@ -688,8 +675,8 @@ pub mod tests {
                         panic!("test_relay_manager_channel_communication: error when receiving answer for Balling dosing thread: {e:?}");
                     }
                 }
-                let _ = tx_balling_to_relay_manager.send(InternalCommand::SwitchOn(AquariumDevice::PeristalticPump4));
-                match rx_balling_from_relay_manager.recv() {
+                let _ = channels.balling.send_to_relay_manager(InternalCommand::SwitchOn(AquariumDevice::PeristalticPump4));
+                match channels.balling.receive_from_relay_manager() {
                     Ok(c) => {
                         assert_eq!(c, true);
                     },
@@ -697,8 +684,8 @@ pub mod tests {
                         panic!("test_relay_manager_channel_communication: error when receiving answer for Balling dosing thread: {e:?}");
                     }
                 }
-                let _ = tx_feed_to_relay_manager.send(InternalCommand::SwitchOn(AquariumDevice::Feeder));
-                match rx_feed_from_relay_manager.recv() {
+                let _ = channels.feed.send_to_relay_manager(InternalCommand::SwitchOn(AquariumDevice::Feeder));
+                match channels.feed.receive_from_relay_manager() {
                     Ok(c) => {
                         assert_eq!(c, true);
                     },
@@ -706,8 +693,8 @@ pub mod tests {
                         panic!("test_relay_manager_channel_communication: error when receiving answer for Feed thread: {e:?}");
                     }
                 }
-                let _ = tx_feed_to_relay_manager.send(InternalCommand::SwitchOn(AquariumDevice::MainPump1));
-                match rx_feed_from_relay_manager.recv() {
+                let _ = channels.feed.send_to_relay_manager(InternalCommand::SwitchOn(AquariumDevice::MainPump1));
+                match channels.feed.receive_from_relay_manager() {
                     Ok(c) => {
                         assert_eq!(c, true);
                     },
@@ -715,8 +702,8 @@ pub mod tests {
                         panic!("test_relay_manager_channel_communication: error when receiving answer for Feed thread: {e:?}");
                     }
                 }
-                let _ = tx_feed_to_relay_manager.send(InternalCommand::SwitchOn(AquariumDevice::MainPump2));
-                match rx_feed_from_relay_manager.recv() {
+                let _ = channels.feed.send_to_relay_manager(InternalCommand::SwitchOn(AquariumDevice::MainPump2));
+                match channels.feed.receive_from_relay_manager() {
                     Ok(c) => {
                         assert_eq!(c, true);
                     },
@@ -724,8 +711,8 @@ pub mod tests {
                         panic!("test_relay_manager_channel_communication: error when receiving answer for Feed thread: {e:?}");
                     }
                 }
-                let _ = tx_feed_to_relay_manager.send(InternalCommand::SwitchOn(AquariumDevice::AuxPump1));
-                match rx_feed_from_relay_manager.recv() {
+                let _ = channels.feed.send_to_relay_manager(InternalCommand::SwitchOn(AquariumDevice::AuxPump1));
+                match channels.feed.receive_from_relay_manager() {
                     Ok(c) => {
                         assert_eq!(c, true);
                     },
@@ -733,8 +720,8 @@ pub mod tests {
                         panic!("test_relay_manager_channel_communication: error when receiving answer for Feed thread: {e:?}");
                     }
                 }
-                let _ = tx_feed_to_relay_manager.send(InternalCommand::SwitchOn(AquariumDevice::AuxPump2));
-                match rx_feed_from_relay_manager.recv() {
+                let _ = channels.feed.send_to_relay_manager(InternalCommand::SwitchOn(AquariumDevice::AuxPump2));
+                match channels.feed.receive_from_relay_manager() {
                     Ok(c) => {
                         assert_eq!(c, true);
                     },
@@ -742,8 +729,8 @@ pub mod tests {
                         panic!("test_relay_manager_channel_communication: error when receiving answer for Feed thread: {e:?}");
                     }
                 }
-                let _ = tx_refill_to_relay_manager.send(InternalCommand::SwitchOff(AquariumDevice::RefillPump));
-                match rx_refill_from_relay_manager.recv() {
+                let _ = channels.refill.send_to_relay_manager(InternalCommand::SwitchOff(AquariumDevice::RefillPump));
+                match channels.refill.receive_from_relay_manager() {
                     Ok(c) => {
                         assert_eq!(c, true);
                     },
@@ -751,8 +738,8 @@ pub mod tests {
                         panic!("test_relay_manager_channel_communication: error when receiving answer for refill thread: {e:?}");
                     }
                 }
-                let _ = tx_heating_to_relay_manager.send(InternalCommand::SwitchOff(AquariumDevice::Heater));
-                match rx_heating_from_relay_manager.recv() {
+                let _ = channels.heating.send_to_relay_manager(InternalCommand::SwitchOff(AquariumDevice::Heater));
+                match channels.heating.receive_from_relay_manager() {
                     Ok(c) => {
                         assert_eq!(c, true);
                     },
@@ -760,8 +747,8 @@ pub mod tests {
                         panic!("test_relay_manager_channel_communication: error when receiving answer for heating thread: {e:?}");
                     }
                 }
-                let _ = tx_ventilation_to_relay_manager.send(InternalCommand::SwitchOff(AquariumDevice::Ventilation));
-                match rx_ventilation_from_relay_manager.recv() {
+                let _ = channels.ventilation.send_to_relay_manager(InternalCommand::SwitchOff(AquariumDevice::Ventilation));
+                match channels.ventilation.receive_from_relay_manager() {
                     Ok(c) => {
                         assert_eq!(c, true);
                     },
@@ -769,8 +756,8 @@ pub mod tests {
                         panic!("test_relay_manager_channel_communication: error when receiving answer for ventilation thread: {e:?}");
                     }
                 }
-                let _ = tx_balling_to_relay_manager.send(InternalCommand::SwitchOff(AquariumDevice::PeristalticPump1));
-                match rx_balling_from_relay_manager.recv() {
+                let _ = channels.balling.send_to_relay_manager(InternalCommand::SwitchOff(AquariumDevice::PeristalticPump1));
+                match channels.balling.receive_from_relay_manager() {
                     Ok(c) => {
                         assert_eq!(c, true);
                     },
@@ -778,8 +765,8 @@ pub mod tests {
                         panic!("test_relay_manager_channel_communication: error when receiving answer for Balling dosing thread: {e:?}");
                     }
                 }
-                let _ = tx_balling_to_relay_manager.send(InternalCommand::SwitchOff(AquariumDevice::PeristalticPump2));
-                match rx_balling_from_relay_manager.recv() {
+                let _ = channels.balling.send_to_relay_manager(InternalCommand::SwitchOff(AquariumDevice::PeristalticPump2));
+                match channels.balling.receive_from_relay_manager() {
                     Ok(c) => {
                         assert_eq!(c, true);
                     },
@@ -787,8 +774,8 @@ pub mod tests {
                         panic!("test_relay_manager_channel_communication: error when receiving answer for Balling dosing thread: {e:?}");
                     }
                 }
-                let _ = tx_balling_to_relay_manager.send(InternalCommand::SwitchOff(AquariumDevice::PeristalticPump3));
-                match rx_balling_from_relay_manager.recv() {
+                let _ = channels.balling.send_to_relay_manager(InternalCommand::SwitchOff(AquariumDevice::PeristalticPump3));
+                match channels.balling.receive_from_relay_manager() {
                     Ok(c) => {
                         assert_eq!(c, true);
                     },
@@ -796,8 +783,8 @@ pub mod tests {
                         panic!("test_relay_manager_channel_communication: error when receiving answer for Balling dosing thread: {e:?}");
                     }
                 }
-                let _ = tx_balling_to_relay_manager.send(InternalCommand::SwitchOff(AquariumDevice::PeristalticPump4));
-                match rx_balling_from_relay_manager.recv() {
+                let _ = channels.balling.send_to_relay_manager(InternalCommand::SwitchOff(AquariumDevice::PeristalticPump4));
+                match channels.balling.receive_from_relay_manager() {
                     Ok(c) => {
                         assert_eq!(c, true);
                     },
@@ -805,8 +792,8 @@ pub mod tests {
                         panic!("test_relay_manager_channel_communication: error when receiving answer for Balling dosing thread: {e:?}");
                     }
                 }
-                let _ = tx_feed_to_relay_manager.send(InternalCommand::SwitchOff(AquariumDevice::Feeder));
-                match rx_feed_from_relay_manager.recv() {
+                let _ = channels.feed.send_to_relay_manager(InternalCommand::SwitchOff(AquariumDevice::Feeder));
+                match channels.feed.receive_from_relay_manager() {
                     Ok(c) => {
                         assert_eq!(c, true);
                     },
@@ -814,8 +801,8 @@ pub mod tests {
                         panic!("test_relay_manager_channel_communication: error when receiving answer for Feed thread: {e:?}");
                     }
                 }
-                let _ = tx_feed_to_relay_manager.send(InternalCommand::SwitchOff(AquariumDevice::MainPump1));
-                match rx_feed_from_relay_manager.recv() {
+                let _ = channels.feed.send_to_relay_manager(InternalCommand::SwitchOff(AquariumDevice::MainPump1));
+                match channels.feed.receive_from_relay_manager() {
                     Ok(c) => {
                         assert_eq!(c, true);
                     },
@@ -823,8 +810,8 @@ pub mod tests {
                         panic!("test_relay_manager_channel_communication: error when receiving answer for Feed thread: {e:?}");
                     }
                 }
-                let _ = tx_feed_to_relay_manager.send(InternalCommand::SwitchOff(AquariumDevice::MainPump2));
-                match rx_feed_from_relay_manager.recv() {
+                let _ = channels.feed.send_to_relay_manager(InternalCommand::SwitchOff(AquariumDevice::MainPump2));
+                match channels.feed.receive_from_relay_manager() {
                     Ok(c) => {
                         assert_eq!(c, true);
                     },
@@ -832,8 +819,8 @@ pub mod tests {
                         panic!("test_relay_manager_channel_communication: error when receiving answer for Feed thread: {e:?}");
                     }
                 }
-                let _ = tx_feed_to_relay_manager.send(InternalCommand::SwitchOff(AquariumDevice::AuxPump1));
-                match rx_feed_from_relay_manager.recv() {
+                let _ = channels.feed.send_to_relay_manager(InternalCommand::SwitchOff(AquariumDevice::AuxPump1));
+                match channels.feed.receive_from_relay_manager() {
                     Ok(c) => {
                         assert_eq!(c, true);
                     },
@@ -841,8 +828,8 @@ pub mod tests {
                         panic!("test_relay_manager_channel_communication: error when receiving answer for Feed thread: {e:?}");
                     }
                 }
-                let _ = tx_feed_to_relay_manager.send(InternalCommand::SwitchOff(AquariumDevice::AuxPump2));
-                match rx_feed_from_relay_manager.recv() {
+                let _ = channels.feed.send_to_relay_manager(InternalCommand::SwitchOff(AquariumDevice::AuxPump2));
+                match channels.feed.receive_from_relay_manager() {
                     Ok(c) => {
                         assert_eq!(c, true);
                     },
@@ -853,8 +840,8 @@ pub mod tests {
 
                 spin_sleeper.sleep(sleep_duration); // wait for two seconds to test the heartbeat
 
-                let _ = tx_signal_handler_to_relay_manager.send(InternalCommand::Quit);
-                rx_signal_handler_from_relay_manager.recv().unwrap();
+                let _ = channels.signal_handler.send_to_relay_manager(InternalCommand::Quit);
+                channels.signal_handler.receive_from_relay_manager().unwrap();
             });
 
             // thread for the test object
@@ -867,57 +854,7 @@ pub mod tests {
                     permanent_error_result: None,
                 };
 
-                let mut relay_manager_channels = RelayManagerChannels {
-                    tx_relay_manager_to_refill,
-                    #[cfg(feature = "debug_channels")]
-                    cnt_tx_relay_manager_to_refill: 0,
-
-                    rx_relay_manager_from_refill,
-                    #[cfg(feature = "debug_channels")]
-                    cnt_rx_relay_manager_from_refill: 0,
-
-                    tx_relay_manager_to_heating,
-                    #[cfg(feature = "debug_channels")]
-                    cnt_tx_relay_manager_to_heating: 0,
-
-                    rx_relay_manager_from_heating,
-                    #[cfg(feature = "debug_channels")]
-                    cnt_rx_relay_manager_from_heating: 0,
-
-                    tx_relay_manager_to_ventilation,
-                    #[cfg(feature = "debug_channels")]
-                    cnt_tx_relay_manager_to_ventilation: 0,
-
-                    rx_relay_manager_from_ventilation,
-                    #[cfg(feature = "debug_channels")]
-                    cnt_rx_relay_manager_from_ventilation: 0,
-
-                    tx_relay_manager_to_balling,
-                    #[cfg(feature = "debug_channels")]
-                    cnt_tx_relay_manager_to_balling: 0,
-
-                    rx_relay_manager_from_balling,
-                    #[cfg(feature = "debug_channels")]
-                    cnt_rx_relay_manager_from_balling: 0,
-
-                    tx_relay_manager_to_feed,
-                    #[cfg(feature = "debug_channels")]
-                    cnt_tx_relay_manager_to_feed: 0,
-
-                    rx_relay_manager_from_feed,
-                    #[cfg(feature = "debug_channels")]
-                    cnt_rx_relay_manager_from_feed: 0,
-
-                    tx_relay_manager_to_signal_handler,
-                    #[cfg(feature = "debug_channels")]
-                    cnt_tx_relay_manager_to_signal_handler: 0,
-
-                    rx_relay_manager_from_signal_handler,
-                    #[cfg(feature = "debug_channels")]
-                    cnt_rx_relay_manager_from_signal_handler: 0,
-                };
-
-                relay_manager.execute(&mut relay_manager_channels, &mut mock_actuator);
+                relay_manager.execute(&mut channels.relay_manager, &mut mock_actuator);
 
                 // Test object thread has ended.
                 assert_eq!(mock_actuator.get_execution_count(), 24); //Assertion checks the number of calls to the actuator.
@@ -934,26 +871,13 @@ pub mod tests {
 
         let mut relay_manager = RelayManager::new(config.relay_manager, ExecutionConfig::default());
 
-        let (tx_relay_manager_to_refill, rx_refill_from_relay_manager) = mpsc::channel();
-        let (tx_refill_to_relay_manager, rx_relay_manager_from_refill) = mpsc::channel();
-        let (tx_relay_manager_to_heating, rx_heating_from_relay_manager) = mpsc::channel();
-        let (tx_heating_to_relay_manager, rx_relay_manager_from_heating) = mpsc::channel();
-        let (tx_relay_manager_to_ventilation, _rx_ventilation_from_relay_manager) = mpsc::channel();
-        let (_tx_ventilation_to_relay_manager, rx_relay_manager_from_ventilation) = mpsc::channel();
-        let (tx_relay_manager_to_balling, _rx_balling_from_relay_manager) = mpsc::channel();
-        let (_tx_balling_to_relay_manager, rx_relay_manager_from_balling) = mpsc::channel();
-        let (tx_relay_manager_to_feed, _rx_feed_from_relay_manager) = mpsc::channel();
-        let (_tx_feed_to_relay_manager, rx_relay_manager_from_feed) = mpsc::channel();
-        let (tx_relay_manager_to_signal_handler, rx_signal_handler_from_relay_manager) =
-            mpsc::channel();
-        let (tx_signal_handler_to_relay_manager, rx_relay_manager_from_signal_handler) =
-            mpsc::channel();
+        let mut channels = Channels::new_for_test();
 
         scope(|scope| {
             // thread for test environment
             scope.spawn(move || {
-                let _ = tx_refill_to_relay_manager.send(InternalCommand::SwitchOn(AquariumDevice::RefillPump));
-                match rx_refill_from_relay_manager.recv() {
+                let _ = channels.refill.send_to_relay_manager(InternalCommand::SwitchOn(AquariumDevice::RefillPump));
+                match channels.refill.receive_from_relay_manager() {
                     Ok(c) => {
                         assert_eq!(c, true);
                     },
@@ -961,8 +885,8 @@ pub mod tests {
                         panic!("test_relay_manager_channel_communication: error when receiving answer for refill thread: {e:?}");
                     }
                 }
-                let _ = tx_heating_to_relay_manager.send(InternalCommand::SwitchOn(AquariumDevice::Heater));
-                match rx_heating_from_relay_manager.recv() {
+                let _ = channels.heating.send_to_relay_manager(InternalCommand::SwitchOn(AquariumDevice::Heater));
+                match channels.heating.receive_from_relay_manager() {
                     Ok(c) => {
                         assert_eq!(c, true);
                     },
@@ -971,8 +895,8 @@ pub mod tests {
                     }
                 }
 
-                let _ = tx_signal_handler_to_relay_manager.send(InternalCommand::Quit);
-                rx_signal_handler_from_relay_manager.recv().unwrap();
+                let _ = channels.signal_handler.send_to_relay_manager(InternalCommand::Quit);
+                channels.signal_handler.receive_from_relay_manager().unwrap();
             });
 
             // thread for the test object
@@ -987,57 +911,7 @@ pub mod tests {
                     permanent_error_result: None,
                 };
 
-                let mut relay_manager_channels = RelayManagerChannels {
-                    tx_relay_manager_to_refill,
-                    #[cfg(feature = "debug_channels")]
-                    cnt_tx_relay_manager_to_refill: 0,
-
-                    rx_relay_manager_from_refill,
-                    #[cfg(feature = "debug_channels")]
-                    cnt_rx_relay_manager_from_refill: 0,
-
-                    tx_relay_manager_to_heating,
-                    #[cfg(feature = "debug_channels")]
-                    cnt_tx_relay_manager_to_heating: 0,
-
-                    rx_relay_manager_from_heating,
-                    #[cfg(feature = "debug_channels")]
-                    cnt_rx_relay_manager_from_heating: 0,
-
-                    tx_relay_manager_to_ventilation,
-                    #[cfg(feature = "debug_channels")]
-                    cnt_tx_relay_manager_to_ventilation: 0,
-
-                    rx_relay_manager_from_ventilation,
-                    #[cfg(feature = "debug_channels")]
-                    cnt_rx_relay_manager_from_ventilation: 0,
-
-                    tx_relay_manager_to_balling,
-                    #[cfg(feature = "debug_channels")]
-                    cnt_tx_relay_manager_to_balling: 0,
-
-                    rx_relay_manager_from_balling,
-                    #[cfg(feature = "debug_channels")]
-                    cnt_rx_relay_manager_from_balling: 0,
-
-                    tx_relay_manager_to_feed,
-                    #[cfg(feature = "debug_channels")]
-                    cnt_tx_relay_manager_to_feed: 0,
-
-                    rx_relay_manager_from_feed,
-                    #[cfg(feature = "debug_channels")]
-                    cnt_rx_relay_manager_from_feed: 0,
-
-                    tx_relay_manager_to_signal_handler,
-                    #[cfg(feature = "debug_channels")]
-                    cnt_tx_relay_manager_to_signal_handler: 0,
-
-                    rx_relay_manager_from_signal_handler,
-                    #[cfg(feature = "debug_channels")]
-                    cnt_rx_relay_manager_from_signal_handler: 0,
-                };
-
-                relay_manager.execute(&mut relay_manager_channels, &mut mock_actuator);
+                relay_manager.execute(&mut channels.relay_manager, &mut mock_actuator);
 
                 // Test object thread has ended.
                 assert_eq!(mock_actuator.get_execution_count(), 3); //Assertion checks the number of calls to the actuator.
@@ -1057,26 +931,13 @@ pub mod tests {
 
         let mut relay_manager = RelayManager::new(config.relay_manager, ExecutionConfig::default());
 
-        let (tx_relay_manager_to_refill, rx_refill_from_relay_manager) = mpsc::channel();
-        let (tx_refill_to_relay_manager, rx_relay_manager_from_refill) = mpsc::channel();
-        let (tx_relay_manager_to_heating, _rx_heating_from_relay_manager) = mpsc::channel();
-        let (_tx_heating_to_relay_manager, rx_relay_manager_from_heating) = mpsc::channel();
-        let (tx_relay_manager_to_ventilation, _rx_ventilation_from_relay_manager) = mpsc::channel();
-        let (_tx_ventilation_to_relay_manager, rx_relay_manager_from_ventilation) = mpsc::channel();
-        let (tx_relay_manager_to_balling, _rx_balling_from_relay_manager) = mpsc::channel();
-        let (_tx_balling_to_relay_manager, rx_relay_manager_from_balling) = mpsc::channel();
-        let (tx_relay_manager_to_feed, _rx_feed_from_relay_manager) = mpsc::channel();
-        let (_tx_feed_to_relay_manager, rx_relay_manager_from_feed) = mpsc::channel();
-        let (tx_relay_manager_to_signal_handler, rx_signal_handler_from_relay_manager) =
-            mpsc::channel();
-        let (tx_signal_handler_to_relay_manager, rx_relay_manager_from_signal_handler) =
-            mpsc::channel();
+        let mut channels = Channels::new_for_test();
 
         scope(|scope| {
             // thread for test environment
             scope.spawn(move || {
-                let _ = tx_refill_to_relay_manager.send(InternalCommand::SwitchOn(AquariumDevice::RefillPump));
-                match rx_refill_from_relay_manager.recv() {
+                let _ = channels.refill.send_to_relay_manager(InternalCommand::SwitchOn(AquariumDevice::RefillPump));
+                match channels.refill.receive_from_relay_manager() {
                     Ok(c) => {
                         assert_eq!(c, true);
                     },
@@ -1085,8 +946,8 @@ pub mod tests {
                     }
                 }
 
-                let _ = tx_signal_handler_to_relay_manager.send(InternalCommand::Quit);
-                rx_signal_handler_from_relay_manager.recv().unwrap();
+                let _ = channels.signal_handler.send_to_relay_manager(InternalCommand::Quit);
+                channels.signal_handler.receive_from_relay_manager().unwrap();
             });
 
             // thread for the test object
@@ -1101,57 +962,7 @@ pub mod tests {
                     )),
                 };
 
-                let mut relay_manager_channels = RelayManagerChannels {
-                    tx_relay_manager_to_refill,
-                    #[cfg(feature = "debug_channels")]
-                    cnt_tx_relay_manager_to_refill: 0,
-
-                    rx_relay_manager_from_refill,
-                    #[cfg(feature = "debug_channels")]
-                    cnt_rx_relay_manager_from_refill: 0,
-
-                    tx_relay_manager_to_heating,
-                    #[cfg(feature = "debug_channels")]
-                    cnt_tx_relay_manager_to_heating: 0,
-
-                    rx_relay_manager_from_heating,
-                    #[cfg(feature = "debug_channels")]
-                    cnt_rx_relay_manager_from_heating: 0,
-
-                    tx_relay_manager_to_ventilation,
-                    #[cfg(feature = "debug_channels")]
-                    cnt_tx_relay_manager_to_ventilation: 0,
-
-                    rx_relay_manager_from_ventilation,
-                    #[cfg(feature = "debug_channels")]
-                    cnt_rx_relay_manager_from_ventilation: 0,
-
-                    tx_relay_manager_to_balling,
-                    #[cfg(feature = "debug_channels")]
-                    cnt_tx_relay_manager_to_balling: 0,
-
-                    rx_relay_manager_from_balling,
-                    #[cfg(feature = "debug_channels")]
-                    cnt_rx_relay_manager_from_balling: 0,
-
-                    tx_relay_manager_to_feed,
-                    #[cfg(feature = "debug_channels")]
-                    cnt_tx_relay_manager_to_feed: 0,
-
-                    rx_relay_manager_from_feed,
-                    #[cfg(feature = "debug_channels")]
-                    cnt_rx_relay_manager_from_feed: 0,
-
-                    tx_relay_manager_to_signal_handler,
-                    #[cfg(feature = "debug_channels")]
-                    cnt_tx_relay_manager_to_signal_handler: 0,
-
-                    rx_relay_manager_from_signal_handler,
-                    #[cfg(feature = "debug_channels")]
-                    cnt_rx_relay_manager_from_signal_handler: 0,
-                };
-
-                relay_manager.execute(&mut relay_manager_channels, &mut mock_actuator);
+                relay_manager.execute(&mut channels.relay_manager, &mut mock_actuator);
 
                 // Test object thread has ended.
 

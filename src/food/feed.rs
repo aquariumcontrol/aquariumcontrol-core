@@ -605,7 +605,7 @@ pub mod tests {
     use crate::database::database_interface_feed_trait::DatabaseInterfaceFeedTrait;
     use crate::database::sql_interface::SqlInterface;
     use crate::database::sql_interface_feed::SqlInterfaceFeed;
-    use crate::food::feed::{Feed};
+    use crate::food::feed::Feed;
     use crate::food::feed_schedule_entry::FeedScheduleEntry;
     use crate::utilities::channel_content::InternalCommand;
     use crate::utilities::config::{
@@ -857,7 +857,11 @@ pub mod tests {
                 spin_sleeper.sleep(sleep_duration_100_millis);
 
                 // sending the message requesting stop of feed control
-                match channels.messaging.tx_messaging_to_feed.send(InternalCommand::Stop) {
+                match channels
+                    .messaging
+                    .tx_messaging_to_feed
+                    .send(InternalCommand::Stop)
+                {
                     Ok(()) => { /* do nothing */ }
                     Err(e) => {
                         panic!(
@@ -878,7 +882,11 @@ pub mod tests {
                 assert_eq!(actuation_count_1, 0);
 
                 // sending the message requesting restart of feed control
-                match channels.messaging.tx_messaging_to_feed.send(InternalCommand::Start) {
+                match channels
+                    .messaging
+                    .tx_messaging_to_feed
+                    .send(InternalCommand::Start)
+                {
                     Ok(()) => { /* do nothing */ }
                     Err(e) => {
                         panic!(
@@ -900,7 +908,11 @@ pub mod tests {
                 assert_eq!(actuation_count_2, 1);
 
                 // sending the message requesting execution of the feed profile
-                match channels.messaging.tx_messaging_to_feed.send(InternalCommand::Execute(1)) {
+                match channels
+                    .messaging
+                    .tx_messaging_to_feed
+                    .send(InternalCommand::Execute(1))
+                {
                     Ok(()) => { /* do nothing */ }
                     Err(e) => {
                         panic!(
@@ -924,7 +936,9 @@ pub mod tests {
                 // requesting feed control to quit
                 let _ = channels.signal_handler.send_to_feed(InternalCommand::Quit);
                 channels.signal_handler.receive_from_feed().unwrap();
-                let _ = channels.signal_handler.send_to_feed(InternalCommand::Terminate);
+                let _ = channels
+                    .signal_handler
+                    .send_to_feed(InternalCommand::Terminate);
             })
             .unwrap();
 
@@ -934,7 +948,6 @@ pub mod tests {
         let join_handle_test_object = thread::Builder::new()
             .name("test_object".to_string())
             .spawn(move || {
-
                 feed.execute(
                     mutex_device_scheduler_feed_test_object.clone(),
                     &mut channels.feed,
@@ -1003,7 +1016,9 @@ pub mod tests {
                 // requesting feed control to quit
                 let _ = channels.signal_handler.send_to_feed(InternalCommand::Quit);
                 channels.signal_handler.receive_from_feed().unwrap();
-                let _ = channels.signal_handler.send_to_feed(InternalCommand::Terminate);
+                let _ = channels
+                    .signal_handler
+                    .send_to_feed(InternalCommand::Terminate);
             })
             .unwrap();
 
@@ -1013,7 +1028,6 @@ pub mod tests {
         let join_handle_test_object = thread::Builder::new()
             .name("test_object".to_string())
             .spawn(move || {
-
                 feed.execute(
                     mutex_device_scheduler_feed_test_object.clone(),
                     &mut channels.feed,
@@ -1263,7 +1277,6 @@ pub mod tests {
 
             // thread for the test object
             scope.spawn(move || {
-
                 feed.execute(
                     mutex_device_scheduler_feed.clone(),
                     &mut channels.feed,
@@ -1388,7 +1401,6 @@ pub mod tests {
 
             // thread for the test object
             scope.spawn(move || {
-
                 feed.execute(
                     mutex_device_scheduler_feed.clone(),
                     &mut channels.feed,

@@ -312,8 +312,7 @@ impl ScheduleCheck {
 
             //*********** ventilation ***********
             if execution_config.ventilation {
-                let schedule_entry_ventilation_opt: Option<&ScheduleEntry> =
-                if self.config.active {
+                let schedule_entry_ventilation_opt: Option<&ScheduleEntry> = if self.config.active {
                     match sql_interface_schedule.find_schedule(ScheduleType::Ventilation) {
                         Ok(c) => {
                             self.lock_error_find_ventilation_schedule = false;
@@ -360,8 +359,7 @@ impl ScheduleCheck {
 
             //*********** heating ***********
             if execution_config.heating {
-                let schedule_entry_heating_opt: Option<&ScheduleEntry> =
-                if self.config.active {
+                let schedule_entry_heating_opt: Option<&ScheduleEntry> = if self.config.active {
                     match sql_interface_schedule.find_schedule(ScheduleType::Heating) {
                         Ok(c) => {
                             self.lock_error_find_heating_schedule = false;
@@ -408,8 +406,7 @@ impl ScheduleCheck {
 
             //*********** refill ***********
             if execution_config.refill {
-                let schedule_entry_refill_opt: Option<&ScheduleEntry> =
-                if self.config.active {
+                let schedule_entry_refill_opt: Option<&ScheduleEntry> = if self.config.active {
                     match sql_interface_schedule.find_schedule(ScheduleType::Refill) {
                         Ok(c) => {
                             self.lock_error_find_refill_schedule = false;
@@ -456,8 +453,7 @@ impl ScheduleCheck {
 
             //*********** Balling ***********
             if execution_config.balling {
-                let schedule_entry_balling_opt: Option<&ScheduleEntry> =
-                if self.config.active {
+                let schedule_entry_balling_opt: Option<&ScheduleEntry> = if self.config.active {
                     match sql_interface_schedule.find_schedule(ScheduleType::Balling) {
                         Ok(c) => {
                             self.lock_error_find_balling_schedule = false;
