@@ -689,6 +689,7 @@ pub mod tests {
         ) = mpsc::channel();
         let rx_signal_handler_from_messaging_opt = Some(rx_signal_handler_from_messaging);
 
+        #[allow(unused)] // rx_dht_from_signal_handler used in conditionally compiled code
         let (tx_signal_handler_to_dht, rx_dht_from_signal_handler): (
             Sender<InternalCommand>,
             Receiver<InternalCommand>,

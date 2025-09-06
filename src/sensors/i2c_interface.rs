@@ -334,7 +334,7 @@ impl I2cInterface {
     /// Executes the main loop for the I2C interface thread, acting as a request/response service.
     ///
     /// This function runs indefinitely, processing I2C requests received from other modules.
-    /// It listens on the `rx_from_atlas_scientific` channel for an `I2cRequest`. Upon
+    /// It listens on the `rx_i2c_interface_from_atlas_scientific` channel for an `I2cRequest`. Upon
     /// receiving a request, it calls `get_response_from_i2c` to perform the hardware
     /// communication and sends the resulting `I2cResult` back to the caller via the
     /// channel.

@@ -100,7 +100,7 @@ impl TcpCommunicationChannels {
             })
     }
 
-    /// Receives a command from the tank level switch, if the channel exists.
+    /// Receives a command from the tank level switch if the channel exists.
     #[allow(unused)]
     pub fn receive_from_tank_level_switch(&mut self) -> Option<Result<InternalCommand, RecvError>> {
         self.rx_tcp_communication_from_tank_level_switch_opt
@@ -265,12 +265,3 @@ impl TcpCommunicationChannels {
         println!("- rx_tcp_communication_from_signal_handler: Present");
     }
 }
-
-/// A type alias for a sender/receiver pair used in TCP communication.
-///
-/// This channel is used to send sensor values (`f32`) or communication errors
-/// between a module and the TCP simulator thread.
-pub type TcpCommunicationChannelPair = (
-    Sender<Result<f32, TcpCommunicationError>>,
-    Receiver<Result<f32, TcpCommunicationError>>,
-);

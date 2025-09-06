@@ -9,9 +9,11 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 use crate::sensors::i2c_interface::{I2cRequest, I2cResult};
 use crate::utilities::channel_content::InternalCommand;
 use std::fmt;
-use std::sync::mpsc::{Receiver, Sender};
 #[cfg(any(test, all(target_os = "linux", feature = "target_hw")))]
-use std::sync::mpsc::{SendError, TryRecvError};
+use std::sync::mpsc::SendError;
+#[cfg(all(target_os = "linux", feature = "target_hw"))]
+use std::sync::mpsc::TryRecvError;
+use std::sync::mpsc::{Receiver, Sender};
 
 /// Container for channels used by I2cInterface
 pub struct I2cInterfaceChannels {
@@ -46,7 +48,7 @@ impl I2cInterfaceChannels {
         result
     }
 
-    #[cfg(any(test, all(target_os = "linux", feature = "target_hw")))]
+    #[cfg(all(target_os = "linux", feature = "target_hw"))]
     /// Receives a request from the Atlas Scientific module.
     pub fn receive_from_atlas_scientific(&mut self) -> Result<I2cRequest, TryRecvError> {
         let result = self.rx_i2c_interface_from_atlas_scientific.try_recv();
