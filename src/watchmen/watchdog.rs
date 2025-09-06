@@ -183,16 +183,15 @@ impl Watchdog {
 
 #[cfg(test)]
 pub mod tests {
+    use crate::launch::channels::Channels;
     use crate::mocks::mock_petting::tests::MockPetting;
     use crate::utilities::channel_content::InternalCommand;
     use crate::utilities::config::{read_config_file, ConfigData};
     use crate::watchmen::petting::Petting;
     use crate::watchmen::watchdog::{Watchdog, WatchdogError};
-    use crate::watchmen::watchdog_channels::WatchDogChannels;
     use spin_sleep::SpinSleeper;
     use std::fs::OpenOptions;
     use std::io::Read;
-    use std::sync::mpsc::{self};
     use std::thread::scope;
     use std::time::Duration;
 
@@ -292,21 +291,8 @@ pub mod tests {
     fn test_watchdog_execute_petting() {
         let config: ConfigData =
             read_config_file("/config/aquarium_control_test_generic.toml".to_string()).unwrap();
-        let (tx_watchdog_to_signal_handler, rx_signal_handler_from_watchdog) = mpsc::channel();
-        let (tx_signal_handler_to_watchdog, rx_watchdog_from_signal_handler) = mpsc::channel();
-        let mut watchdog_channels = WatchDogChannels {
-            tx_watchdog_to_signal_handler,
-            #[cfg(feature = "debug_channels")]
-            cnt_tx_watchdog_to_signal_handler: 0,
 
-            rx_watchdog_from_signal_handler,
-            #[cfg(feature = "debug_channels")]
-            cnt_rx_watchdog_from_signal_handler: 0,
-
-            rx_watchdog_from_messaging_opt: None,
-            #[cfg(feature = "debug_channels")]
-            cnt_rx_watchdog_from_messaging_opt: 0,
-        };
+        let mut channels = Channels::new_for_test();
 
         let min_duration = Duration::from_millis(config.watchdog.heartbeat_duration_millis - 50);
         let max_duration = Duration::from_millis(config.watchdog.heartbeat_duration_millis + 50);
@@ -324,16 +310,17 @@ pub mod tests {
                 let spin_sleeper_test_environment = SpinSleeper::default();
 
                 spin_sleeper_test_environment.sleep(sleep_duration_test_environment);
-                tx_signal_handler_to_watchdog
-                    .send(InternalCommand::Terminate)
+                channels
+                    .signal_handler
+                    .send_to_watchdog(InternalCommand::Terminate)
                     .unwrap();
-                rx_signal_handler_from_watchdog.recv().unwrap();
+                channels.signal_handler.receive_from_watchdog().unwrap();
             });
 
             // thread for the test object
             scope.spawn(move || {
                 watchdog.execute(
-                    &mut watchdog_channels,
+                    &mut channels.watchdog,
                     &mut mock_petting,
                 );
 
@@ -387,21 +374,8 @@ pub mod tests {
             read_config_file("/config/aquarium_control_test_generic.toml".to_string()).unwrap();
 
         config.watchdog.watchdog_filename = "/var/log/watchdog.log".to_string();
-        let (tx_watchdog_to_signal_handler, rx_signal_handler_from_watchdog) = mpsc::channel();
-        let (tx_signal_handler_to_watchdog, rx_watchdog_from_signal_handler) = mpsc::channel();
-        let mut watchdog_channels = WatchDogChannels {
-            tx_watchdog_to_signal_handler,
-            #[cfg(feature = "debug_channels")]
-            cnt_tx_watchdog_to_signal_handler: 0,
 
-            rx_watchdog_from_signal_handler,
-            #[cfg(feature = "debug_channels")]
-            cnt_rx_watchdog_from_signal_handler: 0,
-
-            rx_watchdog_from_messaging_opt: None,
-            #[cfg(feature = "debug_channels")]
-            cnt_rx_watchdog_from_messaging_opt: 0,
-        };
+        let mut channels = Channels::new_for_test();
 
         let reference_heartbeat_signal = config.watchdog.watchdog_heartbeat.clone();
         let reference_deactivation_signal = config.watchdog.watchdog_deactivation.clone();
@@ -424,10 +398,11 @@ pub mod tests {
                 let spin_sleeper_test_environment = SpinSleeper::default();
 
                 spin_sleeper_test_environment.sleep(sleep_duration_test_environment);
-                tx_signal_handler_to_watchdog
-                    .send(InternalCommand::Terminate)
+                channels
+                    .signal_handler
+                    .send_to_watchdog(InternalCommand::Terminate)
                     .unwrap();
-                rx_signal_handler_from_watchdog.recv().unwrap();
+                channels.signal_handler.receive_from_watchdog().unwrap();
             });
 
             // thread for the assertions
@@ -463,7 +438,7 @@ pub mod tests {
 
             // thread for the test object
             scope.spawn(move || {
-                watchdog.execute(&mut watchdog_channels, &mut petting);
+                watchdog.execute(&mut channels.watchdog, &mut petting);
             });
         });
     }
