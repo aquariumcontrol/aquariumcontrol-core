@@ -354,6 +354,7 @@ pub mod tests {
     use std::sync::{mpsc, Arc, Mutex};
     use std::time::Duration;
     use std::{env, thread};
+    use crate::launch::channels::Channels;
 
     #[test]
     #[ignore]
@@ -712,10 +713,6 @@ pub mod tests {
             Arc::new(Mutex::new(Ok(Ds18b20ResultData::new(
                 config.sensor_manager.replacement_value_ambient_temperature,
             ))));
-        //let mutex_ds18b20_water_temperature_clone_for_test_environment =
-        //    mutex_ds18b20_water_temperature.clone();
-        //let mutex_ds18b20_ambient_temperature_clone_for_test_environment =
-        //    mutex_ds18b20_ambient_temperature.clone();
         let mutex_ds18b20_water_temperature_clone_for_asserts =
             mutex_ds18b20_water_temperature.clone();
         let mutex_ds18b20_ambient_temperature_clone_for_asserts =
@@ -723,16 +720,7 @@ pub mod tests {
 
         let mut ds18b20 = Ds18b20::new(config.ds18b20).unwrap();
 
-        // *** signal handler => ds18b20 ***
-        let (tx_signal_handler_to_ds18b20, rx_ds18b20_from_signal_handler): (
-            Sender<InternalCommand>,
-            Receiver<InternalCommand>,
-        ) = mpsc::channel();
-        let mut ds18b20_channels = Ds18b20Channels {
-            rx_ds18b20_from_signal_handler,
-            #[cfg(feature = "debug_channels")]
-            cnt_rx_ds18b20_from_signal_handler: 0,
-        };
+        let mut channels = Channels::new_for_test();
 
         // thread for test environment (incl. signal handler)
         let join_handle_test_environment = thread::Builder::new()
@@ -742,9 +730,7 @@ pub mod tests {
                 let sleep_time = Duration::from_millis(1000);
                 let spin_sleeper = SpinSleeper::default();
                 spin_sleeper.sleep(sleep_time);
-                tx_signal_handler_to_ds18b20
-                    .send(InternalCommand::Quit)
-                    .unwrap();
+                channels.signal_handler.send_to_ds18b20(InternalCommand::Quit).unwrap();
             })
             .unwrap();
 
@@ -753,7 +739,7 @@ pub mod tests {
             .name("test_object".to_string())
             .spawn(move || {
                 ds18b20.execute(
-                    &mut ds18b20_channels,
+                    &mut channels.ds18b20,
                     mutex_ds18b20_water_temperature,
                     mutex_ds18b20_ambient_temperature,
                 );
