@@ -640,19 +640,18 @@ impl TankLevelSwitch {
 
 #[cfg(test)]
 pub mod tests {
-    use spin_sleep::SpinSleeper;
-    use std::sync::mpsc::{Receiver, Sender};
-    use std::sync::{mpsc, Arc, Mutex};
-    use std::thread;
-    use std::thread::JoinHandle;
-    use std::time::Duration;
-
+    use crate::launch::channels::Channels;
     use crate::mocks::mock_signal::tests::MockSignal;
     use crate::mocks::mock_tcp::tests::mock_tcp_for_tank_level_switch;
     use crate::mocks::test_command::tests::TestCommand;
     use crate::sensors::tank_level_switch::{TankLevelSwitch, TankLevelSwitchSignals};
     use crate::utilities::channel_content::InternalCommand;
     use crate::utilities::config::{read_config_file, ConfigData};
+    use spin_sleep::SpinSleeper;
+    use std::sync::{mpsc, Arc, Mutex};
+    use std::thread;
+    use std::thread::JoinHandle;
+    use std::time::Duration;
 
     #[cfg(all(target_os = "linux", feature = "target_hw"))]
     use crate::sensors::gpio_handler::GpioHandler;
@@ -660,17 +659,12 @@ pub mod tests {
     #[cfg(all(target_os = "linux", feature = "target_hw"))]
     use crate::relays::actuate_gpio;
     use crate::sensors::tank_level_switch_channels::TankLevelSwitchChannels;
-    use crate::simulator::tcp_communication_error::TcpCommunicationError;
 
     #[test]
+    // test if position stabilized signal is updating when the invalid signal is true
     pub fn test_refill_calc_tank_level_switch_position_stabilized_false_when_invalid() {
-        // test if position stabilized signal is updating when the invalid signal is true
-        let (tx_tank_level_switch_to_tcp, rx_tcp_from_tank_level_switch) = mpsc::channel();
-        let (tx_tcp_to_tank_level_switch, rx_tank_level_switch_from_tcp) = mpsc::channel();
-        let (tx_tank_level_switch_to_signal_handler, rx_signal_handler_from_tank_level_switch) =
-            mpsc::channel();
-        let (tx_signal_handler_to_tank_level_switch, rx_tank_level_switch_from_signal_handler) =
-            mpsc::channel();
+        let mut channels = Channels::new(false, false, true);
+
         let (_tx_test_environment_to_tcp, rx_tcp_from_test_environment) = mpsc::channel();
 
         let config: ConfigData =
@@ -698,8 +692,7 @@ pub mod tests {
             .name("mock_tcp".to_string())
             .spawn(move || {
                 mock_tcp_for_tank_level_switch(
-                    &tx_tcp_to_tank_level_switch,
-                    &rx_tcp_from_tank_level_switch,
+                    channels.tcp_communication,
                     Some(&rx_tcp_from_test_environment),
                     false,
                     true,
@@ -716,9 +709,16 @@ pub mod tests {
                 let spin_sleeper = SpinSleeper::default();
                 spin_sleeper.sleep(sleep_duration);
                 spin_sleeper.sleep(sleep_duration_thread_processing);
-                let _ = tx_signal_handler_to_tank_level_switch.send(InternalCommand::Quit);
-                rx_signal_handler_from_tank_level_switch.recv().unwrap();
-                let _ = tx_signal_handler_to_tank_level_switch.send(InternalCommand::Terminate);
+                let _ = channels
+                    .signal_handler
+                    .send_to_tank_level_switch(InternalCommand::Quit);
+                channels
+                    .signal_handler
+                    .receive_from_tank_level_switch()
+                    .unwrap();
+                let _ = channels
+                    .signal_handler
+                    .send_to_tank_level_switch(InternalCommand::Terminate);
             })
             .unwrap();
 
@@ -727,33 +727,16 @@ pub mod tests {
             .name("test_object".to_string())
             .spawn(move || {
                 // clone sender part of channels to mock threads so that we can terminate them after execution of the test object
-                let tx_tank_level_switch_to_tcp_for_test_case_finish =
-                    tx_tank_level_switch_to_tcp.clone();
-                let tx_tank_level_switch_to_tcp_opt = Some(tx_tank_level_switch_to_tcp);
-                let rx_tank_level_switch_from_tcp_opt = Some(rx_tank_level_switch_from_tcp);
-
-                let mut tank_level_switch_channels = TankLevelSwitchChannels {
-                    tx_tank_level_switch_to_tcp_opt,
-                    #[cfg(feature = "debug_channels")]
-                    cnt_tx_tank_level_switch_to_tcp_opt: 0,
-
-                    rx_tank_level_switch_from_tcp_opt,
-                    #[cfg(feature = "debug_channels")]
-                    cnt_rx_tank_level_switch_from_tcp_opt: 0,
-
-                    tx_tank_level_switch_to_signal_handler,
-                    #[cfg(feature = "debug_channels")]
-                    cnt_tx_tank_level_switch_to_signal_handler: 0,
-
-                    rx_tank_level_switch_from_signal_handler,
-                    #[cfg(feature = "debug_channels")]
-                    cnt_rx_tank_level_switch_from_signal_handler: 0,
-                };
+                let tx_tank_level_switch_to_tcp_for_test_case_finish = channels
+                    .tank_level_switch
+                    .tx_tank_level_switch_to_tcp_opt
+                    .clone()
+                    .unwrap();
 
                 let mutex_tank_level_switch_signals_for_assert =
                     mutex_tank_level_switch_signals.clone();
                 let _ = tank_level_switch.execute(
-                    &mut tank_level_switch_channels,
+                    &mut channels.tank_level_switch,
                     mutex_tank_level_switch_signals,
                 );
 
@@ -786,38 +769,13 @@ pub mod tests {
 
     // helper function for creating the test object
     fn create_test_object(
-        tx_tank_level_switch_to_tcp: Sender<InternalCommand>,
-        rx_tank_level_switch_from_tcp: Receiver<Result<f32, TcpCommunicationError>>,
         mut tank_level_switch: TankLevelSwitch,
-        tx_tank_level_switch_to_signal_handler: Sender<bool>,
-        rx_tank_level_switch_from_signal_handler: Receiver<InternalCommand>,
+        mut tank_level_switch_channels: TankLevelSwitchChannels,
         mutex_tank_level_switch_signals: Arc<Mutex<TankLevelSwitchSignals>>,
     ) -> JoinHandle<()> {
         thread::Builder::new()
             .name("test_object".to_string())
             .spawn(move || {
-                // clone sender part of channels to mock threads so that we can terminate them after execution of the test object
-                let tx_tank_level_switch_to_tcp_opt = Some(tx_tank_level_switch_to_tcp);
-                let rx_tank_level_switch_from_tcp_opt = Some(rx_tank_level_switch_from_tcp);
-
-                let mut tank_level_switch_channels = TankLevelSwitchChannels {
-                    tx_tank_level_switch_to_tcp_opt,
-                    #[cfg(feature = "debug_channels")]
-                    cnt_tx_tank_level_switch_to_tcp_opt: 0,
-
-                    rx_tank_level_switch_from_tcp_opt,
-                    #[cfg(feature = "debug_channels")]
-                    cnt_rx_tank_level_switch_from_tcp_opt: 0,
-
-                    tx_tank_level_switch_to_signal_handler,
-                    #[cfg(feature = "debug_channels")]
-                    cnt_tx_tank_level_switch_to_signal_handler: 0,
-
-                    rx_tank_level_switch_from_signal_handler,
-                    #[cfg(feature = "debug_channels")]
-                    cnt_rx_tank_level_switch_from_signal_handler: 0,
-                };
-
                 let _ = tank_level_switch.execute(
                     &mut tank_level_switch_channels,
                     mutex_tank_level_switch_signals,
@@ -827,16 +785,10 @@ pub mod tests {
     }
 
     #[test]
+    // test if the position signal is updating without delay when the invalid signal is false
     pub fn test_refill_calc_tank_level_switch_position_stabilized_false_true() {
-        // test if the position signal is updating without delay when the invalid signal is false
-        let (tx_tank_level_switch_to_tcp, rx_tcp_from_tank_level_switch) = mpsc::channel();
-        let (tx_tcp_to_tank_level_switch, rx_tank_level_switch_from_tcp) = mpsc::channel();
-        let (tx_tank_level_switch_to_signal_handler, rx_signal_handler_from_tank_level_switch) =
-            mpsc::channel();
-        let (tx_signal_handler_to_tank_level_switch, rx_tank_level_switch_from_signal_handler) =
-            mpsc::channel();
-        let (tx_signal_handler_to_refill, _rx_refill_from_signal_handler) = mpsc::channel();
-        let (tx_signal_handler_to_heating, _rx_heating_from_signal_handler) = mpsc::channel();
+        let mut channels = Channels::new(false, false, true);
+
         let (tx_test_environment_to_tcp, rx_tcp_from_test_environment) = mpsc::channel();
 
         let mut config: ConfigData =
@@ -864,8 +816,7 @@ pub mod tests {
             .name("mock_tcp".to_string())
             .spawn(move || {
                 mock_tcp_for_tank_level_switch(
-                    &tx_tcp_to_tank_level_switch,
-                    &rx_tcp_from_tank_level_switch,
+                    channels.tcp_communication,
                     Some(&rx_tcp_from_test_environment),
                     false,
                     false,
@@ -873,7 +824,11 @@ pub mod tests {
             })
             .unwrap();
 
-        let tx_test_environment_to_tcp_for_test_case_finish = tx_tank_level_switch_to_tcp.clone();
+        let tx_test_environment_to_tcp_for_test_case_finish = channels
+            .tank_level_switch
+            .tx_tank_level_switch_to_tcp_opt
+            .clone()
+            .unwrap();
 
         // thread for controlling duration of test run
         let join_handle_test_environment = thread::Builder::new()
@@ -888,25 +843,37 @@ pub mod tests {
                     MockSignal::TankLevelSwitchPosition(true),
                 ));
                 spin_sleeper.sleep(sleep_duration_part_2);
-                let _ = tx_signal_handler_to_heating.send(InternalCommand::Quit);
-                let _ = tx_signal_handler_to_refill.send(InternalCommand::Quit);
+                let _ = channels
+                    .signal_handler
+                    .send_to_heating(InternalCommand::Quit);
+                let _ = channels
+                    .signal_handler
+                    .send_to_refill(InternalCommand::Quit);
                 spin_sleeper.sleep(sleep_duration_thread_processing);
-                let _ = tx_signal_handler_to_tank_level_switch.send(InternalCommand::Quit);
-                rx_signal_handler_from_tank_level_switch.recv().unwrap();
-                let _ = tx_signal_handler_to_heating.send(InternalCommand::Terminate);
-                let _ = tx_signal_handler_to_refill.send(InternalCommand::Terminate);
+                let _ = channels
+                    .signal_handler
+                    .send_to_tank_level_switch(InternalCommand::Quit);
+                channels
+                    .signal_handler
+                    .receive_from_tank_level_switch()
+                    .unwrap();
+                let _ = channels
+                    .signal_handler
+                    .send_to_heating(InternalCommand::Terminate);
+                let _ = channels
+                    .signal_handler
+                    .send_to_refill(InternalCommand::Terminate);
                 let _ = tx_test_environment_to_tcp_for_test_case_finish.send(InternalCommand::Quit);
-                let _ = tx_signal_handler_to_tank_level_switch.send(InternalCommand::Terminate);
+                let _ = channels
+                    .signal_handler
+                    .send_to_tank_level_switch(InternalCommand::Terminate);
             })
             .unwrap();
 
         // thread for the test object
         let join_handle_test_object = create_test_object(
-            tx_tank_level_switch_to_tcp,
-            rx_tank_level_switch_from_tcp,
             tank_level_switch,
-            tx_tank_level_switch_to_signal_handler,
-            rx_tank_level_switch_from_signal_handler,
+            channels.tank_level_switch,
             mutex_tank_level_switch_signals,
         );
 
@@ -924,16 +891,10 @@ pub mod tests {
     }
 
     #[test]
+    // test if the position signal is updating with delay when the invalid signal is false
     pub fn test_refill_calc_tank_level_switch_position_stabilized_true_false() {
-        // test if the position signal is updating with delay when the invalid signal is false
-        let (tx_tank_level_switch_to_tcp, rx_tcp_from_tank_level_switch) = mpsc::channel();
-        let (tx_tcp_to_tank_level_switch, rx_tank_level_switch_from_tcp) = mpsc::channel();
-        let (tx_tank_level_switch_to_signal_handler, rx_signal_handler_from_tank_level_switch) =
-            mpsc::channel();
-        let (tx_signal_handler_to_tank_level_switch, rx_tank_level_switch_from_signal_handler) =
-            mpsc::channel();
-        let (tx_signal_handler_to_refill, _rx_refill_from_signal_handler) = mpsc::channel();
-        let (tx_signal_handler_to_heating, _rx_heating_from_signal_handler) = mpsc::channel();
+        let mut channels = Channels::new(false, false, true);
+
         let (tx_test_environment_to_tcp, rx_tcp_from_test_environment) = mpsc::channel();
 
         let config: ConfigData =
@@ -957,8 +918,7 @@ pub mod tests {
             .name("mock_tcp".to_string())
             .spawn(move || {
                 mock_tcp_for_tank_level_switch(
-                    &tx_tcp_to_tank_level_switch,
-                    &rx_tcp_from_tank_level_switch,
+                    channels.tcp_communication,
                     Some(&rx_tcp_from_test_environment),
                     true,
                     false,
@@ -966,7 +926,11 @@ pub mod tests {
             })
             .unwrap();
 
-        let tx_test_environment_to_tcp_for_test_case_finish = tx_tank_level_switch_to_tcp.clone();
+        let tx_test_environment_to_tcp_for_test_case_finish = channels
+            .tank_level_switch
+            .tx_tank_level_switch_to_tcp_opt
+            .clone()
+            .unwrap();
 
         // thread for controlling duration of test run
         let join_handle_test_environment = thread::Builder::new()
@@ -981,25 +945,37 @@ pub mod tests {
                     MockSignal::TankLevelSwitchPosition(false),
                 ));
                 spin_sleeper.sleep(sleep_duration_part_2);
-                let _ = tx_signal_handler_to_heating.send(InternalCommand::Quit);
-                let _ = tx_signal_handler_to_refill.send(InternalCommand::Quit);
+                let _ = channels
+                    .signal_handler
+                    .send_to_heating(InternalCommand::Quit);
+                let _ = channels
+                    .signal_handler
+                    .send_to_refill(InternalCommand::Quit);
                 spin_sleeper.sleep(sleep_duration_thread_processing);
-                let _ = tx_signal_handler_to_tank_level_switch.send(InternalCommand::Quit);
-                rx_signal_handler_from_tank_level_switch.recv().unwrap();
-                let _ = tx_signal_handler_to_heating.send(InternalCommand::Terminate);
-                let _ = tx_signal_handler_to_refill.send(InternalCommand::Terminate);
+                let _ = channels
+                    .signal_handler
+                    .send_to_tank_level_switch(InternalCommand::Quit);
+                channels
+                    .signal_handler
+                    .receive_from_tank_level_switch()
+                    .unwrap();
+                let _ = channels
+                    .signal_handler
+                    .send_to_heating(InternalCommand::Terminate);
+                let _ = channels
+                    .signal_handler
+                    .send_to_refill(InternalCommand::Terminate);
                 let _ = tx_test_environment_to_tcp_for_test_case_finish.send(InternalCommand::Quit);
-                let _ = tx_signal_handler_to_tank_level_switch.send(InternalCommand::Terminate);
+                let _ = channels
+                    .signal_handler
+                    .send_to_tank_level_switch(InternalCommand::Terminate);
             })
             .unwrap();
 
         // thread for the test object
         let join_handle_test_object = create_test_object(
-            tx_tank_level_switch_to_tcp,
-            rx_tank_level_switch_from_tcp,
             tank_level_switch,
-            tx_tank_level_switch_to_signal_handler,
-            rx_tank_level_switch_from_signal_handler,
+            channels.tank_level_switch,
             mutex_tank_level_switch_signals,
         );
 
@@ -1017,16 +993,9 @@ pub mod tests {
     }
 
     #[test]
+    // test if position stabilized signal is not updating when the raw input signal is toggling
     pub fn test_refill_calc_tank_level_switch_position_stabilized_is_true_with_toggling_input() {
-        // test if position stabilized signal is not updating when the raw input signal is toggling
-        let (tx_tank_level_switch_to_tcp, rx_tcp_from_tank_level_switch) = mpsc::channel();
-        let (tx_tcp_to_tank_level_switch, rx_tank_level_switch_from_tcp) = mpsc::channel();
-        let (tx_tank_level_switch_to_signal_handler, rx_signal_handler_from_tank_level_switch) =
-            mpsc::channel();
-        let (tx_signal_handler_to_tank_level_switch, rx_tank_level_switch_from_signal_handler) =
-            mpsc::channel();
-        let (tx_signal_handler_to_refill, _rx_refill_from_signal_handler) = mpsc::channel();
-        let (tx_signal_handler_to_heating, _rx_heating_from_signal_handler) = mpsc::channel();
+        let mut channels = Channels::new(false, false, true);
         let (tx_test_environment_to_tcp, rx_tcp_from_test_environment) = mpsc::channel();
 
         let config: ConfigData =
@@ -1050,8 +1019,7 @@ pub mod tests {
             .name("mock_tcp".to_string())
             .spawn(move || {
                 mock_tcp_for_tank_level_switch(
-                    &tx_tcp_to_tank_level_switch,
-                    &rx_tcp_from_tank_level_switch,
+                    channels.tcp_communication,
                     Some(&rx_tcp_from_test_environment),
                     true,
                     false,
@@ -1059,7 +1027,11 @@ pub mod tests {
             })
             .unwrap();
 
-        let tx_test_environment_to_tcp_for_test_case_finish = tx_tank_level_switch_to_tcp.clone();
+        let tx_test_environment_to_tcp_for_test_case_finish = channels
+            .tank_level_switch
+            .tx_tank_level_switch_to_tcp_opt
+            .clone()
+            .unwrap();
 
         // thread for controlling duration of test run
         let join_handle_test_environment = thread::Builder::new()
@@ -1078,25 +1050,37 @@ pub mod tests {
                         MockSignal::TankLevelSwitchPosition(true),
                     ));
                 }
-                let _ = tx_signal_handler_to_heating.send(InternalCommand::Quit);
-                let _ = tx_signal_handler_to_refill.send(InternalCommand::Quit);
+                let _ = channels
+                    .signal_handler
+                    .send_to_heating(InternalCommand::Quit);
+                let _ = channels
+                    .signal_handler
+                    .send_to_refill(InternalCommand::Quit);
                 spin_sleeper.sleep(sleep_duration_thread_processing);
-                let _ = tx_signal_handler_to_tank_level_switch.send(InternalCommand::Quit);
-                rx_signal_handler_from_tank_level_switch.recv().unwrap();
-                let _ = tx_signal_handler_to_heating.send(InternalCommand::Terminate);
-                let _ = tx_signal_handler_to_refill.send(InternalCommand::Terminate);
+                let _ = channels
+                    .signal_handler
+                    .send_to_tank_level_switch(InternalCommand::Quit);
+                channels
+                    .signal_handler
+                    .receive_from_tank_level_switch()
+                    .unwrap();
+                let _ = channels
+                    .signal_handler
+                    .send_to_heating(InternalCommand::Terminate);
+                let _ = channels
+                    .signal_handler
+                    .send_to_refill(InternalCommand::Terminate);
                 let _ = tx_test_environment_to_tcp_for_test_case_finish.send(InternalCommand::Quit);
-                let _ = tx_signal_handler_to_tank_level_switch.send(InternalCommand::Terminate);
+                let _ = channels
+                    .signal_handler
+                    .send_to_tank_level_switch(InternalCommand::Terminate);
             })
             .unwrap();
 
         // thread for the test object
         let join_handle_test_object = create_test_object(
-            tx_tank_level_switch_to_tcp,
-            rx_tank_level_switch_from_tcp,
             tank_level_switch,
-            tx_tank_level_switch_to_signal_handler,
-            rx_tank_level_switch_from_signal_handler,
+            channels.tank_level_switch,
             mutex_tank_level_switch_signals,
         );
 
@@ -1254,17 +1238,11 @@ pub mod tests {
             .expect("Test environment thread did not finish.");
     }
     #[test]
+    // test if mutex access duration is measured and monitored
     pub fn test_refill_calc_tank_level_switch_position_stabilized_false_true_with_mutex_blocked_too_long(
     ) {
-        // test if mutex access duration is measured and monitored
-        let (tx_tank_level_switch_to_tcp, rx_tcp_from_tank_level_switch) = mpsc::channel();
-        let (tx_tcp_to_tank_level_switch, rx_tank_level_switch_from_tcp) = mpsc::channel();
-        let (tx_tank_level_switch_to_signal_handler, rx_signal_handler_from_tank_level_switch) =
-            mpsc::channel();
-        let (tx_signal_handler_to_tank_level_switch, rx_tank_level_switch_from_signal_handler) =
-            mpsc::channel();
-        let (tx_signal_handler_to_refill, _rx_refill_from_signal_handler) = mpsc::channel();
-        let (tx_signal_handler_to_heating, _rx_heating_from_signal_handler) = mpsc::channel();
+        let mut channels = Channels::new(false, false, true);
+
         let (tx_test_environment_to_tcp, rx_tcp_from_test_environment) = mpsc::channel();
 
         let mut config: ConfigData =
@@ -1294,8 +1272,7 @@ pub mod tests {
             .name("mock_tcp".to_string())
             .spawn(move || {
                 mock_tcp_for_tank_level_switch(
-                    &tx_tcp_to_tank_level_switch,
-                    &rx_tcp_from_tank_level_switch,
+                    channels.tcp_communication,
                     Some(&rx_tcp_from_test_environment),
                     false,
                     false,
@@ -1303,7 +1280,11 @@ pub mod tests {
             })
             .unwrap();
 
-        let tx_test_environment_to_tcp_for_test_case_finish = tx_tank_level_switch_to_tcp.clone();
+        let tx_test_environment_to_tcp_for_test_case_finish = channels
+            .tank_level_switch
+            .tx_tank_level_switch_to_tcp_opt
+            .clone()
+            .unwrap();
 
         // thread for controlling duration of test run
         let join_handle_test_environment = thread::Builder::new()
@@ -1322,15 +1303,30 @@ pub mod tests {
                     let _unused = mutex_tank_level_switch_signals_clone_for_test_environment.lock();
                     spin_sleeper.sleep(sleep_duration_part_2);
                 }
-                let _ = tx_signal_handler_to_heating.send(InternalCommand::Quit);
-                let _ = tx_signal_handler_to_refill.send(InternalCommand::Quit);
+                let _ = channels
+                    .signal_handler
+                    .send_to_heating(InternalCommand::Quit);
+                let _ = channels
+                    .signal_handler
+                    .send_to_refill(InternalCommand::Quit);
                 spin_sleeper.sleep(sleep_duration_thread_processing);
-                let _ = tx_signal_handler_to_tank_level_switch.send(InternalCommand::Quit);
-                rx_signal_handler_from_tank_level_switch.recv().unwrap();
-                let _ = tx_signal_handler_to_heating.send(InternalCommand::Terminate);
-                let _ = tx_signal_handler_to_refill.send(InternalCommand::Terminate);
+                let _ = channels
+                    .signal_handler
+                    .send_to_tank_level_switch(InternalCommand::Quit);
+                channels
+                    .signal_handler
+                    .receive_from_tank_level_switch()
+                    .unwrap();
+                let _ = channels
+                    .signal_handler
+                    .send_to_heating(InternalCommand::Terminate);
+                let _ = channels
+                    .signal_handler
+                    .send_to_refill(InternalCommand::Terminate);
                 let _ = tx_test_environment_to_tcp_for_test_case_finish.send(InternalCommand::Quit);
-                let _ = tx_signal_handler_to_tank_level_switch.send(InternalCommand::Terminate);
+                let _ = channels
+                    .signal_handler
+                    .send_to_tank_level_switch(InternalCommand::Terminate);
             })
             .unwrap();
 
@@ -1338,30 +1334,8 @@ pub mod tests {
         let join_handle_test_object = thread::Builder::new()
             .name("test_object".to_string())
             .spawn(move || {
-                // clone sender part of channels to mock threads so that we can terminate them after execution of the test object
-                let tx_tank_level_switch_to_tcp_opt = Some(tx_tank_level_switch_to_tcp);
-                let rx_tank_level_switch_from_tcp_opt = Some(rx_tank_level_switch_from_tcp);
-
-                let mut tank_level_switch_channels = TankLevelSwitchChannels {
-                    tx_tank_level_switch_to_tcp_opt,
-                    #[cfg(feature = "debug_channels")]
-                    cnt_tx_tank_level_switch_to_tcp_opt: 0,
-
-                    rx_tank_level_switch_from_tcp_opt,
-                    #[cfg(feature = "debug_channels")]
-                    cnt_rx_tank_level_switch_from_tcp_opt: 0,
-
-                    tx_tank_level_switch_to_signal_handler,
-                    #[cfg(feature = "debug_channels")]
-                    cnt_tx_tank_level_switch_to_signal_handler: 0,
-
-                    rx_tank_level_switch_from_signal_handler,
-                    #[cfg(feature = "debug_channels")]
-                    cnt_rx_tank_level_switch_from_signal_handler: 0,
-                };
-
                 let _ = tank_level_switch.execute(
-                    &mut tank_level_switch_channels,
+                    &mut channels.tank_level_switch,
                     mutex_tank_level_switch_signals,
                 );
 

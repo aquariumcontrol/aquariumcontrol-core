@@ -10,17 +10,17 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 #[cfg(test)]
 pub mod tests {
     use spin_sleep::SpinSleeper;
-    use std::sync::mpsc::{Receiver, Sender, TryRecvError};
+    use std::sync::mpsc::{Receiver, TryRecvError};
     use std::time::Duration;
 
     use crate::mocks::mock_signal::tests::MockSignal;
     use crate::mocks::test_command::tests::TestCommand;
     use crate::simulator::tcp_communication::TcpCommunicationError;
+    use crate::simulator::tcp_communication_channels::TcpCommunicationChannels;
     use crate::utilities::channel_content::{AquariumSignal, InternalCommand};
 
     pub fn mock_tcp_for_tank_level_switch(
-        tx_tcp_to_test_object: &Sender<Result<f32, TcpCommunicationError>>,
-        rx_tcp_from_test_object: &Receiver<InternalCommand>,
+        tcp_communication_channels: TcpCommunicationChannels,
         rx_tcp_from_test_environment_opt: Option<&Receiver<TestCommand>>,
         initial_mock_value_position: bool,
         initial_mock_value_invalid: bool,
@@ -32,6 +32,13 @@ pub mod tests {
 
         let mut command_received: Option<InternalCommand>;
         let mut signal_received: Option<AquariumSignal>;
+
+        let tx_tcp_to_test_object = tcp_communication_channels
+            .tx_tcp_communication_to_tank_level_switch_opt
+            .unwrap();
+        let rx_tcp_from_test_object = tcp_communication_channels
+            .rx_tcp_communication_from_tank_level_switch_opt
+            .unwrap();
 
         loop {
             match rx_tcp_from_test_object.try_recv() {
