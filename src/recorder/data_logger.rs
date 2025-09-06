@@ -1097,13 +1097,13 @@ impl DataLogger {
 #[cfg(test)]
 pub mod tests {
     use crate::database::{sql_interface::SqlInterface, sql_interface_data::SqlInterfaceData};
+    use crate::launch::channels::Channels;
     use crate::mocks::mock_data_injection::tests::MockDataInjection;
     use crate::mocks::mock_heating::tests::mock_heating;
     use crate::mocks::mock_signal::tests::MockSignal;
     use crate::mocks::mock_ventilation::tests::mock_ventilation;
     use crate::mocks::test_command::tests::TestCommand;
     use crate::recorder::data_logger::{DataLogger, DataLoggerConfig, DataLoggerMutexes};
-    use crate::recorder::data_logger_channels::DataLoggerChannels;
     use crate::sensors::sensor_manager::SensorManagerSignals;
     use crate::sensors::tank_level_switch::TankLevelSwitchSignals;
     use crate::utilities::channel_content::InternalCommand;
@@ -1259,14 +1259,9 @@ pub mod tests {
     // - writing output to the filesystem
     // Test case uses test database #45.
     pub fn test_data_log() {
-        // channels for communication with the test environment
-        let (tx_data_logger_to_signal_handler, rx_signal_handler_from_data_logger) =
-            mpsc::channel();
-        let (tx_signal_handler_to_data_logger, rx_data_logger_from_signal_handler) =
-            mpsc::channel();
-        let (tx_signal_handler_to_ventilation, rx_ventilation_from_signal_handler) =
-            mpsc::channel();
-        let (tx_signal_handler_to_heating, rx_heating_from_signal_handler) = mpsc::channel();
+        let mut channels = Channels::new_for_test();
+
+        // test environment-specific channels
         let (tx_test_environment_to_ventilation, rx_ventilation_from_test_environment) =
             mpsc::channel();
         let (tx_test_environment_to_heating, rx_heating_from_test_environment) = mpsc::channel();
@@ -1415,15 +1410,15 @@ pub mod tests {
                 spin_sleeper.sleep(sleep_duration_1_second);
 
                 // cease operation of the test object
-                let _ = tx_signal_handler_to_data_logger.send(InternalCommand::Quit);
-                rx_signal_handler_from_data_logger.recv().unwrap();
+                let _ = channels.signal_handler.send_to_data_logger(InternalCommand::Quit);
+                channels.signal_handler.receive_from_data_logger().unwrap();
 
                 // signal end of test case execution to mock threads
-                let _ = tx_signal_handler_to_heating.send(InternalCommand::Quit);
-                let _ = tx_signal_handler_to_ventilation.send(InternalCommand::Quit);
+                let _ = channels.signal_handler.send_to_heating(InternalCommand::Quit);
+                let _ = channels.signal_handler.send_to_ventilation(InternalCommand::Quit);
 
                 spin_sleeper.sleep(sleep_duration_1_second);
-                let _ = tx_signal_handler_to_data_logger.send(InternalCommand::Terminate);
+                let _ = channels.signal_handler.send_to_data_logger(InternalCommand::Terminate);
             })
             .unwrap();
 
@@ -1434,7 +1429,7 @@ pub mod tests {
                 mock_heating(
                     None,
                     None,
-                    &rx_heating_from_signal_handler,
+                    &channels.heating.rx_heating_from_signal_handler,
                     Some(&rx_heating_from_test_environment),
                     mutex_heating_status, // initial heating control status
                 );
@@ -1446,7 +1441,7 @@ pub mod tests {
             .name("mock_ventilation".to_string())
             .spawn(move || {
                 mock_ventilation(
-                    &rx_ventilation_from_signal_handler,
+                    &channels.ventilation.rx_ventilation_from_signal_handler,
                     Some(&rx_ventilation_from_test_environment),
                     mutex_ventilation_status, // initial ventilation control status
                 );
@@ -1462,15 +1457,6 @@ pub mod tests {
         let join_handle_test_object = thread::Builder::new()
             .name("test_object".to_string())
             .spawn(move || {
-                let mut data_logger_channels = DataLoggerChannels {
-                    tx_data_logger_to_signal_handler,
-                    #[cfg(feature = "debug_channels")]
-                    cnt_tx_data_logger_to_signal_handler: 0,
-
-                    rx_data_logger_from_signal_handler,
-                    #[cfg(feature = "debug_channels")]
-                    cnt_rx_data_logger_from_signal_handler: 0,
-                };
 
                 let data_logger_mutexes = DataLoggerMutexes {
                     mutex_sensor_manager_signals:
@@ -1484,7 +1470,7 @@ pub mod tests {
                 data_logger.execute(
                     &mut mock_data_injection,
                     sql_interface_data,
-                    &mut data_logger_channels,
+                    &mut channels.data_logger,
                     data_logger_mutexes,
                 );
 
