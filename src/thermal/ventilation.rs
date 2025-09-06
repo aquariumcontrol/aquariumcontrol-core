@@ -79,7 +79,7 @@ fn actuate_ventilation(
     *mutex_data += 1;
 }
 
-/// Commands the relay manager to switch on the ventilation device.
+/// The function commands the relay manager to switch on the ventilation device.
 ///
 /// This function is a specific wrapper around `actuate_ventilation` that sends the `SwitchOn` command.
 ///
@@ -88,7 +88,7 @@ fn actuate_ventilation(
 ///   coordinating device actuation.
 /// * `mutex_blocked_during_actuation` - A mutable boolean flag that is set if the
 /// * `ventilation_channels` - A mutable reference to the struct containing the channels.
-///   actuation mutex was found to be blocked.
+///   Actuation mutex was found to be blocked.
 fn switch_on_ventilation(
     mutex_device_scheduler_ventilation: &Arc<Mutex<i32>>,
     mutex_blocked_during_actuation: &mut bool,
@@ -102,7 +102,7 @@ fn switch_on_ventilation(
     );
 }
 
-/// Commands the relay manager to switch off the ventilation device.
+/// The function commands the relay manager to switch off the ventilation device.
 ///
 /// This function is a specific wrapper around `actuate_ventilation` that sends the `SwitchOff` command.
 ///
@@ -111,7 +111,7 @@ fn switch_on_ventilation(
 ///   coordinating device actuation.
 /// * `mutex_blocked_during_actuation` - A mutable boolean flag that is set if the
 /// * `ventilation_channels` - A mutable reference to the struct containing the channels.
-///   actuation mutex was found to be blocked.
+///   Actuation mutex was found to be blocked.
 fn switch_off_ventilation(
     mutex_device_scheduler_ventilation: &Arc<Mutex<i32>>,
     mutex_blocked_during_actuation: &mut bool,
@@ -586,18 +586,18 @@ impl Ventilation {
 
 #[cfg(test)]
 pub mod tests {
+    use crate::launch::channels::Channels;
     use crate::mocks::mock_relay_manager::tests::mock_relay_manager;
     use crate::mocks::mock_schedule_check::tests::mock_schedule_check;
     use crate::mocks::mock_ventilation::tests::MockSqlInterfaceVentilationSetVals;
     use crate::sensors::sensor_manager::SensorManagerSignals;
     use crate::thermal::ventilation::Ventilation;
-    use crate::thermal::ventilation_channels::VentilationChannels;
     use crate::utilities::channel_content::{AquariumDevice, InternalCommand};
     use crate::utilities::common::tests::update_min_max_actuation_duration;
     use crate::utilities::config::{read_config_file, ConfigData};
+    use crate::utilities::signal_handler::SignalHandlerChannels;
     use all_asserts::{assert_ge, assert_le};
     use spin_sleep::SpinSleeper;
-    use std::sync::mpsc;
     use std::sync::mpsc::{Receiver, Sender};
     use std::sync::{Arc, Mutex};
     use std::thread;
@@ -645,8 +645,7 @@ pub mod tests {
     // - It fails to receive the acknowledgment from the `Ventilation` test object.
     fn create_test_environment(
         duration_seconds: u64,
-        tx_signal_handler_to_ventilation: Sender<InternalCommand>,
-        rx_signal_handler_from_ventilation: Receiver<bool>,
+        mut signal_handler_channels: SignalHandlerChannels,
         mutex_ventilation_status_opt: Option<Arc<Mutex<bool>>>,
     ) -> thread::JoinHandle<()> {
         thread::Builder::new()
@@ -679,9 +678,9 @@ pub mod tests {
                     let spin_sleeper = SpinSleeper::default();
                     spin_sleeper.sleep(sleep_duration_ten_seconds);
                 }
-                let _ = tx_signal_handler_to_ventilation.send(InternalCommand::Quit);
-                rx_signal_handler_from_ventilation.recv().unwrap();
-                let _ = tx_signal_handler_to_ventilation.send(InternalCommand::Terminate);
+                let _ = signal_handler_channels.send_to_ventilation(InternalCommand::Quit);
+                signal_handler_channels.receive_from_ventilation().unwrap();
+                let _ = signal_handler_channels.send_to_ventilation(InternalCommand::Terminate);
             })
             .unwrap()
     }
@@ -698,25 +697,15 @@ pub mod tests {
         // replacement value is used for initializing mutex
         config.sensor_manager.replacement_value_water_temperature = 30.0;
 
-        // Channels for the test object. The test environment only uses one of the channels
-        let (tx_ventilation_to_relay_manager, rx_relay_manager_from_ventilation) = mpsc::channel();
-        let (tx_relay_manager_to_ventilation, rx_ventilation_from_relay_manager) = mpsc::channel();
-        let (tx_signal_handler_to_ventilation, rx_ventilation_from_signal_handler) =
-            mpsc::channel();
-        let (tx_ventilation_to_signal_handler, rx_signal_handler_from_ventilation) =
-            mpsc::channel();
-        let (tx_schedule_check_to_ventilation, rx_ventilation_from_schedule_check) =
-            mpsc::channel();
-        let (tx_ventilation_to_schedule_check, rx_schedule_check_from_ventilation) =
-            mpsc::channel();
+        let mut channels = Channels::new_for_test();
 
         // thread for mock schedule check
         let join_handle_mock_schedule_check = thread::Builder::new()
             .name("mock_schedule_check".to_string())
             .spawn(move || {
                 mock_schedule_check(
-                    &tx_schedule_check_to_ventilation,
-                    &rx_schedule_check_from_ventilation,
+                    &channels.schedule_check.tx_schedule_check_to_ventilation,
+                    &channels.schedule_check.rx_schedule_check_from_ventilation,
                     None,
                     true,
                 );
@@ -732,15 +721,14 @@ pub mod tests {
 
         // thread for mock relay manager - includes assertions
         let join_handle_mock_relay_manager = create_mock_relay_manager_for_ventilation_on(
-            tx_relay_manager_to_ventilation,
-            rx_relay_manager_from_ventilation,
+            channels.relay_manager.tx_relay_manager_to_ventilation,
+            channels.relay_manager.rx_relay_manager_from_ventilation,
         );
 
         // thread for controlling duration of test run
         let join_handle_test_environment = create_test_environment(
             10,
-            tx_signal_handler_to_ventilation,
-            rx_signal_handler_from_ventilation,
+            channels.signal_handler,
             None, // no blocking of mutex in this test case
         );
 
@@ -751,47 +739,19 @@ pub mod tests {
             .name("test_object".to_string())
             .spawn(move || {
                 // clone sender part of the channels to mock threads so that we can terminate them after execution of the test object
-                let tx_ventilation_to_schedule_check_for_test_case_finish =
-                    tx_ventilation_to_schedule_check.clone();
+                let tx_ventilation_to_schedule_check_for_test_case_finish = channels
+                    .ventilation
+                    .tx_ventilation_to_schedule_check
+                    .clone();
                 let tx_ventilation_to_relay_manager_for_test_case_finish =
-                    tx_ventilation_to_relay_manager.clone();
-
-                let mut ventilation_channels = VentilationChannels {
-                    tx_ventilation_to_relay_manager,
-                    #[cfg(feature = "debug_channels")]
-                    cnt_tx_ventilation_to_relay_manager: 0,
-
-                    rx_ventilation_from_relay_manager,
-                    #[cfg(feature = "debug_channels")]
-                    cnt_rx_ventilation_from_relay_manager: 0,
-
-                    tx_ventilation_to_signal_handler,
-                    #[cfg(feature = "debug_channels")]
-                    cnt_tx_ventilation_to_signal_handler: 0,
-
-                    rx_ventilation_from_signal_handler,
-                    #[cfg(feature = "debug_channels")]
-                    cnt_rx_ventilation_from_signal_handler: 0,
-
-                    tx_ventilation_to_schedule_check,
-                    #[cfg(feature = "debug_channels")]
-                    cnt_tx_ventilation_to_schedule_check: 0,
-
-                    rx_ventilation_from_schedule_check,
-                    #[cfg(feature = "debug_channels")]
-                    cnt_rx_ventilation_from_schedule_check: 0,
-
-                    rx_ventilation_from_messaging_opt: None,
-                    #[cfg(feature = "debug_channels")]
-                    cnt_rx_ventilation_from_messaging_opt: 0,
-                };
+                    channels.ventilation.tx_ventilation_to_relay_manager.clone();
 
                 let mut ventilation_set_value_updater =
                     MockSqlInterfaceVentilationSetVals::new(false, None, None, None);
 
                 ventilation.execute(
                     mutex_device_scheduler_ventilation.clone(),
-                    &mut ventilation_channels,
+                    &mut channels.ventilation,
                     &mut ventilation_set_value_updater,
                     mutex_sensor_manager_signals,
                     Arc::new(Mutex::new(false)),
@@ -883,25 +843,15 @@ pub mod tests {
         // replacement value is used for initializing mutex
         config.sensor_manager.replacement_value_water_temperature = 20.0;
 
-        // Channels for the test object. The test environment only uses one of the channels
-        let (tx_ventilation_to_relay_manager, rx_relay_manager_from_ventilation) = mpsc::channel();
-        let (tx_relay_manager_to_ventilation, rx_ventilation_from_relay_manager) = mpsc::channel();
-        let (tx_signal_handler_to_ventilation, rx_ventilation_from_signal_handler) =
-            mpsc::channel();
-        let (tx_ventilation_to_signal_handler, rx_signal_handler_from_ventilation) =
-            mpsc::channel();
-        let (tx_schedule_check_to_ventilation, rx_ventilation_from_schedule_check) =
-            mpsc::channel();
-        let (tx_ventilation_to_schedule_check, rx_schedule_check_from_ventilation) =
-            mpsc::channel();
+        let mut channels = Channels::new_for_test();
 
         // thread for mock schedule check
         let join_handle_mock_schedule_check = thread::Builder::new()
             .name("mock_schedule_check".to_string())
             .spawn(move || {
                 mock_schedule_check(
-                    &tx_schedule_check_to_ventilation,
-                    &rx_schedule_check_from_ventilation,
+                    &channels.schedule_check.tx_schedule_check_to_ventilation,
+                    &channels.schedule_check.rx_schedule_check_from_ventilation,
                     None,
                     true,
                 );
@@ -917,15 +867,14 @@ pub mod tests {
 
         // thread for mock relay manager - includes assertions
         let join_handle_mock_relay_manager = create_mock_relay_manager(
-            tx_relay_manager_to_ventilation,
-            rx_relay_manager_from_ventilation,
+            channels.relay_manager.tx_relay_manager_to_ventilation,
+            channels.relay_manager.rx_relay_manager_from_ventilation,
         );
 
         // thread for controlling duration of test run
         let join_handle_test_environment = create_test_environment(
             58,
-            tx_signal_handler_to_ventilation,
-            rx_signal_handler_from_ventilation,
+            channels.signal_handler,
             None, // no blocking of mutex in this test case
         );
 
@@ -936,47 +885,19 @@ pub mod tests {
             .name("test_object".to_string())
             .spawn(move || {
                 // clone sender part of the channels to mock threads so that we can terminate them after execution of the test object
-                let tx_ventilation_to_schedule_check_for_test_case_finish =
-                    tx_ventilation_to_schedule_check.clone();
+                let tx_ventilation_to_schedule_check_for_test_case_finish = channels
+                    .ventilation
+                    .tx_ventilation_to_schedule_check
+                    .clone();
                 let tx_ventilation_to_relay_manager_for_test_case_finish =
-                    tx_ventilation_to_relay_manager.clone();
-
-                let mut ventilation_channels = VentilationChannels {
-                    tx_ventilation_to_relay_manager,
-                    #[cfg(feature = "debug_channels")]
-                    cnt_tx_ventilation_to_relay_manager: 0,
-
-                    rx_ventilation_from_relay_manager,
-                    #[cfg(feature = "debug_channels")]
-                    cnt_rx_ventilation_from_relay_manager: 0,
-
-                    tx_ventilation_to_signal_handler,
-                    #[cfg(feature = "debug_channels")]
-                    cnt_tx_ventilation_to_signal_handler: 0,
-
-                    rx_ventilation_from_signal_handler,
-                    #[cfg(feature = "debug_channels")]
-                    cnt_rx_ventilation_from_signal_handler: 0,
-
-                    tx_ventilation_to_schedule_check,
-                    #[cfg(feature = "debug_channels")]
-                    cnt_tx_ventilation_to_schedule_check: 0,
-
-                    rx_ventilation_from_schedule_check,
-                    #[cfg(feature = "debug_channels")]
-                    cnt_rx_ventilation_from_schedule_check: 0,
-
-                    rx_ventilation_from_messaging_opt: None,
-                    #[cfg(feature = "debug_channels")]
-                    cnt_rx_ventilation_from_messaging_opt: 0,
-                };
+                    channels.ventilation.tx_ventilation_to_relay_manager.clone();
 
                 let mut ventilation_set_value_updater =
                     MockSqlInterfaceVentilationSetVals::new(false, None, None, None);
 
                 ventilation.execute(
                     mutex_device_scheduler_ventilation.clone(),
-                    &mut ventilation_channels,
+                    &mut channels.ventilation,
                     &mut ventilation_set_value_updater,
                     mutex_sensor_manager_signals,
                     Arc::new(Mutex::new(false)),
@@ -1018,25 +939,15 @@ pub mod tests {
         // replacement value is used for initializing mutex
         config.sensor_manager.replacement_value_water_temperature = 25.0;
 
-        // Channels for the test object. The test environment only uses one of the channels.
-        let (tx_ventilation_to_relay_manager, rx_relay_manager_from_ventilation) = mpsc::channel();
-        let (tx_relay_manager_to_ventilation, rx_ventilation_from_relay_manager) = mpsc::channel();
-        let (tx_signal_handler_to_ventilation, rx_ventilation_from_signal_handler) =
-            mpsc::channel();
-        let (tx_ventilation_to_signal_handler, rx_signal_handler_from_ventilation) =
-            mpsc::channel();
-        let (tx_schedule_check_to_ventilation, rx_ventilation_from_schedule_check) =
-            mpsc::channel();
-        let (tx_ventilation_to_schedule_check, rx_schedule_check_from_ventilation) =
-            mpsc::channel();
+        let mut channels = Channels::new_for_test();
 
         // thread for mock schedule check
         let join_handle_mock_schedule_check = thread::Builder::new()
             .name("mock_schedule_check".to_string())
             .spawn(move || {
                 mock_schedule_check(
-                    &tx_schedule_check_to_ventilation,
-                    &rx_schedule_check_from_ventilation,
+                    &channels.schedule_check.tx_schedule_check_to_ventilation,
+                    &channels.schedule_check.rx_schedule_check_from_ventilation,
                     None,
                     true,
                 );
@@ -1055,8 +966,8 @@ pub mod tests {
             .name("mock_relay_manager".to_string())
             .spawn(move || {
                 let (mut actuation_events, mock_actuator_states) = mock_relay_manager(
-                    &tx_relay_manager_to_ventilation,
-                    &rx_relay_manager_from_ventilation,
+                    &channels.relay_manager.tx_relay_manager_to_ventilation,
+                    &channels.relay_manager.rx_relay_manager_from_ventilation,
                 );
                 println!(
                     "Mock relay manager received {} commands:",
@@ -1198,8 +1109,7 @@ pub mod tests {
         // thread for controlling duration of test run
         let join_handle_test_environment = create_test_environment(
             58,
-            tx_signal_handler_to_ventilation,
-            rx_signal_handler_from_ventilation,
+            channels.signal_handler,
             None, // no blocking of mutex in this test case
         );
 
@@ -1210,47 +1120,19 @@ pub mod tests {
             .name("test_object".to_string())
             .spawn(move || {
                 // clone sender part of the channels to mock threads so that we can terminate them after execution of the test object
-                let tx_ventilation_to_schedule_check_for_test_case_finish =
-                    tx_ventilation_to_schedule_check.clone();
+                let tx_ventilation_to_schedule_check_for_test_case_finish = channels
+                    .ventilation
+                    .tx_ventilation_to_schedule_check
+                    .clone();
                 let tx_ventilation_to_relay_manager_for_test_case_finish =
-                    tx_ventilation_to_relay_manager.clone();
-
-                let mut ventilation_channels = VentilationChannels {
-                    tx_ventilation_to_relay_manager,
-                    #[cfg(feature = "debug_channels")]
-                    cnt_tx_ventilation_to_relay_manager: 0,
-
-                    rx_ventilation_from_relay_manager,
-                    #[cfg(feature = "debug_channels")]
-                    cnt_rx_ventilation_from_relay_manager: 0,
-
-                    tx_ventilation_to_signal_handler,
-                    #[cfg(feature = "debug_channels")]
-                    cnt_tx_ventilation_to_signal_handler: 0,
-
-                    rx_ventilation_from_signal_handler,
-                    #[cfg(feature = "debug_channels")]
-                    cnt_rx_ventilation_from_signal_handler: 0,
-
-                    tx_ventilation_to_schedule_check,
-                    #[cfg(feature = "debug_channels")]
-                    cnt_tx_ventilation_to_schedule_check: 0,
-
-                    rx_ventilation_from_schedule_check,
-                    #[cfg(feature = "debug_channels")]
-                    cnt_rx_ventilation_from_schedule_check: 0,
-
-                    rx_ventilation_from_messaging_opt: None,
-                    #[cfg(feature = "debug_channels")]
-                    cnt_rx_ventilation_from_messaging_opt: 0,
-                };
+                    channels.ventilation.tx_ventilation_to_relay_manager.clone();
 
                 let mut ventilation_set_value_updater =
                     MockSqlInterfaceVentilationSetVals::new(false, None, None, None);
 
                 ventilation.execute(
                     mutex_device_scheduler_ventilation.clone(),
-                    &mut ventilation_channels,
+                    &mut channels.ventilation,
                     &mut ventilation_set_value_updater,
                     mutex_sensor_manager_signals,
                     Arc::new(Mutex::new(false)),
@@ -1290,25 +1172,15 @@ pub mod tests {
         // replacement value is used for initializing mutex
         config.sensor_manager.replacement_value_water_temperature = 30.0;
 
-        // Channels for the test object. The test environment only uses one of the channels.
-        let (tx_ventilation_to_relay_manager, rx_relay_manager_from_ventilation) = mpsc::channel();
-        let (tx_relay_manager_to_ventilation, rx_ventilation_from_relay_manager) = mpsc::channel();
-        let (tx_signal_handler_to_ventilation, rx_ventilation_from_signal_handler) =
-            mpsc::channel();
-        let (tx_ventilation_to_signal_handler, rx_signal_handler_from_ventilation) =
-            mpsc::channel();
-        let (tx_schedule_check_to_ventilation, rx_ventilation_from_schedule_check) =
-            mpsc::channel();
-        let (tx_ventilation_to_schedule_check, rx_schedule_check_from_ventilation) =
-            mpsc::channel();
+        let mut channels = Channels::new_for_test();
 
         // thread for mock schedule check
         let join_handle_mock_schedule_check = thread::Builder::new()
             .name("mock_schedule_check".to_string())
             .spawn(move || {
                 mock_schedule_check(
-                    &tx_schedule_check_to_ventilation,
-                    &rx_schedule_check_from_ventilation,
+                    &channels.schedule_check.tx_schedule_check_to_ventilation,
+                    &channels.schedule_check.rx_schedule_check_from_ventilation,
                     None,
                     false,
                 );
@@ -1324,15 +1196,14 @@ pub mod tests {
 
         // thread for mock relay manager - includes assertions
         let join_handle_mock_relay_manager = create_mock_relay_manager(
-            tx_relay_manager_to_ventilation,
-            rx_relay_manager_from_ventilation,
+            channels.relay_manager.tx_relay_manager_to_ventilation,
+            channels.relay_manager.rx_relay_manager_from_ventilation,
         );
 
         // thread for controlling duration of test run
         let join_handle_test_environment = create_test_environment(
             10,
-            tx_signal_handler_to_ventilation,
-            rx_signal_handler_from_ventilation,
+            channels.signal_handler,
             None, // no blocking of mutex in this test case
         );
 
@@ -1343,47 +1214,19 @@ pub mod tests {
             .name("test_object".to_string())
             .spawn(move || {
                 // clone sender part of the channels to mock threads so that we can terminate them after execution of the test object
-                let tx_ventilation_to_schedule_check_for_test_case_finish =
-                    tx_ventilation_to_schedule_check.clone();
+                let tx_ventilation_to_schedule_check_for_test_case_finish = channels
+                    .ventilation
+                    .tx_ventilation_to_schedule_check
+                    .clone();
                 let tx_ventilation_to_relay_manager_for_test_case_finish =
-                    tx_ventilation_to_relay_manager.clone();
-
-                let mut ventilation_channels = VentilationChannels {
-                    tx_ventilation_to_relay_manager,
-                    #[cfg(feature = "debug_channels")]
-                    cnt_tx_ventilation_to_relay_manager: 0,
-
-                    rx_ventilation_from_relay_manager,
-                    #[cfg(feature = "debug_channels")]
-                    cnt_rx_ventilation_from_relay_manager: 0,
-
-                    tx_ventilation_to_signal_handler,
-                    #[cfg(feature = "debug_channels")]
-                    cnt_tx_ventilation_to_signal_handler: 0,
-
-                    rx_ventilation_from_signal_handler,
-                    #[cfg(feature = "debug_channels")]
-                    cnt_rx_ventilation_from_signal_handler: 0,
-
-                    tx_ventilation_to_schedule_check,
-                    #[cfg(feature = "debug_channels")]
-                    cnt_tx_ventilation_to_schedule_check: 0,
-
-                    rx_ventilation_from_schedule_check,
-                    #[cfg(feature = "debug_channels")]
-                    cnt_rx_ventilation_from_schedule_check: 0,
-
-                    rx_ventilation_from_messaging_opt: None,
-                    #[cfg(feature = "debug_channels")]
-                    cnt_rx_ventilation_from_messaging_opt: 0,
-                };
+                    channels.ventilation.tx_ventilation_to_relay_manager.clone();
 
                 let mut ventilation_set_value_updater =
                     MockSqlInterfaceVentilationSetVals::new(false, None, None, None);
 
                 ventilation.execute(
                     mutex_device_scheduler_ventilation.clone(),
-                    &mut ventilation_channels,
+                    &mut channels.ventilation,
                     &mut ventilation_set_value_updater,
                     mutex_sensor_manager_signals,
                     Arc::new(Mutex::new(false)),
@@ -1437,17 +1280,7 @@ pub mod tests {
 
         let mut ventilation = Ventilation::new(config.ventilation);
 
-        let (tx_ventilation_to_relay_manager, rx_relay_manager_from_ventilation) = mpsc::channel();
-        let (tx_relay_manager_to_ventilation, rx_ventilation_from_relay_manager) = mpsc::channel();
-        let (tx_ventilation_to_signal_handler, rx_signal_handler_from_ventilation) =
-            mpsc::channel();
-        let (tx_schedule_check_to_ventilation, rx_ventilation_from_schedule_check) =
-            mpsc::channel();
-        let (tx_ventilation_to_schedule_check, rx_schedule_check_from_ventilation) =
-            mpsc::channel();
-        let (tx_messaging_to_ventilation, rx_ventilation_from_messaging) = mpsc::channel();
-        let (tx_signal_handler_to_ventilation, rx_ventilation_from_signal_handler) =
-            mpsc::channel();
+        let mut channels = Channels::new_for_test();
 
         let mutex_device_scheduler_ventilation = Arc::new(Mutex::new(0));
         let mutex_device_scheduler_test_environment = mutex_device_scheduler_ventilation.clone();
@@ -1457,8 +1290,8 @@ pub mod tests {
             .name("mock_schedule_check".to_string())
             .spawn(move || {
                 mock_schedule_check(
-                    &tx_schedule_check_to_ventilation,
-                    &rx_schedule_check_from_ventilation,
+                    &channels.schedule_check.tx_schedule_check_to_ventilation,
+                    &channels.schedule_check.rx_schedule_check_from_ventilation,
                     None,
                     true,
                 );
@@ -1470,8 +1303,8 @@ pub mod tests {
             .name("mock_relay_manager".to_string())
             .spawn(move || {
                 let (mut actuation_events, mock_actuator_states) = mock_relay_manager(
-                    &tx_relay_manager_to_ventilation,
-                    &rx_relay_manager_from_ventilation,
+                    &channels.relay_manager.tx_relay_manager_to_ventilation,
+                    &channels.relay_manager.rx_relay_manager_from_ventilation,
                 );
                 println!("actuation_events:");
                 for actuation_event in &actuation_events {
@@ -1522,7 +1355,11 @@ pub mod tests {
                 assert_eq!(*mutex_device_scheduler_test_environment.lock().unwrap(), 1);
 
                 // sending a message requesting stop of ventilation control
-                match tx_messaging_to_ventilation.send(InternalCommand::Stop) {
+                match channels
+                    .messaging
+                    .tx_messaging_to_ventilation
+                    .send(InternalCommand::Stop)
+                {
                     Ok(()) => { /* do nothing */ }
                     Err(e) => {
                         panic!(
@@ -1540,7 +1377,11 @@ pub mod tests {
                 assert_eq!(*mutex_device_scheduler_test_environment.lock().unwrap(), 2);
 
                 // sending a message requesting restart of ventilation control
-                match tx_messaging_to_ventilation.send(InternalCommand::Start) {
+                match channels
+                    .messaging
+                    .tx_messaging_to_ventilation
+                    .send(InternalCommand::Start)
+                {
                     Ok(()) => { /* do nothing */ }
                     Err(e) => {
                         panic!(
@@ -1558,7 +1399,11 @@ pub mod tests {
                 assert_eq!(*mutex_device_scheduler_test_environment.lock().unwrap(), 3);
 
                 // sending a message requesting stop of ventilation control
-                match tx_messaging_to_ventilation.send(InternalCommand::Stop) {
+                match channels
+                    .messaging
+                    .tx_messaging_to_ventilation
+                    .send(InternalCommand::Stop)
+                {
                     Ok(()) => { /* do nothing */ }
                     Err(e) => {
                         panic!(
@@ -1576,12 +1421,16 @@ pub mod tests {
                 assert_eq!(*mutex_device_scheduler_test_environment.lock().unwrap(), 4);
 
                 // requesting ventilation control to quit
-                let _ = tx_signal_handler_to_ventilation.send(InternalCommand::Quit);
-                rx_signal_handler_from_ventilation.recv().unwrap();
+                let _ = channels
+                    .signal_handler
+                    .send_to_ventilation(InternalCommand::Quit);
+                channels.signal_handler.receive_from_ventilation().unwrap();
 
                 // check if ventilation is actuated
                 assert_eq!(*mutex_device_scheduler_test_environment.lock().unwrap(), 5);
-                let _ = tx_signal_handler_to_ventilation.send(InternalCommand::Terminate);
+                let _ = channels
+                    .signal_handler
+                    .send_to_ventilation(InternalCommand::Terminate);
             })
             .unwrap();
 
@@ -1590,47 +1439,19 @@ pub mod tests {
             .name("test_object".to_string())
             .spawn(move || {
                 // clone sender part of the channels to mock threads so that we can terminate them after execution of the test object
-                let tx_ventilation_to_schedule_check_for_test_case_finish =
-                    tx_ventilation_to_schedule_check.clone();
+                let tx_ventilation_to_schedule_check_for_test_case_finish = channels
+                    .ventilation
+                    .tx_ventilation_to_schedule_check
+                    .clone();
                 let tx_ventilation_to_relay_manager_for_test_case_finish =
-                    tx_ventilation_to_relay_manager.clone();
-
-                let mut ventilation_channels = VentilationChannels {
-                    tx_ventilation_to_relay_manager,
-                    #[cfg(feature = "debug_channels")]
-                    cnt_tx_ventilation_to_relay_manager: 0,
-
-                    rx_ventilation_from_relay_manager,
-                    #[cfg(feature = "debug_channels")]
-                    cnt_rx_ventilation_from_relay_manager: 0,
-
-                    tx_ventilation_to_signal_handler,
-                    #[cfg(feature = "debug_channels")]
-                    cnt_tx_ventilation_to_signal_handler: 0,
-
-                    rx_ventilation_from_signal_handler,
-                    #[cfg(feature = "debug_channels")]
-                    cnt_rx_ventilation_from_signal_handler: 0,
-
-                    tx_ventilation_to_schedule_check,
-                    #[cfg(feature = "debug_channels")]
-                    cnt_tx_ventilation_to_schedule_check: 0,
-
-                    rx_ventilation_from_schedule_check,
-                    #[cfg(feature = "debug_channels")]
-                    cnt_rx_ventilation_from_schedule_check: 0,
-
-                    rx_ventilation_from_messaging_opt: Some(rx_ventilation_from_messaging),
-                    #[cfg(feature = "debug_channels")]
-                    cnt_rx_ventilation_from_messaging_opt: 0,
-                };
+                    channels.ventilation.tx_ventilation_to_relay_manager.clone();
 
                 let mut ventilation_set_value_updater =
                     MockSqlInterfaceVentilationSetVals::new(false, None, None, None);
 
                 ventilation.execute(
                     mutex_device_scheduler_ventilation.clone(),
-                    &mut ventilation_channels,
+                    &mut channels.ventilation,
                     &mut ventilation_set_value_updater,
                     mutex_sensor_manager_signals,
                     Arc::new(Mutex::new(false)),
@@ -1674,25 +1495,15 @@ pub mod tests {
         // replacement value is used for initializing mutex
         config.sensor_manager.replacement_value_water_temperature = 30.0;
 
-        // Channels for the test object. The test environment only uses one of the channels
-        let (tx_ventilation_to_relay_manager, rx_relay_manager_from_ventilation) = mpsc::channel();
-        let (tx_relay_manager_to_ventilation, rx_ventilation_from_relay_manager) = mpsc::channel();
-        let (tx_signal_handler_to_ventilation, rx_ventilation_from_signal_handler) =
-            mpsc::channel();
-        let (tx_ventilation_to_signal_handler, rx_signal_handler_from_ventilation) =
-            mpsc::channel();
-        let (tx_schedule_check_to_ventilation, rx_ventilation_from_schedule_check) =
-            mpsc::channel();
-        let (tx_ventilation_to_schedule_check, rx_schedule_check_from_ventilation) =
-            mpsc::channel();
+        let mut channels = Channels::new_for_test();
 
         // thread for mock schedule check
         let join_handle_mock_schedule_check = thread::Builder::new()
             .name("mock_schedule_check".to_string())
             .spawn(move || {
                 mock_schedule_check(
-                    &tx_schedule_check_to_ventilation,
-                    &rx_schedule_check_from_ventilation,
+                    &channels.schedule_check.tx_schedule_check_to_ventilation,
+                    &channels.schedule_check.rx_schedule_check_from_ventilation,
                     None,
                     true,
                 );
@@ -1711,8 +1522,8 @@ pub mod tests {
             .name("mock_relay_manager".to_string())
             .spawn(move || {
                 let (mut actuation_events, mock_actuator_states) = mock_relay_manager(
-                    &tx_relay_manager_to_ventilation,
-                    &rx_relay_manager_from_ventilation,
+                    &channels.relay_manager.tx_relay_manager_to_ventilation,
+                    &channels.relay_manager.rx_relay_manager_from_ventilation,
                 );
                 assert_eq!(actuation_events.len(), 3);
                 let actuation_event_3 = actuation_events.pop().unwrap();
@@ -1737,8 +1548,7 @@ pub mod tests {
         // thread for controlling duration of test run
         let join_handle_test_environment = create_test_environment(
             12,
-            tx_signal_handler_to_ventilation,
-            rx_signal_handler_from_ventilation,
+            channels.signal_handler,
             None, // no blocking of mutex in this test case
         );
 
@@ -1749,40 +1559,12 @@ pub mod tests {
             .name("test_object".to_string())
             .spawn(move || {
                 // clone sender part of the channels to mock threads so that we can terminate them after execution of the test object
-                let tx_ventilation_to_schedule_check_for_test_case_finish =
-                    tx_ventilation_to_schedule_check.clone();
+                let tx_ventilation_to_schedule_check_for_test_case_finish = channels
+                    .ventilation
+                    .tx_ventilation_to_schedule_check
+                    .clone();
                 let tx_ventilation_to_relay_manager_for_test_case_finish =
-                    tx_ventilation_to_relay_manager.clone();
-
-                let mut ventilation_channels = VentilationChannels {
-                    tx_ventilation_to_relay_manager,
-                    #[cfg(feature = "debug_channels")]
-                    cnt_tx_ventilation_to_relay_manager: 0,
-
-                    rx_ventilation_from_relay_manager,
-                    #[cfg(feature = "debug_channels")]
-                    cnt_rx_ventilation_from_relay_manager: 0,
-
-                    tx_ventilation_to_signal_handler,
-                    #[cfg(feature = "debug_channels")]
-                    cnt_tx_ventilation_to_signal_handler: 0,
-
-                    rx_ventilation_from_signal_handler,
-                    #[cfg(feature = "debug_channels")]
-                    cnt_rx_ventilation_from_signal_handler: 0,
-
-                    tx_ventilation_to_schedule_check,
-                    #[cfg(feature = "debug_channels")]
-                    cnt_tx_ventilation_to_schedule_check: 0,
-
-                    rx_ventilation_from_schedule_check,
-                    #[cfg(feature = "debug_channels")]
-                    cnt_rx_ventilation_from_schedule_check: 0,
-
-                    rx_ventilation_from_messaging_opt: None,
-                    #[cfg(feature = "debug_channels")]
-                    cnt_rx_ventilation_from_messaging_opt: 0,
-                };
+                    channels.ventilation.tx_ventilation_to_relay_manager.clone();
 
                 // set up the set value updater to actively manipulate the set values
                 let mut ventilation_set_value_updater = MockSqlInterfaceVentilationSetVals::new(
@@ -1794,7 +1576,7 @@ pub mod tests {
 
                 ventilation.execute(
                     mutex_device_scheduler_ventilation.clone(),
-                    &mut ventilation_channels,
+                    &mut channels.ventilation,
                     &mut ventilation_set_value_updater,
                     mutex_sensor_manager_signals,
                     Arc::new(Mutex::new(false)),
@@ -1858,17 +1640,7 @@ pub mod tests {
         // replacement value is used for initializing mutex
         config.sensor_manager.replacement_value_water_temperature = 30.0;
 
-        // Channels for the test object. The test environment only uses one of the channels
-        let (tx_ventilation_to_relay_manager, rx_relay_manager_from_ventilation) = mpsc::channel();
-        let (tx_relay_manager_to_ventilation, rx_ventilation_from_relay_manager) = mpsc::channel();
-        let (tx_signal_handler_to_ventilation, rx_ventilation_from_signal_handler) =
-            mpsc::channel();
-        let (tx_ventilation_to_signal_handler, rx_signal_handler_from_ventilation) =
-            mpsc::channel();
-        let (tx_schedule_check_to_ventilation, rx_ventilation_from_schedule_check) =
-            mpsc::channel();
-        let (tx_ventilation_to_schedule_check, rx_schedule_check_from_ventilation) =
-            mpsc::channel();
+        let mut channels = Channels::new_for_test();
 
         let mutex_ventilation_status = Arc::new(Mutex::new(false));
         let mutex_ventilation_status_clone_for_test_environment = mutex_ventilation_status.clone();
@@ -1878,8 +1650,8 @@ pub mod tests {
             .name("mock_schedule_check".to_string())
             .spawn(move || {
                 mock_schedule_check(
-                    &tx_schedule_check_to_ventilation,
-                    &rx_schedule_check_from_ventilation,
+                    &channels.schedule_check.tx_schedule_check_to_ventilation,
+                    &channels.schedule_check.rx_schedule_check_from_ventilation,
                     None,
                     true,
                 );
@@ -1895,15 +1667,14 @@ pub mod tests {
 
         // thread for mock relay manager - includes assertions
         let join_handle_mock_relay_manager = create_mock_relay_manager_for_ventilation_on(
-            tx_relay_manager_to_ventilation,
-            rx_relay_manager_from_ventilation,
+            channels.relay_manager.tx_relay_manager_to_ventilation,
+            channels.relay_manager.rx_relay_manager_from_ventilation,
         );
 
         // thread for controlling duration of test run
         let join_handle_test_environment = create_test_environment(
             10,
-            tx_signal_handler_to_ventilation,
-            rx_signal_handler_from_ventilation,
+            channels.signal_handler,
             Some(mutex_ventilation_status_clone_for_test_environment), // blocking of mutex in this test case
         );
 
@@ -1914,47 +1685,19 @@ pub mod tests {
             .name("test_object".to_string())
             .spawn(move || {
                 // clone sender part of the channels to mock threads so that we can terminate them after execution of the test object
-                let tx_ventilation_to_schedule_check_for_test_case_finish =
-                    tx_ventilation_to_schedule_check.clone();
+                let tx_ventilation_to_schedule_check_for_test_case_finish = channels
+                    .ventilation
+                    .tx_ventilation_to_schedule_check
+                    .clone();
                 let tx_ventilation_to_relay_manager_for_test_case_finish =
-                    tx_ventilation_to_relay_manager.clone();
-
-                let mut ventilation_channels = VentilationChannels {
-                    tx_ventilation_to_relay_manager,
-                    #[cfg(feature = "debug_channels")]
-                    cnt_tx_ventilation_to_relay_manager: 0,
-
-                    rx_ventilation_from_relay_manager,
-                    #[cfg(feature = "debug_channels")]
-                    cnt_rx_ventilation_from_relay_manager: 0,
-
-                    tx_ventilation_to_signal_handler,
-                    #[cfg(feature = "debug_channels")]
-                    cnt_tx_ventilation_to_signal_handler: 0,
-
-                    rx_ventilation_from_signal_handler,
-                    #[cfg(feature = "debug_channels")]
-                    cnt_rx_ventilation_from_signal_handler: 0,
-
-                    tx_ventilation_to_schedule_check,
-                    #[cfg(feature = "debug_channels")]
-                    cnt_tx_ventilation_to_schedule_check: 0,
-
-                    rx_ventilation_from_schedule_check,
-                    #[cfg(feature = "debug_channels")]
-                    cnt_rx_ventilation_from_schedule_check: 0,
-
-                    rx_ventilation_from_messaging_opt: None,
-                    #[cfg(feature = "debug_channels")]
-                    cnt_rx_ventilation_from_messaging_opt: 0,
-                };
+                    channels.ventilation.tx_ventilation_to_relay_manager.clone();
 
                 let mut ventilation_set_value_updater =
                     MockSqlInterfaceVentilationSetVals::new(false, None, None, None);
 
                 ventilation.execute(
                     mutex_device_scheduler_ventilation.clone(),
-                    &mut ventilation_channels,
+                    &mut channels.ventilation,
                     &mut ventilation_set_value_updater,
                     mutex_sensor_manager_signals,
                     mutex_ventilation_status,
