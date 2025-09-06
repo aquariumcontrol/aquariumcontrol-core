@@ -37,9 +37,9 @@ use crate::water::refill_monitor_view::RefillMonitorView;
 use crate::sensors::i2c_interface_channels::I2cInterfaceChannels;
 
 use crate::recorder::data_logger_channels::DataLoggerChannels;
+use crate::sensors::i2c_interface_channels::I2cInterfaceChannels;
 use std::sync::mpsc;
 use std::sync::mpsc::{Receiver, Sender};
-use crate::sensors::i2c_interface_channels::I2cInterfaceChannels;
 
 pub struct Channels {
     pub feed: FeedChannels,

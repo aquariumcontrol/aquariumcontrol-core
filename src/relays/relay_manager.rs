@@ -532,9 +532,7 @@ impl RelayManager {
 pub mod tests {
     use crate::launch::channels::Channels;
     use crate::launch::execution_config::ExecutionConfig;
-    use crate::relays::relay_manager::{
-        RelayActuationTrait, RelayError, RelayManager,
-    };
+    use crate::relays::relay_manager::{RelayActuationTrait, RelayError, RelayManager};
     use crate::utilities::channel_content::{AquariumDevice, InternalCommand};
     use crate::utilities::config::{read_config_file, ConfigData};
     use spin_sleep::SpinSleeper;

@@ -648,6 +648,7 @@ impl SensorManager {
 
 #[cfg(test)]
 pub mod tests {
+    use crate::launch::channels::Channels;
     use crate::sensors::atlas_scientific::AtlasScientificResultData;
     use crate::sensors::ds18b20::Ds18b20ResultData;
     use crate::sensors::sensor_manager::{
@@ -656,9 +657,8 @@ pub mod tests {
     };
     use crate::utilities::channel_content::InternalCommand;
     use crate::utilities::config::{read_config_file, ConfigData};
+    use crate::utilities::signal_handler_channels::SignalHandlerChannels;
     use spin_sleep::SpinSleeper;
-    use std::sync::mpsc;
-    use std::sync::mpsc::{Receiver, Sender};
     use std::sync::{Arc, Mutex};
     use std::thread::scope;
     use std::time::Duration;
@@ -698,8 +698,7 @@ pub mod tests {
     }
 
     fn mock_signal_handler_for_sensor_manager(
-        tx_signal_handler_to_sensor_manager: Sender<InternalCommand>,
-        rx_signal_handler_from_sensor_manager: Receiver<bool>,
+        mut signal_handler_channels: SignalHandlerChannels,
         mutex_sensor_manager_opt: Option<Arc<Mutex<SensorManagerSignals>>>,
     ) {
         let spin_sleeper = SpinSleeper::default();
@@ -722,38 +721,21 @@ pub mod tests {
                 }
             }
         }
-        let _ = tx_signal_handler_to_sensor_manager.send(InternalCommand::Quit);
-        rx_signal_handler_from_sensor_manager.recv().unwrap();
-        let _ = tx_signal_handler_to_sensor_manager.send(InternalCommand::Terminate);
+        let _ = signal_handler_channels.send_to_sensor_manager(InternalCommand::Quit);
+        signal_handler_channels
+            .receive_from_sensor_manager()
+            .unwrap();
+        let _ = signal_handler_channels.send_to_sensor_manager(InternalCommand::Terminate);
     }
 
     fn execute_and_assert_sensor_manager(
-        tx_sensor_manager_to_signal_handler: Sender<bool>,
-        rx_sensor_manager_from_signal_handler: Receiver<InternalCommand>,
+        mut sensor_manager_channels: SensorManagerChannels,
         mut sensor_manager: SensorManager,
         mutexes: SensorManagerMutexes,
         target_value_water_temperature: f32,
         target_value_ambient_temperature: f32,
         reference_mutex_access_time_exceeded: bool,
     ) {
-        let mut sensor_manager_channels = SensorManagerChannels {
-            tx_sensor_manager_to_tcp_opt: None,
-            #[cfg(feature = "debug_channels")]
-            cnt_tx_sensor_manager_to_tcp_opt: 0,
-
-            rx_sensor_manager_from_tcp_opt: None,
-            #[cfg(feature = "debug_channels")]
-            cnt_rx_sensor_manager_from_tcp_opt: 0,
-
-            tx_sensor_manager_to_signal_handler,
-            #[cfg(feature = "debug_channels")]
-            cnt_tx_sensor_manager_to_signal_handler: 0,
-
-            rx_sensor_manager_from_signal_handler,
-            #[cfg(feature = "debug_channels")]
-            cnt_rx_sensor_manager_from_signal_handler: 0,
-        };
-
         let mutexes_clone_for_asserts = mutexes.clone();
 
         // test object
@@ -788,11 +770,7 @@ pub mod tests {
     // Test case verifies if the test object is processing the interfaces correctly using input
     // from Ds18b20 sensors.
     pub fn test_sensor_manager_interfaces_using_ds18b20_as_input_without_mutex_blocked() {
-        // channels for communication with the test environment
-        let (tx_signal_handler_to_sensor_manager, rx_sensor_manager_from_signal_handler) =
-            mpsc::channel();
-        let (tx_sensor_manager_to_signal_handler, rx_signal_handler_from_sensor_manager) =
-            mpsc::channel();
+        let channels = Channels::new_for_test();
 
         let mut config: ConfigData =
             read_config_file("/config/aquarium_control_test_generic.toml".to_string()).unwrap();
@@ -840,17 +818,12 @@ pub mod tests {
 
         scope(|scope| {
             scope.spawn(move || {
-                mock_signal_handler_for_sensor_manager(
-                    tx_signal_handler_to_sensor_manager,
-                    rx_signal_handler_from_sensor_manager,
-                    None,
-                );
+                mock_signal_handler_for_sensor_manager(channels.signal_handler, None);
             });
 
             scope.spawn(move || {
                 execute_and_assert_sensor_manager(
-                    tx_sensor_manager_to_signal_handler,
-                    rx_sensor_manager_from_signal_handler,
+                    channels.sensor_manager,
                     sensor_manager,
                     mutexes,
                     target_value_water_temperature,
@@ -865,11 +838,7 @@ pub mod tests {
     // Test case verifies if the test object is processing the interfaces correctly using input
     // from Ds18b20 sensors.
     pub fn test_sensor_manager_interfaces_using_atlas_scientific_and_dht_as_input() {
-        // channels for communication with the test environment
-        let (tx_signal_handler_to_sensor_manager, rx_sensor_manager_from_signal_handler) =
-            mpsc::channel();
-        let (tx_sensor_manager_to_signal_handler, rx_signal_handler_from_sensor_manager) =
-            mpsc::channel();
+        let channels = Channels::new_for_test();
 
         let mut config: ConfigData =
             read_config_file("/config/aquarium_control_test_generic.toml".to_string()).unwrap();
@@ -917,17 +886,12 @@ pub mod tests {
 
         scope(|scope| {
             scope.spawn(move || {
-                mock_signal_handler_for_sensor_manager(
-                    tx_signal_handler_to_sensor_manager,
-                    rx_signal_handler_from_sensor_manager,
-                    None,
-                );
+                mock_signal_handler_for_sensor_manager(channels.signal_handler, None);
             });
 
             scope.spawn(move || {
                 execute_and_assert_sensor_manager(
-                    tx_sensor_manager_to_signal_handler,
-                    rx_sensor_manager_from_signal_handler,
+                    channels.sensor_manager,
                     sensor_manager,
                     mutexes,
                     target_value_water_temperature,
@@ -942,11 +906,7 @@ pub mod tests {
     // Test case verifies if the test object is processing the interfaces correctly using input
     // from Ds18b20 sensors while having mutex blocked
     pub fn test_sensor_manager_interfaces_using_ds18b20_as_input_with_mutex_blocked() {
-        // channels for communication with the test environment
-        let (tx_signal_handler_to_sensor_manager, rx_sensor_manager_from_signal_handler) =
-            mpsc::channel();
-        let (tx_sensor_manager_to_signal_handler, rx_signal_handler_from_sensor_manager) =
-            mpsc::channel();
+        let channels = Channels::new_for_test();
 
         let mut config: ConfigData =
             read_config_file("/config/aquarium_control_test_generic.toml".to_string()).unwrap();
@@ -998,16 +958,14 @@ pub mod tests {
         scope(|scope| {
             scope.spawn(move || {
                 mock_signal_handler_for_sensor_manager(
-                    tx_signal_handler_to_sensor_manager,
-                    rx_signal_handler_from_sensor_manager,
+                    channels.signal_handler,
                     Some(mutex_sensor_manager_signals_clone_for_test_environment),
                 );
             });
 
             scope.spawn(move || {
                 execute_and_assert_sensor_manager(
-                    tx_sensor_manager_to_signal_handler,
-                    rx_sensor_manager_from_signal_handler,
+                    channels.sensor_manager,
                     sensor_manager,
                     mutexes,
                     target_value_water_temperature,

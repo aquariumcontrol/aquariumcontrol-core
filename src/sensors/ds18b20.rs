@@ -344,6 +344,7 @@ impl Ds18b20 {
 
 #[cfg(test)]
 pub mod tests {
+    use crate::launch::channels::Channels;
     use crate::sensors::ds18b20::{Ds18b20, Ds18b20Config, Ds18b20Error};
     use crate::sensors::ds18b20::{Ds18b20Result, Ds18b20ResultData};
     use crate::sensors::ds18b20_channels::Ds18b20Channels;
@@ -354,7 +355,6 @@ pub mod tests {
     use std::sync::{mpsc, Arc, Mutex};
     use std::time::Duration;
     use std::{env, thread};
-    use crate::launch::channels::Channels;
 
     #[test]
     #[ignore]
@@ -730,7 +730,10 @@ pub mod tests {
                 let sleep_time = Duration::from_millis(1000);
                 let spin_sleeper = SpinSleeper::default();
                 spin_sleeper.sleep(sleep_time);
-                channels.signal_handler.send_to_ds18b20(InternalCommand::Quit).unwrap();
+                channels
+                    .signal_handler
+                    .send_to_ds18b20(InternalCommand::Quit)
+                    .unwrap();
             })
             .unwrap();
 

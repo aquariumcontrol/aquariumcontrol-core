@@ -740,6 +740,7 @@ impl AtlasScientific {
 
 #[cfg(test)]
 pub mod tests {
+    use crate::launch::channels::Channels;
     use crate::mocks::mock_i2c_interface::tests::MockI2cInterface;
     use crate::sensors::atlas_scientific::{
         atlas_scientific_constants, AtlasScientific, AtlasScientificChannels, AtlasScientificError,
@@ -755,7 +756,6 @@ pub mod tests {
     use std::sync::{mpsc, Arc, Mutex};
     use std::thread;
     use std::time::{Duration, Instant};
-    use crate::launch::channels::Channels;
 
     #[test]
     // happy case for evaluating response from pH sensor unit
@@ -1064,7 +1064,9 @@ pub mod tests {
         ));
 
         // Sending stimuli for water temperature before triggering try_recv from the test object
-        _ = channels.i2c_interface.send_to_atlas_scientific(Ok(stimuli_i2c_response_temperature));
+        _ = channels
+            .i2c_interface
+            .send_to_atlas_scientific(Ok(stimuli_i2c_response_temperature));
 
         _ = atlas_scientific.receive_response_from_i2c_interface(
             &AquariumSignal::WaterTemperature,
@@ -1085,7 +1087,9 @@ pub mod tests {
         };
 
         // Sending stimuli for pH before triggering try_recv from the test object
-        _ = channels.i2c_interface.send_to_atlas_scientific(Ok(stimuli_i2c_response_ph));
+        _ = channels
+            .i2c_interface
+            .send_to_atlas_scientific(Ok(stimuli_i2c_response_ph));
 
         _ = atlas_scientific.receive_response_from_i2c_interface(
             &AquariumSignal::pH,
@@ -1106,7 +1110,9 @@ pub mod tests {
         };
 
         // Sending stimuli for conductivity before triggering try_recv from the test object
-        _ = channels.i2c_interface.send_to_atlas_scientific(Ok(stimuli_i2c_response_conductivity));
+        _ = channels
+            .i2c_interface
+            .send_to_atlas_scientific(Ok(stimuli_i2c_response_conductivity));
 
         _ = atlas_scientific.receive_response_from_i2c_interface(
             &AquariumSignal::Conductivity,
@@ -1229,9 +1235,18 @@ pub mod tests {
                 );
                 let spin_sleeper = SpinSleeper::default();
                 spin_sleeper.sleep(sleep_time);
-                channels.signal_handler.send_to_atlas_scientific(InternalCommand::Quit).unwrap();
-                channels.signal_handler.send_to_i2c_interface(InternalCommand::Quit).unwrap();
-                channels.signal_handler.send_to_atlas_scientific(InternalCommand::Terminate).unwrap();
+                channels
+                    .signal_handler
+                    .send_to_atlas_scientific(InternalCommand::Quit)
+                    .unwrap();
+                channels
+                    .signal_handler
+                    .send_to_i2c_interface(InternalCommand::Quit)
+                    .unwrap();
+                channels
+                    .signal_handler
+                    .send_to_atlas_scientific(InternalCommand::Terminate)
+                    .unwrap();
             })
             .unwrap();
 
@@ -1429,9 +1444,18 @@ pub mod tests {
                     }
                 };
 
-                channels.signal_handler.send_to_atlas_scientific(InternalCommand::Quit).unwrap();
-                channels.signal_handler.send_to_i2c_interface(InternalCommand::Quit).unwrap();
-                channels.signal_handler.send_to_atlas_scientific(InternalCommand::Terminate).unwrap();
+                channels
+                    .signal_handler
+                    .send_to_atlas_scientific(InternalCommand::Quit)
+                    .unwrap();
+                channels
+                    .signal_handler
+                    .send_to_i2c_interface(InternalCommand::Quit)
+                    .unwrap();
+                channels
+                    .signal_handler
+                    .send_to_atlas_scientific(InternalCommand::Terminate)
+                    .unwrap();
             })
             .unwrap();
 
