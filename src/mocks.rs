@@ -24,7 +24,6 @@ pub mod mock_schedule_check;
 pub mod mock_signal;
 pub mod mock_sql_interface_feed;
 pub mod mock_sql_interface_refill;
-pub mod mock_tank_level_switch;
 pub mod mock_tcp;
 pub mod mock_ventilation;
 pub mod mock_water_injection;

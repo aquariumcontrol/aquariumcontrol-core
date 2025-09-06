@@ -793,7 +793,7 @@ pub mod tests {
     use chrono::Local;
     use mysql::PooledConn;
     use spin_sleep::SpinSleeper;
-    use std::sync::{mpsc, Arc, Mutex};
+    use std::sync::{Arc, Mutex};
     use std::thread;
     use std::time::{Duration, Instant};
 
@@ -802,15 +802,13 @@ pub mod tests {
     };
     use crate::database::sql_interface_midnight::SqlInterfaceMidnightCalculatorTrait;
     use crate::database::{sql_interface::SqlInterface, sql_interface_error::SqlInterfaceError};
+    use crate::launch::channels::Channels;
     use crate::mocks::mock_heating::tests::MockSqlInterfaceHeatingSetVals;
     use crate::mocks::mock_relay_manager::tests::mock_relay_manager;
     use crate::mocks::mock_schedule_check::tests::mock_schedule_check;
-    use crate::mocks::mock_tank_level_switch::tests::mock_tank_level_switch;
     use crate::sensors::sensor_manager::SensorManagerSignals;
     use crate::sensors::tank_level_switch::TankLevelSwitchSignals;
-    use crate::thermal::heating::{
-        Heating, HeatingChannels, HeatingMutexes, HeatingStatsDataTransferTrait,
-    };
+    use crate::thermal::heating::{Heating, HeatingMutexes, HeatingStatsDataTransferTrait};
     use crate::utilities::channel_content::{AquariumDevice, InternalCommand};
     use crate::utilities::common::tests::update_min_max_actuation_duration;
     use crate::utilities::config::{read_config_file_with_test_database, ConfigData};
@@ -1008,17 +1006,7 @@ pub mod tests {
         config.sensor_manager.replacement_value_water_temperature = 30.0;
         config.sensor_manager.replacement_value_ambient_temperature = 24.0;
 
-        // Channels for the test object. The test environment only uses one of the channels
-        let (tx_heating_to_tank_level_switch, rx_tank_level_switch_from_heating) = mpsc::channel();
-        let (tx_tank_level_switch_to_heating, _rx_heating_from_tank_level_switch) = mpsc::channel();
-        let (tx_heating_to_relay_manager, rx_relay_manager_from_heating) = mpsc::channel();
-        let (tx_relay_manager_to_heating, rx_heating_from_relay_manager) = mpsc::channel();
-        let (tx_signal_handler_to_heating, rx_heating_from_signal_handler) = mpsc::channel();
-        let (tx_heating_to_signal_handler, rx_signal_handler_from_heating) = mpsc::channel();
-        let (tx_schedule_check_to_heating, rx_heating_from_schedule_check) = mpsc::channel();
-        let (tx_heating_to_schedule_check, rx_schedule_check_from_heating) = mpsc::channel();
-        let (_tx_test_environment_to_tank_level_switch, rx_tank_level_switch_from_test_environment) =
-            mpsc::channel();
+        let mut channels = Channels::new_for_test();
 
         // Mutex for tank level switch signals
         let mutex_tank_level_switch_signals =
@@ -1029,26 +1017,9 @@ pub mod tests {
             .name("mock_schedule_check".to_string())
             .spawn(move || {
                 mock_schedule_check(
-                    &tx_schedule_check_to_heating,
-                    &rx_schedule_check_from_heating,
+                    &channels.schedule_check.tx_schedule_check_to_heating,
+                    &channels.schedule_check.rx_schedule_check_from_heating,
                     None,
-                    true,
-                );
-            })
-            .unwrap();
-
-        // thread for mock TankLevelSwitch
-        let join_handle_mock_tank_level_switch = thread::Builder::new()
-            .name("mock_tank_level_switch".to_string())
-            .spawn(move || {
-                mock_tank_level_switch(
-                    &tx_tank_level_switch_to_heating,
-                    &rx_tank_level_switch_from_heating,
-                    Some(&rx_tank_level_switch_from_test_environment),
-                    None,
-                    None,
-                    true,
-                    false,
                     true,
                 );
             })
@@ -1061,8 +1032,8 @@ pub mod tests {
             .name("mock_relay_manager".to_string())
             .spawn(move || {
                 let (mut actuation_events, mock_actuator_states) = mock_relay_manager(
-                    &tx_relay_manager_to_heating,
-                    &rx_relay_manager_from_heating,
+                    &channels.relay_manager.tx_relay_manager_to_heating,
+                    &channels.relay_manager.rx_relay_manager_from_heating,
                 );
                 assert_eq!(actuation_events.len(), 1);
                 let actuation_event = actuation_events.pop().unwrap();
@@ -1081,9 +1052,13 @@ pub mod tests {
                 let sleep_duration_ten_seconds = Duration::from_secs(10);
                 let spin_sleeper = SpinSleeper::default();
                 spin_sleeper.sleep(sleep_duration_ten_seconds);
-                let _ = tx_signal_handler_to_heating.send(InternalCommand::Quit);
-                rx_signal_handler_from_heating.recv().unwrap();
-                let _ = tx_signal_handler_to_heating.send(InternalCommand::Terminate);
+                let _ = channels
+                    .signal_handler
+                    .send_to_heating(InternalCommand::Quit);
+                channels.signal_handler.receive_from_heating().unwrap();
+                let _ = channels
+                    .signal_handler
+                    .send_to_heating(InternalCommand::Terminate);
             })
             .unwrap();
 
@@ -1096,41 +1071,9 @@ pub mod tests {
             .spawn(move || {
                 // clone sender part of the channels to mock threads so that we can terminate them after execution of the test object
                 let tx_heating_to_schedule_check_for_test_case_finish =
-                    tx_heating_to_schedule_check.clone();
-                let tx_heating_to_tank_level_switch_for_test_case_finish =
-                    tx_heating_to_tank_level_switch.clone();
+                    channels.heating.tx_heating_to_schedule_check.clone();
                 let tx_heating_to_relay_manager_for_test_case_finish =
-                    tx_heating_to_relay_manager.clone();
-
-                let mut heating_channels = HeatingChannels {
-                    tx_heating_to_relay_manager,
-                    #[cfg(feature = "debug_channels")]
-                    cnt_tx_heating_to_relay_manager: 0,
-
-                    rx_heating_from_relay_manager,
-                    #[cfg(feature = "debug_channels")]
-                    cnt_rx_heating_from_relay_manager: 0,
-
-                    tx_heating_to_signal_handler,
-                    #[cfg(feature = "debug_channels")]
-                    cnt_tx_heating_to_signal_handler: 0,
-
-                    rx_heating_from_signal_handler,
-                    #[cfg(feature = "debug_channels")]
-                    cnt_rx_heating_from_signal_handler: 0,
-
-                    tx_heating_to_schedule_check,
-                    #[cfg(feature = "debug_channels")]
-                    cnt_tx_heating_to_schedule_check: 0,
-
-                    rx_heating_from_schedule_check,
-                    #[cfg(feature = "debug_channels")]
-                    cnt_rx_heating_from_schedule_check: 0,
-
-                    rx_heating_from_messaging_opt: None,
-                    #[cfg(feature = "debug_channels")]
-                    cnt_rx_heating_from_messaging_opt: 0,
-                };
+                    channels.heating.tx_heating_to_relay_manager.clone();
 
                 let mut heating_stats_transfer =
                     HeatingStatsMockDataTransfer::new(&mut sql_interface.get_connection().unwrap());
@@ -1147,7 +1090,7 @@ pub mod tests {
 
                 heating.execute(
                     mutex_device_scheduler_heating.clone(),
-                    &mut heating_channels,
+                    &mut channels.heating,
                     &mut heating_stats_transfer,
                     &mut heating_set_value_updater,
                     heating_mutexes,
@@ -1157,8 +1100,6 @@ pub mod tests {
                 // send Quit signal to mock threads because the test object has terminated
                 let _ =
                     tx_heating_to_schedule_check_for_test_case_finish.send(InternalCommand::Quit);
-                let _ = tx_heating_to_tank_level_switch_for_test_case_finish
-                    .send(InternalCommand::Quit);
                 let _ =
                     tx_heating_to_relay_manager_for_test_case_finish.send(InternalCommand::Quit);
 
@@ -1169,9 +1110,6 @@ pub mod tests {
         join_handle_mock_schedule_check
             .join()
             .expect("Mock schedule check did not finish.");
-        join_handle_mock_tank_level_switch
-            .join()
-            .expect("Mock tank level switch did not finish.");
         join_handle_mock_relay_manager
             .join()
             .expect("Mock relay manager thread did not finish.");
@@ -1199,13 +1137,7 @@ pub mod tests {
         config.sensor_manager.replacement_value_water_temperature = 20.0;
         config.sensor_manager.replacement_value_ambient_temperature = 24.0;
 
-        // Channels for the test object. The test environment only uses one of the channels
-        let (tx_heating_to_relay_manager, rx_relay_manager_from_heating) = mpsc::channel();
-        let (tx_relay_manager_to_heating, rx_heating_from_relay_manager) = mpsc::channel();
-        let (tx_signal_handler_to_heating, rx_heating_from_signal_handler) = mpsc::channel();
-        let (tx_heating_to_signal_handler, rx_signal_handler_from_heating) = mpsc::channel();
-        let (tx_schedule_check_to_heating, rx_heating_from_schedule_check) = mpsc::channel();
-        let (tx_heating_to_schedule_check, rx_schedule_check_from_heating) = mpsc::channel();
+        let mut channels = Channels::new_for_test();
 
         // Mutex for tank level switch signals
         let mutex_tank_level_switch_signals =
@@ -1216,8 +1148,8 @@ pub mod tests {
             .name("mock_schedule_check".to_string())
             .spawn(move || {
                 mock_schedule_check(
-                    &tx_schedule_check_to_heating,
-                    &rx_schedule_check_from_heating,
+                    &channels.schedule_check.tx_schedule_check_to_heating,
+                    &channels.schedule_check.rx_schedule_check_from_heating,
                     None,
                     true,
                 );
@@ -1231,8 +1163,8 @@ pub mod tests {
             .name("mock_relay_manager".to_string())
             .spawn(move || {
                 let (mut actuation_events, mock_actuator_states) = mock_relay_manager(
-                    &tx_relay_manager_to_heating,
-                    &rx_relay_manager_from_heating,
+                    &channels.relay_manager.tx_relay_manager_to_heating,
+                    &channels.relay_manager.rx_relay_manager_from_heating,
                 );
                 assert_eq!(actuation_events.len(), 2);
                 let last_actuation_event = actuation_events.pop().unwrap();
@@ -1256,9 +1188,13 @@ pub mod tests {
                 let sleep_duration_ten_seconds = Duration::from_secs(10);
                 let spin_sleeper = SpinSleeper::default();
                 spin_sleeper.sleep(sleep_duration_ten_seconds);
-                let _ = tx_signal_handler_to_heating.send(InternalCommand::Quit);
-                rx_signal_handler_from_heating.recv().unwrap();
-                let _ = tx_signal_handler_to_heating.send(InternalCommand::Terminate);
+                let _ = channels
+                    .signal_handler
+                    .send_to_heating(InternalCommand::Quit);
+                channels.signal_handler.receive_from_heating().unwrap();
+                let _ = channels
+                    .signal_handler
+                    .send_to_heating(InternalCommand::Terminate);
             })
             .unwrap();
 
@@ -1271,39 +1207,9 @@ pub mod tests {
             .spawn(move || {
                 // clone sender part of the channels to mock threads so that we can terminate them after execution of the test object
                 let tx_heating_to_schedule_check_for_test_case_finish =
-                    tx_heating_to_schedule_check.clone();
+                    channels.heating.tx_heating_to_schedule_check.clone();
                 let tx_heating_to_relay_manager_for_test_case_finish =
-                    tx_heating_to_relay_manager.clone();
-
-                let mut heating_channels = HeatingChannels {
-                    tx_heating_to_relay_manager,
-                    #[cfg(feature = "debug_channels")]
-                    cnt_tx_heating_to_relay_manager: 0,
-
-                    rx_heating_from_relay_manager,
-                    #[cfg(feature = "debug_channels")]
-                    cnt_rx_heating_from_relay_manager: 0,
-
-                    tx_heating_to_signal_handler,
-                    #[cfg(feature = "debug_channels")]
-                    cnt_tx_heating_to_signal_handler: 0,
-
-                    rx_heating_from_signal_handler,
-                    #[cfg(feature = "debug_channels")]
-                    cnt_rx_heating_from_signal_handler: 0,
-
-                    tx_heating_to_schedule_check,
-                    #[cfg(feature = "debug_channels")]
-                    cnt_tx_heating_to_schedule_check: 0,
-
-                    rx_heating_from_schedule_check,
-                    #[cfg(feature = "debug_channels")]
-                    cnt_rx_heating_from_schedule_check: 0,
-
-                    rx_heating_from_messaging_opt: None,
-                    #[cfg(feature = "debug_channels")]
-                    cnt_rx_heating_from_messaging_opt: 0,
-                };
+                    channels.heating.tx_heating_to_relay_manager.clone();
 
                 let mut heating_stats_transfer =
                     HeatingStatsMockDataTransfer::new(&mut sql_interface.get_connection().unwrap());
@@ -1320,7 +1226,7 @@ pub mod tests {
 
                 heating.execute(
                     mutex_device_scheduler_heating.clone(),
-                    &mut heating_channels,
+                    &mut channels.heating,
                     &mut heating_stats_transfer,
                     &mut heating_set_value_updater,
                     heating_mutexes,
@@ -1371,13 +1277,7 @@ pub mod tests {
         config.sensor_manager.replacement_value_water_temperature = 25.0;
         config.sensor_manager.replacement_value_ambient_temperature = 24.0;
 
-        // Channels for the test object. The test environment only uses one of the channels
-        let (tx_heating_to_relay_manager, rx_relay_manager_from_heating) = mpsc::channel();
-        let (tx_relay_manager_to_heating, rx_heating_from_relay_manager) = mpsc::channel();
-        let (tx_signal_handler_to_heating, rx_heating_from_signal_handler) = mpsc::channel();
-        let (tx_heating_to_signal_handler, rx_signal_handler_from_heating) = mpsc::channel();
-        let (tx_schedule_check_to_heating, rx_heating_from_schedule_check) = mpsc::channel();
-        let (tx_heating_to_schedule_check, rx_schedule_check_from_heating) = mpsc::channel();
+        let mut channels = Channels::new_for_test();
 
         // Mutex for tank level switch signals
         let mutex_tank_level_switch_signals =
@@ -1388,8 +1288,8 @@ pub mod tests {
             .name("mock_schedule_check".to_string())
             .spawn(move || {
                 mock_schedule_check(
-                    &tx_schedule_check_to_heating,
-                    &rx_schedule_check_from_heating,
+                    &channels.schedule_check.tx_schedule_check_to_heating,
+                    &channels.schedule_check.rx_schedule_check_from_heating,
                     None,
                     true,
                 );
@@ -1403,8 +1303,8 @@ pub mod tests {
             .name("mock_relay_manager".to_string())
             .spawn(move || {
                 let (mut actuation_events, mock_actuator_states) = mock_relay_manager(
-                    &tx_relay_manager_to_heating,
-                    &rx_relay_manager_from_heating,
+                    &channels.relay_manager.tx_relay_manager_to_heating,
+                    &channels.relay_manager.rx_relay_manager_from_heating,
                 );
                 println!(
                     "Mock relay manager received {} commands:",
@@ -1542,9 +1442,13 @@ pub mod tests {
                 let sleep_duration = Duration::from_secs(59);
                 let spin_sleeper = SpinSleeper::default();
                 spin_sleeper.sleep(sleep_duration);
-                let _ = tx_signal_handler_to_heating.send(InternalCommand::Quit);
-                rx_signal_handler_from_heating.recv().unwrap();
-                let _ = tx_signal_handler_to_heating.send(InternalCommand::Terminate);
+                let _ = channels
+                    .signal_handler
+                    .send_to_heating(InternalCommand::Quit);
+                channels.signal_handler.receive_from_heating().unwrap();
+                let _ = channels
+                    .signal_handler
+                    .send_to_heating(InternalCommand::Terminate);
             })
             .unwrap();
 
@@ -1557,44 +1461,14 @@ pub mod tests {
             .spawn(move || {
                 // clone sender part of the channels to mock threads so that we can terminate them after execution of the test object
                 let tx_heating_to_schedule_check_for_test_case_finish =
-                    tx_heating_to_schedule_check.clone();
+                    channels.heating.tx_heating_to_schedule_check.clone();
                 let tx_heating_to_relay_manager_for_test_case_finish =
-                    tx_heating_to_relay_manager.clone();
+                    channels.heating.tx_heating_to_relay_manager.clone();
 
                 let mut heating_stats_transfer =
                     HeatingStatsMockDataTransfer::new(&mut sql_interface.get_connection().unwrap());
                 let mut heating_set_value_updater =
                     MockSqlInterfaceHeatingSetVals::new(false, None, None, None);
-
-                let mut heating_channels = HeatingChannels {
-                    tx_heating_to_relay_manager,
-                    #[cfg(feature = "debug_channels")]
-                    cnt_tx_heating_to_relay_manager: 0,
-
-                    rx_heating_from_relay_manager,
-                    #[cfg(feature = "debug_channels")]
-                    cnt_rx_heating_from_relay_manager: 0,
-
-                    tx_heating_to_signal_handler,
-                    #[cfg(feature = "debug_channels")]
-                    cnt_tx_heating_to_signal_handler: 0,
-
-                    rx_heating_from_signal_handler,
-                    #[cfg(feature = "debug_channels")]
-                    cnt_rx_heating_from_signal_handler: 0,
-
-                    tx_heating_to_schedule_check,
-                    #[cfg(feature = "debug_channels")]
-                    cnt_tx_heating_to_schedule_check: 0,
-
-                    rx_heating_from_schedule_check,
-                    #[cfg(feature = "debug_channels")]
-                    cnt_rx_heating_from_schedule_check: 0,
-
-                    rx_heating_from_messaging_opt: None,
-                    #[cfg(feature = "debug_channels")]
-                    cnt_rx_heating_from_messaging_opt: 0,
-                };
 
                 let heating_mutexes = HeatingMutexes {
                     mutex_sensor_manager_signals: Arc::new(Mutex::new(SensorManagerSignals::new(
@@ -1606,7 +1480,7 @@ pub mod tests {
 
                 heating.execute(
                     mutex_device_scheduler_heating.clone(),
-                    &mut heating_channels,
+                    &mut channels.heating,
                     &mut heating_stats_transfer,
                     &mut heating_set_value_updater,
                     heating_mutexes,
@@ -1652,13 +1526,7 @@ pub mod tests {
         config.sensor_manager.replacement_value_water_temperature = 25.0;
         config.sensor_manager.replacement_value_ambient_temperature = 24.0;
 
-        // Channels for the test object. The test environment only uses one of the channels
-        let (tx_heating_to_relay_manager, rx_relay_manager_from_heating) = mpsc::channel();
-        let (tx_relay_manager_to_heating, rx_heating_from_relay_manager) = mpsc::channel();
-        let (tx_signal_handler_to_heating, rx_heating_from_signal_handler) = mpsc::channel();
-        let (tx_heating_to_signal_handler, rx_signal_handler_from_heating) = mpsc::channel();
-        let (tx_schedule_check_to_heating, rx_heating_from_schedule_check) = mpsc::channel();
-        let (tx_heating_to_schedule_check, rx_schedule_check_from_heating) = mpsc::channel();
+        let mut channels = Channels::new_for_test();
 
         let start_time = Instant::now();
 
@@ -1671,8 +1539,8 @@ pub mod tests {
             .name("mock_schedule_check".to_string())
             .spawn(move || {
                 mock_schedule_check(
-                    &tx_schedule_check_to_heating,
-                    &rx_schedule_check_from_heating,
+                    &channels.schedule_check.tx_schedule_check_to_heating,
+                    &channels.schedule_check.rx_schedule_check_from_heating,
                     None,
                     true,
                 );
@@ -1686,8 +1554,8 @@ pub mod tests {
             .name("mock_relay_manager".to_string())
             .spawn(move || {
                 let (mut actuation_events, mock_actuator_states) = mock_relay_manager(
-                    &tx_relay_manager_to_heating,
-                    &rx_relay_manager_from_heating,
+                    &channels.relay_manager.tx_relay_manager_to_heating,
+                    &channels.relay_manager.rx_relay_manager_from_heating,
                 );
                 println!(
                     "Mock relay manager received {} commands.",
@@ -1707,9 +1575,13 @@ pub mod tests {
         let join_handle_test_environment = thread::Builder::new()
             .name("test_environment".to_string())
             .spawn(move || {
-                let _ = tx_signal_handler_to_heating.send(InternalCommand::Quit);
-                rx_signal_handler_from_heating.recv().unwrap();
-                let _ = tx_signal_handler_to_heating.send(InternalCommand::Terminate);
+                let _ = channels
+                    .signal_handler
+                    .send_to_heating(InternalCommand::Quit);
+                channels.signal_handler.receive_from_heating().unwrap();
+                let _ = channels
+                    .signal_handler
+                    .send_to_heating(InternalCommand::Terminate);
             })
             .unwrap();
 
@@ -1721,43 +1593,13 @@ pub mod tests {
             .spawn(move || {
                 // clone sender part of the channels to mock threads so that we can terminate them after execution of the test object
                 let tx_heating_to_schedule_check_for_test_case_finish =
-                    tx_heating_to_schedule_check.clone();
+                    channels.heating.tx_heating_to_schedule_check.clone();
                 let tx_heating_to_relay_manager_for_test_case_finish =
-                    tx_heating_to_relay_manager.clone();
+                    channels.heating.tx_heating_to_relay_manager.clone();
 
                 let mut heating_stats_transfer =
                     HeatingStatsMockDataTransfer::new(&mut sql_interface.get_connection().unwrap());
                 let mut heating_set_value_updater = MockSqlInterfaceHeatingSetVals::new(false, None, None, None);
-
-                let mut heating_channels = HeatingChannels {
-                    tx_heating_to_relay_manager,
-                    #[cfg(feature = "debug_channels")]
-                    cnt_tx_heating_to_relay_manager: 0,
-
-                    rx_heating_from_relay_manager,
-                    #[cfg(feature = "debug_channels")]
-                    cnt_rx_heating_from_relay_manager: 0,
-
-                    tx_heating_to_signal_handler,
-                    #[cfg(feature = "debug_channels")]
-                    cnt_tx_heating_to_signal_handler: 0,
-
-                    rx_heating_from_signal_handler,
-                    #[cfg(feature = "debug_channels")]
-                    cnt_rx_heating_from_signal_handler: 0,
-
-                    tx_heating_to_schedule_check,
-                    #[cfg(feature = "debug_channels")]
-                    cnt_tx_heating_to_schedule_check: 0,
-
-                    rx_heating_from_schedule_check,
-                    #[cfg(feature = "debug_channels")]
-                    cnt_rx_heating_from_schedule_check: 0,
-
-                    rx_heating_from_messaging_opt: None,
-                    #[cfg(feature = "debug_channels")]
-                    cnt_rx_heating_from_messaging_opt: 0,
-                };
 
                 let heating_mutexes = HeatingMutexes {
                     mutex_sensor_manager_signals: Arc::new(Mutex::new(SensorManagerSignals::new(&config.sensor_manager))),
@@ -1767,7 +1609,7 @@ pub mod tests {
 
                 heating.execute(
                     mutex_device_scheduler_heating.clone(),
-                    &mut heating_channels,
+                    &mut channels.heating,
                     &mut heating_stats_transfer,
                     &mut heating_set_value_updater,
                     heating_mutexes,
@@ -1819,13 +1661,7 @@ pub mod tests {
         config.sensor_manager.replacement_value_water_temperature = 20.0;
         config.sensor_manager.replacement_value_ambient_temperature = 24.0;
 
-        // Channels for the test object. The test environment only uses one of the channels
-        let (tx_heating_to_relay_manager, rx_relay_manager_from_heating) = mpsc::channel();
-        let (tx_relay_manager_to_heating, rx_heating_from_relay_manager) = mpsc::channel();
-        let (tx_signal_handler_to_heating, rx_heating_from_signal_handler) = mpsc::channel();
-        let (tx_heating_to_signal_handler, rx_signal_handler_from_heating) = mpsc::channel();
-        let (tx_schedule_check_to_heating, rx_heating_from_schedule_check) = mpsc::channel();
-        let (tx_heating_to_schedule_check, rx_schedule_check_from_heating) = mpsc::channel();
+        let mut channels = Channels::new_for_test();
 
         // Mutex for tank level switch signals
         let mutex_tank_level_switch_signals =
@@ -1852,8 +1688,8 @@ pub mod tests {
             .name("mock_schedule_check".to_string())
             .spawn(move || {
                 mock_schedule_check(
-                    &tx_schedule_check_to_heating,
-                    &rx_schedule_check_from_heating,
+                    &channels.schedule_check.tx_schedule_check_to_heating,
+                    &channels.schedule_check.rx_schedule_check_from_heating,
                     None,
                     true,
                 );
@@ -1866,7 +1702,10 @@ pub mod tests {
         let join_handle_mock_relay_manager = thread::Builder::new()
             .name("mock_relay_manager".to_string())
             .spawn(move || {
-                mock_relay_manager(&tx_relay_manager_to_heating, &rx_relay_manager_from_heating);
+                mock_relay_manager(
+                    &channels.relay_manager.tx_relay_manager_to_heating,
+                    &channels.relay_manager.rx_relay_manager_from_heating,
+                );
             })
             .unwrap();
 
@@ -1877,9 +1716,13 @@ pub mod tests {
                 let sleep_duration = Duration::from_secs(4);
                 let spin_sleeper = SpinSleeper::default();
                 spin_sleeper.sleep(sleep_duration);
-                let _ = tx_signal_handler_to_heating.send(InternalCommand::Quit);
-                rx_signal_handler_from_heating.recv().unwrap();
-                let _ = tx_signal_handler_to_heating.send(InternalCommand::Terminate);
+                let _ = channels
+                    .signal_handler
+                    .send_to_heating(InternalCommand::Quit);
+                channels.signal_handler.receive_from_heating().unwrap();
+                let _ = channels
+                    .signal_handler
+                    .send_to_heating(InternalCommand::Terminate);
             })
             .unwrap();
 
@@ -1891,43 +1734,13 @@ pub mod tests {
             .spawn(move || {
                 // clone sender part of the channels to mock threads so that we can terminate them after execution of the test object
                 let tx_heating_to_schedule_check_for_test_case_finish =
-                    tx_heating_to_schedule_check.clone();
+                    channels.heating.tx_heating_to_schedule_check.clone();
                 let tx_heating_to_relay_manager_for_test_case_finish =
-                    tx_heating_to_relay_manager.clone();
+                    channels.heating.tx_heating_to_relay_manager.clone();
 
                 let mut heating_stats_transfer =
                     HeatingStatsMockDataTransfer::new(&mut sql_interface.get_connection().unwrap());
                 let mut heating_set_value_updater = MockSqlInterfaceHeatingSetVals::new(false, None, None, None);
-
-                let mut heating_channels = HeatingChannels {
-                    tx_heating_to_relay_manager,
-                    #[cfg(feature = "debug_channels")]
-                    cnt_tx_heating_to_relay_manager: 0,
-
-                    rx_heating_from_relay_manager,
-                    #[cfg(feature = "debug_channels")]
-                    cnt_rx_heating_from_relay_manager: 0,
-
-                    tx_heating_to_signal_handler,
-                    #[cfg(feature = "debug_channels")]
-                    cnt_tx_heating_to_signal_handler: 0,
-
-                    rx_heating_from_signal_handler,
-                    #[cfg(feature = "debug_channels")]
-                    cnt_rx_heating_from_signal_handler: 0,
-
-                    tx_heating_to_schedule_check,
-                    #[cfg(feature = "debug_channels")]
-                    cnt_tx_heating_to_schedule_check: 0,
-
-                    rx_heating_from_schedule_check,
-                    #[cfg(feature = "debug_channels")]
-                    cnt_rx_heating_from_schedule_check: 0,
-
-                    rx_heating_from_messaging_opt: None,
-                    #[cfg(feature = "debug_channels")]
-                    cnt_rx_heating_from_messaging_opt: 0,
-                };
 
                 let heating_mutexes = HeatingMutexes {
                     mutex_sensor_manager_signals: Arc::new(Mutex::new(SensorManagerSignals::new(&config.sensor_manager))),
@@ -1937,7 +1750,7 @@ pub mod tests {
 
                 heating.execute(
                     mutex_device_scheduler_heating.clone(),
-                    &mut heating_channels,
+                    &mut channels.heating,
                     &mut heating_stats_transfer,
                     &mut heating_set_value_updater,
                     heating_mutexes,
@@ -2089,13 +1902,7 @@ pub mod tests {
         config.sensor_manager.replacement_value_water_temperature = 30.0;
         config.sensor_manager.replacement_value_ambient_temperature = 24.0;
 
-        // Channels for the test object. The test environment only uses one of the channels
-        let (tx_heating_to_relay_manager, rx_relay_manager_from_heating) = mpsc::channel();
-        let (tx_relay_manager_to_heating, rx_heating_from_relay_manager) = mpsc::channel();
-        let (tx_signal_handler_to_heating, rx_heating_from_signal_handler) = mpsc::channel();
-        let (tx_heating_to_signal_handler, rx_signal_handler_from_heating) = mpsc::channel();
-        let (tx_schedule_check_to_heating, rx_heating_from_schedule_check) = mpsc::channel();
-        let (tx_heating_to_schedule_check, rx_schedule_check_from_heating) = mpsc::channel();
+        let mut channels = Channels::new_for_test();
 
         // get initial data for calculation of reference value
         let initial_heating_stats_entry = sql_interface_heating_stats
@@ -2118,8 +1925,8 @@ pub mod tests {
             .name("mock_schedule_check".to_string())
             .spawn(move || {
                 mock_schedule_check(
-                    &tx_schedule_check_to_heating,
-                    &rx_schedule_check_from_heating,
+                    &channels.schedule_check.tx_schedule_check_to_heating,
+                    &channels.schedule_check.rx_schedule_check_from_heating,
                     None,
                     true,
                 );
@@ -2136,7 +1943,10 @@ pub mod tests {
         let join_handle_mock_relay_manager = thread::Builder::new()
             .name("mock_relay_manager".to_string())
             .spawn(move || {
-                mock_relay_manager(&tx_relay_manager_to_heating, &rx_relay_manager_from_heating);
+                mock_relay_manager(
+                    &channels.relay_manager.tx_relay_manager_to_heating,
+                    &channels.relay_manager.rx_relay_manager_from_heating,
+                );
             })
             .unwrap();
 
@@ -2147,9 +1957,13 @@ pub mod tests {
                 let sleep_duration = Duration::from_secs(4);
                 let spin_sleeper = SpinSleeper::default();
                 spin_sleeper.sleep(sleep_duration);
-                let _ = tx_signal_handler_to_heating.send(InternalCommand::Quit);
-                rx_signal_handler_from_heating.recv().unwrap();
-                let _ = tx_signal_handler_to_heating.send(InternalCommand::Terminate);
+                let _ = channels
+                    .signal_handler
+                    .send_to_heating(InternalCommand::Quit);
+                channels.signal_handler.receive_from_heating().unwrap();
+                let _ = channels
+                    .signal_handler
+                    .send_to_heating(InternalCommand::Terminate);
             })
             .unwrap();
 
@@ -2161,43 +1975,13 @@ pub mod tests {
             .spawn(move || {
                 // clone sender part of the channels to mock threads so that we can terminate them after execution of the test object
                 let tx_heating_to_schedule_check_for_test_case_finish =
-                    tx_heating_to_schedule_check.clone();
+                    channels.heating.tx_heating_to_schedule_check.clone();
                 let tx_heating_to_relay_manager_for_test_case_finish =
-                    tx_heating_to_relay_manager.clone();
+                    channels.heating.tx_heating_to_relay_manager.clone();
 
                 let mut heating_stats_transfer =
                     HeatingStatsMockDataTransfer::new(&mut sql_interface.get_connection().unwrap());
                 let mut heating_set_value_updater = MockSqlInterfaceHeatingSetVals::new(false, None, None, None);
-
-                let mut heating_channels = HeatingChannels {
-                    tx_heating_to_relay_manager,
-                    #[cfg(feature = "debug_channels")]
-                    cnt_tx_heating_to_relay_manager: 0,
-
-                    rx_heating_from_relay_manager,
-                    #[cfg(feature = "debug_channels")]
-                    cnt_rx_heating_from_relay_manager: 0,
-
-                    tx_heating_to_signal_handler,
-                    #[cfg(feature = "debug_channels")]
-                    cnt_tx_heating_to_signal_handler: 0,
-
-                    rx_heating_from_signal_handler,
-                    #[cfg(feature = "debug_channels")]
-                    cnt_rx_heating_from_signal_handler: 0,
-
-                    tx_heating_to_schedule_check,
-                    #[cfg(feature = "debug_channels")]
-                    cnt_tx_heating_to_schedule_check: 0,
-
-                    rx_heating_from_schedule_check,
-                    #[cfg(feature = "debug_channels")]
-                    cnt_rx_heating_from_schedule_check: 0,
-
-                    rx_heating_from_messaging_opt: None,
-                    #[cfg(feature = "debug_channels")]
-                    cnt_rx_heating_from_messaging_opt: 0,
-                };
 
                 let heating_mutexes = HeatingMutexes {
                     mutex_sensor_manager_signals: Arc::new(Mutex::new(SensorManagerSignals::new(&config.sensor_manager))),
@@ -2207,7 +1991,7 @@ pub mod tests {
 
                 heating.execute(
                     mutex_device_scheduler_heating.clone(),
-                    &mut heating_channels,
+                    &mut channels.heating,
                     &mut heating_stats_transfer,
                     &mut heating_set_value_updater,
                     heating_mutexes,
@@ -2359,13 +2143,7 @@ pub mod tests {
         config.sensor_manager.replacement_value_water_temperature = 20.0;
         config.sensor_manager.replacement_value_ambient_temperature = 24.0;
 
-        // Channels for the test object. The test environment only uses one of the channels
-        let (tx_heating_to_relay_manager, rx_relay_manager_from_heating) = mpsc::channel();
-        let (tx_relay_manager_to_heating, rx_heating_from_relay_manager) = mpsc::channel();
-        let (tx_signal_handler_to_heating, rx_heating_from_signal_handler) = mpsc::channel();
-        let (tx_heating_to_signal_handler, rx_signal_handler_from_heating) = mpsc::channel();
-        let (tx_schedule_check_to_heating, rx_heating_from_schedule_check) = mpsc::channel();
-        let (tx_heating_to_schedule_check, rx_schedule_check_from_heating) = mpsc::channel();
+        let mut channels = Channels::new_for_test();
 
         // Mutex for tank level switch signals
         let mutex_tank_level_switch_signals =
@@ -2376,8 +2154,8 @@ pub mod tests {
             .name("mock_schedule_check".to_string())
             .spawn(move || {
                 mock_schedule_check(
-                    &tx_schedule_check_to_heating,
-                    &rx_schedule_check_from_heating,
+                    &channels.schedule_check.tx_schedule_check_to_heating,
+                    &channels.schedule_check.rx_schedule_check_from_heating,
                     None,
                     false,
                 );
@@ -2391,8 +2169,8 @@ pub mod tests {
             .name("mock_relay_manager".to_string())
             .spawn(move || {
                 let (mut actuation_events, mock_actuator_states) = mock_relay_manager(
-                    &tx_relay_manager_to_heating,
-                    &rx_relay_manager_from_heating,
+                    &channels.relay_manager.tx_relay_manager_to_heating,
+                    &channels.relay_manager.rx_relay_manager_from_heating,
                 );
                 assert_eq!(actuation_events.len(), 1);
                 let actuation_event = actuation_events.pop().unwrap();
@@ -2411,9 +2189,13 @@ pub mod tests {
                 let sleep_duration_ten_seconds = Duration::from_secs(10);
                 let spin_sleeper = SpinSleeper::default();
                 spin_sleeper.sleep(sleep_duration_ten_seconds);
-                let _ = tx_signal_handler_to_heating.send(InternalCommand::Quit);
-                rx_signal_handler_from_heating.recv().unwrap();
-                let _ = tx_signal_handler_to_heating.send(InternalCommand::Terminate);
+                let _ = channels
+                    .signal_handler
+                    .send_to_heating(InternalCommand::Quit);
+                channels.signal_handler.receive_from_heating().unwrap();
+                let _ = channels
+                    .signal_handler
+                    .send_to_heating(InternalCommand::Terminate);
             })
             .unwrap();
 
@@ -2426,44 +2208,14 @@ pub mod tests {
             .spawn(move || {
                 // clone sender part of the channels to mock threads so that we can terminate them after execution of the test object
                 let tx_heating_to_schedule_check_for_test_case_finish =
-                    tx_heating_to_schedule_check.clone();
+                    channels.heating.tx_heating_to_schedule_check.clone();
                 let tx_heating_to_relay_manager_for_test_case_finish =
-                    tx_heating_to_relay_manager.clone();
+                    channels.heating.tx_heating_to_relay_manager.clone();
 
                 let mut heating_stats_transfer =
                     HeatingStatsMockDataTransfer::new(&mut sql_interface.get_connection().unwrap());
                 let mut heating_set_value_updater =
                     MockSqlInterfaceHeatingSetVals::new(false, None, None, None);
-
-                let mut heating_channels = HeatingChannels {
-                    tx_heating_to_relay_manager,
-                    #[cfg(feature = "debug_channels")]
-                    cnt_tx_heating_to_relay_manager: 0,
-
-                    rx_heating_from_relay_manager,
-                    #[cfg(feature = "debug_channels")]
-                    cnt_rx_heating_from_relay_manager: 0,
-
-                    tx_heating_to_signal_handler,
-                    #[cfg(feature = "debug_channels")]
-                    cnt_tx_heating_to_signal_handler: 0,
-
-                    rx_heating_from_signal_handler,
-                    #[cfg(feature = "debug_channels")]
-                    cnt_rx_heating_from_signal_handler: 0,
-
-                    tx_heating_to_schedule_check,
-                    #[cfg(feature = "debug_channels")]
-                    cnt_tx_heating_to_schedule_check: 0,
-
-                    rx_heating_from_schedule_check,
-                    #[cfg(feature = "debug_channels")]
-                    cnt_rx_heating_from_schedule_check: 0,
-
-                    rx_heating_from_messaging_opt: None,
-                    #[cfg(feature = "debug_channels")]
-                    cnt_rx_heating_from_messaging_opt: 0,
-                };
 
                 let heating_mutexes = HeatingMutexes {
                     mutex_sensor_manager_signals: Arc::new(Mutex::new(SensorManagerSignals::new(
@@ -2475,7 +2227,7 @@ pub mod tests {
 
                 heating.execute(
                     mutex_device_scheduler_heating.clone(),
-                    &mut heating_channels,
+                    &mut channels.heating,
                     &mut heating_stats_transfer,
                     &mut heating_set_value_updater,
                     heating_mutexes,
@@ -2518,21 +2270,15 @@ pub mod tests {
         config.sensor_manager.replacement_value_water_temperature = 20.0;
         config.sensor_manager.replacement_value_ambient_temperature = 24.0;
 
-        // Channels for the test object. The test environment only uses one of the channels
-        let (tx_heating_to_relay_manager, rx_relay_manager_from_heating) = mpsc::channel();
-        let (tx_relay_manager_to_heating, rx_heating_from_relay_manager) = mpsc::channel();
-        let (tx_signal_handler_to_heating, rx_heating_from_signal_handler) = mpsc::channel();
-        let (tx_heating_to_signal_handler, rx_signal_handler_from_heating) = mpsc::channel();
-        let (tx_schedule_check_to_heating, rx_heating_from_schedule_check) = mpsc::channel();
-        let (tx_heating_to_schedule_check, rx_schedule_check_from_heating) = mpsc::channel();
+        let mut channels = Channels::new_for_test();
 
         // thread for mock schedule check
         let join_handle_mock_schedule_check = thread::Builder::new()
             .name("mock_schedule_check".to_string())
             .spawn(move || {
                 mock_schedule_check(
-                    &tx_schedule_check_to_heating,
-                    &rx_schedule_check_from_heating,
+                    &channels.schedule_check.tx_schedule_check_to_heating,
+                    &channels.schedule_check.rx_schedule_check_from_heating,
                     None,
                     true,
                 );
@@ -2550,8 +2296,8 @@ pub mod tests {
             .name("mock_relay_manager".to_string())
             .spawn(move || {
                 let (mut actuation_events, mock_actuator_states) = mock_relay_manager(
-                    &tx_relay_manager_to_heating,
-                    &rx_relay_manager_from_heating,
+                    &channels.relay_manager.tx_relay_manager_to_heating,
+                    &channels.relay_manager.rx_relay_manager_from_heating,
                 );
                 assert_eq!(actuation_events.len(), 2);
                 let actuation_event = actuation_events.pop().unwrap();
@@ -2575,9 +2321,13 @@ pub mod tests {
                 let sleep_duration_ten_seconds = Duration::from_secs(10);
                 let spin_sleeper = SpinSleeper::default();
                 spin_sleeper.sleep(sleep_duration_ten_seconds);
-                let _ = tx_signal_handler_to_heating.send(InternalCommand::Quit);
-                rx_signal_handler_from_heating.recv().unwrap();
-                let _ = tx_signal_handler_to_heating.send(InternalCommand::Terminate);
+                let _ = channels
+                    .signal_handler
+                    .send_to_heating(InternalCommand::Quit);
+                channels.signal_handler.receive_from_heating().unwrap();
+                let _ = channels
+                    .signal_handler
+                    .send_to_heating(InternalCommand::Terminate);
             })
             .unwrap();
 
@@ -2590,44 +2340,14 @@ pub mod tests {
             .spawn(move || {
                 // clone sender part of the channels to mock threads so that we can terminate them after execution of the test object
                 let tx_heating_to_schedule_check_for_test_case_finish =
-                    tx_heating_to_schedule_check.clone();
+                    channels.heating.tx_heating_to_schedule_check.clone();
                 let tx_heating_to_relay_manager_for_test_case_finish =
-                    tx_heating_to_relay_manager.clone();
+                    channels.heating.tx_heating_to_relay_manager.clone();
 
                 let mut heating_stats_transfer =
                     HeatingStatsMockDataTransfer::new(&mut sql_interface.get_connection().unwrap());
                 let mut heating_set_value_updater =
                     MockSqlInterfaceHeatingSetVals::new(false, None, None, None);
-
-                let mut heating_channels = HeatingChannels {
-                    tx_heating_to_relay_manager,
-                    #[cfg(feature = "debug_channels")]
-                    cnt_tx_heating_to_relay_manager: 0,
-
-                    rx_heating_from_relay_manager,
-                    #[cfg(feature = "debug_channels")]
-                    cnt_rx_heating_from_relay_manager: 0,
-
-                    tx_heating_to_signal_handler,
-                    #[cfg(feature = "debug_channels")]
-                    cnt_tx_heating_to_signal_handler: 0,
-
-                    rx_heating_from_signal_handler,
-                    #[cfg(feature = "debug_channels")]
-                    cnt_rx_heating_from_signal_handler: 0,
-
-                    tx_heating_to_schedule_check,
-                    #[cfg(feature = "debug_channels")]
-                    cnt_tx_heating_to_schedule_check: 0,
-
-                    rx_heating_from_schedule_check,
-                    #[cfg(feature = "debug_channels")]
-                    cnt_rx_heating_from_schedule_check: 0,
-
-                    rx_heating_from_messaging_opt: None,
-                    #[cfg(feature = "debug_channels")]
-                    cnt_rx_heating_from_messaging_opt: 0,
-                };
 
                 let heating_mutexes = HeatingMutexes {
                     mutex_sensor_manager_signals: Arc::new(Mutex::new(SensorManagerSignals::new(
@@ -2639,7 +2359,7 @@ pub mod tests {
 
                 heating.execute(
                     mutex_device_scheduler_heating.clone(),
-                    &mut heating_channels,
+                    &mut channels.heating,
                     &mut heating_stats_transfer,
                     &mut heating_set_value_updater,
                     heating_mutexes,
@@ -2684,13 +2404,7 @@ pub mod tests {
         config.sensor_manager.replacement_value_water_temperature = 20.0;
         config.sensor_manager.replacement_value_ambient_temperature = 24.0;
 
-        let (tx_heating_to_relay_manager, rx_relay_manager_from_heating) = mpsc::channel();
-        let (tx_relay_manager_to_heating, rx_heating_from_relay_manager) = mpsc::channel();
-        let (tx_heating_to_signal_handler, rx_signal_handler_from_heating) = mpsc::channel();
-        let (tx_schedule_check_to_heating, rx_heating_from_schedule_check) = mpsc::channel();
-        let (tx_heating_to_schedule_check, rx_schedule_check_from_heating) = mpsc::channel();
-        let (tx_messaging_to_heating, rx_heating_from_messaging) = mpsc::channel();
-        let (tx_signal_handler_to_heating, rx_heating_from_signal_handler) = mpsc::channel();
+        let mut channels = Channels::new_for_test();
 
         let mutex_device_scheduler_heating = Arc::new(Mutex::new(0));
         let mutex_device_scheduler_test_environment = mutex_device_scheduler_heating.clone();
@@ -2700,8 +2414,8 @@ pub mod tests {
             .name("mock_schedule_check".to_string())
             .spawn(move || {
                 mock_schedule_check(
-                    &tx_schedule_check_to_heating,
-                    &rx_schedule_check_from_heating,
+                    &channels.schedule_check.tx_schedule_check_to_heating,
+                    &channels.schedule_check.rx_schedule_check_from_heating,
                     None,
                     true,
                 );
@@ -2717,8 +2431,8 @@ pub mod tests {
             .name("mock_relay_manager".to_string())
             .spawn(move || {
                 let (mut actuation_events, mock_actuator_states) = mock_relay_manager(
-                    &tx_relay_manager_to_heating,
-                    &rx_relay_manager_from_heating,
+                    &channels.relay_manager.tx_relay_manager_to_heating,
+                    &channels.relay_manager.rx_relay_manager_from_heating,
                 );
                 println!("actuation_events:");
                 for actuation_event in &actuation_events {
@@ -2764,7 +2478,11 @@ pub mod tests {
                 assert_eq!(*mutex_device_scheduler_test_environment.lock().unwrap(), 1);
 
                 // sending a message requesting stop of heating control
-                match tx_messaging_to_heating.send(InternalCommand::Stop) {
+                match channels
+                    .messaging
+                    .tx_messaging_to_heating
+                    .send(InternalCommand::Stop)
+                {
                     Ok(()) => { /* do nothing */ }
                     Err(e) => {
                         panic!(
@@ -2782,7 +2500,11 @@ pub mod tests {
                 assert_eq!(*mutex_device_scheduler_test_environment.lock().unwrap(), 2);
 
                 // sending a message requesting restart of heating control
-                match tx_messaging_to_heating.send(InternalCommand::Start) {
+                match channels
+                    .messaging
+                    .tx_messaging_to_heating
+                    .send(InternalCommand::Start)
+                {
                     Ok(()) => { /* do nothing */ }
                     Err(e) => {
                         panic!(
@@ -2800,7 +2522,11 @@ pub mod tests {
                 assert_eq!(*mutex_device_scheduler_test_environment.lock().unwrap(), 3);
 
                 // sending a message requesting stop of heating control
-                match tx_messaging_to_heating.send(InternalCommand::Stop) {
+                match channels
+                    .messaging
+                    .tx_messaging_to_heating
+                    .send(InternalCommand::Stop)
+                {
                     Ok(()) => { /* do nothing */ }
                     Err(e) => {
                         panic!(
@@ -2818,12 +2544,16 @@ pub mod tests {
                 assert_eq!(*mutex_device_scheduler_test_environment.lock().unwrap(), 4);
 
                 // requesting heating control to quit
-                let _ = tx_signal_handler_to_heating.send(InternalCommand::Quit);
-                rx_signal_handler_from_heating.recv().unwrap();
+                let _ = channels
+                    .signal_handler
+                    .send_to_heating(InternalCommand::Quit);
+                channels.signal_handler.receive_from_heating().unwrap();
 
                 // check if heating is not actuated
                 assert_eq!(*mutex_device_scheduler_test_environment.lock().unwrap(), 4);
-                let _ = tx_signal_handler_to_heating.send(InternalCommand::Terminate);
+                let _ = channels
+                    .signal_handler
+                    .send_to_heating(InternalCommand::Terminate);
             })
             .unwrap();
 
@@ -2833,44 +2563,14 @@ pub mod tests {
             .spawn(move || {
                 // clone sender part of the channels to mock threads so that we can terminate them after execution of the test object
                 let tx_heating_to_schedule_check_for_test_case_finish =
-                    tx_heating_to_schedule_check.clone();
+                    channels.heating.tx_heating_to_schedule_check.clone();
                 let tx_heating_to_relay_manager_for_test_case_finish =
-                    tx_heating_to_relay_manager.clone();
+                    channels.heating.tx_heating_to_relay_manager.clone();
 
                 let mut heating_stats_transfer =
                     HeatingStatsMockDataTransfer::new(&mut sql_interface.get_connection().unwrap());
                 let mut heating_set_value_updater =
                     MockSqlInterfaceHeatingSetVals::new(false, None, None, None);
-
-                let mut heating_channels = HeatingChannels {
-                    tx_heating_to_relay_manager,
-                    #[cfg(feature = "debug_channels")]
-                    cnt_tx_heating_to_relay_manager: 0,
-
-                    rx_heating_from_relay_manager,
-                    #[cfg(feature = "debug_channels")]
-                    cnt_rx_heating_from_relay_manager: 0,
-
-                    tx_heating_to_signal_handler,
-                    #[cfg(feature = "debug_channels")]
-                    cnt_tx_heating_to_signal_handler: 0,
-
-                    rx_heating_from_signal_handler,
-                    #[cfg(feature = "debug_channels")]
-                    cnt_rx_heating_from_signal_handler: 0,
-
-                    tx_heating_to_schedule_check,
-                    #[cfg(feature = "debug_channels")]
-                    cnt_tx_heating_to_schedule_check: 0,
-
-                    rx_heating_from_schedule_check,
-                    #[cfg(feature = "debug_channels")]
-                    cnt_rx_heating_from_schedule_check: 0,
-
-                    rx_heating_from_messaging_opt: Some(rx_heating_from_messaging),
-                    #[cfg(feature = "debug_channels")]
-                    cnt_rx_heating_from_messaging_opt: 0,
-                };
 
                 let heating_mutexes = HeatingMutexes {
                     mutex_sensor_manager_signals: Arc::new(Mutex::new(SensorManagerSignals::new(
@@ -2882,7 +2582,7 @@ pub mod tests {
 
                 heating.execute(
                     mutex_device_scheduler_heating.clone(),
-                    &mut heating_channels,
+                    &mut channels.heating,
                     &mut heating_stats_transfer,
                     &mut heating_set_value_updater,
                     heating_mutexes,
@@ -2928,17 +2628,7 @@ pub mod tests {
         config.sensor_manager.replacement_value_water_temperature = 30.0;
         config.sensor_manager.replacement_value_ambient_temperature = 24.0;
 
-        // Channels for the test object. The test environment only uses one of the channels
-        let (tx_heating_to_tank_level_switch, rx_tank_level_switch_from_heating) = mpsc::channel();
-        let (tx_tank_level_switch_to_heating, _rx_heating_from_tank_level_switch) = mpsc::channel();
-        let (tx_heating_to_relay_manager, rx_relay_manager_from_heating) = mpsc::channel();
-        let (tx_relay_manager_to_heating, rx_heating_from_relay_manager) = mpsc::channel();
-        let (tx_signal_handler_to_heating, rx_heating_from_signal_handler) = mpsc::channel();
-        let (tx_heating_to_signal_handler, rx_signal_handler_from_heating) = mpsc::channel();
-        let (tx_schedule_check_to_heating, rx_heating_from_schedule_check) = mpsc::channel();
-        let (tx_heating_to_schedule_check, rx_schedule_check_from_heating) = mpsc::channel();
-        let (_tx_test_environment_to_tank_level_switch, rx_tank_level_switch_from_test_environment) =
-            mpsc::channel();
+        let mut channels = Channels::new_for_test();
 
         // Mutex for tank level switch signals
         let mutex_tank_level_switch_signals =
@@ -2949,8 +2639,8 @@ pub mod tests {
             .name("mock_schedule_check".to_string())
             .spawn(move || {
                 mock_schedule_check(
-                    &tx_schedule_check_to_heating,
-                    &rx_schedule_check_from_heating,
+                    &channels.schedule_check.tx_schedule_check_to_heating,
+                    &channels.schedule_check.rx_schedule_check_from_heating,
                     None,
                     true,
                 );
@@ -2958,22 +2648,6 @@ pub mod tests {
             .unwrap();
 
         // thread for mock TankLevelSwitch
-        let join_handle_mock_tank_level_switch = thread::Builder::new()
-            .name("mock_tank_level_switch".to_string())
-            .spawn(move || {
-                mock_tank_level_switch(
-                    &tx_tank_level_switch_to_heating,
-                    &rx_tank_level_switch_from_heating,
-                    Some(&rx_tank_level_switch_from_test_environment),
-                    None,
-                    None,
-                    true,
-                    false,
-                    true,
-                );
-            })
-            .unwrap();
-
         let mutex_device_scheduler_heating = Arc::new(Mutex::new(0));
 
         // thread for mock relay manager - includes assertions
@@ -2981,8 +2655,8 @@ pub mod tests {
             .name("mock_relay_manager".to_string())
             .spawn(move || {
                 let (mut actuation_events, mock_actuator_states) = mock_relay_manager(
-                    &tx_relay_manager_to_heating,
-                    &rx_relay_manager_from_heating,
+                    &channels.relay_manager.tx_relay_manager_to_heating,
+                    &channels.relay_manager.rx_relay_manager_from_heating,
                 );
                 assert_eq!(actuation_events.len(), 3);
                 let actuation_event_3 = actuation_events.pop().unwrap();
@@ -3011,9 +2685,13 @@ pub mod tests {
                 let sleep_duration_twelve_seconds = Duration::from_secs(12);
                 let spin_sleeper = SpinSleeper::default();
                 spin_sleeper.sleep(sleep_duration_twelve_seconds);
-                let _ = tx_signal_handler_to_heating.send(InternalCommand::Quit);
-                rx_signal_handler_from_heating.recv().unwrap();
-                let _ = tx_signal_handler_to_heating.send(InternalCommand::Terminate);
+                let _ = channels
+                    .signal_handler
+                    .send_to_heating(InternalCommand::Quit);
+                channels.signal_handler.receive_from_heating().unwrap();
+                let _ = channels
+                    .signal_handler
+                    .send_to_heating(InternalCommand::Terminate);
             })
             .unwrap();
 
@@ -3026,41 +2704,9 @@ pub mod tests {
             .spawn(move || {
                 // clone sender part of the channels to mock threads so that we can terminate them after execution of the test object
                 let tx_heating_to_schedule_check_for_test_case_finish =
-                    tx_heating_to_schedule_check.clone();
-                let tx_heating_to_tank_level_switch_for_test_case_finish =
-                    tx_heating_to_tank_level_switch.clone();
+                    channels.heating.tx_heating_to_schedule_check.clone();
                 let tx_heating_to_relay_manager_for_test_case_finish =
-                    tx_heating_to_relay_manager.clone();
-
-                let mut heating_channels = HeatingChannels {
-                    tx_heating_to_relay_manager,
-                    #[cfg(feature = "debug_channels")]
-                    cnt_tx_heating_to_relay_manager: 0,
-
-                    rx_heating_from_relay_manager,
-                    #[cfg(feature = "debug_channels")]
-                    cnt_rx_heating_from_relay_manager: 0,
-
-                    tx_heating_to_signal_handler,
-                    #[cfg(feature = "debug_channels")]
-                    cnt_tx_heating_to_signal_handler: 0,
-
-                    rx_heating_from_signal_handler,
-                    #[cfg(feature = "debug_channels")]
-                    cnt_rx_heating_from_signal_handler: 0,
-
-                    tx_heating_to_schedule_check,
-                    #[cfg(feature = "debug_channels")]
-                    cnt_tx_heating_to_schedule_check: 0,
-
-                    rx_heating_from_schedule_check,
-                    #[cfg(feature = "debug_channels")]
-                    cnt_rx_heating_from_schedule_check: 0,
-
-                    rx_heating_from_messaging_opt: None,
-                    #[cfg(feature = "debug_channels")]
-                    cnt_rx_heating_from_messaging_opt: 0,
-                };
+                    channels.heating.tx_heating_to_relay_manager.clone();
 
                 let mut heating_stats_transfer =
                     HeatingStatsMockDataTransfer::new(&mut sql_interface.get_connection().unwrap());
@@ -3083,7 +2729,7 @@ pub mod tests {
 
                 heating.execute(
                     mutex_device_scheduler_heating.clone(),
-                    &mut heating_channels,
+                    &mut channels.heating,
                     &mut heating_stats_transfer,
                     &mut heating_set_value_updater,
                     heating_mutexes,
@@ -3093,8 +2739,6 @@ pub mod tests {
                 // send Quit signal to mock threads because the test object has terminated
                 let _ =
                     tx_heating_to_schedule_check_for_test_case_finish.send(InternalCommand::Quit);
-                let _ = tx_heating_to_tank_level_switch_for_test_case_finish
-                    .send(InternalCommand::Quit);
                 let _ =
                     tx_heating_to_relay_manager_for_test_case_finish.send(InternalCommand::Quit);
 
@@ -3105,9 +2749,6 @@ pub mod tests {
         join_handle_mock_schedule_check
             .join()
             .expect("Mock schedule check did not finish.");
-        join_handle_mock_tank_level_switch
-            .join()
-            .expect("Mock tank level switch did not finish.");
         join_handle_mock_relay_manager
             .join()
             .expect("Mock relay manager thread did not finish.");
@@ -3136,13 +2777,7 @@ pub mod tests {
         config.sensor_manager.replacement_value_water_temperature = 20.0;
         config.sensor_manager.replacement_value_ambient_temperature = 24.0;
 
-        // Channels for the test object. The test environment only uses one of the channels
-        let (tx_heating_to_relay_manager, rx_relay_manager_from_heating) = mpsc::channel();
-        let (tx_relay_manager_to_heating, rx_heating_from_relay_manager) = mpsc::channel();
-        let (tx_signal_handler_to_heating, rx_heating_from_signal_handler) = mpsc::channel();
-        let (tx_heating_to_signal_handler, rx_signal_handler_from_heating) = mpsc::channel();
-        let (tx_schedule_check_to_heating, rx_heating_from_schedule_check) = mpsc::channel();
-        let (tx_heating_to_schedule_check, rx_schedule_check_from_heating) = mpsc::channel();
+        let mut channels = Channels::new_for_test();
 
         // Mutex for tank level switch signals
         let mutex_tank_level_switch_signals =
@@ -3153,8 +2788,8 @@ pub mod tests {
             .name("mock_schedule_check".to_string())
             .spawn(move || {
                 mock_schedule_check(
-                    &tx_schedule_check_to_heating,
-                    &rx_schedule_check_from_heating,
+                    &channels.schedule_check.tx_schedule_check_to_heating,
+                    &channels.schedule_check.rx_schedule_check_from_heating,
                     None,
                     true,
                 );
@@ -3170,8 +2805,8 @@ pub mod tests {
             .name("mock_relay_manager".to_string())
             .spawn(move || {
                 let (mut actuation_events, mock_actuator_states) = mock_relay_manager(
-                    &tx_relay_manager_to_heating,
-                    &rx_relay_manager_from_heating,
+                    &channels.relay_manager.tx_relay_manager_to_heating,
+                    &channels.relay_manager.rx_relay_manager_from_heating,
                 );
                 assert_eq!(actuation_events.len(), 2);
                 let last_actuation_event = actuation_events.pop().unwrap();
@@ -3211,9 +2846,13 @@ pub mod tests {
                         }
                     }
                 }
-                let _ = tx_signal_handler_to_heating.send(InternalCommand::Quit);
-                rx_signal_handler_from_heating.recv().unwrap();
-                let _ = tx_signal_handler_to_heating.send(InternalCommand::Terminate);
+                let _ = channels
+                    .signal_handler
+                    .send_to_heating(InternalCommand::Quit);
+                channels.signal_handler.receive_from_heating().unwrap();
+                let _ = channels
+                    .signal_handler
+                    .send_to_heating(InternalCommand::Terminate);
             })
             .unwrap();
 
@@ -3226,39 +2865,9 @@ pub mod tests {
             .spawn(move || {
                 // clone sender part of the channels to mock threads so that we can terminate them after execution of the test object
                 let tx_heating_to_schedule_check_for_test_case_finish =
-                    tx_heating_to_schedule_check.clone();
+                    channels.heating.tx_heating_to_schedule_check.clone();
                 let tx_heating_to_relay_manager_for_test_case_finish =
-                    tx_heating_to_relay_manager.clone();
-
-                let mut heating_channels = HeatingChannels {
-                    tx_heating_to_relay_manager,
-                    #[cfg(feature = "debug_channels")]
-                    cnt_tx_heating_to_relay_manager: 0,
-
-                    rx_heating_from_relay_manager,
-                    #[cfg(feature = "debug_channels")]
-                    cnt_rx_heating_from_relay_manager: 0,
-
-                    tx_heating_to_signal_handler,
-                    #[cfg(feature = "debug_channels")]
-                    cnt_tx_heating_to_signal_handler: 0,
-
-                    rx_heating_from_signal_handler,
-                    #[cfg(feature = "debug_channels")]
-                    cnt_rx_heating_from_signal_handler: 0,
-
-                    tx_heating_to_schedule_check,
-                    #[cfg(feature = "debug_channels")]
-                    cnt_tx_heating_to_schedule_check: 0,
-
-                    rx_heating_from_schedule_check,
-                    #[cfg(feature = "debug_channels")]
-                    cnt_rx_heating_from_schedule_check: 0,
-
-                    rx_heating_from_messaging_opt: None,
-                    #[cfg(feature = "debug_channels")]
-                    cnt_rx_heating_from_messaging_opt: 0,
-                };
+                    channels.heating.tx_heating_to_relay_manager.clone();
 
                 let mut heating_stats_transfer =
                     HeatingStatsMockDataTransfer::new(&mut sql_interface.get_connection().unwrap());
@@ -3275,7 +2884,7 @@ pub mod tests {
 
                 heating.execute(
                     mutex_device_scheduler_heating.clone(),
-                    &mut heating_channels,
+                    &mut channels.heating,
                     &mut heating_stats_transfer,
                     &mut heating_set_value_updater,
                     heating_mutexes,

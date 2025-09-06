@@ -15,7 +15,6 @@ pub mod tests {
 
     use crate::mocks::mock_signal::tests::MockSignal;
     use crate::mocks::test_command::tests::TestCommand;
-    use crate::simulator::tcp_communication::TcpCommunicationError;
     use crate::simulator::tcp_communication_channels::TcpCommunicationChannels;
     use crate::utilities::channel_content::{AquariumSignal, InternalCommand};
 
