@@ -245,6 +245,7 @@ pub mod tests {
 
             spin_sleeper.sleep(sleep_duration_one_millisecond);
         }
+        println!("mock_relay_manager: done");
         (result, mock_actuator_states)
     }
 }
