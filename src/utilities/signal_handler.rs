@@ -689,7 +689,6 @@ pub mod tests {
         ) = mpsc::channel();
         let rx_signal_handler_from_messaging_opt = Some(rx_signal_handler_from_messaging);
 
-        #[cfg(all(target_os = "linux", feature = "target_hw"))]
         let (tx_signal_handler_to_dht, rx_dht_from_signal_handler): (
             Sender<InternalCommand>,
             Receiver<InternalCommand>,
@@ -829,22 +828,12 @@ pub mod tests {
                     #[cfg(feature = "debug_channels")]
                     cnt_rx_signal_handler_from_tcp_opt: 0,
 
-                    #[cfg(all(feature = "target_hw", target_os = "linux"))]
                     tx_signal_handler_to_dht,
-                    #[cfg(all(
-                        feature = "target_hw",
-                        target_os = "linux",
-                        feature = "debug_channels"
-                    ))]
+                    #[cfg(feature = "debug_channels")]
                     cnt_tx_signal_handler_to_dht: 0,
 
-                    #[cfg(all(feature = "target_hw", target_os = "linux"))]
                     tx_signal_handler_to_i2c_interface,
-                    #[cfg(all(
-                        feature = "target_hw",
-                        target_os = "linux",
-                        feature = "debug_channels"
-                    ))]
+                    #[cfg(feature = "debug_channels")]
                     cnt_tx_signal_handler_to_i2c_interface: 0,
 
                     tx_signal_handler_to_watchdog,

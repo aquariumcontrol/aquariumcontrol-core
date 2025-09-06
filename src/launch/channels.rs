@@ -39,21 +39,24 @@ use crate::sensors::i2c_interface_channels::I2cInterfaceChannels;
 use crate::recorder::data_logger_channels::DataLoggerChannels;
 use std::sync::mpsc;
 use std::sync::mpsc::{Receiver, Sender};
+use crate::sensors::i2c_interface_channels::I2cInterfaceChannels;
 
 pub struct Channels {
     pub feed: FeedChannels,
     pub schedule_check: ScheduleCheckChannels,
     pub actuate_simulator: ActuateSimulatorChannels,
     pub relay_manager: RelayManagerChannels,
-    #[cfg(all(feature = "target_hw", target_os = "linux"))]
+
+    #[allow(unused)] // used in conditionally compiled code
     pub atlas_scientific: AtlasScientificChannels,
+
     #[allow(unused)] // used in conditionally compiled code
     pub dht: DhtChannels,
     pub ds18b20: Ds18b20Channels,
     pub balling: BallingChannels,
     pub data_logger: DataLoggerChannels,
 
-    #[cfg(all(feature = "target_hw", target_os = "linux"))]
+    #[allow(unused)] // used in conditionally compiled code
     pub i2c_interface: I2cInterfaceChannels,
     pub tank_level_switch: TankLevelSwitchChannels,
 
@@ -611,7 +614,6 @@ impl Channels {
             cnt_rx_relay_manager_from_signal_handler: 0,
         };
 
-        #[cfg(all(feature = "target_hw", target_os = "linux"))]
         let atlas_scientific = AtlasScientificChannels {
             tx_atlas_scientific_to_i2c_interface,
             #[cfg(feature = "debug_channels")]
@@ -848,7 +850,6 @@ impl Channels {
             cnt_rx_schedule_check_from_signal_handler: 0,
         };
 
-        #[cfg(all(target_os = "linux", feature = "target_hw"))]
         let i2c_interface = I2cInterfaceChannels {
             tx_i2c_interface_to_atlas_scientific,
             #[cfg(feature = "debug_channels")]
@@ -976,14 +977,12 @@ impl Channels {
             #[cfg(feature = "debug_channels")]
             cnt_rx_signal_handler_from_tcp_opt: 0,
 
-            #[cfg(all(feature = "target_hw", target_os = "linux"))]
             tx_signal_handler_to_dht,
-            #[cfg(all(feature = "target_hw", target_os = "linux", feature = "debug_channels"))]
+            #[cfg(feature = "debug_channels")]
             cnt_tx_signal_handler_to_dht: 0,
 
-            #[cfg(all(feature = "target_hw", target_os = "linux"))]
             tx_signal_handler_to_i2c_interface,
-            #[cfg(all(feature = "target_hw", target_os = "linux", feature = "debug_channels"))]
+            #[cfg(feature = "debug_channels")]
             cnt_tx_signal_handler_to_i2c_interface: 0,
 
             tx_signal_handler_to_watchdog,
@@ -1139,10 +1138,7 @@ impl Channels {
             schedule_check,
             actuate_simulator,
             relay_manager,
-
-            #[cfg(all(feature = "target_hw", target_os = "linux"))]
             atlas_scientific,
-
             dht,
             ds18b20,
             balling,
@@ -1150,10 +1146,7 @@ impl Channels {
             tank_level_switch,
             tcp_communication,
             heating,
-
-            #[cfg(all(feature = "target_hw", target_os = "linux"))]
             i2c_interface,
-
             ventilation,
             signal_handler,
             monitors,
@@ -1601,7 +1594,6 @@ impl Channels {
             cnt_rx_relay_manager_from_signal_handler: 0,
         };
 
-        #[cfg(all(feature = "target_hw", target_os = "linux"))]
         let atlas_scientific = AtlasScientificChannels {
             tx_atlas_scientific_to_i2c_interface,
             #[cfg(feature = "debug_channels")]
@@ -1838,7 +1830,6 @@ impl Channels {
             cnt_rx_schedule_check_from_signal_handler: 0,
         };
 
-        #[cfg(all(target_os = "linux", feature = "target_hw"))]
         let i2c_interface = I2cInterfaceChannels {
             tx_i2c_interface_to_atlas_scientific,
             #[cfg(feature = "debug_channels")]
@@ -1966,14 +1957,12 @@ impl Channels {
             #[cfg(feature = "debug_channels")]
             cnt_rx_signal_handler_from_tcp_opt: 0,
 
-            #[cfg(all(feature = "target_hw", target_os = "linux"))]
             tx_signal_handler_to_dht,
-            #[cfg(all(feature = "target_hw", target_os = "linux", feature = "debug_channels"))]
+            #[cfg(feature = "debug_channels")]
             cnt_tx_signal_handler_to_dht: 0,
 
-            #[cfg(all(feature = "target_hw", target_os = "linux"))]
             tx_signal_handler_to_i2c_interface,
-            #[cfg(all(feature = "target_hw", target_os = "linux", feature = "debug_channels"))]
+            #[cfg(feature = "debug_channels")]
             cnt_tx_signal_handler_to_i2c_interface: 0,
 
             tx_signal_handler_to_watchdog,
@@ -2128,10 +2117,7 @@ impl Channels {
             schedule_check,
             actuate_simulator,
             relay_manager,
-
-            #[cfg(all(feature = "target_hw", target_os = "linux"))]
             atlas_scientific,
-
             dht,
             ds18b20,
             balling,
@@ -2139,10 +2125,7 @@ impl Channels {
             tank_level_switch,
             tcp_communication,
             heating,
-
-            #[cfg(all(feature = "target_hw", target_os = "linux"))]
             i2c_interface,
-
             ventilation,
             signal_handler,
             monitors,

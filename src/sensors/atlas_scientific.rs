@@ -755,6 +755,7 @@ pub mod tests {
     use std::sync::{mpsc, Arc, Mutex};
     use std::thread;
     use std::time::{Duration, Instant};
+    use crate::launch::channels::Channels;
 
     #[test]
     // happy case for evaluating response from pH sensor unit
@@ -969,44 +970,11 @@ pub mod tests {
             read_config_file("/config/aquarium_control_test_generic.toml".to_string()).unwrap();
         let mut atlas_scientific = AtlasScientific::new(config.atlas_scientific);
 
-        let (tx_atlas_scientific_to_i2c_interface, _rx_i2c_interface_from_atlas_scientific): (
-            Sender<I2cRequest>,
-            Receiver<I2cRequest>,
-        ) = mpsc::channel();
-        let (_tx_i2c_interface_to_atlas_scientific, rx_atlas_scientific_from_i2c_interface): (
-            Sender<I2cResult>,
-            Receiver<I2cResult>,
-        ) = mpsc::channel();
-        let (tx_atlas_scientific_to_signal_handler, _rx_signal_handler_from_atlas_scientific): (
-            Sender<bool>,
-            Receiver<bool>,
-        ) = mpsc::channel();
-        let (_tx_signal_handler_to_atlas_scientific, rx_atlas_scientific_from_signal_handler): (
-            Sender<InternalCommand>,
-            Receiver<InternalCommand>,
-        ) = mpsc::channel();
-
-        let mut atlas_scientific_channels = AtlasScientificChannels {
-            tx_atlas_scientific_to_i2c_interface,
-            #[cfg(feature = "debug_channels")]
-            cnt_tx_atlas_scientific_to_i2c_interface: 0,
-
-            rx_atlas_scientific_from_i2c_interface,
-            #[cfg(feature = "debug_channels")]
-            cnt_rx_atlas_scientific_from_i2c_interface: 0,
-
-            tx_atlas_scientific_to_signal_handler,
-            #[cfg(feature = "debug_channels")]
-            cnt_tx_atlas_scientific_to_signal_handler: 0,
-
-            rx_atlas_scientific_from_signal_handler,
-            #[cfg(feature = "debug_channels")]
-            cnt_rx_atlas_scientific_from_signal_handler: 0,
-        };
+        let mut channels = Channels::new_for_test();
 
         let result = atlas_scientific.send_request_to_i2c_interface(
             &AquariumSignal::MockInvalidSignal,
-            &mut atlas_scientific_channels,
+            &mut channels.atlas_scientific,
         );
 
         assert!(matches!(
@@ -1079,40 +1047,7 @@ pub mod tests {
 
         let mut atlas_scientific = AtlasScientific::new(config.atlas_scientific);
 
-        let (tx_atlas_scientific_to_i2c_interface, _rx_i2c_interface_from_atlas_scientific): (
-            Sender<I2cRequest>,
-            Receiver<I2cRequest>,
-        ) = mpsc::channel();
-        let (tx_i2c_interface_to_atlas_scientific, rx_atlas_scientific_from_i2c_interface): (
-            Sender<I2cResult>,
-            Receiver<I2cResult>,
-        ) = mpsc::channel();
-        let (tx_atlas_scientific_to_signal_handler, _rx_signal_handler_from_atlas_scientific): (
-            Sender<bool>,
-            Receiver<bool>,
-        ) = mpsc::channel();
-        let (_tx_signal_handler_to_atlas_scientific, rx_atlas_scientific_from_signal_handler): (
-            Sender<InternalCommand>,
-            Receiver<InternalCommand>,
-        ) = mpsc::channel();
-
-        let mut atlas_scientific_channels = AtlasScientificChannels {
-            tx_atlas_scientific_to_i2c_interface,
-            #[cfg(feature = "debug_channels")]
-            cnt_tx_atlas_scientific_to_i2c_interface: 0,
-
-            rx_atlas_scientific_from_i2c_interface,
-            #[cfg(feature = "debug_channels")]
-            cnt_rx_atlas_scientific_from_i2c_interface: 0,
-
-            tx_atlas_scientific_to_signal_handler,
-            #[cfg(feature = "debug_channels")]
-            cnt_tx_atlas_scientific_to_signal_handler: 0,
-
-            rx_atlas_scientific_from_signal_handler,
-            #[cfg(feature = "debug_channels")]
-            cnt_rx_atlas_scientific_from_signal_handler: 0,
-        };
+        let mut channels = Channels::new_for_test();
 
         // Mutexes for Atlas Scientific signals
         let mutex_atlas_scientific_temperature =
@@ -1129,11 +1064,11 @@ pub mod tests {
         ));
 
         // Sending stimuli for water temperature before triggering try_recv from the test object
-        _ = tx_i2c_interface_to_atlas_scientific.send(Ok(stimuli_i2c_response_temperature));
+        _ = channels.i2c_interface.send_to_atlas_scientific(Ok(stimuli_i2c_response_temperature));
 
         _ = atlas_scientific.receive_response_from_i2c_interface(
             &AquariumSignal::WaterTemperature,
-            &mut atlas_scientific_channels,
+            &mut channels.atlas_scientific,
             &mutex_atlas_scientific_temperature,
             &mutex_atlas_scientific_ph,
             &mutex_atlas_scientific_conductivity,
@@ -1150,11 +1085,11 @@ pub mod tests {
         };
 
         // Sending stimuli for pH before triggering try_recv from the test object
-        _ = tx_i2c_interface_to_atlas_scientific.send(Ok(stimuli_i2c_response_ph));
+        _ = channels.i2c_interface.send_to_atlas_scientific(Ok(stimuli_i2c_response_ph));
 
         _ = atlas_scientific.receive_response_from_i2c_interface(
             &AquariumSignal::pH,
-            &mut atlas_scientific_channels,
+            &mut channels.atlas_scientific,
             &mutex_atlas_scientific_temperature,
             &mutex_atlas_scientific_ph,
             &mutex_atlas_scientific_conductivity,
@@ -1171,11 +1106,11 @@ pub mod tests {
         };
 
         // Sending stimuli for conductivity before triggering try_recv from the test object
-        _ = tx_i2c_interface_to_atlas_scientific.send(Ok(stimuli_i2c_response_conductivity));
+        _ = channels.i2c_interface.send_to_atlas_scientific(Ok(stimuli_i2c_response_conductivity));
 
         _ = atlas_scientific.receive_response_from_i2c_interface(
             &AquariumSignal::Conductivity,
-            &mut atlas_scientific_channels,
+            &mut channels.atlas_scientific,
             &mutex_atlas_scientific_temperature,
             &mutex_atlas_scientific_ph,
             &mutex_atlas_scientific_conductivity,
@@ -1263,53 +1198,7 @@ pub mod tests {
 
         let mut atlas_scientific = AtlasScientific::new(config.atlas_scientific);
 
-        let (tx_atlas_scientific_to_i2c_interface, rx_i2c_interface_from_atlas_scientific): (
-            Sender<I2cRequest>,
-            Receiver<I2cRequest>,
-        ) = mpsc::channel();
-
-        let (tx_i2c_interface_to_atlas_scientific, rx_atlas_scientific_from_i2c_interface): (
-            Sender<I2cResult>,
-            Receiver<I2cResult>,
-        ) = mpsc::channel();
-
-        let (tx_i2c_interface_to_signal_handler, _rx_signal_handler_from_i2c_interface): (
-            Sender<bool>,
-            Receiver<bool>,
-        ) = mpsc::channel();
-
-        let (tx_signal_handler_to_i2c_interface, rx_i2c_interface_from_signal_handler): (
-            Sender<InternalCommand>,
-            Receiver<InternalCommand>,
-        ) = mpsc::channel();
-
-        let (tx_atlas_scientific_to_signal_handler, _rx_signal_handler_from_atlas_scientific): (
-            Sender<bool>,
-            Receiver<bool>,
-        ) = mpsc::channel();
-
-        let (tx_signal_handler_to_atlas_scientific, rx_atlas_scientific_from_signal_handler): (
-            Sender<InternalCommand>,
-            Receiver<InternalCommand>,
-        ) = mpsc::channel();
-
-        let mut atlas_scientific_channels = AtlasScientificChannels {
-            tx_atlas_scientific_to_i2c_interface,
-            #[cfg(feature = "debug_channels")]
-            cnt_tx_atlas_scientific_to_i2c_interface: 0,
-
-            rx_atlas_scientific_from_i2c_interface,
-            #[cfg(feature = "debug_channels")]
-            cnt_rx_atlas_scientific_from_i2c_interface: 0,
-
-            tx_atlas_scientific_to_signal_handler,
-            #[cfg(feature = "debug_channels")]
-            cnt_tx_atlas_scientific_to_signal_handler: 0,
-
-            rx_atlas_scientific_from_signal_handler,
-            #[cfg(feature = "debug_channels")]
-            cnt_rx_atlas_scientific_from_signal_handler: 0,
-        };
+        let mut channels = Channels::new_for_test();
 
         // Mutexes for Atlas Scientific signals
         let mutex_atlas_scientific_temperature =
@@ -1340,15 +1229,9 @@ pub mod tests {
                 );
                 let spin_sleeper = SpinSleeper::default();
                 spin_sleeper.sleep(sleep_time);
-                tx_signal_handler_to_atlas_scientific
-                    .send(InternalCommand::Quit)
-                    .unwrap();
-                tx_signal_handler_to_i2c_interface
-                    .send(InternalCommand::Quit)
-                    .unwrap();
-                tx_signal_handler_to_atlas_scientific
-                    .send(InternalCommand::Terminate)
-                    .unwrap();
+                channels.signal_handler.send_to_atlas_scientific(InternalCommand::Quit).unwrap();
+                channels.signal_handler.send_to_i2c_interface(InternalCommand::Quit).unwrap();
+                channels.signal_handler.send_to_atlas_scientific(InternalCommand::Terminate).unwrap();
             })
             .unwrap();
 
@@ -1356,12 +1239,7 @@ pub mod tests {
         let join_handle_mock_i2c_interface = thread::Builder::new()
             .name("i2c_interface".to_string())
             .spawn(move || {
-                mock_i2c_interface.execute(
-                    tx_i2c_interface_to_atlas_scientific,
-                    rx_i2c_interface_from_atlas_scientific,
-                    tx_i2c_interface_to_signal_handler,
-                    rx_i2c_interface_from_signal_handler,
-                );
+                mock_i2c_interface.execute(channels.i2c_interface);
             })
             .unwrap();
 
@@ -1370,7 +1248,7 @@ pub mod tests {
             .name("test_object".to_string())
             .spawn(move || {
                 atlas_scientific.execute(
-                    &mut atlas_scientific_channels,
+                    &mut channels.atlas_scientific,
                     mutex_atlas_scientific_temperature,
                     mutex_atlas_scientific_ph,
                     mutex_atlas_scientific_conductivity,
@@ -1490,53 +1368,7 @@ pub mod tests {
 
         let mut atlas_scientific = AtlasScientific::new(config.atlas_scientific);
 
-        let (tx_atlas_scientific_to_i2c_interface, rx_i2c_interface_from_atlas_scientific): (
-            Sender<I2cRequest>,
-            Receiver<I2cRequest>,
-        ) = mpsc::channel();
-
-        let (tx_i2c_interface_to_atlas_scientific, rx_atlas_scientific_from_i2c_interface): (
-            Sender<I2cResult>,
-            Receiver<I2cResult>,
-        ) = mpsc::channel();
-
-        let (tx_i2c_interface_to_signal_handler, _rx_signal_handler_from_i2c_interface): (
-            Sender<bool>,
-            Receiver<bool>,
-        ) = mpsc::channel();
-
-        let (tx_signal_handler_to_i2c_interface, rx_i2c_interface_from_signal_handler): (
-            Sender<InternalCommand>,
-            Receiver<InternalCommand>,
-        ) = mpsc::channel();
-
-        let (tx_atlas_scientific_to_signal_handler, _rx_signal_handler_from_atlas_scientific): (
-            Sender<bool>,
-            Receiver<bool>,
-        ) = mpsc::channel();
-
-        let (tx_signal_handler_to_atlas_scientific, rx_atlas_scientific_from_signal_handler): (
-            Sender<InternalCommand>,
-            Receiver<InternalCommand>,
-        ) = mpsc::channel();
-
-        let mut atlas_scientific_channels = AtlasScientificChannels {
-            tx_atlas_scientific_to_i2c_interface,
-            #[cfg(feature = "debug_channels")]
-            cnt_tx_atlas_scientific_to_i2c_interface: 0,
-
-            rx_atlas_scientific_from_i2c_interface,
-            #[cfg(feature = "debug_channels")]
-            cnt_rx_atlas_scientific_from_i2c_interface: 0,
-
-            tx_atlas_scientific_to_signal_handler,
-            #[cfg(feature = "debug_channels")]
-            cnt_tx_atlas_scientific_to_signal_handler: 0,
-
-            rx_atlas_scientific_from_signal_handler,
-            #[cfg(feature = "debug_channels")]
-            cnt_rx_atlas_scientific_from_signal_handler: 0,
-        };
+        let mut channels = Channels::new_for_test();
 
         // Mutexes for Atlas Scientific signals
         let mutex_atlas_scientific_temperature =
@@ -1597,15 +1429,9 @@ pub mod tests {
                     }
                 };
 
-                tx_signal_handler_to_atlas_scientific
-                    .send(InternalCommand::Quit)
-                    .unwrap();
-                tx_signal_handler_to_i2c_interface
-                    .send(InternalCommand::Quit)
-                    .unwrap();
-                tx_signal_handler_to_atlas_scientific
-                    .send(InternalCommand::Terminate)
-                    .unwrap();
+                channels.signal_handler.send_to_atlas_scientific(InternalCommand::Quit).unwrap();
+                channels.signal_handler.send_to_i2c_interface(InternalCommand::Quit).unwrap();
+                channels.signal_handler.send_to_atlas_scientific(InternalCommand::Terminate).unwrap();
             })
             .unwrap();
 
@@ -1613,12 +1439,7 @@ pub mod tests {
         let join_handle_mock_i2c_interface = thread::Builder::new()
             .name("i2c_interface".to_string())
             .spawn(move || {
-                mock_i2c_interface.execute(
-                    tx_i2c_interface_to_atlas_scientific,
-                    rx_i2c_interface_from_atlas_scientific,
-                    tx_i2c_interface_to_signal_handler,
-                    rx_i2c_interface_from_signal_handler,
-                );
+                mock_i2c_interface.execute(channels.i2c_interface);
             })
             .unwrap();
 
@@ -1627,7 +1448,7 @@ pub mod tests {
             .name("test_object".to_string())
             .spawn(move || {
                 atlas_scientific.execute(
-                    &mut atlas_scientific_channels,
+                    &mut channels.atlas_scientific,
                     mutex_atlas_scientific_temperature,
                     mutex_atlas_scientific_ph,
                     mutex_atlas_scientific_conductivity,

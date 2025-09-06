@@ -10,10 +10,10 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 #[cfg(test)]
 pub mod tests {
     use crate::sensors::atlas_scientific_config::AtlasScientificConfig;
-    use crate::sensors::i2c_interface::{I2cRequest, I2cResponse, I2cResult};
+    use crate::sensors::i2c_interface::{I2cResponse};
     use crate::utilities::channel_content::InternalCommand;
     use crate::utilities::proc_ext_req::ProcessExternalRequestTrait;
-    use std::sync::mpsc::{Receiver, Sender};
+    use crate::sensors::i2c_interface_channels::I2cInterfaceChannels;
 
     pub struct MockI2cInterface {
         /// I2C address of Atlas Scientific pH sensor unit
@@ -59,23 +59,20 @@ pub mod tests {
 
         pub fn execute(
             &mut self,
-            tx_i2c_interface_to_atlas_scientific: Sender<I2cResult>,
-            rx_i2c_interface_from_atlas_scientific: Receiver<I2cRequest>,
-            _tx_i2c_interface_to_signal_handler: Sender<bool>,
-            rx_i2c_interface_from_signal_handler: Receiver<InternalCommand>,
+            i2c_interface_channels: I2cInterfaceChannels
         ) {
             loop {
                 let (
                     quit_command_received, // the request to end the application has been received
                     _,
                     _,
-                ) = self.process_external_request(&rx_i2c_interface_from_signal_handler, None);
+                ) = self.process_external_request(&i2c_interface_channels.rx_i2c_interface_from_signal_handler, None);
 
                 if quit_command_received {
                     break;
                 }
 
-                match rx_i2c_interface_from_atlas_scientific.try_recv() {
+                match i2c_interface_channels.rx_i2c_interface_from_atlas_scientific.try_recv() {
                     Ok(request) => {
                         println!("{}: Read from channel.", module_path!());
                         let mut response: I2cResponse = self.mock_response_temperature.clone();
@@ -87,14 +84,14 @@ pub mod tests {
                             response = self.mock_response_conductivity.clone();
                         }
                         println!("{}: responding with response={}", module_path!(), response);
-                        tx_i2c_interface_to_atlas_scientific
+                        i2c_interface_channels.tx_i2c_interface_to_atlas_scientific
                             .send(Ok(response))
                             .unwrap();
                     }
                     Err(_) => { /* do nothing */ }
                 }
 
-                match rx_i2c_interface_from_signal_handler.try_recv() {
+                match i2c_interface_channels.rx_i2c_interface_from_signal_handler.try_recv() {
                     Ok(signal_handler_request) => {
                         if signal_handler_request == InternalCommand::Quit {
                             println!("{}: received Quit command.", module_path!());

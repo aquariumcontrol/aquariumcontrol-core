@@ -118,14 +118,12 @@ pub struct SignalHandlerChannels {
     pub cnt_rx_signal_handler_from_watchdog: u64,
 
     // Hardware-specific channels
-    #[cfg(all(target_os = "linux", feature = "target_hw"))]
     pub tx_signal_handler_to_dht: Sender<InternalCommand>,
-    #[cfg(all(target_os = "linux", feature = "target_hw", feature = "debug_channels"))]
+    #[cfg(feature = "debug_channels")]
     pub cnt_tx_signal_handler_to_dht: u64,
 
-    #[cfg(all(target_os = "linux", feature = "target_hw"))]
     pub tx_signal_handler_to_i2c_interface: Sender<InternalCommand>,
-    #[cfg(all(target_os = "linux", feature = "target_hw", feature = "debug_channels"))]
+    #[cfg(feature = "debug_channels")]
     pub cnt_tx_signal_handler_to_i2c_interface: u64,
 
     pub tx_signal_handler_to_ds18b20: Sender<InternalCommand>,
@@ -493,7 +491,6 @@ impl SignalHandlerChannels {
 
     // --- Hardware-Specific Modules (Send only) ---
     #[allow(unused)]
-    #[cfg(all(target_os = "linux", feature = "target_hw"))]
     pub fn send_to_dht(
         &mut self,
         command: InternalCommand,
@@ -507,7 +504,6 @@ impl SignalHandlerChannels {
     }
 
     #[allow(unused)]
-    #[cfg(all(target_os = "linux", feature = "target_hw"))]
     pub fn send_to_i2c_interface(
         &mut self,
         command: InternalCommand,
@@ -689,24 +685,21 @@ impl fmt::Display for SignalHandlerChannels {
             self.cnt_rx_signal_handler_from_watchdog
         )?;
 
-        #[cfg(all(target_os = "linux", feature = "target_hw"))]
-        {
-            writeln!(
-                f,
-                "cnt_tx_signal_handler_to_dht: {}",
-                self.cnt_tx_signal_handler_to_dht
-            )?;
-            writeln!(
-                f,
-                "cnt_tx_signal_handler_to_i2c_interface: {}",
-                self.cnt_tx_signal_handler_to_i2c_interface
-            )?;
-            writeln!(
-                f,
-                "cnt_tx_signal_handler_to_ds18b20: {}",
-                self.cnt_tx_signal_handler_to_ds18b20
-            )?;
-        }
+        writeln!(
+            f,
+            "cnt_tx_signal_handler_to_dht: {}",
+            self.cnt_tx_signal_handler_to_dht
+        )?;
+        writeln!(
+            f,
+            "cnt_tx_signal_handler_to_i2c_interface: {}",
+            self.cnt_tx_signal_handler_to_i2c_interface
+        )?;
+        writeln!(
+            f,
+            "cnt_tx_signal_handler_to_ds18b20: {}",
+            self.cnt_tx_signal_handler_to_ds18b20
+        )?;
 
         Ok(())
     }
