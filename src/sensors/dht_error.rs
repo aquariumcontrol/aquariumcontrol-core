@@ -91,7 +91,7 @@ pub enum DhtError {
     #[error("[{0}] Gpio handle has not been provided. Check the configuration.")]
     GpioHandleNotProvided(String),
 
-    /// reported from low-level reading when called without gpio lib handle available
+    /// reported from low-level reading function substitute for non-target platform
     #[allow(unused)] // used in conditionally compiled code
     #[error("[{0}] Dht driver has not been compiled into the SW for this platform.")]
     IncorrectPlatform(String),
