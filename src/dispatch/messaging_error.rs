@@ -6,13 +6,15 @@ The above copyright notice and this permission notice shall be included in all c
 
 THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
-#[cfg(target_os = "linux")]
-use crate::utilities::channel_content::InternalCommand;
-use thiserror::Error;
+cfg_if::cfg_if! {
+    if #[cfg(target_os = "linux")] {
+        use crate::utilities::channel_content::InternalCommand;
+        use thiserror::Error;
+        use std::sync::mpsc::SendError;
+    }
+}
 
 #[cfg(target_os = "linux")]
-use std::sync::mpsc::SendError;
-
 #[derive(Debug, Error)]
 /// Enum codifies the errors which the program may encounter in communication with the Linux messaging system.
 pub enum MessagingError {

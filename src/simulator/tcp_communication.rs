@@ -9,7 +9,7 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 
 #[cfg(all(not(test), target_os = "linux"))]
 use log::info;
-use log::{debug, error, warn};
+use log::{debug, error};
 
 use spin_sleep::SpinSleeper;
 use std::sync::mpsc::{Receiver, Sender, TryRecvError};
@@ -82,16 +82,13 @@ impl TcpCommunication {
         tcp_connection: &TcpCommunicationConfig,
         execution_config: ExecutionConfig,
     ) -> Result<TcpCommunication, TcpCommunicationError> {
-        let stream = TcpStream::connect((
-            tcp_connection.ip_address.as_str(),
-            tcp_connection.port,
-        ))
-        .map_err(|e| TcpCommunicationError::ConnectionFailed {
-            location: module_path!().to_string(),
-            ip_address: tcp_connection.ip_address.clone(),
-            port: tcp_connection.port,
-            source: e,
-        })?;
+        let stream = TcpStream::connect((tcp_connection.ip_address.as_str(), tcp_connection.port))
+            .map_err(|e| TcpCommunicationError::ConnectionFailed {
+                location: module_path!().to_string(),
+                ip_address: tcp_connection.ip_address.clone(),
+                port: tcp_connection.port,
+                source: e,
+            })?;
 
         let write_stream =
             stream
@@ -122,27 +119,7 @@ impl TcpCommunication {
     /// - `Some(&str)` containing a reference to the last word if the string contains words.
     /// - `None` if the input string is empty or contains only whitespace.
     fn get_last_word(sequence: &str) -> Option<&str> {
-        sequence.rsplit_whitespace().next()
-    }
-
-    /// Trims a single trailing newline (`\n`) and an optional preceding carriage return (`\r`) from a `String`.
-    ///
-    /// This private helper function modifies the input string in place, removing common
-    /// line ending characters. It is particularly useful when reading lines from streams
-    /// where `\n` or `\r\n` terminators might be present and need to be cleaned up.
-    ///
-    /// The implementation is adapted from a common pattern:
-    /// Code taken over from <https://stackoverflow.com/questions/37888042/remove-single-trailing-newline-from-string-without-cloning>
-    ///
-    /// # Arguments
-    /// * `s` - A mutable reference to the `String` from which trailing newline characters should be removed.
-    fn trim_newline(s: &mut String) {
-        if s.ends_with('\n') {
-            s.pop();
-            if s.ends_with('\r') {
-                s.pop();
-            }
-        }
+        sequence.split_whitespace().last()
     }
 
     /// Writes a string request to the TCP stream and handles potential errors.
@@ -296,17 +273,17 @@ impl TcpCommunication {
                 TcpCommunicationError::ResponseContainsNoWords(module_path!().to_string())
             })
             .and_then(|last_word| {
-                if last_word.is_empty() {
+                let trimmed_word = last_word.trim();
+                if trimmed_word.is_empty() {
                     Err(TcpCommunicationError::LastWordOfResponseEmpty(
                         module_path!().to_string(),
                     ))
                 } else {
-                    let mut last_word_string = last_word.to_string();
-                    Self::trim_newline(&mut last_word_string);
-                    last_word_string.parse::<f32>().map_err(|e| {
+                    // Parse directly from the trimmed slice.
+                    trimmed_word.parse::<f32>().map_err(|e| {
                         TcpCommunicationError::ResponseConversionError {
                             location: module_path!().to_string(),
-                            last_word: last_word_string,
+                            last_word: trimmed_word.to_string(), // Only allocate string for the error case.
                             source: e,
                         }
                     })
@@ -335,38 +312,52 @@ impl TcpCommunication {
         rx: &Receiver<InternalCommand>,
         tx: &Sender<Result<f32, TcpCommunicationError>>,
     ) -> Result<(), TcpCommunicationError> {
-        let response_to_calling_thread: Result<f32, TcpCommunicationError>;
         match rx.try_recv() {
-            Ok(c) => {
-                match c {
-                    InternalCommand::RequestSignal(s) => {
-                        let simulator_response = self.get_signal(s);
-                        if simulator_response.is_err() {
-                            response_to_calling_thread =
-                                Err(TcpCommunicationError::InvalidResponseFromSimulator(
-                                    module_path!().to_string(),
-                                ));
-                        } else {
-                            response_to_calling_thread = simulator_response;
-                        }
-                        match tx.send(response_to_calling_thread) {
-                            Ok(()) => Ok(()),
-                            Err(_) => Err(TcpCommunicationError::SendingResponseViaChannelFailure(
-                                module_path!().to_string(),
-                            )),
-                        }
-                    }
-                    _ => {
-                        Ok(()) /* Do nothing for all other commands */
-                    }
+            Ok(InternalCommand::RequestSignal(s)) => {
+                // A signal was requested. Get it from the simulator.
+                let response = self.get_signal(s);
+                // Send the response (Ok or Err) back to the caller.
+                tx.send(response).map_err(|_| {
+                    TcpCommunicationError::SendingResponseViaChannelFailure(
+                        module_path!().to_string(),
+                    )
+                })
+            }
+            Ok(_) => {
+                // Any other command was received, which we can safely ignore.
+                Ok(())
+            }
+            Err(TryRecvError::Empty) => {
+                // No command in the channel, which is a normal, non-error state.
+                Ok(())
+            }
+            Err(TryRecvError::Disconnected) => {
+                // The channel is broken, which is a critical error.
+                Err(TcpCommunicationError::ChannelDisconnected(
+                    module_path!().to_string(),
+                ))
+            }
+        }
+    }
+
+    /// Handles a request-response cycle for a simulated sensor if it's active.
+    fn handle_simulated_sensor(
+        &mut self,
+        is_active: bool,
+        rx_opt: &Option<Receiver<InternalCommand>>,
+        tx_opt: &Option<Sender<Result<f32, TcpCommunicationError>>>,
+        module_name: &str,
+    ) {
+        if is_active {
+            if let (Some(rx), Some(tx)) = (rx_opt, tx_opt) {
+                if let Err(e) = self.receive_and_answer(rx, tx) {
+                    log_error_chain(
+                        module_path!(),
+                        &format!("Error in communication with {module_name}"),
+                        e,
+                    );
                 }
             }
-            Err(e) => match e {
-                TryRecvError::Empty => Ok(()),
-                TryRecvError::Disconnected => Err(TcpCommunicationError::ChannelDisconnected(
-                    module_path!().to_string(),
-                )),
-            },
         }
     }
 
@@ -406,48 +397,20 @@ impl TcpCommunication {
             }
 
             // *** communication with sensor manager ***
-            if self.execution_config.sensor_manager {
-                if let Some(ref rx_tcp_communication_from_sensor_manager) =
-                    tcp_communication_channels.rx_tcp_communication_from_sensor_manager_opt
-                {
-                    if let Some(ref tx_tcp_communication_to_sensor_manager) =
-                        tcp_communication_channels.tx_tcp_communication_to_sensor_manager_opt
-                    {
-                        if let Err(e) = self.receive_and_answer(
-                            rx_tcp_communication_from_sensor_manager,
-                            tx_tcp_communication_to_sensor_manager,
-                        ) {
-                            log_error_chain(
-                                module_path!(),
-                                "Error in communication with sensor manager",
-                                e,
-                            );
-                        }
-                    }
-                }
-            }
+            self.handle_simulated_sensor(
+                self.execution_config.sensor_manager,
+                &tcp_communication_channels.rx_tcp_communication_from_sensor_manager_opt,
+                &tcp_communication_channels.tx_tcp_communication_to_sensor_manager_opt,
+                "sensor manager",
+            );
 
             // *** communication with Tank level switch ***
-            if self.execution_config.tank_level_switch {
-                if let Some(ref rx_tcp_communication_from_tank_level_switch) =
-                    tcp_communication_channels.rx_tcp_communication_from_tank_level_switch_opt
-                {
-                    if let Some(ref tx_tcp_communication_to_tank_level_switch) =
-                        tcp_communication_channels.tx_tcp_communication_to_tank_level_switch_opt
-                    {
-                        if let Err(e) = self.receive_and_answer(
-                            rx_tcp_communication_from_tank_level_switch,
-                            tx_tcp_communication_to_tank_level_switch,
-                        ) {
-                            log_error_chain(
-                                module_path!(),
-                                "Error in communication with tank level switch thread",
-                                e,
-                            );
-                        }
-                    }
-                }
-            }
+            self.handle_simulated_sensor(
+                self.execution_config.tank_level_switch,
+                &tcp_communication_channels.rx_tcp_communication_from_tank_level_switch_opt,
+                &tcp_communication_channels.tx_tcp_communication_to_tank_level_switch_opt,
+                "tank level switch",
+            );
 
             // *** communication with relay manager - no response required ***
             if !lock_relay_manager_channel_disconnected && self.execution_config.relay_manager {

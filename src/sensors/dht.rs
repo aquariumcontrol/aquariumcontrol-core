@@ -181,6 +181,9 @@ pub struct Dht {
 
     /// Maximum permissible access duration for Mutex
     pub max_mutex_access_duration: Duration,
+
+    /// Duration between measurements
+    pub measurement_interval: Duration,
 }
 
 impl Dht {
@@ -206,6 +209,7 @@ impl Dht {
         gpio_dht22_io: u8,
         gpio_dht22_vcc: u8,
     ) -> Dht {
+        let measurement_interval = Duration::from_millis(config.measurement_interval_millis);
         Dht {
             config,
             gpio_opt,
@@ -219,6 +223,7 @@ impl Dht {
             #[cfg(test)]
             mutex_access_duration_exceeded: false,
             max_mutex_access_duration: Duration::from_millis(MAX_MUTEX_ACCESS_DURATION_MILLIS),
+            measurement_interval,
         }
     }
 
@@ -787,12 +792,7 @@ impl Dht {
             // Check if data acquisition is enabled.
             if self.config.active {
                 // Check if a sufficient amount of time has passed since the last measurement.
-                let current_instant = Instant::now();
-                if current_instant
-                    .duration_since(self.instant_last_measurement)
-                    .as_millis()
-                    > self.config.measurement_interval_millis.into()
-                {
+                if self.instant_last_measurement.elapsed() > self.measurement_interval {
                     let result = self.get_data();
                     if let Err(ref dht_error) = result {
                         if matches!(
@@ -850,7 +850,7 @@ impl Dht {
                         instant_before_locking_mutex,
                     );
 
-                    self.instant_last_measurement = current_instant;
+                    self.instant_last_measurement = Instant::now();
                 }
             }
         }
@@ -860,8 +860,17 @@ impl Dht {
 #[cfg(test)]
 pub mod tests {
     use assert_float_eq::*;
+    use std::sync::mpsc;
+    use std::sync::mpsc::Sender;
+    use std::sync::{Arc, Mutex};
+    use std::thread;
+    use std::time::Duration;
 
+    use crate::sensors::dht::DhtResult;
     use crate::sensors::dht::{dht22_constants, Dht, DhtError};
+    use crate::sensors::dht_channels::DhtChannels;
+    use crate::sensors::dht_config::DhtConfig;
+    use crate::utilities::channel_content::InternalCommand;
     use crate::utilities::logger::setup_logger;
     use crate::utilities::logger_config::LoggerConfig;
 
@@ -1055,5 +1064,132 @@ pub mod tests {
         }
 
         assert!(reference.iter().eq(result.iter()));
+    }
+
+    /// Helper function to create a standard setup for execute function tests.
+    /// This reduces boilerplate code across multiple tests.
+    fn setup_execute_test() -> (
+        Dht,
+        DhtChannels,
+        Sender<InternalCommand>,
+        Arc<Mutex<DhtResult>>,
+    ) {
+        let (tx, rx) = mpsc::channel();
+        let channels = DhtChannels {
+            rx_dht_from_signal_handler: rx,
+            #[cfg(feature = "debug_channels")]
+            cnt_rx_dht_from_signal_handler: 0,
+        };
+        // Create a default config for testing purposes.
+        let config = DhtConfig {
+            active: false,
+            measurement_interval_millis: 2000,
+            sensor_reset_duration_millis: 500,
+            sensor_startup_duration_millis: 1000,
+            sensor_pause_duration_millis: 2000,
+            sensor_init_pin_down_duration_micros: 1000,
+            sensor_init_pin_up_duration_micros: 40,
+            sensor_init_input_duration_micros: 0,
+            timeout_duration_micros: 200,
+        };
+        let dht = Dht::new(config, None, 0, 0);
+        let mutex = Arc::new(Mutex::new(Ok((0.0, 0.0))));
+
+        (dht, channels, tx, mutex)
+    }
+
+    #[test]
+    /// Verifies that the `execute` loop terminates gracefully when a `Quit` command is received.
+    fn test_execute_handles_quit_command() {
+        // Arrange
+        let (mut dht, mut channels, tx, mutex) = setup_execute_test();
+
+        // Action
+        let handle = thread::spawn(move || {
+            dht.execute(mutex, &mut channels);
+        });
+        tx.send(InternalCommand::Quit).unwrap();
+
+        // Assert
+        // The thread should join successfully, which proves it terminated as expected.
+        let join_result = handle.join();
+        assert!(
+            join_result.is_ok(),
+            "The DHT thread should terminate gracefully on Quit."
+        );
+    }
+
+    #[test]
+    /// Verifies that the `execute` loop continues running after receiving an unrecognized command.
+    fn test_execute_handles_invalid_command() {
+        // Arrange
+        let (mut dht, mut channels, tx, mutex) = setup_execute_test();
+
+        // Action
+        let handle = thread::spawn(move || {
+            dht.execute(mutex, &mut channels);
+        });
+        // Send a command that the `execute` function doesn't explicitly handle.
+        tx.send(InternalCommand::Stop).unwrap();
+        // Give the thread a moment to process the invalid command.
+        thread::sleep(Duration::from_millis(150));
+        // Now send the Quit command to terminate the loop.
+        tx.send(InternalCommand::Quit).unwrap();
+
+        // Assert
+        // The thread should not have panicked and should join successfully.
+        let join_result = handle.join();
+        assert!(
+            join_result.is_ok(),
+            "The DHT thread should handle invalid commands and continue until Quit."
+        );
+    }
+
+    #[test]
+    #[cfg(not(all(target_os = "linux", feature = "target_hw")))]
+    /// Verifies that a measurement is performed and the result is written to the shared mutex
+    /// when the measurement interval elapses. This test is for non-hardware platforms.
+    fn test_execute_updates_mutex_on_measurement_interval() {
+        // Arrange
+        let (tx, rx) = mpsc::channel();
+        let mut channels = DhtChannels {
+            rx_dht_from_signal_handler: rx,
+            #[cfg(feature = "debug_channels")]
+            cnt_rx_dht_from_signal_handler: 0,
+        };
+        let config = DhtConfig {
+            active: true,                    // Enable measurement
+            measurement_interval_millis: 50, // Use a short interval for testing
+            sensor_reset_duration_millis: 500,
+            sensor_startup_duration_millis: 1000,
+            sensor_pause_duration_millis: 2000,
+            sensor_init_pin_down_duration_micros: 1000,
+            sensor_init_pin_up_duration_micros: 40,
+            sensor_init_input_duration_micros: 0,
+            timeout_duration_micros: 200,
+        };
+        let mut dht = Dht::new(config, None, 0, 0);
+        let mutex = Arc::new(Mutex::new(Ok((0.0, 0.0))));
+        let mutex_clone = mutex.clone();
+
+        // Action
+        let handle = thread::spawn(move || {
+            dht.execute(mutex_clone, &mut channels);
+        });
+
+        // Wait for longer than the measurement interval to ensure a measurement is attempted.
+        thread::sleep(Duration::from_millis(200));
+
+        tx.send(InternalCommand::Quit).unwrap();
+        handle.join().unwrap();
+
+        // Assert
+        // On non-hardware platforms, `get_data()` returns `Err(DhtError::IncorrectPlatform)`.
+        // We check that this specific error was written to the mutex.
+        let final_result = mutex.lock().unwrap();
+        assert!(
+            matches!(*final_result, Err(DhtError::IncorrectPlatform(_))),
+            "Mutex should contain IncorrectPlatform error on non-hardware targets after measurement"
+        );
     }
 }

@@ -214,23 +214,38 @@ impl TcpCommunicationChannels {
 
         println!(
             "- rx_tcp_communication_from_relay_manager_opt: {}",
-            self.rx_tcp_communication_from_relay_manager_opt.as_ref().map_or("None", |_| "Some"));
+            self.rx_tcp_communication_from_relay_manager_opt
+                .as_ref()
+                .map_or("None", |_| "Some")
+        );
 
         println!(
             "- rx_tcp_communication_from_sensor_manager_opt: {}",
-            self.rx_tcp_communication_from_sensor_manager_opt.as_ref().map_or("None", |_| "Some"));
+            self.rx_tcp_communication_from_sensor_manager_opt
+                .as_ref()
+                .map_or("None", |_| "Some")
+        );
 
         println!(
             "- tx_tcp_communication_to_sensor_manager_opt: {}",
-            self.tx_tcp_communication_to_sensor_manager_opt.is_some().as_ref().map_or("None", |_| "Some"));
+            self.tx_tcp_communication_to_sensor_manager_opt
+                .as_ref()
+                .map_or("None", |_| "Some")
+        );
 
         println!(
             "- rx_tcp_communication_from_tank_level_switch_opt: {}",
-            self.rx_tcp_communication_from_tank_level_switch_opt.as_ref().map_or("None", |_| "Some"));
+            self.rx_tcp_communication_from_tank_level_switch_opt
+                .as_ref()
+                .map_or("None", |_| "Some")
+        );
 
         println!(
             "- tx_tcp_communication_to_tank_level_switch_opt: {}",
-            self.tx_tcp_communication_to_tank_level_switch_opt.as_ref().map_or("None", |_| "Some"));
+            self.tx_tcp_communication_to_tank_level_switch_opt
+                .as_ref()
+                .map_or("None", |_| "Some")
+        );
 
         println!("- tx_tcp_communication_to_signal_handler: Present");
 

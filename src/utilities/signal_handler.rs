@@ -522,7 +522,6 @@ pub mod tests {
         let join_handle_test_object = thread::Builder::new()
             .name("test_object".to_string())
             .spawn(move || {
-
                 handle_signals(
                     term_clone,
                     channels.signal_handler,
@@ -542,34 +541,60 @@ pub mod tests {
         send_signal(pid, signal_hook::consts::signal::SIGABRT);
 
         assert_eq!(
-            channels.data_logger.rx_data_logger_from_signal_handler.recv().unwrap(),
+            channels
+                .data_logger
+                .rx_data_logger_from_signal_handler
+                .recv()
+                .unwrap(),
             InternalCommand::Quit
         );
-        _ = channels.data_logger.tx_data_logger_to_signal_handler.send(true);
+        _ = channels
+            .data_logger
+            .tx_data_logger_to_signal_handler
+            .send(true);
 
         assert_eq!(
-            channels.messaging.rx_messaging_from_signal_handler.recv().unwrap(),
+            channels
+                .messaging
+                .rx_messaging_from_signal_handler
+                .recv()
+                .unwrap(),
             InternalCommand::Quit
         );
         _ = channels.messaging.tx_messaging_to_signal_handler.send(true);
 
         assert_eq!(
-            channels.refill.rx_refill_from_signal_handler.recv().unwrap(),
+            channels
+                .refill
+                .rx_refill_from_signal_handler
+                .recv()
+                .unwrap(),
             InternalCommand::Quit
         );
         _ = channels.refill.tx_refill_to_signal_handler.send(true);
 
         assert_eq!(
-            channels.heating.rx_heating_from_signal_handler.recv().unwrap(),
+            channels
+                .heating
+                .rx_heating_from_signal_handler
+                .recv()
+                .unwrap(),
             InternalCommand::Quit
         );
         _ = channels.heating.tx_heating_to_signal_handler.send(true);
 
         assert_eq!(
-            channels.ventilation.rx_ventilation_from_signal_handler.recv().unwrap(),
+            channels
+                .ventilation
+                .rx_ventilation_from_signal_handler
+                .recv()
+                .unwrap(),
             InternalCommand::Quit
         );
-        _ = channels.ventilation.tx_ventilation_to_signal_handler.send(true);
+        _ = channels
+            .ventilation
+            .tx_ventilation_to_signal_handler
+            .send(true);
 
         assert_eq!(
             channels.feed.rx_feed_from_signal_handler.recv().unwrap(),
@@ -578,37 +603,73 @@ pub mod tests {
         _ = channels.feed.tx_feed_to_signal_handler.send(true);
 
         assert_eq!(
-            channels.balling.rx_balling_from_signal_handler.recv().unwrap(),
+            channels
+                .balling
+                .rx_balling_from_signal_handler
+                .recv()
+                .unwrap(),
             InternalCommand::Quit
         );
         _ = channels.balling.tx_balling_to_signal_handler.send(true);
 
         assert_eq!(
-            channels.tank_level_switch.rx_tank_level_switch_from_signal_handler.recv().unwrap(),
+            channels
+                .tank_level_switch
+                .rx_tank_level_switch_from_signal_handler
+                .recv()
+                .unwrap(),
             InternalCommand::Quit
         );
-        _ = channels.tank_level_switch.tx_tank_level_switch_to_signal_handler.send(true);
+        _ = channels
+            .tank_level_switch
+            .tx_tank_level_switch_to_signal_handler
+            .send(true);
         #[cfg(all(feature = "target_hw", target_os = "linux"))]
         {
             assert_eq!(
-                channels.atlas_scientific.rx_atlas_scientific_from_signal_handler.recv().unwrap(),
+                channels
+                    .atlas_scientific
+                    .rx_atlas_scientific_from_signal_handler
+                    .recv()
+                    .unwrap(),
                 InternalCommand::Quit
             );
-            _ = channels.atlas_scientific.tx_atlas_scientific_to_signal_handler.send(true);
+            _ = channels
+                .atlas_scientific
+                .tx_atlas_scientific_to_signal_handler
+                .send(true);
         }
         assert_eq!(
-            channels.sensor_manager.rx_sensor_manager_from_signal_handler.recv().unwrap(),
+            channels
+                .sensor_manager
+                .rx_sensor_manager_from_signal_handler
+                .recv()
+                .unwrap(),
             InternalCommand::Quit
         );
-        _ = channels.sensor_manager.tx_sensor_manager_to_signal_handler.send(true);
+        _ = channels
+            .sensor_manager
+            .tx_sensor_manager_to_signal_handler
+            .send(true);
         assert_eq!(
-            channels.schedule_check.rx_schedule_check_from_signal_handler.recv().unwrap(),
+            channels
+                .schedule_check
+                .rx_schedule_check_from_signal_handler
+                .recv()
+                .unwrap(),
             InternalCommand::Quit
         );
-        _ = channels.schedule_check.tx_schedule_check_to_signal_handler.send(true);
+        _ = channels
+            .schedule_check
+            .tx_schedule_check_to_signal_handler
+            .send(true);
         #[cfg(all(target_os = "linux", feature = "target_hw"))]
         assert_eq!(
-            channels.i2c_interface.rx_i2c_interface_from_signal_handler.recv().unwrap(),
+            channels
+                .i2c_interface
+                .rx_i2c_interface_from_signal_handler
+                .recv()
+                .unwrap(),
             InternalCommand::Quit
         );
         // no response from i2c_interface
@@ -621,37 +682,67 @@ pub mod tests {
         // no response from dht
 
         assert_eq!(
-            channels.relay_manager.rx_relay_manager_from_signal_handler.recv().unwrap(),
+            channels
+                .relay_manager
+                .rx_relay_manager_from_signal_handler
+                .recv()
+                .unwrap(),
             InternalCommand::Quit
         );
-        _ = channels.relay_manager.tx_relay_manager_to_signal_handler.send(true);
+        _ = channels
+            .relay_manager
+            .tx_relay_manager_to_signal_handler
+            .send(true);
 
         assert_eq!(
-            channels.tcp_communication.rx_tcp_communication_from_signal_handler.recv().unwrap(),
+            channels
+                .tcp_communication
+                .rx_tcp_communication_from_signal_handler
+                .recv()
+                .unwrap(),
             InternalCommand::Quit
         );
-        _ = channels.tcp_communication.tx_tcp_communication_to_signal_handler.send(true);
+        _ = channels
+            .tcp_communication
+            .tx_tcp_communication_to_signal_handler
+            .send(true);
 
         assert_eq!(
-            channels.monitors.rx_monitors_from_signal_handler.recv().unwrap(),
+            channels
+                .monitors
+                .rx_monitors_from_signal_handler
+                .recv()
+                .unwrap(),
             InternalCommand::Quit
         );
         _ = channels.monitors.tx_monitors_to_signal_handler.send(true);
 
         assert_eq!(
-            channels.data_logger.rx_data_logger_from_signal_handler.recv().unwrap(),
+            channels
+                .data_logger
+                .rx_data_logger_from_signal_handler
+                .recv()
+                .unwrap(),
             InternalCommand::Terminate
         );
         // no response to termination request
 
         assert_eq!(
-            channels.heating.rx_heating_from_signal_handler.recv().unwrap(),
+            channels
+                .heating
+                .rx_heating_from_signal_handler
+                .recv()
+                .unwrap(),
             InternalCommand::Terminate
         );
         // no response to termination request
 
         assert_eq!(
-            channels.ventilation.rx_ventilation_from_signal_handler.recv().unwrap(),
+            channels
+                .ventilation
+                .rx_ventilation_from_signal_handler
+                .recv()
+                .unwrap(),
             InternalCommand::Terminate
         );
         // no response to termination request
@@ -663,19 +754,31 @@ pub mod tests {
         // no response to termination request
 
         assert_eq!(
-            channels.refill.rx_refill_from_signal_handler.recv().unwrap(),
+            channels
+                .refill
+                .rx_refill_from_signal_handler
+                .recv()
+                .unwrap(),
             InternalCommand::Terminate
         );
         // no response to termination request
 
         assert_eq!(
-            channels.balling.rx_balling_from_signal_handler.recv().unwrap(),
+            channels
+                .balling
+                .rx_balling_from_signal_handler
+                .recv()
+                .unwrap(),
             InternalCommand::Terminate
         );
         // no response to termination request
 
         assert_eq!(
-            channels.ds18b20.rx_ds18b20_from_signal_handler.recv().unwrap(),
+            channels
+                .ds18b20
+                .rx_ds18b20_from_signal_handler
+                .recv()
+                .unwrap(),
             InternalCommand::Quit
         );
         // no response to quit signal from ds18b20
@@ -683,32 +786,52 @@ pub mod tests {
         #[cfg(all(feature = "target_hw", target_os = "linux"))]
         {
             assert_eq!(
-                channels.atlas_scientific.rx_atlas_scientific_from_signal_handler.recv().unwrap(),
+                channels
+                    .atlas_scientific
+                    .rx_atlas_scientific_from_signal_handler
+                    .recv()
+                    .unwrap(),
                 InternalCommand::Terminate
             );
         }
         // no response to termination request
 
         assert_eq!(
-            channels.sensor_manager.rx_sensor_manager_from_signal_handler.recv().unwrap(),
+            channels
+                .sensor_manager
+                .rx_sensor_manager_from_signal_handler
+                .recv()
+                .unwrap(),
             InternalCommand::Terminate
         );
         // no response to termination request
 
         assert_eq!(
-            channels.tank_level_switch.rx_tank_level_switch_from_signal_handler.recv().unwrap(),
+            channels
+                .tank_level_switch
+                .rx_tank_level_switch_from_signal_handler
+                .recv()
+                .unwrap(),
             InternalCommand::Terminate
         );
         // no response to termination request
 
         assert_eq!(
-            channels.watchdog.rx_watchdog_from_signal_handler.recv().unwrap(),
+            channels
+                .watchdog
+                .rx_watchdog_from_signal_handler
+                .recv()
+                .unwrap(),
             InternalCommand::Terminate
         );
         _ = channels.watchdog.tx_watchdog_to_signal_handler.send(true);
 
         assert_eq!(
-            channels.messaging.rx_messaging_from_signal_handler.recv().unwrap(),
+            channels
+                .messaging
+                .rx_messaging_from_signal_handler
+                .recv()
+                .unwrap(),
             InternalCommand::Terminate
         );
         // no response to termination request

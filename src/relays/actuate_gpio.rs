@@ -7,15 +7,13 @@ The above copyright notice and this permission notice shall be included in all c
 THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
-use log::warn;
-
-use crate::relays::device_relay_logic::get_relay_command_gpio;
-use crate::relays::relay_error::RelayError;
-use crate::relays::relay_manager::RelayActuationTrait;
-use crate::utilities::channel_content::InternalCommand;
-
 cfg_if::cfg_if! {
     if #[cfg(all(target_os = "linux", feature = "target_hw"))] {
+        use log::warn;
+        use crate::relays::device_relay_logic::get_relay_command_gpio;
+        use crate::relays::relay_error::RelayError;
+        use crate::relays::relay_manager::RelayActuationTrait;
+        use crate::utilities::channel_content::InternalCommand;
         use crate::sensors::gpio_handler_config::GpioHandlerConfig;
         use rppal::gpio::{Gpio, OutputPin};
         use crate::utilities::channel_content::AquariumDevice;
@@ -74,6 +72,7 @@ impl ActuateGpioConfig {
     }
 }
 
+#[cfg(all(target_os = "linux", feature = "target_hw"))]
 /// Contains trait implementation for actuation of relays via GPIO
 pub struct ActuateGpio {
     #[cfg(all(target_os = "linux", feature = "target_hw"))]
@@ -163,6 +162,7 @@ pub fn get_output_pin(
         })
 }
 
+#[cfg(all(target_os = "linux", feature = "target_hw"))]
 impl ActuateGpio {
     #[cfg(all(target_os = "linux", feature = "target_hw"))]
     /// Creates a new `ActuateGpio` instance by configuring and acquiring all necessary GPIO output pins.
@@ -222,6 +222,7 @@ impl ActuateGpio {
     }
 }
 
+#[cfg(all(target_os = "linux", feature = "target_hw"))]
 impl RelayActuationTrait for ActuateGpio {
     /// Actuates a relay by setting the state of its corresponding GPIO pin.
     ///

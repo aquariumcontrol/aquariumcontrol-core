@@ -78,11 +78,6 @@ pub enum TcpCommunicationError {
     #[error("[{0}] Error in trying to receive command from data logger")]
     ChannelDisconnected(String),
 
-    /// value is communicated back to calling thread in case of error
-    /// because the original error value cannot be cloned.
-    #[error("[{0}] Invalid response from simulator")]
-    InvalidResponseFromSimulator(String),
-
     /// value indicates that receiving from TCP thread failed
     #[error("{location}: Error occurred when trying to receive response from TCP thread for {requester}.")]
     ReceivingFromTCPThreadFailed {

@@ -6,15 +6,19 @@ The above copyright notice and this permission notice shall be included in all c
 
 THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
+#[cfg(all(target_os = "linux", feature = "target_hw"))]
 use crate::relays::relay_error::RelayError;
+#[cfg(all(target_os = "linux", feature = "target_hw"))]
 use crate::utilities::channel_content::{AquariumDevice, InternalCommand};
 
+#[cfg(all(target_os = "linux", feature = "target_hw"))]
 /// An enum to represent the physical logic of a relay.
 enum RelayLogic {
     NormallyOpen,
     NormallyClosed,
 }
 
+#[cfg(all(target_os = "linux", feature = "target_hw"))]
 /// Determines the target GPIO state based on a command and the relay's physical logic.
 ///
 /// # Arguments
@@ -47,6 +51,7 @@ fn get_gpio_state(command: &InternalCommand, logic: RelayLogic) -> Result<bool, 
     }
 }
 
+#[cfg(all(target_os = "linux", feature = "target_hw"))]
 /// Determines the appropriate GPIO pin state (`true` for low, `false` for high)
 /// required to actuate a specific aquarium device based on its configured relay logic.
 ///
