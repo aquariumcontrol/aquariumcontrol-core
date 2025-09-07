@@ -82,9 +82,10 @@ impl TcpCommunication {
         tcp_connection: &TcpCommunicationConfig,
         execution_config: ExecutionConfig,
     ) -> Result<TcpCommunication, TcpCommunicationError> {
-        let stream = TcpStream::connect(
-            tcp_connection.ip_address.clone() + ":" + &tcp_connection.port.to_string(),
-        )
+        let stream = TcpStream::connect((
+            tcp_connection.ip_address.as_str(),
+            tcp_connection.port,
+        ))
         .map_err(|e| TcpCommunicationError::ConnectionFailed {
             location: module_path!().to_string(),
             ip_address: tcp_connection.ip_address.clone(),
@@ -107,10 +108,11 @@ impl TcpCommunication {
         })
     }
 
-    /// Extracts the last word from a given string slice, using a space as the delimiter.
+    /// Extracts the last word from a given string slice, using whitespace as the delimiter.
     ///
     /// This private helper function is useful for parsing responses where the desired
     /// data (e.g., a numeric value) is consistently the final token in a space-separated sequence.
+    /// This implementation avoids heap allocation by using a reverse iterator.
     ///
     /// # Arguments
     /// * `sequence` - The string slice from which to extract the last word.
@@ -120,8 +122,7 @@ impl TcpCommunication {
     /// - `Some(&str)` containing a reference to the last word if the string contains words.
     /// - `None` if the input string is empty or contains only whitespace.
     fn get_last_word(sequence: &str) -> Option<&str> {
-        let words = sequence.split(" ").collect::<Vec<&str>>();
-        words.last().copied()
+        sequence.rsplit_whitespace().next()
     }
 
     /// Trims a single trailing newline (`\n`) and an optional preceding carriage return (`\r`) from a `String`.
@@ -166,24 +167,12 @@ impl TcpCommunication {
         &mut self,
         request: String,
     ) -> Result<(), TcpCommunicationError> {
-        match self.write_stream.write(request.as_bytes()) {
-            Ok(amount_of_bytes_written) => {
-                if amount_of_bytes_written != request.len() {
-                    warn!(
-                        "{}: Writing to TCP stream failed - (amount of bytes written ({}) differs from expected ({}))",
-                        module_path!(),
-                        amount_of_bytes_written,
-                        request.len(),
-                    );
-                }
-            }
-            Err(e) => {
-                return Err(TcpCommunicationError::WritingToStreamFailed {
-                    location: module_path!().to_string(),
-                    source: e,
-                });
-            }
-        };
+        self.write_stream
+            .write_all(request.as_bytes())
+            .map_err(|e| TcpCommunicationError::WritingToStreamFailed {
+                location: module_path!().to_string(),
+                source: e,
+            })?;
         self.write_stream
             .flush()
             .map_err(|e| TcpCommunicationError::FlushFailed {
