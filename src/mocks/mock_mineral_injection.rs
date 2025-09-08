@@ -9,7 +9,7 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 
 #[cfg(test)]
 pub mod tests {
-    use crate::mineral::balling::BallingChannels;
+    use crate::mineral::balling_channels::BallingChannels;
     use crate::mineral::mineral_injection::MineralInjectionTrait;
     use crate::utilities::channel_content::AquariumDevice;
     use std::fmt;

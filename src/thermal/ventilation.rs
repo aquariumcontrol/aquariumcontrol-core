@@ -24,7 +24,7 @@ use spin_sleep::SpinSleeper;
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
-pub(crate) use crate::thermal::ventilation_channels::VentilationChannels;
+use crate::thermal::ventilation_channels::VentilationChannels;
 use crate::thermal::ventilation_config::VentilationConfig;
 use crate::utilities::acknowledge_signal_handler::AcknowledgeSignalHandlerTrait;
 use crate::utilities::check_mutex_access_duration::CheckMutexAccessDurationTrait;
@@ -32,6 +32,7 @@ use crate::utilities::logger::log_error_chain;
 use crate::utilities::wait_for_termination::WaitForTerminationTrait;
 #[cfg(all(not(test), target_os = "linux"))]
 use nix::unistd::gettid;
+use crate::perform_schedule_check;
 
 const CYCLE_TIME_VENTILATION_MILLIS: u64 = 500;
 
@@ -320,7 +321,7 @@ impl Ventilation {
         let mut measured_water_temperature = 0.0;
         let mut measurement_error_water_temperature: bool;
         let mut ventilation_state: ActuatorState = ActuatorState::Undefined;
-        let mut schedule_check_result: bool = false;
+        let mut schedule_check_result: bool;
         let mut ventilation_inhibited = false; // state of ventilation control determined by if the start/stop command has been received
         let mut lock_warn_cycle_time_exceeded = false;
         let mut start_time = Instant::now();
@@ -389,39 +390,13 @@ impl Ventilation {
                 }
 
                 // schedule check to see if actuation is allowed
-                match ventilation_channels.send_to_schedule_check(InternalCommand::ScheduleCheck) {
-                    Ok(_) => {
-                        self.lock_error_channel_send_schedule_check = false;
-                        // now listen for the response
-                        schedule_check_result = match ventilation_channels
-                            .receive_from_schedule_check()
-                        {
-                            Ok(c) => {
-                                self.lock_error_channel_receive_schedule_check = false;
-                                c
-                            }
-                            Err(e) => {
-                                if !self.lock_error_channel_receive_schedule_check {
-                                    error!(
-                                        target: module_path!(),
-                                        "reading channel content for schedule check failed ({e:?})"
-                                    );
-                                    self.lock_error_channel_receive_schedule_check = true;
-                                }
-                                true // assume we are allowed to actuate when communication is not successful
-                            }
-                        };
-                    }
-                    Err(e) => {
-                        if !self.lock_error_channel_send_schedule_check {
-                            error!(
-                                target: module_path!(),
-                                "channel communication to schedule check failed ({e:?})"
-                            );
-                            self.lock_error_channel_send_schedule_check = true;
-                        }
-                    }
-                }
+                perform_schedule_check!(
+                    ventilation_channels,
+                    schedule_check_result,
+                    self.lock_error_channel_send_schedule_check,
+                    self.lock_error_channel_receive_schedule_check,
+                    module_path!()
+                );
 
                 if schedule_check_result && !ventilation_inhibited {
                     // actuation is allowed. proceed with control.

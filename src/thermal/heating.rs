@@ -35,6 +35,7 @@ use crate::utilities::logger::log_error_chain;
 use crate::utilities::proc_ext_req::ProcessExternalRequestTrait;
 use crate::utilities::sawtooth_profile::SawToothProfile;
 use crate::utilities::wait_for_termination::WaitForTerminationTrait;
+use crate::perform_schedule_check;
 #[cfg(not(test))]
 use log::info;
 
@@ -368,7 +369,7 @@ impl Heating {
         let mut measured_tank_level_switch_invalid = false;
         let mut loop_counter = 0;
         let mut heater_state: ActuatorState = ActuatorState::Undefined;
-        let mut schedule_check_result: bool = false;
+        let mut schedule_check_result: bool;
         let mut duration_until_midnight =
             self.get_duration_until_midnight(&mut sql_interface_heating);
         let mut tank_level_low_counter = 0;
@@ -462,40 +463,15 @@ impl Heating {
                 } else {
                     tank_level_low_counter = 0;
                 }
-
+                
                 // schedule check to see if actuation is allowed
-                match heating_channels.send_to_schedule_check(InternalCommand::ScheduleCheck) {
-                    Ok(_) => {
-                        self.lock_error_channel_send_schedule_check = false;
-                        // now listen for the response
-                        schedule_check_result = match heating_channels.receive_from_schedule_check()
-                        {
-                            Ok(c) => {
-                                self.lock_error_channel_receive_schedule_check = false;
-                                c
-                            }
-                            Err(e) => {
-                                if !self.lock_error_channel_receive_schedule_check {
-                                    error!(
-                                        target: module_path!(),
-                                        "receiving from schedule check failed ({e:?})"
-                                    );
-                                    self.lock_error_channel_receive_schedule_check = true;
-                                }
-                                false // assume we are not allowed to actuate when communication is not successful
-                            }
-                        };
-                    }
-                    Err(e) => {
-                        if !self.lock_error_channel_send_schedule_check {
-                            error!(
-                                target: module_path!(),
-                                "channel communication to schedule check failed ({e:?})"
-                            );
-                            self.lock_error_channel_send_schedule_check = true;
-                        }
-                    }
-                }
+                perform_schedule_check!(
+                    heating_channels,
+                    schedule_check_result,
+                    self.lock_error_channel_send_schedule_check,
+                    self.lock_error_channel_receive_schedule_check,
+                    module_path!()
+                );
 
                 // check if set values need to be updated
                 if let Err(e) = heating_set_val_updater.update_set_value(

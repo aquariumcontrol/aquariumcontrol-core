@@ -9,6 +9,7 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 #[cfg(feature = "debug_refill")]
 use log::debug;
 
+use crate::error;
 use log::warn;
 
 #[cfg(not(test))]
@@ -22,7 +23,7 @@ use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
 use crate::database::sql_interface_refill::DatabaseInterfaceRefillTrait;
-use crate::log_error_chain;
+use crate::{log_error_chain, perform_schedule_check};
 use crate::sensors::tank_level_switch::TankLevelSwitchSignals;
 use crate::utilities::acknowledge_signal_handler::AcknowledgeSignalHandlerTrait;
 use crate::utilities::channel_content::InternalCommand;
@@ -612,56 +613,6 @@ impl Refill {
             | refill_check_interval_last_refill
     }
 
-    /// Communicates with the schedule checker to determine if refill actuation is currently permitted.
-    ///
-    /// This private helper function sends a `ScheduleCheck` command to the schedule checker thread
-    /// and waits for a boolean response indicating whether actuation is allowed.
-    ///
-    /// If there's an error during channel communication (either sending the request or receiving the response),
-    /// this function assumes a **fail-safe** posture and returns `true`, indicating that actuation is *allowed*
-    /// despite the communication issue. It uses internal lock flags to prevent log flooding from recurring errors.
-    ///
-    /// # Arguments
-    /// * `refill_channels` - A mutable reference to the struct containing the channels
-    ///
-    /// # Returns
-    /// `true` if actuation is allowed by the schedule checker (or if communication fails, leading to a fail-safe `true`); `false` otherwise.
-    fn check_schedule(&mut self, refill_channels: &mut RefillChannels) -> bool {
-        match refill_channels.send_to_schedule_check(InternalCommand::ScheduleCheck) {
-            Ok(_) => {
-                self.lock_error_channel_send_schedule_check = false;
-                match refill_channels.receive_from_schedule_check() {
-                    Ok(c) => {
-                        self.lock_error_channel_receive_schedule_check = false;
-                        c
-                    }
-                    Err(e) => {
-                        if !self.lock_error_channel_receive_schedule_check {
-                            log_error_chain(
-                                module_path!(),
-                                "reading channel content for schedule check failed",
-                                e,
-                            );
-                            self.lock_error_channel_receive_schedule_check = true;
-                        }
-                        true // assume we are allowed to actuate when communication is not successful
-                    }
-                }
-            }
-            Err(e) => {
-                if !self.lock_error_channel_send_schedule_check {
-                    log_error_chain(
-                        module_path!(),
-                        "channel communication to schedule check failed",
-                        e,
-                    );
-                    self.lock_error_channel_send_schedule_check = true;
-                }
-                true // assume we are allowed to actuate when communication is not successful
-            }
-        }
-    }
-
     /// Executes the **main control loop for the refill module**.
     ///
     /// This function runs continuously, managing the aquarium's freshwater refill system
@@ -810,7 +761,13 @@ impl Refill {
                         && !self.refill_errors.error_sql_update_failed
                         && !self.refill_errors.error_sql_get_historic_data_failed
                     {
-                        schedule_check_result = self.check_schedule(refill_channels);
+                        perform_schedule_check!(
+                            refill_channels,
+                            schedule_check_result,
+                            self.lock_error_channel_send_schedule_check,
+                            self.lock_error_channel_receive_schedule_check,
+                            module_path!()
+                        );
 
                         if schedule_check_result
                             && !tank_level_switch_position_stabilized

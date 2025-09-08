@@ -306,7 +306,7 @@ pub mod tests {
     use spin_sleep::SpinSleeper;
     use std::sync::mpsc::{Receiver, Sender};
     use std::sync::{Arc, Mutex};
-    use std::{sync::mpsc, thread, time::Duration};
+    use std::{thread, time::Duration};
 
     // Creates a thread to run `WaterInjection::inject_water` and assert its outcome.
     //
@@ -880,18 +880,9 @@ pub mod tests {
         let (_, mut refill, _, sql_interface_refill) = prepare_refill_tests(None, 10, 60, Some(44));
         let mut water_injection = WaterInjection::new(&refill.config);
 
-        let (tx_refill_to_relay_manager, rx_relay_manager_from_refill) =
-            mpsc::channel::<InternalCommand>();
-        let (tx_relay_manager_to_refill, rx_refill_from_relay_manager) = mpsc::channel::<bool>();
-        let (tx_signal_handler_to_refill, rx_refill_from_signal_handler) =
-            mpsc::channel::<InternalCommand>();
-        let (tx_refill_to_signal_handler, _rx_signal_handler_from_refill) = mpsc::channel::<bool>();
-        let (_tx_schedule_check_to_refill, rx_refill_from_schedule_check) = mpsc::channel::<bool>();
-        let (tx_refill_to_schedule_check, _rx_schedule_check_from_refill) =
-            mpsc::channel::<InternalCommand>();
-        let (tx_refill_to_monitors, _rx_monitors_from_refill) = mpsc::channel();
+        let mut channels = Channels::new_for_test();
 
-        let tx_signal_handler_to_relay_manager = tx_refill_to_relay_manager.clone();
+        let tx_signal_handler_to_relay_manager = channels.refill.tx_refill_to_relay_manager.clone();
 
         let mutex_tank_level_switch_signals =
             Arc::new(Mutex::new(TankLevelSwitchSignals::new(false, false, false)));
@@ -901,7 +892,7 @@ pub mod tests {
             .name("mock_relay_manager".to_string())
             .spawn(move || {
                 let (mut actuation_events, mock_actuator_states) =
-                    mock_relay_manager(&tx_relay_manager_to_refill, &rx_relay_manager_from_refill);
+                    mock_relay_manager(&channels.relay_manager.tx_relay_manager_to_refill, &channels.relay_manager.rx_relay_manager_from_refill);
                 assert_eq!(actuation_events.len(), 2);
                 let last_actuation_event = actuation_events.pop().unwrap();
                 assert_eq!(
@@ -929,7 +920,7 @@ pub mod tests {
 
         // thread for controlling duration of test run
         let join_handle_test_environment = create_test_environment(
-            tx_signal_handler_to_refill,
+            channels.signal_handler.tx_signal_handler_to_refill,
             tx_signal_handler_to_relay_manager,
         );
 
@@ -940,47 +931,13 @@ pub mod tests {
         let join_handle_test_object = thread::Builder::new()
             .name("test_object".to_string())
             .spawn(move || {
-                let mut refill_channels = RefillChannels {
-                    tx_refill_to_relay_manager,
-                    #[cfg(feature = "debug_channels")]
-                    cnt_tx_refill_to_relay_manager: 0,
-
-                    rx_refill_from_relay_manager,
-                    #[cfg(feature = "debug_channels")]
-                    cnt_rx_refill_from_relay_manager: 0,
-
-                    tx_refill_to_signal_handler,
-                    #[cfg(feature = "debug_channels")]
-                    cnt_tx_refill_to_signal_handler: 0,
-
-                    rx_refill_from_signal_handler,
-                    #[cfg(feature = "debug_channels")]
-                    cnt_rx_refill_from_signal_handler: 0,
-
-                    tx_refill_to_schedule_check,
-                    #[cfg(feature = "debug_channels")]
-                    cnt_tx_refill_to_schedule_check: 0,
-
-                    rx_refill_from_schedule_check,
-                    #[cfg(feature = "debug_channels")]
-                    cnt_rx_refill_from_schedule_check: 0,
-
-                    rx_refill_from_messaging_opt: None,
-                    #[cfg(feature = "debug_channels")]
-                    cnt_rx_refill_from_messaging_opt: 0,
-
-                    tx_refill_to_monitors,
-                    #[cfg(feature = "debug_channels")]
-                    cnt_tx_refill_to_monitors: 0,
-                };
-
-                let mut boxed_sql_interface_refill: Box<
+                                let mut boxed_sql_interface_refill: Box<
                     dyn crate::database::sql_interface_refill::DatabaseInterfaceRefillTrait
                         + Sync
                         + Send,
                 > = Box::new(sql_interface_refill);
                 let result = water_injection.inject_water(
-                    &mut refill_channels,
+                    &mut channels.refill,
                     &mut refill.refill_errors,
                     &mut boxed_sql_interface_refill,
                     &mutex_tank_level_switch_signals,

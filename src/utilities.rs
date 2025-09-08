@@ -69,3 +69,6 @@ pub mod acknowledge_signal_handler;
 
 /// A trait for components that need to periodically ping a `Pingable` resource.
 pub mod database_ping_trait;
+
+/// Macro for performing schedule check
+mod perform_schedule_check;

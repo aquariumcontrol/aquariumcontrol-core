@@ -23,7 +23,7 @@ use crate::sensors::tank_level_switch_channels::TankLevelSwitchChannels;
 use crate::simulator::tcp_communication::TcpCommunicationError;
 use crate::simulator::tcp_communication_channels::TcpCommunicationChannels;
 use crate::thermal::heating_channels::HeatingChannels;
-use crate::thermal::ventilation::VentilationChannels;
+use crate::thermal::ventilation_channels::VentilationChannels;
 use crate::utilities::channel_content::InternalCommand;
 use crate::utilities::signal_handler::SignalHandlerChannels;
 use crate::watchmen::monitors_channels::MonitorsChannels;

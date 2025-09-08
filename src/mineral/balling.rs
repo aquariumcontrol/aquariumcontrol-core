@@ -21,10 +21,11 @@ use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
 use crate::database::sql_interface_balling::{BallingSetVal, SqlInterfaceBalling};
-pub(crate) use crate::mineral::balling_channels::BallingChannels;
+use crate::mineral::balling_channels::BallingChannels;
 use crate::mineral::balling_config::BallingConfig;
 use crate::mineral::balling_error::BallingError;
 use crate::mineral::mineral_injection::MineralInjectionTrait;
+use crate::perform_schedule_check;
 use crate::utilities::acknowledge_signal_handler::AcknowledgeSignalHandlerTrait;
 use crate::utilities::channel_content::{AquariumDevice, InternalCommand};
 use crate::utilities::database_ping_trait::DatabasePingTrait;
@@ -558,7 +559,7 @@ impl Balling {
         let mut stop_command_received: bool; // the request to (temporarily) stop dosing has been received
         let mut start_command_received: bool; // the request to (temporarily) stop dosing has been received
         let mut dosing_inhibited: bool = false; // state of dosing control determined if the start/stop command has been received
-        let mut schedule_check_result = false; // flag indicating if operation of Balling is permitted at this time of day
+        let mut schedule_check_result: bool; // flag indicating if operation of Balling is permitted at this time of day
 
         loop {
             if self.config.active
@@ -568,36 +569,14 @@ impl Balling {
                 // and the monitoring period has passed (usually every 60 seconds)
 
                 // schedule check to see if actuation is allowed
-                match balling_channels.send_to_schedule_check(InternalCommand::ScheduleCheck) {
-                    Ok(_) => {
-                        // now listen for the response
-                        schedule_check_result = match balling_channels.receive_from_schedule_check()
-                        {
-                            Ok(c) => {
-                                self.lock_error_channel_receive_schedule_check = false;
-                                c
-                            }
-                            Err(e) => {
-                                if !self.lock_error_channel_receive_schedule_check {
-                                    error!(target: module_path!(),
-                                        "Error when reading channel content for schedule check ({e:?})",
-                                    );
-                                    self.lock_error_channel_receive_schedule_check = true;
-                                }
-                                false // assume we are not allowed to actuate when communication is not successful
-                            }
-                        };
-                        self.lock_error_channel_send_schedule_check = false;
-                    }
-                    Err(e) => {
-                        if !self.lock_error_channel_send_schedule_check {
-                            error!(target: module_path!(),
-                                "Error in channel communication to schedule check: {e:?}"
-                            );
-                            self.lock_error_channel_send_schedule_check = true;
-                        }
-                    }
-                }
+                perform_schedule_check!(
+                    balling_channels,
+                    schedule_check_result,
+                    self.lock_error_channel_send_schedule_check,
+                    self.lock_error_channel_receive_schedule_check,
+                    module_path!() // Pass the current module path for accurate logging
+                );
+
 
                 // debug information
                 #[cfg(feature = "debug_balling")]

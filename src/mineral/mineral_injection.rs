@@ -173,12 +173,12 @@ impl MineralInjectionTrait for MineralInjection {
 
 #[cfg(test)]
 pub mod tests {
-    use crate::mineral::balling::BallingChannels;
+    use crate::launch::channels::Channels;
     use crate::mineral::mineral_injection::{MineralInjection, MineralInjectionTrait};
     use crate::utilities::channel_content::{ActuatorState, AquariumDevice, InternalCommand};
     use all_asserts::{assert_ge, assert_le};
     use spin_sleep::SpinSleeper;
-    use std::sync::mpsc::{self, Receiver, Sender};
+    use std::sync::mpsc::{Receiver, Sender};
     use std::thread::scope;
     use std::time::Duration;
 
@@ -315,41 +315,7 @@ pub mod tests {
     // This test case executes the mineral injection without interruption from the signal handler.
     #[test]
     pub fn test_mineral_dosing_happy_case() {
-        let (tx_balling_to_relay_manager, rx_relay_manager_from_balling) = mpsc::channel();
-        let (tx_relay_manager_to_balling, rx_balling_from_relay_manager) = mpsc::channel();
-        let (_tx_signal_handler_to_balling, rx_balling_from_signal_handler) = mpsc::channel();
-        let (tx_balling_to_signal_handler, _rx_signal_handler_from_balling) = mpsc::channel();
-        let (tx_balling_to_schedule_check, _rx_schedule_check_from_balling) = mpsc::channel();
-        let (_tx_schedule_check_to_balling, rx_balling_from_schedule_check) = mpsc::channel();
-        let mut balling_channels = BallingChannels {
-            tx_balling_to_relay_manager,
-            #[cfg(feature = "debug_channels")]
-            cnt_tx_balling_to_relay_manager: 0,
-
-            rx_balling_from_relay_manager,
-            #[cfg(feature = "debug_channels")]
-            cnt_rx_balling_from_relay_manager: 0,
-
-            tx_balling_to_signal_handler,
-            #[cfg(feature = "debug_channels")]
-            cnt_tx_balling_to_signal_handler: 0,
-
-            rx_balling_from_signal_handler,
-            #[cfg(feature = "debug_channels")]
-            cnt_rx_balling_from_signal_handler: 0,
-
-            tx_balling_to_schedule_check,
-            #[cfg(feature = "debug_channels")]
-            cnt_tx_balling_to_schedule_check: 0,
-
-            rx_balling_from_schedule_check,
-            #[cfg(feature = "debug_channels")]
-            cnt_rx_balling_from_schedule_check: 0,
-
-            rx_balling_from_messaging_opt: None,
-            #[cfg(feature = "debug_channels")]
-            cnt_rx_balling_from_messaging_opt: 0,
-        };
+        let mut channels = Channels::new_for_test();
 
         let mut mineral_injection = MineralInjection::new();
 
@@ -359,8 +325,8 @@ pub mod tests {
             // thread for test environment
             scope.spawn(move || {
                 mineral_injection_test_environment(
-                    tx_relay_manager_to_balling,
-                    rx_relay_manager_from_balling,
+                    channels.relay_manager.tx_relay_manager_to_balling,
+                    channels.relay_manager.rx_relay_manager_from_balling,
                 );
             });
 
@@ -368,7 +334,7 @@ pub mod tests {
             scope.spawn(move || {
                 let (quit_command_received, actual_dosing_duration_millis) = mineral_injection
                     .inject_mineral(
-                        &mut balling_channels,
+                        &mut channels.balling,
                         AquariumDevice::PeristalticPump1,
                         target_dosing_duration_millis,
                     );
@@ -388,42 +354,7 @@ pub mod tests {
     // This test case executes the mineral injection with interruption from the signal handler.
     #[test]
     pub fn test_mineral_dosing_interrupted() {
-        let (tx_balling_to_relay_manager, rx_relay_manager_from_balling) = mpsc::channel();
-        let (tx_relay_manager_to_balling, rx_balling_from_relay_manager) = mpsc::channel();
-        let (tx_signal_handler_to_balling, rx_balling_from_signal_handler) = mpsc::channel();
-        let (tx_balling_to_signal_handler, _rx_signal_handler_from_balling) = mpsc::channel();
-        let (tx_balling_to_schedule_check, _rx_schedule_check_from_balling) = mpsc::channel();
-        let (_tx_schedule_check_to_balling, rx_balling_from_schedule_check) = mpsc::channel();
-
-        let mut balling_channels = BallingChannels {
-            tx_balling_to_relay_manager,
-            #[cfg(feature = "debug_channels")]
-            cnt_tx_balling_to_relay_manager: 0,
-
-            rx_balling_from_relay_manager,
-            #[cfg(feature = "debug_channels")]
-            cnt_rx_balling_from_relay_manager: 0,
-
-            tx_balling_to_signal_handler,
-            #[cfg(feature = "debug_channels")]
-            cnt_tx_balling_to_signal_handler: 0,
-
-            rx_balling_from_signal_handler,
-            #[cfg(feature = "debug_channels")]
-            cnt_rx_balling_from_signal_handler: 0,
-
-            tx_balling_to_schedule_check,
-            #[cfg(feature = "debug_channels")]
-            cnt_tx_balling_to_schedule_check: 0,
-
-            rx_balling_from_schedule_check,
-            #[cfg(feature = "debug_channels")]
-            cnt_rx_balling_from_schedule_check: 0,
-
-            rx_balling_from_messaging_opt: None,
-            #[cfg(feature = "debug_channels")]
-            cnt_rx_balling_from_messaging_opt: 0,
-        };
+        let mut channels = Channels::new_for_test();
 
         let mut mineral_injection = MineralInjection::new();
 
@@ -436,14 +367,14 @@ pub mod tests {
             // thread for signal handler
             scope.spawn(move || {
                 spin_sleeper.sleep(sleep_duration);
-                let _ = tx_signal_handler_to_balling.send(InternalCommand::Quit);
+                let _ = channels.signal_handler.send_to_balling(InternalCommand::Quit);
             });
 
             // thread for the rest of test environment
             scope.spawn(move || {
                 mineral_injection_test_environment(
-                    tx_relay_manager_to_balling,
-                    rx_relay_manager_from_balling,
+                    channels.relay_manager.tx_relay_manager_to_balling,
+                    channels.relay_manager.rx_relay_manager_from_balling,
                 );
             });
 
@@ -451,7 +382,7 @@ pub mod tests {
             scope.spawn(move || {
                 let (quit_command_received, actual_dosing_duration_millis) = mineral_injection
                     .inject_mineral(
-                        &mut balling_channels,
+                        &mut channels.balling,
                         AquariumDevice::PeristalticPump1,
                         target_dosing_duration_millis,
                     );
