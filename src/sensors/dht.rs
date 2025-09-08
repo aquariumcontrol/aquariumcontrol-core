@@ -6,7 +6,6 @@ The above copyright notice and this permission notice shall be included in all c
 
 THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
-use crate::utilities::channel_content::InternalCommand;
 use log::error;
 #[cfg(all(not(test), target_os = "linux"))]
 use log::info;
@@ -15,14 +14,15 @@ use crate::sensors::dht_channels::DhtChannels;
 use crate::sensors::dht_config::DhtConfig;
 use crate::sensors::dht_error::DhtError;
 use crate::utilities::check_mutex_access_duration::CheckMutexAccessDurationTrait;
+#[cfg(not(test))]
+use crate::utilities::logger::log_error_chain;
+
 #[cfg(all(not(test), target_os = "linux"))]
 use nix::unistd::gettid;
 use spin_sleep::SpinSleeper;
-use std::sync::mpsc::TryRecvError;
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
-#[cfg(not(test))]
-use crate::utilities::logger::log_error_chain;
+use crate::utilities::proc_ext_req::ProcessExternalRequestTrait;
 
 cfg_if::cfg_if! {
     if #[cfg(all(target_os = "linux", feature = "target_hw"))] {
@@ -286,17 +286,10 @@ impl Dht {
         start_index: usize,
         stop_index: usize,
     ) -> u8 {
-        let mut byte_val: u8 = 0;
-        // Iterate over the exact slice of bits that form the byte.
-        for bit in &data_bits[start_index..=stop_index] {
-            // Shift the existing bits to the left to make room for the new one.
-            byte_val <<= 1;
-            // If the current bit is true, set the last bit of the accumulator to 1.
-            if *bit {
-                byte_val |= 1;
-            }
-        }
-        byte_val
+        // `fold` iterates through the bits, accumulating the final byte value.
+        data_bits[start_index..=stop_index]
+            .iter()
+            .fold(0u8, |accumulator, &bit| (accumulator << 1) | (bit as u8))
     }
 
     #[allow(unused)]
@@ -377,18 +370,11 @@ impl Dht {
         byte_vals: [u8; dht22_constants::DHT22_DATA_LEN],
         try_again: &mut bool,
     ) -> Result<u8, DhtError> {
-        // calculate and compare checksum
-        let mut checksum_intermediate: u16 =
-            byte_vals[0] as u16 + byte_vals[1] as u16 + byte_vals[2] as u16 + byte_vals[3] as u16;
-        checksum_intermediate &= 0xFF;
-        let checksum_calculated: u8 = match ((checksum_intermediate << 8) >> 8).try_into() {
-            Ok(c) => c,
-            Err(_) => {
-                return Err(DhtError::ChecksumCalculationError(
-                    module_path!().to_string(),
-                ))
-            }
-        };
+        // Use `wrapping_add` for a clear and correct 8-bit sum.
+        let checksum_calculated = byte_vals[0]
+            .wrapping_add(byte_vals[1])
+            .wrapping_add(byte_vals[2])
+            .wrapping_add(byte_vals[3]);
 
         let checksum_received: u8 = byte_vals[4];
         if checksum_calculated != checksum_received {
@@ -684,44 +670,32 @@ impl Dht {
     /// - Any other `DhtError` variant for non-recoverable hardware or configuration failures.
     #[allow(unused)] // used in conditionally compiled code
     pub fn get_data(&mut self) -> DhtResult {
-        // read one sample from DHT sensor to verify SW and HW are working ok
-        let mut retry_counter = 0;
-        let mut try_again = false;
+        for i in 0..=dht22_constants::DHT22_MAX_RETRIES {
+            let mut try_again = false;
+            // Reset power supply only on the first attempt (i == 0).
+            let read_result = self.read(i == 0, &mut try_again);
 
-        loop {
-            let read_result = self.read(retry_counter == 0, &mut try_again); // reset power supply for the first read
             match read_result {
-                Ok((temperature, humidity)) => {
-                    #[cfg(feature = "debug_dht")]
-                    debug!(
-                        target: module_path!(),
-                        "measured successfully: temperature={}, humidity={}",
-                        temperature,
-                        humidity
-                    );
-
-                    return Ok((temperature, humidity));
-                }
+                // On success, return immediately.
+                Ok(data) => return Ok(data),
                 Err(e) => {
-                    if try_again {
-                        // For errors DhtError::Timeout and DhtError::ChecksumError
-                        // These two errors shall not be reported directly.
-                        // Instead, the application will try to read again for multiple times.
-                        retry_counter += 1;
-                        if retry_counter > dht22_constants::DHT22_MAX_RETRIES {
-                            return Err(DhtError::FailedAfterRetries {
-                                location: module_path!().to_string(),
-                                retry_counter,
-                                source: Box::new(e),
-                            });
-                        }
-                    } else {
-                        // any other failure will be reported directly
+                    // If the error is not recoverable, return it immediately.
+                    if !try_again {
                         return Err(e);
                     }
+                    // If this was the last retry, and it failed, return FailedAfterRetries.
+                    if i == dht22_constants::DHT22_MAX_RETRIES {
+                        return Err(DhtError::FailedAfterRetries {
+                            location: module_path!().to_string(),
+                            retry_counter: i,
+                            source: Box::new(e),
+                        });
+                    }
+                    // Otherwise, the loop will continue for another retry.
                 }
             }
         }
+        unreachable!();
     }
 
     /// Executes the main loop for the DHT sensor thread, receiving requests and sending measurement responses.
@@ -750,44 +724,19 @@ impl Dht {
         let sleep_duration_100_millis = Duration::from_millis(100);
 
         loop {
-            match dht_channels.receive_from_signal_handler() {
-                Ok(c) => {
-                    lock_error_receive = false;
-                    match c {
-                        InternalCommand::Quit => {
-                            #[cfg(feature = "debug_dht")]
-                            debug!(
-                                target: module_path!(),
-                                "Received QUIT command"
-                            );
-                            break;
-                        }
-                        _ => {
-                            if !lock_error_invalid_command {
-                                error!(
-                                    target: module_path!(),
-                                    "Received invalid command from signal handler."
-                                );
-                                lock_error_invalid_command = true;
-                            }
-                        }
-                    };
-                }
-                Err(e) => {
-                    match e {
-                        TryRecvError::Empty => { /* do nothing */ }
-                        TryRecvError::Disconnected => {
-                            if !lock_error_receive {
-                                error!(
-                                    target: module_path!(),
-                                    "Error in trying to receive command from signal handler: {e:?}"
-                                );
-                                lock_error_receive = true;
-                            }
-                        }
-                    }
-                }
-            };
+            let (
+                quit_command_received, // the request to end the application has been received
+                _,
+                _,
+            ) = self.process_external_request(
+                &dht_channels.rx_dht_from_signal_handler,
+                None,
+            );
+
+            if quit_command_received {
+                break;
+            }
+
             spin_sleeper.sleep(sleep_duration_100_millis);
 
             // Check if data acquisition is enabled.
@@ -1183,6 +1132,7 @@ pub mod tests {
         // Wait for longer than the measurement interval to ensure a measurement is attempted.
         thread::sleep(Duration::from_millis(200));
 
+        println!("Sending quit command to DHT thread");
         tx.send(InternalCommand::Quit).unwrap();
         handle.join().unwrap();
 

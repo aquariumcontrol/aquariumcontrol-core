@@ -65,10 +65,6 @@ pub enum DhtError {
     #[error("[{0}] Incorrect number of valid ticks received: target={1}, measured={2}.")]
     WrongNumberOfValidTicks(String, usize, usize),
 
-    /// the error occurred during the calculation of the checksum
-    #[error("[{0}] An error occurred during the calculation of the checksum")]
-    ChecksumCalculationError(String),
-
     /// calculated checksum does not match the received value
     #[error("[{0}] Calculated checksum ({1}) does not match the received value ({2})")]
     ChecksumError(String, u8, u8),

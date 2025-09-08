@@ -24,6 +24,7 @@ use crate::dispatch::messaging::Messaging;
 
 use crate::mineral::{balling::Balling, mineral_injection::MineralInjection};
 use crate::permission::schedule_check::ScheduleCheck;
+use crate::sensors::dht::Dht;
 use crate::sensors::i2c_interface::I2cInterface;
 use crate::simulator::tcp_communication::TcpCommunication;
 use crate::watchmen::watchdog::Watchdog;
@@ -304,6 +305,34 @@ impl ProcessExternalRequestTrait for DataLogger {
         _: Option<&Receiver<InternalCommand>>,
     ) -> (bool, bool, bool) {
         process_external_request_without_messaging(rx_from_signal_handler, "DataLogger".to_string())
+    }
+}
+
+impl ProcessExternalRequestTrait for Dht {
+    /// Checks for and processes new commands relevant to the Dht module from external channels.
+    ///
+    /// This is the specialized implementation of `ProcessExternalRequestTrait` for the `DataLogger`.
+    /// It delegates directly to `process_external_request_without_messaging`, indicating
+    /// that the `DataLogger` only processes commands from the signal handler and
+    /// ignores any input from a messaging channel.
+    ///
+    /// # Arguments
+    /// * `rx_from_signal_handler` - A reference to the receiver end of the channel
+    ///   for commands originating from the signal handler.
+    /// * `_` - This parameter is ignored, as the `DataLogger` does not process
+    ///   messages from a messaging channel.
+    ///
+    /// # Returns
+    /// A tuple `(bool, bool, bool)` indicating the status of commands received:
+    /// - The first `bool` is `true` if a `Quit` command was received; otherwise `false`.
+    /// - The second `bool` is always `false` (no "Start" commands processed).
+    /// - The third `bool` is always `false` (no "Stop" commands processed).
+    fn process_external_request(
+        &mut self,
+        rx_from_signal_handler: &Receiver<InternalCommand>,
+        _: Option<&Receiver<InternalCommand>>,
+    ) -> (bool, bool, bool) {
+        process_external_request_without_messaging(rx_from_signal_handler, "Dht".to_string())
     }
 }
 
