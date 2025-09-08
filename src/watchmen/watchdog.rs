@@ -159,11 +159,13 @@ impl Watchdog {
             );
 
             if quit_command_received {
-                // Deactivate the watchdog functionality
-                petting.pet(
-                    &self.config.watchdog_filename,
-                    &self.config.watchdog_deactivation,
-                );
+                if self.config.active {
+                    // Deactivate the watchdog functionality
+                    petting.pet(
+                        &self.config.watchdog_filename,
+                        &self.config.watchdog_deactivation,
+                    );
+                }
                 break;
             }
 
