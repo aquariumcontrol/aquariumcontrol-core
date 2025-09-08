@@ -32,7 +32,7 @@ use crate::utilities::logger::log_error_chain;
 use crate::utilities::wait_for_termination::WaitForTerminationTrait;
 #[cfg(all(not(test), target_os = "linux"))]
 use nix::unistd::gettid;
-use crate::{perform_schedule_check, update_thermal_set_values};
+use crate::{manage_cycle_time_thermal, perform_schedule_check, update_thermal_set_values};
 
 const CYCLE_TIME_VENTILATION_MILLIS: u64 = 500;
 
@@ -492,27 +492,16 @@ impl Ventilation {
 
             saw_tooth_profile.execute_with(TIME_INCREMENT_VENTILATION_SECS);
 
-            let stop_time = Instant::now();
-            let execution_duration = stop_time.duration_since(start_time);
-
-            if execution_duration > cycle_time_duration {
-                if !lock_warn_cycle_time_exceeded && !actuation_mutex_was_blocked_during_actuation {
-                    #[cfg(not(test))]
-                    warn!(target: module_path!(),
-                        "execution duration of {} milliseconds exceeds cycle time of {}",
-                        execution_duration.as_millis(),
-                        CYCLE_TIME_VENTILATION_MILLIS);
-                    lock_warn_cycle_time_exceeded = true;
-                }
-            } else {
-                let remaining_sleep_time = cycle_time_duration - execution_duration;
-                // sleep time does not need to be split up because cycle time is 500 milliseconds only
-                spin_sleeper.sleep(remaining_sleep_time);
-                lock_warn_cycle_time_exceeded = false;
-            }
-            actuation_mutex_was_blocked_during_actuation = false; // reset for the next cycle
-
-            start_time = Instant::now(); // start time for the next cycle
+            // Manage the loop's cycle time, sleeping or logging a warning as needed.
+            manage_cycle_time_thermal!(
+                start_time,
+                cycle_time_duration,
+                CYCLE_TIME_VENTILATION_MILLIS,
+                spin_sleeper,
+                lock_warn_cycle_time_exceeded,
+                actuation_mutex_was_blocked_during_actuation,
+                module_path!()
+            );
         }
 
         if self.config.switch_on_when_terminating {

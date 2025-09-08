@@ -34,14 +34,12 @@ use crate::utilities::logger::log_error_chain;
 use crate::utilities::proc_ext_req::ProcessExternalRequestTrait;
 use crate::utilities::sawtooth_profile::SawToothProfile;
 use crate::utilities::wait_for_termination::WaitForTerminationTrait;
-use crate::{perform_schedule_check, update_thermal_set_values};
+use crate::{manage_cycle_time_thermal, perform_schedule_check, update_thermal_set_values};
 #[cfg(not(test))]
 use log::info;
 use crate::database::thermal_set_value_updater_trait::ThermalSetValueUpdaterTrait;
 
 const CYCLE_TIME_HEATING_MILLIS: u64 = 500;
-
-const CYCLE_TIME_HEATING_DIVISOR: u64 = 1000 / CYCLE_TIME_HEATING_MILLIS;
 
 const TIME_INCREMENT_HEATING_SECS: f32 = CYCLE_TIME_HEATING_MILLIS as f32 / 1000.0;
 
@@ -378,6 +376,8 @@ impl Heating {
         let mut lock_warn_cycle_time_exceeded: bool = false;
         let mut actuation_mutex_was_blocked_during_actuation: bool = false;
         let cycle_time_duration = Duration::from_millis(CYCLE_TIME_HEATING_MILLIS);
+        let midnight_check_interval = Duration::from_secs(1);
+        let mut instant_midnight_check = Instant::now() - midnight_check_interval;
 
         let mut heating_stats_opt = match sql_interface_heating
             .get_single_heating_stats_from_database()
@@ -612,8 +612,9 @@ impl Heating {
                 saw_tooth_profile.execute_with(TIME_INCREMENT_HEATING_SECS);
 
                 // the update of midnight counter only runs every second
-                if loop_counter % CYCLE_TIME_HEATING_DIVISOR == 0 {
+                if instant_midnight_check.elapsed() >= midnight_check_interval {
                     // one second closer to midnight
+                    instant_midnight_check = Instant::now();
                     duration_until_midnight = duration_until_midnight.saturating_sub(1);
                     match heating_stats_opt {
                         Some(ref mut heating_stats) => {
@@ -694,30 +695,18 @@ impl Heating {
                 loop_counter = 0;
             }
 
-            let stop_time = Instant::now();
-            let execution_duration = stop_time.duration_since(start_time);
-
-            if execution_duration > cycle_time_duration {
-                if !lock_warn_cycle_time_exceeded && !actuation_mutex_was_blocked_during_actuation {
-                    #[cfg(not(test))]
-                    warn!(target: module_path!(),
-                        "execution duration of {} milliseconds exceeds cycle time of {}",
-                        execution_duration.as_millis(),
-                        CYCLE_TIME_HEATING_MILLIS);
-                    lock_warn_cycle_time_exceeded = true;
-                }
-            } else {
-                let remaining_sleep_time = cycle_time_duration - execution_duration;
-                // sleep time does not need to be split up because cycle time is 500 milliseconds only
-                spin_sleeper.sleep(remaining_sleep_time);
-
-                lock_warn_cycle_time_exceeded = false;
-            }
-            actuation_mutex_was_blocked_during_actuation = false; // reset for the next cycle
+            // Manage the loop's cycle time, sleeping or logging a warning as needed.
+            manage_cycle_time_thermal!(
+                start_time,
+                cycle_time_duration,
+                CYCLE_TIME_HEATING_MILLIS,
+                spin_sleeper,
+                lock_warn_cycle_time_exceeded,
+                actuation_mutex_was_blocked_during_actuation,
+                module_path!()
+            );
 
             self.check_timing_and_ping_database(&mut sql_interface_heating);
-
-            start_time = Instant::now(); // start time for the next cycle
         }
 
         // switch off the heater if not already off

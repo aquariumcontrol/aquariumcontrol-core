@@ -27,3 +27,6 @@ pub mod heating_config;
 
 /// Configuration of Ventilation
 pub mod ventilation_config;
+
+/// Macro for managing cycle time
+pub mod manage_cycle_time_thermal;
