@@ -30,10 +30,6 @@ use crate::watchmen::monitors_channels::MonitorsChannels;
 use crate::watchmen::watchdog_channels::WatchDogChannels;
 use crate::water::refill_channels::RefillChannels;
 use crate::water::refill_monitor_view::RefillMonitorView;
-
-#[cfg(all(feature = "target_hw", target_os = "linux"))]
-use crate::sensors::i2c_interface_channels::I2cInterfaceChannels;
-
 use crate::recorder::data_logger_channels::DataLoggerChannels;
 use crate::sensors::i2c_interface_channels::I2cInterfaceChannels;
 use std::sync::mpsc;
