@@ -17,12 +17,12 @@ use crate::utilities::check_mutex_access_duration::CheckMutexAccessDurationTrait
 #[cfg(not(test))]
 use crate::utilities::logger::log_error_chain;
 
+use crate::utilities::proc_ext_req::ProcessExternalRequestTrait;
 #[cfg(all(not(test), target_os = "linux"))]
 use nix::unistd::gettid;
 use spin_sleep::SpinSleeper;
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
-use crate::utilities::proc_ext_req::ProcessExternalRequestTrait;
 
 cfg_if::cfg_if! {
     if #[cfg(all(target_os = "linux", feature = "target_hw"))] {
@@ -728,10 +728,7 @@ impl Dht {
                 quit_command_received, // the request to end the application has been received
                 _,
                 _,
-            ) = self.process_external_request(
-                &dht_channels.rx_dht_from_signal_handler,
-                None,
-            );
+            ) = self.process_external_request(&dht_channels.rx_dht_from_signal_handler, None);
 
             if quit_command_received {
                 break;

@@ -234,7 +234,7 @@ pub const SQL_QUERY_WRITE_DATA: &str = concat!(
 );
 
 /// Checks how many entries there are in the data table.
-pub const SQL_QUERY_CHECK_DATA_COUNT: &str = concat!("SELECT COUNT(*) FROM data LIMIT 1;");
+pub const SQL_QUERY_CHECK_DATA_COUNT: &str = "SELECT COUNT(*) FROM data LIMIT 1;";
 
 /// Provides the schedule entry for one of the controls (Refill, Ventilation, Heating, Balling)
 pub const SQL_QUERY_READ_SCHEDULE: &str = "SELECT * FROM schedule LIMIT 100;";
@@ -380,11 +380,10 @@ pub const SQL_QUERY_CHECK_FEEDPATTERNS_NULL: &str = concat!(
 );
 
 /// Checks how many entries there are in the feed patterns table.
-pub const SQL_QUERY_CHECK_FEEDPATTERN_COUNT: &str =
-    concat!("SELECT COUNT(*) FROM feedpatterns LIMIT 1;");
+pub const SQL_QUERY_CHECK_FEEDPATTERN_COUNT: &str = "SELECT COUNT(*) FROM feedpatterns LIMIT 1;";
 
 /// Checks how many entries there are in the feed log table.
-pub const SQL_QUERY_CHECK_FEEDLOG_COUNT: &str = concat!("SELECT COUNT(*) FROM feedlog LIMIT 1;");
+pub const SQL_QUERY_CHECK_FEEDLOG_COUNT: &str = "SELECT COUNT(*) FROM feedlog LIMIT 1;";
 
 /// Checks if the feed schedule table contains any NULL values.
 pub const SQL_QUERY_CHECK_FEEDSCHEDULE_NULL: &str = concat!(
@@ -397,8 +396,7 @@ pub const SQL_QUERY_CHECK_FEEDSCHEDULE_NULL: &str = concat!(
 );
 
 /// Checks how many entries there are in the feed schedule table.
-pub const SQL_QUERY_CHECK_FEEDSCHEDULE_COUNT: &str =
-    concat!("SELECT COUNT(*) FROM feedschedule LIMIT 1;");
+pub const SQL_QUERY_CHECK_FEEDSCHEDULE_COUNT: &str = "SELECT COUNT(*) FROM feedschedule LIMIT 1;";
 
 /// Checks if the heating set value table contains any NULL values.
 pub const SQL_QUERY_CHECK_HEATING_SETVALS_NULL: &str = concat!(
@@ -408,7 +406,7 @@ pub const SQL_QUERY_CHECK_HEATING_SETVALS_NULL: &str = concat!(
 
 /// Checks how many entries there are in the heating set value table.
 pub const SQL_QUERY_CHECK_HEATING_SETVALS_COUNT: &str =
-    concat!("SELECT COUNT(*) FROM heatingsetvals LIMIT 1;");
+    "SELECT COUNT(*) FROM heatingsetvals LIMIT 1;";
 
 /// Checks if the heating stats table contains any NULL values.
 pub const SQL_QUERY_CHECK_HEATING_STATS_NULL: &str = concat!(
@@ -423,8 +421,7 @@ pub const SQL_QUERY_CHECK_HEATING_STATS_NULL: &str = concat!(
 );
 
 /// Checks how many entries there are in the heating set value table.
-pub const SQL_QUERY_CHECK_HEATING_STATS_COUNT: &str =
-    concat!("SELECT COUNT(*) FROM heatingstats LIMIT 1;");
+pub const SQL_QUERY_CHECK_HEATING_STATS_COUNT: &str = "SELECT COUNT(*) FROM heatingstats LIMIT 1;";
 
 /// Reads the heating set values from the database.
 pub const SQL_QUERY_READ_HEATING_SETVALS: &str =
@@ -456,7 +453,7 @@ pub const SQL_QUERY_CHECK_VENTILATION_SETVALS_NULL: &str = concat!(
 
 /// Checks how many entries there are in the heating set value table.
 pub const SQL_QUERY_CHECK_VENTILATION_SETVALS_COUNT: &str =
-    concat!("SELECT COUNT(*) FROM ventilationsetvals LIMIT 1;");
+    "SELECT COUNT(*) FROM ventilationsetvals LIMIT 1;";
 
 /// Checks if the schedule table contains any NULL values.
 pub const SQL_QUERY_CHECK_SCHEDULE_NULL: &str = concat!(
@@ -465,7 +462,7 @@ pub const SQL_QUERY_CHECK_SCHEDULE_NULL: &str = concat!(
 );
 
 /// Checks how many entries there are in the schedule table.
-pub const SQL_QUERY_CHECK_SCHEDULE_COUNT: &str = concat!("SELECT COUNT(*) FROM schedule LIMIT 1;");
+pub const SQL_QUERY_CHECK_SCHEDULE_COUNT: &str = "SELECT COUNT(*) FROM schedule LIMIT 1;";
 
 /// Provides the system variable that controls how long the server waits for activity on an idle connection before closing it.
 pub const SQL_QUERY_READ_TIMEOUT: &str = concat!(
@@ -497,7 +494,7 @@ pub const SQL_QUERY_READ_REFILL_EVENT: &str =
     "SELECT Timestamp, Duration, Volume, ErrorCode from refill ORDER BY Timestamp DESC LIMIT 1;";
 
 /// Checks how many entries there are in the refill table.
-pub const SQL_QUERY_CHECK_REFILL_COUNT: &str = concat!("SELECT COUNT(*) FROM refill LIMIT 1;");
+pub const SQL_QUERY_CHECK_REFILL_COUNT: &str = "SELECT COUNT(*) FROM refill LIMIT 1;";
 
 /// Calculates a timestamp based on current timestamp and offset in seconds.
 #[cfg(test)]
