@@ -1177,7 +1177,6 @@ pub mod tests {
     }
 
     #[test]
-    #[should_panic]
     // This test case checks if an excessively high value for the minimum wait timeout triggers a panic.
     pub fn test_sql_interface_min_wait_timeout_check() {
         let mut config: ConfigData = read_config_file_with_test_database(
@@ -1186,8 +1185,9 @@ pub mod tests {
         );
         config.sql_interface.db_min_wait_timeout = 1000000;
         println!("Testing with database {}", config.sql_interface.db_name);
-        _ = SqlInterface::new(config.sql_interface)
-            .expect("Initialization of SQL interface for test failed with min wait timeout=0.");
+        let result = SqlInterface::new(config.sql_interface);
+
+        assert!(matches!(result, Err(SqlInterfaceError::WaitTimeoutTooLow(_, _, _))));
     }
 
     #[test]
