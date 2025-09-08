@@ -25,7 +25,7 @@ use crate::mineral::balling_channels::BallingChannels;
 use crate::mineral::balling_config::BallingConfig;
 use crate::mineral::balling_error::BallingError;
 use crate::mineral::mineral_injection::MineralInjectionTrait;
-use crate::perform_schedule_check;
+use crate::{check_quit_increment_counter_ping_database, perform_schedule_check};
 use crate::utilities::acknowledge_signal_handler::AcknowledgeSignalHandlerTrait;
 use crate::utilities::channel_content::{AquariumDevice, InternalCommand};
 use crate::utilities::database_ping_trait::DatabasePingTrait;
@@ -745,12 +745,6 @@ impl Balling {
                 }
             }
 
-            if quit_command_received {
-                #[cfg(test)]
-                println!("{}: received Quit command. Exiting...", module_path!());
-
-                break;
-            }
             if stop_command_received {
                 #[cfg(test)]
                 println!(
@@ -769,16 +763,15 @@ impl Balling {
 
                 dosing_inhibited = false;
             }
-            spin_sleeper.sleep(sleep_duration_hundred_millis);
 
-            loop_counter += 1;
-
-            // avoid overflow
-            if loop_counter == 1_000_000 {
-                loop_counter = 0;
-            }
-
-            self.check_timing_and_ping_database(&mut sql_interface_balling);
+            check_quit_increment_counter_ping_database!(
+                quit_command_received,
+                spin_sleeper,
+                sleep_duration_hundred_millis,
+                loop_counter,
+                self,
+                &mut sql_interface_balling
+            );
         }
 
         balling_channels.acknowledge_signal_handler();

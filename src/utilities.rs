@@ -72,4 +72,9 @@ pub mod database_ping_trait;
 
 /// Macro for performing schedule check
 mod perform_schedule_check;
+
+/// Macro for updating set values for heating and ventilation
 mod update_thermal_set_values;
+
+/// Macro to handle common end-of-loop tasks for Balling and Feed
+mod check_quit_increment_counter_ping_database;

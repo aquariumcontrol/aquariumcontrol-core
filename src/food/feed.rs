@@ -32,6 +32,7 @@ use crate::utilities::wait_for_termination::WaitForTerminationTrait;
 use spin_sleep::SpinSleeper;
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
+use crate::check_quit_increment_counter_ping_database;
 
 #[cfg_attr(doc, aquamarine::aquamarine)]
 /// Contains the configuration and the implementation for the feed control.
@@ -556,20 +557,15 @@ impl Feed {
                     *mutex_data = mutex_data.saturating_add(1);
                 }
             }
-            if quit_command_received {
-                break;
-            }
 
-            spin_sleeper.sleep(sleep_duration_hundred_millis);
-
-            loop_counter += 1;
-
-            // avoid overflow
-            if loop_counter == 1_000_000 {
-                loop_counter = 0;
-            }
-
-            self.check_timing_and_ping_database(&mut *sql_interface_feed);
+            check_quit_increment_counter_ping_database!(
+                quit_command_received,
+                spin_sleeper,
+                sleep_duration_hundred_millis,
+                loop_counter,
+                self,
+                &mut *sql_interface_feed
+            );
         }
 
         // The application received request to terminate. That is why the loop was left.
