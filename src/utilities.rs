@@ -72,3 +72,4 @@ pub mod database_ping_trait;
 
 /// Macro for performing schedule check
 mod perform_schedule_check;
+mod update_thermal_set_values;

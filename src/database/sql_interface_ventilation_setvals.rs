@@ -12,6 +12,7 @@ use std::time::{Duration, Instant};
 #[cfg(test)]
 use mysql::params;
 
+use crate::database::thermal_set_value_updater_trait::ThermalSetValueUpdaterTrait;
 use crate::database::sql_interface::SqlInterface;
 use crate::database::sql_interface_error::SqlInterfaceError;
 use crate::database::sql_query_strings;
@@ -29,16 +30,6 @@ pub struct VentilationSetVals {
 
     /// the temperature at which the ventilation should be switched off 0%
     pub ventilation_switch_off_temperature: f32,
-}
-
-/// Trait for updating the ventilation set values with values from the database.
-/// This trait allows running the main control with a mock implementation for testing.
-pub trait VentilationSetValueUpdaterTrait {
-    fn update_set_value(
-        &mut self,
-        ventilation_switch_off_temperature: &mut f32,
-        ventilation_switch_on_temperature: &mut f32,
-    ) -> Result<(), SqlInterfaceError>;
 }
 
 pub struct SqlInterfaceVentilationSetVals {
@@ -259,7 +250,7 @@ impl SqlInterfaceVentilationSetVals {
     }
 }
 
-impl VentilationSetValueUpdaterTrait for SqlInterfaceVentilationSetVals {
+impl ThermalSetValueUpdaterTrait for SqlInterfaceVentilationSetVals {
     /// Periodically updates ventilation set point values from the database.
     ///
     /// This method checks if a configured interval (`update_duration`) has passed since

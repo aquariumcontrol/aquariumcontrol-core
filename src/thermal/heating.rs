@@ -20,7 +20,6 @@ use std::time::{Duration, Instant};
 use nix::unistd::gettid;
 
 use crate::database::sql_interface_error::SqlInterfaceError;
-use crate::database::sql_interface_heating_setvals::HeatingSetValueUpdaterTrait;
 use crate::database::sql_interface_heating_stats::{HeatingStatsEntry, SqlInterfaceHeatingStats};
 use crate::sensors::sensor_manager::SensorManagerSignals;
 use crate::sensors::tank_level_switch::TankLevelSwitchSignals;
@@ -35,9 +34,10 @@ use crate::utilities::logger::log_error_chain;
 use crate::utilities::proc_ext_req::ProcessExternalRequestTrait;
 use crate::utilities::sawtooth_profile::SawToothProfile;
 use crate::utilities::wait_for_termination::WaitForTerminationTrait;
-use crate::perform_schedule_check;
+use crate::{perform_schedule_check, update_thermal_set_values};
 #[cfg(not(test))]
 use log::info;
+use crate::database::thermal_set_value_updater_trait::ThermalSetValueUpdaterTrait;
 
 const CYCLE_TIME_HEATING_MILLIS: u64 = 500;
 
@@ -351,7 +351,7 @@ impl Heating {
         mutex_device_scheduler_heating: Arc<Mutex<i32>>,
         heating_channels: &mut HeatingChannels,
         heating_stats_transfer: &mut impl HeatingStatsDataTransferTrait,
-        heating_set_val_updater: &mut impl HeatingSetValueUpdaterTrait,
+        heating_set_val_updater: &mut impl ThermalSetValueUpdaterTrait,
         heating_mutexes: HeatingMutexes,
         mut sql_interface_heating: SqlInterfaceHeatingStats,
     ) {
@@ -474,24 +474,13 @@ impl Heating {
                 );
 
                 // check if set values need to be updated
-                if let Err(e) = heating_set_val_updater.update_set_value(
-                    &mut self.config.switch_off_temperature,
-                    &mut self.config.switch_on_temperature,
-                ) {
-                    if !self.lock_error_heating_set_value_read_failure {
-                        error!(
-                            target: module_path!(),
-                            concat!(
-                                "Error occurred when trying to retrieve heating set values from database",
-                                "maintaining the current heating set values (off={:?}, on={:?}): {:?}"
-                            ),
-                            self.config.switch_off_temperature, self.config.switch_on_temperature, e
-                        );
-                        self.lock_error_heating_set_value_read_failure = true;
-                    }
-                } else {
-                    self.lock_error_heating_set_value_read_failure = false;
-                }
+                update_thermal_set_values!(
+                    heating_set_val_updater,
+                    self.config.switch_off_temperature,
+                    self.config.switch_on_temperature,
+                    self.lock_error_heating_set_value_read_failure,
+                    module_path!()
+                );
 
                 if self.config.stop_on_refill_error
                     && (tank_level_low_counter > self.config.stop_on_refill_error_delay)

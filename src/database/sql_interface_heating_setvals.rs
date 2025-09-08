@@ -5,6 +5,7 @@ use std::time::{Duration, Instant};
 use mysql::params;
 
 use crate::database::sql_interface::SqlInterface;
+use crate::database::thermal_set_value_updater_trait::ThermalSetValueUpdaterTrait;
 use crate::database::sql_interface_error::SqlInterfaceError;
 use crate::database::sql_query_strings;
 use crate::database::sql_query_strings::{
@@ -21,16 +22,6 @@ pub struct HeatingSetVals {
 
     /// the temperature at which the heating should be switched off 0%
     pub heating_switch_off_temperature: f32,
-}
-
-/// Trait for updating the heating set values with values from the database.
-/// This trait allows running the main control with a mock implementation for testing.
-pub trait HeatingSetValueUpdaterTrait {
-    fn update_set_value(
-        &mut self,
-        heating_switch_off_temperature: &mut f32,
-        heating_switch_on_temperature: &mut f32,
-    ) -> Result<(), SqlInterfaceError>;
 }
 
 pub struct SqlInterfaceHeatingSetVals {
@@ -234,7 +225,7 @@ impl SqlInterfaceHeatingSetVals {
         Ok(())
     }
 }
-impl HeatingSetValueUpdaterTrait for SqlInterfaceHeatingSetVals {
+impl ThermalSetValueUpdaterTrait for SqlInterfaceHeatingSetVals {
     /// Periodically updates heating set point values from the database.
     ///
     /// This method checks if a configured interval (`update_duration`) has passed since

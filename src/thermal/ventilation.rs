@@ -14,7 +14,7 @@ use log::warn;
 #[cfg(not(test))]
 use log::info;
 
-use crate::database::sql_interface_ventilation_setvals::VentilationSetValueUpdaterTrait;
+use crate::database::thermal_set_value_updater_trait::ThermalSetValueUpdaterTrait;
 use crate::sensors::sensor_manager::SensorManagerSignals;
 use crate::utilities::channel_content::{ActuatorState, AquariumDevice, InternalCommand};
 use crate::utilities::common::check_if_mutex_is_blocked;
@@ -32,7 +32,7 @@ use crate::utilities::logger::log_error_chain;
 use crate::utilities::wait_for_termination::WaitForTerminationTrait;
 #[cfg(all(not(test), target_os = "linux"))]
 use nix::unistd::gettid;
-use crate::perform_schedule_check;
+use crate::{perform_schedule_check, update_thermal_set_values};
 
 const CYCLE_TIME_VENTILATION_MILLIS: u64 = 500;
 
@@ -307,7 +307,7 @@ impl Ventilation {
         &mut self,
         mutex_device_scheduler_ventilation: Arc<Mutex<i32>>,
         ventilation_channels: &mut VentilationChannels,
-        ventilation_set_val_updater: &mut impl VentilationSetValueUpdaterTrait,
+        ventilation_set_val_updater: &mut impl ThermalSetValueUpdaterTrait,
         mutex_sensor_manager_signals: Arc<Mutex<SensorManagerSignals>>,
         mutex_ventilation_status: Arc<Mutex<bool>>,
     ) {
@@ -370,24 +370,13 @@ impl Ventilation {
                 }
 
                 // check if set values need to be updated
-                if let Err(e) = ventilation_set_val_updater.update_set_value(
-                    &mut self.config.switch_off_temperature,
-                    &mut self.config.switch_on_temperature,
-                ) {
-                    if !self.lock_error_ventilation_set_value_read_failure {
-                        error!(
-                            target: module_path!(),
-                            concat!(
-                                "Error occurred when trying to retrieve ventilation set values from database",
-                                "maintaining the current ventilation set values (off={:?}, on={:?}): {:?}"
-                            ),
-                            self.config.switch_off_temperature, self.config.switch_on_temperature, e
-                        );
-                        self.lock_error_ventilation_set_value_read_failure = true;
-                    }
-                } else {
-                    self.lock_error_ventilation_set_value_read_failure = false;
-                }
+                update_thermal_set_values!(
+                    ventilation_set_val_updater,
+                    self.config.switch_off_temperature,
+                    self.config.switch_on_temperature,
+                    self.lock_error_ventilation_set_value_read_failure,
+                    module_path!()
+                );
 
                 // schedule check to see if actuation is allowed
                 perform_schedule_check!(

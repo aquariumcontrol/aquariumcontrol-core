@@ -10,7 +10,7 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 #[cfg(test)]
 pub mod tests {
     use crate::database::sql_interface_error::SqlInterfaceError;
-    use crate::database::sql_interface_ventilation_setvals::VentilationSetValueUpdaterTrait;
+    use crate::database::thermal_set_value_updater_trait::ThermalSetValueUpdaterTrait;
     use crate::mocks::mock_common::mock_common_receive_from_signal_handler;
     use crate::mocks::mock_signal::tests::MockSignal;
     use crate::mocks::test_command::tests::TestCommand;
@@ -131,7 +131,7 @@ pub mod tests {
             }
         }
     }
-    impl VentilationSetValueUpdaterTrait for MockSqlInterfaceVentilationSetVals {
+    impl ThermalSetValueUpdaterTrait for MockSqlInterfaceVentilationSetVals {
         fn update_set_value(
             &mut self,
             ventilation_switch_off_temperature: &mut f32,

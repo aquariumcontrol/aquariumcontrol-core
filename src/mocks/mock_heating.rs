@@ -10,11 +10,11 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 #[cfg(test)]
 pub mod tests {
     use crate::database::sql_interface_error::SqlInterfaceError;
-    use crate::database::sql_interface_heating_setvals::HeatingSetValueUpdaterTrait;
     use crate::mocks::mock_common::mock_common_receive_from_signal_handler;
     use crate::mocks::mock_signal::tests::MockSignal;
     use crate::mocks::test_command::tests::TestCommand;
     use crate::utilities::channel_content::{AquariumSignal, InternalCommand};
+    use crate::database::thermal_set_value_updater_trait::ThermalSetValueUpdaterTrait;
     use spin_sleep::SpinSleeper;
     use std::sync::mpsc::{Receiver, Sender, TryRecvError};
     use std::sync::{Arc, Mutex};
@@ -178,7 +178,7 @@ pub mod tests {
             }
         }
     }
-    impl HeatingSetValueUpdaterTrait for MockSqlInterfaceHeatingSetVals {
+    impl ThermalSetValueUpdaterTrait for MockSqlInterfaceHeatingSetVals {
         fn update_set_value(
             &mut self,
             heating_switch_off_temperature: &mut f32,
