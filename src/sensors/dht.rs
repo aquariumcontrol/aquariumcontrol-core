@@ -15,13 +15,14 @@ use crate::sensors::dht_channels::DhtChannels;
 use crate::sensors::dht_config::DhtConfig;
 use crate::sensors::dht_error::DhtError;
 use crate::utilities::check_mutex_access_duration::CheckMutexAccessDurationTrait;
-use crate::utilities::logger::log_error_chain;
 #[cfg(all(not(test), target_os = "linux"))]
 use nix::unistd::gettid;
 use spin_sleep::SpinSleeper;
 use std::sync::mpsc::TryRecvError;
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
+#[cfg(not(test))]
+use crate::utilities::logger::log_error_chain;
 
 cfg_if::cfg_if! {
     if #[cfg(all(target_os = "linux", feature = "target_hw"))] {
@@ -805,6 +806,7 @@ impl Dht {
                         ) {
                             if !self.lock_error_failed_after_retries {
                                 // avoid log flooding
+                                #[cfg(not(test))]
                                 log_error_chain(
                                     module_path!(),
                                     "Failure to read from DHT sensor",
@@ -815,6 +817,7 @@ impl Dht {
                         } else {
                             self.lock_error_failed_after_retries = false;
                             // report directly
+                            #[cfg(not(test))]
                             log_error_chain(
                                 module_path!(),
                                 "Failure to read from DHT sensor",
