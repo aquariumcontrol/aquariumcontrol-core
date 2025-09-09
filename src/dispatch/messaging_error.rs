@@ -8,9 +8,8 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 */
 cfg_if::cfg_if! {
     if #[cfg(target_os = "linux")] {
-        use crate::utilities::channel_content::InternalCommand;
         use thiserror::Error;
-        use std::sync::mpsc::SendError;
+        use crate::launch::channels::AquaChannelError;
     }
 }
 
@@ -48,6 +47,6 @@ pub enum MessagingError {
     ChannelSendError {
         location: String,
         #[source]
-        source: SendError<InternalCommand>,
+        source: AquaChannelError,
     },
 }
