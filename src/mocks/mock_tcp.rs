@@ -32,7 +32,7 @@ pub mod tests {
         let mut command_received: Option<InternalCommand>;
         let mut signal_received: Option<AquariumSignal>;
 
-        let tx_tcp_to_test_object = tcp_communication_channels
+        let mut tx_tcp_to_test_object = tcp_communication_channels
             .tx_tcp_communication_to_tank_level_switch_opt
             .unwrap();
         let rx_tcp_from_test_object = tcp_communication_channels

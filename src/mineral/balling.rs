@@ -25,12 +25,12 @@ use crate::mineral::balling_channels::BallingChannels;
 use crate::mineral::balling_config::BallingConfig;
 use crate::mineral::balling_error::BallingError;
 use crate::mineral::mineral_injection::MineralInjectionTrait;
-use crate::{check_quit_increment_counter_ping_database, perform_schedule_check};
 use crate::utilities::acknowledge_signal_handler::AcknowledgeSignalHandlerTrait;
 use crate::utilities::channel_content::{AquariumDevice, InternalCommand};
 use crate::utilities::database_ping_trait::DatabasePingTrait;
 use crate::utilities::proc_ext_req::ProcessExternalRequestTrait;
 use crate::utilities::wait_for_termination::WaitForTerminationTrait;
+use crate::{check_quit_increment_counter_ping_database, perform_schedule_check};
 
 #[cfg_attr(doc, aquamarine::aquamarine)]
 /// Contains the configuration and the implementation for the Balling dosing control.
@@ -576,7 +576,6 @@ impl Balling {
                     self.lock_error_channel_receive_schedule_check,
                     module_path!() // Pass the current module path for accurate logging
                 );
-
 
                 // debug information
                 #[cfg(feature = "debug_balling")]
@@ -1193,7 +1192,7 @@ pub mod tests {
             // thread for schedule check
             scope.spawn(move || {
                 mock_schedule_check(
-                    &channels.schedule_check.tx_schedule_check_to_balling,
+                    &mut channels.schedule_check.tx_schedule_check_to_balling,
                     &channels.schedule_check.rx_schedule_check_from_balling,
                     None,
                     schedule_allows,
@@ -1228,7 +1227,7 @@ pub mod tests {
 
             // thread for the test object
             scope.spawn(move || {
-                let tx_balling_to_schedule_check_for_test_case_finish =
+                let mut tx_balling_to_schedule_check_for_test_case_finish =
                     channels.balling.tx_balling_to_schedule_check.clone();
 
                 balling.execute(
@@ -1559,7 +1558,7 @@ pub mod tests {
 
         let mut channels = Channels::new_for_test();
 
-        let tx_balling_to_schedule_check_for_test_case_finish =
+        let mut tx_balling_to_schedule_check_for_test_case_finish =
             channels.balling.tx_balling_to_schedule_check.clone();
 
         let mutex_device_scheduler = Arc::new(Mutex::new(0));
@@ -1571,7 +1570,7 @@ pub mod tests {
             // thread for schedule check
             scope.spawn(move || {
                 mock_schedule_check(
-                    &channels.schedule_check.tx_schedule_check_to_balling,
+                    &mut channels.schedule_check.tx_schedule_check_to_balling,
                     &channels.schedule_check.rx_schedule_check_from_balling,
                     None,
                     true,
@@ -1839,7 +1838,7 @@ pub mod tests {
             // thread for schedule check
             scope.spawn(move || {
                 mock_schedule_check(
-                    &channels.schedule_check.tx_schedule_check_to_balling,
+                    &mut channels.schedule_check.tx_schedule_check_to_balling,
                     &channels.schedule_check.rx_schedule_check_from_balling,
                     None,
                     schedule_allows,
@@ -1903,7 +1902,7 @@ pub mod tests {
 
             // thread for the test object
             scope.spawn(move || {
-                let tx_balling_to_schedule_check_for_test_case_finish =
+                let mut tx_balling_to_schedule_check_for_test_case_finish =
                     channels.balling.tx_balling_to_schedule_check.clone();
 
                 balling.execute(

@@ -295,16 +295,17 @@ impl WaterInjectionTrait for WaterInjection {
 #[cfg(test)]
 pub mod tests {
     use crate::database::sql_interface_refill::SqlInterfaceRefill;
-    use crate::launch::channels::Channels;
+    use crate::launch::channels::{AquaSender, Channels};
     use crate::mocks::mock_relay_manager::tests::mock_relay_manager;
     use crate::sensors::tank_level_switch::TankLevelSwitchSignals;
     use crate::utilities::channel_content::{ActuatorState, AquariumDevice, InternalCommand};
     use crate::water::refill::tests::prepare_refill_tests;
-    use crate::water::refill::{Refill, RefillChannels};
+    use crate::water::refill::Refill;
+    use crate::water::refill_channels::RefillChannels;
     use crate::water::water_injection::{WaterInjection, WaterInjectionTrait};
     use all_asserts::{assert_ge, assert_le};
     use spin_sleep::SpinSleeper;
-    use std::sync::mpsc::{Receiver, Sender};
+    use std::sync::mpsc::Receiver;
     use std::sync::{Arc, Mutex};
     use std::{thread, time::Duration};
 
@@ -374,7 +375,8 @@ pub mod tests {
 
         let mut channels = Channels::new_for_test();
 
-        let tx_signal_handler_to_relay_manager = channels.refill.tx_refill_to_relay_manager.clone();
+        let mut tx_signal_handler_to_relay_manager =
+            channels.refill.tx_refill_to_relay_manager.clone();
 
         let mutex_tank_level_switch_signals =
             Arc::new(Mutex::new(TankLevelSwitchSignals::new(true, true, false)));
@@ -384,7 +386,7 @@ pub mod tests {
             .name("mock_relay_manager".to_string())
             .spawn(move || {
                 let (mut actuation_events, mock_actuator_states) = mock_relay_manager(
-                    &channels.relay_manager.tx_relay_manager_to_refill,
+                    &mut channels.relay_manager.tx_relay_manager_to_refill,
                     &channels.relay_manager.rx_relay_manager_from_refill,
                 );
                 assert_eq!(actuation_events.len(), 2);
@@ -456,14 +458,14 @@ pub mod tests {
     }
 
     fn create_mock_relay_manager(
-        tx_relay_manager_to_water_injection: Sender<bool>,
+        mut tx_relay_manager_to_water_injection: AquaSender<bool>,
         rx_relay_manager_from_water_injection: Receiver<InternalCommand>,
     ) -> thread::JoinHandle<()> {
         thread::Builder::new()
             .name("mock_relay_manager".to_string())
             .spawn(move || {
                 let (mut actuation_events, mock_actuator_states) = mock_relay_manager(
-                    &tx_relay_manager_to_water_injection,
+                    &mut tx_relay_manager_to_water_injection,
                     &rx_relay_manager_from_water_injection,
                 );
                 assert_eq!(actuation_events.len(), 2);
@@ -505,7 +507,7 @@ pub mod tests {
 
         let mut channels = Channels::new_for_test();
 
-        let tx_text_environment_to_relay_manager =
+        let mut tx_text_environment_to_relay_manager =
             channels.refill.tx_refill_to_relay_manager.clone();
 
         let mutex_tank_level_switch_signals =
@@ -581,8 +583,8 @@ pub mod tests {
     // - The new thread cannot be spawned.
     // - It fails to send any of the `InternalCommand::Quit` messages through the channels.
     fn create_test_environment(
-        tx_signal_handler_to_water_injection: Sender<InternalCommand>,
-        tx_signal_handler_to_relay_manager: Sender<InternalCommand>,
+        mut tx_signal_handler_to_water_injection: AquaSender<InternalCommand>,
+        mut tx_signal_handler_to_relay_manager: AquaSender<InternalCommand>,
     ) -> thread::JoinHandle<()> {
         thread::Builder::new()
             .name("test_environment".to_string())
@@ -670,7 +672,7 @@ pub mod tests {
 
         let mut channels = Channels::new_for_test();
 
-        let tx_test_environment_to_relay_manager =
+        let mut tx_test_environment_to_relay_manager =
             channels.refill.tx_refill_to_relay_manager.clone();
 
         let mutex_tank_level_switch_signals =
@@ -683,7 +685,7 @@ pub mod tests {
             .name("mock_relay_manager".to_string())
             .spawn(move || {
                 let (mut actuation_events, mock_actuator_states) = mock_relay_manager(
-                    &channels.relay_manager.tx_relay_manager_to_refill,
+                    &mut channels.relay_manager.tx_relay_manager_to_refill,
                     &channels.relay_manager.rx_relay_manager_from_refill,
                 );
                 assert_eq!(actuation_events.len(), 2);
@@ -783,7 +785,8 @@ pub mod tests {
 
         let mut channels = Channels::new_for_test();
 
-        let tx_signal_handler_to_relay_manager = channels.refill.tx_refill_to_relay_manager.clone();
+        let mut tx_signal_handler_to_relay_manager =
+            channels.refill.tx_refill_to_relay_manager.clone();
 
         let mutex_tank_level_switch_signals =
             Arc::new(Mutex::new(TankLevelSwitchSignals::new(false, false, false)));
@@ -793,7 +796,7 @@ pub mod tests {
             .name("mock_relay_manager".to_string())
             .spawn(move || {
                 let (mut actuation_events, actuator_states) = mock_relay_manager(
-                    &channels.relay_manager.tx_relay_manager_to_refill,
+                    &mut channels.relay_manager.tx_relay_manager_to_refill,
                     &channels.relay_manager.rx_relay_manager_from_refill,
                 );
                 assert_eq!(actuation_events.len(), 2);
@@ -891,8 +894,10 @@ pub mod tests {
         let join_handle_mock_relay_manager = thread::Builder::new()
             .name("mock_relay_manager".to_string())
             .spawn(move || {
-                let (mut actuation_events, mock_actuator_states) =
-                    mock_relay_manager(&channels.relay_manager.tx_relay_manager_to_refill, &channels.relay_manager.rx_relay_manager_from_refill);
+                let (mut actuation_events, mock_actuator_states) = mock_relay_manager(
+                    &mut channels.relay_manager.tx_relay_manager_to_refill,
+                    &channels.relay_manager.rx_relay_manager_from_refill,
+                );
                 assert_eq!(actuation_events.len(), 2);
                 let last_actuation_event = actuation_events.pop().unwrap();
                 assert_eq!(
@@ -931,7 +936,7 @@ pub mod tests {
         let join_handle_test_object = thread::Builder::new()
             .name("test_object".to_string())
             .spawn(move || {
-                                let mut boxed_sql_interface_refill: Box<
+                let mut boxed_sql_interface_refill: Box<
                     dyn crate::database::sql_interface_refill::DatabaseInterfaceRefillTrait
                         + Sync
                         + Send,

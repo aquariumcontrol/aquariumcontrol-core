@@ -12,13 +12,14 @@ use log::info;
 use log::{debug, error};
 
 use spin_sleep::SpinSleeper;
-use std::sync::mpsc::{Receiver, Sender, TryRecvError};
+use std::sync::mpsc::{Receiver, TryRecvError};
 use std::{
     io::{prelude::*, BufReader},
     net::TcpStream,
     time::Duration,
 };
 
+use crate::launch::channels::AquaSender;
 use crate::launch::execution_config::ExecutionConfig;
 use crate::simulator::tcp_communication_channels::TcpCommunicationChannels;
 use crate::simulator::tcp_communication_config::TcpCommunicationConfig;
@@ -310,7 +311,7 @@ impl TcpCommunication {
     fn receive_and_answer(
         &mut self,
         rx: &Receiver<InternalCommand>,
-        tx: &Sender<Result<f32, TcpCommunicationError>>,
+        tx: &mut AquaSender<Result<f32, TcpCommunicationError>>,
     ) -> Result<(), TcpCommunicationError> {
         match rx.try_recv() {
             Ok(InternalCommand::RequestSignal(s)) => {
@@ -345,7 +346,7 @@ impl TcpCommunication {
         &mut self,
         is_active: bool,
         rx_opt: &Option<Receiver<InternalCommand>>,
-        tx_opt: &Option<Sender<Result<f32, TcpCommunicationError>>>,
+        tx_opt: &mut Option<AquaSender<Result<f32, TcpCommunicationError>>>,
         module_name: &str,
     ) {
         if is_active {
@@ -400,7 +401,7 @@ impl TcpCommunication {
             self.handle_simulated_sensor(
                 self.execution_config.sensor_manager,
                 &tcp_communication_channels.rx_tcp_communication_from_sensor_manager_opt,
-                &tcp_communication_channels.tx_tcp_communication_to_sensor_manager_opt,
+                &mut tcp_communication_channels.tx_tcp_communication_to_sensor_manager_opt,
                 "sensor manager",
             );
 
@@ -408,7 +409,7 @@ impl TcpCommunication {
             self.handle_simulated_sensor(
                 self.execution_config.tank_level_switch,
                 &tcp_communication_channels.rx_tcp_communication_from_tank_level_switch_opt,
-                &tcp_communication_channels.tx_tcp_communication_to_tank_level_switch_opt,
+                &mut tcp_communication_channels.tx_tcp_communication_to_tank_level_switch_opt,
                 "tank level switch",
             );
 

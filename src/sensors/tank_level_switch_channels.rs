@@ -6,23 +6,20 @@ The above copyright notice and this permission notice shall be included in all c
 
 THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
+use crate::launch::channels::{AquaChannelError, AquaSender};
 use crate::simulator::tcp_communication::TcpCommunicationError;
 use crate::utilities::channel_content::InternalCommand;
 use std::fmt;
-use std::sync::mpsc::{Receiver, RecvError, SendError, Sender};
+use std::sync::mpsc::{Receiver, RecvError};
 
 pub struct TankLevelSwitchChannels {
-    pub tx_tank_level_switch_to_tcp_opt: Option<Sender<InternalCommand>>,
-    #[cfg(feature = "debug_channels")]
-    pub cnt_tx_tank_level_switch_to_tcp_opt: u64,
+    pub tx_tank_level_switch_to_tcp_opt: Option<AquaSender<InternalCommand>>,
 
     pub rx_tank_level_switch_from_tcp_opt: Option<Receiver<Result<f32, TcpCommunicationError>>>,
     #[cfg(feature = "debug_channels")]
     pub cnt_rx_tank_level_switch_from_tcp_opt: u64,
 
-    pub tx_tank_level_switch_to_signal_handler: Sender<bool>,
-    #[cfg(feature = "debug_channels")]
-    pub cnt_tx_tank_level_switch_to_signal_handler: u64,
+    pub tx_tank_level_switch_to_signal_handler: AquaSender<bool>,
 
     pub rx_tank_level_switch_from_signal_handler: Receiver<InternalCommand>,
     #[cfg(feature = "debug_channels")]
@@ -35,15 +32,10 @@ impl TankLevelSwitchChannels {
     pub fn send_to_tcp(
         &mut self,
         command: InternalCommand,
-    ) -> Option<Result<(), SendError<InternalCommand>>> {
-        self.tx_tank_level_switch_to_tcp_opt.as_ref().map(|tx| {
-            let result = tx.send(command);
-            #[cfg(feature = "debug_channels")]
-            if result.is_ok() {
-                self.cnt_tx_tank_level_switch_to_tcp_opt += 1;
-            }
-            result
-        })
+    ) -> Option<Result<(), AquaChannelError>> {
+        self.tx_tank_level_switch_to_tcp_opt
+            .as_mut()
+            .map(|tx| tx.send(command))
     }
 
     /// Receives a result from the TCP simulator if the channel exists.
@@ -63,13 +55,8 @@ impl TankLevelSwitchChannels {
 
     /// Sends an acknowledgment to the signal handler.
     #[allow(unused)]
-    pub fn send_to_signal_handler(&mut self, ack: bool) -> Result<(), SendError<bool>> {
-        let result = self.tx_tank_level_switch_to_signal_handler.send(ack);
-        #[cfg(feature = "debug_channels")]
-        if result.is_ok() {
-            self.cnt_tx_tank_level_switch_to_signal_handler += 1;
-        }
-        result
+    pub fn send_to_signal_handler(&mut self, ack: bool) -> Result<(), AquaChannelError> {
+        self.tx_tank_level_switch_to_signal_handler.send(ack)
     }
 
     /// Receives a command from the signal handler.
@@ -90,8 +77,8 @@ impl fmt::Display for TankLevelSwitchChannels {
         writeln!(f, "=== TankLevelSwitchChannels ===")?;
         writeln!(
             f,
-            "cnt_tx_tank_level_switch_to_tcp_opt: {}",
-            self.cnt_tx_tank_level_switch_to_tcp_opt
+            "tx_tank_level_switch_to_tcp_opt: {}",
+            self.tx_tank_level_switch_to_tcp_opt.as_ref().unwrap().count
         )?;
         writeln!(
             f,
@@ -100,8 +87,8 @@ impl fmt::Display for TankLevelSwitchChannels {
         )?;
         writeln!(
             f,
-            "cnt_tx_tank_level_switch_to_signal_handler: {}",
-            self.cnt_tx_tank_level_switch_to_signal_handler
+            "tx_tank_level_switch_to_signal_handler: {}",
+            self.tx_tank_level_switch_to_signal_handler.count
         )?;
         write!(
             f,

@@ -329,11 +329,11 @@ impl SensorManager {
         // unwrap is safe because tested beforehand
         let tx_sensor_manager_to_simulator = sensor_manager_channels
             .tx_sensor_manager_to_tcp_opt
-            .as_ref()
+            .as_mut()
             .unwrap();
         let rx_sensor_manager_from_simulator = sensor_manager_channels
             .rx_sensor_manager_from_tcp_opt
-            .as_ref()
+            .as_mut()
             .unwrap();
 
         self.ambient_temperature = Self::get_response_from_simulator(

@@ -6,10 +6,12 @@ The above copyright notice and this permission notice shall be included in all c
 
 THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
+#[allow(unused)]
+use crate::launch::channels::AquaSender;
 #[cfg(any(test, target_os = "linux"))]
 use crate::utilities::channel_content::InternalCommand;
 #[cfg(any(test, target_os = "linux"))]
-use std::sync::mpsc::{Receiver, Sender};
+use std::sync::mpsc::Receiver;
 
 cfg_if::cfg_if! {
     if #[cfg(target_os = "linux")] {
@@ -33,11 +35,7 @@ cfg_if::cfg_if! {
 pub struct MessagingChannels {
     #[allow(unused)]
     /// Sender for sending acknowledgments back to the `SignalHandler`.
-    pub tx_messaging_to_signal_handler: Sender<bool>,
-    #[allow(unused)]
-    #[cfg(feature = "debug_channels")]
-    /// Counter for messages sent to the signal handler.
-    pub cnt_tx_messaging_to_signal_handler: u64,
+    pub tx_messaging_to_signal_handler: AquaSender<bool>,
 
     #[allow(unused)]
     /// Receiver for commands from the `SignalHandler` (e.g., `Quit`, `Terminate`).
@@ -48,59 +46,31 @@ pub struct MessagingChannels {
     pub cnt_rx_messaging_from_signal_handler: u64,
 
     /// Sender for dispatching commands to the `Refill` module.
-    pub tx_messaging_to_refill: Sender<InternalCommand>,
-    #[allow(unused)]
-    #[cfg(feature = "debug_channels")]
-    /// Counter for messages sent to refill.
-    pub cnt_tx_messaging_to_refill: u64,
+    pub tx_messaging_to_refill: AquaSender<InternalCommand>,
 
     #[allow(unused)]
     /// Sender for dispatching commands to the `Ventilation` module.
-    pub tx_messaging_to_ventilation: Sender<InternalCommand>,
-    #[allow(unused)]
-    #[cfg(feature = "debug_channels")]
-    /// Counter for messages sent to ventilation.
-    pub cnt_tx_messaging_to_ventilation: u64,
+    pub tx_messaging_to_ventilation: AquaSender<InternalCommand>,
 
     #[allow(unused)]
     /// Sender for dispatching commands to the `Heating` module.
-    pub tx_messaging_to_heating: Sender<InternalCommand>,
-    #[allow(unused)]
-    #[cfg(feature = "debug_channels")]
-    /// Counter for messages sent to heating.
-    pub cnt_tx_messaging_to_heating: u64,
+    pub tx_messaging_to_heating: AquaSender<InternalCommand>,
 
     #[allow(unused)]
     /// Sender for dispatching commands to the `Feed` module.
-    pub tx_messaging_to_feed: Sender<InternalCommand>,
-    #[allow(unused)]
-    #[cfg(feature = "debug_channels")]
-    /// Counter for messages sent to feed.
-    pub cnt_tx_messaging_to_feed: u64,
+    pub tx_messaging_to_feed: AquaSender<InternalCommand>,
 
     #[allow(unused)]
     /// Sender for dispatching commands to the `Balling` module.
-    pub tx_messaging_to_balling: Sender<InternalCommand>,
-    #[allow(unused)]
-    #[cfg(feature = "debug_channels")]
-    /// Counter for messages sent to balling.
-    pub cnt_tx_messaging_to_balling: u64,
+    pub tx_messaging_to_balling: AquaSender<InternalCommand>,
 
     #[allow(unused)]
     /// Sender for dispatching commands to the `Monitors` module.
-    pub tx_messaging_to_monitors: Sender<InternalCommand>,
-    #[allow(unused)]
-    #[cfg(feature = "debug_channels")]
-    /// Counter for messages sent to monitors.
-    pub cnt_tx_messaging_to_monitors: u64,
+    pub tx_messaging_to_monitors: AquaSender<InternalCommand>,
 
     #[allow(unused)]
     /// Sender for dispatching commands to the `Watchdog` module.
-    pub tx_messaging_to_watchdog: Sender<InternalCommand>,
-    #[allow(unused)]
-    #[cfg(feature = "debug_channels")]
-    /// Counter for messages sent to watchdog.
-    pub cnt_tx_messaging_to_watchdog: u64,
+    pub tx_messaging_to_watchdog: AquaSender<InternalCommand>,
 }
 
 #[cfg(target_os = "linux")]
@@ -155,38 +125,12 @@ impl MessagingChannels {
                 source: e,
             })?;
 
-        // Conditionally increment the counter for the corresponding channel on success.
-        #[cfg(feature = "debug_channels")]
-        {
-            let counter = match domain {
-                MessagingDomain::Refill => &mut self.cnt_tx_messaging_to_refill,
-                MessagingDomain::Ventilation => &mut self.cnt_tx_messaging_to_ventilation,
-                MessagingDomain::Feed => &mut self.cnt_tx_messaging_to_feed,
-                MessagingDomain::Heating => &mut self.cnt_tx_messaging_to_heating,
-                MessagingDomain::Balling => &mut self.cnt_tx_messaging_to_balling,
-                MessagingDomain::Monitors => &mut self.cnt_tx_messaging_to_monitors,
-                MessagingDomain::Watchdog => &mut self.cnt_tx_messaging_to_watchdog,
-                _ => {
-                    return Err(MessagingError::UnknownDomain(
-                        module_path!().to_string(),
-                        domain.to_string(),
-                    ));
-                }
-            };
-            *counter += 1;
-        }
-
         Ok(())
     }
 
     /// Sends an acknowledgment to the signal handler.
     pub fn send_to_signal_handler(&mut self, ack: bool) -> Result<(), SendError<bool>> {
-        let result = self.tx_messaging_to_signal_handler.send(ack);
-        #[cfg(feature = "debug_channels")]
-        if result.is_ok() {
-            self.cnt_tx_messaging_to_signal_handler += 1;
-        }
-        result
+        self.tx_messaging_to_signal_handler.send(ack)
     }
 }
 
@@ -196,8 +140,8 @@ impl fmt::Display for MessagingChannels {
         writeln!(f, "=== MessagingChannels ===")?;
         writeln!(
             f,
-            "cnt_tx_messaging_to_signal_handler: {}",
-            self.cnt_tx_messaging_to_signal_handler
+            "tx_messaging_to_signal_handler: {}",
+            self.tx_messaging_to_signal_handler.count
         )?;
         writeln!(
             f,
@@ -207,37 +151,37 @@ impl fmt::Display for MessagingChannels {
         writeln!(
             f,
             "cnt_tx_messaging_to_refill: {}",
-            self.cnt_tx_messaging_to_refill
+            self.tx_messaging_to_refill.count
         )?;
         writeln!(
             f,
-            "cnt_tx_messaging_to_ventilation: {}",
-            self.cnt_tx_messaging_to_ventilation
+            "tx_messaging_to_ventilation: {}",
+            self.tx_messaging_to_ventilation.count
         )?;
         writeln!(
             f,
-            "cnt_tx_messaging_to_heating: {}",
-            self.cnt_tx_messaging_to_heating
+            "tx_messaging_to_heating: {}",
+            self.tx_messaging_to_heating.count
         )?;
         writeln!(
             f,
-            "cnt_tx_messaging_to_feed: {}",
-            self.cnt_tx_messaging_to_feed
+            "tx_messaging_to_feed: {}",
+            self.tx_messaging_to_feed.count
         )?;
         writeln!(
             f,
-            "cnt_tx_messaging_to_balling: {}",
-            self.cnt_tx_messaging_to_balling
+            "tx_messaging_to_balling: {}",
+            self.tx_messaging_to_balling.count
         )?;
         writeln!(
             f,
-            "cnt_tx_messaging_to_monitors: {}",
-            self.cnt_tx_messaging_to_monitors
+            "tx_messaging_to_monitors: {}",
+            self.tx_messaging_to_monitors.count
         )?;
         write!(
             f,
-            "cnt_tx_messaging_to_watchdog: {}",
-            self.cnt_tx_messaging_to_watchdog
+            "tx_messaging_to_watchdog: {}",
+            self.tx_messaging_to_watchdog.count
         )
     }
 }

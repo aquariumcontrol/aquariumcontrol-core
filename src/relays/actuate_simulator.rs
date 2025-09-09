@@ -55,7 +55,7 @@ impl<'a> RelayActuationTrait for ActuateSimulator<'a> {
         let tx_actuate_simulator_to_tcp = self
             .actuate_simulator_channels
             .tx_actuate_simulator_to_tcp_opt
-            .as_ref()
+            .as_mut()
             .unwrap();
         match internal_command {
             InternalCommand::SwitchOn(ref c) | InternalCommand::SwitchOff(ref c) => {
@@ -70,14 +70,7 @@ impl<'a> RelayActuationTrait for ActuateSimulator<'a> {
                     }
                 };
                 match tx_actuate_simulator_to_tcp.send(relay_command.clone()) {
-                    Ok(()) => {
-                        #[cfg(feature = "debug_channels")]
-                        {
-                            self.actuate_simulator_channels
-                                .cnt_tx_actuate_simulator_to_tcp_opt += 1;
-                        }
-                        Ok(())
-                    }
+                    Ok(()) => Ok(()),
                     Err(e) => {
                         panic!(
                             "Controllino: error when sending relay command {relay_command} to TCP thread: {e:?}"

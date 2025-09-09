@@ -1187,7 +1187,10 @@ pub mod tests {
         println!("Testing with database {}", config.sql_interface.db_name);
         let result = SqlInterface::new(config.sql_interface);
 
-        assert!(matches!(result, Err(SqlInterfaceError::WaitTimeoutTooLow(_, _, _))));
+        assert!(matches!(
+            result,
+            Err(SqlInterfaceError::WaitTimeoutTooLow(_, _, _))
+        ));
     }
 
     #[test]

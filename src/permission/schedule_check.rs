@@ -16,10 +16,11 @@ use log::warn;
 #[cfg(all(target_os = "linux", not(test)))]
 use nix::unistd::gettid;
 use spin_sleep::SpinSleeper;
-use std::sync::mpsc::{Receiver, Sender, TryRecvError};
+use std::sync::mpsc::{Receiver, TryRecvError};
 use std::time::{Duration, Instant};
 
 use crate::database::sql_interface_schedule::{ScheduleEntry, ScheduleType, SqlInterfaceSchedule};
+use crate::launch::channels::AquaSender;
 use crate::launch::execution_config::ExecutionConfig;
 use crate::permission::schedule_check_channels::ScheduleCheckChannels;
 use crate::permission::schedule_check_config::ScheduleCheckConfig;
@@ -175,7 +176,7 @@ impl ScheduleCheck {
     /// * A tuple (bool, bool) indicating a successful send operation and a successful receive-operation.
     fn check_pending_schedule_request(
         config: &ScheduleCheckConfig,
-        tx: &Sender<bool>,
+        tx: &mut AquaSender<bool>,
         rx: &Receiver<InternalCommand>,
         schedule_entry: Option<&ScheduleEntry>,
         locks: (&mut bool, &mut bool, &mut bool),
@@ -335,7 +336,7 @@ impl ScheduleCheck {
                 };
                 let (_send_success, _receive_success) = Self::check_pending_schedule_request(
                     &self.config,
-                    &schedule_check_channels.tx_schedule_check_to_ventilation,
+                    &mut schedule_check_channels.tx_schedule_check_to_ventilation,
                     &schedule_check_channels.rx_schedule_check_from_ventilation,
                     schedule_entry_ventilation_opt,
                     (
@@ -347,11 +348,8 @@ impl ScheduleCheck {
                 );
                 #[cfg(feature = "debug_channels")]
                 {
-                    if _send_success {
-                        schedule_check_channels.cnt_rx_schedule_check_from_ventilation += 1;
-                    }
                     if _receive_success {
-                        schedule_check_channels.cnt_tx_schedule_check_to_ventilation += 1;
+                        schedule_check_channels.cnt_rx_schedule_check_from_ventilation += 1;
                     }
                 }
             }
@@ -382,7 +380,7 @@ impl ScheduleCheck {
                 };
                 let (_send_success, _receive_success) = Self::check_pending_schedule_request(
                     &self.config,
-                    &schedule_check_channels.tx_schedule_check_to_heating,
+                    &mut schedule_check_channels.tx_schedule_check_to_heating,
                     &schedule_check_channels.rx_schedule_check_from_heating,
                     schedule_entry_heating_opt,
                     (
@@ -394,11 +392,8 @@ impl ScheduleCheck {
                 );
                 #[cfg(feature = "debug_channels")]
                 {
-                    if _send_success {
-                        schedule_check_channels.cnt_rx_schedule_check_from_heating += 1;
-                    }
                     if _receive_success {
-                        schedule_check_channels.cnt_tx_schedule_check_to_heating += 1;
+                        schedule_check_channels.cnt_rx_schedule_check_from_heating += 1;
                     }
                 }
             }
@@ -429,7 +424,7 @@ impl ScheduleCheck {
                 };
                 let (_send_success, _receive_success) = Self::check_pending_schedule_request(
                     &self.config,
-                    &schedule_check_channels.tx_schedule_check_to_refill,
+                    &mut schedule_check_channels.tx_schedule_check_to_refill,
                     &schedule_check_channels.rx_schedule_check_from_refill,
                     schedule_entry_refill_opt,
                     (
@@ -441,11 +436,8 @@ impl ScheduleCheck {
                 );
                 #[cfg(feature = "debug_channels")]
                 {
-                    if _send_success {
-                        schedule_check_channels.cnt_rx_schedule_check_from_refill += 1;
-                    }
                     if _receive_success {
-                        schedule_check_channels.cnt_tx_schedule_check_to_refill += 1;
+                        schedule_check_channels.cnt_rx_schedule_check_from_refill += 1;
                     }
                 }
             }
@@ -476,7 +468,7 @@ impl ScheduleCheck {
                 };
                 let (_send_success, _receive_success) = Self::check_pending_schedule_request(
                     &self.config,
-                    &schedule_check_channels.tx_schedule_check_to_balling,
+                    &mut schedule_check_channels.tx_schedule_check_to_balling,
                     &schedule_check_channels.rx_schedule_check_from_balling,
                     schedule_entry_balling_opt,
                     (
@@ -488,11 +480,8 @@ impl ScheduleCheck {
                 );
                 #[cfg(feature = "debug_channels")]
                 {
-                    if _send_success {
-                        schedule_check_channels.cnt_rx_schedule_check_from_balling += 1;
-                    }
                     if _receive_success {
-                        schedule_check_channels.cnt_tx_schedule_check_to_balling += 1;
+                        schedule_check_channels.cnt_rx_schedule_check_from_balling += 1;
                     }
                 }
             }

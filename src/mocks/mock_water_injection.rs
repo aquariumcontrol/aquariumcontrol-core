@@ -9,19 +9,19 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 
 #[cfg(test)]
 pub mod tests {
-    use std::sync::mpsc::Sender;
     use std::sync::{Arc, Mutex};
     use std::time::Instant;
 
     use crate::database::sql_interface_refill::DatabaseInterfaceRefillTrait;
+    use crate::launch::channels::AquaSender;
     use crate::mocks::test_command::tests::TestCommand;
     use crate::sensors::tank_level_switch::TankLevelSwitchSignals;
-    use crate::water::refill::RefillChannels;
+    use crate::water::refill_channels::RefillChannels;
     use crate::water::refill_error_states::RefillErrorStates;
     use crate::water::water_injection::WaterInjectionTrait;
 
     pub struct MockWaterInjection {
-        tx_water_injection_to_test_environment_opt: Option<Sender<TestCommand>>,
+        tx_water_injection_to_test_environment_opt: Option<AquaSender<TestCommand>>,
 
         pub injection_recorder: Vec<Instant>,
 
@@ -30,7 +30,7 @@ pub mod tests {
 
     impl MockWaterInjection {
         pub fn new(
-            tx_water_injection_to_test_environment_opt: Option<Sender<TestCommand>>,
+            tx_water_injection_to_test_environment_opt: Option<AquaSender<TestCommand>>,
             refill_errors: RefillErrorStates,
         ) -> MockWaterInjection {
             MockWaterInjection {
@@ -50,7 +50,7 @@ pub mod tests {
             _mutex_tank_level_switch: &Arc<Mutex<TankLevelSwitchSignals>>,
         ) -> bool {
             if self.tx_water_injection_to_test_environment_opt.is_some() {
-                let tx_water_injection_to_test_environment = self
+                let mut tx_water_injection_to_test_environment = self
                     .tx_water_injection_to_test_environment_opt
                     .clone()
                     .unwrap();

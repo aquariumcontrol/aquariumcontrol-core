@@ -16,12 +16,13 @@ use log::info;
 #[cfg(target_os = "linux")]
 use nix::unistd::gettid;
 
+use crate::launch::channels::AquaSender;
 use crate::launch::execution_config::ExecutionConfig;
 use crate::utilities::channel_content::InternalCommand;
 pub(crate) use crate::utilities::signal_handler_channels::SignalHandlerChannels;
 use spin_sleep::SpinSleeper;
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::mpsc::{Receiver, Sender};
+use std::sync::mpsc::Receiver;
 use std::{sync::Arc, time::Duration};
 
 /// Sends a specified `InternalCommand` to a target thread's channel and optionally waits for an acknowledgment.
@@ -41,7 +42,7 @@ use std::{sync::Arc, time::Duration};
 /// * `thread_name` - The name of the target thread (for logging and debugging purposes).
 fn send_command(
     command: InternalCommand,
-    tx_to_thread_opt: Option<&Sender<InternalCommand>>,
+    tx_to_thread_opt: Option<&mut AquaSender<InternalCommand>>,
     rx_from_thread_opt: Option<&Receiver<bool>>,
     thread_name: &str,
 ) {
@@ -144,7 +145,7 @@ fn send_command(
 /// ```
 pub fn handle_signals(
     term: Arc<AtomicBool>,
-    signal_handler_channels: SignalHandlerChannels,
+    mut signal_handler_channels: SignalHandlerChannels,
     execution_config: ExecutionConfig,
 ) {
     #[cfg(target_os = "linux")]
@@ -200,7 +201,7 @@ pub fn handle_signals(
     if execution_config.data_logger {
         send_command(
             InternalCommand::Quit,
-            Some(&signal_handler_channels.tx_signal_handler_to_data_logger),
+            Some(&mut signal_handler_channels.tx_signal_handler_to_data_logger),
             Some(&signal_handler_channels.rx_signal_handler_from_data_logger),
             "data_logger",
         );
@@ -209,7 +210,7 @@ pub fn handle_signals(
         InternalCommand::Quit,
         signal_handler_channels
             .tx_signal_handler_to_messaging_opt
-            .as_ref(),
+            .as_mut(),
         signal_handler_channels
             .rx_signal_handler_from_messaging_opt
             .as_ref(),
@@ -226,7 +227,7 @@ pub fn handle_signals(
     if execution_config.refill {
         send_command(
             InternalCommand::Quit,
-            Some(&signal_handler_channels.tx_signal_handler_to_refill),
+            Some(&mut signal_handler_channels.tx_signal_handler_to_refill),
             Some(&signal_handler_channels.rx_signal_handler_from_refill),
             "refill",
         );
@@ -234,7 +235,7 @@ pub fn handle_signals(
     if execution_config.heating {
         send_command(
             InternalCommand::Quit,
-            Some(&signal_handler_channels.tx_signal_handler_to_heating),
+            Some(&mut signal_handler_channels.tx_signal_handler_to_heating),
             Some(&signal_handler_channels.rx_signal_handler_from_heating),
             "heating",
         );
@@ -242,7 +243,7 @@ pub fn handle_signals(
     if execution_config.ventilation {
         send_command(
             InternalCommand::Quit,
-            Some(&signal_handler_channels.tx_signal_handler_to_ventilation),
+            Some(&mut signal_handler_channels.tx_signal_handler_to_ventilation),
             Some(&signal_handler_channels.rx_signal_handler_from_ventilation),
             "ventilation",
         );
@@ -250,7 +251,7 @@ pub fn handle_signals(
     if execution_config.feed {
         send_command(
             InternalCommand::Quit,
-            Some(&signal_handler_channels.tx_signal_handler_to_feed),
+            Some(&mut signal_handler_channels.tx_signal_handler_to_feed),
             Some(&signal_handler_channels.rx_signal_handler_from_feed),
             "feed",
         );
@@ -258,7 +259,7 @@ pub fn handle_signals(
     if execution_config.balling {
         send_command(
             InternalCommand::Quit,
-            Some(&signal_handler_channels.tx_signal_handler_to_balling),
+            Some(&mut signal_handler_channels.tx_signal_handler_to_balling),
             Some(&signal_handler_channels.rx_signal_handler_from_balling),
             "balling",
         );
@@ -274,7 +275,7 @@ pub fn handle_signals(
     if execution_config.tank_level_switch {
         send_command(
             InternalCommand::Quit,
-            Some(&signal_handler_channels.tx_signal_handler_to_tank_level_switch),
+            Some(&mut signal_handler_channels.tx_signal_handler_to_tank_level_switch),
             Some(&signal_handler_channels.rx_signal_handler_from_tank_level_switch),
             "tank_level_switch",
         );
@@ -282,7 +283,7 @@ pub fn handle_signals(
     if !use_simulator && execution_config.atlas_scientific {
         send_command(
             InternalCommand::Quit,
-            Some(&signal_handler_channels.tx_signal_handler_to_atlas_scientific),
+            Some(&mut signal_handler_channels.tx_signal_handler_to_atlas_scientific),
             Some(&signal_handler_channels.rx_signal_handler_from_atlas_scientific),
             "atlas_scientific",
         );
@@ -290,7 +291,7 @@ pub fn handle_signals(
     if execution_config.sensor_manager {
         send_command(
             InternalCommand::Quit,
-            Some(&signal_handler_channels.tx_signal_handler_to_sensor_manager),
+            Some(&mut signal_handler_channels.tx_signal_handler_to_sensor_manager),
             Some(&signal_handler_channels.rx_signal_handler_from_sensor_manager),
             "ambient",
         );
@@ -298,7 +299,7 @@ pub fn handle_signals(
     if execution_config.schedule_check {
         send_command(
             InternalCommand::Quit,
-            Some(&signal_handler_channels.tx_signal_handler_to_schedule_check),
+            Some(&mut signal_handler_channels.tx_signal_handler_to_schedule_check),
             Some(&signal_handler_channels.rx_signal_handler_from_schedule_check),
             "schedule_check",
         );
@@ -332,7 +333,7 @@ pub fn handle_signals(
     if execution_config.relay_manager {
         send_command(
             InternalCommand::Quit,
-            Some(&signal_handler_channels.tx_signal_handler_to_relay_manager),
+            Some(&mut signal_handler_channels.tx_signal_handler_to_relay_manager),
             Some(&signal_handler_channels.rx_signal_handler_from_relay_manager),
             "relay_manager",
         );
@@ -341,7 +342,7 @@ pub fn handle_signals(
         InternalCommand::Quit,
         signal_handler_channels
             .tx_signal_handler_to_tcp_opt
-            .as_ref(),
+            .as_mut(),
         signal_handler_channels
             .rx_signal_handler_from_tcp_opt
             .as_ref(),
@@ -350,7 +351,7 @@ pub fn handle_signals(
     if execution_config.monitors {
         send_command(
             InternalCommand::Quit,
-            Some(&signal_handler_channels.tx_signal_handler_to_monitors),
+            Some(&mut signal_handler_channels.tx_signal_handler_to_monitors),
             Some(&signal_handler_channels.rx_signal_handler_from_monitors),
             "monitors",
         );
@@ -365,7 +366,7 @@ pub fn handle_signals(
     if execution_config.data_logger {
         send_command(
             InternalCommand::Terminate,
-            Some(&signal_handler_channels.tx_signal_handler_to_data_logger),
+            Some(&mut signal_handler_channels.tx_signal_handler_to_data_logger),
             None,
             "data_logger",
         );
@@ -380,7 +381,7 @@ pub fn handle_signals(
     if execution_config.heating {
         send_command(
             InternalCommand::Terminate,
-            Some(&signal_handler_channels.tx_signal_handler_to_heating),
+            Some(&mut signal_handler_channels.tx_signal_handler_to_heating),
             None,
             "heating",
         );
@@ -388,7 +389,7 @@ pub fn handle_signals(
     if execution_config.ventilation {
         send_command(
             InternalCommand::Terminate,
-            Some(&signal_handler_channels.tx_signal_handler_to_ventilation),
+            Some(&mut signal_handler_channels.tx_signal_handler_to_ventilation),
             None,
             "ventilation",
         );
@@ -396,7 +397,7 @@ pub fn handle_signals(
     if execution_config.feed {
         send_command(
             InternalCommand::Terminate,
-            Some(&signal_handler_channels.tx_signal_handler_to_feed),
+            Some(&mut signal_handler_channels.tx_signal_handler_to_feed),
             None,
             "feed",
         );
@@ -404,7 +405,7 @@ pub fn handle_signals(
     if execution_config.refill {
         send_command(
             InternalCommand::Terminate,
-            Some(&signal_handler_channels.tx_signal_handler_to_refill),
+            Some(&mut signal_handler_channels.tx_signal_handler_to_refill),
             None,
             "refill",
         );
@@ -412,7 +413,7 @@ pub fn handle_signals(
     if execution_config.balling {
         send_command(
             InternalCommand::Terminate,
-            Some(&signal_handler_channels.tx_signal_handler_to_balling),
+            Some(&mut signal_handler_channels.tx_signal_handler_to_balling),
             None,
             "balling",
         );
@@ -427,7 +428,7 @@ pub fn handle_signals(
     if execution_config.ds18b20 {
         send_command(
             InternalCommand::Quit,
-            Some(&signal_handler_channels.tx_signal_handler_to_ds18b20),
+            Some(&mut signal_handler_channels.tx_signal_handler_to_ds18b20),
             None,
             "ds18b20",
         );
@@ -447,7 +448,7 @@ pub fn handle_signals(
     if execution_config.sensor_manager {
         send_command(
             InternalCommand::Terminate,
-            Some(&signal_handler_channels.tx_signal_handler_to_sensor_manager),
+            Some(&mut signal_handler_channels.tx_signal_handler_to_sensor_manager),
             None,
             "ambient",
         );
@@ -455,7 +456,7 @@ pub fn handle_signals(
     if execution_config.tank_level_switch {
         send_command(
             InternalCommand::Terminate,
-            Some(&signal_handler_channels.tx_signal_handler_to_tank_level_switch),
+            Some(&mut signal_handler_channels.tx_signal_handler_to_tank_level_switch),
             None,
             "tank_level_switch",
         );
@@ -470,7 +471,7 @@ pub fn handle_signals(
     if execution_config.watchdog {
         send_command(
             InternalCommand::Terminate,
-            Some(&signal_handler_channels.tx_signal_handler_to_watchdog),
+            Some(&mut signal_handler_channels.tx_signal_handler_to_watchdog),
             Some(&signal_handler_channels.rx_signal_handler_from_watchdog),
             "watchdog",
         );
@@ -479,7 +480,7 @@ pub fn handle_signals(
         InternalCommand::Terminate,
         signal_handler_channels
             .tx_signal_handler_to_messaging_opt
-            .as_ref(),
+            .as_mut(),
         None,
         "messaging",
     );
@@ -516,7 +517,7 @@ pub mod tests {
         let term = Arc::new(AtomicBool::new(false));
         let term_clone = Arc::clone(&term);
 
-        let channels = Channels::new_for_test();
+        let mut channels = Channels::new_for_test();
 
         // start the test object in a separate thread
         let join_handle_test_object = thread::Builder::new()

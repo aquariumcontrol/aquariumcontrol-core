@@ -6,17 +6,15 @@ The above copyright notice and this permission notice shall be included in all c
 
 THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
+use crate::launch::channels::{AquaChannelError, AquaSender};
 use crate::utilities::channel_content::InternalCommand;
 use std::fmt;
-use std::sync::mpsc::{Receiver, RecvError, SendError, Sender};
+use std::sync::mpsc::{Receiver, RecvError};
 
 /// Struct collects the channels for communication between the feed control and the other components.
 pub struct FeedChannels {
     /// Sender part of the channel for communication to relay manager
-    pub tx_feed_to_relay_manager: Sender<InternalCommand>,
-    #[cfg(feature = "debug_channels")]
-    /// Counter for messages sent to the relay manager
-    pub cnt_tx_feed_to_relay_manager: u64,
+    pub tx_feed_to_relay_manager: AquaSender<InternalCommand>,
 
     /// Receiver part of the channel for communication from the relay manager
     pub rx_feed_from_relay_manager: Receiver<bool>,
@@ -25,10 +23,7 @@ pub struct FeedChannels {
     pub cnt_rx_feed_from_relay_manager: u64,
 
     /// Sender part of the channel for communication to the signal handler
-    pub tx_feed_to_signal_handler: Sender<bool>,
-    #[cfg(feature = "debug_channels")]
-    /// Counter for messages sent to the signal handler
-    pub cnt_tx_feed_to_signal_handler: u64,
+    pub tx_feed_to_signal_handler: AquaSender<bool>,
 
     /// Receiver part of the channel for communication from the signal handler
     pub rx_feed_from_signal_handler: Receiver<InternalCommand>,
@@ -48,13 +43,8 @@ impl FeedChannels {
     pub fn send_to_relay_manager(
         &mut self,
         command: InternalCommand,
-    ) -> Result<(), SendError<InternalCommand>> {
-        let result = self.tx_feed_to_relay_manager.send(command);
-        #[cfg(feature = "debug_channels")]
-        if result.is_ok() {
-            self.cnt_tx_feed_to_relay_manager += 1;
-        }
-        result
+    ) -> Result<(), AquaChannelError> {
+        self.tx_feed_to_relay_manager.send(command)
     }
 
     /// Receives a response from the relay manager.
@@ -68,23 +58,19 @@ impl FeedChannels {
     }
 
     /// Sends an acknowledgment to the signal handler.
-    pub fn send_to_signal_handler(&mut self, ack: bool) -> Result<(), SendError<bool>> {
-        let result = self.tx_feed_to_signal_handler.send(ack);
-        #[cfg(feature = "debug_channels")]
-        if result.is_ok() {
-            self.cnt_tx_feed_to_signal_handler += 1;
-        }
-        result
+    pub fn send_to_signal_handler(&mut self, ack: bool) -> Result<(), AquaChannelError> {
+        self.tx_feed_to_signal_handler.send(ack)
     }
 }
 
 #[cfg(feature = "debug_channels")]
 impl fmt::Display for FeedChannels {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        writeln!(f, "=== FeedChannels ===")?;
         writeln!(
             f,
-            "\ncnt_tx_feed_to_relay_manager: {}",
-            self.cnt_tx_feed_to_relay_manager
+            "tx_feed_to_relay_manager: {}",
+            self.tx_feed_to_relay_manager.count
         )?;
         writeln!(
             f,
@@ -93,8 +79,8 @@ impl fmt::Display for FeedChannels {
         )?;
         writeln!(
             f,
-            "cnt_tx_feed_to_signal_handler: {}",
-            self.cnt_tx_feed_to_signal_handler
+            "tx_feed_to_signal_handler: {}",
+            self.tx_feed_to_signal_handler.count
         )?;
         writeln!(
             f,

@@ -6,67 +6,50 @@ The above copyright notice and this permission notice shall be included in all c
 
 THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
+use crate::launch::channels::{AquaChannelError, AquaSender};
 use crate::utilities::channel_content::InternalCommand;
 use std::fmt;
-use std::sync::mpsc::{Receiver, SendError, Sender, TryRecvError};
+use std::sync::mpsc::{Receiver, TryRecvError};
 
 /// Container for channels used by relay manager
 pub struct RelayManagerChannels {
     /// sender part of the channel for communication to the refill thread
-    pub tx_relay_manager_to_refill: Sender<bool>,
-    #[cfg(feature = "debug_channels")]
-    pub cnt_tx_relay_manager_to_refill: u64,
-
+    pub tx_relay_manager_to_refill: AquaSender<bool>,
     /// receiver part of the channel for communication from the refill thread
     pub rx_relay_manager_from_refill: Receiver<InternalCommand>,
     #[cfg(feature = "debug_channels")]
     pub cnt_rx_relay_manager_from_refill: u64,
 
     /// sender part of the channel for communication to the heating thread
-    pub tx_relay_manager_to_heating: Sender<bool>,
-    #[cfg(feature = "debug_channels")]
-    pub cnt_tx_relay_manager_to_heating: u64,
-
+    pub tx_relay_manager_to_heating: AquaSender<bool>,
     /// receiver part of the channel for communication from the heating thread
     pub rx_relay_manager_from_heating: Receiver<InternalCommand>,
     #[cfg(feature = "debug_channels")]
     pub cnt_rx_relay_manager_from_heating: u64,
 
     /// sender part of the channel for communication to the ventilation thread
-    pub tx_relay_manager_to_ventilation: Sender<bool>,
-    #[cfg(feature = "debug_channels")]
-    pub cnt_tx_relay_manager_to_ventilation: u64,
-
+    pub tx_relay_manager_to_ventilation: AquaSender<bool>,
     /// receiver part of the channel for communication from the ventilation thread
     pub rx_relay_manager_from_ventilation: Receiver<InternalCommand>,
     #[cfg(feature = "debug_channels")]
     pub cnt_rx_relay_manager_from_ventilation: u64,
 
     /// sender part of the channel for communication to the Balling dosing thread
-    pub tx_relay_manager_to_balling: Sender<bool>,
-    #[cfg(feature = "debug_channels")]
-    pub cnt_tx_relay_manager_to_balling: u64,
-
+    pub tx_relay_manager_to_balling: AquaSender<bool>,
     /// receiver part of the channel for communication from the Balling dosing thread
     pub rx_relay_manager_from_balling: Receiver<InternalCommand>,
     #[cfg(feature = "debug_channels")]
     pub cnt_rx_relay_manager_from_balling: u64,
 
     /// sender part of the channel for communication to the feed thread
-    pub tx_relay_manager_to_feed: Sender<bool>,
-    #[cfg(feature = "debug_channels")]
-    pub cnt_tx_relay_manager_to_feed: u64,
-
+    pub tx_relay_manager_to_feed: AquaSender<bool>,
     /// receiver part of the channel for communication from the feed thread
     pub rx_relay_manager_from_feed: Receiver<InternalCommand>,
     #[cfg(feature = "debug_channels")]
     pub cnt_rx_relay_manager_from_feed: u64,
 
     /// sender part of the channel for communication to the signal handler
-    pub tx_relay_manager_to_signal_handler: Sender<bool>,
-    #[cfg(feature = "debug_channels")]
-    pub cnt_tx_relay_manager_to_signal_handler: u64,
-
+    pub tx_relay_manager_to_signal_handler: AquaSender<bool>,
     /// receiver part of the channel for communication from the signal handler
     pub rx_relay_manager_from_signal_handler: Receiver<InternalCommand>,
     #[cfg(feature = "debug_channels")]
@@ -76,13 +59,8 @@ pub struct RelayManagerChannels {
 impl RelayManagerChannels {
     /// Sends a response to the refill module.
     #[allow(unused)]
-    pub fn send_to_refill(&mut self, ack: bool) -> Result<(), SendError<bool>> {
-        let result = self.tx_relay_manager_to_refill.send(ack);
-        #[cfg(feature = "debug_channels")]
-        if result.is_ok() {
-            self.cnt_tx_relay_manager_to_refill += 1;
-        }
-        result
+    pub fn send_to_refill(&mut self, ack: bool) -> Result<(), AquaChannelError> {
+        self.tx_relay_manager_to_refill.send(ack)
     }
 
     /// Receives a command from the refill module (non-blocking).
@@ -98,13 +76,8 @@ impl RelayManagerChannels {
 
     /// Sends a response to the heating module.
     #[allow(unused)]
-    pub fn send_to_heating(&mut self, ack: bool) -> Result<(), SendError<bool>> {
-        let result = self.tx_relay_manager_to_heating.send(ack);
-        #[cfg(feature = "debug_channels")]
-        if result.is_ok() {
-            self.cnt_tx_relay_manager_to_heating += 1;
-        }
-        result
+    pub fn send_to_heating(&mut self, ack: bool) -> Result<(), AquaChannelError> {
+        self.tx_relay_manager_to_heating.send(ack)
     }
 
     /// Receives a command from the heating module (non-blocking).
@@ -120,13 +93,8 @@ impl RelayManagerChannels {
 
     /// Sends a response to the ventilation module.
     #[allow(unused)]
-    pub fn send_to_ventilation(&mut self, ack: bool) -> Result<(), SendError<bool>> {
-        let result = self.tx_relay_manager_to_ventilation.send(ack);
-        #[cfg(feature = "debug_channels")]
-        {
-            self.cnt_tx_relay_manager_to_ventilation += 1;
-        }
-        result
+    pub fn send_to_ventilation(&mut self, ack: bool) -> Result<(), AquaChannelError> {
+        self.tx_relay_manager_to_ventilation.send(ack)
     }
 
     /// Receives a command from the ventilation module (non-blocking).
@@ -142,13 +110,8 @@ impl RelayManagerChannels {
 
     /// Sends a response to the balling module.
     #[allow(unused)]
-    pub fn send_to_balling(&mut self, ack: bool) -> Result<(), SendError<bool>> {
-        let result = self.tx_relay_manager_to_balling.send(ack);
-        #[cfg(feature = "debug_channels")]
-        if result.is_ok() {
-            self.cnt_tx_relay_manager_to_balling += 1;
-        }
-        result
+    pub fn send_to_balling(&mut self, ack: bool) -> Result<(), AquaChannelError> {
+        self.tx_relay_manager_to_balling.send(ack)
     }
 
     /// Receives a command from the balling module (non-blocking).
@@ -164,13 +127,8 @@ impl RelayManagerChannels {
 
     /// Sends a response to the feed module.
     #[allow(unused)]
-    pub fn send_to_feed(&mut self, ack: bool) -> Result<(), SendError<bool>> {
-        let result = self.tx_relay_manager_to_feed.send(ack);
-        #[cfg(feature = "debug_channels")]
-        {
-            self.cnt_tx_relay_manager_to_feed += 1;
-        }
-        result
+    pub fn send_to_feed(&mut self, ack: bool) -> Result<(), AquaChannelError> {
+        self.tx_relay_manager_to_feed.send(ack)
     }
 
     /// Receives a command from the feed module (non-blocking).
@@ -186,13 +144,8 @@ impl RelayManagerChannels {
 
     /// Sends a response to the signal handler.
     #[allow(unused)]
-    pub fn send_to_signal_handler(&mut self, ack: bool) -> Result<(), SendError<bool>> {
-        let result = self.tx_relay_manager_to_signal_handler.send(ack);
-        #[cfg(feature = "debug_channels")]
-        if result.is_ok() {
-            self.cnt_tx_relay_manager_to_signal_handler += 1;
-        }
-        result
+    pub fn send_to_signal_handler(&mut self, ack: bool) -> Result<(), AquaChannelError> {
+        self.tx_relay_manager_to_signal_handler.send(ack)
     }
 
     /// Receives a command from the signal handler (non-blocking).
@@ -213,8 +166,8 @@ impl fmt::Display for RelayManagerChannels {
         writeln!(f, "=== RelayManagerChannels ===")?;
         writeln!(
             f,
-            "cnt_tx_relay_manager_to_refill: {}",
-            self.cnt_tx_relay_manager_to_refill
+            "tx_relay_manager_to_refill: {}",
+            self.tx_relay_manager_to_refill.count
         )?;
         writeln!(
             f,
@@ -223,8 +176,8 @@ impl fmt::Display for RelayManagerChannels {
         )?;
         writeln!(
             f,
-            "cnt_tx_relay_manager_to_heating: {}",
-            self.cnt_tx_relay_manager_to_heating
+            "tx_relay_manager_to_heating: {}",
+            self.tx_relay_manager_to_heating.count
         )?;
         writeln!(
             f,
@@ -233,8 +186,8 @@ impl fmt::Display for RelayManagerChannels {
         )?;
         writeln!(
             f,
-            "cnt_tx_relay_manager_to_ventilation: {}",
-            self.cnt_tx_relay_manager_to_ventilation
+            "tx_relay_manager_to_ventilation: {}",
+            self.tx_relay_manager_to_ventilation.count
         )?;
         writeln!(
             f,
@@ -243,8 +196,8 @@ impl fmt::Display for RelayManagerChannels {
         )?;
         writeln!(
             f,
-            "cnt_tx_relay_manager_to_balling: {}",
-            self.cnt_tx_relay_manager_to_balling
+            "tx_relay_manager_to_balling: {}",
+            self.tx_relay_manager_to_balling.count
         )?;
         writeln!(
             f,
@@ -253,8 +206,8 @@ impl fmt::Display for RelayManagerChannels {
         )?;
         writeln!(
             f,
-            "cnt_tx_relay_manager_to_feed: {}",
-            self.cnt_tx_relay_manager_to_feed
+            "tx_relay_manager_to_feed: {}",
+            self.tx_relay_manager_to_feed.count
         )?;
         writeln!(
             f,
@@ -263,8 +216,8 @@ impl fmt::Display for RelayManagerChannels {
         )?;
         writeln!(
             f,
-            "cnt_tx_relay_manager_to_signal_handler: {}",
-            self.cnt_tx_relay_manager_to_signal_handler
+            "tx_relay_manager_to_signal_handler: {}",
+            self.tx_relay_manager_to_signal_handler.count
         )?;
         write!(
             f,

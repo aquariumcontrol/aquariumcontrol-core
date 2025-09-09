@@ -7,10 +7,11 @@ The above copyright notice and this permission notice shall be included in all c
 THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
+use crate::launch::channels::AquaSender;
 use crate::simulator::tcp_communication_error::TcpCommunicationError;
 use crate::utilities::channel_content::InternalCommand;
 use log::warn;
-use std::sync::mpsc::{Receiver, Sender};
+use std::sync::mpsc::Receiver;
 
 /// A trait that provides a generic method for communicating with a simulator.
 pub trait GetResponseFromSimulatorTrait {
@@ -42,7 +43,7 @@ pub trait GetResponseFromSimulatorTrait {
     ///   thread itself sends back within its `Result`.
     fn get_response_from_simulator(
         requester: String,
-        tx_to_tcp: &Sender<InternalCommand>,
+        tx_to_tcp: &mut AquaSender<InternalCommand>,
         rx_from_tcp: &Receiver<Result<f32, TcpCommunicationError>>,
         internal_command: InternalCommand,
     ) -> Result<f32, TcpCommunicationError> {

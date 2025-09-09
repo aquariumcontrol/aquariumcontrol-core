@@ -6,10 +6,11 @@ The above copyright notice and this permission notice shall be included in all c
 
 THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
+use crate::launch::channels::{AquaChannelError, AquaSender};
 use crate::utilities::channel_content::InternalCommand;
 use crate::water::refill_monitor_view::RefillMonitorView;
 use std::fmt;
-use std::sync::mpsc::{Receiver, SendError, Sender, TryRecvError};
+use std::sync::mpsc::{Receiver, TryRecvError};
 
 /// Struct collects the channels for communication between Monitors and other components.
 pub struct MonitorsChannels {
@@ -20,10 +21,7 @@ pub struct MonitorsChannels {
     pub cnt_rx_monitors_from_refill: u64,
 
     /// Sender part of the channel for communication to the signal handler
-    pub tx_monitors_to_signal_handler: Sender<bool>,
-    #[cfg(feature = "debug_channels")]
-    /// Counter for messages sent to the signal handler
-    pub cnt_tx_monitors_to_signal_handler: u64,
+    pub tx_monitors_to_signal_handler: AquaSender<bool>,
 
     /// Receiver part of the channel for communication from the signal handler
     pub rx_monitors_from_signal_handler: Receiver<InternalCommand>,
@@ -56,13 +54,8 @@ impl MonitorsChannels {
     ///
     /// This wrapper sends a boolean acknowledgment and increments the debug counter.
     #[allow(unused)]
-    pub fn send_to_signal_handler(&mut self, ack: bool) -> Result<(), SendError<bool>> {
-        let result = self.tx_monitors_to_signal_handler.send(ack);
-        #[cfg(feature = "debug_channels")]
-        if result.is_ok() {
-            self.cnt_tx_monitors_to_signal_handler += 1;
-        }
-        result
+    pub fn send_to_signal_handler(&mut self, ack: bool) -> Result<(), AquaChannelError> {
+        self.tx_monitors_to_signal_handler.send(ack)
     }
 
     /// Receives a command from the signal handler.
@@ -105,8 +98,8 @@ impl fmt::Display for MonitorsChannels {
         )?;
         writeln!(
             f,
-            "cnt_tx_monitors_to_signal_handler: {}",
-            self.cnt_tx_monitors_to_signal_handler
+            "tx_monitors_to_signal_handler: {}",
+            self.tx_monitors_to_signal_handler.count
         )?;
         writeln!(
             f,

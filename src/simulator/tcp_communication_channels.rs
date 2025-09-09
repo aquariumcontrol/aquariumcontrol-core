@@ -6,10 +6,11 @@ The above copyright notice and this permission notice shall be included in all c
 
 THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
+use crate::launch::channels::{AquaChannelError, AquaSender};
 use crate::simulator::tcp_communication::TcpCommunicationError;
 use crate::utilities::channel_content::InternalCommand;
 use std::fmt;
-use std::sync::mpsc::{Receiver, RecvError, SendError, Sender, TryRecvError};
+use std::sync::mpsc::{Receiver, RecvError, TryRecvError};
 
 /// Struct collects the channels for communication with other threads.
 pub struct TcpCommunicationChannels {
@@ -25,9 +26,7 @@ pub struct TcpCommunicationChannels {
 
     /// Sender part of the channel for communication to sensor manager wrapped in Option type
     pub tx_tcp_communication_to_sensor_manager_opt:
-        Option<Sender<Result<f32, TcpCommunicationError>>>,
-    #[cfg(feature = "debug_channels")]
-    pub cnt_tx_tcp_communication_to_sensor_manager_opt: u64,
+        Option<AquaSender<Result<f32, TcpCommunicationError>>>,
 
     /// Receiver part of the channel for communication from tank level switch wrapped in Option type
     pub rx_tcp_communication_from_tank_level_switch_opt: Option<Receiver<InternalCommand>>,
@@ -36,14 +35,10 @@ pub struct TcpCommunicationChannels {
 
     /// Sender part of the channel for communication to tank level switch wrapped in Option type
     pub tx_tcp_communication_to_tank_level_switch_opt:
-        Option<Sender<Result<f32, TcpCommunicationError>>>,
-    #[cfg(feature = "debug_channels")]
-    pub cnt_tx_tcp_communication_to_tank_level_switch_opt: u64,
+        Option<AquaSender<Result<f32, TcpCommunicationError>>>,
 
     /// Sender part of the channel for communication to the signal handler
-    pub tx_tcp_communication_to_signal_handler: Sender<bool>,
-    #[cfg(feature = "debug_channels")]
-    pub cnt_tx_tcp_communication_to_signal_handler: u64,
+    pub tx_tcp_communication_to_signal_handler: AquaSender<bool>,
 
     /// Receiver part of the channel for communication from the signal handler
     pub rx_tcp_communication_from_signal_handler: Receiver<InternalCommand>,
@@ -87,17 +82,10 @@ impl TcpCommunicationChannels {
     pub fn send_to_sensor_manager(
         &mut self,
         data: Result<f32, TcpCommunicationError>,
-    ) -> Option<Result<(), SendError<Result<f32, TcpCommunicationError>>>> {
+    ) -> Option<Result<(), AquaChannelError>> {
         self.tx_tcp_communication_to_sensor_manager_opt
-            .as_ref()
-            .map(|tx| {
-                let result = tx.send(data);
-                #[cfg(feature = "debug_channels")]
-                if result.is_ok() {
-                    self.cnt_tx_tcp_communication_to_sensor_manager_opt += 1;
-                }
-                result
-            })
+            .as_mut()
+            .map(|tx| tx.send(data))
     }
 
     /// Receives a command from the tank level switch if the channel exists.
@@ -120,27 +108,15 @@ impl TcpCommunicationChannels {
     pub fn send_to_tank_level_switch(
         &mut self,
         data: Result<f32, TcpCommunicationError>,
-    ) -> Option<Result<(), SendError<Result<f32, TcpCommunicationError>>>> {
+    ) -> Option<Result<(), AquaChannelError>> {
         self.tx_tcp_communication_to_tank_level_switch_opt
-            .as_ref()
-            .map(|tx| {
-                let result = tx.send(data);
-                #[cfg(feature = "debug_channels")]
-                if result.is_ok() {
-                    self.cnt_tx_tcp_communication_to_tank_level_switch_opt += 1;
-                }
-                result
-            })
+            .as_mut()
+            .map(|tx| tx.send(data))
     }
 
     /// Sends an acknowledgment to the signal handler.
-    pub fn send_to_signal_handler(&mut self, ack: bool) -> Result<(), SendError<bool>> {
-        let result = self.tx_tcp_communication_to_signal_handler.send(ack);
-        #[cfg(feature = "debug_channels")]
-        {
-            self.cnt_tx_tcp_communication_to_signal_handler += 1;
-        }
-        result
+    pub fn send_to_signal_handler(&mut self, ack: bool) -> Result<(), AquaChannelError> {
+        self.tx_tcp_communication_to_signal_handler.send(ack)
     }
 
     /// Receives a command from the signal handler.
@@ -171,8 +147,11 @@ impl fmt::Display for TcpCommunicationChannels {
         )?;
         writeln!(
             f,
-            "cnt_tx_tcp_communication_to_sensor_manager_opt: {}",
-            self.cnt_tx_tcp_communication_to_sensor_manager_opt
+            "tx_tcp_communication_to_sensor_manager_opt: {}",
+            self.tx_tcp_communication_to_sensor_manager_opt
+                .as_ref()
+                .unwrap()
+                .count
         )?;
         writeln!(
             f,
@@ -181,13 +160,16 @@ impl fmt::Display for TcpCommunicationChannels {
         )?;
         writeln!(
             f,
-            "cnt_tx_tcp_communication_to_tank_level_switch_opt: {}",
-            self.cnt_tx_tcp_communication_to_tank_level_switch_opt
+            "tx_tcp_communication_to_tank_level_switch_opt: {}",
+            self.tx_tcp_communication_to_tank_level_switch_opt
+                .as_ref()
+                .unwrap()
+                .count
         )?;
         writeln!(
             f,
-            "cnt_tx_tcp_communication_to_signal_handler: {}",
-            self.cnt_tx_tcp_communication_to_signal_handler
+            "tx_tcp_communication_to_signal_handler: {}",
+            self.tx_tcp_communication_to_signal_handler.count
         )?;
         write!(
             f,

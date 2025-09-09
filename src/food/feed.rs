@@ -19,6 +19,7 @@ use log::debug;
 #[cfg(all(target_os = "linux", not(test)))]
 use nix::unistd::gettid;
 
+use crate::check_quit_increment_counter_ping_database;
 use crate::database::database_interface_feed_trait::DatabaseInterfaceFeedTrait;
 use crate::food::feed_channels::FeedChannels;
 use crate::food::feed_config::FeedConfig;
@@ -32,7 +33,6 @@ use crate::utilities::wait_for_termination::WaitForTerminationTrait;
 use spin_sleep::SpinSleeper;
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
-use crate::check_quit_increment_counter_ping_database;
 
 #[cfg_attr(doc, aquamarine::aquamarine)]
 /// Contains the configuration and the implementation for the feed control.
@@ -587,7 +587,7 @@ impl Feed {
 #[cfg(test)]
 pub mod tests {
     use spin_sleep::SpinSleeper;
-    use std::sync::mpsc::{Receiver, Sender};
+    use std::sync::mpsc::Receiver;
     use std::sync::{Arc, Mutex};
     use std::thread;
     use std::thread::scope;
@@ -607,7 +607,7 @@ pub mod tests {
 
     use crate::database::sql_interface_feed::tests::insert_feed_patterns;
     use crate::database::sql_query_strings::{SQL_TABLE_FEEDLOG, SQL_TABLE_FEEDSCHEDULE};
-    use crate::launch::channels::Channels;
+    use crate::launch::channels::{AquaSender, Channels};
     use crate::mocks::mock_food_injection::MockFoodInjection;
     use crate::mocks::mock_sql_interface_feed::tests::MockSqlInterfaceFeed;
 
@@ -622,7 +622,7 @@ pub mod tests {
     /// * `spin_sleeper` - SpinSleeper instance used for waiting before sending Quit command to the test object
     /// * `sleep_duration` - sleep duration used for waiting before sending Quit command to the test object
     fn create_mock_signal_handler(
-        tx_signal_handler_to_feed: &Sender<InternalCommand>,
+        tx_signal_handler_to_feed: &mut AquaSender<InternalCommand>,
         rx_signal_handler_from_feed: &Receiver<bool>,
         spin_sleeper: SpinSleeper,
         sleep_duration: Duration,
@@ -734,7 +734,7 @@ pub mod tests {
             // thread for mock signal handler
             scope.spawn(move || {
                 create_mock_signal_handler(
-                    &channels.signal_handler.tx_signal_handler_to_feed,
+                    &mut channels.signal_handler.tx_signal_handler_to_feed,
                     &channels.signal_handler.rx_signal_handler_from_feed,
                     spin_sleeper,
                     sleep_duration_8_seconds,
@@ -1257,7 +1257,7 @@ pub mod tests {
             // thread for mock signal handler
             scope.spawn(move || {
                 create_mock_signal_handler(
-                    &channels.signal_handler.tx_signal_handler_to_feed,
+                    &mut channels.signal_handler.tx_signal_handler_to_feed,
                     &channels.signal_handler.rx_signal_handler_from_feed,
                     spin_sleeper,
                     sleep_duration_8_seconds,
@@ -1381,7 +1381,7 @@ pub mod tests {
             // thread for mock signal handler
             scope.spawn(move || {
                 create_mock_signal_handler(
-                    &channels.signal_handler.tx_signal_handler_to_feed,
+                    &mut channels.signal_handler.tx_signal_handler_to_feed,
                     &channels.signal_handler.rx_signal_handler_from_feed,
                     spin_sleeper,
                     sleep_duration_8_seconds,

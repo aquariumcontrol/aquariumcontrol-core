@@ -21,6 +21,7 @@ use nix::unistd::gettid;
 
 use crate::database::sql_interface_error::SqlInterfaceError;
 use crate::database::sql_interface_heating_stats::{HeatingStatsEntry, SqlInterfaceHeatingStats};
+use crate::database::thermal_set_value_updater_trait::ThermalSetValueUpdaterTrait;
 use crate::sensors::sensor_manager::SensorManagerSignals;
 use crate::sensors::tank_level_switch::TankLevelSwitchSignals;
 use crate::thermal::heating_channels::HeatingChannels;
@@ -37,7 +38,6 @@ use crate::utilities::wait_for_termination::WaitForTerminationTrait;
 use crate::{manage_cycle_time_thermal, perform_schedule_check, update_thermal_set_values};
 #[cfg(not(test))]
 use log::info;
-use crate::database::thermal_set_value_updater_trait::ThermalSetValueUpdaterTrait;
 
 const CYCLE_TIME_HEATING_MILLIS: u64 = 500;
 
@@ -463,7 +463,7 @@ impl Heating {
                 } else {
                     tank_level_low_counter = 0;
                 }
-                
+
                 // schedule check to see if actuation is allowed
                 perform_schedule_check!(
                     heating_channels,
@@ -971,7 +971,7 @@ pub mod tests {
             .name("mock_schedule_check".to_string())
             .spawn(move || {
                 mock_schedule_check(
-                    &channels.schedule_check.tx_schedule_check_to_heating,
+                    &mut channels.schedule_check.tx_schedule_check_to_heating,
                     &channels.schedule_check.rx_schedule_check_from_heating,
                     None,
                     true,
@@ -986,7 +986,7 @@ pub mod tests {
             .name("mock_relay_manager".to_string())
             .spawn(move || {
                 let (mut actuation_events, mock_actuator_states) = mock_relay_manager(
-                    &channels.relay_manager.tx_relay_manager_to_heating,
+                    &mut channels.relay_manager.tx_relay_manager_to_heating,
                     &channels.relay_manager.rx_relay_manager_from_heating,
                 );
                 assert_eq!(actuation_events.len(), 1);
@@ -1024,9 +1024,9 @@ pub mod tests {
             .name("test_object".to_string())
             .spawn(move || {
                 // clone sender part of the channels to mock threads so that we can terminate them after execution of the test object
-                let tx_heating_to_schedule_check_for_test_case_finish =
+                let mut tx_heating_to_schedule_check_for_test_case_finish =
                     channels.heating.tx_heating_to_schedule_check.clone();
-                let tx_heating_to_relay_manager_for_test_case_finish =
+                let mut tx_heating_to_relay_manager_for_test_case_finish =
                     channels.heating.tx_heating_to_relay_manager.clone();
 
                 let mut heating_stats_transfer =
@@ -1102,7 +1102,7 @@ pub mod tests {
             .name("mock_schedule_check".to_string())
             .spawn(move || {
                 mock_schedule_check(
-                    &channels.schedule_check.tx_schedule_check_to_heating,
+                    &mut channels.schedule_check.tx_schedule_check_to_heating,
                     &channels.schedule_check.rx_schedule_check_from_heating,
                     None,
                     true,
@@ -1117,7 +1117,7 @@ pub mod tests {
             .name("mock_relay_manager".to_string())
             .spawn(move || {
                 let (mut actuation_events, mock_actuator_states) = mock_relay_manager(
-                    &channels.relay_manager.tx_relay_manager_to_heating,
+                    &mut channels.relay_manager.tx_relay_manager_to_heating,
                     &channels.relay_manager.rx_relay_manager_from_heating,
                 );
                 assert_eq!(actuation_events.len(), 2);
@@ -1160,9 +1160,9 @@ pub mod tests {
             .name("test_object".to_string())
             .spawn(move || {
                 // clone sender part of the channels to mock threads so that we can terminate them after execution of the test object
-                let tx_heating_to_schedule_check_for_test_case_finish =
+                let mut tx_heating_to_schedule_check_for_test_case_finish =
                     channels.heating.tx_heating_to_schedule_check.clone();
-                let tx_heating_to_relay_manager_for_test_case_finish =
+                let mut tx_heating_to_relay_manager_for_test_case_finish =
                     channels.heating.tx_heating_to_relay_manager.clone();
 
                 let mut heating_stats_transfer =
@@ -1242,7 +1242,7 @@ pub mod tests {
             .name("mock_schedule_check".to_string())
             .spawn(move || {
                 mock_schedule_check(
-                    &channels.schedule_check.tx_schedule_check_to_heating,
+                    &mut channels.schedule_check.tx_schedule_check_to_heating,
                     &channels.schedule_check.rx_schedule_check_from_heating,
                     None,
                     true,
@@ -1257,7 +1257,7 @@ pub mod tests {
             .name("mock_relay_manager".to_string())
             .spawn(move || {
                 let (mut actuation_events, mock_actuator_states) = mock_relay_manager(
-                    &channels.relay_manager.tx_relay_manager_to_heating,
+                    &mut channels.relay_manager.tx_relay_manager_to_heating,
                     &channels.relay_manager.rx_relay_manager_from_heating,
                 );
                 println!(
@@ -1414,9 +1414,9 @@ pub mod tests {
             .name("test_object".to_string())
             .spawn(move || {
                 // clone sender part of the channels to mock threads so that we can terminate them after execution of the test object
-                let tx_heating_to_schedule_check_for_test_case_finish =
+                let mut tx_heating_to_schedule_check_for_test_case_finish =
                     channels.heating.tx_heating_to_schedule_check.clone();
-                let tx_heating_to_relay_manager_for_test_case_finish =
+                let mut tx_heating_to_relay_manager_for_test_case_finish =
                     channels.heating.tx_heating_to_relay_manager.clone();
 
                 let mut heating_stats_transfer =
@@ -1493,7 +1493,7 @@ pub mod tests {
             .name("mock_schedule_check".to_string())
             .spawn(move || {
                 mock_schedule_check(
-                    &channels.schedule_check.tx_schedule_check_to_heating,
+                    &mut channels.schedule_check.tx_schedule_check_to_heating,
                     &channels.schedule_check.rx_schedule_check_from_heating,
                     None,
                     true,
@@ -1508,7 +1508,7 @@ pub mod tests {
             .name("mock_relay_manager".to_string())
             .spawn(move || {
                 let (mut actuation_events, mock_actuator_states) = mock_relay_manager(
-                    &channels.relay_manager.tx_relay_manager_to_heating,
+                    &mut channels.relay_manager.tx_relay_manager_to_heating,
                     &channels.relay_manager.rx_relay_manager_from_heating,
                 );
                 println!(
@@ -1546,9 +1546,9 @@ pub mod tests {
             .name("test_object".to_string())
             .spawn(move || {
                 // clone sender part of the channels to mock threads so that we can terminate them after execution of the test object
-                let tx_heating_to_schedule_check_for_test_case_finish =
+                let mut tx_heating_to_schedule_check_for_test_case_finish =
                     channels.heating.tx_heating_to_schedule_check.clone();
-                let tx_heating_to_relay_manager_for_test_case_finish =
+                let mut tx_heating_to_relay_manager_for_test_case_finish =
                     channels.heating.tx_heating_to_relay_manager.clone();
 
                 let mut heating_stats_transfer =
@@ -1642,7 +1642,7 @@ pub mod tests {
             .name("mock_schedule_check".to_string())
             .spawn(move || {
                 mock_schedule_check(
-                    &channels.schedule_check.tx_schedule_check_to_heating,
+                    &mut channels.schedule_check.tx_schedule_check_to_heating,
                     &channels.schedule_check.rx_schedule_check_from_heating,
                     None,
                     true,
@@ -1657,7 +1657,7 @@ pub mod tests {
             .name("mock_relay_manager".to_string())
             .spawn(move || {
                 mock_relay_manager(
-                    &channels.relay_manager.tx_relay_manager_to_heating,
+                    &mut channels.relay_manager.tx_relay_manager_to_heating,
                     &channels.relay_manager.rx_relay_manager_from_heating,
                 );
             })
@@ -1687,9 +1687,9 @@ pub mod tests {
             .name("test_object".to_string())
             .spawn(move || {
                 // clone sender part of the channels to mock threads so that we can terminate them after execution of the test object
-                let tx_heating_to_schedule_check_for_test_case_finish =
+                let mut tx_heating_to_schedule_check_for_test_case_finish =
                     channels.heating.tx_heating_to_schedule_check.clone();
-                let tx_heating_to_relay_manager_for_test_case_finish =
+                let mut tx_heating_to_relay_manager_for_test_case_finish =
                     channels.heating.tx_heating_to_relay_manager.clone();
 
                 let mut heating_stats_transfer =
@@ -1879,7 +1879,7 @@ pub mod tests {
             .name("mock_schedule_check".to_string())
             .spawn(move || {
                 mock_schedule_check(
-                    &channels.schedule_check.tx_schedule_check_to_heating,
+                    &mut channels.schedule_check.tx_schedule_check_to_heating,
                     &channels.schedule_check.rx_schedule_check_from_heating,
                     None,
                     true,
@@ -1898,7 +1898,7 @@ pub mod tests {
             .name("mock_relay_manager".to_string())
             .spawn(move || {
                 mock_relay_manager(
-                    &channels.relay_manager.tx_relay_manager_to_heating,
+                    &mut channels.relay_manager.tx_relay_manager_to_heating,
                     &channels.relay_manager.rx_relay_manager_from_heating,
                 );
             })
@@ -1928,9 +1928,9 @@ pub mod tests {
             .name("test_object".to_string())
             .spawn(move || {
                 // clone sender part of the channels to mock threads so that we can terminate them after execution of the test object
-                let tx_heating_to_schedule_check_for_test_case_finish =
+                let mut tx_heating_to_schedule_check_for_test_case_finish =
                     channels.heating.tx_heating_to_schedule_check.clone();
-                let tx_heating_to_relay_manager_for_test_case_finish =
+                let mut tx_heating_to_relay_manager_for_test_case_finish =
                     channels.heating.tx_heating_to_relay_manager.clone();
 
                 let mut heating_stats_transfer =
@@ -2108,7 +2108,7 @@ pub mod tests {
             .name("mock_schedule_check".to_string())
             .spawn(move || {
                 mock_schedule_check(
-                    &channels.schedule_check.tx_schedule_check_to_heating,
+                    &mut channels.schedule_check.tx_schedule_check_to_heating,
                     &channels.schedule_check.rx_schedule_check_from_heating,
                     None,
                     false,
@@ -2123,7 +2123,7 @@ pub mod tests {
             .name("mock_relay_manager".to_string())
             .spawn(move || {
                 let (mut actuation_events, mock_actuator_states) = mock_relay_manager(
-                    &channels.relay_manager.tx_relay_manager_to_heating,
+                    &mut channels.relay_manager.tx_relay_manager_to_heating,
                     &channels.relay_manager.rx_relay_manager_from_heating,
                 );
                 assert_eq!(actuation_events.len(), 1);
@@ -2161,9 +2161,9 @@ pub mod tests {
             .name("test_object".to_string())
             .spawn(move || {
                 // clone sender part of the channels to mock threads so that we can terminate them after execution of the test object
-                let tx_heating_to_schedule_check_for_test_case_finish =
+                let mut tx_heating_to_schedule_check_for_test_case_finish =
                     channels.heating.tx_heating_to_schedule_check.clone();
-                let tx_heating_to_relay_manager_for_test_case_finish =
+                let mut tx_heating_to_relay_manager_for_test_case_finish =
                     channels.heating.tx_heating_to_relay_manager.clone();
 
                 let mut heating_stats_transfer =
@@ -2231,7 +2231,7 @@ pub mod tests {
             .name("mock_schedule_check".to_string())
             .spawn(move || {
                 mock_schedule_check(
-                    &channels.schedule_check.tx_schedule_check_to_heating,
+                    &mut channels.schedule_check.tx_schedule_check_to_heating,
                     &channels.schedule_check.rx_schedule_check_from_heating,
                     None,
                     true,
@@ -2250,7 +2250,7 @@ pub mod tests {
             .name("mock_relay_manager".to_string())
             .spawn(move || {
                 let (mut actuation_events, mock_actuator_states) = mock_relay_manager(
-                    &channels.relay_manager.tx_relay_manager_to_heating,
+                    &mut channels.relay_manager.tx_relay_manager_to_heating,
                     &channels.relay_manager.rx_relay_manager_from_heating,
                 );
                 assert_eq!(actuation_events.len(), 2);
@@ -2293,9 +2293,9 @@ pub mod tests {
             .name("test_object".to_string())
             .spawn(move || {
                 // clone sender part of the channels to mock threads so that we can terminate them after execution of the test object
-                let tx_heating_to_schedule_check_for_test_case_finish =
+                let mut tx_heating_to_schedule_check_for_test_case_finish =
                     channels.heating.tx_heating_to_schedule_check.clone();
-                let tx_heating_to_relay_manager_for_test_case_finish =
+                let mut tx_heating_to_relay_manager_for_test_case_finish =
                     channels.heating.tx_heating_to_relay_manager.clone();
 
                 let mut heating_stats_transfer =
@@ -2368,7 +2368,7 @@ pub mod tests {
             .name("mock_schedule_check".to_string())
             .spawn(move || {
                 mock_schedule_check(
-                    &channels.schedule_check.tx_schedule_check_to_heating,
+                    &mut channels.schedule_check.tx_schedule_check_to_heating,
                     &channels.schedule_check.rx_schedule_check_from_heating,
                     None,
                     true,
@@ -2385,7 +2385,7 @@ pub mod tests {
             .name("mock_relay_manager".to_string())
             .spawn(move || {
                 let (mut actuation_events, mock_actuator_states) = mock_relay_manager(
-                    &channels.relay_manager.tx_relay_manager_to_heating,
+                    &mut channels.relay_manager.tx_relay_manager_to_heating,
                     &channels.relay_manager.rx_relay_manager_from_heating,
                 );
                 println!("actuation_events:");
@@ -2516,9 +2516,9 @@ pub mod tests {
             .name("test_object".to_string())
             .spawn(move || {
                 // clone sender part of the channels to mock threads so that we can terminate them after execution of the test object
-                let tx_heating_to_schedule_check_for_test_case_finish =
+                let mut tx_heating_to_schedule_check_for_test_case_finish =
                     channels.heating.tx_heating_to_schedule_check.clone();
-                let tx_heating_to_relay_manager_for_test_case_finish =
+                let mut tx_heating_to_relay_manager_for_test_case_finish =
                     channels.heating.tx_heating_to_relay_manager.clone();
 
                 let mut heating_stats_transfer =
@@ -2593,7 +2593,7 @@ pub mod tests {
             .name("mock_schedule_check".to_string())
             .spawn(move || {
                 mock_schedule_check(
-                    &channels.schedule_check.tx_schedule_check_to_heating,
+                    &mut channels.schedule_check.tx_schedule_check_to_heating,
                     &channels.schedule_check.rx_schedule_check_from_heating,
                     None,
                     true,
@@ -2609,7 +2609,7 @@ pub mod tests {
             .name("mock_relay_manager".to_string())
             .spawn(move || {
                 let (mut actuation_events, mock_actuator_states) = mock_relay_manager(
-                    &channels.relay_manager.tx_relay_manager_to_heating,
+                    &mut channels.relay_manager.tx_relay_manager_to_heating,
                     &channels.relay_manager.rx_relay_manager_from_heating,
                 );
                 assert_eq!(actuation_events.len(), 3);
@@ -2657,9 +2657,9 @@ pub mod tests {
             .name("test_object".to_string())
             .spawn(move || {
                 // clone sender part of the channels to mock threads so that we can terminate them after execution of the test object
-                let tx_heating_to_schedule_check_for_test_case_finish =
+                let mut tx_heating_to_schedule_check_for_test_case_finish =
                     channels.heating.tx_heating_to_schedule_check.clone();
-                let tx_heating_to_relay_manager_for_test_case_finish =
+                let mut tx_heating_to_relay_manager_for_test_case_finish =
                     channels.heating.tx_heating_to_relay_manager.clone();
 
                 let mut heating_stats_transfer =
@@ -2742,7 +2742,7 @@ pub mod tests {
             .name("mock_schedule_check".to_string())
             .spawn(move || {
                 mock_schedule_check(
-                    &channels.schedule_check.tx_schedule_check_to_heating,
+                    &mut channels.schedule_check.tx_schedule_check_to_heating,
                     &channels.schedule_check.rx_schedule_check_from_heating,
                     None,
                     true,
@@ -2759,7 +2759,7 @@ pub mod tests {
             .name("mock_relay_manager".to_string())
             .spawn(move || {
                 let (mut actuation_events, mock_actuator_states) = mock_relay_manager(
-                    &channels.relay_manager.tx_relay_manager_to_heating,
+                    &mut channels.relay_manager.tx_relay_manager_to_heating,
                     &channels.relay_manager.rx_relay_manager_from_heating,
                 );
                 assert_eq!(actuation_events.len(), 2);
@@ -2818,9 +2818,9 @@ pub mod tests {
             .name("test_object".to_string())
             .spawn(move || {
                 // clone sender part of the channels to mock threads so that we can terminate them after execution of the test object
-                let tx_heating_to_schedule_check_for_test_case_finish =
+                let mut tx_heating_to_schedule_check_for_test_case_finish =
                     channels.heating.tx_heating_to_schedule_check.clone();
-                let tx_heating_to_relay_manager_for_test_case_finish =
+                let mut tx_heating_to_relay_manager_for_test_case_finish =
                     channels.heating.tx_heating_to_relay_manager.clone();
 
                 let mut heating_stats_transfer =

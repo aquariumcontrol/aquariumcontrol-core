@@ -6,10 +6,11 @@ The above copyright notice and this permission notice shall be included in all c
 
 THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
+use crate::launch::channels::{AquaChannelError, AquaSender};
 use crate::utilities::channel_content::InternalCommand;
 use crate::water::refill_monitor_view::RefillMonitorView;
 use std::fmt;
-use std::sync::mpsc::{Receiver, RecvError, Sender};
+use std::sync::mpsc::{Receiver, RecvError};
 
 /// Struct collects the channels for the communication between the refill control and the other components.
 /// Additionally, the struct contains counters for debug purposes.
@@ -17,9 +18,7 @@ use std::sync::mpsc::{Receiver, RecvError, Sender};
 /// The functions increment the usage counters.
 pub struct RefillChannels {
     /// Sender part of the channel for communication to relay manager
-    pub tx_refill_to_relay_manager: Sender<InternalCommand>,
-    #[cfg(feature = "debug_channels")]
-    pub cnt_tx_refill_to_relay_manager: u64,
+    pub tx_refill_to_relay_manager: AquaSender<InternalCommand>,
 
     /// Receiver part of the channel for communication from the relay manager
     pub rx_refill_from_relay_manager: Receiver<bool>,
@@ -27,9 +26,7 @@ pub struct RefillChannels {
     pub cnt_rx_refill_from_relay_manager: u64,
 
     /// Sender part of the channel for communication to the signal handler
-    pub tx_refill_to_signal_handler: Sender<bool>,
-    #[cfg(feature = "debug_channels")]
-    pub cnt_tx_refill_to_signal_handler: u64,
+    pub tx_refill_to_signal_handler: AquaSender<bool>,
 
     /// Receiver part of the channel for communication from the signal handler
     pub rx_refill_from_signal_handler: Receiver<InternalCommand>,
@@ -37,9 +34,7 @@ pub struct RefillChannels {
     pub cnt_rx_refill_from_signal_handler: u64,
 
     /// Sender part of the channel for communication to the schedule checker
-    pub tx_refill_to_schedule_check: Sender<InternalCommand>,
-    #[cfg(feature = "debug_channels")]
-    pub cnt_tx_refill_to_schedule_check: u64,
+    pub tx_refill_to_schedule_check: AquaSender<InternalCommand>,
 
     /// Receiver part of the channel for communication from the schedule checker
     pub rx_refill_from_schedule_check: Receiver<bool>,
@@ -52,22 +47,15 @@ pub struct RefillChannels {
     pub cnt_rx_refill_from_messaging_opt: u64,
 
     /// Sender part of the channel for communication to the monitors
-    pub tx_refill_to_monitors: Sender<RefillMonitorView>,
-    #[cfg(feature = "debug_channels")]
-    pub cnt_tx_refill_to_monitors: u64,
+    pub tx_refill_to_monitors: AquaSender<RefillMonitorView>,
 }
 
 impl RefillChannels {
     pub fn send_to_relay_manager(
         &mut self,
         command: InternalCommand,
-    ) -> Result<(), std::sync::mpsc::SendError<InternalCommand>> {
-        let result = self.tx_refill_to_relay_manager.send(command);
-        #[cfg(feature = "debug_channels")]
-        if result.is_ok() {
-            self.cnt_tx_refill_to_relay_manager += 1;
-        }
-        result
+    ) -> Result<(), AquaChannelError> {
+        self.tx_refill_to_relay_manager.send(command)
     }
 
     pub fn receive_from_relay_manager(&mut self) -> Result<bool, RecvError> {
@@ -82,13 +70,8 @@ impl RefillChannels {
     pub fn send_to_schedule_check(
         &mut self,
         command: InternalCommand,
-    ) -> Result<(), std::sync::mpsc::SendError<InternalCommand>> {
-        let result = self.tx_refill_to_schedule_check.send(command);
-        #[cfg(feature = "debug_channels")]
-        if result.is_ok() {
-            self.cnt_tx_refill_to_schedule_check += 1;
-        }
-        result
+    ) -> Result<(), AquaChannelError> {
+        self.tx_refill_to_schedule_check.send(command)
     }
 
     pub fn receive_from_schedule_check(&mut self) -> Result<bool, RecvError> {
@@ -100,28 +83,12 @@ impl RefillChannels {
         result
     }
 
-    pub fn send_to_monitor(
-        &mut self,
-        view: RefillMonitorView,
-    ) -> Result<(), std::sync::mpsc::SendError<RefillMonitorView>> {
-        let result = self.tx_refill_to_monitors.send(view);
-        #[cfg(feature = "debug_channels")]
-        if result.is_ok() {
-            self.cnt_tx_refill_to_monitors += 1;
-        }
-        result
+    pub fn send_to_monitor(&mut self, view: RefillMonitorView) -> Result<(), AquaChannelError> {
+        self.tx_refill_to_monitors.send(view)
     }
 
-    pub fn send_to_signal_handler(
-        &mut self,
-        status: bool,
-    ) -> Result<(), std::sync::mpsc::SendError<bool>> {
-        let result = self.tx_refill_to_signal_handler.send(status);
-        #[cfg(feature = "debug_channels")]
-        if result.is_ok() {
-            self.cnt_tx_refill_to_signal_handler += 1;
-        }
-        result
+    pub fn send_to_signal_handler(&mut self, status: bool) -> Result<(), AquaChannelError> {
+        self.tx_refill_to_signal_handler.send(status)
     }
 }
 
@@ -131,8 +98,8 @@ impl fmt::Display for RefillChannels {
         writeln!(f, "=== RefillChannels ===")?;
         writeln!(
             f,
-            "cnt_tx_refill_to_relay_manager: {}",
-            self.cnt_tx_refill_to_relay_manager
+            "tx_refill_to_relay_manager: {}",
+            self.tx_refill_to_relay_manager.count
         )?;
         writeln!(
             f,
@@ -141,8 +108,8 @@ impl fmt::Display for RefillChannels {
         )?;
         writeln!(
             f,
-            "cnt_tx_refill_to_signal_handler: {}",
-            self.cnt_tx_refill_to_signal_handler
+            "tx_refill_to_signal_handler: {}",
+            self.tx_refill_to_signal_handler.count
         )?;
         writeln!(
             f,
@@ -151,8 +118,8 @@ impl fmt::Display for RefillChannels {
         )?;
         writeln!(
             f,
-            "cnt_tx_refill_to_schedule_check: {}",
-            self.cnt_tx_refill_to_schedule_check
+            "tx_refill_to_schedule_check: {}",
+            self.tx_refill_to_schedule_check.count
         )?;
         writeln!(
             f,
@@ -166,8 +133,8 @@ impl fmt::Display for RefillChannels {
         )?;
         write!(
             f,
-            "cnt_tx_refill_to_monitors: {}",
-            self.cnt_tx_refill_to_monitors
+            "tx_refill_to_monitors: {}",
+            self.tx_refill_to_monitors.count
         )
     }
 }
@@ -185,61 +152,25 @@ impl fmt::Display for RefillChannels {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::sync::mpsc;
+    use crate::launch::channels::Channels;
 
-    /// A helper function to create a `RefillChannels` instance with mock channel ends for testing.
+    /// A helper function to create a `RefillChannels` instance with the mock channel ends for testing.
     ///
     /// This function sets up all the necessary `mpsc` channels and returns the `RefillChannels`
     /// struct along with the "other ends" of the channels that the test needs to interact with
     /// or assert against.
     fn setup_channels() -> (
         RefillChannels,
-        mpsc::Receiver<InternalCommand>, // Test receiver for schedule_check
-        mpsc::Sender<bool>,              // Test sender for schedule_check response
-        mpsc::Receiver<RefillMonitorView>, // Test receiver for monitors
+        Receiver<InternalCommand>,   // Test receiver for schedule_check
+        AquaSender<bool>,            // Test sender for schedule_check response
+        Receiver<RefillMonitorView>, // Test receiver for monitors
     ) {
-        let (tx_relay, _rx_relay) = mpsc::channel();
-        let (_tx_relay_resp, rx_relay_resp) = mpsc::channel();
-        let (tx_signal, _rx_signal) = mpsc::channel();
-        let (_tx_signal_resp, rx_signal_resp) = mpsc::channel();
-        let (tx_schedule, rx_schedule_test) = mpsc::channel();
-        let (tx_schedule_resp_test, rx_schedule) = mpsc::channel();
-        let (_tx_messaging, rx_messaging) = mpsc::channel();
-        let (tx_monitor, rx_monitor_test) = mpsc::channel();
-
-        let channels = RefillChannels {
-            tx_refill_to_relay_manager: tx_relay,
-            rx_refill_from_relay_manager: rx_relay_resp,
-            tx_refill_to_signal_handler: tx_signal,
-            rx_refill_from_signal_handler: rx_signal_resp,
-            tx_refill_to_schedule_check: tx_schedule,
-            rx_refill_from_schedule_check: rx_schedule,
-            rx_refill_from_messaging_opt: Some(rx_messaging),
-            tx_refill_to_monitors: tx_monitor,
-
-            #[cfg(feature = "debug_channels")]
-            cnt_tx_refill_to_relay_manager: 0,
-            #[cfg(feature = "debug_channels")]
-            cnt_rx_refill_from_relay_manager: 0,
-            #[cfg(feature = "debug_channels")]
-            cnt_tx_refill_to_signal_handler: 0,
-            #[cfg(feature = "debug_channels")]
-            cnt_rx_refill_from_signal_handler: 0,
-            #[cfg(feature = "debug_channels")]
-            cnt_tx_refill_to_schedule_check: 0,
-            #[cfg(feature = "debug_channels")]
-            cnt_rx_refill_from_schedule_check: 0,
-            #[cfg(feature = "debug_channels")]
-            cnt_rx_refill_from_messaging_opt: 0,
-            #[cfg(feature = "debug_channels")]
-            cnt_tx_refill_to_monitors: 0,
-        };
-
+        let channels = Channels::new_for_test();
         (
-            channels,
-            rx_schedule_test,
-            tx_schedule_resp_test,
-            rx_monitor_test,
+            channels.refill,
+            channels.schedule_check.rx_schedule_check_from_refill,
+            channels.schedule_check.tx_schedule_check_to_refill,
+            channels.monitors.rx_monitors_from_refill,
         )
     }
 
@@ -263,7 +194,7 @@ mod tests {
         #[cfg(feature = "debug_channels")]
         {
             assert_eq!(
-                channels.cnt_tx_refill_to_schedule_check, 1,
+                channels.tx_refill_to_schedule_check, 1,
                 "Counter should be incremented"
             );
         }
@@ -272,7 +203,7 @@ mod tests {
     #[test]
     fn test_receive_from_schedule_check_receives_response_and_increments_counter() {
         // Arrange
-        let (mut channels, _, tx_schedule_resp_test, _) = setup_channels();
+        let (mut channels, _, mut tx_schedule_resp_test, _) = setup_channels();
         let expected_response = true;
         tx_schedule_resp_test.send(expected_response).unwrap();
 
@@ -317,7 +248,7 @@ mod tests {
         #[cfg(feature = "debug_channels")]
         {
             assert_eq!(
-                channels.cnt_tx_refill_to_monitors, 1,
+                channels.tx_refill_to_monitors, 1,
                 "Counter should be incremented"
             );
         }

@@ -9,17 +9,17 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 
 #[cfg(test)]
 pub mod tests {
-    use spin_sleep::SpinSleeper;
-    use std::sync::mpsc::{Receiver, Sender, TryRecvError};
-    use std::time::Duration;
-
+    use crate::launch::channels::AquaSender;
     use crate::mocks::mock_signal::tests::MockSignal;
     use crate::mocks::test_command::tests::TestCommand;
     use crate::utilities::channel_content::InternalCommand;
+    use spin_sleep::SpinSleeper;
+    use std::sync::mpsc::{Receiver, TryRecvError};
+    use std::time::Duration;
 
     // send via the channel a value to the test object to indicate if actuation is permitted.
     pub fn mock_schedule_check(
-        tx_schedule_check_to_test_object: &Sender<bool>,
+        tx_schedule_check_to_test_object: &mut AquaSender<bool>,
         rx_schedule_check_from_test_object: &Receiver<InternalCommand>,
         rx_schedule_check_from_test_environment_opt: Option<&Receiver<TestCommand>>,
         initial_stimuli: bool,

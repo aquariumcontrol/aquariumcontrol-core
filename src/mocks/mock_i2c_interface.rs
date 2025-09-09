@@ -57,7 +57,7 @@ pub mod tests {
             }
         }
 
-        pub fn execute(&mut self, i2c_interface_channels: I2cInterfaceChannels) {
+        pub fn execute(&mut self, mut i2c_interface_channels: I2cInterfaceChannels) {
             loop {
                 let (
                     quit_command_received, // the request to end the application has been received

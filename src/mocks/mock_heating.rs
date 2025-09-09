@@ -10,18 +10,19 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 #[cfg(test)]
 pub mod tests {
     use crate::database::sql_interface_error::SqlInterfaceError;
+    use crate::database::thermal_set_value_updater_trait::ThermalSetValueUpdaterTrait;
+    use crate::launch::channels::AquaSender;
     use crate::mocks::mock_common::mock_common_receive_from_signal_handler;
     use crate::mocks::mock_signal::tests::MockSignal;
     use crate::mocks::test_command::tests::TestCommand;
     use crate::utilities::channel_content::{AquariumSignal, InternalCommand};
-    use crate::database::thermal_set_value_updater_trait::ThermalSetValueUpdaterTrait;
     use spin_sleep::SpinSleeper;
-    use std::sync::mpsc::{Receiver, Sender, TryRecvError};
+    use std::sync::mpsc::{Receiver, TryRecvError};
     use std::sync::{Arc, Mutex};
     use std::time::{Duration, Instant};
 
     pub fn mock_heating(
-        tx_heating_to_tank_level_switch_opt: Option<&Sender<InternalCommand>>,
+        mut tx_heating_to_tank_level_switch_opt: Option<&mut AquaSender<InternalCommand>>,
         rx_heating_from_tank_level_switch_opt: Option<&Receiver<bool>>,
         rx_heating_from_signal_handler: &Receiver<InternalCommand>,
         rx_heating_from_test_environment_opt: Option<&Receiver<TestCommand>>,
@@ -32,7 +33,7 @@ pub mod tests {
 
         loop {
             match tx_heating_to_tank_level_switch_opt {
-                Some(tx_heating_to_tank_level_switch) => {
+                Some(ref mut tx_heating_to_tank_level_switch) => {
                     match tx_heating_to_tank_level_switch.send(InternalCommand::RequestSignal(
                         AquariumSignal::TankLevelSwitchPosition,
                     )) {

@@ -6,129 +6,109 @@ The above copyright notice and this permission notice shall be included in all c
 
 THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
+use crate::launch::channels::{AquaChannelError, AquaSender};
 use crate::utilities::channel_content::InternalCommand;
 use std::fmt;
-use std::sync::mpsc::{Receiver, RecvError, SendError, Sender};
+use std::sync::mpsc::{Receiver, RecvError};
 
 pub struct SignalHandlerChannels {
     // --- Channels for each module ---
-    pub tx_signal_handler_to_messaging_opt: Option<Sender<InternalCommand>>,
-    #[cfg(feature = "debug_channels")]
-    pub cnt_tx_signal_handler_to_messaging_opt: u64,
+    pub tx_signal_handler_to_messaging_opt: Option<AquaSender<InternalCommand>>,
+
     pub rx_signal_handler_from_messaging_opt: Option<Receiver<bool>>,
     #[cfg(feature = "debug_channels")]
     pub cnt_rx_signal_handler_from_messaging_opt: u64,
 
-    pub tx_signal_handler_to_refill: Sender<InternalCommand>,
-    #[cfg(feature = "debug_channels")]
-    pub cnt_tx_signal_handler_to_refill: u64,
+    pub tx_signal_handler_to_refill: AquaSender<InternalCommand>,
+
     pub rx_signal_handler_from_refill: Receiver<bool>,
     #[cfg(feature = "debug_channels")]
     pub cnt_rx_signal_handler_from_refill: u64,
 
-    pub tx_signal_handler_to_tank_level_switch: Sender<InternalCommand>,
-    #[cfg(feature = "debug_channels")]
-    pub cnt_tx_signal_handler_to_tank_level_switch: u64,
+    pub tx_signal_handler_to_tank_level_switch: AquaSender<InternalCommand>,
+
     pub rx_signal_handler_from_tank_level_switch: Receiver<bool>,
     #[cfg(feature = "debug_channels")]
     pub cnt_rx_signal_handler_from_tank_level_switch: u64,
 
-    pub tx_signal_handler_to_heating: Sender<InternalCommand>,
-    #[cfg(feature = "debug_channels")]
-    pub cnt_tx_signal_handler_to_heating: u64,
+    pub tx_signal_handler_to_heating: AquaSender<InternalCommand>,
+
     pub rx_signal_handler_from_heating: Receiver<bool>,
     #[cfg(feature = "debug_channels")]
     pub cnt_rx_signal_handler_from_heating: u64,
 
-    pub tx_signal_handler_to_relay_manager: Sender<InternalCommand>,
-    #[cfg(feature = "debug_channels")]
-    pub cnt_tx_signal_handler_to_relay_manager: u64,
+    pub tx_signal_handler_to_relay_manager: AquaSender<InternalCommand>,
+
     pub rx_signal_handler_from_relay_manager: Receiver<bool>,
     #[cfg(feature = "debug_channels")]
     pub cnt_rx_signal_handler_from_relay_manager: u64,
 
-    pub tx_signal_handler_to_atlas_scientific: Sender<InternalCommand>,
-    #[cfg(feature = "debug_channels")]
-    pub cnt_tx_signal_handler_to_atlas_scientific: u64,
+    pub tx_signal_handler_to_atlas_scientific: AquaSender<InternalCommand>,
+
     pub rx_signal_handler_from_atlas_scientific: Receiver<bool>,
     #[cfg(feature = "debug_channels")]
     pub cnt_rx_signal_handler_from_atlas_scientific: u64,
 
-    pub tx_signal_handler_to_sensor_manager: Sender<InternalCommand>,
-    #[cfg(feature = "debug_channels")]
-    pub cnt_tx_signal_handler_to_sensor_manager: u64,
+    pub tx_signal_handler_to_sensor_manager: AquaSender<InternalCommand>,
+
     pub rx_signal_handler_from_sensor_manager: Receiver<bool>,
     #[cfg(feature = "debug_channels")]
     pub cnt_rx_signal_handler_from_sensor_manager: u64,
 
-    pub tx_signal_handler_to_data_logger: Sender<InternalCommand>,
-    #[cfg(feature = "debug_channels")]
-    pub cnt_tx_signal_handler_to_data_logger: u64,
+    pub tx_signal_handler_to_data_logger: AquaSender<InternalCommand>,
+
     pub rx_signal_handler_from_data_logger: Receiver<bool>,
     #[cfg(feature = "debug_channels")]
     pub cnt_rx_signal_handler_from_data_logger: u64,
 
-    pub tx_signal_handler_to_balling: Sender<InternalCommand>,
-    #[cfg(feature = "debug_channels")]
-    pub cnt_tx_signal_handler_to_balling: u64,
+    pub tx_signal_handler_to_balling: AquaSender<InternalCommand>,
+
     pub rx_signal_handler_from_balling: Receiver<bool>,
     #[cfg(feature = "debug_channels")]
     pub cnt_rx_signal_handler_from_balling: u64,
 
-    pub tx_signal_handler_to_ventilation: Sender<InternalCommand>,
-    #[cfg(feature = "debug_channels")]
-    pub cnt_tx_signal_handler_to_ventilation: u64,
+    pub tx_signal_handler_to_ventilation: AquaSender<InternalCommand>,
+
     pub rx_signal_handler_from_ventilation: Receiver<bool>,
     #[cfg(feature = "debug_channels")]
     pub cnt_rx_signal_handler_from_ventilation: u64,
 
-    pub tx_signal_handler_to_monitors: Sender<InternalCommand>,
-    #[cfg(feature = "debug_channels")]
-    pub cnt_tx_signal_handler_to_monitors: u64,
+    pub tx_signal_handler_to_monitors: AquaSender<InternalCommand>,
+
     pub rx_signal_handler_from_monitors: Receiver<bool>,
     #[cfg(feature = "debug_channels")]
     pub cnt_rx_signal_handler_from_monitors: u64,
 
-    pub tx_signal_handler_to_feed: Sender<InternalCommand>,
-    #[cfg(feature = "debug_channels")]
-    pub cnt_tx_signal_handler_to_feed: u64,
+    pub tx_signal_handler_to_feed: AquaSender<InternalCommand>,
+
     pub rx_signal_handler_from_feed: Receiver<bool>,
     #[cfg(feature = "debug_channels")]
     pub cnt_rx_signal_handler_from_feed: u64,
 
-    pub tx_signal_handler_to_schedule_check: Sender<InternalCommand>,
-    #[cfg(feature = "debug_channels")]
-    pub cnt_tx_signal_handler_to_schedule_check: u64,
+    pub tx_signal_handler_to_schedule_check: AquaSender<InternalCommand>,
+
     pub rx_signal_handler_from_schedule_check: Receiver<bool>,
     #[cfg(feature = "debug_channels")]
     pub cnt_rx_signal_handler_from_schedule_check: u64,
 
-    pub tx_signal_handler_to_tcp_opt: Option<Sender<InternalCommand>>,
-    #[cfg(feature = "debug_channels")]
-    pub cnt_tx_signal_handler_to_tcp_opt: u64,
+    pub tx_signal_handler_to_tcp_opt: Option<AquaSender<InternalCommand>>,
+
     pub rx_signal_handler_from_tcp_opt: Option<Receiver<bool>>,
     #[cfg(feature = "debug_channels")]
     pub cnt_rx_signal_handler_from_tcp_opt: u64,
 
-    pub tx_signal_handler_to_watchdog: Sender<InternalCommand>,
-    #[cfg(feature = "debug_channels")]
-    pub cnt_tx_signal_handler_to_watchdog: u64,
+    pub tx_signal_handler_to_watchdog: AquaSender<InternalCommand>,
+
     pub rx_signal_handler_from_watchdog: Receiver<bool>,
     #[cfg(feature = "debug_channels")]
     pub cnt_rx_signal_handler_from_watchdog: u64,
 
     // Hardware-specific channels
-    pub tx_signal_handler_to_dht: Sender<InternalCommand>,
-    #[cfg(feature = "debug_channels")]
-    pub cnt_tx_signal_handler_to_dht: u64,
+    pub tx_signal_handler_to_dht: AquaSender<InternalCommand>,
 
-    pub tx_signal_handler_to_i2c_interface: Sender<InternalCommand>,
-    #[cfg(feature = "debug_channels")]
-    pub cnt_tx_signal_handler_to_i2c_interface: u64,
+    pub tx_signal_handler_to_i2c_interface: AquaSender<InternalCommand>,
 
-    pub tx_signal_handler_to_ds18b20: Sender<InternalCommand>,
-    #[cfg(feature = "debug_channels")]
-    pub cnt_tx_signal_handler_to_ds18b20: u64,
+    pub tx_signal_handler_to_ds18b20: AquaSender<InternalCommand>,
 }
 
 impl SignalHandlerChannels {
@@ -137,15 +117,10 @@ impl SignalHandlerChannels {
     pub fn send_to_messaging(
         &mut self,
         command: InternalCommand,
-    ) -> Option<Result<(), SendError<InternalCommand>>> {
-        self.tx_signal_handler_to_messaging_opt.as_ref().map(|tx| {
-            let result = tx.send(command);
-            #[cfg(feature = "debug_channels")]
-            if result.is_ok() {
-                self.cnt_tx_signal_handler_to_messaging_opt += 1;
-            }
-            result
-        })
+    ) -> Option<Result<(), AquaChannelError>> {
+        self.tx_signal_handler_to_messaging_opt
+            .as_mut()
+            .map(|mut tx| tx.send(command))
     }
 
     #[allow(unused)]
@@ -166,15 +141,10 @@ impl SignalHandlerChannels {
     pub fn send_to_tcp(
         &mut self,
         command: InternalCommand,
-    ) -> Option<Result<(), SendError<InternalCommand>>> {
-        self.tx_signal_handler_to_tcp_opt.as_ref().map(|tx| {
-            let result = tx.send(command);
-            #[cfg(feature = "debug_channels")]
-            if result.is_ok() {
-                self.cnt_tx_signal_handler_to_tcp_opt += 1;
-            }
-            result
-        })
+    ) -> Option<Result<(), AquaChannelError>> {
+        self.tx_signal_handler_to_tcp_opt
+            .as_mut()
+            .map(|mut tx| tx.send(command))
     }
 
     #[allow(unused)]
@@ -189,18 +159,9 @@ impl SignalHandlerChannels {
         })
     }
 
-    // --- Standard Modules ---
     #[allow(unused)]
-    pub fn send_to_refill(
-        &mut self,
-        command: InternalCommand,
-    ) -> Result<(), SendError<InternalCommand>> {
-        let result = self.tx_signal_handler_to_refill.send(command);
-        #[cfg(feature = "debug_channels")]
-        if result.is_ok() {
-            self.cnt_tx_signal_handler_to_refill += 1;
-        }
-        result
+    pub fn send_to_refill(&mut self, command: InternalCommand) -> Result<(), AquaChannelError> {
+        self.tx_signal_handler_to_refill.send(command)
     }
 
     #[allow(unused)]
@@ -217,13 +178,8 @@ impl SignalHandlerChannels {
     pub fn send_to_tank_level_switch(
         &mut self,
         command: InternalCommand,
-    ) -> Result<(), SendError<InternalCommand>> {
-        let result = self.tx_signal_handler_to_tank_level_switch.send(command);
-        #[cfg(feature = "debug_channels")]
-        if result.is_ok() {
-            self.cnt_tx_signal_handler_to_tank_level_switch += 1;
-        }
-        result
+    ) -> Result<(), AquaChannelError> {
+        self.tx_signal_handler_to_tank_level_switch.send(command)
     }
 
     #[allow(unused)]
@@ -237,16 +193,8 @@ impl SignalHandlerChannels {
     }
 
     #[allow(unused)]
-    pub fn send_to_heating(
-        &mut self,
-        command: InternalCommand,
-    ) -> Result<(), SendError<InternalCommand>> {
-        let result = self.tx_signal_handler_to_heating.send(command);
-        #[cfg(feature = "debug_channels")]
-        if result.is_ok() {
-            self.cnt_tx_signal_handler_to_heating += 1;
-        }
-        result
+    pub fn send_to_heating(&mut self, command: InternalCommand) -> Result<(), AquaChannelError> {
+        self.tx_signal_handler_to_heating.send(command)
     }
 
     #[allow(unused)]
@@ -263,13 +211,8 @@ impl SignalHandlerChannels {
     pub fn send_to_relay_manager(
         &mut self,
         command: InternalCommand,
-    ) -> Result<(), SendError<InternalCommand>> {
-        let result = self.tx_signal_handler_to_relay_manager.send(command);
-        #[cfg(feature = "debug_channels")]
-        if result.is_ok() {
-            self.cnt_tx_signal_handler_to_relay_manager += 1;
-        }
-        result
+    ) -> Result<(), AquaChannelError> {
+        self.tx_signal_handler_to_relay_manager.send(command)
     }
 
     #[allow(unused)]
@@ -286,13 +229,8 @@ impl SignalHandlerChannels {
     pub fn send_to_atlas_scientific(
         &mut self,
         command: InternalCommand,
-    ) -> Result<(), SendError<InternalCommand>> {
-        let result = self.tx_signal_handler_to_atlas_scientific.send(command);
-        #[cfg(feature = "debug_channels")]
-        if result.is_ok() {
-            self.cnt_tx_signal_handler_to_atlas_scientific += 1;
-        }
-        result
+    ) -> Result<(), AquaChannelError> {
+        self.tx_signal_handler_to_atlas_scientific.send(command)
     }
 
     #[allow(unused)]
@@ -309,13 +247,8 @@ impl SignalHandlerChannels {
     pub fn send_to_sensor_manager(
         &mut self,
         command: InternalCommand,
-    ) -> Result<(), SendError<InternalCommand>> {
-        let result = self.tx_signal_handler_to_sensor_manager.send(command);
-        #[cfg(feature = "debug_channels")]
-        if result.is_ok() {
-            self.cnt_tx_signal_handler_to_sensor_manager += 1;
-        }
-        result
+    ) -> Result<(), AquaChannelError> {
+        self.tx_signal_handler_to_sensor_manager.send(command)
     }
 
     #[allow(unused)]
@@ -332,13 +265,8 @@ impl SignalHandlerChannels {
     pub fn send_to_data_logger(
         &mut self,
         command: InternalCommand,
-    ) -> Result<(), SendError<InternalCommand>> {
-        let result = self.tx_signal_handler_to_data_logger.send(command);
-        #[cfg(feature = "debug_channels")]
-        if result.is_ok() {
-            self.cnt_tx_signal_handler_to_data_logger += 1;
-        }
-        result
+    ) -> Result<(), AquaChannelError> {
+        self.tx_signal_handler_to_data_logger.send(command)
     }
 
     #[allow(unused)]
@@ -352,16 +280,8 @@ impl SignalHandlerChannels {
     }
 
     #[allow(unused)]
-    pub fn send_to_balling(
-        &mut self,
-        command: InternalCommand,
-    ) -> Result<(), SendError<InternalCommand>> {
-        let result = self.tx_signal_handler_to_balling.send(command);
-        #[cfg(feature = "debug_channels")]
-        if result.is_ok() {
-            self.cnt_tx_signal_handler_to_balling += 1;
-        }
-        result
+    pub fn send_to_balling(&mut self, command: InternalCommand) -> Result<(), AquaChannelError> {
+        self.tx_signal_handler_to_balling.send(command)
     }
 
     #[allow(unused)]
@@ -378,13 +298,8 @@ impl SignalHandlerChannels {
     pub fn send_to_ventilation(
         &mut self,
         command: InternalCommand,
-    ) -> Result<(), SendError<InternalCommand>> {
-        let result = self.tx_signal_handler_to_ventilation.send(command);
-        #[cfg(feature = "debug_channels")]
-        if result.is_ok() {
-            self.cnt_tx_signal_handler_to_ventilation += 1;
-        }
-        result
+    ) -> Result<(), AquaChannelError> {
+        self.tx_signal_handler_to_ventilation.send(command)
     }
 
     #[allow(unused)]
@@ -398,16 +313,8 @@ impl SignalHandlerChannels {
     }
 
     #[allow(unused)]
-    pub fn send_to_monitors(
-        &mut self,
-        command: InternalCommand,
-    ) -> Result<(), SendError<InternalCommand>> {
-        let result = self.tx_signal_handler_to_monitors.send(command);
-        #[cfg(feature = "debug_channels")]
-        if result.is_ok() {
-            self.cnt_tx_signal_handler_to_monitors += 1;
-        }
-        result
+    pub fn send_to_monitors(&mut self, command: InternalCommand) -> Result<(), AquaChannelError> {
+        self.tx_signal_handler_to_monitors.send(command)
     }
 
     #[allow(unused)]
@@ -421,16 +328,8 @@ impl SignalHandlerChannels {
     }
 
     #[allow(unused)]
-    pub fn send_to_feed(
-        &mut self,
-        command: InternalCommand,
-    ) -> Result<(), SendError<InternalCommand>> {
-        let result = self.tx_signal_handler_to_feed.send(command);
-        #[cfg(feature = "debug_channels")]
-        if result.is_ok() {
-            self.cnt_tx_signal_handler_to_feed += 1;
-        }
-        result
+    pub fn send_to_feed(&mut self, command: InternalCommand) -> Result<(), AquaChannelError> {
+        self.tx_signal_handler_to_feed.send(command)
     }
 
     #[allow(unused)]
@@ -447,13 +346,8 @@ impl SignalHandlerChannels {
     pub fn send_to_schedule_check(
         &mut self,
         command: InternalCommand,
-    ) -> Result<(), SendError<InternalCommand>> {
-        let result = self.tx_signal_handler_to_schedule_check.send(command);
-        #[cfg(feature = "debug_channels")]
-        if result.is_ok() {
-            self.cnt_tx_signal_handler_to_schedule_check += 1;
-        }
-        result
+    ) -> Result<(), AquaChannelError> {
+        self.tx_signal_handler_to_schedule_check.send(command)
     }
 
     #[allow(unused)]
@@ -467,16 +361,8 @@ impl SignalHandlerChannels {
     }
 
     #[allow(unused)]
-    pub fn send_to_watchdog(
-        &mut self,
-        command: InternalCommand,
-    ) -> Result<(), SendError<InternalCommand>> {
-        let result = self.tx_signal_handler_to_watchdog.send(command);
-        #[cfg(feature = "debug_channels")]
-        if result.is_ok() {
-            self.cnt_tx_signal_handler_to_watchdog += 1;
-        }
-        result
+    pub fn send_to_watchdog(&mut self, command: InternalCommand) -> Result<(), AquaChannelError> {
+        self.tx_signal_handler_to_watchdog.send(command)
     }
 
     #[allow(unused)]
@@ -491,42 +377,21 @@ impl SignalHandlerChannels {
 
     // --- Hardware-Specific Modules (Send only) ---
     #[allow(unused)]
-    pub fn send_to_dht(
-        &mut self,
-        command: InternalCommand,
-    ) -> Result<(), SendError<InternalCommand>> {
-        let result = self.tx_signal_handler_to_dht.send(command);
-        #[cfg(feature = "debug_channels")]
-        if result.is_ok() {
-            self.cnt_tx_signal_handler_to_dht += 1;
-        }
-        result
+    pub fn send_to_dht(&mut self, command: InternalCommand) -> Result<(), AquaChannelError> {
+        self.tx_signal_handler_to_dht.send(command)
     }
 
     #[allow(unused)]
     pub fn send_to_i2c_interface(
         &mut self,
         command: InternalCommand,
-    ) -> Result<(), SendError<InternalCommand>> {
-        let result = self.tx_signal_handler_to_i2c_interface.send(command);
-        #[cfg(feature = "debug_channels")]
-        if result.is_ok() {
-            self.cnt_tx_signal_handler_to_i2c_interface += 1;
-        }
-        result
+    ) -> Result<(), AquaChannelError> {
+        self.tx_signal_handler_to_i2c_interface.send(command)
     }
 
     #[allow(unused)]
-    pub fn send_to_ds18b20(
-        &mut self,
-        command: InternalCommand,
-    ) -> Result<(), SendError<InternalCommand>> {
-        let result = self.tx_signal_handler_to_ds18b20.send(command);
-        #[cfg(feature = "debug_channels")]
-        if result.is_ok() {
-            self.cnt_tx_signal_handler_to_ds18b20 += 1;
-        }
-        result
+    pub fn send_to_ds18b20(&mut self, command: InternalCommand) -> Result<(), AquaChannelError> {
+        self.tx_signal_handler_to_ds18b20.send(command)
     }
 }
 
@@ -536,8 +401,11 @@ impl fmt::Display for SignalHandlerChannels {
         writeln!(f, "=== Signal Handler Channel Status ===")?;
         writeln!(
             f,
-            "cnt_tx_signal_handler_to_messaging_opt: {}",
-            self.cnt_tx_signal_handler_to_messaging_opt
+            "tx_signal_handler_to_messaging_opt: {}",
+            self.tx_signal_handler_to_messaging_opt
+                .as_ref()
+                .unwrap()
+                .count
         )?;
         writeln!(
             f,
@@ -546,8 +414,8 @@ impl fmt::Display for SignalHandlerChannels {
         )?;
         writeln!(
             f,
-            "cnt_tx_signal_handler_to_refill: {}",
-            self.cnt_tx_signal_handler_to_refill
+            "tx_signal_handler_to_refill: {}",
+            self.tx_signal_handler_to_refill.count
         )?;
         writeln!(
             f,
@@ -556,8 +424,8 @@ impl fmt::Display for SignalHandlerChannels {
         )?;
         writeln!(
             f,
-            "cnt_tx_signal_handler_to_tank_level_switch: {}",
-            self.cnt_tx_signal_handler_to_tank_level_switch
+            "tx_signal_handler_to_tank_level_switch: {}",
+            self.tx_signal_handler_to_tank_level_switch.count
         )?;
         writeln!(
             f,
@@ -566,8 +434,8 @@ impl fmt::Display for SignalHandlerChannels {
         )?;
         writeln!(
             f,
-            "cnt_tx_signal_handler_to_heating: {}",
-            self.cnt_tx_signal_handler_to_heating
+            "tx_signal_handler_to_heating: {}",
+            self.tx_signal_handler_to_heating.count
         )?;
         writeln!(
             f,
@@ -576,8 +444,8 @@ impl fmt::Display for SignalHandlerChannels {
         )?;
         writeln!(
             f,
-            "cnt_tx_signal_handler_to_relay_manager: {}",
-            self.cnt_tx_signal_handler_to_relay_manager
+            "tx_signal_handler_to_relay_manager: {}",
+            self.tx_signal_handler_to_relay_manager.count
         )?;
         writeln!(
             f,
@@ -586,8 +454,8 @@ impl fmt::Display for SignalHandlerChannels {
         )?;
         writeln!(
             f,
-            "cnt_tx_signal_handler_to_atlas_scientific: {}",
-            self.cnt_tx_signal_handler_to_atlas_scientific
+            "tx_signal_handler_to_atlas_scientific: {}",
+            self.tx_signal_handler_to_atlas_scientific.count
         )?;
         writeln!(
             f,
@@ -596,8 +464,8 @@ impl fmt::Display for SignalHandlerChannels {
         )?;
         writeln!(
             f,
-            "cnt_tx_signal_handler_to_sensor_manager: {}",
-            self.cnt_tx_signal_handler_to_sensor_manager
+            "tx_signal_handler_to_sensor_manager: {}",
+            self.tx_signal_handler_to_sensor_manager.count
         )?;
         writeln!(
             f,
@@ -606,8 +474,8 @@ impl fmt::Display for SignalHandlerChannels {
         )?;
         writeln!(
             f,
-            "cnt_tx_signal_handler_to_data_logger: {}",
-            self.cnt_tx_signal_handler_to_data_logger
+            "tx_signal_handler_to_data_logger: {}",
+            self.tx_signal_handler_to_data_logger.count
         )?;
         writeln!(
             f,
@@ -616,8 +484,8 @@ impl fmt::Display for SignalHandlerChannels {
         )?;
         writeln!(
             f,
-            "cnt_tx_signal_handler_to_balling: {}",
-            self.cnt_tx_signal_handler_to_balling
+            "tx_signal_handler_to_balling: {}",
+            self.tx_signal_handler_to_balling.count
         )?;
         writeln!(
             f,
@@ -626,8 +494,8 @@ impl fmt::Display for SignalHandlerChannels {
         )?;
         writeln!(
             f,
-            "cnt_tx_signal_handler_to_ventilation: {}",
-            self.cnt_tx_signal_handler_to_ventilation
+            "tx_signal_handler_to_ventilation: {}",
+            self.tx_signal_handler_to_ventilation.count
         )?;
         writeln!(
             f,
@@ -636,8 +504,8 @@ impl fmt::Display for SignalHandlerChannels {
         )?;
         writeln!(
             f,
-            "cnt_tx_signal_handler_to_monitors: {}",
-            self.cnt_tx_signal_handler_to_monitors
+            "tx_signal_handler_to_monitors: {}",
+            self.tx_signal_handler_to_monitors.count
         )?;
         writeln!(
             f,
@@ -646,8 +514,8 @@ impl fmt::Display for SignalHandlerChannels {
         )?;
         writeln!(
             f,
-            "cnt_tx_signal_handler_to_feed: {}",
-            self.cnt_tx_signal_handler_to_feed
+            "tx_signal_handler_to_feed: {}",
+            self.tx_signal_handler_to_feed.count
         )?;
         writeln!(
             f,
@@ -656,8 +524,8 @@ impl fmt::Display for SignalHandlerChannels {
         )?;
         writeln!(
             f,
-            "cnt_tx_signal_handler_to_schedule_check: {}",
-            self.cnt_tx_signal_handler_to_schedule_check
+            "tx_signal_handler_to_schedule_check: {}",
+            self.tx_signal_handler_to_schedule_check.count
         )?;
         writeln!(
             f,
@@ -666,8 +534,8 @@ impl fmt::Display for SignalHandlerChannels {
         )?;
         writeln!(
             f,
-            "cnt_tx_signal_handler_to_tcp_opt: {}",
-            self.cnt_tx_signal_handler_to_tcp_opt
+            "tx_signal_handler_to_tcp_opt: {}",
+            self.tx_signal_handler_to_tcp_opt.as_ref().unwrap().count
         )?;
         writeln!(
             f,
@@ -676,8 +544,8 @@ impl fmt::Display for SignalHandlerChannels {
         )?;
         writeln!(
             f,
-            "cnt_tx_signal_handler_to_watchdog: {}",
-            self.cnt_tx_signal_handler_to_watchdog
+            "tx_signal_handler_to_watchdog: {}",
+            self.tx_signal_handler_to_watchdog.count
         )?;
         writeln!(
             f,
@@ -687,18 +555,18 @@ impl fmt::Display for SignalHandlerChannels {
 
         writeln!(
             f,
-            "cnt_tx_signal_handler_to_dht: {}",
-            self.cnt_tx_signal_handler_to_dht
+            "tx_signal_handler_to_dht: {}",
+            self.tx_signal_handler_to_dht.count
         )?;
         writeln!(
             f,
-            "cnt_tx_signal_handler_to_i2c_interface: {}",
-            self.cnt_tx_signal_handler_to_i2c_interface
+            "tx_signal_handler_to_i2c_interface: {}",
+            self.tx_signal_handler_to_i2c_interface.count
         )?;
         writeln!(
             f,
-            "cnt_tx_signal_handler_to_ds18b20: {}",
-            self.cnt_tx_signal_handler_to_ds18b20
+            "tx_signal_handler_to_ds18b20: {}",
+            self.tx_signal_handler_to_ds18b20.count
         )?;
 
         Ok(())

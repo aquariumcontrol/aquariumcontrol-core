@@ -391,11 +391,11 @@ impl Messaging {
 pub mod tests {
     use posixmq::PosixMq;
     use spin_sleep::SpinSleeper;
-    use std::sync::mpsc::Sender;
     use std::{thread, time::Duration};
 
     use crate::dispatch::messaging::{messaging_commands, messaging_domains, Message, Messaging};
     use crate::dispatch::messaging_channels::MessagingChannels;
+    use crate::launch::channels::AquaSender;
     use crate::launch::channels::Channels;
     use crate::launch::execution_config::ExecutionConfig;
     use crate::mocks::mock_message_command_receiver::tests::mock_message_command_receiver;
@@ -481,7 +481,7 @@ pub mod tests {
     // - The new thread cannot be spawned.
     fn create_test_environment(
         msg_commands: Vec<Message>,
-        tx_environment_to_object: Sender<InternalCommand>,
+        tx_environment_to_object: AquaSender<InternalCommand>,
         signal_handler_channels: SignalHandlerChannels,
         mq_filename: String,
     ) -> thread::JoinHandle<()> {

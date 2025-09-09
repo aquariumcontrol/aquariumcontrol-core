@@ -30,9 +30,9 @@ use crate::utilities::acknowledge_signal_handler::AcknowledgeSignalHandlerTrait;
 use crate::utilities::check_mutex_access_duration::CheckMutexAccessDurationTrait;
 use crate::utilities::logger::log_error_chain;
 use crate::utilities::wait_for_termination::WaitForTerminationTrait;
+use crate::{manage_cycle_time_thermal, perform_schedule_check, update_thermal_set_values};
 #[cfg(all(not(test), target_os = "linux"))]
 use nix::unistd::gettid;
-use crate::{manage_cycle_time_thermal, perform_schedule_check, update_thermal_set_values};
 
 const CYCLE_TIME_VENTILATION_MILLIS: u64 = 500;
 
@@ -539,7 +539,7 @@ impl Ventilation {
 
 #[cfg(test)]
 pub mod tests {
-    use crate::launch::channels::Channels;
+    use crate::launch::channels::{AquaSender, Channels};
     use crate::mocks::mock_relay_manager::tests::mock_relay_manager;
     use crate::mocks::mock_schedule_check::tests::mock_schedule_check;
     use crate::mocks::mock_ventilation::tests::MockSqlInterfaceVentilationSetVals;
@@ -551,7 +551,7 @@ pub mod tests {
     use crate::utilities::signal_handler::SignalHandlerChannels;
     use all_asserts::{assert_ge, assert_le};
     use spin_sleep::SpinSleeper;
-    use std::sync::mpsc::{Receiver, Sender};
+    use std::sync::mpsc::Receiver;
     use std::sync::{Arc, Mutex};
     use std::thread;
     use std::time::Duration;
@@ -657,7 +657,7 @@ pub mod tests {
             .name("mock_schedule_check".to_string())
             .spawn(move || {
                 mock_schedule_check(
-                    &channels.schedule_check.tx_schedule_check_to_ventilation,
+                    &mut channels.schedule_check.tx_schedule_check_to_ventilation,
                     &channels.schedule_check.rx_schedule_check_from_ventilation,
                     None,
                     true,
@@ -692,11 +692,11 @@ pub mod tests {
             .name("test_object".to_string())
             .spawn(move || {
                 // clone sender part of the channels to mock threads so that we can terminate them after execution of the test object
-                let tx_ventilation_to_schedule_check_for_test_case_finish = channels
+                let mut tx_ventilation_to_schedule_check_for_test_case_finish = channels
                     .ventilation
                     .tx_ventilation_to_schedule_check
                     .clone();
-                let tx_ventilation_to_relay_manager_for_test_case_finish =
+                let mut tx_ventilation_to_relay_manager_for_test_case_finish =
                     channels.ventilation.tx_ventilation_to_relay_manager.clone();
 
                 let mut ventilation_set_value_updater =
@@ -758,14 +758,14 @@ pub mod tests {
     // - The expected commands are not received in the correct order or type.
     // - Any other unexpected command is received.
     fn create_mock_relay_manager(
-        tx_relay_manager_to_ventilation: Sender<bool>,
+        mut tx_relay_manager_to_ventilation: AquaSender<bool>,
         rx_relay_manager_from_ventilation: Receiver<InternalCommand>,
     ) -> thread::JoinHandle<()> {
         thread::Builder::new()
             .name("mock_relay_manager".to_string())
             .spawn(move || {
                 let (mut actuation_events, mock_actuator_states) = mock_relay_manager(
-                    &tx_relay_manager_to_ventilation,
+                    &mut tx_relay_manager_to_ventilation,
                     &rx_relay_manager_from_ventilation,
                 );
                 assert_eq!(actuation_events.len(), 2);
@@ -803,7 +803,7 @@ pub mod tests {
             .name("mock_schedule_check".to_string())
             .spawn(move || {
                 mock_schedule_check(
-                    &channels.schedule_check.tx_schedule_check_to_ventilation,
+                    &mut channels.schedule_check.tx_schedule_check_to_ventilation,
                     &channels.schedule_check.rx_schedule_check_from_ventilation,
                     None,
                     true,
@@ -838,11 +838,11 @@ pub mod tests {
             .name("test_object".to_string())
             .spawn(move || {
                 // clone sender part of the channels to mock threads so that we can terminate them after execution of the test object
-                let tx_ventilation_to_schedule_check_for_test_case_finish = channels
+                let mut tx_ventilation_to_schedule_check_for_test_case_finish = channels
                     .ventilation
                     .tx_ventilation_to_schedule_check
                     .clone();
-                let tx_ventilation_to_relay_manager_for_test_case_finish =
+                let mut tx_ventilation_to_relay_manager_for_test_case_finish =
                     channels.ventilation.tx_ventilation_to_relay_manager.clone();
 
                 let mut ventilation_set_value_updater =
@@ -899,7 +899,7 @@ pub mod tests {
             .name("mock_schedule_check".to_string())
             .spawn(move || {
                 mock_schedule_check(
-                    &channels.schedule_check.tx_schedule_check_to_ventilation,
+                    &mut channels.schedule_check.tx_schedule_check_to_ventilation,
                     &channels.schedule_check.rx_schedule_check_from_ventilation,
                     None,
                     true,
@@ -919,7 +919,7 @@ pub mod tests {
             .name("mock_relay_manager".to_string())
             .spawn(move || {
                 let (mut actuation_events, mock_actuator_states) = mock_relay_manager(
-                    &channels.relay_manager.tx_relay_manager_to_ventilation,
+                    &mut channels.relay_manager.tx_relay_manager_to_ventilation,
                     &channels.relay_manager.rx_relay_manager_from_ventilation,
                 );
                 println!(
@@ -1073,11 +1073,11 @@ pub mod tests {
             .name("test_object".to_string())
             .spawn(move || {
                 // clone sender part of the channels to mock threads so that we can terminate them after execution of the test object
-                let tx_ventilation_to_schedule_check_for_test_case_finish = channels
+                let mut tx_ventilation_to_schedule_check_for_test_case_finish = channels
                     .ventilation
                     .tx_ventilation_to_schedule_check
                     .clone();
-                let tx_ventilation_to_relay_manager_for_test_case_finish =
+                let mut tx_ventilation_to_relay_manager_for_test_case_finish =
                     channels.ventilation.tx_ventilation_to_relay_manager.clone();
 
                 let mut ventilation_set_value_updater =
@@ -1132,7 +1132,7 @@ pub mod tests {
             .name("mock_schedule_check".to_string())
             .spawn(move || {
                 mock_schedule_check(
-                    &channels.schedule_check.tx_schedule_check_to_ventilation,
+                    &mut channels.schedule_check.tx_schedule_check_to_ventilation,
                     &channels.schedule_check.rx_schedule_check_from_ventilation,
                     None,
                     false,
@@ -1167,11 +1167,11 @@ pub mod tests {
             .name("test_object".to_string())
             .spawn(move || {
                 // clone sender part of the channels to mock threads so that we can terminate them after execution of the test object
-                let tx_ventilation_to_schedule_check_for_test_case_finish = channels
+                let mut tx_ventilation_to_schedule_check_for_test_case_finish = channels
                     .ventilation
                     .tx_ventilation_to_schedule_check
                     .clone();
-                let tx_ventilation_to_relay_manager_for_test_case_finish =
+                let mut tx_ventilation_to_relay_manager_for_test_case_finish =
                     channels.ventilation.tx_ventilation_to_relay_manager.clone();
 
                 let mut ventilation_set_value_updater =
@@ -1243,7 +1243,7 @@ pub mod tests {
             .name("mock_schedule_check".to_string())
             .spawn(move || {
                 mock_schedule_check(
-                    &channels.schedule_check.tx_schedule_check_to_ventilation,
+                    &mut channels.schedule_check.tx_schedule_check_to_ventilation,
                     &channels.schedule_check.rx_schedule_check_from_ventilation,
                     None,
                     true,
@@ -1256,7 +1256,7 @@ pub mod tests {
             .name("mock_relay_manager".to_string())
             .spawn(move || {
                 let (mut actuation_events, mock_actuator_states) = mock_relay_manager(
-                    &channels.relay_manager.tx_relay_manager_to_ventilation,
+                    &mut channels.relay_manager.tx_relay_manager_to_ventilation,
                     &channels.relay_manager.rx_relay_manager_from_ventilation,
                 );
                 println!("actuation_events:");
@@ -1392,11 +1392,11 @@ pub mod tests {
             .name("test_object".to_string())
             .spawn(move || {
                 // clone sender part of the channels to mock threads so that we can terminate them after execution of the test object
-                let tx_ventilation_to_schedule_check_for_test_case_finish = channels
+                let mut tx_ventilation_to_schedule_check_for_test_case_finish = channels
                     .ventilation
                     .tx_ventilation_to_schedule_check
                     .clone();
-                let tx_ventilation_to_relay_manager_for_test_case_finish =
+                let mut tx_ventilation_to_relay_manager_for_test_case_finish =
                     channels.ventilation.tx_ventilation_to_relay_manager.clone();
 
                 let mut ventilation_set_value_updater =
@@ -1455,7 +1455,7 @@ pub mod tests {
             .name("mock_schedule_check".to_string())
             .spawn(move || {
                 mock_schedule_check(
-                    &channels.schedule_check.tx_schedule_check_to_ventilation,
+                    &mut channels.schedule_check.tx_schedule_check_to_ventilation,
                     &channels.schedule_check.rx_schedule_check_from_ventilation,
                     None,
                     true,
@@ -1475,7 +1475,7 @@ pub mod tests {
             .name("mock_relay_manager".to_string())
             .spawn(move || {
                 let (mut actuation_events, mock_actuator_states) = mock_relay_manager(
-                    &channels.relay_manager.tx_relay_manager_to_ventilation,
+                    &mut channels.relay_manager.tx_relay_manager_to_ventilation,
                     &channels.relay_manager.rx_relay_manager_from_ventilation,
                 );
                 assert_eq!(actuation_events.len(), 3);
@@ -1512,11 +1512,11 @@ pub mod tests {
             .name("test_object".to_string())
             .spawn(move || {
                 // clone sender part of the channels to mock threads so that we can terminate them after execution of the test object
-                let tx_ventilation_to_schedule_check_for_test_case_finish = channels
+                let mut tx_ventilation_to_schedule_check_for_test_case_finish = channels
                     .ventilation
                     .tx_ventilation_to_schedule_check
                     .clone();
-                let tx_ventilation_to_relay_manager_for_test_case_finish =
+                let mut tx_ventilation_to_relay_manager_for_test_case_finish =
                     channels.ventilation.tx_ventilation_to_relay_manager.clone();
 
                 // set up the set value updater to actively manipulate the set values
@@ -1560,14 +1560,14 @@ pub mod tests {
 
     // helper function to avoid warning about duplicated code.
     fn create_mock_relay_manager_for_ventilation_on(
-        tx_relay_manager_to_ventilation: Sender<bool>,
+        mut tx_relay_manager_to_ventilation: AquaSender<bool>,
         rx_relay_manager_from_ventilation: Receiver<InternalCommand>,
     ) -> thread::JoinHandle<()> {
         thread::Builder::new()
             .name("mock_relay_manager".to_string())
             .spawn(move || {
                 let (mut actuation_events, mock_actuator_states) = mock_relay_manager(
-                    &tx_relay_manager_to_ventilation,
+                    &mut tx_relay_manager_to_ventilation,
                     &rx_relay_manager_from_ventilation,
                 );
                 assert_eq!(actuation_events.len(), 1);
@@ -1603,7 +1603,7 @@ pub mod tests {
             .name("mock_schedule_check".to_string())
             .spawn(move || {
                 mock_schedule_check(
-                    &channels.schedule_check.tx_schedule_check_to_ventilation,
+                    &mut channels.schedule_check.tx_schedule_check_to_ventilation,
                     &channels.schedule_check.rx_schedule_check_from_ventilation,
                     None,
                     true,
@@ -1638,11 +1638,11 @@ pub mod tests {
             .name("test_object".to_string())
             .spawn(move || {
                 // clone sender part of the channels to mock threads so that we can terminate them after execution of the test object
-                let tx_ventilation_to_schedule_check_for_test_case_finish = channels
+                let mut tx_ventilation_to_schedule_check_for_test_case_finish = channels
                     .ventilation
                     .tx_ventilation_to_schedule_check
                     .clone();
-                let tx_ventilation_to_relay_manager_for_test_case_finish =
+                let mut tx_ventilation_to_relay_manager_for_test_case_finish =
                     channels.ventilation.tx_ventilation_to_relay_manager.clone();
 
                 let mut ventilation_set_value_updater =

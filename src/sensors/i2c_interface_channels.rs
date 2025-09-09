@@ -6,21 +6,21 @@ The above copyright notice and this permission notice shall be included in all c
 
 THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
+#[cfg(any(test, all(target_os = "linux", feature = "target_hw")))]
+use crate::launch::channels::AquaChannelError;
+
+use crate::launch::channels::AquaSender;
 use crate::sensors::i2c_interface::{I2cRequest, I2cResult};
 use crate::utilities::channel_content::InternalCommand;
 use std::fmt;
-#[cfg(any(test, all(target_os = "linux", feature = "target_hw")))]
-use std::sync::mpsc::SendError;
+use std::sync::mpsc::Receiver;
 #[cfg(all(target_os = "linux", feature = "target_hw"))]
 use std::sync::mpsc::TryRecvError;
-use std::sync::mpsc::{Receiver, Sender};
 
 /// Container for channels used by I2cInterface
 pub struct I2cInterfaceChannels {
     #[allow(unused)] // used in conditionally compiled code
-    pub tx_i2c_interface_to_atlas_scientific: Sender<I2cResult>,
-    #[cfg(feature = "debug_channels")]
-    pub cnt_tx_i2c_interface_to_atlas_scientific: u64,
+    pub tx_i2c_interface_to_atlas_scientific: AquaSender<I2cResult>,
 
     #[allow(unused)] // used in conditionally compiled code
     pub rx_i2c_interface_from_atlas_scientific: Receiver<I2cRequest>,
@@ -36,16 +36,8 @@ pub struct I2cInterfaceChannels {
 impl I2cInterfaceChannels {
     #[cfg(any(test, all(target_os = "linux", feature = "target_hw")))]
     /// Sends a result to the Atlas Scientific module.
-    pub fn send_to_atlas_scientific(
-        &mut self,
-        result: I2cResult,
-    ) -> Result<(), SendError<I2cResult>> {
-        let result = self.tx_i2c_interface_to_atlas_scientific.send(result);
-        #[cfg(feature = "debug_channels")]
-        if result.is_ok() {
-            self.cnt_tx_i2c_interface_to_atlas_scientific += 1;
-        }
-        result
+    pub fn send_to_atlas_scientific(&mut self, result: I2cResult) -> Result<(), AquaChannelError> {
+        self.tx_i2c_interface_to_atlas_scientific.send(result)
     }
 
     #[cfg(all(target_os = "linux", feature = "target_hw"))]
@@ -66,8 +58,8 @@ impl fmt::Display for I2cInterfaceChannels {
         writeln!(f, "=== I2cInterfaceChannels ===")?;
         writeln!(
             f,
-            "cnt_tx_i2c_interface_to_atlas_scientific: {}",
-            self.cnt_tx_i2c_interface_to_atlas_scientific
+            "tx_i2c_interface_to_atlas_scientific: {}",
+            self.tx_i2c_interface_to_atlas_scientific.count
         )?;
         writeln!(
             f,

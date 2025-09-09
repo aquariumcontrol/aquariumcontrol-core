@@ -7,10 +7,11 @@ The above copyright notice and this permission notice shall be included in all c
 THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
-use crate::utilities::channel_content::{AquariumSignal, InternalCommand};
+use crate::launch::channels::AquaChannelError;
+use crate::utilities::channel_content::AquariumSignal;
 use std::io;
 use std::num::ParseFloatError;
-use std::sync::mpsc::{RecvError, SendError};
+use std::sync::mpsc::RecvError;
 use thiserror::Error;
 
 /// Contains the error definition for communication with the simulator via TCP
@@ -97,7 +98,7 @@ pub enum TcpCommunicationError {
         requester: String,
 
         #[source]
-        source: SendError<InternalCommand>,
+        source: AquaChannelError,
     },
 
     /// The TCP stream could not be cloned, which is necessary for creating separate

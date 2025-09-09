@@ -6,14 +6,12 @@ The above copyright notice and this permission notice shall be included in all c
 
 THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
+use crate::launch::channels::{AquaChannelError, AquaSender};
 use crate::utilities::channel_content::InternalCommand;
 use std::fmt;
-use std::sync::mpsc::{SendError, Sender};
 
 pub struct ActuateSimulatorChannels {
-    pub tx_actuate_simulator_to_tcp_opt: Option<Sender<InternalCommand>>,
-    #[cfg(feature = "debug_channels")]
-    pub cnt_tx_actuate_simulator_to_tcp_opt: u64,
+    pub tx_actuate_simulator_to_tcp_opt: Option<AquaSender<InternalCommand>>,
 }
 
 impl ActuateSimulatorChannels {
@@ -25,14 +23,10 @@ impl ActuateSimulatorChannels {
     pub fn send_to_tcp(
         &mut self,
         command: InternalCommand,
-    ) -> Option<Result<(), SendError<InternalCommand>>> {
-        self.tx_actuate_simulator_to_tcp_opt.as_ref().map(|tx| {
-            #[cfg(feature = "debug_channels")]
-            {
-                self.cnt_tx_actuate_simulator_to_tcp_opt += 1;
-            }
-            tx.send(command)
-        })
+    ) -> Option<Result<(), AquaChannelError>> {
+        self.tx_actuate_simulator_to_tcp_opt
+            .as_mut()
+            .map(|tx| tx.send(command))
     }
 }
 
@@ -42,8 +36,8 @@ impl fmt::Display for ActuateSimulatorChannels {
         writeln!(f, "=== ActuateSimulatorChannels ===")?;
         write!(
             f,
-            "cnt_tx_actuate_simulator_to_tcp_opt: {}",
-            self.cnt_tx_actuate_simulator_to_tcp_opt
+            "tx_actuate_simulator_to_tcp_opt: {}",
+            self.tx_actuate_simulator_to_tcp_opt.as_ref().unwrap().count
         )
     }
 }

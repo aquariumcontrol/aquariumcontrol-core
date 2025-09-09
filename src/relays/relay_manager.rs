@@ -20,6 +20,7 @@ use log::debug;
 #[cfg(all(not(test), target_os = "linux"))]
 use nix::unistd::gettid;
 
+use crate::launch::channels::AquaSender;
 use crate::launch::execution_config::ExecutionConfig;
 use crate::relays::relay_error::RelayError;
 use crate::relays::relay_manager_channels::RelayManagerChannels;
@@ -28,7 +29,7 @@ use crate::utilities::channel_content::InternalCommand;
 use crate::utilities::logger::log_error_chain;
 use crate::utilities::proc_ext_req::ProcessExternalRequestTrait;
 use spin_sleep::SpinSleeper;
-use std::sync::mpsc::{Receiver, Sender, TryRecvError};
+use std::sync::mpsc::{Receiver, TryRecvError};
 use std::time::{Duration, Instant};
 
 /// Trait for the execution of relay actuation on either simulator or real hardware.
@@ -314,7 +315,7 @@ impl RelayManager {
                 ) = self.process_actuation_request(
                     (
                         &relay_manager_channels.rx_relay_manager_from_refill,
-                        &relay_manager_channels.tx_relay_manager_to_refill,
+                        &mut relay_manager_channels.tx_relay_manager_to_refill,
                     ),
                     (
                         self.lock_error_channel_receive_refill,
@@ -334,7 +335,7 @@ impl RelayManager {
                 ) = self.process_actuation_request(
                     (
                         &relay_manager_channels.rx_relay_manager_from_heating,
-                        &relay_manager_channels.tx_relay_manager_to_heating,
+                        &mut relay_manager_channels.tx_relay_manager_to_heating,
                     ),
                     (
                         self.lock_error_channel_receive_heating,
@@ -354,7 +355,7 @@ impl RelayManager {
                 ) = self.process_actuation_request(
                     (
                         &relay_manager_channels.rx_relay_manager_from_ventilation,
-                        &relay_manager_channels.tx_relay_manager_to_ventilation,
+                        &mut relay_manager_channels.tx_relay_manager_to_ventilation,
                     ),
                     (
                         self.lock_error_channel_receive_ventilation,
@@ -374,7 +375,7 @@ impl RelayManager {
                 ) = self.process_actuation_request(
                     (
                         &relay_manager_channels.rx_relay_manager_from_balling,
-                        &relay_manager_channels.tx_relay_manager_to_balling,
+                        &mut relay_manager_channels.tx_relay_manager_to_balling,
                     ),
                     (
                         self.lock_error_channel_receive_balling,
@@ -394,7 +395,7 @@ impl RelayManager {
                 ) = self.process_actuation_request(
                     (
                         &relay_manager_channels.rx_relay_manager_from_feed,
-                        &relay_manager_channels.tx_relay_manager_to_feed,
+                        &mut relay_manager_channels.tx_relay_manager_to_feed,
                     ),
                     (
                         self.lock_error_channel_receive_feed,
@@ -467,7 +468,7 @@ impl RelayManager {
     /// `lock_send` flags, respectively.
     fn process_actuation_request(
         &mut self,
-        channels: (&Receiver<InternalCommand>, &Sender<bool>),
+        channels: (&Receiver<InternalCommand>, &mut AquaSender<bool>),
         locks: (bool, bool),
         actuation_name: &str,
         actuator: &mut impl RelayActuationTrait,

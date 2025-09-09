@@ -6,14 +6,13 @@ The above copyright notice and this permission notice shall be included in all c
 
 THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
+use crate::launch::channels::{AquaChannelError, AquaSender};
 use crate::utilities::channel_content::InternalCommand;
 use std::fmt;
-use std::sync::mpsc::{Receiver, SendError, Sender, TryRecvError};
+use std::sync::mpsc::{Receiver, TryRecvError};
 
 pub struct WatchDogChannels {
-    pub tx_watchdog_to_signal_handler: Sender<bool>,
-    #[cfg(feature = "debug_channels")]
-    pub cnt_tx_watchdog_to_signal_handler: u64,
+    pub tx_watchdog_to_signal_handler: AquaSender<bool>,
 
     pub rx_watchdog_from_signal_handler: Receiver<InternalCommand>,
     #[cfg(feature = "debug_channels")]
@@ -31,18 +30,13 @@ impl WatchDogChannels {
     /// associated debug counter if the `debug_channels` feature is enabled and
     /// the send operation is successful.
     #[allow(unused)]
-    pub fn send_to_signal_handler(&mut self, ack: bool) -> Result<(), SendError<bool>> {
-        let result = self.tx_watchdog_to_signal_handler.send(ack);
-        #[cfg(feature = "debug_channels")]
-        if result.is_ok() {
-            self.cnt_tx_watchdog_to_signal_handler += 1;
-        }
-        result
+    pub fn send_to_signal_handler(&mut self, ack: bool) -> Result<(), AquaChannelError> {
+        self.tx_watchdog_to_signal_handler.send(ack)
     }
 
     /// Receives a command from the signal handler (non-blocking).
     ///
-    /// This wrapper function performs a non-blocking receive for a command and increments
+    /// This wrapper function performs a non-blocking receive-operation for a command and increments
     /// the associated debug counter if the `debug_channels` feature is enabled and a
     /// message is successfully received.
     #[allow(unused)]
@@ -55,9 +49,9 @@ impl WatchDogChannels {
         result
     }
 
-    /// Receives a command from messaging, if the channel exists (non-blocking).
+    /// Receives a command from the messaging module, if the channel exists (non-blocking).
     ///
-    /// This wrapper function performs a non-blocking receive and increments the
+    /// This wrapper function performs a non-blocking receive-operation and increments the
     /// associated debug counter if the `debug_channels` feature is enabled and a
     /// message is successfully received.
     #[allow(unused)]
@@ -79,8 +73,8 @@ impl fmt::Display for WatchDogChannels {
         writeln!(f, "=== WatchDogChannels ===")?;
         writeln!(
             f,
-            "cnt_tx_watchdog_to_signal_handler: {}",
-            self.cnt_tx_watchdog_to_signal_handler
+            "tx_watchdog_to_signal_handler: {}",
+            self.tx_watchdog_to_signal_handler.count
         )?;
         writeln!(
             f,

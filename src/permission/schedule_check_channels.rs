@@ -6,17 +6,15 @@ The above copyright notice and this permission notice shall be included in all c
 
 THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
+use crate::launch::channels::{AquaChannelError, AquaSender};
 use crate::utilities::channel_content::InternalCommand;
 use std::fmt;
-use std::sync::mpsc::{Receiver, SendError, Sender};
+use std::sync::mpsc::Receiver;
 
 /// Struct collects all channels for communication between ScheduleCheck and other components.
 pub struct ScheduleCheckChannels {
     /// Sender part of the channel for communication to ventilation
-    pub tx_schedule_check_to_ventilation: Sender<bool>,
-    #[cfg(feature = "debug_channels")]
-    /// Counter for messages sent to ventilation
-    pub cnt_tx_schedule_check_to_ventilation: u64,
+    pub tx_schedule_check_to_ventilation: AquaSender<bool>,
 
     /// Receiver part of the channel for communication from ventilation
     pub rx_schedule_check_from_ventilation: Receiver<InternalCommand>,
@@ -25,10 +23,7 @@ pub struct ScheduleCheckChannels {
     pub cnt_rx_schedule_check_from_ventilation: u64,
 
     /// Sender part of the channel for communication to heating
-    pub tx_schedule_check_to_heating: Sender<bool>,
-    #[cfg(feature = "debug_channels")]
-    /// Counter for messages sent to heating
-    pub cnt_tx_schedule_check_to_heating: u64,
+    pub tx_schedule_check_to_heating: AquaSender<bool>,
 
     /// Receiver part of the channel for communication from heating
     pub rx_schedule_check_from_heating: Receiver<InternalCommand>,
@@ -37,10 +32,7 @@ pub struct ScheduleCheckChannels {
     pub cnt_rx_schedule_check_from_heating: u64,
 
     /// Sender part of the channel for communication to refill
-    pub tx_schedule_check_to_refill: Sender<bool>,
-    #[cfg(feature = "debug_channels")]
-    /// Counter for messages sent to refill
-    pub cnt_tx_schedule_check_to_refill: u64,
+    pub tx_schedule_check_to_refill: AquaSender<bool>,
 
     /// Receiver part of the channel for communication from refill
     pub rx_schedule_check_from_refill: Receiver<InternalCommand>,
@@ -49,10 +41,7 @@ pub struct ScheduleCheckChannels {
     pub cnt_rx_schedule_check_from_refill: u64,
 
     /// Sender part of the channel for communication to the Balling dosing control
-    pub tx_schedule_check_to_balling: Sender<bool>,
-    #[cfg(feature = "debug_channels")]
-    /// Counter for messages sent to balling
-    pub cnt_tx_schedule_check_to_balling: u64,
+    pub tx_schedule_check_to_balling: AquaSender<bool>,
 
     /// Receiver part of the channel for communication from the Balling dosing control
     pub rx_schedule_check_from_balling: Receiver<InternalCommand>,
@@ -61,10 +50,7 @@ pub struct ScheduleCheckChannels {
     pub cnt_rx_schedule_check_from_balling: u64,
 
     /// Sender part of the channel for communication to the signal handler
-    pub tx_schedule_check_to_signal_handler: Sender<bool>,
-    #[cfg(feature = "debug_channels")]
-    /// Counter for messages sent to the signal handler
-    pub cnt_tx_schedule_check_to_signal_handler: u64,
+    pub tx_schedule_check_to_signal_handler: AquaSender<bool>,
 
     /// Receiver part of the channel for communication from the signal handler
     pub rx_schedule_check_from_signal_handler: Receiver<InternalCommand>,
@@ -75,13 +61,8 @@ pub struct ScheduleCheckChannels {
 
 impl ScheduleCheckChannels {
     /// Sends an acknowledgment to the signal handler.
-    pub fn send_to_signal_handler(&mut self, ack: bool) -> Result<(), SendError<bool>> {
-        let result = self.tx_schedule_check_to_signal_handler.send(ack);
-        #[cfg(feature = "debug_channels")]
-        if result.is_ok() {
-            self.cnt_tx_schedule_check_to_signal_handler += 1;
-        }
-        result
+    pub fn send_to_signal_handler(&mut self, ack: bool) -> Result<(), AquaChannelError> {
+        self.tx_schedule_check_to_signal_handler.send(ack)
     }
 }
 
@@ -91,8 +72,8 @@ impl fmt::Display for ScheduleCheckChannels {
         writeln!(f, "=== ScheduleCheckChannels ===")?;
         writeln!(
             f,
-            "cnt_tx_schedule_check_to_ventilation: {}",
-            self.cnt_tx_schedule_check_to_ventilation
+            "tx_schedule_check_to_ventilation: {}",
+            self.tx_schedule_check_to_ventilation.count
         )?;
         writeln!(
             f,
@@ -101,8 +82,8 @@ impl fmt::Display for ScheduleCheckChannels {
         )?;
         writeln!(
             f,
-            "cnt_tx_schedule_check_to_heating: {}",
-            self.cnt_tx_schedule_check_to_heating
+            "tx_schedule_check_to_heating: {}",
+            self.tx_schedule_check_to_heating.count
         )?;
         writeln!(
             f,
@@ -111,8 +92,8 @@ impl fmt::Display for ScheduleCheckChannels {
         )?;
         writeln!(
             f,
-            "cnt_tx_schedule_check_to_refill: {}",
-            self.cnt_tx_schedule_check_to_refill
+            "tx_schedule_check_to_refill: {}",
+            self.tx_schedule_check_to_refill.count
         )?;
         writeln!(
             f,
@@ -121,8 +102,8 @@ impl fmt::Display for ScheduleCheckChannels {
         )?;
         writeln!(
             f,
-            "cnt_tx_schedule_check_to_balling: {}",
-            self.cnt_tx_schedule_check_to_balling
+            "tx_schedule_check_to_balling: {}",
+            self.tx_schedule_check_to_balling.count
         )?;
         writeln!(
             f,
@@ -131,8 +112,8 @@ impl fmt::Display for ScheduleCheckChannels {
         )?;
         writeln!(
             f,
-            "cnt_tx_schedule_check_to_signal_handler: {}",
-            self.cnt_tx_schedule_check_to_signal_handler
+            "tx_schedule_check_to_signal_handler: {}",
+            self.tx_schedule_check_to_signal_handler.count
         )?;
         write!(
             f,

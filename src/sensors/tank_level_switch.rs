@@ -20,11 +20,12 @@ use log::info;
 #[cfg(not(test))]
 use log::warn;
 
+use crate::launch::channels::AquaSender;
 use crate::sensors::tank_level_switch_channels::TankLevelSwitchChannels;
 use crate::sensors::tank_level_switch_config::TankLevelSwitchConfig;
 use crate::utilities::check_mutex_access_duration::CheckMutexAccessDurationTrait;
 use spin_sleep::SpinSleeper;
-use std::sync::mpsc::{Receiver, Sender};
+use std::sync::mpsc::Receiver;
 use std::time::{Duration, Instant};
 use thiserror::Error;
 
@@ -342,13 +343,13 @@ impl TankLevelSwitch {
     ///   input pin is not available.
     pub fn update_tank_level_switch_signals(
         &mut self,
-        tx_tank_level_switch_to_tcp_opt: &Option<Sender<InternalCommand>>,
+        tx_tank_level_switch_to_tcp_opt: &mut Option<AquaSender<InternalCommand>>,
         rx_tank_level_switch_from_tcp_opt: &Option<Receiver<Result<f32, TcpCommunicationError>>>,
     ) -> Result<(), TankLevelSwitchError> {
         if self.config.use_simulator {
             // Ensure channels are present before proceeding.
             let tx_tank_level_switch_to_tcp =
-                tx_tank_level_switch_to_tcp_opt.as_ref().ok_or_else(|| {
+                tx_tank_level_switch_to_tcp_opt.as_mut().ok_or_else(|| {
                     TankLevelSwitchError::SimulatorChannelNotProvided(module_path!().to_string())
                 })?;
             let rx_tank_level_switch_from_tcp =
@@ -520,7 +521,7 @@ impl TankLevelSwitch {
             if self.config.active {
                 // either communicate with real HW or with the simulator to get updated signal information
                 if let Err(e) = self.update_tank_level_switch_signals(
-                    &tank_level_switch_channels.tx_tank_level_switch_to_tcp_opt,
+                    &mut tank_level_switch_channels.tx_tank_level_switch_to_tcp_opt,
                     &tank_level_switch_channels.rx_tank_level_switch_from_tcp_opt,
                 ) {
                     if matches!(e, TankLevelSwitchError::InputPinNotProvided(_)) {
@@ -640,7 +641,7 @@ impl TankLevelSwitch {
 
 #[cfg(test)]
 pub mod tests {
-    use crate::launch::channels::Channels;
+    use crate::launch::channels::{channel, Channels};
     use crate::mocks::mock_signal::tests::MockSignal;
     use crate::mocks::mock_tcp::tests::mock_tcp_for_tank_level_switch;
     use crate::mocks::test_command::tests::TestCommand;
@@ -648,7 +649,7 @@ pub mod tests {
     use crate::utilities::channel_content::InternalCommand;
     use crate::utilities::config::{read_config_file, ConfigData};
     use spin_sleep::SpinSleeper;
-    use std::sync::{mpsc, Arc, Mutex};
+    use std::sync::{Arc, Mutex};
     use std::thread;
     use std::thread::JoinHandle;
     use std::time::Duration;
@@ -665,7 +666,7 @@ pub mod tests {
     pub fn test_refill_calc_tank_level_switch_position_stabilized_false_when_invalid() {
         let mut channels = Channels::new(false, false, true);
 
-        let (_tx_test_environment_to_tcp, rx_tcp_from_test_environment) = mpsc::channel();
+        let (_tx_test_environment_to_tcp, rx_tcp_from_test_environment) = channel(1);
 
         let config: ConfigData =
             read_config_file("/config/aquarium_control_test_generic.toml".to_string()).unwrap();
@@ -727,7 +728,7 @@ pub mod tests {
             .name("test_object".to_string())
             .spawn(move || {
                 // clone sender part of channels to mock threads so that we can terminate them after execution of the test object
-                let tx_tank_level_switch_to_tcp_for_test_case_finish = channels
+                let mut tx_tank_level_switch_to_tcp_for_test_case_finish = channels
                     .tank_level_switch
                     .tx_tank_level_switch_to_tcp_opt
                     .clone()
@@ -789,7 +790,7 @@ pub mod tests {
     pub fn test_refill_calc_tank_level_switch_position_stabilized_false_true() {
         let mut channels = Channels::new(false, false, true);
 
-        let (tx_test_environment_to_tcp, rx_tcp_from_test_environment) = mpsc::channel();
+        let (mut tx_test_environment_to_tcp, rx_tcp_from_test_environment) = channel(1);
 
         let mut config: ConfigData =
             read_config_file("/config/aquarium_control_test_generic.toml".to_string()).unwrap();
@@ -824,7 +825,7 @@ pub mod tests {
             })
             .unwrap();
 
-        let tx_test_environment_to_tcp_for_test_case_finish = channels
+        let mut tx_test_environment_to_tcp_for_test_case_finish = channels
             .tank_level_switch
             .tx_tank_level_switch_to_tcp_opt
             .clone()
@@ -895,7 +896,7 @@ pub mod tests {
     pub fn test_refill_calc_tank_level_switch_position_stabilized_true_false() {
         let mut channels = Channels::new(false, false, true);
 
-        let (tx_test_environment_to_tcp, rx_tcp_from_test_environment) = mpsc::channel();
+        let (mut tx_test_environment_to_tcp, rx_tcp_from_test_environment) = channel(1);
 
         let config: ConfigData =
             read_config_file("/config/aquarium_control_test_generic.toml".to_string()).unwrap();
@@ -926,7 +927,7 @@ pub mod tests {
             })
             .unwrap();
 
-        let tx_test_environment_to_tcp_for_test_case_finish = channels
+        let mut tx_test_environment_to_tcp_for_test_case_finish = channels
             .tank_level_switch
             .tx_tank_level_switch_to_tcp_opt
             .clone()
@@ -996,7 +997,7 @@ pub mod tests {
     // test if position stabilized signal is not updating when the raw input signal is toggling
     pub fn test_refill_calc_tank_level_switch_position_stabilized_is_true_with_toggling_input() {
         let mut channels = Channels::new(false, false, true);
-        let (tx_test_environment_to_tcp, rx_tcp_from_test_environment) = mpsc::channel();
+        let (mut tx_test_environment_to_tcp, rx_tcp_from_test_environment) = channel(1);
 
         let config: ConfigData =
             read_config_file("/config/aquarium_control_test_generic.toml".to_string()).unwrap();
@@ -1027,7 +1028,7 @@ pub mod tests {
             })
             .unwrap();
 
-        let tx_test_environment_to_tcp_for_test_case_finish = channels
+        let mut tx_test_environment_to_tcp_for_test_case_finish = channels
             .tank_level_switch
             .tx_tank_level_switch_to_tcp_opt
             .clone()
@@ -1243,7 +1244,7 @@ pub mod tests {
     ) {
         let mut channels = Channels::new(false, false, true);
 
-        let (tx_test_environment_to_tcp, rx_tcp_from_test_environment) = mpsc::channel();
+        let (mut tx_test_environment_to_tcp, rx_tcp_from_test_environment) = channel(1);
 
         let mut config: ConfigData =
             read_config_file("/config/aquarium_control_test_generic.toml".to_string()).unwrap();
@@ -1280,7 +1281,7 @@ pub mod tests {
             })
             .unwrap();
 
-        let tx_test_environment_to_tcp_for_test_case_finish = channels
+        let mut tx_test_environment_to_tcp_for_test_case_finish = channels
             .tank_level_switch
             .tx_tank_level_switch_to_tcp_opt
             .clone()

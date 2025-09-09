@@ -21,10 +21,10 @@ use crate::watchmen::monitors_channels::MonitorsChannels;
 use crate::watchmen::watchdog_channels::WatchDogChannels;
 use crate::water::refill_channels::RefillChannels;
 use log::error;
-use std::sync::mpsc::SendError;
 
 #[cfg(target_os = "linux")]
 use crate::dispatch::messaging_channels::MessagingChannels;
+use crate::launch::channels::AquaChannelError;
 
 /// A trait for objects that can send a shutdown acknowledgment to the `SignalHandler`.
 ///
@@ -37,7 +37,7 @@ pub trait AcknowledgeSignalHandlerTrait {
     ///
     /// This method must be implemented by any struct that uses the trait. It is responsible
     /// for the actual send-operation to the channel.
-    fn send_true_to_signal_handler(&mut self) -> Result<(), SendError<bool>>;
+    fn send_true_to_signal_handler(&mut self) -> Result<(), AquaChannelError>;
 
     /// Returns the source location (module path) for logging purposes.
     ///
@@ -61,7 +61,7 @@ pub trait AcknowledgeSignalHandlerTrait {
 }
 
 impl AcknowledgeSignalHandlerTrait for AtlasScientificChannels {
-    fn send_true_to_signal_handler(&mut self) -> Result<(), SendError<bool>> {
+    fn send_true_to_signal_handler(&mut self) -> Result<(), AquaChannelError> {
         self.send_to_signal_handler(true)
     }
 
@@ -71,7 +71,7 @@ impl AcknowledgeSignalHandlerTrait for AtlasScientificChannels {
 }
 
 impl AcknowledgeSignalHandlerTrait for FeedChannels {
-    fn send_true_to_signal_handler(&mut self) -> Result<(), SendError<bool>> {
+    fn send_true_to_signal_handler(&mut self) -> Result<(), AquaChannelError> {
         self.send_to_signal_handler(true)
     }
 
@@ -81,7 +81,7 @@ impl AcknowledgeSignalHandlerTrait for FeedChannels {
 }
 
 impl AcknowledgeSignalHandlerTrait for BallingChannels {
-    fn send_true_to_signal_handler(&mut self) -> Result<(), SendError<bool>> {
+    fn send_true_to_signal_handler(&mut self) -> Result<(), AquaChannelError> {
         self.send_to_signal_handler(true)
     }
 
@@ -91,7 +91,7 @@ impl AcknowledgeSignalHandlerTrait for BallingChannels {
 }
 
 impl AcknowledgeSignalHandlerTrait for ScheduleCheckChannels {
-    fn send_true_to_signal_handler(&mut self) -> Result<(), SendError<bool>> {
+    fn send_true_to_signal_handler(&mut self) -> Result<(), AquaChannelError> {
         self.send_to_signal_handler(true)
     }
 
@@ -101,7 +101,7 @@ impl AcknowledgeSignalHandlerTrait for ScheduleCheckChannels {
 }
 
 impl AcknowledgeSignalHandlerTrait for DataLoggerChannels {
-    fn send_true_to_signal_handler(&mut self) -> Result<(), SendError<bool>> {
+    fn send_true_to_signal_handler(&mut self) -> Result<(), AquaChannelError> {
         self.send_to_signal_handler(true)
     }
 
@@ -111,7 +111,7 @@ impl AcknowledgeSignalHandlerTrait for DataLoggerChannels {
 }
 
 impl AcknowledgeSignalHandlerTrait for RelayManagerChannels {
-    fn send_true_to_signal_handler(&mut self) -> Result<(), SendError<bool>> {
+    fn send_true_to_signal_handler(&mut self) -> Result<(), AquaChannelError> {
         self.send_to_signal_handler(true)
     }
 
@@ -121,7 +121,7 @@ impl AcknowledgeSignalHandlerTrait for RelayManagerChannels {
 }
 
 impl AcknowledgeSignalHandlerTrait for SensorManagerChannels {
-    fn send_true_to_signal_handler(&mut self) -> Result<(), SendError<bool>> {
+    fn send_true_to_signal_handler(&mut self) -> Result<(), AquaChannelError> {
         self.send_to_signal_handler(true)
     }
 
@@ -131,7 +131,7 @@ impl AcknowledgeSignalHandlerTrait for SensorManagerChannels {
 }
 
 impl AcknowledgeSignalHandlerTrait for TankLevelSwitchChannels {
-    fn send_true_to_signal_handler(&mut self) -> Result<(), SendError<bool>> {
+    fn send_true_to_signal_handler(&mut self) -> Result<(), AquaChannelError> {
         self.send_to_signal_handler(true)
     }
 
@@ -141,7 +141,7 @@ impl AcknowledgeSignalHandlerTrait for TankLevelSwitchChannels {
 }
 
 impl AcknowledgeSignalHandlerTrait for TcpCommunicationChannels {
-    fn send_true_to_signal_handler(&mut self) -> Result<(), SendError<bool>> {
+    fn send_true_to_signal_handler(&mut self) -> Result<(), AquaChannelError> {
         self.send_to_signal_handler(true)
     }
 
@@ -151,7 +151,7 @@ impl AcknowledgeSignalHandlerTrait for TcpCommunicationChannels {
 }
 
 impl AcknowledgeSignalHandlerTrait for HeatingChannels {
-    fn send_true_to_signal_handler(&mut self) -> Result<(), SendError<bool>> {
+    fn send_true_to_signal_handler(&mut self) -> Result<(), AquaChannelError> {
         self.send_to_signal_handler(true)
     }
 
@@ -161,7 +161,7 @@ impl AcknowledgeSignalHandlerTrait for HeatingChannels {
 }
 
 impl AcknowledgeSignalHandlerTrait for VentilationChannels {
-    fn send_true_to_signal_handler(&mut self) -> Result<(), SendError<bool>> {
+    fn send_true_to_signal_handler(&mut self) -> Result<(), AquaChannelError> {
         self.send_to_signal_handler(true)
     }
 
@@ -171,7 +171,7 @@ impl AcknowledgeSignalHandlerTrait for VentilationChannels {
 }
 
 impl AcknowledgeSignalHandlerTrait for MonitorsChannels {
-    fn send_true_to_signal_handler(&mut self) -> Result<(), SendError<bool>> {
+    fn send_true_to_signal_handler(&mut self) -> Result<(), AquaChannelError> {
         self.send_to_signal_handler(true)
     }
 
@@ -181,7 +181,7 @@ impl AcknowledgeSignalHandlerTrait for MonitorsChannels {
 }
 
 impl AcknowledgeSignalHandlerTrait for WatchDogChannels {
-    fn send_true_to_signal_handler(&mut self) -> Result<(), SendError<bool>> {
+    fn send_true_to_signal_handler(&mut self) -> Result<(), AquaChannelError> {
         self.send_to_signal_handler(true)
     }
 
@@ -191,7 +191,7 @@ impl AcknowledgeSignalHandlerTrait for WatchDogChannels {
 }
 
 impl AcknowledgeSignalHandlerTrait for RefillChannels {
-    fn send_true_to_signal_handler(&mut self) -> Result<(), SendError<bool>> {
+    fn send_true_to_signal_handler(&mut self) -> Result<(), AquaChannelError> {
         self.send_to_signal_handler(true)
     }
 
@@ -202,7 +202,7 @@ impl AcknowledgeSignalHandlerTrait for RefillChannels {
 
 #[cfg(target_os = "linux")]
 impl AcknowledgeSignalHandlerTrait for MessagingChannels {
-    fn send_true_to_signal_handler(&mut self) -> Result<(), SendError<bool>> {
+    fn send_true_to_signal_handler(&mut self) -> Result<(), AquaChannelError> {
         self.send_to_signal_handler(true)
     }
 

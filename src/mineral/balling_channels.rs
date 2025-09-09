@@ -6,17 +6,15 @@ The above copyright notice and this permission notice shall be included in all c
 
 THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
+use crate::launch::channels::{AquaChannelError, AquaSender};
 use crate::utilities::channel_content::InternalCommand;
 use std::fmt;
-use std::sync::mpsc::{Receiver, RecvError, SendError, Sender};
+use std::sync::mpsc::{Receiver, RecvError};
 
 /// Container for the channels used by Balling for inter-thread communication
 pub struct BallingChannels {
     /// sender part of the channel for communication to relay manager
-    pub tx_balling_to_relay_manager: Sender<InternalCommand>,
-    #[cfg(feature = "debug_channels")]
-    /// Counter for messages sent to the relay manager
-    pub cnt_tx_balling_to_relay_manager: u64,
+    pub tx_balling_to_relay_manager: AquaSender<InternalCommand>,
 
     /// receiver part of the channel for communication from the relay manager
     pub rx_balling_from_relay_manager: Receiver<bool>,
@@ -25,10 +23,7 @@ pub struct BallingChannels {
     pub cnt_rx_balling_from_relay_manager: u64,
 
     /// sender part of the channel for communication to the signal handler
-    pub tx_balling_to_signal_handler: Sender<bool>,
-    #[cfg(feature = "debug_channels")]
-    /// Counter for messages sent to the signal handler
-    pub cnt_tx_balling_to_signal_handler: u64,
+    pub tx_balling_to_signal_handler: AquaSender<bool>,
 
     /// receiver part of the channel for communication from the signal handler
     pub rx_balling_from_signal_handler: Receiver<InternalCommand>,
@@ -37,10 +32,7 @@ pub struct BallingChannels {
     pub cnt_rx_balling_from_signal_handler: u64,
 
     /// sender part of the channel for communication to the schedule checker
-    pub tx_balling_to_schedule_check: Sender<InternalCommand>,
-    #[cfg(feature = "debug_channels")]
-    /// Counter for messages sent to the schedule checker
-    pub cnt_tx_balling_to_schedule_check: u64,
+    pub tx_balling_to_schedule_check: AquaSender<InternalCommand>,
 
     /// receiver part of the channel for communication from the schedule checker
     pub rx_balling_from_schedule_check: Receiver<bool>,
@@ -60,13 +52,8 @@ impl BallingChannels {
     pub fn send_to_relay_manager(
         &mut self,
         command: InternalCommand,
-    ) -> Result<(), SendError<InternalCommand>> {
-        let result = self.tx_balling_to_relay_manager.send(command);
-        #[cfg(feature = "debug_channels")]
-        if result.is_ok() {
-            self.cnt_tx_balling_to_relay_manager += 1;
-        }
-        result
+    ) -> Result<(), AquaChannelError> {
+        self.tx_balling_to_relay_manager.send(command)
     }
 
     /// Receives a response from the relay manager.
@@ -80,26 +67,16 @@ impl BallingChannels {
     }
 
     /// Sends an acknowledgment to the signal handler.
-    pub fn send_to_signal_handler(&mut self, ack: bool) -> Result<(), SendError<bool>> {
-        let result = self.tx_balling_to_signal_handler.send(ack);
-        #[cfg(feature = "debug_channels")]
-        if result.is_ok() {
-            self.cnt_tx_balling_to_signal_handler += 1;
-        }
-        result
+    pub fn send_to_signal_handler(&mut self, ack: bool) -> Result<(), AquaChannelError> {
+        self.tx_balling_to_signal_handler.send(ack)
     }
 
     /// Sends a command to the schedule checker.
     pub fn send_to_schedule_check(
         &mut self,
         command: InternalCommand,
-    ) -> Result<(), SendError<InternalCommand>> {
-        let result = self.tx_balling_to_schedule_check.send(command);
-        #[cfg(feature = "debug_channels")]
-        if result.is_ok() {
-            self.cnt_tx_balling_to_schedule_check += 1;
-        }
-        result
+    ) -> Result<(), AquaChannelError> {
+        self.tx_balling_to_schedule_check.send(command)
     }
 
     /// Receives a response from the schedule checker.
@@ -119,8 +96,8 @@ impl fmt::Display for BallingChannels {
         writeln!(f, "=== BallingChannels ===")?;
         writeln!(
             f,
-            "cnt_tx_balling_to_relay_manager: {}",
-            self.cnt_tx_balling_to_relay_manager
+            "tx_balling_to_relay_manager: {}",
+            self.tx_balling_to_relay_manager.count
         )?;
         writeln!(
             f,
@@ -129,8 +106,8 @@ impl fmt::Display for BallingChannels {
         )?;
         writeln!(
             f,
-            "cnt_tx_balling_to_signal_handler: {}",
-            self.cnt_tx_balling_to_signal_handler
+            "tx_balling_to_signal_handler: {}",
+            self.tx_balling_to_signal_handler.count
         )?;
         writeln!(
             f,
@@ -139,8 +116,8 @@ impl fmt::Display for BallingChannels {
         )?;
         writeln!(
             f,
-            "cnt_tx_balling_to_schedule_check: {}",
-            self.cnt_tx_balling_to_schedule_check
+            "tx_balling_to_schedule_check: {}",
+            self.tx_balling_to_schedule_check.count
         )?;
         writeln!(
             f,

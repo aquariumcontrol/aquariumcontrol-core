@@ -10,16 +10,16 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 #[allow(unused)]
 #[cfg(test)]
 pub mod tests {
-    use spin_sleep::SpinSleeper;
-    use std::sync::mpsc::{Receiver, Sender, TryRecvError};
-    use std::time::Duration;
-
+    use crate::launch::channels::AquaSender;
     use crate::mocks::mock_signal::tests::MockSignal;
     use crate::mocks::test_command::tests::TestCommand;
     use crate::utilities::channel_content::{AquariumSignal, InternalCommand};
+    use spin_sleep::SpinSleeper;
+    use std::sync::mpsc::{Receiver, TryRecvError};
+    use std::time::Duration;
 
     pub fn mock_ambient(
-        tx_ambient_to_test_object: &Sender<f32>,
+        tx_ambient_to_test_object: &mut AquaSender<f32>,
         rx_ambient_from_test_object: &Receiver<InternalCommand>,
         rx_ambient_from_test_environment_opt: Option<&Receiver<TestCommand>>,
         initial_stimuli_ambient_temperature: f32,

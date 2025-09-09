@@ -173,12 +173,12 @@ impl MineralInjectionTrait for MineralInjection {
 
 #[cfg(test)]
 pub mod tests {
-    use crate::launch::channels::Channels;
+    use crate::launch::channels::{AquaSender, Channels};
     use crate::mineral::mineral_injection::{MineralInjection, MineralInjectionTrait};
     use crate::utilities::channel_content::{ActuatorState, AquariumDevice, InternalCommand};
     use all_asserts::{assert_ge, assert_le};
     use spin_sleep::SpinSleeper;
-    use std::sync::mpsc::{Receiver, Sender};
+    use std::sync::mpsc::Receiver;
     use std::thread::scope;
     use std::time::Duration;
 
@@ -205,7 +205,7 @@ pub mod tests {
     // - It receives an `InternalCommand` that is neither `SwitchOn` nor `SwitchOff`.
     // - It fails to send the acknowledgment back.
     fn test_mineral_injection_receive_actuation_command_send_confirmation(
-        tx_relay_manager_to_mineral_injection: &Sender<bool>,
+        tx_relay_manager_to_mineral_injection: &mut AquaSender<bool>,
         rx_relay_manager_from_mineral_injection: &Receiver<InternalCommand>,
     ) -> InternalCommand {
         let command: InternalCommand;
@@ -273,7 +273,7 @@ pub mod tests {
     }
 
     fn mineral_injection_test_environment(
-        tx_relay_manager_to_mineral_injection: Sender<bool>,
+        mut tx_relay_manager_to_mineral_injection: AquaSender<bool>,
         rx_relay_manager_from_mineral_injection: Receiver<InternalCommand>,
     ) {
         let mut peristaltic_pump1_actuation_state = ActuatorState::Off;
@@ -283,7 +283,7 @@ pub mod tests {
 
         // allow switching on peristaltic pump
         let command = test_mineral_injection_receive_actuation_command_send_confirmation(
-            &tx_relay_manager_to_mineral_injection,
+            &mut tx_relay_manager_to_mineral_injection,
             &rx_relay_manager_from_mineral_injection,
         );
         update_actuator_states(
@@ -296,7 +296,7 @@ pub mod tests {
 
         // allow switching off peristaltic pump
         let command = test_mineral_injection_receive_actuation_command_send_confirmation(
-            &tx_relay_manager_to_mineral_injection,
+            &mut tx_relay_manager_to_mineral_injection,
             &rx_relay_manager_from_mineral_injection,
         );
         update_actuator_states(
@@ -367,7 +367,9 @@ pub mod tests {
             // thread for signal handler
             scope.spawn(move || {
                 spin_sleeper.sleep(sleep_duration);
-                let _ = channels.signal_handler.send_to_balling(InternalCommand::Quit);
+                let _ = channels
+                    .signal_handler
+                    .send_to_balling(InternalCommand::Quit);
             });
 
             // thread for the rest of test environment

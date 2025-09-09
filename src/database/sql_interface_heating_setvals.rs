@@ -5,12 +5,12 @@ use std::time::{Duration, Instant};
 use mysql::params;
 
 use crate::database::sql_interface::SqlInterface;
-use crate::database::thermal_set_value_updater_trait::ThermalSetValueUpdaterTrait;
 use crate::database::sql_interface_error::SqlInterfaceError;
 use crate::database::sql_query_strings;
 use crate::database::sql_query_strings::{
     SQL_QUERY_CHECK_HEATING_SETVALS_COUNT, SQL_QUERY_CHECK_HEATING_SETVALS_NULL,
 };
+use crate::database::thermal_set_value_updater_trait::ThermalSetValueUpdaterTrait;
 use crate::thermal::heating_config::HeatingConfig;
 use mysql::prelude::Queryable;
 

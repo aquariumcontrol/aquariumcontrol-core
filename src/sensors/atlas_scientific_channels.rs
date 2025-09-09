@@ -6,19 +6,17 @@ The above copyright notice and this permission notice shall be included in all c
 
 THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
+use crate::launch::channels::{AquaChannelError, AquaSender};
 use crate::sensors::i2c_interface::{I2cRequest, I2cResult};
 use crate::utilities::channel_content::InternalCommand;
 use std::fmt;
-use std::sync::mpsc::{Receiver, SendError, Sender, TryRecvError};
+use std::sync::mpsc::{Receiver, TryRecvError};
 
 /// Struct collects the channels for the communication between AtlasScientific and other components.
 pub struct AtlasScientificChannels {
     /// Sender part of the channel for communication to I2CInterface
     #[allow(unused)] // used in conditionally compiled code
-    pub tx_atlas_scientific_to_i2c_interface: Sender<I2cRequest>,
-    #[cfg(feature = "debug_channels")]
-    /// Counter for messages sent to the I2C interface
-    pub cnt_tx_atlas_scientific_to_i2c_interface: u64,
+    pub tx_atlas_scientific_to_i2c_interface: AquaSender<I2cRequest>,
 
     /// Receiver part of the channel for communication from I2CInterface
     #[allow(unused)] // used in conditionally compiled code
@@ -29,10 +27,7 @@ pub struct AtlasScientificChannels {
 
     /// Sender part of the channel for communication to the signal handler
     #[allow(unused)] // used in conditionally compiled code
-    pub tx_atlas_scientific_to_signal_handler: Sender<bool>,
-    #[cfg(feature = "debug_channels")]
-    /// Counter for messages sent to the signal handler
-    pub cnt_tx_atlas_scientific_to_signal_handler: u64,
+    pub tx_atlas_scientific_to_signal_handler: AquaSender<bool>,
 
     /// Receiver part of the channel for communication from the signal handler
     #[allow(unused)] // used in conditionally compiled code
@@ -45,16 +40,8 @@ pub struct AtlasScientificChannels {
 impl AtlasScientificChannels {
     /// Sends a request to the I2C interface.
     #[allow(unused)] // used in conditionally compiled code
-    pub fn send_to_i2c_interface(
-        &mut self,
-        request: I2cRequest,
-    ) -> Result<(), SendError<I2cRequest>> {
-        let result = self.tx_atlas_scientific_to_i2c_interface.send(request);
-        #[cfg(feature = "debug_channels")]
-        if result.is_ok() {
-            self.cnt_tx_atlas_scientific_to_i2c_interface += 1;
-        }
-        result
+    pub fn send_to_i2c_interface(&mut self, request: I2cRequest) -> Result<(), AquaChannelError> {
+        self.tx_atlas_scientific_to_i2c_interface.send(request)
     }
 
     /// Receives a result from the I2C interface.
@@ -69,13 +56,8 @@ impl AtlasScientificChannels {
     }
 
     /// Sends a request to the I2C interface.
-    pub fn send_to_signal_handler(&mut self, status: bool) -> Result<(), SendError<bool>> {
-        let result = self.tx_atlas_scientific_to_signal_handler.send(status);
-        #[cfg(feature = "debug_channels")]
-        if result.is_ok() {
-            self.cnt_tx_atlas_scientific_to_signal_handler += 1;
-        }
-        result
+    pub fn send_to_signal_handler(&mut self, status: bool) -> Result<(), AquaChannelError> {
+        self.tx_atlas_scientific_to_signal_handler.send(status)
     }
 }
 
@@ -85,8 +67,8 @@ impl fmt::Display for AtlasScientificChannels {
         writeln!(f, "=== AtlasScientificChannels ===")?;
         writeln!(
             f,
-            "cnt_tx_atlas_scientific_to_i2c_interface: {}",
-            self.cnt_tx_atlas_scientific_to_i2c_interface
+            "tx_atlas_scientific_to_i2c_interface: {}",
+            self.tx_atlas_scientific_to_i2c_interface.count
         )?;
         writeln!(
             f,
@@ -95,8 +77,8 @@ impl fmt::Display for AtlasScientificChannels {
         )?;
         writeln!(
             f,
-            "cnt_tx_atlas_scientific_to_signal_handler: {}",
-            self.cnt_tx_atlas_scientific_to_signal_handler
+            "tx_atlas_scientific_to_signal_handler: {}",
+            self.tx_atlas_scientific_to_signal_handler.count
         )?;
         write!(
             f,
