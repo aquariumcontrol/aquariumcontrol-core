@@ -546,13 +546,8 @@ impl Feed {
                         feed_channels,
                         &mut sql_interface_feed,
                     );
-                    match result {
-                        Ok(_) => { /* do nothing */ }
-                        Err(_) => {
-                            // error occurred. Block subsequent executions
-                            self.execution_blocked = true;
-                        }
-                    }
+                    self.execution_blocked |= result.is_err(); // block next execution if error occurred
+
                     quit_command_received = quit_command_received_during_requested_feed;
                     *mutex_data = mutex_data.saturating_add(1);
                 }
