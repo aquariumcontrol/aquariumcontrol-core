@@ -6,28 +6,23 @@ The above copyright notice and this permission notice shall be included in all c
 
 THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
-use crate::launch::channels::{AquaChannelError, AquaSender};
+use crate::launch::channels::{AquaChannelError, AquaReceiver, AquaSender};
 use crate::simulator::tcp_communication::TcpCommunicationError;
 use crate::utilities::channel_content::InternalCommand;
 use std::fmt;
-use std::sync::mpsc::{Receiver, RecvError};
 
 pub struct SensorManagerChannels {
     /// Sender part of the channel for communication via TCP wrapped as optional
     pub tx_sensor_manager_to_tcp_opt: Option<AquaSender<InternalCommand>>,
 
     /// Receiver part of the channel for communication via TCP wrapped as optional
-    pub rx_sensor_manager_from_tcp_opt: Option<Receiver<Result<f32, TcpCommunicationError>>>,
-    #[cfg(feature = "debug_channels")]
-    pub cnt_rx_sensor_manager_from_tcp_opt: u64,
+    pub rx_sensor_manager_from_tcp_opt: Option<AquaReceiver<Result<f32, TcpCommunicationError>>>,
 
     /// Sender part of the channel for communication to the signal handler
     pub tx_sensor_manager_to_signal_handler: AquaSender<bool>,
 
     /// Receiver part of the channel for communication from the signal handler
-    pub rx_sensor_manager_from_signal_handler: Receiver<InternalCommand>,
-    #[cfg(feature = "debug_channels")]
-    pub cnt_rx_sensor_manager_from_signal_handler: u64,
+    pub rx_sensor_manager_from_signal_handler: AquaReceiver<InternalCommand>,
 }
 
 impl SensorManagerChannels {
@@ -46,14 +41,9 @@ impl SensorManagerChannels {
     #[allow(unused)]
     pub fn receive_from_tcp(
         &mut self,
-    ) -> Option<Result<Result<f32, TcpCommunicationError>, RecvError>> {
-        self.rx_sensor_manager_from_tcp_opt.as_ref().map(|rx| {
-            let result = rx.recv();
-            #[cfg(feature = "debug_channels")]
-            if result.is_ok() {
-                self.cnt_rx_sensor_manager_from_tcp_opt += 1;
-            }
-            result
+    ) -> Option<Result<Result<f32, TcpCommunicationError>, AquaChannelError>> {
+        self.rx_sensor_manager_from_tcp_opt.as_mut().map(|rx| {
+            rx.recv()
         })
     }
 
@@ -65,13 +55,8 @@ impl SensorManagerChannels {
 
     /// Receives a command from the signal handler.
     #[allow(unused)]
-    pub fn receive_from_signal_handler(&mut self) -> Result<InternalCommand, RecvError> {
-        let result = self.rx_sensor_manager_from_signal_handler.recv();
-        #[cfg(feature = "debug_channels")]
-        if result.is_ok() {
-            self.cnt_rx_sensor_manager_from_signal_handler += 1;
-        }
-        result
+    pub fn receive_from_signal_handler(&mut self) -> Result<InternalCommand, AquaChannelError> {
+        self.rx_sensor_manager_from_signal_handler.recv()
     }
 }
 
@@ -79,16 +64,20 @@ impl SensorManagerChannels {
 impl fmt::Display for SensorManagerChannels {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         writeln!(f, "=== SensorManagerChannels ===")?;
-        writeln!(
-            f,
-            "tx_sensor_manager_to_tcp_opt: {}",
-            self.tx_sensor_manager_to_tcp_opt.as_ref().unwrap().count
-        )?;
-        writeln!(
-            f,
-            "cnt_rx_sensor_manager_from_tcp_opt: {}",
-            self.cnt_rx_sensor_manager_from_tcp_opt
-        )?;
+        if self.tx_sensor_manager_to_tcp_opt.is_some() {
+            writeln!(
+                f,
+                "tx_sensor_manager_to_tcp_opt: {}",
+                self.tx_sensor_manager_to_tcp_opt.as_ref().unwrap().count
+            )?;
+        }
+        if self.rx_sensor_manager_from_tcp_opt.is_some() {
+            writeln!(
+                f,
+                "rx_sensor_manager_from_tcp_opt: {}",
+                self.rx_sensor_manager_from_tcp_opt.as_ref().unwrap().count
+            )?;
+        }
         writeln!(
             f,
             "tx_sensor_manager_to_signal_handler: {}",
@@ -96,8 +85,8 @@ impl fmt::Display for SensorManagerChannels {
         )?;
         write!(
             f,
-            "cnt_rx_sensor_manager_from_signal_handler: {}",
-            self.cnt_rx_sensor_manager_from_signal_handler
+            "rx_sensor_manager_from_signal_handler: {}",
+            self.rx_sensor_manager_from_signal_handler.count
         )
     }
 }

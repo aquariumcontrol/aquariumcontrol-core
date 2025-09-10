@@ -728,7 +728,7 @@ impl Dht {
                 quit_command_received, // the request to end the application has been received
                 _,
                 _,
-            ) = self.process_external_request(&dht_channels.rx_dht_from_signal_handler, None);
+            ) = self.process_external_request(&mut dht_channels.rx_dht_from_signal_handler, None);
 
             if quit_command_received {
                 break;
@@ -808,13 +808,7 @@ impl Dht {
 
 #[cfg(test)]
 pub mod tests {
-    use assert_float_eq::*;
-    use std::sync::mpsc;
-    use std::sync::mpsc::Sender;
-    use std::sync::{Arc, Mutex};
-    use std::thread;
-    use std::time::Duration;
-
+    use crate::launch::channels::{channel, AquaSender};
     use crate::sensors::dht::DhtResult;
     use crate::sensors::dht::{dht22_constants, Dht, DhtError};
     use crate::sensors::dht_channels::DhtChannels;
@@ -822,6 +816,10 @@ pub mod tests {
     use crate::utilities::channel_content::InternalCommand;
     use crate::utilities::logger::setup_logger;
     use crate::utilities::logger_config::LoggerConfig;
+    use assert_float_eq::*;
+    use std::sync::{Arc, Mutex};
+    use std::thread;
+    use std::time::Duration;
 
     // feature-specific imports
     cfg_if::cfg_if! {
@@ -1020,10 +1018,10 @@ pub mod tests {
     fn setup_execute_test() -> (
         Dht,
         DhtChannels,
-        Sender<InternalCommand>,
+        AquaSender<InternalCommand>,
         Arc<Mutex<DhtResult>>,
     ) {
-        let (tx, rx) = mpsc::channel();
+        let (tx, rx) = channel(1);
         let channels = DhtChannels {
             rx_dht_from_signal_handler: rx,
             #[cfg(feature = "debug_channels")]
@@ -1051,7 +1049,7 @@ pub mod tests {
     /// Verifies that the `execute` loop terminates gracefully when a `Quit` command is received.
     fn test_execute_handles_quit_command() {
         // Arrange
-        let (mut dht, mut channels, tx, mutex) = setup_execute_test();
+        let (mut dht, mut channels, mut tx, mutex) = setup_execute_test();
 
         // Action
         let handle = thread::spawn(move || {
@@ -1072,7 +1070,7 @@ pub mod tests {
     /// Verifies that the `execute` loop continues running after receiving an unrecognized command.
     fn test_execute_handles_invalid_command() {
         // Arrange
-        let (mut dht, mut channels, tx, mutex) = setup_execute_test();
+        let (mut dht, mut channels, mut tx, mutex) = setup_execute_test();
 
         // Action
         let handle = thread::spawn(move || {
@@ -1100,7 +1098,7 @@ pub mod tests {
     /// when the measurement interval elapses. This test is for non-hardware platforms.
     fn test_execute_updates_mutex_on_measurement_interval() {
         // Arrange
-        let (tx, rx) = mpsc::channel();
+        let (mut tx, rx) = channel(1);
         let mut channels = DhtChannels {
             rx_dht_from_signal_handler: rx,
             #[cfg(feature = "debug_channels")]

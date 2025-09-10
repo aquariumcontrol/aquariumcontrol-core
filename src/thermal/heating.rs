@@ -401,8 +401,8 @@ impl Heating {
                 start_command_received, // the request to (re-)start heating has been received
                 stop_command_received, // the request to (temporarily) stop heating has been received
             ) = self.process_external_request(
-                &heating_channels.rx_heating_from_signal_handler,
-                heating_channels.rx_heating_from_messaging_opt.as_ref(),
+                &mut heating_channels.rx_heating_from_signal_handler,
+                heating_channels.rx_heating_from_messaging_opt.as_mut(),
             );
             if quit_command_received {
                 break;
@@ -734,7 +734,7 @@ impl Heating {
         // Those threads have to stop receiving commands from this thread.
         // The shutdown sequence is handled by the signal_handler module.
         self.wait_for_termination(
-            &heating_channels.rx_heating_from_signal_handler,
+            &mut heating_channels.rx_heating_from_signal_handler,
             sleep_duration_hundred_millis,
             module_path!(),
         );
@@ -972,7 +972,7 @@ pub mod tests {
             .spawn(move || {
                 mock_schedule_check(
                     &mut channels.schedule_check.tx_schedule_check_to_heating,
-                    &channels.schedule_check.rx_schedule_check_from_heating,
+                    &mut channels.schedule_check.rx_schedule_check_from_heating,
                     None,
                     true,
                 );
@@ -987,7 +987,7 @@ pub mod tests {
             .spawn(move || {
                 let (mut actuation_events, mock_actuator_states) = mock_relay_manager(
                     &mut channels.relay_manager.tx_relay_manager_to_heating,
-                    &channels.relay_manager.rx_relay_manager_from_heating,
+                    &mut channels.relay_manager.rx_relay_manager_from_heating,
                 );
                 assert_eq!(actuation_events.len(), 1);
                 let actuation_event = actuation_events.pop().unwrap();
@@ -1103,7 +1103,7 @@ pub mod tests {
             .spawn(move || {
                 mock_schedule_check(
                     &mut channels.schedule_check.tx_schedule_check_to_heating,
-                    &channels.schedule_check.rx_schedule_check_from_heating,
+                    &mut channels.schedule_check.rx_schedule_check_from_heating,
                     None,
                     true,
                 );
@@ -1118,7 +1118,7 @@ pub mod tests {
             .spawn(move || {
                 let (mut actuation_events, mock_actuator_states) = mock_relay_manager(
                     &mut channels.relay_manager.tx_relay_manager_to_heating,
-                    &channels.relay_manager.rx_relay_manager_from_heating,
+                    &mut channels.relay_manager.rx_relay_manager_from_heating,
                 );
                 assert_eq!(actuation_events.len(), 2);
                 let last_actuation_event = actuation_events.pop().unwrap();
@@ -1243,7 +1243,7 @@ pub mod tests {
             .spawn(move || {
                 mock_schedule_check(
                     &mut channels.schedule_check.tx_schedule_check_to_heating,
-                    &channels.schedule_check.rx_schedule_check_from_heating,
+                    &mut channels.schedule_check.rx_schedule_check_from_heating,
                     None,
                     true,
                 );
@@ -1258,7 +1258,7 @@ pub mod tests {
             .spawn(move || {
                 let (mut actuation_events, mock_actuator_states) = mock_relay_manager(
                     &mut channels.relay_manager.tx_relay_manager_to_heating,
-                    &channels.relay_manager.rx_relay_manager_from_heating,
+                    &mut channels.relay_manager.rx_relay_manager_from_heating,
                 );
                 println!(
                     "Mock relay manager received {} commands:",
@@ -1494,7 +1494,7 @@ pub mod tests {
             .spawn(move || {
                 mock_schedule_check(
                     &mut channels.schedule_check.tx_schedule_check_to_heating,
-                    &channels.schedule_check.rx_schedule_check_from_heating,
+                    &mut channels.schedule_check.rx_schedule_check_from_heating,
                     None,
                     true,
                 );
@@ -1509,7 +1509,7 @@ pub mod tests {
             .spawn(move || {
                 let (mut actuation_events, mock_actuator_states) = mock_relay_manager(
                     &mut channels.relay_manager.tx_relay_manager_to_heating,
-                    &channels.relay_manager.rx_relay_manager_from_heating,
+                    &mut channels.relay_manager.rx_relay_manager_from_heating,
                 );
                 println!(
                     "Mock relay manager received {} commands.",
@@ -1643,7 +1643,7 @@ pub mod tests {
             .spawn(move || {
                 mock_schedule_check(
                     &mut channels.schedule_check.tx_schedule_check_to_heating,
-                    &channels.schedule_check.rx_schedule_check_from_heating,
+                    &mut channels.schedule_check.rx_schedule_check_from_heating,
                     None,
                     true,
                 );
@@ -1658,7 +1658,7 @@ pub mod tests {
             .spawn(move || {
                 mock_relay_manager(
                     &mut channels.relay_manager.tx_relay_manager_to_heating,
-                    &channels.relay_manager.rx_relay_manager_from_heating,
+                    &mut channels.relay_manager.rx_relay_manager_from_heating,
                 );
             })
             .unwrap();
@@ -1880,7 +1880,7 @@ pub mod tests {
             .spawn(move || {
                 mock_schedule_check(
                     &mut channels.schedule_check.tx_schedule_check_to_heating,
-                    &channels.schedule_check.rx_schedule_check_from_heating,
+                    &mut channels.schedule_check.rx_schedule_check_from_heating,
                     None,
                     true,
                 );
@@ -1899,7 +1899,7 @@ pub mod tests {
             .spawn(move || {
                 mock_relay_manager(
                     &mut channels.relay_manager.tx_relay_manager_to_heating,
-                    &channels.relay_manager.rx_relay_manager_from_heating,
+                    &mut channels.relay_manager.rx_relay_manager_from_heating,
                 );
             })
             .unwrap();
@@ -2109,7 +2109,7 @@ pub mod tests {
             .spawn(move || {
                 mock_schedule_check(
                     &mut channels.schedule_check.tx_schedule_check_to_heating,
-                    &channels.schedule_check.rx_schedule_check_from_heating,
+                    &mut channels.schedule_check.rx_schedule_check_from_heating,
                     None,
                     false,
                 );
@@ -2124,7 +2124,7 @@ pub mod tests {
             .spawn(move || {
                 let (mut actuation_events, mock_actuator_states) = mock_relay_manager(
                     &mut channels.relay_manager.tx_relay_manager_to_heating,
-                    &channels.relay_manager.rx_relay_manager_from_heating,
+                    &mut channels.relay_manager.rx_relay_manager_from_heating,
                 );
                 assert_eq!(actuation_events.len(), 1);
                 let actuation_event = actuation_events.pop().unwrap();
@@ -2232,7 +2232,7 @@ pub mod tests {
             .spawn(move || {
                 mock_schedule_check(
                     &mut channels.schedule_check.tx_schedule_check_to_heating,
-                    &channels.schedule_check.rx_schedule_check_from_heating,
+                    &mut channels.schedule_check.rx_schedule_check_from_heating,
                     None,
                     true,
                 );
@@ -2251,7 +2251,7 @@ pub mod tests {
             .spawn(move || {
                 let (mut actuation_events, mock_actuator_states) = mock_relay_manager(
                     &mut channels.relay_manager.tx_relay_manager_to_heating,
-                    &channels.relay_manager.rx_relay_manager_from_heating,
+                    &mut channels.relay_manager.rx_relay_manager_from_heating,
                 );
                 assert_eq!(actuation_events.len(), 2);
                 let actuation_event = actuation_events.pop().unwrap();
@@ -2369,7 +2369,7 @@ pub mod tests {
             .spawn(move || {
                 mock_schedule_check(
                     &mut channels.schedule_check.tx_schedule_check_to_heating,
-                    &channels.schedule_check.rx_schedule_check_from_heating,
+                    &mut channels.schedule_check.rx_schedule_check_from_heating,
                     None,
                     true,
                 );
@@ -2386,7 +2386,7 @@ pub mod tests {
             .spawn(move || {
                 let (mut actuation_events, mock_actuator_states) = mock_relay_manager(
                     &mut channels.relay_manager.tx_relay_manager_to_heating,
-                    &channels.relay_manager.rx_relay_manager_from_heating,
+                    &mut channels.relay_manager.rx_relay_manager_from_heating,
                 );
                 println!("actuation_events:");
                 for actuation_event in &actuation_events {
@@ -2594,7 +2594,7 @@ pub mod tests {
             .spawn(move || {
                 mock_schedule_check(
                     &mut channels.schedule_check.tx_schedule_check_to_heating,
-                    &channels.schedule_check.rx_schedule_check_from_heating,
+                    &mut channels.schedule_check.rx_schedule_check_from_heating,
                     None,
                     true,
                 );
@@ -2610,7 +2610,7 @@ pub mod tests {
             .spawn(move || {
                 let (mut actuation_events, mock_actuator_states) = mock_relay_manager(
                     &mut channels.relay_manager.tx_relay_manager_to_heating,
-                    &channels.relay_manager.rx_relay_manager_from_heating,
+                    &mut channels.relay_manager.rx_relay_manager_from_heating,
                 );
                 assert_eq!(actuation_events.len(), 3);
                 let actuation_event_3 = actuation_events.pop().unwrap();
@@ -2743,7 +2743,7 @@ pub mod tests {
             .spawn(move || {
                 mock_schedule_check(
                     &mut channels.schedule_check.tx_schedule_check_to_heating,
-                    &channels.schedule_check.rx_schedule_check_from_heating,
+                    &mut channels.schedule_check.rx_schedule_check_from_heating,
                     None,
                     true,
                 );
@@ -2760,7 +2760,7 @@ pub mod tests {
             .spawn(move || {
                 let (mut actuation_events, mock_actuator_states) = mock_relay_manager(
                     &mut channels.relay_manager.tx_relay_manager_to_heating,
-                    &channels.relay_manager.rx_relay_manager_from_heating,
+                    &mut channels.relay_manager.rx_relay_manager_from_heating,
                 );
                 assert_eq!(actuation_events.len(), 2);
                 let last_actuation_event = actuation_events.pop().unwrap();

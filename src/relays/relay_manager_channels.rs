@@ -6,54 +6,41 @@ The above copyright notice and this permission notice shall be included in all c
 
 THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
-use crate::launch::channels::{AquaChannelError, AquaSender};
+use crate::launch::channels::{AquaChannelError, AquaReceiver, AquaSender};
 use crate::utilities::channel_content::InternalCommand;
 use std::fmt;
-use std::sync::mpsc::{Receiver, TryRecvError};
 
 /// Container for channels used by relay manager
 pub struct RelayManagerChannels {
     /// sender part of the channel for communication to the refill thread
     pub tx_relay_manager_to_refill: AquaSender<bool>,
     /// receiver part of the channel for communication from the refill thread
-    pub rx_relay_manager_from_refill: Receiver<InternalCommand>,
-    #[cfg(feature = "debug_channels")]
-    pub cnt_rx_relay_manager_from_refill: u64,
+    pub rx_relay_manager_from_refill: AquaReceiver<InternalCommand>,
 
     /// sender part of the channel for communication to the heating thread
     pub tx_relay_manager_to_heating: AquaSender<bool>,
     /// receiver part of the channel for communication from the heating thread
-    pub rx_relay_manager_from_heating: Receiver<InternalCommand>,
-    #[cfg(feature = "debug_channels")]
-    pub cnt_rx_relay_manager_from_heating: u64,
+    pub rx_relay_manager_from_heating: AquaReceiver<InternalCommand>,
 
     /// sender part of the channel for communication to the ventilation thread
     pub tx_relay_manager_to_ventilation: AquaSender<bool>,
     /// receiver part of the channel for communication from the ventilation thread
-    pub rx_relay_manager_from_ventilation: Receiver<InternalCommand>,
-    #[cfg(feature = "debug_channels")]
-    pub cnt_rx_relay_manager_from_ventilation: u64,
+    pub rx_relay_manager_from_ventilation: AquaReceiver<InternalCommand>,
 
     /// sender part of the channel for communication to the Balling dosing thread
     pub tx_relay_manager_to_balling: AquaSender<bool>,
     /// receiver part of the channel for communication from the Balling dosing thread
-    pub rx_relay_manager_from_balling: Receiver<InternalCommand>,
-    #[cfg(feature = "debug_channels")]
-    pub cnt_rx_relay_manager_from_balling: u64,
+    pub rx_relay_manager_from_balling: AquaReceiver<InternalCommand>,
 
     /// sender part of the channel for communication to the feed thread
     pub tx_relay_manager_to_feed: AquaSender<bool>,
     /// receiver part of the channel for communication from the feed thread
-    pub rx_relay_manager_from_feed: Receiver<InternalCommand>,
-    #[cfg(feature = "debug_channels")]
-    pub cnt_rx_relay_manager_from_feed: u64,
+    pub rx_relay_manager_from_feed: AquaReceiver<InternalCommand>,
 
     /// sender part of the channel for communication to the signal handler
     pub tx_relay_manager_to_signal_handler: AquaSender<bool>,
     /// receiver part of the channel for communication from the signal handler
-    pub rx_relay_manager_from_signal_handler: Receiver<InternalCommand>,
-    #[cfg(feature = "debug_channels")]
-    pub cnt_rx_relay_manager_from_signal_handler: u64,
+    pub rx_relay_manager_from_signal_handler: AquaReceiver<InternalCommand>,
 }
 
 impl RelayManagerChannels {
@@ -65,13 +52,8 @@ impl RelayManagerChannels {
 
     /// Receives a command from the refill module (non-blocking).
     #[allow(unused)]
-    pub fn receive_from_refill(&mut self) -> Result<InternalCommand, TryRecvError> {
-        let result = self.rx_relay_manager_from_refill.try_recv();
-        #[cfg(feature = "debug_channels")]
-        if result.is_ok() {
-            self.cnt_rx_relay_manager_from_refill += 1;
-        }
-        result
+    pub fn receive_from_refill(&mut self) -> Result<InternalCommand, AquaChannelError> {
+        self.rx_relay_manager_from_refill.try_recv()
     }
 
     /// Sends a response to the heating module.
@@ -82,13 +64,8 @@ impl RelayManagerChannels {
 
     /// Receives a command from the heating module (non-blocking).
     #[allow(unused)]
-    pub fn receive_from_heating(&mut self) -> Result<InternalCommand, TryRecvError> {
-        let result = self.rx_relay_manager_from_heating.try_recv();
-        #[cfg(feature = "debug_channels")]
-        if result.is_ok() {
-            self.cnt_rx_relay_manager_from_heating += 1;
-        }
-        result
+    pub fn receive_from_heating(&mut self) -> Result<InternalCommand, AquaChannelError> {
+        self.rx_relay_manager_from_heating.try_recv()
     }
 
     /// Sends a response to the ventilation module.
@@ -99,13 +76,8 @@ impl RelayManagerChannels {
 
     /// Receives a command from the ventilation module (non-blocking).
     #[allow(unused)]
-    pub fn receive_from_ventilation(&mut self) -> Result<InternalCommand, TryRecvError> {
-        let result = self.rx_relay_manager_from_ventilation.try_recv();
-        #[cfg(feature = "debug_channels")]
-        if result.is_ok() {
-            self.cnt_rx_relay_manager_from_ventilation += 1;
-        }
-        result
+    pub fn receive_from_ventilation(&mut self) -> Result<InternalCommand, AquaChannelError> {
+        self.rx_relay_manager_from_ventilation.try_recv()
     }
 
     /// Sends a response to the balling module.
@@ -116,13 +88,8 @@ impl RelayManagerChannels {
 
     /// Receives a command from the balling module (non-blocking).
     #[allow(unused)]
-    pub fn receive_from_balling(&mut self) -> Result<InternalCommand, TryRecvError> {
-        let result = self.rx_relay_manager_from_balling.try_recv();
-        #[cfg(feature = "debug_channels")]
-        if result.is_ok() {
-            self.cnt_rx_relay_manager_from_balling += 1;
-        }
-        result
+    pub fn receive_from_balling(&mut self) -> Result<InternalCommand, AquaChannelError> {
+        self.rx_relay_manager_from_balling.try_recv()
     }
 
     /// Sends a response to the feed module.
@@ -133,13 +100,8 @@ impl RelayManagerChannels {
 
     /// Receives a command from the feed module (non-blocking).
     #[allow(unused)]
-    pub fn receive_from_feed(&mut self) -> Result<InternalCommand, TryRecvError> {
-        let result = self.rx_relay_manager_from_feed.try_recv();
-        #[cfg(feature = "debug_channels")]
-        if result.is_ok() {
-            self.cnt_rx_relay_manager_from_feed += 1;
-        }
-        result
+    pub fn receive_from_feed(&mut self) -> Result<InternalCommand, AquaChannelError> {
+        self.rx_relay_manager_from_feed.try_recv()
     }
 
     /// Sends a response to the signal handler.
@@ -150,13 +112,8 @@ impl RelayManagerChannels {
 
     /// Receives a command from the signal handler (non-blocking).
     #[allow(unused)]
-    pub fn receive_from_signal_handler(&mut self) -> Result<InternalCommand, TryRecvError> {
-        let result = self.rx_relay_manager_from_signal_handler.try_recv();
-        #[cfg(feature = "debug_channels")]
-        if result.is_ok() {
-            self.cnt_rx_relay_manager_from_signal_handler += 1;
-        }
-        result
+    pub fn receive_from_signal_handler(&mut self) -> Result<InternalCommand, AquaChannelError> {
+        self.rx_relay_manager_from_signal_handler.try_recv()
     }
 }
 
@@ -171,8 +128,8 @@ impl fmt::Display for RelayManagerChannels {
         )?;
         writeln!(
             f,
-            "cnt_rx_relay_manager_from_refill: {}",
-            self.cnt_rx_relay_manager_from_refill
+            "rx_relay_manager_from_refill: {}",
+            self.rx_relay_manager_from_refill.count
         )?;
         writeln!(
             f,
@@ -181,8 +138,8 @@ impl fmt::Display for RelayManagerChannels {
         )?;
         writeln!(
             f,
-            "cnt_rx_relay_manager_from_heating: {}",
-            self.cnt_rx_relay_manager_from_heating
+            "rx_relay_manager_from_heating: {}",
+            self.rx_relay_manager_from_heating.count
         )?;
         writeln!(
             f,
@@ -191,8 +148,8 @@ impl fmt::Display for RelayManagerChannels {
         )?;
         writeln!(
             f,
-            "cnt_rx_relay_manager_from_ventilation: {}",
-            self.cnt_rx_relay_manager_from_ventilation
+            "rx_relay_manager_from_ventilation: {}",
+            self.rx_relay_manager_from_ventilation.count
         )?;
         writeln!(
             f,
@@ -201,8 +158,8 @@ impl fmt::Display for RelayManagerChannels {
         )?;
         writeln!(
             f,
-            "cnt_rx_relay_manager_from_balling: {}",
-            self.cnt_rx_relay_manager_from_balling
+            "rx_relay_manager_from_balling: {}",
+            self.rx_relay_manager_from_balling.count
         )?;
         writeln!(
             f,
@@ -211,8 +168,8 @@ impl fmt::Display for RelayManagerChannels {
         )?;
         writeln!(
             f,
-            "cnt_rx_relay_manager_from_feed: {}",
-            self.cnt_rx_relay_manager_from_feed
+            "rx_relay_manager_from_feed: {}",
+            self.rx_relay_manager_from_feed.count
         )?;
         writeln!(
             f,
@@ -221,8 +178,8 @@ impl fmt::Display for RelayManagerChannels {
         )?;
         write!(
             f,
-            "cnt_rx_relay_manager_from_signal_handler: {}",
-            self.cnt_rx_relay_manager_from_signal_handler
+            "rx_relay_manager_from_signal_handler: {}",
+            self.rx_relay_manager_from_signal_handler.count
         )
     }
 }

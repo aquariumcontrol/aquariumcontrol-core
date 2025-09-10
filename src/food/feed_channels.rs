@@ -6,10 +6,9 @@ The above copyright notice and this permission notice shall be included in all c
 
 THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
-use crate::launch::channels::{AquaChannelError, AquaSender};
+use crate::launch::channels::{AquaChannelError, AquaReceiver, AquaSender};
 use crate::utilities::channel_content::InternalCommand;
 use std::fmt;
-use std::sync::mpsc::{Receiver, RecvError};
 
 /// Struct collects the channels for communication between the feed control and the other components.
 pub struct FeedChannels {
@@ -17,25 +16,16 @@ pub struct FeedChannels {
     pub tx_feed_to_relay_manager: AquaSender<InternalCommand>,
 
     /// Receiver part of the channel for communication from the relay manager
-    pub rx_feed_from_relay_manager: Receiver<bool>,
-    #[cfg(feature = "debug_channels")]
-    /// Counter for messages received from the relay manager
-    pub cnt_rx_feed_from_relay_manager: u64,
+    pub rx_feed_from_relay_manager: AquaReceiver<bool>,
 
     /// Sender part of the channel for communication to the signal handler
     pub tx_feed_to_signal_handler: AquaSender<bool>,
 
     /// Receiver part of the channel for communication from the signal handler
-    pub rx_feed_from_signal_handler: Receiver<InternalCommand>,
-    #[cfg(feature = "debug_channels")]
-    /// Counter for messages received from the signal handler
-    pub cnt_rx_feed_from_signal_handler: u64,
+    pub rx_feed_from_signal_handler: AquaReceiver<InternalCommand>,
 
     /// Receiver part of the channel wrapped in Option for communication from the messaging
-    pub rx_feed_from_messaging_opt: Option<Receiver<InternalCommand>>,
-    #[cfg(feature = "debug_channels")]
-    /// Counter for messages received from messaging
-    pub cnt_rx_feed_from_messaging_opt: u64,
+    pub rx_feed_from_messaging_opt: Option<AquaReceiver<InternalCommand>>,
 }
 
 impl FeedChannels {
@@ -48,13 +38,8 @@ impl FeedChannels {
     }
 
     /// Receives a response from the relay manager.
-    pub fn receive_from_relay_manager(&mut self) -> Result<bool, RecvError> {
-        let result = self.rx_feed_from_relay_manager.recv();
-        #[cfg(feature = "debug_channels")]
-        if result.is_ok() {
-            self.cnt_rx_feed_from_relay_manager += 1;
-        }
-        result
+    pub fn receive_from_relay_manager(&mut self) -> Result<bool, AquaChannelError> {
+        self.rx_feed_from_relay_manager.recv()
     }
 
     /// Sends an acknowledgment to the signal handler.
@@ -74,8 +59,8 @@ impl fmt::Display for FeedChannels {
         )?;
         writeln!(
             f,
-            "cnt_rx_feed_from_relay_manager: {}",
-            self.cnt_rx_feed_from_relay_manager
+            "rx_feed_from_relay_manager: {}",
+            self.rx_feed_from_relay_manager.count
         )?;
         writeln!(
             f,
@@ -84,14 +69,17 @@ impl fmt::Display for FeedChannels {
         )?;
         writeln!(
             f,
-            "cnt_rx_feed_from_signal_handler: {}",
-            self.cnt_rx_feed_from_signal_handler
+            "rx_feed_from_signal_handler: {}",
+            self.rx_feed_from_signal_handler.count
         )?;
-        write!(
-            f,
-            "cnt_rx_feed_from_messaging_opt: {}",
-            self.cnt_rx_feed_from_messaging_opt
-        )
+        if self.rx_feed_from_messaging_opt.is_some() {
+            write!(
+                f,
+                "rx_feed_from_messaging_opt: {}",
+                self.rx_feed_from_messaging_opt.as_ref().unwrap().count
+            )?;
+        }
+        Ok(())
     }
 }
 

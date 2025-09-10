@@ -16,13 +16,13 @@ pub mod tests {
     use crate::mocks::test_command::tests::TestCommand;
     use crate::utilities::channel_content::InternalCommand;
     use spin_sleep::SpinSleeper;
-    use std::sync::mpsc::{Receiver, TryRecvError};
     use std::sync::{Arc, Mutex};
     use std::time::{Duration, Instant};
+    use crate::launch::channels::{AquaChannelError, AquaReceiver};
 
     pub fn mock_ventilation(
-        rx_ventilation_from_signal_handler: &Receiver<InternalCommand>,
-        rx_ventilation_from_test_environment_opt: Option<&Receiver<TestCommand>>,
+        rx_ventilation_from_signal_handler: &mut AquaReceiver<InternalCommand>,
+        mut rx_ventilation_from_test_environment_opt: Option<&mut AquaReceiver<TestCommand>>,
         mutex_ventilation_status: Arc<Mutex<bool>>,
     ) {
         let sleep_duration = Duration::from_millis(10);
@@ -37,7 +37,7 @@ pub mod tests {
             }
 
             match rx_ventilation_from_test_environment_opt {
-                Some(rx_ventilation_from_test_environment) => {
+                Some(ref mut rx_ventilation_from_test_environment) => {
                     match rx_ventilation_from_test_environment.try_recv() {
                         Ok(c) => {
                             let test_command = c.clone();
@@ -76,8 +76,8 @@ pub mod tests {
                         }
                         Err(e) => {
                             match e {
-                                TryRecvError::Empty => { /* empty buffer - no action required */ }
-                                TryRecvError::Disconnected => {
+                                AquaChannelError::Empty => { /* empty buffer - no action required */ }
+                                AquaChannelError::Disconnected => {
                                     panic!(
                                         "{}: Error in trying to receive command from test environment: {e:?}",
                                         module_path!()

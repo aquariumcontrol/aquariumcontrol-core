@@ -11,19 +11,18 @@ use crate::launch::channels::AquaSender;
 #[cfg(any(test, target_os = "linux"))]
 use crate::utilities::channel_content::InternalCommand;
 #[cfg(any(test, target_os = "linux"))]
-use std::sync::mpsc::Receiver;
+use crate::launch::channels::AquaReceiver;
 
 cfg_if::cfg_if! {
     if #[cfg(target_os = "linux")] {
         use std::fmt;
-        use std::sync::mpsc::SendError;
         use crate::dispatch::messaging_domain::MessagingDomain;
         use crate::dispatch::messaging_error::MessagingError;
     }
 }
 
 #[cfg(any(test, target_os = "linux"))]
-/// Collects all `mpsc` channels used by the `Messaging` module for IPC.
+/// Collects all channels used by the `Messaging` module for IPC.
 ///
 /// This struct acts as a central container for all the communication endpoints
 /// that the `Messaging` module uses to dispatch commands received via a POSIX
@@ -39,11 +38,7 @@ pub struct MessagingChannels {
 
     #[allow(unused)]
     /// Receiver for commands from the `SignalHandler` (e.g., `Quit`, `Terminate`).
-    pub rx_messaging_from_signal_handler: Receiver<InternalCommand>,
-    #[allow(unused)]
-    #[cfg(feature = "debug_channels")]
-    /// Counter for messages received from the signal handler.
-    pub cnt_rx_messaging_from_signal_handler: u64,
+    pub rx_messaging_from_signal_handler: AquaReceiver<InternalCommand>,
 
     /// Sender for dispatching commands to the `Refill` module.
     pub tx_messaging_to_refill: AquaSender<InternalCommand>,
@@ -129,7 +124,7 @@ impl MessagingChannels {
     }
 
     /// Sends an acknowledgment to the signal handler.
-    pub fn send_to_signal_handler(&mut self, ack: bool) -> Result<(), SendError<bool>> {
+    pub fn send_to_signal_handler(&mut self, ack: bool) -> Result<(), AquaChannelError> {
         self.tx_messaging_to_signal_handler.send(ack)
     }
 }
@@ -145,12 +140,12 @@ impl fmt::Display for MessagingChannels {
         )?;
         writeln!(
             f,
-            "cnt_rx_messaging_from_signal_handler: {}",
-            self.cnt_rx_messaging_from_signal_handler
+            "rx_messaging_from_signal_handler: {}",
+            self.rx_messaging_from_signal_handler.count
         )?;
         writeln!(
             f,
-            "cnt_tx_messaging_to_refill: {}",
+            "tx_messaging_to_refill: {}",
             self.tx_messaging_to_refill.count
         )?;
         writeln!(

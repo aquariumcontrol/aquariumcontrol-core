@@ -119,7 +119,7 @@ impl MineralInjectionTrait for MineralInjection {
         loop {
             // check if there is a quit request
             (quit_command_received, _, _) = self
-                .process_external_request(&balling_channels.rx_balling_from_signal_handler, None);
+                .process_external_request(&mut balling_channels.rx_balling_from_signal_handler, None);
             if quit_command_received {
                 break; // stop dosing
             }
@@ -173,12 +173,11 @@ impl MineralInjectionTrait for MineralInjection {
 
 #[cfg(test)]
 pub mod tests {
-    use crate::launch::channels::{AquaSender, Channels};
+    use crate::launch::channels::{AquaReceiver, AquaSender, Channels};
     use crate::mineral::mineral_injection::{MineralInjection, MineralInjectionTrait};
     use crate::utilities::channel_content::{ActuatorState, AquariumDevice, InternalCommand};
     use all_asserts::{assert_ge, assert_le};
     use spin_sleep::SpinSleeper;
-    use std::sync::mpsc::Receiver;
     use std::thread::scope;
     use std::time::Duration;
 
@@ -206,7 +205,7 @@ pub mod tests {
     // - It fails to send the acknowledgment back.
     fn test_mineral_injection_receive_actuation_command_send_confirmation(
         tx_relay_manager_to_mineral_injection: &mut AquaSender<bool>,
-        rx_relay_manager_from_mineral_injection: &Receiver<InternalCommand>,
+        rx_relay_manager_from_mineral_injection: &mut AquaReceiver<InternalCommand>,
     ) -> InternalCommand {
         let command: InternalCommand;
 
@@ -274,7 +273,7 @@ pub mod tests {
 
     fn mineral_injection_test_environment(
         mut tx_relay_manager_to_mineral_injection: AquaSender<bool>,
-        rx_relay_manager_from_mineral_injection: Receiver<InternalCommand>,
+        mut rx_relay_manager_from_mineral_injection: AquaReceiver<InternalCommand>,
     ) {
         let mut peristaltic_pump1_actuation_state = ActuatorState::Off;
         let mut peristaltic_pump2_actuation_state = ActuatorState::Off;
@@ -284,7 +283,7 @@ pub mod tests {
         // allow switching on peristaltic pump
         let command = test_mineral_injection_receive_actuation_command_send_confirmation(
             &mut tx_relay_manager_to_mineral_injection,
-            &rx_relay_manager_from_mineral_injection,
+            &mut rx_relay_manager_from_mineral_injection,
         );
         update_actuator_states(
             command,
@@ -297,7 +296,7 @@ pub mod tests {
         // allow switching off peristaltic pump
         let command = test_mineral_injection_receive_actuation_command_send_confirmation(
             &mut tx_relay_manager_to_mineral_injection,
-            &rx_relay_manager_from_mineral_injection,
+            &mut rx_relay_manager_from_mineral_injection,
         );
         update_actuator_states(
             command,

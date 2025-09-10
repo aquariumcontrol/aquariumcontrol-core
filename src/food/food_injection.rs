@@ -477,7 +477,7 @@ impl FoodInjectionTrait for FoodInjection {
         for feedphase in &feedpattern.feedphases {
             // check if there is a quit request
             (quit_command_received, _, _) =
-                self.process_external_request(&feed_channels.rx_feed_from_signal_handler, None);
+                self.process_external_request(&mut feed_channels.rx_feed_from_signal_handler, None);
             if quit_command_received {
                 break; // exit outer loop
             }
@@ -525,7 +525,7 @@ impl FoodInjectionTrait for FoodInjection {
             let pause_duration = Duration::from_millis(feedphase.pause_duration as u64);
             while Instant::now().duration_since(start_of_pause) < pause_duration {
                 (quit_command_received, _, _) =
-                    self.process_external_request(&feed_channels.rx_feed_from_signal_handler, None);
+                    self.process_external_request(&mut feed_channels.rx_feed_from_signal_handler, None);
                 if quit_command_received {
                     #[cfg(test)]
                     println!("Received quit command during pause phase of food injection");
@@ -580,7 +580,7 @@ impl FoodInjectionTrait for FoodInjection {
             let feed_duration = Duration::from_millis(feedphase.feed_duration as u64);
             while Instant::now().duration_since(start_of_pause) < feed_duration {
                 (quit_command_received, _, _) =
-                    self.process_external_request(&feed_channels.rx_feed_from_signal_handler, None);
+                    self.process_external_request(&mut feed_channels.rx_feed_from_signal_handler, None);
                 if quit_command_received {
                     #[cfg(test)]
                     println!("Received quit command during feed phase of food injection");
@@ -621,11 +621,10 @@ impl FoodInjectionTrait for FoodInjection {
 pub mod tests {
     use crate::food::feed_pattern::{FeedPhase, Feedpattern};
     use crate::food::food_injection::{FoodInjection, FoodInjectionTrait};
-    use crate::launch::channels::{AquaSender, Channels};
+    use crate::launch::channels::{AquaReceiver, AquaSender, Channels};
     use crate::utilities::channel_content::{ActuatorState, AquariumDevice, InternalCommand};
     use crate::utilities::config::{read_config_file, ConfigData};
     use all_asserts::{assert_ge, assert_le};
-    use std::sync::mpsc::Receiver;
     use std::thread::scope;
     use std::time::Instant;
 
@@ -652,7 +651,7 @@ pub mod tests {
     // - It fails to send the acknowledgment back to the `FoodInjection` test object.
     fn test_food_injection_receive_actuation_command_send_confirmation(
         tx_relay_manager_to_feed: &mut AquaSender<bool>,
-        rx_relay_manager_from_feed: &Receiver<InternalCommand>,
+        rx_relay_manager_from_feed: &mut AquaReceiver<InternalCommand>,
         counter_switch_on: &mut i32,
         counter_switch_off: &mut i32,
     ) -> InternalCommand {
@@ -775,7 +774,7 @@ pub mod tests {
                     println!("test_food_injection: loop #{}", i);
                     let command = test_food_injection_receive_actuation_command_send_confirmation(
                         &mut channels.relay_manager.tx_relay_manager_to_feed,
-                        &channels.relay_manager.rx_relay_manager_from_feed,
+                        &mut channels.relay_manager.rx_relay_manager_from_feed,
                         &mut counter_switch_on,
                         &mut counter_switch_off,
                     );
@@ -876,7 +875,7 @@ pub mod tests {
                     println!("test_food_injection: loop #{}", i);
                     let command = test_food_injection_receive_actuation_command_send_confirmation(
                         &mut channels.relay_manager.tx_relay_manager_to_feed,
-                        &channels.relay_manager.rx_relay_manager_from_feed,
+                        &mut channels.relay_manager.rx_relay_manager_from_feed,
                         &mut counter_switch_on,
                         &mut counter_switch_off,
                     );
@@ -896,7 +895,7 @@ pub mod tests {
                     println!("test_food_injection: loop #{}", i);
                     let command = test_food_injection_receive_actuation_command_send_confirmation(
                         &mut channels.relay_manager.tx_relay_manager_to_feed,
-                        &channels.relay_manager.rx_relay_manager_from_feed,
+                        &mut channels.relay_manager.rx_relay_manager_from_feed,
                         &mut counter_switch_on,
                         &mut counter_switch_off,
                     );

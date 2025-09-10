@@ -10,7 +10,6 @@ cfg_if::cfg_if! {
     if #[cfg(target_os = "linux")] {
         use crate::utilities::channel_content::InternalCommand;
         use thiserror::Error;
-        use std::sync::mpsc::SendError;
     }
 }
 

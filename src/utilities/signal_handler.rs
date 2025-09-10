@@ -16,13 +16,12 @@ use log::info;
 #[cfg(target_os = "linux")]
 use nix::unistd::gettid;
 
-use crate::launch::channels::AquaSender;
+use crate::launch::channels::{AquaReceiver, AquaSender};
 use crate::launch::execution_config::ExecutionConfig;
 use crate::utilities::channel_content::InternalCommand;
 pub(crate) use crate::utilities::signal_handler_channels::SignalHandlerChannels;
 use spin_sleep::SpinSleeper;
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::mpsc::Receiver;
 use std::{sync::Arc, time::Duration};
 
 /// Sends a specified `InternalCommand` to a target thread's channel and optionally waits for an acknowledgment.
@@ -43,7 +42,7 @@ use std::{sync::Arc, time::Duration};
 fn send_command(
     command: InternalCommand,
     tx_to_thread_opt: Option<&mut AquaSender<InternalCommand>>,
-    rx_from_thread_opt: Option<&Receiver<bool>>,
+    rx_from_thread_opt: Option<&mut AquaReceiver<bool>>,
     thread_name: &str,
 ) {
     match tx_to_thread_opt {
@@ -202,7 +201,7 @@ pub fn handle_signals(
         send_command(
             InternalCommand::Quit,
             Some(&mut signal_handler_channels.tx_signal_handler_to_data_logger),
-            Some(&signal_handler_channels.rx_signal_handler_from_data_logger),
+            Some(&mut signal_handler_channels.rx_signal_handler_from_data_logger),
             "data_logger",
         );
     }
@@ -213,7 +212,7 @@ pub fn handle_signals(
             .as_mut(),
         signal_handler_channels
             .rx_signal_handler_from_messaging_opt
-            .as_ref(),
+            .as_mut(),
         "messaging",
     );
     #[cfg(feature = "debug_signal_handler")]
@@ -228,7 +227,7 @@ pub fn handle_signals(
         send_command(
             InternalCommand::Quit,
             Some(&mut signal_handler_channels.tx_signal_handler_to_refill),
-            Some(&signal_handler_channels.rx_signal_handler_from_refill),
+            Some(&mut signal_handler_channels.rx_signal_handler_from_refill),
             "refill",
         );
     }
@@ -236,7 +235,7 @@ pub fn handle_signals(
         send_command(
             InternalCommand::Quit,
             Some(&mut signal_handler_channels.tx_signal_handler_to_heating),
-            Some(&signal_handler_channels.rx_signal_handler_from_heating),
+            Some(&mut signal_handler_channels.rx_signal_handler_from_heating),
             "heating",
         );
     }
@@ -244,7 +243,7 @@ pub fn handle_signals(
         send_command(
             InternalCommand::Quit,
             Some(&mut signal_handler_channels.tx_signal_handler_to_ventilation),
-            Some(&signal_handler_channels.rx_signal_handler_from_ventilation),
+            Some(&mut signal_handler_channels.rx_signal_handler_from_ventilation),
             "ventilation",
         );
     }
@@ -252,7 +251,7 @@ pub fn handle_signals(
         send_command(
             InternalCommand::Quit,
             Some(&mut signal_handler_channels.tx_signal_handler_to_feed),
-            Some(&signal_handler_channels.rx_signal_handler_from_feed),
+            Some(&mut signal_handler_channels.rx_signal_handler_from_feed),
             "feed",
         );
     }
@@ -260,7 +259,7 @@ pub fn handle_signals(
         send_command(
             InternalCommand::Quit,
             Some(&mut signal_handler_channels.tx_signal_handler_to_balling),
-            Some(&signal_handler_channels.rx_signal_handler_from_balling),
+            Some(&mut signal_handler_channels.rx_signal_handler_from_balling),
             "balling",
         );
     }
@@ -276,7 +275,7 @@ pub fn handle_signals(
         send_command(
             InternalCommand::Quit,
             Some(&mut signal_handler_channels.tx_signal_handler_to_tank_level_switch),
-            Some(&signal_handler_channels.rx_signal_handler_from_tank_level_switch),
+            Some(&mut signal_handler_channels.rx_signal_handler_from_tank_level_switch),
             "tank_level_switch",
         );
     }
@@ -284,7 +283,7 @@ pub fn handle_signals(
         send_command(
             InternalCommand::Quit,
             Some(&mut signal_handler_channels.tx_signal_handler_to_atlas_scientific),
-            Some(&signal_handler_channels.rx_signal_handler_from_atlas_scientific),
+            Some(&mut signal_handler_channels.rx_signal_handler_from_atlas_scientific),
             "atlas_scientific",
         );
     }
@@ -292,7 +291,7 @@ pub fn handle_signals(
         send_command(
             InternalCommand::Quit,
             Some(&mut signal_handler_channels.tx_signal_handler_to_sensor_manager),
-            Some(&signal_handler_channels.rx_signal_handler_from_sensor_manager),
+            Some(&mut signal_handler_channels.rx_signal_handler_from_sensor_manager),
             "ambient",
         );
     }
@@ -300,7 +299,7 @@ pub fn handle_signals(
         send_command(
             InternalCommand::Quit,
             Some(&mut signal_handler_channels.tx_signal_handler_to_schedule_check),
-            Some(&signal_handler_channels.rx_signal_handler_from_schedule_check),
+            Some(&mut signal_handler_channels.rx_signal_handler_from_schedule_check),
             "schedule_check",
         );
     }
@@ -334,7 +333,7 @@ pub fn handle_signals(
         send_command(
             InternalCommand::Quit,
             Some(&mut signal_handler_channels.tx_signal_handler_to_relay_manager),
-            Some(&signal_handler_channels.rx_signal_handler_from_relay_manager),
+            Some(&mut signal_handler_channels.rx_signal_handler_from_relay_manager),
             "relay_manager",
         );
     }
@@ -345,14 +344,14 @@ pub fn handle_signals(
             .as_mut(),
         signal_handler_channels
             .rx_signal_handler_from_tcp_opt
-            .as_ref(),
+            .as_mut(),
         "tcp",
     );
     if execution_config.monitors {
         send_command(
             InternalCommand::Quit,
             Some(&mut signal_handler_channels.tx_signal_handler_to_monitors),
-            Some(&signal_handler_channels.rx_signal_handler_from_monitors),
+            Some(&mut signal_handler_channels.rx_signal_handler_from_monitors),
             "monitors",
         );
     }
@@ -472,7 +471,7 @@ pub fn handle_signals(
         send_command(
             InternalCommand::Terminate,
             Some(&mut signal_handler_channels.tx_signal_handler_to_watchdog),
-            Some(&signal_handler_channels.rx_signal_handler_from_watchdog),
+            Some(&mut signal_handler_channels.rx_signal_handler_from_watchdog),
             "watchdog",
         );
     }

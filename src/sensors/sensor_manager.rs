@@ -455,7 +455,7 @@ impl SensorManager {
                 _,
                 _,
             ) = self.process_external_request(
-                &sensor_manager_channels.rx_sensor_manager_from_signal_handler,
+                &mut sensor_manager_channels.rx_sensor_manager_from_signal_handler,
                 None,
             );
 
@@ -639,7 +639,7 @@ impl SensorManager {
         // Those threads have to stop receiving commands from this thread.
         // The shutdown sequence is handled by the signal_handler module.
         self.wait_for_termination(
-            &sensor_manager_channels.rx_sensor_manager_from_signal_handler,
+            &mut sensor_manager_channels.rx_sensor_manager_from_signal_handler,
             sleep_duration_one_millis,
             module_path!(),
         );

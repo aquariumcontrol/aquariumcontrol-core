@@ -330,10 +330,10 @@ impl Ventilation {
         loop {
             let (quit_command_received, start_command_received, stop_command_received) = self
                 .process_external_request(
-                    &ventilation_channels.rx_ventilation_from_signal_handler,
+                    &mut ventilation_channels.rx_ventilation_from_signal_handler,
                     ventilation_channels
                         .rx_ventilation_from_messaging_opt
-                        .as_ref(),
+                        .as_mut(),
                 );
             if quit_command_received {
                 break;
@@ -530,7 +530,7 @@ impl Ventilation {
         // Those threads have to stop receiving commands from this thread.
         // The shutdown sequence is handled by the signal_handler module.
         self.wait_for_termination(
-            &ventilation_channels.rx_ventilation_from_signal_handler,
+            &mut ventilation_channels.rx_ventilation_from_signal_handler,
             sleep_duration_hundred_millis,
             module_path!(),
         );
@@ -539,7 +539,7 @@ impl Ventilation {
 
 #[cfg(test)]
 pub mod tests {
-    use crate::launch::channels::{AquaSender, Channels};
+    use crate::launch::channels::{AquaReceiver, AquaSender, Channels};
     use crate::mocks::mock_relay_manager::tests::mock_relay_manager;
     use crate::mocks::mock_schedule_check::tests::mock_schedule_check;
     use crate::mocks::mock_ventilation::tests::MockSqlInterfaceVentilationSetVals;
@@ -551,7 +551,6 @@ pub mod tests {
     use crate::utilities::signal_handler::SignalHandlerChannels;
     use all_asserts::{assert_ge, assert_le};
     use spin_sleep::SpinSleeper;
-    use std::sync::mpsc::Receiver;
     use std::sync::{Arc, Mutex};
     use std::thread;
     use std::time::Duration;
@@ -658,7 +657,7 @@ pub mod tests {
             .spawn(move || {
                 mock_schedule_check(
                     &mut channels.schedule_check.tx_schedule_check_to_ventilation,
-                    &channels.schedule_check.rx_schedule_check_from_ventilation,
+                    &mut channels.schedule_check.rx_schedule_check_from_ventilation,
                     None,
                     true,
                 );
@@ -759,14 +758,14 @@ pub mod tests {
     // - Any other unexpected command is received.
     fn create_mock_relay_manager(
         mut tx_relay_manager_to_ventilation: AquaSender<bool>,
-        rx_relay_manager_from_ventilation: Receiver<InternalCommand>,
+        mut rx_relay_manager_from_ventilation: AquaReceiver<InternalCommand>,
     ) -> thread::JoinHandle<()> {
         thread::Builder::new()
             .name("mock_relay_manager".to_string())
             .spawn(move || {
                 let (mut actuation_events, mock_actuator_states) = mock_relay_manager(
                     &mut tx_relay_manager_to_ventilation,
-                    &rx_relay_manager_from_ventilation,
+                    &mut rx_relay_manager_from_ventilation,
                 );
                 assert_eq!(actuation_events.len(), 2);
                 let actuation_event = actuation_events.pop().unwrap();
@@ -804,7 +803,7 @@ pub mod tests {
             .spawn(move || {
                 mock_schedule_check(
                     &mut channels.schedule_check.tx_schedule_check_to_ventilation,
-                    &channels.schedule_check.rx_schedule_check_from_ventilation,
+                    &mut channels.schedule_check.rx_schedule_check_from_ventilation,
                     None,
                     true,
                 );
@@ -900,7 +899,7 @@ pub mod tests {
             .spawn(move || {
                 mock_schedule_check(
                     &mut channels.schedule_check.tx_schedule_check_to_ventilation,
-                    &channels.schedule_check.rx_schedule_check_from_ventilation,
+                    &mut channels.schedule_check.rx_schedule_check_from_ventilation,
                     None,
                     true,
                 );
@@ -920,7 +919,7 @@ pub mod tests {
             .spawn(move || {
                 let (mut actuation_events, mock_actuator_states) = mock_relay_manager(
                     &mut channels.relay_manager.tx_relay_manager_to_ventilation,
-                    &channels.relay_manager.rx_relay_manager_from_ventilation,
+                    &mut channels.relay_manager.rx_relay_manager_from_ventilation,
                 );
                 println!(
                     "Mock relay manager received {} commands:",
@@ -1133,7 +1132,7 @@ pub mod tests {
             .spawn(move || {
                 mock_schedule_check(
                     &mut channels.schedule_check.tx_schedule_check_to_ventilation,
-                    &channels.schedule_check.rx_schedule_check_from_ventilation,
+                    &mut channels.schedule_check.rx_schedule_check_from_ventilation,
                     None,
                     false,
                 );
@@ -1244,7 +1243,7 @@ pub mod tests {
             .spawn(move || {
                 mock_schedule_check(
                     &mut channels.schedule_check.tx_schedule_check_to_ventilation,
-                    &channels.schedule_check.rx_schedule_check_from_ventilation,
+                    &mut channels.schedule_check.rx_schedule_check_from_ventilation,
                     None,
                     true,
                 );
@@ -1257,7 +1256,7 @@ pub mod tests {
             .spawn(move || {
                 let (mut actuation_events, mock_actuator_states) = mock_relay_manager(
                     &mut channels.relay_manager.tx_relay_manager_to_ventilation,
-                    &channels.relay_manager.rx_relay_manager_from_ventilation,
+                    &mut channels.relay_manager.rx_relay_manager_from_ventilation,
                 );
                 println!("actuation_events:");
                 for actuation_event in &actuation_events {
@@ -1456,7 +1455,7 @@ pub mod tests {
             .spawn(move || {
                 mock_schedule_check(
                     &mut channels.schedule_check.tx_schedule_check_to_ventilation,
-                    &channels.schedule_check.rx_schedule_check_from_ventilation,
+                    &mut channels.schedule_check.rx_schedule_check_from_ventilation,
                     None,
                     true,
                 );
@@ -1476,7 +1475,7 @@ pub mod tests {
             .spawn(move || {
                 let (mut actuation_events, mock_actuator_states) = mock_relay_manager(
                     &mut channels.relay_manager.tx_relay_manager_to_ventilation,
-                    &channels.relay_manager.rx_relay_manager_from_ventilation,
+                    &mut channels.relay_manager.rx_relay_manager_from_ventilation,
                 );
                 assert_eq!(actuation_events.len(), 3);
                 let actuation_event_3 = actuation_events.pop().unwrap();
@@ -1561,14 +1560,14 @@ pub mod tests {
     // helper function to avoid warning about duplicated code.
     fn create_mock_relay_manager_for_ventilation_on(
         mut tx_relay_manager_to_ventilation: AquaSender<bool>,
-        rx_relay_manager_from_ventilation: Receiver<InternalCommand>,
+        mut rx_relay_manager_from_ventilation: AquaReceiver<InternalCommand>,
     ) -> thread::JoinHandle<()> {
         thread::Builder::new()
             .name("mock_relay_manager".to_string())
             .spawn(move || {
                 let (mut actuation_events, mock_actuator_states) = mock_relay_manager(
                     &mut tx_relay_manager_to_ventilation,
-                    &rx_relay_manager_from_ventilation,
+                    &mut rx_relay_manager_from_ventilation,
                 );
                 assert_eq!(actuation_events.len(), 1);
                 let actuation_event = actuation_events.pop().unwrap();
@@ -1604,7 +1603,7 @@ pub mod tests {
             .spawn(move || {
                 mock_schedule_check(
                     &mut channels.schedule_check.tx_schedule_check_to_ventilation,
-                    &channels.schedule_check.rx_schedule_check_from_ventilation,
+                    &mut channels.schedule_check.rx_schedule_check_from_ventilation,
                     None,
                     true,
                 );

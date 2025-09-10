@@ -9,9 +9,6 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 #[cfg(test)]
 pub mod tests {
     #[cfg(target_os = "linux")]
-    use std::sync::mpsc::Receiver;
-
-    #[cfg(target_os = "linux")]
     use crate::utilities::channel_content::InternalCommand;
     #[cfg(target_os = "linux")]
     pub fn mock_message_command_receiver(

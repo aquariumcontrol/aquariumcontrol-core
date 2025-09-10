@@ -702,8 +702,8 @@ impl Refill {
                     start_command_received,
                     stop_command_received,
                 ) = self.process_external_request(
-                    &refill_channels.rx_refill_from_signal_handler,
-                    refill_channels.rx_refill_from_messaging_opt.as_ref(),
+                    &mut refill_channels.rx_refill_from_signal_handler,
+                    refill_channels.rx_refill_from_messaging_opt.as_mut(),
                 );
                 refill_inhibited = self.calc_inhibition_flag(
                     refill_inhibited,
@@ -905,8 +905,8 @@ impl Refill {
                         start_command_received,
                         stop_command_received,
                     ) = self.process_external_request(
-                        &refill_channels.rx_refill_from_signal_handler,
-                        refill_channels.rx_refill_from_messaging_opt.as_ref(),
+                        &mut refill_channels.rx_refill_from_signal_handler,
+                        refill_channels.rx_refill_from_messaging_opt.as_mut(),
                     );
                     refill_inhibited = self.calc_inhibition_flag(
                         refill_inhibited,
@@ -945,7 +945,7 @@ impl Refill {
         // Those threads have to stop receiving commands from this thread.
         // The shutdown sequence is handled by the signal_handler module.
         self.wait_for_termination(
-            &refill_channels.rx_refill_from_signal_handler,
+            &mut refill_channels.rx_refill_from_signal_handler,
             sleep_duration_hundred_millis,
             module_path!(),
         );
@@ -955,7 +955,7 @@ impl Refill {
 #[cfg(test)]
 pub mod tests {
     use crate::database::{sql_interface::SqlInterface, sql_interface_refill::SqlInterfaceRefill};
-    use crate::launch::channels::{channel, AquaSender, Channels};
+    use crate::launch::channels::{channel, AquaChannelError, AquaReceiver, AquaSender, Channels};
     use crate::sensors::tank_level_switch::TankLevelSwitchSignals;
     use crate::utilities::channel_content::InternalCommand;
     use crate::utilities::config::{
@@ -967,7 +967,6 @@ pub mod tests {
     use crate::water::refill::RefillStatus;
     use all_asserts::{assert_ge, assert_le};
     use spin_sleep::SpinSleeper;
-    use std::sync::mpsc::{self, Receiver, TryRecvError};
     use std::sync::{Arc, Mutex};
     use std::thread;
     use std::time::{Duration, Instant};
@@ -1123,20 +1122,20 @@ pub mod tests {
         };
         let (_, mut refill, _, _) = prepare_refill_tests(Some(refill_errors), 2, 60, Some(46));
 
-        let (_, rx_refill_from_signal_handler): (
+        let (_, mut rx_refill_from_signal_handler): (
             AquaSender<InternalCommand>,
-            Receiver<InternalCommand>,
+            AquaReceiver<InternalCommand>,
         ) = channel(1);
 
-        let (_, rx_refill_from_messaging): (
+        let (_, mut rx_refill_from_messaging): (
             AquaSender<InternalCommand>,
-            Receiver<InternalCommand>,
+            AquaReceiver<InternalCommand>,
         ) = channel(1);
 
         let (quit_command_received, start_command_received, stop_command_received) = refill
             .process_external_request(
-                &rx_refill_from_signal_handler,
-                Some(&rx_refill_from_messaging),
+                &mut rx_refill_from_signal_handler,
+                Some(&mut rx_refill_from_messaging),
             );
 
         assert_eq!(quit_command_received, false);
@@ -1159,10 +1158,10 @@ pub mod tests {
         // test environment-specific channels
         let (
             tx_mock_water_injection_to_test_environment,
-            rx_test_environment_from_mock_water_injection,
+            mut rx_test_environment_from_mock_water_injection,
         ) = channel(1);
-        let (tx_test_environment_to_monitors, rx_monitors_from_test_environment) =
-            mpsc::channel::<InternalCommand>();
+        let (mut tx_test_environment_to_monitors, rx_monitors_from_test_environment) =
+            channel::<InternalCommand>(1);
 
         let mutex_tank_level_switch_signals =
             Arc::new(Mutex::new(TankLevelSwitchSignals::new(false, false, false)));
@@ -1213,7 +1212,7 @@ pub mod tests {
             .spawn(move || {
                 mock_schedule_check(
                     &mut channels.schedule_check.tx_schedule_check_to_refill,
-                    &channels.schedule_check.rx_schedule_check_from_refill,
+                    &mut channels.schedule_check.rx_schedule_check_from_refill,
                     None,
                     true,
                 );
@@ -1320,7 +1319,7 @@ pub mod tests {
             channel::<InternalCommand>(1);
         let (
             tx_mock_water_injection_to_test_environment,
-            rx_test_environment_from_mock_water_injection,
+            mut rx_test_environment_from_mock_water_injection,
         ) = channel(1);
 
         // this test case shall output debug! macros
@@ -1373,7 +1372,7 @@ pub mod tests {
             .spawn(move || {
                 mock_schedule_check(
                     &mut channels.schedule_check.tx_schedule_check_to_refill,
-                    &channels.schedule_check.rx_schedule_check_from_refill,
+                    &mut channels.schedule_check.rx_schedule_check_from_refill,
                     None,
                     true,
                 );
@@ -1476,10 +1475,10 @@ pub mod tests {
         // test environment-specific channels
         let (
             tx_mock_water_injection_to_test_environment,
-            rx_test_environment_from_mock_water_injection,
+            mut rx_test_environment_from_mock_water_injection,
         ) = channel(1);
-        let (tx_test_environment_to_monitors, rx_monitors_from_test_environment) =
-            mpsc::channel::<InternalCommand>();
+        let (mut tx_test_environment_to_monitors, rx_monitors_from_test_environment) =
+            channel::<InternalCommand>(1);
 
         // empty the refill table
         match SqlInterface::truncate_table(&mut sql_interface, "refill".to_string()) {
@@ -1528,7 +1527,7 @@ pub mod tests {
             .spawn(move || {
                 mock_schedule_check(
                     &mut channels.schedule_check.tx_schedule_check_to_refill,
-                    &channels.schedule_check.rx_schedule_check_from_refill,
+                    &mut channels.schedule_check.rx_schedule_check_from_refill,
                     None,
                     true,
                 );
@@ -1637,10 +1636,10 @@ pub mod tests {
         // test environment-specific channels
         let (
             tx_mock_water_injection_to_test_environment,
-            rx_test_environment_from_mock_water_injection,
+            mut rx_test_environment_from_mock_water_injection,
         ) = channel(1);
-        let (tx_test_environment_to_monitors, rx_monitors_from_test_environment) =
-            mpsc::channel::<InternalCommand>();
+        let (mut tx_test_environment_to_monitors, rx_monitors_from_test_environment) =
+            channel::<InternalCommand>(1);
 
         let refill_status = RefillStatus {
             refill_in_progress_live: false,
@@ -1692,7 +1691,7 @@ pub mod tests {
             .spawn(move || {
                 mock_schedule_check(
                     &mut channels.schedule_check.tx_schedule_check_to_refill,
-                    &channels.schedule_check.rx_schedule_check_from_refill,
+                    &mut channels.schedule_check.rx_schedule_check_from_refill,
                     None,
                     true,
                 );
@@ -1709,10 +1708,10 @@ pub mod tests {
                 spin_sleeper.sleep(sleep_duration_two_secs);
 
                 for _ in 0..999 {
-                    assert_eq!(
+                    assert!(matches!(
                         rx_test_environment_from_mock_water_injection.try_recv(),
-                        Err(TryRecvError::Empty)
-                    );
+                        Err(AquaChannelError::Empty)
+                    ));
                     spin_sleeper.sleep(sleep_duration_two_millis);
                 }
 
@@ -1830,10 +1829,10 @@ pub mod tests {
         // test environment-specific channels
         let (
             tx_mock_water_injection_to_test_environment,
-            rx_test_environment_from_mock_water_injection,
+            mut rx_test_environment_from_mock_water_injection,
         ) = channel(1);
-        let (tx_test_environment_to_monitors, rx_monitors_from_test_environment) =
-            mpsc::channel::<InternalCommand>();
+        let (mut tx_test_environment_to_monitors, rx_monitors_from_test_environment) =
+            channel::<InternalCommand>(1);
 
         // empty the refill table
         match SqlInterface::truncate_table(&mut sql_interface, "refill".to_string()) {
@@ -1882,7 +1881,7 @@ pub mod tests {
             .spawn(move || {
                 mock_schedule_check(
                     &mut channels.schedule_check.tx_schedule_check_to_refill,
-                    &channels.schedule_check.rx_schedule_check_from_refill,
+                    &mut channels.schedule_check.rx_schedule_check_from_refill,
                     None,
                     true,
                 );
@@ -1900,10 +1899,10 @@ pub mod tests {
                 spin_sleeper.sleep(sleep_duration_two_secs);
 
                 for _ in 0..999 {
-                    assert_eq!(
+                    assert!(matches!(
                         rx_test_environment_from_mock_water_injection.try_recv(),
-                        Err(TryRecvError::Empty)
-                    );
+                        Err(AquaChannelError::Empty)
+                    ));
                     spin_sleeper.sleep(sleep_duration_two_millis);
                 }
 
@@ -1994,8 +1993,8 @@ pub mod tests {
 
         let mut channels = Channels::new_for_test();
 
-        let (tx_test_environment_to_monitors, rx_monitors_from_test_environment) =
-            mpsc::channel::<InternalCommand>();
+        let (mut tx_test_environment_to_monitors, rx_monitors_from_test_environment) =
+            channel::<InternalCommand>(1);
         let (
             tx_mock_water_injection_to_test_environment,
             _rx_test_environment_from_mock_water_injection,
@@ -2048,7 +2047,7 @@ pub mod tests {
             .spawn(move || {
                 mock_schedule_check(
                     &mut channels.schedule_check.tx_schedule_check_to_refill,
-                    &channels.schedule_check.rx_schedule_check_from_refill,
+                    &mut channels.schedule_check.rx_schedule_check_from_refill,
                     None,
                     true,
                 );
@@ -2151,10 +2150,10 @@ pub mod tests {
 
         let (
             tx_mock_water_injection_to_test_environment,
-            rx_test_environment_from_mock_water_injection,
+            mut rx_test_environment_from_mock_water_injection,
         ) = channel(1);
-        let (tx_test_environment_to_monitors, rx_monitors_from_test_environment) =
-            mpsc::channel::<InternalCommand>();
+        let (mut tx_test_environment_to_monitors, rx_monitors_from_test_environment) =
+            channel::<InternalCommand>(1);
 
         // empty the refill table
         match SqlInterface::truncate_table(&mut sql_interface, "refill".to_string()) {
@@ -2203,7 +2202,7 @@ pub mod tests {
             .spawn(move || {
                 mock_schedule_check(
                     &mut channels.schedule_check.tx_schedule_check_to_refill,
-                    &channels.schedule_check.rx_schedule_check_from_refill,
+                    &mut channels.schedule_check.rx_schedule_check_from_refill,
                     None,
                     false,
                 );
@@ -2220,10 +2219,10 @@ pub mod tests {
                 spin_sleeper.sleep(sleep_duration_two_secs);
 
                 for _ in 0..999 {
-                    assert_eq!(
+                    assert!(matches!(
                         rx_test_environment_from_mock_water_injection.try_recv(),
-                        Err(TryRecvError::Empty)
-                    );
+                        Err(AquaChannelError::Empty)
+                    ));
                     spin_sleeper.sleep(sleep_duration_two_millis);
                 }
 
@@ -2306,10 +2305,10 @@ pub mod tests {
 
         let (
             tx_mock_water_injection_to_test_environment,
-            rx_test_environment_from_mock_water_injection,
+            mut rx_test_environment_from_mock_water_injection,
         ) = channel(1);
-        let (tx_test_environment_to_monitors, rx_monitors_from_test_environment) =
-            mpsc::channel::<InternalCommand>();
+        let (mut tx_test_environment_to_monitors, rx_monitors_from_test_environment) =
+            channel::<InternalCommand>(1);
 
         // empty the refill table
         match SqlInterface::truncate_table(&mut sql_interface, "refill".to_string()) {
@@ -2360,7 +2359,7 @@ pub mod tests {
             .spawn(move || {
                 mock_schedule_check(
                     &mut channels.schedule_check.tx_schedule_check_to_refill,
-                    &channels.schedule_check.rx_schedule_check_from_refill,
+                    &mut channels.schedule_check.rx_schedule_check_from_refill,
                     None,
                     true,
                 );
@@ -2404,10 +2403,10 @@ pub mod tests {
 
                 // expect to see no event
                 for _ in 0..999 {
-                    assert_eq!(
+                    assert!(matches!(
                         rx_test_environment_from_mock_water_injection.try_recv(),
-                        Err(TryRecvError::Empty)
-                    );
+                        Err(AquaChannelError::Empty)
+                    ));
                     spin_sleeper.sleep(sleep_duration_two_millis);
                 }
 
@@ -2428,10 +2427,10 @@ pub mod tests {
                 }
 
                 // expect to see one event
-                assert_eq!(
+                assert!(matches!(
                     rx_test_environment_from_mock_water_injection.recv(),
                     Ok(TestCommand::InformWaterInjectionEvent)
-                );
+                ));
 
                 println!("sending quit signal to test object...");
                 let _ = channels
@@ -2514,10 +2513,10 @@ pub mod tests {
 
         let (
             tx_mock_water_injection_to_test_environment,
-            rx_test_environment_from_mock_water_injection,
+            mut rx_test_environment_from_mock_water_injection,
         ) = channel(1);
-        let (tx_test_environment_to_monitors, rx_monitors_from_test_environment) =
-            mpsc::channel::<InternalCommand>();
+        let (mut tx_test_environment_to_monitors, rx_monitors_from_test_environment) =
+            channel::<InternalCommand>(1);
 
         let mutex_device_scheduler = Arc::new(Mutex::new(0));
         let mutex_tank_level_switch_signals =
@@ -2558,7 +2557,7 @@ pub mod tests {
             .spawn(move || {
                 mock_schedule_check(
                     &mut channels.schedule_check.tx_schedule_check_to_refill,
-                    &channels.schedule_check.rx_schedule_check_from_refill,
+                    &mut channels.schedule_check.rx_schedule_check_from_refill,
                     None,
                     true,
                 );
@@ -2576,10 +2575,10 @@ pub mod tests {
                 spin_sleeper.sleep(sleep_duration_two_secs);
 
                 for _ in 0..999 {
-                    assert_eq!(
+                    assert!(matches!(
                         rx_test_environment_from_mock_water_injection.try_recv(),
-                        Err(TryRecvError::Empty)
-                    );
+                        Err(AquaChannelError::Empty)
+                    ));
                     spin_sleeper.sleep(sleep_duration_two_millis);
                 }
 
@@ -2657,8 +2656,8 @@ pub mod tests {
 
         let mut channels = Channels::new_for_test();
 
-        let (tx_test_environment_to_monitors, rx_monitors_from_test_environment) =
-            mpsc::channel::<InternalCommand>();
+        let (mut tx_test_environment_to_monitors, rx_monitors_from_test_environment) =
+            channel::<InternalCommand>(1);
 
         // thread for mock monitors
         let join_handle_mock_monitors = thread::Builder::new()

@@ -291,7 +291,7 @@ impl Ds18b20 {
         loop {
             // Check for quit command first for faster shutdown.
             if self
-                .process_external_request(&ds18b20_channels.rx_ds18b20_from_signal_handler, None)
+                .process_external_request(&mut ds18b20_channels.rx_ds18b20_from_signal_handler, None)
                 .0
             {
                 break;
@@ -344,15 +344,14 @@ impl Ds18b20 {
 
 #[cfg(test)]
 pub mod tests {
-    use crate::launch::channels::Channels;
+    use crate::launch::channels::{channel, AquaReceiver, AquaSender, Channels};
     use crate::sensors::ds18b20::{Ds18b20, Ds18b20Config, Ds18b20Error};
     use crate::sensors::ds18b20::{Ds18b20Result, Ds18b20ResultData};
     use crate::sensors::ds18b20_channels::Ds18b20Channels;
     use crate::utilities::channel_content::InternalCommand;
     use crate::utilities::config::read_config_file;
     use spin_sleep::SpinSleeper;
-    use std::sync::mpsc::{Receiver, Sender};
-    use std::sync::{mpsc, Arc, Mutex};
+    use std::sync::{Arc, Mutex};
     use std::time::Duration;
     use std::{env, thread};
 
@@ -808,10 +807,10 @@ pub mod tests {
         let mut ds18b20 = Ds18b20::new(config.ds18b20).unwrap();
 
         // *** signal handler => ds18b20 ***
-        let (tx_signal_handler_to_ds18b20, rx_ds18b20_from_signal_handler): (
-            Sender<InternalCommand>,
-            Receiver<InternalCommand>,
-        ) = mpsc::channel();
+        let (mut tx_signal_handler_to_ds18b20, rx_ds18b20_from_signal_handler): (
+            AquaSender<InternalCommand>,
+            AquaReceiver<InternalCommand>,
+        ) = channel(1);
         let mut ds18b20_channels = Ds18b20Channels {
             rx_ds18b20_from_signal_handler,
             #[cfg(feature = "debug_channels")]

@@ -6,10 +6,9 @@ The above copyright notice and this permission notice shall be included in all c
 
 THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
-use crate::launch::channels::{AquaChannelError, AquaSender};
+use crate::launch::channels::{AquaChannelError, AquaReceiver, AquaSender};
 use crate::utilities::channel_content::InternalCommand;
 use std::fmt;
-use std::sync::mpsc::{Receiver, RecvError};
 
 /// Container for the channels used by Balling for inter-thread communication
 pub struct BallingChannels {
@@ -17,34 +16,22 @@ pub struct BallingChannels {
     pub tx_balling_to_relay_manager: AquaSender<InternalCommand>,
 
     /// receiver part of the channel for communication from the relay manager
-    pub rx_balling_from_relay_manager: Receiver<bool>,
-    #[cfg(feature = "debug_channels")]
-    /// Counter for messages received from the relay manager
-    pub cnt_rx_balling_from_relay_manager: u64,
+    pub rx_balling_from_relay_manager: AquaReceiver<bool>,
 
     /// sender part of the channel for communication to the signal handler
     pub tx_balling_to_signal_handler: AquaSender<bool>,
 
     /// receiver part of the channel for communication from the signal handler
-    pub rx_balling_from_signal_handler: Receiver<InternalCommand>,
-    #[cfg(feature = "debug_channels")]
-    /// Counter for messages received from the signal handler
-    pub cnt_rx_balling_from_signal_handler: u64,
+    pub rx_balling_from_signal_handler: AquaReceiver<InternalCommand>,
 
     /// sender part of the channel for communication to the schedule checker
     pub tx_balling_to_schedule_check: AquaSender<InternalCommand>,
 
     /// receiver part of the channel for communication from the schedule checker
-    pub rx_balling_from_schedule_check: Receiver<bool>,
-    #[cfg(feature = "debug_channels")]
-    /// Counter for messages received from the schedule checker
-    pub cnt_rx_balling_from_schedule_check: u64,
+    pub rx_balling_from_schedule_check: AquaReceiver<bool>,
 
     /// receiver part of the channel communication wrapped in Option from Messaging
-    pub rx_balling_from_messaging_opt: Option<Receiver<InternalCommand>>,
-    #[cfg(feature = "debug_channels")]
-    /// Counter for messages received from messaging
-    pub cnt_rx_balling_from_messaging_opt: u64,
+    pub rx_balling_from_messaging_opt: Option<AquaReceiver<InternalCommand>>,
 }
 
 impl BallingChannels {
@@ -57,13 +44,8 @@ impl BallingChannels {
     }
 
     /// Receives a response from the relay manager.
-    pub fn receive_from_relay_manager(&mut self) -> Result<bool, RecvError> {
-        let result = self.rx_balling_from_relay_manager.recv();
-        #[cfg(feature = "debug_channels")]
-        if result.is_ok() {
-            self.cnt_rx_balling_from_relay_manager += 1;
-        }
-        result
+    pub fn receive_from_relay_manager(&mut self) -> Result<bool, AquaChannelError> {
+        self.rx_balling_from_relay_manager.recv()
     }
 
     /// Sends an acknowledgment to the signal handler.
@@ -80,13 +62,8 @@ impl BallingChannels {
     }
 
     /// Receives a response from the schedule checker.
-    pub fn receive_from_schedule_check(&mut self) -> Result<bool, RecvError> {
-        let result = self.rx_balling_from_schedule_check.recv();
-        #[cfg(feature = "debug_channels")]
-        if result.is_ok() {
-            self.cnt_rx_balling_from_schedule_check += 1;
-        }
-        result
+    pub fn receive_from_schedule_check(&mut self) -> Result<bool, AquaChannelError> {
+        self.rx_balling_from_schedule_check.recv()
     }
 }
 
@@ -101,8 +78,8 @@ impl fmt::Display for BallingChannels {
         )?;
         writeln!(
             f,
-            "cnt_rx_balling_from_relay_manager: {}",
-            self.cnt_rx_balling_from_relay_manager
+            "rx_balling_from_relay_manager: {}",
+            self.rx_balling_from_relay_manager.count
         )?;
         writeln!(
             f,
@@ -111,8 +88,8 @@ impl fmt::Display for BallingChannels {
         )?;
         writeln!(
             f,
-            "cnt_rx_balling_from_signal_handler: {}",
-            self.cnt_rx_balling_from_signal_handler
+            "rx_balling_from_signal_handler: {}",
+            self.rx_balling_from_signal_handler.count
         )?;
         writeln!(
             f,
@@ -121,14 +98,17 @@ impl fmt::Display for BallingChannels {
         )?;
         writeln!(
             f,
-            "cnt_rx_balling_from_schedule_check: {}",
-            self.cnt_rx_balling_from_schedule_check
+            "rx_balling_from_schedule_check: {}",
+            self.rx_balling_from_schedule_check.count
         )?;
-        write!(
-            f,
-            "cnt_rx_balling_from_messaging_opt: {}",
-            self.cnt_rx_balling_from_messaging_opt
-        )
+        if self.rx_balling_from_messaging_opt.is_some() {
+            write!(
+                f,
+                "rx_balling_from_messaging_opt: {}",
+                self.rx_balling_from_messaging_opt.as_ref().unwrap().count
+            )?;
+        }
+        Ok(())
     }
 }
 

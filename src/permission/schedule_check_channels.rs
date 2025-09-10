@@ -6,10 +6,9 @@ The above copyright notice and this permission notice shall be included in all c
 
 THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
-use crate::launch::channels::{AquaChannelError, AquaSender};
+use crate::launch::channels::{AquaChannelError, AquaReceiver, AquaSender};
 use crate::utilities::channel_content::InternalCommand;
 use std::fmt;
-use std::sync::mpsc::Receiver;
 
 /// Struct collects all channels for communication between ScheduleCheck and other components.
 pub struct ScheduleCheckChannels {
@@ -17,46 +16,31 @@ pub struct ScheduleCheckChannels {
     pub tx_schedule_check_to_ventilation: AquaSender<bool>,
 
     /// Receiver part of the channel for communication from ventilation
-    pub rx_schedule_check_from_ventilation: Receiver<InternalCommand>,
-    #[cfg(feature = "debug_channels")]
-    /// Counter for messages received from ventilation
-    pub cnt_rx_schedule_check_from_ventilation: u64,
+    pub rx_schedule_check_from_ventilation: AquaReceiver<InternalCommand>,
 
     /// Sender part of the channel for communication to heating
     pub tx_schedule_check_to_heating: AquaSender<bool>,
 
     /// Receiver part of the channel for communication from heating
-    pub rx_schedule_check_from_heating: Receiver<InternalCommand>,
-    #[cfg(feature = "debug_channels")]
-    /// Counter for messages received from heating
-    pub cnt_rx_schedule_check_from_heating: u64,
+    pub rx_schedule_check_from_heating: AquaReceiver<InternalCommand>,
 
     /// Sender part of the channel for communication to refill
     pub tx_schedule_check_to_refill: AquaSender<bool>,
 
     /// Receiver part of the channel for communication from refill
-    pub rx_schedule_check_from_refill: Receiver<InternalCommand>,
-    #[cfg(feature = "debug_channels")]
-    /// Counter for messages received from refill
-    pub cnt_rx_schedule_check_from_refill: u64,
+    pub rx_schedule_check_from_refill: AquaReceiver<InternalCommand>,
 
     /// Sender part of the channel for communication to the Balling dosing control
     pub tx_schedule_check_to_balling: AquaSender<bool>,
 
     /// Receiver part of the channel for communication from the Balling dosing control
-    pub rx_schedule_check_from_balling: Receiver<InternalCommand>,
-    #[cfg(feature = "debug_channels")]
-    /// Counter for messages received from balling
-    pub cnt_rx_schedule_check_from_balling: u64,
+    pub rx_schedule_check_from_balling: AquaReceiver<InternalCommand>,
 
     /// Sender part of the channel for communication to the signal handler
     pub tx_schedule_check_to_signal_handler: AquaSender<bool>,
 
     /// Receiver part of the channel for communication from the signal handler
-    pub rx_schedule_check_from_signal_handler: Receiver<InternalCommand>,
-    #[cfg(feature = "debug_channels")]
-    /// Counter for messages received from the signal handler
-    pub cnt_rx_schedule_check_from_signal_handler: u64,
+    pub rx_schedule_check_from_signal_handler: AquaReceiver<InternalCommand>,
 }
 
 impl ScheduleCheckChannels {
@@ -77,8 +61,8 @@ impl fmt::Display for ScheduleCheckChannels {
         )?;
         writeln!(
             f,
-            "cnt_rx_schedule_check_from_ventilation: {}",
-            self.cnt_rx_schedule_check_from_ventilation
+            "rx_schedule_check_from_ventilation: {}",
+            self.rx_schedule_check_from_ventilation.count
         )?;
         writeln!(
             f,
@@ -87,8 +71,8 @@ impl fmt::Display for ScheduleCheckChannels {
         )?;
         writeln!(
             f,
-            "cnt_rx_schedule_check_from_heating: {}",
-            self.cnt_rx_schedule_check_from_heating
+            "rx_schedule_check_from_heating: {}",
+            self.rx_schedule_check_from_heating.count
         )?;
         writeln!(
             f,
@@ -97,8 +81,8 @@ impl fmt::Display for ScheduleCheckChannels {
         )?;
         writeln!(
             f,
-            "cnt_rx_schedule_check_from_refill: {}",
-            self.cnt_rx_schedule_check_from_refill
+            "rx_schedule_check_from_refill: {}",
+            self.rx_schedule_check_from_refill.count
         )?;
         writeln!(
             f,
@@ -107,8 +91,8 @@ impl fmt::Display for ScheduleCheckChannels {
         )?;
         writeln!(
             f,
-            "cnt_rx_schedule_check_from_balling: {}",
-            self.cnt_rx_schedule_check_from_balling
+            "rx_schedule_check_from_balling: {}",
+            self.rx_schedule_check_from_balling.count
         )?;
         writeln!(
             f,
@@ -117,8 +101,8 @@ impl fmt::Display for ScheduleCheckChannels {
         )?;
         write!(
             f,
-            "cnt_rx_schedule_check_from_signal_handler: {}",
-            self.cnt_rx_schedule_check_from_signal_handler
+            "rx_schedule_check_from_signal_handler: {}",
+            self.rx_schedule_check_from_signal_handler.count
         )
     }
 }

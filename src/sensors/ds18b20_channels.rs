@@ -6,14 +6,12 @@ The above copyright notice and this permission notice shall be included in all c
 
 THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
+use crate::launch::channels::{AquaChannelError, AquaReceiver};
 use crate::utilities::channel_content::InternalCommand;
 use std::fmt;
-use std::sync::mpsc::{Receiver, TryRecvError};
 
 pub struct Ds18b20Channels {
-    pub rx_ds18b20_from_signal_handler: Receiver<InternalCommand>,
-    #[cfg(feature = "debug_channels")]
-    pub cnt_rx_ds18b20_from_signal_handler: u64,
+    pub rx_ds18b20_from_signal_handler: AquaReceiver<InternalCommand>,
 }
 
 impl Ds18b20Channels {
@@ -23,13 +21,8 @@ impl Ds18b20Channels {
     /// the associated debug counter if the `debug_channels` feature is enabled and a
     /// message is successfully received.
     #[allow(unused)]
-    pub fn receive_from_signal_handler(&mut self) -> Result<InternalCommand, TryRecvError> {
-        let result = self.rx_ds18b20_from_signal_handler.try_recv();
-        #[cfg(feature = "debug_channels")]
-        if result.is_ok() {
-            self.cnt_rx_ds18b20_from_signal_handler += 1;
-        }
-        result
+    pub fn receive_from_signal_handler(&mut self) -> Result<InternalCommand, AquaChannelError> {
+        self.rx_ds18b20_from_signal_handler.try_recv()
     }
 }
 
@@ -40,7 +33,7 @@ impl fmt::Display for Ds18b20Channels {
         write!(
             f,
             "\ncnt_rx_ds18b20_from_signal_handler: {}",
-            self.cnt_rx_ds18b20_from_signal_handler
+            self.rx_ds18b20_from_signal_handler.count
         )
     }
 }

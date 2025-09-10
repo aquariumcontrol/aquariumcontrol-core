@@ -11,21 +11,20 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 pub mod tests {
     use crate::database::sql_interface_error::SqlInterfaceError;
     use crate::database::thermal_set_value_updater_trait::ThermalSetValueUpdaterTrait;
-    use crate::launch::channels::AquaSender;
+    use crate::launch::channels::{AquaChannelError, AquaReceiver, AquaSender};
     use crate::mocks::mock_common::mock_common_receive_from_signal_handler;
     use crate::mocks::mock_signal::tests::MockSignal;
     use crate::mocks::test_command::tests::TestCommand;
     use crate::utilities::channel_content::{AquariumSignal, InternalCommand};
     use spin_sleep::SpinSleeper;
-    use std::sync::mpsc::{Receiver, TryRecvError};
     use std::sync::{Arc, Mutex};
     use std::time::{Duration, Instant};
 
     pub fn mock_heating(
         mut tx_heating_to_tank_level_switch_opt: Option<&mut AquaSender<InternalCommand>>,
-        rx_heating_from_tank_level_switch_opt: Option<&Receiver<bool>>,
-        rx_heating_from_signal_handler: &Receiver<InternalCommand>,
-        rx_heating_from_test_environment_opt: Option<&Receiver<TestCommand>>,
+        mut rx_heating_from_tank_level_switch_opt: Option<&mut AquaReceiver<bool>>,
+        rx_heating_from_signal_handler: &mut AquaReceiver<InternalCommand>,
+        mut rx_heating_from_test_environment_opt: Option<&mut AquaReceiver<TestCommand>>,
         mutex_heating_status: Arc<Mutex<bool>>,
     ) {
         let sleep_duration = Duration::from_millis(10);
@@ -39,16 +38,16 @@ pub mod tests {
                     )) {
                         Ok(_) => {
                             match rx_heating_from_tank_level_switch_opt {
-                                Some(rx_heating_from_tank_level_switch) => {
+                                Some(ref mut rx_heating_from_tank_level_switch) => {
                                     match rx_heating_from_tank_level_switch.try_recv() {
                                         Ok(_) => {
                                             // do nothing
                                         }
                                         Err(e) => {
                                             match e {
-                                                TryRecvError::Empty => { /* empty buffer - no action required */
+                                                AquaChannelError::Empty => { /* empty buffer - no action required */
                                                 }
-                                                TryRecvError::Disconnected => {
+                                                AquaChannelError::Disconnected => {
                                                     panic!(
                                                         "{}: Error in trying to receive signal from test object: {e:?}",
                                                         module_path!()
@@ -85,7 +84,7 @@ pub mod tests {
             }
 
             match rx_heating_from_test_environment_opt {
-                Some(rx_heating_from_test_environment) => {
+                Some(ref mut rx_heating_from_test_environment) => {
                     match rx_heating_from_test_environment.try_recv() {
                         Ok(c) => {
                             let test_command = c.clone();
@@ -124,8 +123,10 @@ pub mod tests {
                         }
                         Err(e) => {
                             match e {
-                                TryRecvError::Empty => { /* empty buffer - no action required */ }
-                                TryRecvError::Disconnected => {
+                                #[cfg(feature = "debug_channels")]
+                                AquaChannelError::Full => { /* do nothing */ },
+                                AquaChannelError::Empty => { /* empty buffer - no action required */ }
+                                AquaChannelError::Disconnected => {
                                     panic!(
                                         "{}: Error in trying to receive command from test environment: {e:?}",
                                         module_path!()

@@ -12,14 +12,13 @@ use log::info;
 use log::{debug, error};
 
 use spin_sleep::SpinSleeper;
-use std::sync::mpsc::{Receiver, TryRecvError};
 use std::{
     io::{prelude::*, BufReader},
     net::TcpStream,
     time::Duration,
 };
 
-use crate::launch::channels::AquaSender;
+use crate::launch::channels::{AquaChannelError, AquaReceiver, AquaSender};
 use crate::launch::execution_config::ExecutionConfig;
 use crate::simulator::tcp_communication_channels::TcpCommunicationChannels;
 use crate::simulator::tcp_communication_config::TcpCommunicationConfig;
@@ -310,7 +309,7 @@ impl TcpCommunication {
     /// - `Err(TcpCommunicationError:)`: in case of failure
     fn receive_and_answer(
         &mut self,
-        rx: &Receiver<InternalCommand>,
+        rx: &mut AquaReceiver<InternalCommand>,
         tx: &mut AquaSender<Result<f32, TcpCommunicationError>>,
     ) -> Result<(), TcpCommunicationError> {
         match rx.try_recv() {
@@ -328,11 +327,16 @@ impl TcpCommunication {
                 // Any other command was received, which we can safely ignore.
                 Ok(())
             }
-            Err(TryRecvError::Empty) => {
+            #[cfg(feature = "debug_channels")]
+            Err(AquaChannelError::Full) => {
+                // Not applicable. Do nothing.
+                Ok(())
+            }
+            Err(AquaChannelError::Empty) => {
                 // No command in the channel, which is a normal, non-error state.
                 Ok(())
             }
-            Err(TryRecvError::Disconnected) => {
+            Err(AquaChannelError::Disconnected) => {
                 // The channel is broken, which is a critical error.
                 Err(TcpCommunicationError::ChannelDisconnected(
                     module_path!().to_string(),
@@ -345,7 +349,7 @@ impl TcpCommunication {
     fn handle_simulated_sensor(
         &mut self,
         is_active: bool,
-        rx_opt: &Option<Receiver<InternalCommand>>,
+        rx_opt: &mut Option<AquaReceiver<InternalCommand>>,
         tx_opt: &mut Option<AquaSender<Result<f32, TcpCommunicationError>>>,
         module_name: &str,
     ) {
@@ -390,7 +394,7 @@ impl TcpCommunication {
 
         loop {
             let (quit_command_received, _, _) = self.process_external_request(
-                &tcp_communication_channels.rx_tcp_communication_from_signal_handler,
+                &mut tcp_communication_channels.rx_tcp_communication_from_signal_handler,
                 None,
             );
             if quit_command_received {
@@ -400,7 +404,7 @@ impl TcpCommunication {
             // *** communication with sensor manager ***
             self.handle_simulated_sensor(
                 self.execution_config.sensor_manager,
-                &tcp_communication_channels.rx_tcp_communication_from_sensor_manager_opt,
+                &mut tcp_communication_channels.rx_tcp_communication_from_sensor_manager_opt,
                 &mut tcp_communication_channels.tx_tcp_communication_to_sensor_manager_opt,
                 "sensor manager",
             );
@@ -408,7 +412,7 @@ impl TcpCommunication {
             // *** communication with Tank level switch ***
             self.handle_simulated_sensor(
                 self.execution_config.tank_level_switch,
-                &tcp_communication_channels.rx_tcp_communication_from_tank_level_switch_opt,
+                &mut tcp_communication_channels.rx_tcp_communication_from_tank_level_switch_opt,
                 &mut tcp_communication_channels.tx_tcp_communication_to_tank_level_switch_opt,
                 "tank level switch",
             );
@@ -416,7 +420,7 @@ impl TcpCommunication {
             // *** communication with relay manager - no response required ***
             if !lock_relay_manager_channel_disconnected && self.execution_config.relay_manager {
                 match tcp_communication_channels.rx_tcp_communication_from_relay_manager_opt {
-                    Some(ref rx_tcp_communication_from_relay_manager) => {
+                    Some(ref mut rx_tcp_communication_from_relay_manager) => {
                         match rx_tcp_communication_from_relay_manager.try_recv() {
                             Ok(c) => match c {
                                 InternalCommand::SetRelay(c) => {
@@ -441,19 +445,15 @@ impl TcpCommunication {
                                 }
                                 _ => { /* ignore all other commands */ }
                             },
-                            Err(e) => {
-                                match e {
-                                    TryRecvError::Empty => {
-                                        /* empty buffer - no action required */
-                                    }
-                                    TryRecvError::Disconnected => {
-                                        lock_relay_manager_channel_disconnected = true;
-                                        error!(
-                                            target: module_path!(),
-                                            "Error in trying to receive command from relay manager: {e:?}"
-                                        );
-                                    }
-                                }
+                            #[cfg(feature = "debug_channels")]
+                            Err(AquaChannelError::Full) => { /* Not applicable - do nothing */ },
+                            Err(AquaChannelError::Empty) => { /* empty buffer - no action required */ },
+                            Err(AquaChannelError::Disconnected) => {
+                                lock_relay_manager_channel_disconnected = true;
+                                error!(
+                                    target: module_path!(),
+                                    "Error in trying to receive command from relay manager"
+                                );
                             }
                         }
                     }

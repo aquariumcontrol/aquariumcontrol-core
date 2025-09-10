@@ -12,8 +12,6 @@ use log::{error, warn};
 #[cfg(not(test))]
 use log::info;
 
-use std::sync::mpsc::{Receiver, TryRecvError};
-
 use crate::food::{feed::Feed, food_injection::FoodInjection};
 use crate::recorder::data_logger::DataLogger;
 use crate::relays::relay_manager::RelayManager;
@@ -21,7 +19,7 @@ use crate::utilities::channel_content::InternalCommand;
 
 #[cfg(target_os = "linux")]
 use crate::dispatch::messaging::Messaging;
-
+use crate::launch::channels::{AquaChannelError, AquaReceiver};
 use crate::mineral::{balling::Balling, mineral_injection::MineralInjection};
 use crate::permission::schedule_check::ScheduleCheck;
 use crate::sensors::dht::Dht;
@@ -64,8 +62,8 @@ pub trait ProcessExternalRequestTrait {
     /// - The third `bool` is `true` if a `Stop` command was received from messaging; otherwise `false`.
     fn process_external_request(
         &mut self,
-        rx_from_signal_handler: &Receiver<InternalCommand>,
-        rx_from_messaging_opt: Option<&Receiver<InternalCommand>>,
+        rx_from_signal_handler: &mut AquaReceiver<InternalCommand>,
+        rx_from_messaging_opt: Option<&mut AquaReceiver<InternalCommand>>,
     ) -> (bool, bool, bool) {
         let quit_command_received = match rx_from_signal_handler.try_recv() {
             Ok(c) => match c {
@@ -80,8 +78,10 @@ pub trait ProcessExternalRequestTrait {
             },
             Err(e) => {
                 match e {
-                    TryRecvError::Empty => { /* empty buffer - no action required */ }
-                    TryRecvError::Disconnected => {
+                    #[cfg(feature = "debug_channels")]
+                    AquaChannelError::Full => { /* Not applicable. Do nothing */ },
+                    AquaChannelError::Empty => { /* empty buffer - no action required */ },
+                    AquaChannelError::Disconnected => {
                         #[cfg(all(not(test), not(feature = "debug_signal_handler")))]
                         error!(
                             target: module_path!(),
@@ -109,8 +109,10 @@ pub trait ProcessExternalRequestTrait {
                     },
                     Err(e) => {
                         match e {
-                            TryRecvError::Empty => { /* empty buffer - no action required */ }
-                            TryRecvError::Disconnected => {
+                            #[cfg(feature = "debug_channels")]
+                            AquaChannelError::Full => { /* Not applicable. Do nothing */ }
+                            AquaChannelError::Empty => { /* empty buffer - no action required */ }
+                            AquaChannelError::Disconnected => {
                                 #[cfg(not(test))]
                                 error!(
                                     target: module_path!(),
@@ -154,8 +156,8 @@ impl ProcessExternalRequestTrait for Refill {
     /// - The third `bool` is `true` if a `Stop` command was received from messaging; otherwise `false`.
     fn process_external_request(
         &mut self,
-        rx_from_signal_handler: &Receiver<InternalCommand>,
-        rx_from_messaging_opt: Option<&Receiver<InternalCommand>>,
+        rx_from_signal_handler: &mut AquaReceiver<InternalCommand>,
+        rx_from_messaging_opt: Option<&mut AquaReceiver<InternalCommand>>,
     ) -> (bool, bool, bool) {
         let quit_command_received = match rx_from_signal_handler.try_recv() {
             Ok(c) => match c {
@@ -170,8 +172,10 @@ impl ProcessExternalRequestTrait for Refill {
             },
             Err(e) => {
                 match e {
-                    TryRecvError::Empty => { /* empty buffer - no action required */ }
-                    TryRecvError::Disconnected => {
+                    #[cfg(feature = "debug_channels")]
+                    AquaChannelError::Full => { /* Not applicable. Do nothing */ }
+                    AquaChannelError::Empty => { /* empty buffer - no action required */ }
+                    AquaChannelError::Disconnected => {
                         #[cfg(not(test))]
                         error!(
                             target: module_path!(),
@@ -208,8 +212,10 @@ impl ProcessExternalRequestTrait for Refill {
                     },
                     Err(e) => {
                         match e {
-                            TryRecvError::Empty => { /* empty buffer - no action required */ }
-                            TryRecvError::Disconnected => {
+                            #[cfg(feature = "debug_channels")]
+                            AquaChannelError::Full => { /* Not applicable. Do nothing */ }
+                            AquaChannelError::Empty => { /* empty buffer - no action required */ }
+                            AquaChannelError::Disconnected => {
                                 #[cfg(not(test))]
                                 error!(
                                     target: module_path!(),
@@ -249,7 +255,7 @@ impl ProcessExternalRequestTrait for Refill {
 /// - The second `bool` is always `false` as "Start" commands are not processed by this function.
 /// - The third `bool` is always `false` as "Stop" commands are not processed by this function.
 fn process_external_request_without_messaging(
-    rx_from_signal_handler: &Receiver<InternalCommand>,
+    rx_from_signal_handler: &mut AquaReceiver<InternalCommand>,
     sender: String,
 ) -> (bool, bool, bool) {
     let quit_command_received = match rx_from_signal_handler.try_recv() {
@@ -265,8 +271,10 @@ fn process_external_request_without_messaging(
         },
         Err(e) => {
             match e {
-                TryRecvError::Empty => { /* empty buffer - no action required */ }
-                TryRecvError::Disconnected => {
+                #[cfg(feature = "debug_channels")]
+                AquaChannelError::Full => { /* Not applicable. Do nothing */ },
+                AquaChannelError::Empty => { /* empty buffer - no action required */ },
+                AquaChannelError::Disconnected => {
                     error!(
                         target: module_path!(),
                         "({sender}) receiving command from signal handler failed ({e:?})"
@@ -301,8 +309,8 @@ impl ProcessExternalRequestTrait for DataLogger {
     /// - The third `bool` is always `false` (no "Stop" commands processed).
     fn process_external_request(
         &mut self,
-        rx_from_signal_handler: &Receiver<InternalCommand>,
-        _: Option<&Receiver<InternalCommand>>,
+        rx_from_signal_handler: &mut AquaReceiver<InternalCommand>,
+        _: Option<&mut AquaReceiver<InternalCommand>>,
     ) -> (bool, bool, bool) {
         process_external_request_without_messaging(rx_from_signal_handler, "DataLogger".to_string())
     }
@@ -329,8 +337,8 @@ impl ProcessExternalRequestTrait for Dht {
     /// - The third `bool` is always `false` (no "Stop" commands processed).
     fn process_external_request(
         &mut self,
-        rx_from_signal_handler: &Receiver<InternalCommand>,
-        _: Option<&Receiver<InternalCommand>>,
+        rx_from_signal_handler: &mut AquaReceiver<InternalCommand>,
+        _: Option<&mut AquaReceiver<InternalCommand>>,
     ) -> (bool, bool, bool) {
         process_external_request_without_messaging(rx_from_signal_handler, "Dht".to_string())
     }
@@ -357,8 +365,8 @@ impl ProcessExternalRequestTrait for FoodInjection {
     /// - The third `bool` is always `false` (no "Stop" commands processed).
     fn process_external_request(
         &mut self,
-        rx_from_signal_handler: &Receiver<InternalCommand>,
-        _: Option<&Receiver<InternalCommand>>,
+        rx_from_signal_handler: &mut AquaReceiver<InternalCommand>,
+        _: Option<&mut AquaReceiver<InternalCommand>>,
     ) -> (bool, bool, bool) {
         process_external_request_without_messaging(
             rx_from_signal_handler,
@@ -388,8 +396,8 @@ impl ProcessExternalRequestTrait for MineralInjection {
     /// - The third `bool` is always `false` (no "Stop" commands processed).
     fn process_external_request(
         &mut self,
-        rx_from_signal_handler: &Receiver<InternalCommand>,
-        _: Option<&Receiver<InternalCommand>>,
+        rx_from_signal_handler: &mut AquaReceiver<InternalCommand>,
+        _: Option<&mut AquaReceiver<InternalCommand>>,
     ) -> (bool, bool, bool) {
         process_external_request_without_messaging(
             rx_from_signal_handler,
@@ -419,8 +427,8 @@ impl ProcessExternalRequestTrait for WaterInjection {
     /// - The third `bool` is always `false` (no "Stop" commands processed).
     fn process_external_request(
         &mut self,
-        rx_from_signal_handler: &Receiver<InternalCommand>,
-        _: Option<&Receiver<InternalCommand>>,
+        rx_from_signal_handler: &mut AquaReceiver<InternalCommand>,
+        _: Option<&mut AquaReceiver<InternalCommand>>,
     ) -> (bool, bool, bool) {
         process_external_request_without_messaging(
             rx_from_signal_handler,
@@ -450,8 +458,8 @@ impl ProcessExternalRequestTrait for I2cInterface {
     /// - The third `bool` is always `false` (no "Stop" commands processed).
     fn process_external_request(
         &mut self,
-        rx_from_signal_handler: &Receiver<InternalCommand>,
-        _: Option<&Receiver<InternalCommand>>,
+        rx_from_signal_handler: &mut AquaReceiver<InternalCommand>,
+        _: Option<&mut AquaReceiver<InternalCommand>>,
     ) -> (bool, bool, bool) {
         process_external_request_without_messaging(
             rx_from_signal_handler,
@@ -481,8 +489,8 @@ impl ProcessExternalRequestTrait for ScheduleCheck {
     /// - The third `bool` is always `false` (no "Stop" commands processed).
     fn process_external_request(
         &mut self,
-        rx_from_signal_handler: &Receiver<InternalCommand>,
-        _: Option<&Receiver<InternalCommand>>,
+        rx_from_signal_handler: &mut AquaReceiver<InternalCommand>,
+        _: Option<&mut AquaReceiver<InternalCommand>>,
     ) -> (bool, bool, bool) {
         process_external_request_without_messaging(
             rx_from_signal_handler,
@@ -512,8 +520,8 @@ impl ProcessExternalRequestTrait for RelayManager {
     /// - The third `bool` is always `false` (no "Stop" commands processed).
     fn process_external_request(
         &mut self,
-        rx_from_signal_handler: &Receiver<InternalCommand>,
-        _: Option<&Receiver<InternalCommand>>,
+        rx_from_signal_handler: &mut AquaReceiver<InternalCommand>,
+        _: Option<&mut AquaReceiver<InternalCommand>>,
     ) -> (bool, bool, bool) {
         process_external_request_without_messaging(
             rx_from_signal_handler,
@@ -547,8 +555,8 @@ impl ProcessExternalRequestTrait for Messaging {
     /// is only implemented for that platform.
     fn process_external_request(
         &mut self,
-        rx_from_signal_handler: &Receiver<InternalCommand>,
-        _: Option<&Receiver<InternalCommand>>,
+        rx_from_signal_handler: &mut AquaReceiver<InternalCommand>,
+        _: Option<&mut AquaReceiver<InternalCommand>>,
     ) -> (bool, bool, bool) {
         process_external_request_without_messaging(rx_from_signal_handler, "Messaging".to_string())
     }
@@ -575,8 +583,8 @@ impl ProcessExternalRequestTrait for TcpCommunication {
     /// - The third `bool` is always `false` (no "Stop" commands processed).
     fn process_external_request(
         &mut self,
-        rx_from_signal_handler: &Receiver<InternalCommand>,
-        _: Option<&Receiver<InternalCommand>>,
+        rx_from_signal_handler: &mut AquaReceiver<InternalCommand>,
+        _: Option<&mut AquaReceiver<InternalCommand>>,
     ) -> (bool, bool, bool) {
         process_external_request_without_messaging(
             rx_from_signal_handler,
@@ -598,7 +606,7 @@ impl ProcessExternalRequestTrait for TcpCommunication {
 ///
 /// # Returns
 /// `true` if either a `Terminate` or `Quit` command was received; otherwise `false`.
-fn process_standard_request(rx_from_signal_handler: &Receiver<InternalCommand>) -> bool {
+fn process_standard_request(rx_from_signal_handler: &mut AquaReceiver<InternalCommand>) -> bool {
     match rx_from_signal_handler.try_recv() {
         Ok(c) => match c {
             InternalCommand::Terminate => true,
@@ -613,8 +621,10 @@ fn process_standard_request(rx_from_signal_handler: &Receiver<InternalCommand>) 
         },
         Err(e) => {
             match e {
-                TryRecvError::Empty => { /* empty buffer - no action required */ }
-                TryRecvError::Disconnected => {
+                #[cfg(feature = "debug_channels")]
+                AquaChannelError::Full => { /* Not applicable. Do nothing */ }
+                AquaChannelError::Empty => { /* empty buffer - no action required */ }
+                AquaChannelError::Disconnected => {
                     #[cfg(not(test))]
                     error!(
                         target: module_path!(),
@@ -649,8 +659,8 @@ impl ProcessExternalRequestTrait for Feed {
     /// - The third `bool` is `true` if a `Stop` command was received from messaging; otherwise `false`.
     fn process_external_request(
         &mut self,
-        rx_from_signal_handler: &Receiver<InternalCommand>,
-        rx_from_messaging_opt: Option<&Receiver<InternalCommand>>,
+        rx_from_signal_handler: &mut AquaReceiver<InternalCommand>,
+        rx_from_messaging_opt: Option<&mut AquaReceiver<InternalCommand>>,
     ) -> (bool, bool, bool) {
         let quit_command_received = process_standard_request(rx_from_signal_handler);
 
@@ -683,8 +693,10 @@ impl ProcessExternalRequestTrait for Feed {
                         },
                         Err(e) => {
                             match e {
-                                TryRecvError::Empty => { /* empty buffer - no action required */ }
-                                TryRecvError::Disconnected => {
+                                #[cfg(feature = "debug_channels")]
+                                AquaChannelError::Full => { /* Not applicable. Do nothing */ }
+                                AquaChannelError::Empty => { /* empty buffer - no action required */ }
+                                AquaChannelError::Disconnected => {
                                     #[cfg(not(test))]
                                     error!(
                                         target: module_path!(),
@@ -732,8 +744,8 @@ impl ProcessExternalRequestTrait for Balling {
     /// - The third `bool` is `true` if a `Stop` command was received from messaging; otherwise `false`.
     fn process_external_request(
         &mut self,
-        rx_from_signal_handler: &Receiver<InternalCommand>,
-        rx_from_messaging_opt: Option<&Receiver<InternalCommand>>,
+        rx_from_signal_handler: &mut AquaReceiver<InternalCommand>,
+        rx_from_messaging_opt: Option<&mut AquaReceiver<InternalCommand>>,
     ) -> (bool, bool, bool) {
         let quit_command_received = process_standard_request(rx_from_signal_handler);
 
@@ -757,8 +769,10 @@ impl ProcessExternalRequestTrait for Balling {
                         },
                         Err(e) => {
                             match e {
-                                TryRecvError::Empty => { /* empty buffer - no action required */ }
-                                TryRecvError::Disconnected => {
+                                #[cfg(feature = "debug_channels")]
+                                AquaChannelError::Full => { /* Not applicable. Do nothing */ }
+                                AquaChannelError::Empty => { /* empty buffer - no action required */ }
+                                AquaChannelError::Disconnected => {
                                     #[cfg(not(test))]
                                     error!(
                                         target: module_path!(),
@@ -805,8 +819,8 @@ impl ProcessExternalRequestTrait for Watchdog {
     /// - The third `bool` is `true` if a `Stop` command was received from messaging; otherwise `false`.
     fn process_external_request(
         &mut self,
-        rx_from_signal_handler: &Receiver<InternalCommand>,
-        rx_from_messaging_opt: Option<&Receiver<InternalCommand>>,
+        rx_from_signal_handler: &mut AquaReceiver<InternalCommand>,
+        rx_from_messaging_opt: Option<&mut AquaReceiver<InternalCommand>>,
     ) -> (bool, bool, bool) {
         let quit_command_received = process_standard_request(rx_from_signal_handler);
 
@@ -826,8 +840,10 @@ impl ProcessExternalRequestTrait for Watchdog {
                     },
                     Err(e) => {
                         match e {
-                            TryRecvError::Empty => { /* empty buffer - no action required */ }
-                            TryRecvError::Disconnected => {
+                            #[cfg(feature = "debug_channels")]
+                            AquaChannelError::Full => { /* Not applicable. Do nothing */ }
+                            AquaChannelError::Empty => { /* empty buffer - no action required */ }
+                            AquaChannelError::Disconnected => {
                                 #[cfg(not(test))]
                                 error!(
                                     target: module_path!(),

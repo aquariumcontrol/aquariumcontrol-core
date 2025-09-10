@@ -32,9 +32,9 @@ use crate::utilities::wait_for_termination::WaitForTerminationTrait;
 #[cfg(all(not(test), target_os = "linux"))]
 use nix::unistd::gettid;
 use spin_sleep::SpinSleeper;
-use std::sync::mpsc::TryRecvError;
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
+use crate::launch::channels::AquaChannelError;
 
 // max loops for receiving when the quit command has been received
 #[allow(unused)] // used in conditionally compiled code
@@ -555,12 +555,16 @@ impl AtlasScientific {
                 }
             },
             Err(e) => match e {
-                TryRecvError::Empty => {
+                #[cfg(feature = "debug_channels")]
+                AquaChannelError::Full => {
+                    result = Err(AtlasScientificError::UnknownError(module_path!().to_string()));
+                }
+                AquaChannelError::Empty => {
                     result = Err(AtlasScientificError::ChannelIsEmpty(
                         module_path!().to_string(),
                     ));
                 }
-                TryRecvError::Disconnected => {
+                AquaChannelError::Disconnected => {
                     result = Err(AtlasScientificError::ChannelIsDisconnected {
                         location: module_path!().to_string(),
                         source: e,
@@ -616,7 +620,7 @@ impl AtlasScientific {
                 _,
                 _,
             ) = self.process_external_request(
-                &atlas_scientific_channels.rx_atlas_scientific_from_signal_handler,
+                &mut atlas_scientific_channels.rx_atlas_scientific_from_signal_handler,
                 None,
             );
 
@@ -731,7 +735,7 @@ impl AtlasScientific {
         // Those threads have to stop receiving commands from this thread.
         // The shutdown sequence is handled by the signal_handler module.
         self.wait_for_termination(
-            &atlas_scientific_channels.rx_atlas_scientific_from_signal_handler,
+            &mut atlas_scientific_channels.rx_atlas_scientific_from_signal_handler,
             sleep_duration_one_millis,
             module_path!(),
         );
@@ -740,7 +744,7 @@ impl AtlasScientific {
 
 #[cfg(test)]
 pub mod tests {
-    use crate::launch::channels::{channel, AquaSender, Channels};
+    use crate::launch::channels::{channel, AquaReceiver, AquaSender, Channels};
     use crate::mocks::mock_i2c_interface::tests::MockI2cInterface;
     use crate::sensors::atlas_scientific::{
         atlas_scientific_constants, AtlasScientific, AtlasScientificChannels, AtlasScientificError,
@@ -752,7 +756,6 @@ pub mod tests {
     use crate::utilities::config::{read_config_file, ConfigData};
     use assert_float_eq::*;
     use spin_sleep::SpinSleeper;
-    use std::sync::mpsc::Receiver;
     use std::sync::{Arc, Mutex};
     use std::thread;
     use std::time::{Duration, Instant};
@@ -1597,21 +1600,21 @@ pub mod tests {
         let address_atlas_scientific_ph = config.atlas_scientific.address_atlas_scientific_ph;
         let mut atlas_scientific = AtlasScientific::new(config.atlas_scientific);
 
-        let (tx_atlas_scientific_to_i2c_interface, rx_i2c_interface_from_atlas_scientific): (
+        let (tx_atlas_scientific_to_i2c_interface, mut rx_i2c_interface_from_atlas_scientific): (
             AquaSender<I2cRequest>,
-            Receiver<I2cRequest>,
+            AquaReceiver<I2cRequest>,
         ) = channel(1);
         let (_tx_i2c_interface_to_atlas_scientific, rx_atlas_scientific_from_i2c_interface): (
             AquaSender<I2cResult>,
-            Receiver<I2cResult>,
+            AquaReceiver<I2cResult>,
         ) = channel(1);
         let (tx_atlas_scientific_to_signal_handler, _rx_signal_handler_from_atlas_scientific): (
             AquaSender<bool>,
-            Receiver<bool>,
+            AquaReceiver<bool>,
         ) = channel(1);
         let (_tx_signal_handler_to_atlas_scientific, rx_atlas_scientific_from_signal_handler): (
             AquaSender<InternalCommand>,
-            Receiver<InternalCommand>,
+            AquaReceiver<InternalCommand>,
         ) = channel(1);
 
         let mut atlas_scientific_channels = AtlasScientificChannels {

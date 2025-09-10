@@ -10,18 +10,17 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 #[allow(unused)]
 #[cfg(test)]
 pub mod tests {
-    use crate::launch::channels::AquaSender;
+    use crate::launch::channels::{AquaChannelError, AquaReceiver, AquaSender};
     use crate::mocks::mock_signal::tests::MockSignal;
     use crate::mocks::test_command::tests::TestCommand;
     use crate::utilities::channel_content::{AquariumSignal, InternalCommand};
     use spin_sleep::SpinSleeper;
-    use std::sync::mpsc::{Receiver, TryRecvError};
     use std::time::Duration;
 
     pub fn mock_ambient(
         tx_ambient_to_test_object: &mut AquaSender<f32>,
-        rx_ambient_from_test_object: &Receiver<InternalCommand>,
-        rx_ambient_from_test_environment_opt: Option<&Receiver<TestCommand>>,
+        rx_ambient_from_test_object: &mut AquaReceiver<InternalCommand>,
+        mut rx_ambient_from_test_environment_opt: Option<&mut AquaReceiver<TestCommand>>,
         initial_stimuli_ambient_temperature: f32,
         initial_stimuli_ambient_humidity: f32,
     ) {
@@ -61,8 +60,8 @@ pub mod tests {
                 }
                 Err(e) => {
                     match e {
-                        TryRecvError::Empty => { /* empty buffer - no action required */ }
-                        TryRecvError::Disconnected => {
+                        AquaChannelError::Empty => { /* empty buffer - no action required */ }
+                        AquaChannelError::Disconnected => {
                             panic!(
                                 "{}: Error in trying to receive command from data logger: {e:?}",
                                 module_path!()
@@ -72,7 +71,7 @@ pub mod tests {
                 }
             }
             match rx_ambient_from_test_environment_opt {
-                Some(rx_ambient_from_test_environment) => {
+                Some(ref mut rx_ambient_from_test_environment) => {
                     match rx_ambient_from_test_environment.try_recv() {
                         Ok(c) => {
                             let test_command = c.clone();
@@ -106,8 +105,8 @@ pub mod tests {
                         }
                         Err(e) => {
                             match e {
-                                TryRecvError::Empty => { /* empty buffer - no action required */ }
-                                TryRecvError::Disconnected => {
+                                AquaChannelError::Empty => { /* empty buffer - no action required */ }
+                                AquaChannelError::Disconnected => {
                                     panic!(
                                         "{}: Error in trying to receive command from test environment: {e:?}",
                                         module_path!()

@@ -6,10 +6,9 @@ The above copyright notice and this permission notice shall be included in all c
 
 THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
-use crate::launch::channels::{AquaChannelError, AquaSender};
+use crate::launch::channels::{AquaChannelError, AquaReceiver, AquaSender};
 use crate::utilities::channel_content::InternalCommand;
 use std::fmt;
-use std::sync::mpsc::Receiver;
 
 /// Struct acts as a central hub for communication channels used by the DataLogger.
 /// It's a way to bundle together all the necessary mpsc (Multi-Producer, Single-Consumer) channel
@@ -18,9 +17,7 @@ pub struct DataLoggerChannels {
     /// Sender part of the channel for communication to the signal handler
     pub tx_data_logger_to_signal_handler: AquaSender<bool>,
     /// Receiver part of the channel for communication from the signal handler                
-    pub rx_data_logger_from_signal_handler: Receiver<InternalCommand>,
-    #[cfg(feature = "debug_channels")]
-    pub cnt_rx_data_logger_from_signal_handler: u64,
+    pub rx_data_logger_from_signal_handler: AquaReceiver<InternalCommand>,
 }
 
 impl DataLoggerChannels {
@@ -44,8 +41,8 @@ impl fmt::Display for DataLoggerChannels {
         )?;
         write!(
             f,
-            "cnt_rx_data_logger_from_signal_handler: {}",
-            self.cnt_rx_data_logger_from_signal_handler
+            "rx_data_logger_from_signal_handler: {}",
+            self.rx_data_logger_from_signal_handler.count
         )
     }
 }

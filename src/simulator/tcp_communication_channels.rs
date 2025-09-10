@@ -6,32 +6,25 @@ The above copyright notice and this permission notice shall be included in all c
 
 THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
-use crate::launch::channels::{AquaChannelError, AquaSender};
+use crate::launch::channels::{AquaChannelError, AquaReceiver, AquaSender};
 use crate::simulator::tcp_communication::TcpCommunicationError;
 use crate::utilities::channel_content::InternalCommand;
 use std::fmt;
-use std::sync::mpsc::{Receiver, RecvError, TryRecvError};
 
 /// Struct collects the channels for communication with other threads.
 pub struct TcpCommunicationChannels {
     /// Receiver part of the channel for communication from the relay manager wrapped in Option type
-    pub rx_tcp_communication_from_relay_manager_opt: Option<Receiver<InternalCommand>>,
-    #[cfg(feature = "debug_channels")]
-    pub cnt_rx_tcp_communication_from_relay_manager_opt: u64,
+    pub rx_tcp_communication_from_relay_manager_opt: Option<AquaReceiver<InternalCommand>>,
 
     /// Receiver part of the channel for communication from the sensor manager wrapped in Option type
-    pub rx_tcp_communication_from_sensor_manager_opt: Option<Receiver<InternalCommand>>,
-    #[cfg(feature = "debug_channels")]
-    pub cnt_rx_tcp_communication_from_sensor_manager_opt: u64,
+    pub rx_tcp_communication_from_sensor_manager_opt: Option<AquaReceiver<InternalCommand>>,
 
     /// Sender part of the channel for communication to sensor manager wrapped in Option type
     pub tx_tcp_communication_to_sensor_manager_opt:
         Option<AquaSender<Result<f32, TcpCommunicationError>>>,
 
     /// Receiver part of the channel for communication from tank level switch wrapped in Option type
-    pub rx_tcp_communication_from_tank_level_switch_opt: Option<Receiver<InternalCommand>>,
-    #[cfg(feature = "debug_channels")]
-    pub cnt_rx_tcp_communication_from_tank_level_switch_opt: u64,
+    pub rx_tcp_communication_from_tank_level_switch_opt: Option<AquaReceiver<InternalCommand>>,
 
     /// Sender part of the channel for communication to tank level switch wrapped in Option type
     pub tx_tcp_communication_to_tank_level_switch_opt:
@@ -41,39 +34,27 @@ pub struct TcpCommunicationChannels {
     pub tx_tcp_communication_to_signal_handler: AquaSender<bool>,
 
     /// Receiver part of the channel for communication from the signal handler
-    pub rx_tcp_communication_from_signal_handler: Receiver<InternalCommand>,
-    #[cfg(feature = "debug_channels")]
-    pub cnt_rx_tcp_communication_from_signal_handler: u64,
+    pub rx_tcp_communication_from_signal_handler: AquaReceiver<InternalCommand>,
 }
 
 impl TcpCommunicationChannels {
     /// Receives a command from the relay manager if the channel exists.
     #[allow(unused)]
-    pub fn receive_from_relay_manager(&mut self) -> Option<Result<InternalCommand, RecvError>> {
+    pub fn receive_from_relay_manager(&mut self) -> Option<Result<InternalCommand, AquaChannelError>> {
         self.rx_tcp_communication_from_relay_manager_opt
-            .as_ref()
+            .as_mut()
             .map(|rx| {
-                let result = rx.recv();
-                #[cfg(feature = "debug_channels")]
-                if result.is_ok() {
-                    self.cnt_rx_tcp_communication_from_relay_manager_opt += 1;
-                }
-                result
+                rx.recv()
             })
     }
 
     /// Receives a command from the sensor manager if the channel exists.
     #[allow(unused)]
-    pub fn receive_from_sensor_manager(&mut self) -> Option<Result<InternalCommand, RecvError>> {
+    pub fn receive_from_sensor_manager(&mut self) -> Option<Result<InternalCommand, AquaChannelError>> {
         self.rx_tcp_communication_from_sensor_manager_opt
-            .as_ref()
+            .as_mut()
             .map(|rx| {
-                let result = rx.recv();
-                #[cfg(feature = "debug_channels")]
-                if result.is_ok() {
-                    self.cnt_rx_tcp_communication_from_sensor_manager_opt += 1;
-                }
-                result
+                rx.recv()
             })
     }
 
@@ -90,16 +71,11 @@ impl TcpCommunicationChannels {
 
     /// Receives a command from the tank level switch if the channel exists.
     #[allow(unused)]
-    pub fn receive_from_tank_level_switch(&mut self) -> Option<Result<InternalCommand, RecvError>> {
+    pub fn receive_from_tank_level_switch(&mut self) -> Option<Result<InternalCommand, AquaChannelError>> {
         self.rx_tcp_communication_from_tank_level_switch_opt
-            .as_ref()
+            .as_mut()
             .map(|rx| {
-                let result = rx.recv();
-                #[cfg(feature = "debug_channels")]
-                if result.is_ok() {
-                    self.cnt_rx_tcp_communication_from_tank_level_switch_opt += 1;
-                }
-                result
+                rx.recv()
             })
     }
 
@@ -121,13 +97,8 @@ impl TcpCommunicationChannels {
 
     /// Receives a command from the signal handler.
     #[allow(unused)]
-    pub fn receive_from_signal_handler(&mut self) -> Result<InternalCommand, TryRecvError> {
-        let result = self.rx_tcp_communication_from_signal_handler.try_recv();
-        #[cfg(feature = "debug_channels")]
-        if result.is_ok() {
-            self.cnt_rx_tcp_communication_from_signal_handler += 1;
-        }
-        result
+    pub fn receive_from_signal_handler(&mut self) -> Result<InternalCommand, AquaChannelError> {
+        self.rx_tcp_communication_from_signal_handler.try_recv()
     }
 }
 
@@ -137,13 +108,13 @@ impl fmt::Display for TcpCommunicationChannels {
         writeln!(f, "=== TcpCommunicationChannels ===")?;
         writeln!(
             f,
-            "cnt_rx_tcp_communication_from_relay_manager_opt: {}",
-            self.cnt_rx_tcp_communication_from_relay_manager_opt
+            "rx_tcp_communication_from_relay_manager_opt: {}",
+            self.rx_tcp_communication_from_relay_manager_opt.as_ref().unwrap().count
         )?;
         writeln!(
             f,
-            "cnt_rx_tcp_communication_from_sensor_manager_opt: {}",
-            self.cnt_rx_tcp_communication_from_sensor_manager_opt
+            "rx_tcp_communication_from_sensor_manager_opt: {}",
+            self.rx_tcp_communication_from_sensor_manager_opt.as_ref().unwrap().count
         )?;
         writeln!(
             f,
@@ -155,8 +126,8 @@ impl fmt::Display for TcpCommunicationChannels {
         )?;
         writeln!(
             f,
-            "cnt_rx_tcp_communication_from_tank_level_switch_opt: {}",
-            self.cnt_rx_tcp_communication_from_tank_level_switch_opt
+            "rx_tcp_communication_from_tank_level_switch_opt: {}",
+            self.rx_tcp_communication_from_tank_level_switch_opt.as_ref().unwrap().count
         )?;
         writeln!(
             f,
@@ -173,8 +144,8 @@ impl fmt::Display for TcpCommunicationChannels {
         )?;
         write!(
             f,
-            "cnt_rx_tcp_communication_from_signal_handler: {}",
-            self.cnt_rx_tcp_communication_from_signal_handler
+            "rx_tcp_communication_from_signal_handler: {}",
+            self.rx_tcp_communication_from_signal_handler.count
         )
     }
 }

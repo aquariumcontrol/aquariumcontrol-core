@@ -14,11 +14,11 @@ use crate::sensors::tank_level_switch::TankLevelSwitch;
 use crate::utilities::channel_content::InternalCommand;
 use log::{error, warn};
 use spin_sleep::SpinSleeper;
-use std::sync::mpsc::{Receiver, TryRecvError};
 use std::time::Duration;
 
 #[cfg(target_os = "linux")]
 use crate::dispatch::messaging::Messaging;
+use crate::launch::channels::{AquaChannelError, AquaReceiver};
 use crate::sensors::sensor_manager::SensorManager;
 use crate::thermal::heating::Heating;
 use crate::thermal::ventilation::Ventilation;
@@ -61,7 +61,7 @@ pub trait WaitForTerminationTrait {
     /// * `origin` - module name which called this function.
     fn wait_for_termination(
         &mut self,
-        rx_waiting_thread_from_signal_handler: &Receiver<InternalCommand>,
+        rx_waiting_thread_from_signal_handler: &mut AquaReceiver<InternalCommand>,
         sleep_duration: Duration,
         origin: &str,
     ) {
@@ -87,8 +87,10 @@ pub trait WaitForTerminationTrait {
                 },
                 Err(e) => {
                     match e {
-                        TryRecvError::Empty => { /* do nothing */ }
-                        TryRecvError::Disconnected => {
+                        #[cfg(feature = "debug_channels")]
+                        AquaChannelError::Full => { /* Not applicable. Do nothing */ }
+                        AquaChannelError::Empty => { /* do nothing */ }
+                        AquaChannelError::Disconnected => {
                             if !*self.get_error_lock_mut() {
                                 error!(
                                     target: origin,

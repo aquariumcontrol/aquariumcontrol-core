@@ -236,7 +236,7 @@ impl WaterInjectionTrait for WaterInjection {
                 additional_refill_volume_executed += self.refill_increment;
             }
             (quit_command_received, _, _) =
-                self.process_external_request(&refill_channels.rx_refill_from_signal_handler, None);
+                self.process_external_request(&mut refill_channels.rx_refill_from_signal_handler, None);
             if quit_command_received {
                 break;
             }
@@ -295,7 +295,7 @@ impl WaterInjectionTrait for WaterInjection {
 #[cfg(test)]
 pub mod tests {
     use crate::database::sql_interface_refill::SqlInterfaceRefill;
-    use crate::launch::channels::{AquaSender, Channels};
+    use crate::launch::channels::{AquaReceiver, AquaSender, Channels};
     use crate::mocks::mock_relay_manager::tests::mock_relay_manager;
     use crate::sensors::tank_level_switch::TankLevelSwitchSignals;
     use crate::utilities::channel_content::{ActuatorState, AquariumDevice, InternalCommand};
@@ -305,7 +305,6 @@ pub mod tests {
     use crate::water::water_injection::{WaterInjection, WaterInjectionTrait};
     use all_asserts::{assert_ge, assert_le};
     use spin_sleep::SpinSleeper;
-    use std::sync::mpsc::Receiver;
     use std::sync::{Arc, Mutex};
     use std::{thread, time::Duration};
 
@@ -387,7 +386,7 @@ pub mod tests {
             .spawn(move || {
                 let (mut actuation_events, mock_actuator_states) = mock_relay_manager(
                     &mut channels.relay_manager.tx_relay_manager_to_refill,
-                    &channels.relay_manager.rx_relay_manager_from_refill,
+                    &mut channels.relay_manager.rx_relay_manager_from_refill,
                 );
                 assert_eq!(actuation_events.len(), 2);
                 let last_actuation_event = actuation_events.pop().unwrap();
@@ -459,14 +458,14 @@ pub mod tests {
 
     fn create_mock_relay_manager(
         mut tx_relay_manager_to_water_injection: AquaSender<bool>,
-        rx_relay_manager_from_water_injection: Receiver<InternalCommand>,
+        mut rx_relay_manager_from_water_injection: AquaReceiver<InternalCommand>,
     ) -> thread::JoinHandle<()> {
         thread::Builder::new()
             .name("mock_relay_manager".to_string())
             .spawn(move || {
                 let (mut actuation_events, mock_actuator_states) = mock_relay_manager(
                     &mut tx_relay_manager_to_water_injection,
-                    &rx_relay_manager_from_water_injection,
+                    &mut rx_relay_manager_from_water_injection,
                 );
                 assert_eq!(actuation_events.len(), 2);
                 let last_actuation_event = actuation_events.pop().unwrap();
@@ -686,7 +685,7 @@ pub mod tests {
             .spawn(move || {
                 let (mut actuation_events, mock_actuator_states) = mock_relay_manager(
                     &mut channels.relay_manager.tx_relay_manager_to_refill,
-                    &channels.relay_manager.rx_relay_manager_from_refill,
+                    &mut channels.relay_manager.rx_relay_manager_from_refill,
                 );
                 assert_eq!(actuation_events.len(), 2);
                 let last_actuation_event = actuation_events.pop().unwrap();
@@ -797,7 +796,7 @@ pub mod tests {
             .spawn(move || {
                 let (mut actuation_events, actuator_states) = mock_relay_manager(
                     &mut channels.relay_manager.tx_relay_manager_to_refill,
-                    &channels.relay_manager.rx_relay_manager_from_refill,
+                    &mut channels.relay_manager.rx_relay_manager_from_refill,
                 );
                 assert_eq!(actuation_events.len(), 2);
                 let last_actuation_event = actuation_events.pop().unwrap();
@@ -896,7 +895,7 @@ pub mod tests {
             .spawn(move || {
                 let (mut actuation_events, mock_actuator_states) = mock_relay_manager(
                     &mut channels.relay_manager.tx_relay_manager_to_refill,
-                    &channels.relay_manager.rx_relay_manager_from_refill,
+                    &mut channels.relay_manager.rx_relay_manager_from_refill,
                 );
                 assert_eq!(actuation_events.len(), 2);
                 let last_actuation_event = actuation_events.pop().unwrap();

@@ -9,13 +9,10 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 #[cfg(any(test, all(target_os = "linux", feature = "target_hw")))]
 use crate::launch::channels::AquaChannelError;
 
-use crate::launch::channels::AquaSender;
+use crate::launch::channels::{AquaReceiver, AquaSender};
 use crate::sensors::i2c_interface::{I2cRequest, I2cResult};
 use crate::utilities::channel_content::InternalCommand;
 use std::fmt;
-use std::sync::mpsc::Receiver;
-#[cfg(all(target_os = "linux", feature = "target_hw"))]
-use std::sync::mpsc::TryRecvError;
 
 /// Container for channels used by I2cInterface
 pub struct I2cInterfaceChannels {
@@ -23,14 +20,10 @@ pub struct I2cInterfaceChannels {
     pub tx_i2c_interface_to_atlas_scientific: AquaSender<I2cResult>,
 
     #[allow(unused)] // used in conditionally compiled code
-    pub rx_i2c_interface_from_atlas_scientific: Receiver<I2cRequest>,
-    #[cfg(feature = "debug_channels")]
-    pub cnt_rx_i2c_interface_from_atlas_scientific: u64,
+    pub rx_i2c_interface_from_atlas_scientific: AquaReceiver<I2cRequest>,
 
     #[allow(unused)] // used in conditionally compiled code
-    pub rx_i2c_interface_from_signal_handler: Receiver<InternalCommand>,
-    #[cfg(feature = "debug_channels")]
-    pub cnt_rx_i2c_interface_from_signal_handler: u64,
+    pub rx_i2c_interface_from_signal_handler: AquaReceiver<InternalCommand>,
 }
 
 impl I2cInterfaceChannels {
@@ -42,13 +35,8 @@ impl I2cInterfaceChannels {
 
     #[cfg(all(target_os = "linux", feature = "target_hw"))]
     /// Receives a request from the Atlas Scientific module.
-    pub fn receive_from_atlas_scientific(&mut self) -> Result<I2cRequest, TryRecvError> {
-        let result = self.rx_i2c_interface_from_atlas_scientific.try_recv();
-        #[cfg(feature = "debug_channels")]
-        if result.is_ok() {
-            self.cnt_rx_i2c_interface_from_atlas_scientific += 1;
-        }
-        result
+    pub fn receive_from_atlas_scientific(&mut self) -> Result<I2cRequest, AquaChannelError> {
+        self.rx_i2c_interface_from_atlas_scientific.try_recv()
     }
 }
 
@@ -63,13 +51,13 @@ impl fmt::Display for I2cInterfaceChannels {
         )?;
         writeln!(
             f,
-            "cnt_rx_i2c_interface_from_atlas_scientific: {}",
-            self.cnt_rx_i2c_interface_from_atlas_scientific
+            "rx_i2c_interface_from_atlas_scientific: {}",
+            self.rx_i2c_interface_from_atlas_scientific.count
         )?;
         write!(
             f,
-            "cnt_rx_i2c_interface_from_signal_handler: {}",
-            self.cnt_rx_i2c_interface_from_signal_handler
+            "rx_i2c_interface_from_signal_handler: {}",
+            self.rx_i2c_interface_from_signal_handler.count
         )
     }
 }

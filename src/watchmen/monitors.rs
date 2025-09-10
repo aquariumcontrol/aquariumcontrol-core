@@ -16,10 +16,9 @@ use log::debug;
 use nix::unistd::gettid;
 
 use spin_sleep::SpinSleeper;
-use std::sync::mpsc::TryRecvError;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
-
+use crate::launch::channels::AquaChannelError;
 use crate::utilities::acknowledge_signal_handler::AcknowledgeSignalHandlerTrait;
 use crate::utilities::proc_ext_req::ProcessExternalRequestTrait;
 use crate::watchmen::monitors_channels::MonitorsChannels;
@@ -159,8 +158,10 @@ impl Monitors {
                     },
                     Err(e) => {
                         match e {
-                            TryRecvError::Empty => { /* empty buffer - no action required */ }
-                            TryRecvError::Disconnected => {
+                            #[cfg(feature = "debug_channels")]
+                            AquaChannelError::Full => { /* only applicable to send - no action required */ }
+                            AquaChannelError::Empty => { /* empty buffer - no action required */ }
+                            AquaChannelError::Disconnected => {
                                 if !self.lock_error_receive_refill {
                                     error!(target: module_path!(), "Error when trying to receive from refill: {e}");
                                     self.lock_error_receive_refill = true;
@@ -177,8 +178,8 @@ impl Monitors {
                 start_command_received,
                 stop_command_received,
             ) = self.process_external_request(
-                &monitors_channels.rx_monitors_from_signal_handler,
-                monitors_channels.rx_monitors_from_messaging_opt.as_ref(),
+                &mut monitors_channels.rx_monitors_from_signal_handler,
+                monitors_channels.rx_monitors_from_messaging_opt.as_mut(),
             );
             if quit_command_received {
                 break;

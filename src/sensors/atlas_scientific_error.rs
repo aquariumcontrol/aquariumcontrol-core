@@ -11,7 +11,6 @@ use crate::sensors::i2c_error::I2cError;
 use crate::utilities::channel_content::AquariumSignal;
 use std::num::ParseFloatError;
 use std::str::Utf8Error;
-use std::sync::mpsc::TryRecvError;
 use thiserror::Error;
 
 /// error codes for evaluation of sensor unit response
@@ -91,7 +90,7 @@ pub enum AtlasScientificError {
     ChannelIsDisconnected {
         location: String,
         #[source]
-        source: TryRecvError,
+        source: AquaChannelError,
     },
 
     /// Logic error: Signal is unknown
@@ -115,4 +114,8 @@ pub enum AtlasScientificError {
         #[source]
         source: AquaChannelError,
     },
+
+    /// Enum value covering unreachable branch in match
+    #[error("Internal error - this should never happen.")]
+    UnknownError(String),
 }

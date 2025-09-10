@@ -16,11 +16,10 @@ use log::warn;
 #[cfg(all(target_os = "linux", not(test)))]
 use nix::unistd::gettid;
 use spin_sleep::SpinSleeper;
-use std::sync::mpsc::{Receiver, TryRecvError};
 use std::time::{Duration, Instant};
 
 use crate::database::sql_interface_schedule::{ScheduleEntry, ScheduleType, SqlInterfaceSchedule};
-use crate::launch::channels::AquaSender;
+use crate::launch::channels::{AquaChannelError, AquaReceiver, AquaSender};
 use crate::launch::execution_config::ExecutionConfig;
 use crate::permission::schedule_check_channels::ScheduleCheckChannels;
 use crate::permission::schedule_check_config::ScheduleCheckConfig;
@@ -177,7 +176,7 @@ impl ScheduleCheck {
     fn check_pending_schedule_request(
         config: &ScheduleCheckConfig,
         tx: &mut AquaSender<bool>,
-        rx: &Receiver<InternalCommand>,
+        rx: &mut AquaReceiver<InternalCommand>,
         schedule_entry: Option<&ScheduleEntry>,
         locks: (&mut bool, &mut bool, &mut bool),
         module_name: &str,
@@ -212,11 +211,13 @@ impl ScheduleCheck {
             },
             Err(e) => {
                 match e {
-                    TryRecvError::Empty => {
+                    #[cfg(feature = "debug_channels")]
+                    AquaChannelError::Full => { /* Not applicable. Do nothing */ }
+                    AquaChannelError::Empty => {
                         /* empty buffer - no action required */
                         *lock_error_channel_receive = false;
                     }
-                    TryRecvError::Disconnected => {
+                    AquaChannelError::Disconnected => {
                         if !*lock_error_channel_receive {
                             let context = format!("receiving command from {module_name} failed");
                             log_error_chain(module_path!(), &context, e);
@@ -298,7 +299,7 @@ impl ScheduleCheck {
             }
 
             let (quit_command_received, _, _) = self.process_external_request(
-                &schedule_check_channels.rx_schedule_check_from_signal_handler,
+                &mut schedule_check_channels.rx_schedule_check_from_signal_handler,
                 None,
             );
             if quit_command_received {
@@ -337,7 +338,7 @@ impl ScheduleCheck {
                 let (_send_success, _receive_success) = Self::check_pending_schedule_request(
                     &self.config,
                     &mut schedule_check_channels.tx_schedule_check_to_ventilation,
-                    &schedule_check_channels.rx_schedule_check_from_ventilation,
+                    &mut schedule_check_channels.rx_schedule_check_from_ventilation,
                     schedule_entry_ventilation_opt,
                     (
                         &mut self.lock_error_channel_receive_ventilation,
@@ -346,12 +347,6 @@ impl ScheduleCheck {
                     ),
                     "ventilation",
                 );
-                #[cfg(feature = "debug_channels")]
-                {
-                    if _receive_success {
-                        schedule_check_channels.cnt_rx_schedule_check_from_ventilation += 1;
-                    }
-                }
             }
             //***************************************
 
@@ -381,7 +376,7 @@ impl ScheduleCheck {
                 let (_send_success, _receive_success) = Self::check_pending_schedule_request(
                     &self.config,
                     &mut schedule_check_channels.tx_schedule_check_to_heating,
-                    &schedule_check_channels.rx_schedule_check_from_heating,
+                    &mut schedule_check_channels.rx_schedule_check_from_heating,
                     schedule_entry_heating_opt,
                     (
                         &mut self.lock_error_channel_receive_heating,
@@ -390,12 +385,6 @@ impl ScheduleCheck {
                     ),
                     "heating",
                 );
-                #[cfg(feature = "debug_channels")]
-                {
-                    if _receive_success {
-                        schedule_check_channels.cnt_rx_schedule_check_from_heating += 1;
-                    }
-                }
             }
             //***************************************
 
@@ -425,7 +414,7 @@ impl ScheduleCheck {
                 let (_send_success, _receive_success) = Self::check_pending_schedule_request(
                     &self.config,
                     &mut schedule_check_channels.tx_schedule_check_to_refill,
-                    &schedule_check_channels.rx_schedule_check_from_refill,
+                    &mut schedule_check_channels.rx_schedule_check_from_refill,
                     schedule_entry_refill_opt,
                     (
                         &mut self.lock_error_channel_receive_refill,
@@ -434,12 +423,6 @@ impl ScheduleCheck {
                     ),
                     "refill",
                 );
-                #[cfg(feature = "debug_channels")]
-                {
-                    if _receive_success {
-                        schedule_check_channels.cnt_rx_schedule_check_from_refill += 1;
-                    }
-                }
             }
             //***************************************
 
@@ -469,7 +452,7 @@ impl ScheduleCheck {
                 let (_send_success, _receive_success) = Self::check_pending_schedule_request(
                     &self.config,
                     &mut schedule_check_channels.tx_schedule_check_to_balling,
-                    &schedule_check_channels.rx_schedule_check_from_balling,
+                    &mut schedule_check_channels.rx_schedule_check_from_balling,
                     schedule_entry_balling_opt,
                     (
                         &mut self.lock_error_channel_receive_balling,
@@ -478,12 +461,6 @@ impl ScheduleCheck {
                     ),
                     "balling",
                 );
-                #[cfg(feature = "debug_channels")]
-                {
-                    if _receive_success {
-                        schedule_check_channels.cnt_rx_schedule_check_from_balling += 1;
-                    }
-                }
             }
             //***************************************
 

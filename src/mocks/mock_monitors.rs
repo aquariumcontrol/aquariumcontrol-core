@@ -14,9 +14,8 @@ pub mod tests {
     use crate::water::refill_monitor_view::RefillMonitorView;
     use spin_sleep::SpinSleeper;
     use std::fmt;
-    use std::sync::mpsc::Receiver;
-    use std::sync::mpsc::TryRecvError;
     use std::time::{Duration, Instant};
+    use crate::launch::channels::{AquaChannelError, AquaReceiver};
 
     const MOCK_MONITORS_MAX_VEC_LEN: usize = 4096;
 
@@ -67,14 +66,14 @@ pub mod tests {
 
         pub fn execute(
             &mut self,
-            rx_from_refill: Receiver<RefillMonitorView>,
-            rx_from_signal_handler: Receiver<InternalCommand>,
+            mut rx_from_refill: AquaReceiver<RefillMonitorView>,
+            mut rx_from_signal_handler: AquaReceiver<InternalCommand>,
         ) {
             let sleep_duration_hundred_millis = Duration::from_millis(100);
             let spin_sleeper = SpinSleeper::default();
 
             loop {
-                if mock_common_receive_from_signal_handler(&rx_from_signal_handler, module_path!())
+                if mock_common_receive_from_signal_handler(&mut rx_from_signal_handler, module_path!())
                 {
                     break;
                 }
@@ -85,8 +84,8 @@ pub mod tests {
                     }
                     Err(e) => {
                         match e {
-                            TryRecvError::Empty => { /* do nothing */ }
-                            TryRecvError::Disconnected => {
+                            AquaChannelError::Empty => { /* do nothing */ }
+                            AquaChannelError::Disconnected => {
                                 panic!("{}: channel disconnected", module_path!());
                             }
                         }

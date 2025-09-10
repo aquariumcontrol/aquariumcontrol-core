@@ -490,8 +490,8 @@ impl Feed {
                 start_command_received, // the request to (re-)start feed has been received
                 stop_command_received, // the request to (temporarily) stop the feed has been received
             ) = self.process_external_request(
-                &feed_channels.rx_feed_from_signal_handler,
-                feed_channels.rx_feed_from_messaging_opt.as_ref(),
+                &mut feed_channels.rx_feed_from_signal_handler,
+                feed_channels.rx_feed_from_messaging_opt.as_mut(),
             );
             if quit_command_received {
                 break;
@@ -577,7 +577,7 @@ impl Feed {
         // Those threads have to stop receiving commands from this thread.
         // The shutdown sequence is handled by the signal_handler module.
         self.wait_for_termination(
-            &feed_channels.rx_feed_from_signal_handler,
+            &mut feed_channels.rx_feed_from_signal_handler,
             sleep_duration_hundred_millis,
             module_path!(),
         );
@@ -587,7 +587,6 @@ impl Feed {
 #[cfg(test)]
 pub mod tests {
     use spin_sleep::SpinSleeper;
-    use std::sync::mpsc::Receiver;
     use std::sync::{Arc, Mutex};
     use std::thread;
     use std::thread::scope;
@@ -607,7 +606,7 @@ pub mod tests {
 
     use crate::database::sql_interface_feed::tests::insert_feed_patterns;
     use crate::database::sql_query_strings::{SQL_TABLE_FEEDLOG, SQL_TABLE_FEEDSCHEDULE};
-    use crate::launch::channels::{AquaSender, Channels};
+    use crate::launch::channels::{AquaReceiver, AquaSender, Channels};
     use crate::mocks::mock_food_injection::MockFoodInjection;
     use crate::mocks::mock_sql_interface_feed::tests::MockSqlInterfaceFeed;
 
@@ -623,7 +622,7 @@ pub mod tests {
     /// * `sleep_duration` - sleep duration used for waiting before sending Quit command to the test object
     fn create_mock_signal_handler(
         tx_signal_handler_to_feed: &mut AquaSender<InternalCommand>,
-        rx_signal_handler_from_feed: &Receiver<bool>,
+        rx_signal_handler_from_feed: &mut AquaReceiver<bool>,
         spin_sleeper: SpinSleeper,
         sleep_duration: Duration,
     ) {
@@ -735,7 +734,7 @@ pub mod tests {
             scope.spawn(move || {
                 create_mock_signal_handler(
                     &mut channels.signal_handler.tx_signal_handler_to_feed,
-                    &channels.signal_handler.rx_signal_handler_from_feed,
+                    &mut channels.signal_handler.rx_signal_handler_from_feed,
                     spin_sleeper,
                     sleep_duration_8_seconds,
                 );
@@ -1258,7 +1257,7 @@ pub mod tests {
             scope.spawn(move || {
                 create_mock_signal_handler(
                     &mut channels.signal_handler.tx_signal_handler_to_feed,
-                    &channels.signal_handler.rx_signal_handler_from_feed,
+                    &mut channels.signal_handler.rx_signal_handler_from_feed,
                     spin_sleeper,
                     sleep_duration_8_seconds,
                 );
@@ -1382,7 +1381,7 @@ pub mod tests {
             scope.spawn(move || {
                 create_mock_signal_handler(
                     &mut channels.signal_handler.tx_signal_handler_to_feed,
-                    &channels.signal_handler.rx_signal_handler_from_feed,
+                    &mut channels.signal_handler.rx_signal_handler_from_feed,
                     spin_sleeper,
                     sleep_duration_8_seconds,
                 );

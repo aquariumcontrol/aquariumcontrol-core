@@ -818,7 +818,7 @@ impl DataLogger {
         // Those threads have to stop receiving commands from this thread.
         // The shutdown sequence is handled by the signal_handler module.
         self.wait_for_termination(
-            &data_logger_channels.rx_data_logger_from_signal_handler,
+            &mut data_logger_channels.rx_data_logger_from_signal_handler,
             sleep_duration_hundred_millis,
             module_path!(),
         );
@@ -919,7 +919,7 @@ impl DataLogger {
         {
             spin_sleeper.sleep(sleep_duration_hundred_millis);
             (quit_command_received, _, _) = self.process_external_request(
-                &data_logger_channels.rx_data_logger_from_signal_handler,
+                &mut data_logger_channels.rx_data_logger_from_signal_handler,
                 None,
             );
             if quit_command_received {
@@ -1030,7 +1030,7 @@ impl DataLogger {
                 i += 100;
                 spin_sleeper.sleep(sleep_duration_hundred_millis);
                 (quit_command_received, _, _) = self.process_external_request(
-                    &data_logger_channels.rx_data_logger_from_signal_handler,
+                    &mut data_logger_channels.rx_data_logger_from_signal_handler,
                     None,
                 );
                 if quit_command_received {
@@ -1097,7 +1097,7 @@ impl DataLogger {
 #[cfg(test)]
 pub mod tests {
     use crate::database::{sql_interface::SqlInterface, sql_interface_data::SqlInterfaceData};
-    use crate::launch::channels::Channels;
+    use crate::launch::channels::{channel, Channels};
     use crate::mocks::mock_data_injection::tests::MockDataInjection;
     use crate::mocks::mock_heating::tests::mock_heating;
     use crate::mocks::mock_signal::tests::MockSignal;
@@ -1111,7 +1111,7 @@ pub mod tests {
     use crate::water::refill::RefillStatus;
     use spin_sleep::SpinSleeper;
     use std::sync::{Arc, Mutex};
-    use std::{fs, sync::mpsc, thread, time::Duration};
+    use std::{fs, thread, time::Duration};
 
     #[cfg(test)]
     // Asserts the content of all data logger output files on disk.
@@ -1262,9 +1262,9 @@ pub mod tests {
         let mut channels = Channels::new_for_test();
 
         // test environment-specific channels
-        let (tx_test_environment_to_ventilation, rx_ventilation_from_test_environment) =
-            mpsc::channel();
-        let (tx_test_environment_to_heating, rx_heating_from_test_environment) = mpsc::channel();
+        let (mut tx_test_environment_to_ventilation, mut rx_ventilation_from_test_environment) =
+            channel(1);
+        let (mut tx_test_environment_to_heating, mut rx_heating_from_test_environment) = channel(1);
 
         let mut mock_data_injection = MockDataInjection::new();
 
@@ -1437,8 +1437,8 @@ pub mod tests {
                 mock_heating(
                     None,
                     None,
-                    &channels.heating.rx_heating_from_signal_handler,
-                    Some(&rx_heating_from_test_environment),
+                    &mut channels.heating.rx_heating_from_signal_handler,
+                    Some(&mut rx_heating_from_test_environment),
                     mutex_heating_status, // initial heating control status
                 );
             })
@@ -1449,8 +1449,8 @@ pub mod tests {
             .name("mock_ventilation".to_string())
             .spawn(move || {
                 mock_ventilation(
-                    &channels.ventilation.rx_ventilation_from_signal_handler,
-                    Some(&rx_ventilation_from_test_environment),
+                    &mut channels.ventilation.rx_ventilation_from_signal_handler,
+                    Some(&mut rx_ventilation_from_test_environment),
                     mutex_ventilation_status, // initial ventilation control status
                 );
             })

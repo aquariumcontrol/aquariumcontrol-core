@@ -34,7 +34,7 @@ pub enum FoodInjectionError {
         device: AquariumDevice,
 
         #[source]
-        source: std::sync::mpsc::RecvError,
+        source: AquaChannelError,
     },
 
     /// An invalid or unexpected target state was requested for the skimmer.

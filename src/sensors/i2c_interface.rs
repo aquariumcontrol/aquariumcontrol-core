@@ -18,7 +18,6 @@ use crate::sensors::i2c_interface_config::I2cInterfaceConfig;
 cfg_if::cfg_if! {
     if #[cfg(all(target_os = "linux", feature = "target_hw"))] {
         use log::error;
-        use std::sync::mpsc::{TryRecvError};
         use rppal::i2c::I2c; // required for communication with AtlasScientific sensors
 
         #[cfg(feature = "debug_i2c_interface")]

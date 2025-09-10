@@ -36,7 +36,8 @@ use crate::water::refill_monitor_view::RefillMonitorView;
 use std::sync::mpsc::SyncSender;
 #[cfg(feature = "debug_channels")]
 use std::sync::mpsc::TrySendError;
-use std::sync::mpsc::{self, Receiver};
+use std::sync::mpsc;
+use std::sync::mpsc::TryRecvError;
 use thiserror::Error;
 
 #[cfg(feature = "debug_channels")]
@@ -51,11 +52,17 @@ pub struct AquaSender<T: Send> {
     sender: mpsc::Sender<T>,
 }
 
-pub fn channel<T: Send>(bound: usize) -> (AquaSender<T>, Receiver<T>) {
+pub struct AquaReceiver<T> {
+    receiver: mpsc::Receiver<T>,
+    #[cfg(feature = "debug_channels")]
+    pub count: u64,
+}
+
+pub fn channel<T: Send>(bound: usize) -> (AquaSender<T>, AquaReceiver<T>) {
     #[cfg(feature = "debug_channels")]
     {
         let (sender, receiver) = mpsc::sync_channel::<T>(bound);
-        (AquaSender { sender, count: 0 }, receiver)
+        (AquaSender { sender, count: 0 }, AquaReceiver { receiver, count: 0 })
     }
     #[cfg(not(feature = "debug_channels"))]
     {
@@ -63,7 +70,7 @@ pub fn channel<T: Send>(bound: usize) -> (AquaSender<T>, Receiver<T>) {
             let _ = bound;
             mpsc::channel::<T>()
         };
-        (AquaSender { sender }, receiver)
+        (AquaSender { sender }, AquaReceiver { receiver })
     }
 }
 
@@ -71,10 +78,13 @@ pub fn channel<T: Send>(bound: usize) -> (AquaSender<T>, Receiver<T>) {
 pub enum AquaChannelError {
     #[cfg(feature = "debug_channels")]
     #[error("Channel is full.")]
-    ChannelIsFull,
+    Full,
 
     #[error("Channel is disconnected.")]
-    ChannelIsDisconnected,
+    Disconnected,
+
+    #[error("Channel is empty.")]
+    Empty,
 }
 
 impl<T: Send> AquaSender<T> {
@@ -88,16 +98,42 @@ impl<T: Send> AquaSender<T> {
                     self.count += 1;
                     Ok(())
                 }
-                Err(TrySendError::Full(_)) => Err(AquaChannelError::ChannelIsFull),
-                Err(TrySendError::Disconnected(_)) => Err(AquaChannelError::ChannelIsDisconnected),
+                Err(TrySendError::Full(_)) => Err(AquaChannelError::Full),
+                Err(TrySendError::Disconnected(_)) => Err(AquaChannelError::Disconnected),
             }
         }
         #[cfg(not(feature = "debug_channels"))]
         {
             self.sender
                 .send(data)
-                .map_err(|_| AquaChannelError::ChannelIsDisconnected)?;
+                .map_err(|_| AquaChannelError::Disconnected)?;
             Ok(())
+        }
+    }
+}
+
+impl<T> AquaReceiver<T> {
+    /// Receive a value from a channel (blocking), and on builds with "debug_channel" feature enabled,
+    /// count each call for each receiver
+    pub fn recv(&mut self) -> Result<T, AquaChannelError> {
+        #[cfg(feature = "debug_channels")]
+        {
+            self.count += 1;
+        }
+        self.receiver.recv().map_err(|_| AquaChannelError::Disconnected)
+    }
+
+    /// Receive a value from a channel (non-blocking), and on builds with "debug_channel" feature enabled,
+    /// count each call for each receiver
+    pub fn try_recv(&mut self) -> Result<T, AquaChannelError> {
+        #[cfg(feature = "debug_channels")]
+        {
+            self.count += 1;
+        }
+        match self.receiver.try_recv() {
+            Ok(c) => {Ok(c)}
+            Err(TryRecvError::Empty) => {Err(AquaChannelError::Empty)},
+            Err(TryRecvError::Disconnected) => {Err(AquaChannelError::Disconnected)},
         }
     }
 }
@@ -105,8 +141,8 @@ impl<T: Send> AquaSender<T> {
 /// Creates a pair of bidirectional channels for request/response communication.
 macro_rules! create_bidirectional_channel {
     ($req:ty, $resp:ty) => {{
-        let (tx_req, rx_req): (AquaSender<$req>, Receiver<$req>) = channel(1);
-        let (tx_resp, rx_resp): (AquaSender<$resp>, Receiver<$resp>) = channel(1);
+        let (tx_req, rx_req): (AquaSender<$req>, AquaReceiver<$req>) = channel(1);
+        let (tx_resp, rx_resp): (AquaSender<$resp>, AquaReceiver<$resp>) = channel(1);
         ((tx_req, rx_req), (tx_resp, rx_resp))
     }};
 }
@@ -114,7 +150,7 @@ macro_rules! create_bidirectional_channel {
 /// Creates a channel for one-way communication.
 macro_rules! create_unidirectional_channel {
     ($req:ty) => {{
-        let (tx, rx): (AquaSender<$req>, Receiver<$req>) = channel(1);
+        let (tx, rx): (AquaSender<$req>, AquaReceiver<$req>) = channel(1);
         (tx, rx)
     }};
 }
@@ -184,16 +220,16 @@ impl Channels {
 
         // create channels for communication between threads
         let tx_signal_handler_to_messaging_opt: Option<AquaSender<InternalCommand>>;
-        let rx_signal_handler_from_messaging_opt: Option<Receiver<bool>>;
-        let rx_refill_from_messaging_opt: Option<Receiver<InternalCommand>>;
-        let rx_ventilation_from_messaging_opt: Option<Receiver<InternalCommand>>;
-        let rx_heating_from_messaging_opt: Option<Receiver<InternalCommand>>;
-        let rx_feed_from_messaging_opt: Option<Receiver<InternalCommand>>;
-        let rx_balling_from_messaging_opt: Option<Receiver<InternalCommand>>;
-        let rx_monitors_from_messaging_opt: Option<Receiver<InternalCommand>>;
+        let rx_signal_handler_from_messaging_opt: Option<AquaReceiver<bool>>;
+        let rx_refill_from_messaging_opt: Option<AquaReceiver<InternalCommand>>;
+        let rx_ventilation_from_messaging_opt: Option<AquaReceiver<InternalCommand>>;
+        let rx_heating_from_messaging_opt: Option<AquaReceiver<InternalCommand>>;
+        let rx_feed_from_messaging_opt: Option<AquaReceiver<InternalCommand>>;
+        let rx_balling_from_messaging_opt: Option<AquaReceiver<InternalCommand>>;
+        let rx_monitors_from_messaging_opt: Option<AquaReceiver<InternalCommand>>;
 
         #[allow(clippy::needless_late_init)]
-        let rx_watchdog_from_messaging_opt: Option<Receiver<InternalCommand>>;
+        let rx_watchdog_from_messaging_opt: Option<AquaReceiver<InternalCommand>>;
 
         // channels for messaging used in Linux implementation and on unit testing on any platform
         cfg_if::cfg_if! {
@@ -482,310 +518,150 @@ impl Channels {
         let relay_manager = RelayManagerChannels {
             tx_relay_manager_to_refill,
             rx_relay_manager_from_refill,
-            #[cfg(feature = "debug_channels")]
-            cnt_rx_relay_manager_from_refill: 0,
-
             tx_relay_manager_to_heating,
             rx_relay_manager_from_heating,
-            #[cfg(feature = "debug_channels")]
-            cnt_rx_relay_manager_from_heating: 0,
-
             tx_relay_manager_to_ventilation,
             rx_relay_manager_from_ventilation,
-            #[cfg(feature = "debug_channels")]
-            cnt_rx_relay_manager_from_ventilation: 0,
-
             tx_relay_manager_to_balling,
             rx_relay_manager_from_balling,
-            #[cfg(feature = "debug_channels")]
-            cnt_rx_relay_manager_from_balling: 0,
-
             tx_relay_manager_to_feed,
             rx_relay_manager_from_feed,
-            #[cfg(feature = "debug_channels")]
-            cnt_rx_relay_manager_from_feed: 0,
-
             tx_relay_manager_to_signal_handler,
             rx_relay_manager_from_signal_handler,
-            #[cfg(feature = "debug_channels")]
-            cnt_rx_relay_manager_from_signal_handler: 0,
         };
 
         let atlas_scientific = AtlasScientificChannels {
             tx_atlas_scientific_to_i2c_interface,
             rx_atlas_scientific_from_i2c_interface,
-            #[cfg(feature = "debug_channels")]
-            cnt_rx_atlas_scientific_from_i2c_interface: 0,
-
             tx_atlas_scientific_to_signal_handler,
             rx_atlas_scientific_from_signal_handler,
-            #[cfg(feature = "debug_channels")]
-            cnt_rx_atlas_scientific_from_signal_handler: 0,
         };
 
         let refill = RefillChannels {
             tx_refill_to_relay_manager,
             rx_refill_from_relay_manager,
-            #[cfg(feature = "debug_channels")]
-            cnt_rx_refill_from_relay_manager: 0,
-
             tx_refill_to_signal_handler,
             rx_refill_from_signal_handler,
-            #[cfg(feature = "debug_channels")]
-            cnt_rx_refill_from_signal_handler: 0,
-
             tx_refill_to_schedule_check,
             rx_refill_from_schedule_check,
-            #[cfg(feature = "debug_channels")]
-            cnt_rx_refill_from_schedule_check: 0,
-
             tx_refill_to_monitors,
             rx_refill_from_messaging_opt,
-            #[cfg(feature = "debug_channels")]
-            cnt_rx_refill_from_messaging_opt: 0,
         };
 
         let balling = BallingChannels {
             tx_balling_to_relay_manager,
             rx_balling_from_relay_manager,
-            #[cfg(feature = "debug_channels")]
-            cnt_rx_balling_from_relay_manager: 0,
-
             tx_balling_to_signal_handler,
             rx_balling_from_signal_handler,
-            #[cfg(feature = "debug_channels")]
-            cnt_rx_balling_from_signal_handler: 0,
-
             tx_balling_to_schedule_check,
             rx_balling_from_schedule_check,
-            #[cfg(feature = "debug_channels")]
-            cnt_rx_balling_from_schedule_check: 0,
-
             rx_balling_from_messaging_opt,
-            #[cfg(feature = "debug_channels")]
-            cnt_rx_balling_from_messaging_opt: 0,
         };
 
         let ventilation = VentilationChannels {
             tx_ventilation_to_relay_manager,
             rx_ventilation_from_relay_manager,
-            #[cfg(feature = "debug_channels")]
-            cnt_rx_ventilation_from_relay_manager: 0,
-
             tx_ventilation_to_signal_handler,
             rx_ventilation_from_signal_handler,
-            #[cfg(feature = "debug_channels")]
-            cnt_rx_ventilation_from_signal_handler: 0,
-
             tx_ventilation_to_schedule_check,
             rx_ventilation_from_schedule_check,
-            #[cfg(feature = "debug_channels")]
-            cnt_rx_ventilation_from_schedule_check: 0,
-
             rx_ventilation_from_messaging_opt,
-            #[cfg(feature = "debug_channels")]
-            cnt_rx_ventilation_from_messaging_opt: 0,
         };
 
         let feed = FeedChannels {
             tx_feed_to_relay_manager,
             rx_feed_from_relay_manager,
-            #[cfg(feature = "debug_channels")]
-            cnt_rx_feed_from_relay_manager: 0,
-
             tx_feed_to_signal_handler,
             rx_feed_from_signal_handler,
-            #[cfg(feature = "debug_channels")]
-            cnt_rx_feed_from_signal_handler: 0,
-
             rx_feed_from_messaging_opt,
-            #[cfg(feature = "debug_channels")]
-            cnt_rx_feed_from_messaging_opt: 0,
         };
 
         let heating = HeatingChannels {
             tx_heating_to_relay_manager,
             rx_heating_from_relay_manager,
-            #[cfg(feature = "debug_channels")]
-            cnt_rx_heating_from_relay_manager: 0,
-
             tx_heating_to_signal_handler,
             rx_heating_from_signal_handler,
-            #[cfg(feature = "debug_channels")]
-            cnt_rx_heating_from_signal_handler: 0,
-
             tx_heating_to_schedule_check,
             rx_heating_from_schedule_check,
-            #[cfg(feature = "debug_channels")]
-            cnt_rx_heating_from_schedule_check: 0,
-
             rx_heating_from_messaging_opt,
-            #[cfg(feature = "debug_channels")]
-            cnt_rx_heating_from_messaging_opt: 0,
         };
 
         let tcp_communication = TcpCommunicationChannels {
             rx_tcp_communication_from_relay_manager_opt,
-            #[cfg(feature = "debug_channels")]
-            cnt_rx_tcp_communication_from_relay_manager_opt: 0,
-
             rx_tcp_communication_from_sensor_manager_opt,
-            #[cfg(feature = "debug_channels")]
-            cnt_rx_tcp_communication_from_sensor_manager_opt: 0,
-
             tx_tcp_communication_to_sensor_manager_opt,
             rx_tcp_communication_from_tank_level_switch_opt,
-            #[cfg(feature = "debug_channels")]
-            cnt_rx_tcp_communication_from_tank_level_switch_opt: 0,
-
             tx_tcp_communication_to_tank_level_switch_opt,
             tx_tcp_communication_to_signal_handler,
             rx_tcp_communication_from_signal_handler,
-            #[cfg(feature = "debug_channels")]
-            cnt_rx_tcp_communication_from_signal_handler: 0,
         };
 
         let schedule_check = ScheduleCheckChannels {
             tx_schedule_check_to_ventilation,
             rx_schedule_check_from_ventilation,
-            #[cfg(feature = "debug_channels")]
-            cnt_rx_schedule_check_from_ventilation: 0,
-
             tx_schedule_check_to_heating,
             rx_schedule_check_from_heating,
-            #[cfg(feature = "debug_channels")]
-            cnt_rx_schedule_check_from_heating: 0,
-
             tx_schedule_check_to_refill,
             rx_schedule_check_from_refill,
-            #[cfg(feature = "debug_channels")]
-            cnt_rx_schedule_check_from_refill: 0,
-
             tx_schedule_check_to_balling,
             rx_schedule_check_from_balling,
-            #[cfg(feature = "debug_channels")]
-            cnt_rx_schedule_check_from_balling: 0,
-
             tx_schedule_check_to_signal_handler,
             rx_schedule_check_from_signal_handler,
-            #[cfg(feature = "debug_channels")]
-            cnt_rx_schedule_check_from_signal_handler: 0,
         };
 
         let i2c_interface = I2cInterfaceChannels {
             tx_i2c_interface_to_atlas_scientific,
             rx_i2c_interface_from_atlas_scientific,
-            #[cfg(feature = "debug_channels")]
-            cnt_rx_i2c_interface_from_atlas_scientific: 0,
-
             rx_i2c_interface_from_signal_handler,
-            #[cfg(feature = "debug_channels")]
-            cnt_rx_i2c_interface_from_signal_handler: 0,
         };
 
         let signal_handler = SignalHandlerChannels {
             tx_signal_handler_to_messaging_opt,
             rx_signal_handler_from_messaging_opt,
-            #[cfg(feature = "debug_channels")]
-            cnt_rx_signal_handler_from_messaging_opt: 0,
-
             tx_signal_handler_to_refill,
             rx_signal_handler_from_refill,
-            #[cfg(feature = "debug_channels")]
-            cnt_rx_signal_handler_from_refill: 0,
-
             tx_signal_handler_to_tank_level_switch,
             rx_signal_handler_from_tank_level_switch,
-            #[cfg(feature = "debug_channels")]
-            cnt_rx_signal_handler_from_tank_level_switch: 0,
-
             tx_signal_handler_to_heating,
             rx_signal_handler_from_heating,
-            #[cfg(feature = "debug_channels")]
-            cnt_rx_signal_handler_from_heating: 0,
-
             tx_signal_handler_to_relay_manager,
             rx_signal_handler_from_relay_manager,
-            #[cfg(feature = "debug_channels")]
-            cnt_rx_signal_handler_from_relay_manager: 0,
-
             tx_signal_handler_to_atlas_scientific,
             rx_signal_handler_from_atlas_scientific,
-            #[cfg(feature = "debug_channels")]
-            cnt_rx_signal_handler_from_atlas_scientific: 0,
-
             tx_signal_handler_to_sensor_manager,
             rx_signal_handler_from_sensor_manager,
-            #[cfg(feature = "debug_channels")]
-            cnt_rx_signal_handler_from_sensor_manager: 0,
-
             tx_signal_handler_to_data_logger,
             rx_signal_handler_from_data_logger,
-            #[cfg(feature = "debug_channels")]
-            cnt_rx_signal_handler_from_data_logger: 0,
-
             tx_signal_handler_to_balling,
             rx_signal_handler_from_balling,
-            #[cfg(feature = "debug_channels")]
-            cnt_rx_signal_handler_from_balling: 0,
-
             tx_signal_handler_to_ventilation,
             rx_signal_handler_from_ventilation,
-            #[cfg(feature = "debug_channels")]
-            cnt_rx_signal_handler_from_ventilation: 0,
-
             tx_signal_handler_to_monitors,
             rx_signal_handler_from_monitors,
-            #[cfg(feature = "debug_channels")]
-            cnt_rx_signal_handler_from_monitors: 0,
-
             tx_signal_handler_to_feed,
             rx_signal_handler_from_feed,
-            #[cfg(feature = "debug_channels")]
-            cnt_rx_signal_handler_from_feed: 0,
-
             tx_signal_handler_to_schedule_check,
             rx_signal_handler_from_schedule_check,
-            #[cfg(feature = "debug_channels")]
-            cnt_rx_signal_handler_from_schedule_check: 0,
-
             tx_signal_handler_to_tcp_opt,
             rx_signal_handler_from_tcp_opt,
-            #[cfg(feature = "debug_channels")]
-            cnt_rx_signal_handler_from_tcp_opt: 0,
-
             tx_signal_handler_to_dht,
             tx_signal_handler_to_i2c_interface,
             tx_signal_handler_to_watchdog,
             rx_signal_handler_from_watchdog,
-            #[cfg(feature = "debug_channels")]
-            cnt_rx_signal_handler_from_watchdog: 0,
-
             tx_signal_handler_to_ds18b20,
         };
 
         let monitors = MonitorsChannels {
             rx_monitors_from_refill,
-            #[cfg(feature = "debug_channels")]
-            cnt_rx_monitors_from_refill: 0,
-
             tx_monitors_to_signal_handler,
             rx_monitors_from_signal_handler,
-            #[cfg(feature = "debug_channels")]
-            cnt_rx_monitors_from_signal_handler: 0,
-
             rx_monitors_from_messaging_opt,
-            #[cfg(feature = "debug_channels")]
-            cnt_rx_monitors_from_messaging_opt: 0,
         };
 
         #[cfg(any(test, target_os = "linux"))]
         let messaging = MessagingChannels {
             tx_messaging_to_signal_handler,
             rx_messaging_from_signal_handler,
-            #[cfg(feature = "debug_channels")]
-            cnt_rx_messaging_from_signal_handler: 0,
-
             tx_messaging_to_refill,
             tx_messaging_to_ventilation,
             tx_messaging_to_heating,
@@ -798,36 +674,22 @@ impl Channels {
         let tank_level_switch = TankLevelSwitchChannels {
             tx_tank_level_switch_to_tcp_opt,
             rx_tank_level_switch_from_tcp_opt,
-            #[cfg(feature = "debug_channels")]
-            cnt_rx_tank_level_switch_from_tcp_opt: 0,
-
             tx_tank_level_switch_to_signal_handler,
             rx_tank_level_switch_from_signal_handler,
-            #[cfg(feature = "debug_channels")]
-            cnt_rx_tank_level_switch_from_signal_handler: 0,
         };
 
         let watchdog = WatchDogChannels {
             tx_watchdog_to_signal_handler,
             rx_watchdog_from_signal_handler,
-            #[cfg(feature = "debug_channels")]
-            cnt_rx_watchdog_from_signal_handler: 0,
-
             rx_watchdog_from_messaging_opt,
-            #[cfg(feature = "debug_channels")]
-            cnt_rx_watchdog_from_messaging_opt: 0,
         };
 
         let ds18b20 = Ds18b20Channels {
             rx_ds18b20_from_signal_handler,
-            #[cfg(feature = "debug_channels")]
-            cnt_rx_ds18b20_from_signal_handler: 0,
         };
 
         let dht = DhtChannels {
             rx_dht_from_signal_handler,
-            #[cfg(feature = "debug_channels")]
-            cnt_rx_dht_from_signal_handler: 0,
         };
 
         let actuate_simulator = ActuateSimulatorChannels {
@@ -837,20 +699,13 @@ impl Channels {
         let sensor_manager = SensorManagerChannels {
             tx_sensor_manager_to_tcp_opt,
             rx_sensor_manager_from_tcp_opt,
-            #[cfg(feature = "debug_channels")]
-            cnt_rx_sensor_manager_from_tcp_opt: 0,
-
             tx_sensor_manager_to_signal_handler,
             rx_sensor_manager_from_signal_handler,
-            #[cfg(feature = "debug_channels")]
-            cnt_rx_sensor_manager_from_signal_handler: 0,
         };
 
         let data_logger = DataLoggerChannels {
             tx_data_logger_to_signal_handler,
             rx_data_logger_from_signal_handler,
-            #[cfg(feature = "debug_channels")]
-            cnt_rx_data_logger_from_signal_handler: 0,
         };
 
         Channels {

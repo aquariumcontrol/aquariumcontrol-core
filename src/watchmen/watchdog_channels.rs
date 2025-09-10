@@ -6,21 +6,16 @@ The above copyright notice and this permission notice shall be included in all c
 
 THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
-use crate::launch::channels::{AquaChannelError, AquaSender};
+use crate::launch::channels::{AquaChannelError, AquaReceiver, AquaSender};
 use crate::utilities::channel_content::InternalCommand;
 use std::fmt;
-use std::sync::mpsc::{Receiver, TryRecvError};
 
 pub struct WatchDogChannels {
     pub tx_watchdog_to_signal_handler: AquaSender<bool>,
 
-    pub rx_watchdog_from_signal_handler: Receiver<InternalCommand>,
-    #[cfg(feature = "debug_channels")]
-    pub cnt_rx_watchdog_from_signal_handler: u64,
+    pub rx_watchdog_from_signal_handler: AquaReceiver<InternalCommand>,
 
-    pub rx_watchdog_from_messaging_opt: Option<Receiver<InternalCommand>>,
-    #[cfg(feature = "debug_channels")]
-    pub cnt_rx_watchdog_from_messaging_opt: u64,
+    pub rx_watchdog_from_messaging_opt: Option<AquaReceiver<InternalCommand>>,
 }
 
 impl WatchDogChannels {
@@ -40,13 +35,8 @@ impl WatchDogChannels {
     /// the associated debug counter if the `debug_channels` feature is enabled and a
     /// message is successfully received.
     #[allow(unused)]
-    pub fn receive_from_signal_handler(&mut self) -> Result<InternalCommand, TryRecvError> {
-        let result = self.rx_watchdog_from_signal_handler.try_recv();
-        #[cfg(feature = "debug_channels")]
-        if result.is_ok() {
-            self.cnt_rx_watchdog_from_signal_handler += 1;
-        }
-        result
+    pub fn receive_from_signal_handler(&mut self) -> Result<InternalCommand, AquaChannelError> {
+        self.rx_watchdog_from_signal_handler.try_recv()
     }
 
     /// Receives a command from the messaging module, if the channel exists (non-blocking).
@@ -55,14 +45,9 @@ impl WatchDogChannels {
     /// associated debug counter if the `debug_channels` feature is enabled and a
     /// message is successfully received.
     #[allow(unused)]
-    pub fn receive_from_messaging(&mut self) -> Option<Result<InternalCommand, TryRecvError>> {
-        self.rx_watchdog_from_messaging_opt.as_ref().map(|rx| {
-            let result = rx.try_recv();
-            #[cfg(feature = "debug_channels")]
-            if result.is_ok() {
-                self.cnt_rx_watchdog_from_messaging_opt += 1;
-            }
-            result
+    pub fn receive_from_messaging(&mut self) -> Option<Result<InternalCommand, AquaChannelError>> {
+        self.rx_watchdog_from_messaging_opt.as_mut().map(|mut rx| {
+            rx.try_recv()
         })
     }
 }
@@ -78,14 +63,17 @@ impl fmt::Display for WatchDogChannels {
         )?;
         writeln!(
             f,
-            "cnt_rx_watchdog_from_signal_handler: {}",
-            self.cnt_rx_watchdog_from_signal_handler
+            "rx_watchdog_from_signal_handler: {}",
+            self.rx_watchdog_from_signal_handler.count
         )?;
-        write!(
-            f,
-            "cnt_rx_watchdog_from_messaging_opt: {}",
-            self.cnt_rx_watchdog_from_messaging_opt
-        )
+        if self.rx_watchdog_from_messaging_opt.is_some() {
+            write!(
+                f,
+                "rx_watchdog_from_messaging_opt: {}",
+                self.rx_watchdog_from_messaging_opt.as_ref().unwrap().count
+            )?;
+        }
+        Ok(())
     }
 }
 

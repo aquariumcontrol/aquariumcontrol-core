@@ -154,8 +154,8 @@ impl Watchdog {
                 start_command_received,
                 stop_command_received,
             ) = self.process_external_request(
-                &watchdog_channels.rx_watchdog_from_signal_handler,
-                watchdog_channels.rx_watchdog_from_messaging_opt.as_ref(),
+                &mut watchdog_channels.rx_watchdog_from_signal_handler,
+                watchdog_channels.rx_watchdog_from_messaging_opt.as_mut(),
             );
 
             if quit_command_received {

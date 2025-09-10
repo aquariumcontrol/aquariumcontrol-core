@@ -11,7 +11,6 @@ use crate::launch::channels::AquaChannelError;
 use crate::utilities::channel_content::AquariumSignal;
 use std::io;
 use std::num::ParseFloatError;
-use std::sync::mpsc::RecvError;
 use thiserror::Error;
 
 /// Contains the error definition for communication with the simulator via TCP
@@ -86,7 +85,7 @@ pub enum TcpCommunicationError {
         requester: String,
 
         #[source]
-        source: RecvError,
+        source: AquaChannelError,
     },
 
     /// value indicates that communication to TCP thread failed

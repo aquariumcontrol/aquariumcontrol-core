@@ -707,8 +707,8 @@ impl Balling {
                 start_command_received,
                 stop_command_received,
             ) = self.process_external_request(
-                &balling_channels.rx_balling_from_signal_handler,
-                balling_channels.rx_balling_from_messaging_opt.as_ref(),
+                &mut balling_channels.rx_balling_from_signal_handler,
+                balling_channels.rx_balling_from_messaging_opt.as_mut(),
             );
 
             if self.execute_command_received && self.config.active {
@@ -779,7 +779,7 @@ impl Balling {
         // Those threads have to stop receiving commands from this thread.
         // The shutdown sequence is handled by the signal_handler module.
         self.wait_for_termination(
-            &balling_channels.rx_balling_from_signal_handler,
+            &mut balling_channels.rx_balling_from_signal_handler,
             sleep_duration_hundred_millis,
             module_path!(),
         );
@@ -1193,7 +1193,7 @@ pub mod tests {
             scope.spawn(move || {
                 mock_schedule_check(
                     &mut channels.schedule_check.tx_schedule_check_to_balling,
-                    &channels.schedule_check.rx_schedule_check_from_balling,
+                    &mut channels.schedule_check.rx_schedule_check_from_balling,
                     None,
                     schedule_allows,
                 )
@@ -1571,7 +1571,7 @@ pub mod tests {
             scope.spawn(move || {
                 mock_schedule_check(
                     &mut channels.schedule_check.tx_schedule_check_to_balling,
-                    &channels.schedule_check.rx_schedule_check_from_balling,
+                    &mut channels.schedule_check.rx_schedule_check_from_balling,
                     None,
                     true,
                 )
@@ -1839,7 +1839,7 @@ pub mod tests {
             scope.spawn(move || {
                 mock_schedule_check(
                     &mut channels.schedule_check.tx_schedule_check_to_balling,
-                    &channels.schedule_check.rx_schedule_check_from_balling,
+                    &mut channels.schedule_check.rx_schedule_check_from_balling,
                     None,
                     schedule_allows,
                 )

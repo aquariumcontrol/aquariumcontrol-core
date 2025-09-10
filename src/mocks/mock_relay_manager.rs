@@ -9,11 +9,10 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 
 #[cfg(test)]
 pub mod tests {
-    use crate::launch::channels::AquaSender;
+    use crate::launch::channels::{AquaReceiver, AquaSender};
     use crate::mocks::mock_actuation_event::tests::MockActuationEvent;
     use crate::utilities::channel_content::{ActuatorState, AquariumDevice, InternalCommand};
     use spin_sleep::SpinSleeper;
-    use std::sync::mpsc::Receiver;
     use std::time::Duration;
 
     pub struct MockActuatorStates {
@@ -195,7 +194,7 @@ pub mod tests {
 
     pub fn mock_relay_manager(
         tx_relay_manager_to_test_object: &mut AquaSender<bool>,
-        rx_relay_manager_from_test_object: &Receiver<InternalCommand>,
+        rx_relay_manager_from_test_object: &mut AquaReceiver<InternalCommand>,
     ) -> (Vec<MockActuationEvent>, MockActuatorStates) {
         let mut result: Vec<MockActuationEvent> = Vec::new();
         let mut mock_actuator_states = MockActuatorStates::new();

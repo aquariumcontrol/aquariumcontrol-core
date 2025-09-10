@@ -9,19 +9,18 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 
 #[cfg(test)]
 pub mod tests {
-    use crate::launch::channels::AquaSender;
+    use crate::launch::channels::{AquaChannelError, AquaReceiver, AquaSender};
     use crate::mocks::mock_signal::tests::MockSignal;
     use crate::mocks::test_command::tests::TestCommand;
     use crate::utilities::channel_content::InternalCommand;
     use spin_sleep::SpinSleeper;
-    use std::sync::mpsc::{Receiver, TryRecvError};
     use std::time::Duration;
 
     // send via the channel a value to the test object to indicate if actuation is permitted.
     pub fn mock_schedule_check(
         tx_schedule_check_to_test_object: &mut AquaSender<bool>,
-        rx_schedule_check_from_test_object: &Receiver<InternalCommand>,
-        rx_schedule_check_from_test_environment_opt: Option<&Receiver<TestCommand>>,
+        rx_schedule_check_from_test_object: &mut AquaReceiver<InternalCommand>,
+        mut rx_schedule_check_from_test_environment_opt: Option<&mut AquaReceiver<TestCommand>>,
         initial_stimuli: bool,
     ) {
         let mut stimuli = initial_stimuli;
@@ -48,8 +47,8 @@ pub mod tests {
                 }
                 Err(e) => {
                     match e {
-                        TryRecvError::Empty => { /* empty buffer - no action required */ }
-                        TryRecvError::Disconnected => {
+                        AquaChannelError::Empty => { /* empty buffer - no action required */ }
+                        AquaChannelError::Disconnected => {
                             panic!(
                                 "{}: Error in trying to receive command from test object: {e:?}",
                                 module_path!()
@@ -59,7 +58,7 @@ pub mod tests {
                 }
             }
             match rx_schedule_check_from_test_environment_opt {
-                Some(rx_schedule_check_from_test_environment) => {
+                Some(ref mut rx_schedule_check_from_test_environment) => {
                     match rx_schedule_check_from_test_environment.try_recv() {
                         Ok(c) => {
                             let test_command = c.clone();
@@ -88,8 +87,10 @@ pub mod tests {
                         }
                         Err(e) => {
                             match e {
-                                TryRecvError::Empty => { /* empty buffer - no action required */ }
-                                TryRecvError::Disconnected => {
+                                #[cfg(feature = "debug_channels")]
+                                AquaChannelError::Full => { /* do nothing */ },
+                                AquaChannelError::Empty => { /* empty buffer - no action required */ }
+                                AquaChannelError::Disconnected => {
                                     panic!(
                                         "{}: Error in trying to receive command from test environment: {e:?}",
                                         module_path!()

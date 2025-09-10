@@ -20,7 +20,7 @@ use log::debug;
 #[cfg(all(not(test), target_os = "linux"))]
 use nix::unistd::gettid;
 
-use crate::launch::channels::AquaSender;
+use crate::launch::channels::{AquaChannelError, AquaReceiver, AquaSender};
 use crate::launch::execution_config::ExecutionConfig;
 use crate::relays::relay_error::RelayError;
 use crate::relays::relay_manager_channels::RelayManagerChannels;
@@ -29,7 +29,6 @@ use crate::utilities::channel_content::InternalCommand;
 use crate::utilities::logger::log_error_chain;
 use crate::utilities::proc_ext_req::ProcessExternalRequestTrait;
 use spin_sleep::SpinSleeper;
-use std::sync::mpsc::{Receiver, TryRecvError};
 use std::time::{Duration, Instant};
 
 /// Trait for the execution of relay actuation on either simulator or real hardware.
@@ -298,7 +297,7 @@ impl RelayManager {
             // Check for quit command first
             if self
                 .process_external_request(
-                    &relay_manager_channels.rx_relay_manager_from_signal_handler,
+                    &mut relay_manager_channels.rx_relay_manager_from_signal_handler,
                     None,
                 )
                 .0
@@ -314,7 +313,7 @@ impl RelayManager {
                     self.lock_error_channel_send_refill,
                 ) = self.process_actuation_request(
                     (
-                        &relay_manager_channels.rx_relay_manager_from_refill,
+                        &mut relay_manager_channels.rx_relay_manager_from_refill,
                         &mut relay_manager_channels.tx_relay_manager_to_refill,
                     ),
                     (
@@ -334,7 +333,7 @@ impl RelayManager {
                     self.lock_error_channel_send_heating,
                 ) = self.process_actuation_request(
                     (
-                        &relay_manager_channels.rx_relay_manager_from_heating,
+                        &mut relay_manager_channels.rx_relay_manager_from_heating,
                         &mut relay_manager_channels.tx_relay_manager_to_heating,
                     ),
                     (
@@ -354,7 +353,7 @@ impl RelayManager {
                     self.lock_error_channel_send_ventilation,
                 ) = self.process_actuation_request(
                     (
-                        &relay_manager_channels.rx_relay_manager_from_ventilation,
+                        &mut relay_manager_channels.rx_relay_manager_from_ventilation,
                         &mut relay_manager_channels.tx_relay_manager_to_ventilation,
                     ),
                     (
@@ -374,7 +373,7 @@ impl RelayManager {
                     self.lock_error_channel_send_balling,
                 ) = self.process_actuation_request(
                     (
-                        &relay_manager_channels.rx_relay_manager_from_balling,
+                        &mut relay_manager_channels.rx_relay_manager_from_balling,
                         &mut relay_manager_channels.tx_relay_manager_to_balling,
                     ),
                     (
@@ -394,7 +393,7 @@ impl RelayManager {
                     self.lock_error_channel_send_feed,
                 ) = self.process_actuation_request(
                     (
-                        &relay_manager_channels.rx_relay_manager_from_feed,
+                        &mut relay_manager_channels.rx_relay_manager_from_feed,
                         &mut relay_manager_channels.tx_relay_manager_to_feed,
                     ),
                     (
@@ -468,7 +467,7 @@ impl RelayManager {
     /// `lock_send` flags, respectively.
     fn process_actuation_request(
         &mut self,
-        channels: (&Receiver<InternalCommand>, &mut AquaSender<bool>),
+        channels: (&mut AquaReceiver<InternalCommand>, &mut AquaSender<bool>),
         locks: (bool, bool),
         actuation_name: &str,
         actuator: &mut impl RelayActuationTrait,
@@ -510,10 +509,12 @@ impl RelayManager {
                 }
             }
             Err(e) => match e {
-                TryRecvError::Empty => {
+                #[cfg(feature = "debug_channels")]
+                AquaChannelError::Full => { /* Not applicable. Do nothing */ }
+                AquaChannelError::Empty => {
                     lock_receive = false;
                 }
-                TryRecvError::Disconnected => {
+                AquaChannelError::Disconnected => {
                     if !lock_receive {
                         #[cfg(not(test))]
                         error!(

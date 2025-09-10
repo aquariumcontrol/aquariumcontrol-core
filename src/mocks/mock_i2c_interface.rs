@@ -64,7 +64,7 @@ pub mod tests {
                     _,
                     _,
                 ) = self.process_external_request(
-                    &i2c_interface_channels.rx_i2c_interface_from_signal_handler,
+                    &mut i2c_interface_channels.rx_i2c_interface_from_signal_handler,
                     None,
                 );
 

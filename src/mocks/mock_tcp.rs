@@ -10,9 +10,8 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 #[cfg(test)]
 pub mod tests {
     use spin_sleep::SpinSleeper;
-    use std::sync::mpsc::{Receiver, TryRecvError};
     use std::time::Duration;
-
+    use crate::launch::channels::{AquaChannelError, AquaReceiver};
     use crate::mocks::mock_signal::tests::MockSignal;
     use crate::mocks::test_command::tests::TestCommand;
     use crate::simulator::tcp_communication_channels::TcpCommunicationChannels;
@@ -20,7 +19,7 @@ pub mod tests {
 
     pub fn mock_tcp_for_tank_level_switch(
         tcp_communication_channels: TcpCommunicationChannels,
-        rx_tcp_from_test_environment_opt: Option<&Receiver<TestCommand>>,
+        mut rx_tcp_from_test_environment_opt: Option<&mut AquaReceiver<TestCommand>>,
         initial_mock_value_position: bool,
         initial_mock_value_invalid: bool,
     ) {
@@ -35,7 +34,7 @@ pub mod tests {
         let mut tx_tcp_to_test_object = tcp_communication_channels
             .tx_tcp_communication_to_tank_level_switch_opt
             .unwrap();
-        let rx_tcp_from_test_object = tcp_communication_channels
+        let mut rx_tcp_from_test_object = tcp_communication_channels
             .rx_tcp_communication_from_tank_level_switch_opt
             .unwrap();
 
@@ -92,8 +91,8 @@ pub mod tests {
                 }
                 Err(e) => {
                     match e {
-                        TryRecvError::Empty => { /* empty buffer - no action required */ }
-                        TryRecvError::Disconnected => {
+                        AquaChannelError::Empty => { /* empty buffer - no action required */ }
+                        AquaChannelError::Disconnected => {
                             panic!(
                                 "{}: receiving command from test object/test environment failed ({e:?})",
                                 module_path!()
@@ -103,7 +102,7 @@ pub mod tests {
                 }
             };
             match rx_tcp_from_test_environment_opt {
-                Some(rx_tcp_from_test_environment) => match rx_tcp_from_test_environment.try_recv()
+                Some(ref mut rx_tcp_from_test_environment) => match rx_tcp_from_test_environment.try_recv()
                 {
                     Ok(c) => {
                         match c {
@@ -132,8 +131,8 @@ pub mod tests {
                     }
                     Err(e) => {
                         match e {
-                            TryRecvError::Empty => { /* empty buffer - no action required */ }
-                            TryRecvError::Disconnected => {
+                            AquaChannelError::Empty => { /* empty buffer - no action required */ }
+                            AquaChannelError::Disconnected => {
                                 panic!(
                                     "{}: receiving command from test environment failed ({e:?})",
                                     module_path!()

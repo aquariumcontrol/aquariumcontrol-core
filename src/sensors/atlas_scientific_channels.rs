@@ -6,11 +6,10 @@ The above copyright notice and this permission notice shall be included in all c
 
 THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
-use crate::launch::channels::{AquaChannelError, AquaSender};
+use crate::launch::channels::{AquaChannelError, AquaReceiver, AquaSender};
 use crate::sensors::i2c_interface::{I2cRequest, I2cResult};
 use crate::utilities::channel_content::InternalCommand;
 use std::fmt;
-use std::sync::mpsc::{Receiver, TryRecvError};
 
 /// Struct collects the channels for the communication between AtlasScientific and other components.
 pub struct AtlasScientificChannels {
@@ -20,10 +19,7 @@ pub struct AtlasScientificChannels {
 
     /// Receiver part of the channel for communication from I2CInterface
     #[allow(unused)] // used in conditionally compiled code
-    pub rx_atlas_scientific_from_i2c_interface: Receiver<I2cResult>,
-    #[cfg(feature = "debug_channels")]
-    /// Counter for messages received from the I2C interface
-    pub cnt_rx_atlas_scientific_from_i2c_interface: u64,
+    pub rx_atlas_scientific_from_i2c_interface: AquaReceiver<I2cResult>,
 
     /// Sender part of the channel for communication to the signal handler
     #[allow(unused)] // used in conditionally compiled code
@@ -31,10 +27,7 @@ pub struct AtlasScientificChannels {
 
     /// Receiver part of the channel for communication from the signal handler
     #[allow(unused)] // used in conditionally compiled code
-    pub rx_atlas_scientific_from_signal_handler: Receiver<InternalCommand>,
-    #[cfg(feature = "debug_channels")]
-    /// Counter for messages received from the signal handler
-    pub cnt_rx_atlas_scientific_from_signal_handler: u64,
+    pub rx_atlas_scientific_from_signal_handler: AquaReceiver<InternalCommand>,
 }
 
 impl AtlasScientificChannels {
@@ -46,13 +39,8 @@ impl AtlasScientificChannels {
 
     /// Receives a result from the I2C interface.
     #[allow(unused)] // used in conditionally compiled code
-    pub fn receive_from_i2c_interface(&mut self) -> Result<I2cResult, TryRecvError> {
-        let result = self.rx_atlas_scientific_from_i2c_interface.try_recv();
-        #[cfg(feature = "debug_channels")]
-        if result.is_ok() {
-            self.cnt_rx_atlas_scientific_from_i2c_interface += 1;
-        }
-        result
+    pub fn receive_from_i2c_interface(&mut self) -> Result<I2cResult, AquaChannelError> {
+        self.rx_atlas_scientific_from_i2c_interface.try_recv()
     }
 
     /// Sends a request to the I2C interface.
@@ -72,8 +60,8 @@ impl fmt::Display for AtlasScientificChannels {
         )?;
         writeln!(
             f,
-            "cnt_rx_atlas_scientific_from_i2c_interface: {}",
-            self.cnt_rx_atlas_scientific_from_i2c_interface
+            "rx_atlas_scientific_from_i2c_interface: {}",
+            self.rx_atlas_scientific_from_i2c_interface.count
         )?;
         writeln!(
             f,
@@ -82,8 +70,8 @@ impl fmt::Display for AtlasScientificChannels {
         )?;
         write!(
             f,
-            "cnt_rx_atlas_scientific_from_signal_handler: {}",
-            self.cnt_rx_atlas_scientific_from_signal_handler
+            "rx_atlas_scientific_from_signal_handler: {}",
+            self.rx_atlas_scientific_from_signal_handler.count
         )
     }
 }
