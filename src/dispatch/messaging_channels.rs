@@ -18,6 +18,7 @@ cfg_if::cfg_if! {
         use std::fmt;
         use crate::dispatch::messaging_domain::MessagingDomain;
         use crate::dispatch::messaging_error::MessagingError;
+        use crate::launch::channels::AquaChannelError;
     }
 }
 
@@ -97,13 +98,13 @@ impl MessagingChannels {
     ) -> Result<(), MessagingError> {
         // Select the correct sender channel based on the domain.
         let tx_messaging_to_domain = match domain {
-            MessagingDomain::Refill => &self.tx_messaging_to_refill,
-            MessagingDomain::Ventilation => &self.tx_messaging_to_ventilation,
-            MessagingDomain::Feed => &self.tx_messaging_to_feed,
-            MessagingDomain::Heating => &self.tx_messaging_to_heating,
-            MessagingDomain::Balling => &self.tx_messaging_to_balling,
-            MessagingDomain::Monitors => &self.tx_messaging_to_monitors,
-            MessagingDomain::Watchdog => &self.tx_messaging_to_watchdog,
+            MessagingDomain::Refill => &mut self.tx_messaging_to_refill,
+            MessagingDomain::Ventilation => &mut self.tx_messaging_to_ventilation,
+            MessagingDomain::Feed => &mut self.tx_messaging_to_feed,
+            MessagingDomain::Heating => &mut self.tx_messaging_to_heating,
+            MessagingDomain::Balling => &mut self.tx_messaging_to_balling,
+            MessagingDomain::Monitors => &mut self.tx_messaging_to_monitors,
+            MessagingDomain::Watchdog => &mut self.tx_messaging_to_watchdog,
             _ => {
                 return Err(MessagingError::UnknownDomain(
                     module_path!().to_string(),
