@@ -446,8 +446,9 @@ impl TcpCommunication {
                                 _ => { /* ignore all other commands */ }
                             },
                             #[cfg(feature = "debug_channels")]
-                            Err(AquaChannelError::Full) => { /* Not applicable - do nothing */ },
-                            Err(AquaChannelError::Empty) => { /* empty buffer - no action required */ },
+                            Err(AquaChannelError::Full) => { /* Not applicable - do nothing */ }
+                            Err(AquaChannelError::Empty) => { /* empty buffer - no action required */
+                            }
                             Err(AquaChannelError::Disconnected) => {
                                 lock_relay_manager_channel_disconnected = true;
                                 error!(

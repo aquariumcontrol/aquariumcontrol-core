@@ -107,7 +107,8 @@ pub mod tests {
                         }
                         Err(e) => {
                             match e {
-                                AquaChannelError::Empty => { /* empty buffer - no action required */ }
+                                AquaChannelError::Empty => { /* empty buffer - no action required */
+                                }
                                 AquaChannelError::Disconnected => {
                                     panic!(
                                         "{}: Error in trying to receive command from test environment: {e:?}",

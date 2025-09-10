@@ -15,15 +15,15 @@ use log::debug;
 #[cfg(all(not(test), target_os = "linux"))]
 use nix::unistd::gettid;
 
-use spin_sleep::SpinSleeper;
-use std::sync::{Arc, Mutex};
-use std::time::Duration;
 use crate::launch::channels::AquaChannelError;
 use crate::utilities::acknowledge_signal_handler::AcknowledgeSignalHandlerTrait;
 use crate::utilities::proc_ext_req::ProcessExternalRequestTrait;
 use crate::watchmen::monitors_channels::MonitorsChannels;
 use crate::watchmen::monitors_config::MonitorsConfig;
 use crate::water::refill_monitor_view::RefillMonitorView;
+use spin_sleep::SpinSleeper;
+use std::sync::{Arc, Mutex};
+use std::time::Duration;
 
 #[cfg_attr(doc, aquamarine::aquamarine)]
 /// Contains the configuration and the implementation for the monitors.
@@ -159,7 +159,8 @@ impl Monitors {
                     Err(e) => {
                         match e {
                             #[cfg(feature = "debug_channels")]
-                            AquaChannelError::Full => { /* only applicable to send - no action required */ }
+                            AquaChannelError::Full => { /* only applicable to send - no action required */
+                            }
                             AquaChannelError::Empty => { /* empty buffer - no action required */ }
                             AquaChannelError::Disconnected => {
                                 if !self.lock_error_receive_refill {

@@ -40,22 +40,22 @@ pub struct TcpCommunicationChannels {
 impl TcpCommunicationChannels {
     /// Receives a command from the relay manager if the channel exists.
     #[allow(unused)]
-    pub fn receive_from_relay_manager(&mut self) -> Option<Result<InternalCommand, AquaChannelError>> {
+    pub fn receive_from_relay_manager(
+        &mut self,
+    ) -> Option<Result<InternalCommand, AquaChannelError>> {
         self.rx_tcp_communication_from_relay_manager_opt
             .as_mut()
-            .map(|rx| {
-                rx.recv()
-            })
+            .map(|rx| rx.recv())
     }
 
     /// Receives a command from the sensor manager if the channel exists.
     #[allow(unused)]
-    pub fn receive_from_sensor_manager(&mut self) -> Option<Result<InternalCommand, AquaChannelError>> {
+    pub fn receive_from_sensor_manager(
+        &mut self,
+    ) -> Option<Result<InternalCommand, AquaChannelError>> {
         self.rx_tcp_communication_from_sensor_manager_opt
             .as_mut()
-            .map(|rx| {
-                rx.recv()
-            })
+            .map(|rx| rx.recv())
     }
 
     /// Sends a result to the sensor manager if the channel exists.
@@ -71,12 +71,12 @@ impl TcpCommunicationChannels {
 
     /// Receives a command from the tank level switch if the channel exists.
     #[allow(unused)]
-    pub fn receive_from_tank_level_switch(&mut self) -> Option<Result<InternalCommand, AquaChannelError>> {
+    pub fn receive_from_tank_level_switch(
+        &mut self,
+    ) -> Option<Result<InternalCommand, AquaChannelError>> {
         self.rx_tcp_communication_from_tank_level_switch_opt
             .as_mut()
-            .map(|rx| {
-                rx.recv()
-            })
+            .map(|rx| rx.recv())
     }
 
     /// Sends a result to the tank level switch if the channel exists.
@@ -109,12 +109,18 @@ impl fmt::Display for TcpCommunicationChannels {
         writeln!(
             f,
             "rx_tcp_communication_from_relay_manager_opt: {}",
-            self.rx_tcp_communication_from_relay_manager_opt.as_ref().unwrap().count
+            self.rx_tcp_communication_from_relay_manager_opt
+                .as_ref()
+                .unwrap()
+                .count
         )?;
         writeln!(
             f,
             "rx_tcp_communication_from_sensor_manager_opt: {}",
-            self.rx_tcp_communication_from_sensor_manager_opt.as_ref().unwrap().count
+            self.rx_tcp_communication_from_sensor_manager_opt
+                .as_ref()
+                .unwrap()
+                .count
         )?;
         writeln!(
             f,
@@ -127,7 +133,10 @@ impl fmt::Display for TcpCommunicationChannels {
         writeln!(
             f,
             "rx_tcp_communication_from_tank_level_switch_opt: {}",
-            self.rx_tcp_communication_from_tank_level_switch_opt.as_ref().unwrap().count
+            self.rx_tcp_communication_from_tank_level_switch_opt
+                .as_ref()
+                .unwrap()
+                .count
         )?;
         writeln!(
             f,

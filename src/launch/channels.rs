@@ -32,12 +32,12 @@ use crate::watchmen::monitors_channels::MonitorsChannels;
 use crate::watchmen::watchdog_channels::WatchDogChannels;
 use crate::water::refill_channels::RefillChannels;
 use crate::water::refill_monitor_view::RefillMonitorView;
+use std::sync::mpsc;
 #[cfg(feature = "debug_channels")]
 use std::sync::mpsc::SyncSender;
+use std::sync::mpsc::TryRecvError;
 #[cfg(feature = "debug_channels")]
 use std::sync::mpsc::TrySendError;
-use std::sync::mpsc;
-use std::sync::mpsc::TryRecvError;
 use thiserror::Error;
 
 #[cfg(feature = "debug_channels")]
@@ -62,7 +62,10 @@ pub fn channel<T: Send>(bound: usize) -> (AquaSender<T>, AquaReceiver<T>) {
     #[cfg(feature = "debug_channels")]
     {
         let (sender, receiver) = mpsc::sync_channel::<T>(bound);
-        (AquaSender { sender, count: 0 }, AquaReceiver { receiver, count: 0 })
+        (
+            AquaSender { sender, count: 0 },
+            AquaReceiver { receiver, count: 0 },
+        )
     }
     #[cfg(not(feature = "debug_channels"))]
     {
@@ -120,7 +123,9 @@ impl<T> AquaReceiver<T> {
         {
             self.count += 1;
         }
-        self.receiver.recv().map_err(|_| AquaChannelError::Disconnected)
+        self.receiver
+            .recv()
+            .map_err(|_| AquaChannelError::Disconnected)
     }
 
     /// Receive a value from a channel (non-blocking), and on builds with "debug_channel" feature enabled,
@@ -131,9 +136,9 @@ impl<T> AquaReceiver<T> {
             self.count += 1;
         }
         match self.receiver.try_recv() {
-            Ok(c) => {Ok(c)}
-            Err(TryRecvError::Empty) => {Err(AquaChannelError::Empty)},
-            Err(TryRecvError::Disconnected) => {Err(AquaChannelError::Disconnected)},
+            Ok(c) => Ok(c),
+            Err(TryRecvError::Empty) => Err(AquaChannelError::Empty),
+            Err(TryRecvError::Disconnected) => Err(AquaChannelError::Disconnected),
         }
     }
 }

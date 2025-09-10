@@ -96,9 +96,7 @@ impl SignalHandlerChannels {
     pub fn receive_from_messaging(&mut self) -> Option<Result<bool, AquaChannelError>> {
         self.rx_signal_handler_from_messaging_opt
             .as_mut()
-            .map(|rx| {
-                rx.recv()
-            })
+            .map(|rx| rx.recv())
     }
 
     #[allow(unused)]
@@ -113,9 +111,9 @@ impl SignalHandlerChannels {
 
     #[allow(unused)]
     pub fn receive_from_tcp(&mut self) -> Option<Result<bool, AquaChannelError>> {
-        self.rx_signal_handler_from_tcp_opt.as_mut().map(|rx| {
-            rx.recv()
-        })
+        self.rx_signal_handler_from_tcp_opt
+            .as_mut()
+            .map(|rx| rx.recv())
     }
 
     #[allow(unused)]
@@ -304,7 +302,10 @@ impl fmt::Display for SignalHandlerChannels {
         writeln!(
             f,
             "rx_signal_handler_from_messaging_opt: {}",
-            self.rx_signal_handler_from_messaging_opt.as_ref().unwrap().count
+            self.rx_signal_handler_from_messaging_opt
+                .as_ref()
+                .unwrap()
+                .count
         )?;
         writeln!(
             f,

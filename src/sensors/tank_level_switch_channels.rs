@@ -38,9 +38,9 @@ impl TankLevelSwitchChannels {
     pub fn receive_from_tcp(
         &mut self,
     ) -> Option<Result<Result<f32, TcpCommunicationError>, AquaChannelError>> {
-        self.rx_tank_level_switch_from_tcp_opt.as_mut().map(|rx| {
-            rx.recv()
-        })
+        self.rx_tank_level_switch_from_tcp_opt
+            .as_mut()
+            .map(|rx| rx.recv())
     }
 
     /// Sends an acknowledgment to the signal handler.
@@ -68,7 +68,10 @@ impl fmt::Display for TankLevelSwitchChannels {
         writeln!(
             f,
             "rx_tank_level_switch_from_tcp_opt: {}",
-            self.rx_tank_level_switch_from_tcp_opt.as_ref().unwrap().count
+            self.rx_tank_level_switch_from_tcp_opt
+                .as_ref()
+                .unwrap()
+                .count
         )?;
         writeln!(
             f,

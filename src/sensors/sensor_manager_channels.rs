@@ -42,9 +42,9 @@ impl SensorManagerChannels {
     pub fn receive_from_tcp(
         &mut self,
     ) -> Option<Result<Result<f32, TcpCommunicationError>, AquaChannelError>> {
-        self.rx_sensor_manager_from_tcp_opt.as_mut().map(|rx| {
-            rx.recv()
-        })
+        self.rx_sensor_manager_from_tcp_opt
+            .as_mut()
+            .map(|rx| rx.recv())
     }
 
     /// Sends an acknowledgment to the signal handler.

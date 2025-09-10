@@ -79,8 +79,8 @@ pub trait ProcessExternalRequestTrait {
             Err(e) => {
                 match e {
                     #[cfg(feature = "debug_channels")]
-                    AquaChannelError::Full => { /* Not applicable. Do nothing */ },
-                    AquaChannelError::Empty => { /* empty buffer - no action required */ },
+                    AquaChannelError::Full => { /* Not applicable. Do nothing */ }
+                    AquaChannelError::Empty => { /* empty buffer - no action required */ }
                     AquaChannelError::Disconnected => {
                         #[cfg(all(not(test), not(feature = "debug_signal_handler")))]
                         error!(
@@ -272,8 +272,8 @@ fn process_external_request_without_messaging(
         Err(e) => {
             match e {
                 #[cfg(feature = "debug_channels")]
-                AquaChannelError::Full => { /* Not applicable. Do nothing */ },
-                AquaChannelError::Empty => { /* empty buffer - no action required */ },
+                AquaChannelError::Full => { /* Not applicable. Do nothing */ }
+                AquaChannelError::Empty => { /* empty buffer - no action required */ }
                 AquaChannelError::Disconnected => {
                     error!(
                         target: module_path!(),
@@ -695,7 +695,8 @@ impl ProcessExternalRequestTrait for Feed {
                             match e {
                                 #[cfg(feature = "debug_channels")]
                                 AquaChannelError::Full => { /* Not applicable. Do nothing */ }
-                                AquaChannelError::Empty => { /* empty buffer - no action required */ }
+                                AquaChannelError::Empty => { /* empty buffer - no action required */
+                                }
                                 AquaChannelError::Disconnected => {
                                     #[cfg(not(test))]
                                     error!(
@@ -771,7 +772,8 @@ impl ProcessExternalRequestTrait for Balling {
                             match e {
                                 #[cfg(feature = "debug_channels")]
                                 AquaChannelError::Full => { /* Not applicable. Do nothing */ }
-                                AquaChannelError::Empty => { /* empty buffer - no action required */ }
+                                AquaChannelError::Empty => { /* empty buffer - no action required */
+                                }
                                 AquaChannelError::Disconnected => {
                                     #[cfg(not(test))]
                                     error!(

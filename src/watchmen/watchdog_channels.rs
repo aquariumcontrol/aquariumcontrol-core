@@ -46,9 +46,9 @@ impl WatchDogChannels {
     /// message is successfully received.
     #[allow(unused)]
     pub fn receive_from_messaging(&mut self) -> Option<Result<InternalCommand, AquaChannelError>> {
-        self.rx_watchdog_from_messaging_opt.as_mut().map(|mut rx| {
-            rx.try_recv()
-        })
+        self.rx_watchdog_from_messaging_opt
+            .as_mut()
+            .map(|mut rx| rx.try_recv())
     }
 }
 

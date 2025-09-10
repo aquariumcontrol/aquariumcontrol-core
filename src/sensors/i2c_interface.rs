@@ -12,6 +12,7 @@ use log::info;
 use spin_sleep::SpinSleeper;
 use std::fmt;
 
+use crate::launch::channels::AquaChannelError;
 use crate::sensors::i2c_error::I2cError;
 use crate::sensors::i2c_interface_config::I2cInterfaceConfig;
 
@@ -358,7 +359,7 @@ impl I2cInterface {
 
         loop {
             let (quit_command_received, _, _) = self.process_external_request(
-                &i2c_interface_channels.rx_i2c_interface_from_signal_handler,
+                &mut i2c_interface_channels.rx_i2c_interface_from_signal_handler,
                 None,
             );
             if quit_command_received {
@@ -383,8 +384,10 @@ impl I2cInterface {
                 }
                 Err(e) => {
                     match e {
-                        TryRecvError::Empty => { /* empty buffer - no action required */ }
-                        TryRecvError::Disconnected => {
+                        #[cfg(feature = "debug_channels")]
+                        AquaChannelError::Full => { /* not applicable, do nothin */ }
+                        AquaChannelError::Empty => { /* empty buffer - no action required */ }
+                        AquaChannelError::Disconnected => {
                             if !lock_error_receive_atlas_scientific {
                                 error!(target: module_path!(), "Error occurred when trying to receive from atlas_scientific {:?}", e);
                                 lock_error_receive_atlas_scientific = true;

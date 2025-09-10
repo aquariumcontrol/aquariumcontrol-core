@@ -9,13 +9,13 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 
 #[cfg(test)]
 pub mod tests {
+    use crate::launch::channels::{AquaChannelError, AquaReceiver};
     use crate::mocks::mock_common::mock_common_receive_from_signal_handler;
     use crate::utilities::channel_content::InternalCommand;
     use crate::water::refill_monitor_view::RefillMonitorView;
     use spin_sleep::SpinSleeper;
     use std::fmt;
     use std::time::{Duration, Instant};
-    use crate::launch::channels::{AquaChannelError, AquaReceiver};
 
     const MOCK_MONITORS_MAX_VEC_LEN: usize = 4096;
 
@@ -73,8 +73,10 @@ pub mod tests {
             let spin_sleeper = SpinSleeper::default();
 
             loop {
-                if mock_common_receive_from_signal_handler(&mut rx_from_signal_handler, module_path!())
-                {
+                if mock_common_receive_from_signal_handler(
+                    &mut rx_from_signal_handler,
+                    module_path!(),
+                ) {
                     break;
                 }
 

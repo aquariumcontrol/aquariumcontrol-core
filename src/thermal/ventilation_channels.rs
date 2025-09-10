@@ -104,7 +104,10 @@ impl fmt::Display for VentilationChannels {
         write!(
             f,
             "rx_ventilation_from_messaging_opt: {}",
-            self.rx_ventilation_from_messaging_opt.as_ref().unwrap().count
+            self.rx_ventilation_from_messaging_opt
+                .as_ref()
+                .unwrap()
+                .count
         )
     }
 }

@@ -142,8 +142,8 @@ mod tests {
     /// or assert against.
     fn setup_channels() -> (
         RefillChannels,
-        AquaReceiver<InternalCommand>,   // Test receiver for schedule_check
-        AquaSender<bool>,            // Test sender for schedule_check response
+        AquaReceiver<InternalCommand>, // Test receiver for schedule_check
+        AquaSender<bool>,              // Test sender for schedule_check response
         AquaReceiver<RefillMonitorView>, // Test receiver for monitors
     ) {
         let channels = Channels::new_for_test();

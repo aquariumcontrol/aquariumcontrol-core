@@ -15,6 +15,7 @@ use std::fmt;
 #[cfg(not(test))]
 use log::warn;
 
+use crate::launch::channels::AquaChannelError;
 use crate::sensors::atlas_scientific_channels::AtlasScientificChannels;
 use crate::sensors::atlas_scientific_config::AtlasScientificConfig;
 use crate::sensors::atlas_scientific_error::AtlasScientificError;
@@ -34,7 +35,6 @@ use nix::unistd::gettid;
 use spin_sleep::SpinSleeper;
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
-use crate::launch::channels::AquaChannelError;
 
 // max loops for receiving when the quit command has been received
 #[allow(unused)] // used in conditionally compiled code
@@ -557,7 +557,9 @@ impl AtlasScientific {
             Err(e) => match e {
                 #[cfg(feature = "debug_channels")]
                 AquaChannelError::Full => {
-                    result = Err(AtlasScientificError::UnknownError(module_path!().to_string()));
+                    result = Err(AtlasScientificError::UnknownError(
+                        module_path!().to_string(),
+                    ));
                 }
                 AquaChannelError::Empty => {
                     result = Err(AtlasScientificError::ChannelIsEmpty(

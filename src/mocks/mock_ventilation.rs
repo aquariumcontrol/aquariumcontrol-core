@@ -11,6 +11,7 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 pub mod tests {
     use crate::database::sql_interface_error::SqlInterfaceError;
     use crate::database::thermal_set_value_updater_trait::ThermalSetValueUpdaterTrait;
+    use crate::launch::channels::{AquaChannelError, AquaReceiver};
     use crate::mocks::mock_common::mock_common_receive_from_signal_handler;
     use crate::mocks::mock_signal::tests::MockSignal;
     use crate::mocks::test_command::tests::TestCommand;
@@ -18,7 +19,6 @@ pub mod tests {
     use spin_sleep::SpinSleeper;
     use std::sync::{Arc, Mutex};
     use std::time::{Duration, Instant};
-    use crate::launch::channels::{AquaChannelError, AquaReceiver};
 
     pub fn mock_ventilation(
         rx_ventilation_from_signal_handler: &mut AquaReceiver<InternalCommand>,
@@ -76,7 +76,8 @@ pub mod tests {
                         }
                         Err(e) => {
                             match e {
-                                AquaChannelError::Empty => { /* empty buffer - no action required */ }
+                                AquaChannelError::Empty => { /* empty buffer - no action required */
+                                }
                                 AquaChannelError::Disconnected => {
                                     panic!(
                                         "{}: Error in trying to receive command from test environment: {e:?}",

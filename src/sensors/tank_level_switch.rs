@@ -343,7 +343,9 @@ impl TankLevelSwitch {
     pub fn update_tank_level_switch_signals(
         &mut self,
         tx_tank_level_switch_to_tcp_opt: &mut Option<AquaSender<InternalCommand>>,
-        rx_tank_level_switch_from_tcp_opt: &mut Option<AquaReceiver<Result<f32, TcpCommunicationError>>>,
+        rx_tank_level_switch_from_tcp_opt: &mut Option<
+            AquaReceiver<Result<f32, TcpCommunicationError>>,
+        >,
     ) -> Result<(), TankLevelSwitchError> {
         if self.config.use_simulator {
             // Ensure channels are present before proceeding.

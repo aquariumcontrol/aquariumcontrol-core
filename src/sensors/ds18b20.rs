@@ -291,7 +291,10 @@ impl Ds18b20 {
         loop {
             // Check for quit command first for faster shutdown.
             if self
-                .process_external_request(&mut ds18b20_channels.rx_ds18b20_from_signal_handler, None)
+                .process_external_request(
+                    &mut ds18b20_channels.rx_ds18b20_from_signal_handler,
+                    None,
+                )
                 .0
             {
                 break;

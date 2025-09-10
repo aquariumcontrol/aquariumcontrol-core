@@ -124,8 +124,9 @@ pub mod tests {
                         Err(e) => {
                             match e {
                                 #[cfg(feature = "debug_channels")]
-                                AquaChannelError::Full => { /* do nothing */ },
-                                AquaChannelError::Empty => { /* empty buffer - no action required */ }
+                                AquaChannelError::Full => { /* do nothing */ }
+                                AquaChannelError::Empty => { /* empty buffer - no action required */
+                                }
                                 AquaChannelError::Disconnected => {
                                     panic!(
                                         "{}: Error in trying to receive command from test environment: {e:?}",

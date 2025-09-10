@@ -315,7 +315,7 @@ pub fn handle_signals(
         if execution_config.i2c_interface {
             send_command(
                 InternalCommand::Quit,
-                Some(&signal_handler_channels.tx_signal_handler_to_i2c_interface),
+                Some(&mut signal_handler_channels.tx_signal_handler_to_i2c_interface),
                 None,
                 "i2c_interface",
             );
@@ -323,7 +323,7 @@ pub fn handle_signals(
         if execution_config.dht {
             send_command(
                 InternalCommand::Quit,
-                Some(&signal_handler_channels.tx_signal_handler_to_dht),
+                Some(&mut signal_handler_channels.tx_signal_handler_to_dht),
                 None,
                 "dht",
             );
@@ -437,7 +437,7 @@ pub fn handle_signals(
         if execution_config.atlas_scientific {
             send_command(
                 InternalCommand::Terminate,
-                Some(&signal_handler_channels.tx_signal_handler_to_atlas_scientific),
+                Some(&mut signal_handler_channels.tx_signal_handler_to_atlas_scientific),
                 None,
                 "atlas_scientific",
             );

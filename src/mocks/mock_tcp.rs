@@ -9,13 +9,13 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 
 #[cfg(test)]
 pub mod tests {
-    use spin_sleep::SpinSleeper;
-    use std::time::Duration;
     use crate::launch::channels::{AquaChannelError, AquaReceiver};
     use crate::mocks::mock_signal::tests::MockSignal;
     use crate::mocks::test_command::tests::TestCommand;
     use crate::simulator::tcp_communication_channels::TcpCommunicationChannels;
     use crate::utilities::channel_content::{AquariumSignal, InternalCommand};
+    use spin_sleep::SpinSleeper;
+    use std::time::Duration;
 
     pub fn mock_tcp_for_tank_level_switch(
         tcp_communication_channels: TcpCommunicationChannels,
@@ -102,7 +102,8 @@ pub mod tests {
                 }
             };
             match rx_tcp_from_test_environment_opt {
-                Some(ref mut rx_tcp_from_test_environment) => match rx_tcp_from_test_environment.try_recv()
+                Some(ref mut rx_tcp_from_test_environment) => match rx_tcp_from_test_environment
+                    .try_recv()
                 {
                     Ok(c) => {
                         match c {

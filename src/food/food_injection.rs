@@ -524,8 +524,8 @@ impl FoodInjectionTrait for FoodInjection {
             let start_of_pause = Instant::now();
             let pause_duration = Duration::from_millis(feedphase.pause_duration as u64);
             while Instant::now().duration_since(start_of_pause) < pause_duration {
-                (quit_command_received, _, _) =
-                    self.process_external_request(&mut feed_channels.rx_feed_from_signal_handler, None);
+                (quit_command_received, _, _) = self
+                    .process_external_request(&mut feed_channels.rx_feed_from_signal_handler, None);
                 if quit_command_received {
                     #[cfg(test)]
                     println!("Received quit command during pause phase of food injection");
@@ -579,8 +579,8 @@ impl FoodInjectionTrait for FoodInjection {
             let start_of_pause = Instant::now();
             let feed_duration = Duration::from_millis(feedphase.feed_duration as u64);
             while Instant::now().duration_since(start_of_pause) < feed_duration {
-                (quit_command_received, _, _) =
-                    self.process_external_request(&mut feed_channels.rx_feed_from_signal_handler, None);
+                (quit_command_received, _, _) = self
+                    .process_external_request(&mut feed_channels.rx_feed_from_signal_handler, None);
                 if quit_command_received {
                     #[cfg(test)]
                     println!("Received quit command during feed phase of food injection");

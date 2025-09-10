@@ -56,9 +56,9 @@ impl MonitorsChannels {
     /// This wrapper performs a non-blocking receive-operation and increments the debug counter on success.
     #[allow(unused)]
     pub fn receive_from_messaging(&mut self) -> Option<Result<InternalCommand, AquaChannelError>> {
-        self.rx_monitors_from_messaging_opt.as_mut().map(|rx| {
-            rx.try_recv()
-        })
+        self.rx_monitors_from_messaging_opt
+            .as_mut()
+            .map(|rx| rx.try_recv())
     }
 }
 
