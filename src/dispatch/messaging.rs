@@ -357,7 +357,7 @@ impl Messaging {
                 }
             }
             let (quit_command_received, _, _) = self.process_external_request(
-                &messaging_channels.rx_messaging_from_signal_handler,
+                &mut messaging_channels.rx_messaging_from_signal_handler,
                 None,
             );
             if quit_command_received {
@@ -379,7 +379,7 @@ impl Messaging {
         // Those threads have to stop receiving commands from this thread.
         // The shutdown sequence is handled by the signal_handler module.
         self.wait_for_termination(
-            &messaging_channels.rx_messaging_from_signal_handler,
+            &mut messaging_channels.rx_messaging_from_signal_handler,
             sleep_duration,
             module_path!(),
         );
