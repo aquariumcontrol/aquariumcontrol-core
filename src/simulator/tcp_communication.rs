@@ -384,7 +384,7 @@ impl TcpCommunication {
         #[cfg(all(target_os = "linux", not(test)))]
         info!(target: module_path!(), "Thread started with TID: {}", gettid());
 
-        #[cfg(not(test))]
+        #[cfg(all(not(test), feature = "debug_channels"))]
         tcp_communication_channels.report_status();
 
         let spin_sleeper = SpinSleeper::default();

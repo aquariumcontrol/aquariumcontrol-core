@@ -24,5 +24,15 @@ pub mod watchdog_channels;
 /// Configuration of Monitors
 pub mod monitors_config;
 
+/// Configuration of memory configuration check
+pub mod memory_config;
+/// Provides functionality to check for required memory allocation environment variables.
+pub mod memory_config_check;
 /// Configuration of Watchdog
 pub mod watchdog_config;
+
+/// Memory utilization check (virtual memory reservation and RAM usage)
+pub mod memory;
+
+/// Container for channels used by memory module for communication with other threads.
+pub mod memory_channels;

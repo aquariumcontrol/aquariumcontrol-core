@@ -28,9 +28,6 @@ pub mod iir_filter;
 /// Contains setup and configuration for the application-wide logging framework.
 pub mod logger;
 
-/// Provides functionality to check for required memory allocation environment variables.
-pub mod memory_config_check;
-
 /// Defines a trait for processing external requests, such as commands from the signal handler.
 pub mod proc_ext_req;
 
@@ -54,9 +51,6 @@ pub mod wait_for_termination;
 
 /// Configuration of Logger
 pub mod logger_config;
-
-/// Configuration of memory configuration check
-pub mod memory_config_check_config;
 
 /// Configuration of PublishPid
 pub mod publish_pid_config;

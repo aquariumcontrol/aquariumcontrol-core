@@ -25,6 +25,7 @@ use crate::permission::schedule_check::ScheduleCheck;
 use crate::sensors::dht::Dht;
 use crate::sensors::i2c_interface::I2cInterface;
 use crate::simulator::tcp_communication::TcpCommunication;
+use crate::watchmen::memory::Memory;
 use crate::watchmen::watchdog::Watchdog;
 use crate::water::{refill::Refill, water_injection::WaterInjection};
 
@@ -865,5 +866,33 @@ impl ProcessExternalRequestTrait for Watchdog {
             start_command_received,
             stop_command_received,
         )
+    }
+}
+
+impl ProcessExternalRequestTrait for Memory {
+    /// Checks for and processes new commands relevant to the Memory module from external channels.
+    ///
+    /// This is the specialized implementation of `ProcessExternalRequestTrait` for `TcpCommunication`.
+    /// It delegates directly to `process_external_request_without_messaging`, indicating
+    /// that the `Memory` module primarily processes commands from the signal handler
+    /// and does not use a separate messaging channel for external requests.
+    ///
+    /// # Arguments
+    /// * `rx_from_memory` - A reference to the receiver end of the channel
+    ///   for commands originating from the signal handler.
+    /// * `_` - This parameter is ignored, as the `Memory` module does not process
+    ///   messages from a messaging channel in this context.
+    ///
+    /// # Returns
+    /// A tuple `(bool, bool, bool)` indicating the status of commands received:
+    /// - The first `bool` is `true` if a `Quit` command was received; otherwise `false`.
+    /// - The second `bool` is always `false` (no "Start" commands processed).
+    /// - The third `bool` is always `false` (no "Stop" commands processed).
+    fn process_external_request(
+        &mut self,
+        rx_from_signal_handler: &mut AquaReceiver<InternalCommand>,
+        _: Option<&mut AquaReceiver<InternalCommand>>,
+    ) -> (bool, bool, bool) {
+        process_external_request_without_messaging(rx_from_signal_handler, "Memory".to_string())
     }
 }

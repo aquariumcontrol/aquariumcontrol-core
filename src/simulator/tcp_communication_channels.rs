@@ -170,7 +170,7 @@ impl fmt::Display for TcpCommunicationChannels {
 }
 
 impl TcpCommunicationChannels {
-    #[cfg(not(test))]
+    #[cfg(all(not(test), feature = "debug_channels"))]
     pub fn report_status(&self) {
         println!("TcpCommunicationChannels Status:");
 

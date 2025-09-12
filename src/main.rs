@@ -127,7 +127,6 @@ use crate::utilities::config::read_config_file;
 use crate::utilities::config_file_definition_error::ConfigFileDefinitionError;
 use crate::utilities::logger::{log_error_chain, setup_logger};
 use crate::utilities::logger_config::LoggerConfig;
-use crate::utilities::memory_config_check::memory_config_check;
 use crate::utilities::publish_pid::PublishPid;
 use crate::utilities::signal_handler::handle_signals;
 use crate::utilities::version_information::{VersionInformation, VersionInformationError};
@@ -139,6 +138,7 @@ use crate::water::water_injection::WaterInjection;
 use spin_sleep::SpinSleeper;
 pub use std::sync::{atomic::AtomicBool, Arc, Mutex};
 use std::{env, panic, path::Path, thread::scope, time::Duration};
+use watchmen::memory_config_check::memory_config_check;
 
 cfg_if::cfg_if! {
     if #[cfg(all(target_os = "linux", feature = "target_hw"))] {
@@ -154,6 +154,7 @@ cfg_if::cfg_if! {
 }
 #[cfg(not(target_env = "msvc"))]
 use tikv_jemallocator::Jemalloc;
+use crate::watchmen::memory::Memory;
 
 #[cfg(not(target_env = "msvc"))]
 #[global_allocator]
@@ -905,7 +906,8 @@ fn run() -> Result<(), StartupError> {
     let mut monitors = Monitors::new(config.monitors);
     let mut watchdog = Watchdog::new(config.watchdog)
         .map_err(|e| StartupError::WatchdogSetupFailure { source: e })?;
-
+    let mut memory = Memory::new(config.memory);
+    
     let mut ds18b20 = Ds18b20::new(config.ds18b20)
         .map_err(|e| StartupError::Ds18b20SetupFailure { source: e })?;
 
@@ -1248,6 +1250,17 @@ fn run() -> Result<(), StartupError> {
                 debug!(target: module_path!(), "{0}", channels.watchdog);
                 #[cfg(feature = "debug_main")]
                 debug!(target: module_path!(), "Watchdog terminated.");
+            });
+        }
+
+        if execution_config.memory {
+            // Memory utilization monitoring
+            scope.spawn(move || {
+                memory.execute(&mut channels.memory);
+                #[cfg(all(target_os = "linux", feature = "target_hw", feature = "debug_channels"))]
+                debug!(target: module_path!(), "{0}", channels.memory);
+                #[cfg(feature = "debug_main")]
+                debug!(target: module_path!(), "Memory terminated.");
             });
         }
 

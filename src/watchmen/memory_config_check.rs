@@ -6,7 +6,7 @@ The above copyright notice and this permission notice shall be included in all c
 
 THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
-use crate::utilities::memory_config_check_config::MemoryConfig;
+use crate::watchmen::memory_config::MemoryConfig;
 use thiserror::Error;
 
 /// Definition of errors which can be encountered during memory_config_check
@@ -112,9 +112,13 @@ mod tests {
     fn create_test_config() -> MemoryConfig {
         MemoryConfig {
             active: true,
+            execute: false,
             env_variable_name: "TEST_VAR".to_string(),
             env_variable_min_val: 1,
             env_variable_max_val: 10,
+            max_virtual_memory: 0,
+            max_ram_usage: 0,
+            check_interval: 0,
         }
     }
 

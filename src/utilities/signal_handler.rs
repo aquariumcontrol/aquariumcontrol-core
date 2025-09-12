@@ -466,7 +466,7 @@ pub fn handle_signals(
         "phase 7 of termination concluded",
     );
 
-    // phase 8: allow messaging thread and watchdog to close
+    // phase 8: allow messaging thread, memory and watchdog to close
     if execution_config.watchdog {
         send_command(
             InternalCommand::Terminate,
@@ -482,6 +482,11 @@ pub fn handle_signals(
             .as_mut(),
         None,
         "messaging",
+    );
+    send_command(InternalCommand::Quit,
+                 Some(&mut signal_handler_channels.tx_signal_handler_to_memory),
+                 None,
+                 "memory"
     );
 
     println!("Termination of application completed");

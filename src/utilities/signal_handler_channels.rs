@@ -72,6 +72,8 @@ pub struct SignalHandlerChannels {
 
     pub rx_signal_handler_from_watchdog: AquaReceiver<bool>,
 
+    pub tx_signal_handler_to_memory: AquaSender<InternalCommand>,
+
     // Hardware-specific channels
     pub tx_signal_handler_to_dht: AquaSender<InternalCommand>,
 
@@ -265,6 +267,11 @@ impl SignalHandlerChannels {
     #[allow(unused)]
     pub fn receive_from_watchdog(&mut self) -> Result<bool, AquaChannelError> {
         self.rx_signal_handler_from_watchdog.recv()
+    }
+
+    #[allow(unused)]
+    pub fn send_to_memory(&mut self, command: InternalCommand) -> Result<(), AquaChannelError> {
+        self.tx_signal_handler_to_memory.send(command)
     }
 
     // --- Hardware-Specific Modules (Send only) ---

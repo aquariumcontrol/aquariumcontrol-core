@@ -39,6 +39,7 @@ use std::sync::mpsc::TryRecvError;
 #[cfg(feature = "debug_channels")]
 use std::sync::mpsc::TrySendError;
 use thiserror::Error;
+use crate::watchmen::memory_channels::MemoryChannels;
 
 #[cfg(feature = "debug_channels")]
 pub struct AquaSender<T: Send> {
@@ -185,6 +186,7 @@ pub struct Channels {
     pub signal_handler: SignalHandlerChannels,
     pub monitors: MonitorsChannels,
     pub watchdog: WatchDogChannels,
+    pub memory: MemoryChannels,
     pub refill: RefillChannels,
     pub sensor_manager: SensorManagerChannels,
 
@@ -520,6 +522,10 @@ impl Channels {
             (tx_i2c_interface_to_atlas_scientific, rx_atlas_scientific_from_i2c_interface),
         ) = create_bidirectional_channel!(I2cRequest, I2cResult);
 
+        // Signal handler => Memory
+        let (tx_signal_handler_to_memory, rx_memory_from_signal_handler) =
+            create_unidirectional_channel!(InternalCommand);
+        
         let relay_manager = RelayManagerChannels {
             tx_relay_manager_to_refill,
             rx_relay_manager_from_refill,
@@ -654,6 +660,7 @@ impl Channels {
             tx_signal_handler_to_watchdog,
             rx_signal_handler_from_watchdog,
             tx_signal_handler_to_ds18b20,
+            tx_signal_handler_to_memory,
         };
 
         let monitors = MonitorsChannels {
@@ -689,6 +696,10 @@ impl Channels {
             rx_watchdog_from_messaging_opt,
         };
 
+        let memory = MemoryChannels {
+            rx_memory_from_signal_handler,
+        };
+        
         let ds18b20 = Ds18b20Channels {
             rx_ds18b20_from_signal_handler,
         };
@@ -731,6 +742,7 @@ impl Channels {
             signal_handler,
             monitors,
             watchdog,
+            memory,
             refill,
             sensor_manager,
 

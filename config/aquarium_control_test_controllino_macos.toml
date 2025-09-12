@@ -257,6 +257,10 @@ active = false                                          # needs to be deactivate
 env_variable_name = "MALLOC_ARENA_MAX"                  # check the configuration of standard memory allocator
 env_variable_min_val = 2                                # minimum value for environment variable
 env_variable_max_val = 3                                # maximum value for environment variable
+execute = true                                          # used for testing purposes
+max_virtual_memory = 500000                             # maximum allowed virtual memory reservation in kByte
+max_ram_usage = 100000                                  # maximum allowed RAM utilization in kByte
+check_interval = 900                                    # check-interval in seconds
 
 [logger]
 logfile = "/var/log/aquarium.log"                       # path and filename of the log file

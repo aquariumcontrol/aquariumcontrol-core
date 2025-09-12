@@ -15,6 +15,9 @@ pub struct MemoryConfig {
     /// flag for deactivating the memory configuration check, primarily used for testing
     pub active: bool,
 
+    /// used for testing purposes to inhibit creation of thread
+    pub execute: bool,
+    
     /// name of the environment variable to check
     pub env_variable_name: String,
 
@@ -23,4 +26,13 @@ pub struct MemoryConfig {
 
     /// maximum value of the environment variable
     pub env_variable_max_val: u64,
+
+    /// maximum allowed virtual memory reservation in kByte
+    pub max_virtual_memory: u64,
+
+    /// maximum allowed RAM usage in kByte
+    pub max_ram_usage: u64,
+
+    /// check-interval in seconds
+    pub check_interval: u64,
 }
