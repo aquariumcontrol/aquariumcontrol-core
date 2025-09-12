@@ -28,6 +28,7 @@ use crate::thermal::heating_channels::HeatingChannels;
 use crate::thermal::ventilation_channels::VentilationChannels;
 use crate::utilities::channel_content::InternalCommand;
 use crate::utilities::signal_handler::SignalHandlerChannels;
+use crate::watchmen::memory_channels::MemoryChannels;
 use crate::watchmen::monitors_channels::MonitorsChannels;
 use crate::watchmen::watchdog_channels::WatchDogChannels;
 use crate::water::refill_channels::RefillChannels;
@@ -39,7 +40,6 @@ use std::sync::mpsc::TryRecvError;
 #[cfg(feature = "debug_channels")]
 use std::sync::mpsc::TrySendError;
 use thiserror::Error;
-use crate::watchmen::memory_channels::MemoryChannels;
 
 #[cfg(feature = "debug_channels")]
 pub struct AquaSender<T: Send> {
@@ -525,7 +525,7 @@ impl Channels {
         // Signal handler => Memory
         let (tx_signal_handler_to_memory, rx_memory_from_signal_handler) =
             create_unidirectional_channel!(InternalCommand);
-        
+
         let relay_manager = RelayManagerChannels {
             tx_relay_manager_to_refill,
             rx_relay_manager_from_refill,
@@ -699,7 +699,7 @@ impl Channels {
         let memory = MemoryChannels {
             rx_memory_from_signal_handler,
         };
-        
+
         let ds18b20 = Ds18b20Channels {
             rx_ds18b20_from_signal_handler,
         };

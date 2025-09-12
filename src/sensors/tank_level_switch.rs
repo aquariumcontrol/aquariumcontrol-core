@@ -602,8 +602,9 @@ impl TankLevelSwitch {
             let execution_duration = stop_time.duration_since(start_time);
             if execution_duration > cycle_time_duration {
                 let delta_duration = execution_duration - cycle_time_duration;
-                if delta_duration.as_millis()
-                    > PERMISSIBLE_CYCLE_TIME_DEVIATION_TANK_LEVEL_SWITCH_MILLIS
+                if !self.config.use_simulator
+                    && delta_duration.as_millis()
+                        > PERMISSIBLE_CYCLE_TIME_DEVIATION_TANK_LEVEL_SWITCH_MILLIS
                     && !lock_warn_cycle_time_exceeded
                 {
                     #[cfg(not(test))]

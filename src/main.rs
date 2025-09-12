@@ -152,9 +152,9 @@ cfg_if::cfg_if! {
         use crate::sensors::i2c_interface::I2cInterface;
     }
 }
+use crate::watchmen::memory::Memory;
 #[cfg(not(target_env = "msvc"))]
 use tikv_jemallocator::Jemalloc;
-use crate::watchmen::memory::Memory;
 
 #[cfg(not(target_env = "msvc"))]
 #[global_allocator]
@@ -907,7 +907,7 @@ fn run() -> Result<(), StartupError> {
     let mut watchdog = Watchdog::new(config.watchdog)
         .map_err(|e| StartupError::WatchdogSetupFailure { source: e })?;
     let mut memory = Memory::new(config.memory);
-    
+
     let mut ds18b20 = Ds18b20::new(config.ds18b20)
         .map_err(|e| StartupError::Ds18b20SetupFailure { source: e })?;
 

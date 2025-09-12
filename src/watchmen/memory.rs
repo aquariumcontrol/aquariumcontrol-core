@@ -134,8 +134,8 @@ impl Memory {
 
         loop {
             // Check for a quit command before sleeping to ensure a responsive shutdown.
-            let (quit_command_received, _, _) =
-                self.process_external_request(&mut memory_channels.rx_memory_from_signal_handler, None);
+            let (quit_command_received, _, _) = self
+                .process_external_request(&mut memory_channels.rx_memory_from_signal_handler, None);
             if quit_command_received {
                 break;
             }
@@ -181,7 +181,7 @@ mod tests {
             execute: false,
             env_variable_name: "dummy".to_string(),
             env_variable_min_val: 0,
-            max_ram_usage: 100, // 100 kB
+            max_ram_usage: 100,      // 100 kB
             max_virtual_memory: 200, // 200 kB
             check_interval: 60,
             env_variable_max_val: 0,
@@ -220,11 +220,17 @@ mod tests {
         let spin_sleeper = SpinSleeper::default();
         spin_sleeper.sleep(Duration::from_secs(1));
 
-        channels.signal_handler.send_to_memory(InternalCommand::Quit).unwrap();
+        channels
+            .signal_handler
+            .send_to_memory(InternalCommand::Quit)
+            .unwrap();
 
         // Assert
         let result = handle.join();
-        assert!(result.is_ok(), "Thread should shut down gracefully on Quit command");
+        assert!(
+            result.is_ok(),
+            "Thread should shut down gracefully on Quit command"
+        );
     }
 
     #[test]
@@ -236,8 +242,14 @@ mod tests {
         memory.check_memory_limits(50, 150); // Values are below 100 and 200 limits
 
         // Assert
-        assert!(!memory.lock_warn_ram_usage_exceeded, "Lock should not be set when RAM is below limit");
-        assert!(!memory.lock_warn_virtual_memory_exceeded, "Lock should not be set when virtual memory is below limit");
+        assert!(
+            !memory.lock_warn_ram_usage_exceeded,
+            "Lock should not be set when RAM is below limit"
+        );
+        assert!(
+            !memory.lock_warn_virtual_memory_exceeded,
+            "Lock should not be set when virtual memory is below limit"
+        );
     }
 
     #[test]
@@ -249,8 +261,14 @@ mod tests {
         memory.check_memory_limits(150, 150); // RAM is above 100 kByte limit
 
         // Assert
-        assert!(memory.lock_warn_ram_usage_exceeded, "RAM lock should be set when usage exceeds limit");
-        assert!(!memory.lock_warn_virtual_memory_exceeded, "Virtual memory lock should remain unset");
+        assert!(
+            memory.lock_warn_ram_usage_exceeded,
+            "RAM lock should be set when usage exceeds limit"
+        );
+        assert!(
+            !memory.lock_warn_virtual_memory_exceeded,
+            "Virtual memory lock should remain unset"
+        );
     }
 
     #[test]
@@ -262,8 +280,14 @@ mod tests {
         memory.check_memory_limits(50, 250); // Virtual memory is above 200 kByte limit
 
         // Assert
-        assert!(!memory.lock_warn_ram_usage_exceeded, "RAM lock should remain unset");
-        assert!(memory.lock_warn_virtual_memory_exceeded, "Virtual memory lock should be set when usage exceeds limit");
+        assert!(
+            !memory.lock_warn_ram_usage_exceeded,
+            "RAM lock should remain unset"
+        );
+        assert!(
+            memory.lock_warn_virtual_memory_exceeded,
+            "Virtual memory lock should be set when usage exceeds limit"
+        );
     }
 
     #[test]
@@ -281,7 +305,13 @@ mod tests {
         memory.check_memory_limits(50, 150);
 
         // Assert
-        assert!(!memory.lock_warn_ram_usage_exceeded, "RAM lock should be reset when usage returns to normal");
-        assert!(!memory.lock_warn_virtual_memory_exceeded, "Virtual memory lock should be reset when usage returns to normal");
+        assert!(
+            !memory.lock_warn_ram_usage_exceeded,
+            "RAM lock should be reset when usage returns to normal"
+        );
+        assert!(
+            !memory.lock_warn_virtual_memory_exceeded,
+            "Virtual memory lock should be reset when usage returns to normal"
+        );
     }
 }

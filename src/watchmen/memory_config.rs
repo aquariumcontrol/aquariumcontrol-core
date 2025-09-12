@@ -17,7 +17,7 @@ pub struct MemoryConfig {
 
     /// used for testing purposes to inhibit creation of thread
     pub execute: bool,
-    
+
     /// name of the environment variable to check
     pub env_variable_name: String,
 

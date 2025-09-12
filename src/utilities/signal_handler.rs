@@ -483,10 +483,11 @@ pub fn handle_signals(
         None,
         "messaging",
     );
-    send_command(InternalCommand::Quit,
-                 Some(&mut signal_handler_channels.tx_signal_handler_to_memory),
-                 None,
-                 "memory"
+    send_command(
+        InternalCommand::Quit,
+        Some(&mut signal_handler_channels.tx_signal_handler_to_memory),
+        None,
+        "memory",
     );
 
     println!("Termination of application completed");

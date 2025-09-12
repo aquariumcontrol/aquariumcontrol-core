@@ -40,7 +40,7 @@ use std::time::{Duration, Instant};
 /// ```mermaid
 /// graph LR
 ///     feed[Feed Control] --> food_injection[Food Injection]
-///     food_injection[Food Injection] --> relay_manager[Relay Manager]
+///     food_injection --> relay_manager[Relay Manager]
 ///     relay_manager --> food_injection
 ///     feed --> signal_handler[Signal Handler]
 ///     signal_handler --> feed
