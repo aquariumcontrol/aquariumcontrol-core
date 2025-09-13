@@ -6,6 +6,30 @@ The above copyright notice and this permission notice shall be included in all c
 
 THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
+//! Manages temperature reading from DS18B20 1-Wire digital thermometers.
+//!
+//! This module provides the `Ds18b20` struct, which is designed to run as a dedicated
+//! thread. It interfaces with the Linux 1-Wire subsystem via `sysfs` to periodically
+//! read temperature data from one or more configured sensors.
+//!
+//! ## Responsibilities
+//!
+//! 1.  **Configuration Validation**: The `new()` constructor performs rigorous checks on the
+//!     provided configuration, ensuring that all necessary paths are specified and that
+//!     sensor IDs are unique and valid before the thread starts.
+//! 2.  **Periodic Measurement**: The `execute()` loop periodically reads sensor data based
+//!     on the `measurement_pause_duration_millis` setting in the configuration.
+//! 3.  **Robust Reading**: It implements a retry mechanism with a configurable pause to
+//!     handle transient CRC errors or other temporary read failures common on the
+//!     1-Wire bus.
+//! 4.  **State Sharing**: It updates shared `Arc<Mutex<Ds18b20Result>>` containers with
+//!     the latest water and ambient temperature readings, making the data available to
+//!     other parts of the application in a thread-safe manner.
+//! 5.  **Graceful Shutdown**: The `execute()` loop is responsive to a `Quit` command
+//!     received from the main signal handler, allowing the thread to terminate cleanly.
+//! 6.  **Performance Monitoring**: It includes logic to detect and log warnings if
+//!     access to the shared mutexes is blocked for longer than a predefined threshold.
+
 #[cfg(all(not(test), target_os = "linux"))]
 use nix::unistd::gettid;
 use spin_sleep::SpinSleeper;
@@ -59,6 +83,30 @@ impl Ds18b20ResultData {
 }
 pub type Ds18b20Result = Result<Ds18b20ResultData, Ds18b20Error>;
 
+/// Represents a Ds18b20 sensor module responsible for reading temperature signals.
+///
+/// This struct encapsulates the configuration, interface details, and internal state
+/// required to communicate with the sensor. It handles communication with the operating system.
+/// Retries, and perform post-processing (checksum validation,
+/// signal calculation) before providing the final temperature and humidity values.
+///
+/// Thread Communication:
+/// This module is designed to run in its own dedicated thread, periodically reading sensor data
+/// and making the latest measurements available via a shared `Arc<Mutex<Ds18b20Result>>`.
+/// Other modules (like `SensorManager` or `DataLogger`) can then read from this mutex to get the
+/// current temperature and humidity. It also responds to `Quit` commands for graceful shutdown.
+///
+/// Platform-Specific Behavior:
+/// The sensor reading logic (`read` function) will only work on Linux systems but compile for
+/// any other system as well.
+///
+/// Thread communication of this component is as follows:
+/// ```mermaid
+/// graph LR
+///     ds18b20[Ds18b20] -.-> sensor_manager[SensorManager]
+///     ds18b20[Ds18b20] -.-> data_logger[DataLogger]
+///     signal_handler[SignalHandler] --> ds18b20
+/// ```
 pub struct Ds18b20 {
     #[allow(unused)]
     /// configuration for communication with Ds18b20 sensor
@@ -286,7 +334,6 @@ impl Ds18b20 {
         // Use an Instant to track time since the last measurement.
         // Start with a measurement due to ensure the first loop iteration triggers a read.
         let mut last_measurement_instant = Instant::now() - measurement_interval;
-        let mut first_iteration = true;
 
         loop {
             // Check for quit command first for faster shutdown.
@@ -301,9 +348,8 @@ impl Ds18b20 {
             }
 
             if self.config.active
-                && (last_measurement_instant.elapsed() >= measurement_interval || first_iteration)
+                && (last_measurement_instant.elapsed() >= measurement_interval)
             {
-                first_iteration = false;
                 let water_temp_result = if !self.config.water_temperature_sensor_id.is_empty() {
                     Some(self.read(self.config.water_temperature_sensor_id.as_str()))
                 } else {

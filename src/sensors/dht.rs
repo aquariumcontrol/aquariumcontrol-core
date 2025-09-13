@@ -128,7 +128,7 @@ pub mod dht22_constants {
 /// Thread Communication:
 /// This module is designed to run in its own dedicated thread, periodically reading sensor data
 /// and making the latest measurements available via a shared `Arc<Mutex<DhtResult>>`.
-/// Other modules (like `Ambient` or `DataLogger`) can then read from this mutex to get the
+/// Other modules (like `SensorManager` or `DataLogger`) can then read from this mutex to get the
 /// current temperature and humidity. It also responds to `Quit` commands for graceful shutdown.
 ///
 /// Platform-Specific Behavior:
@@ -140,7 +140,7 @@ pub mod dht22_constants {
 /// Thread communication of this component is as follows:
 /// ```mermaid
 /// graph LR
-///     dht[Dht] -.-> Ambient[Ambient]
+///     dht[Dht] -.-> SensorManager[Sensor Managerr]
 ///     signal_handler[SignalHandler] --> dht
 /// ```
 pub struct Dht {

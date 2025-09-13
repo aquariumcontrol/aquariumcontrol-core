@@ -45,7 +45,26 @@ pub enum WatchdogError {
     #[error("[{0}] watchdog heartbeat and deactivation message are identical ({1}) - please assign different values")]
     HeartbeatAndDeactivationMessagesAreIdentical(String, String),
 }
-/// Contains the configuration and the implementation for the Watchdog communication
+
+/// Represents the Watchdog responsible for activating and petting the watchdog.
+///
+/// This struct encapsulates the configuration, interface details, and internal state
+/// required to communicate with the operating system.
+///
+/// Thread Communication:
+/// This module is designed to run in its own dedicated thread.
+/// It reads commands provided by the messaging system and acts accordingly.
+/// It responds to `Quit` commands for graceful shutdown.
+///
+/// Platform-Specific Behavior:
+/// The watchdog logic will only work on Linux systems but compile for any other system as well.
+///
+/// Thread communication of this component is as follows:
+/// ```mermaid
+/// graph LR
+///     messaging[Messaging] --> ds18b20[Ds18b20]
+///     signal_handler[SignalHandler] --> ds18b20
+/// ```
 pub struct Watchdog {
     config: WatchdogConfig,
 }
