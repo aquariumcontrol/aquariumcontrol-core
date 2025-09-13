@@ -23,13 +23,17 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 use crate::utilities::proc_ext_req::ProcessExternalRequestTrait;
 use crate::watchmen::memory_channels::MemoryChannels;
 use crate::watchmen::memory_config::MemoryConfig;
-use log::{error, info};
+use log::{error};
+#[cfg(all(target_os = "linux", feature = "debug_channels"))]
+use log::info;
 #[cfg(not(test))]
 use log::warn;
 use spin_sleep::SpinSleeper;
 use std::time::{Duration, Instant};
 use sysinfo::{Pid, System};
 use crate::watchmen::memory_config_check::{memory_config_check, MemoryConfigError};
+#[cfg(all(target_os = "linux", feature = "debug_channels"))]
+use tikv_jemalloc_ctl::{epoch, stats};
 
 /// The main struct for the memory monitoring thread.
 ///
@@ -66,10 +70,10 @@ impl Memory {
         if config.active {
             // check if the memory configuration is valid
             match memory_config_check(&config) {
-                Ok(env_var_name_value_tuple_opt) => {
-                    match env_var_name_value_tuple_opt {
+                Ok(_env_var_name_value_tuple_opt) => {
+                    #[cfg(all(target_os = "linux", feature = "debug_channels"))]
+                    match _env_var_name_value_tuple_opt {
                         Some((env_var_name, value)) => {
-                            #[cfg(not(test))]
                             info!("Memory configuration check: {env_var_name} is configured to {value}");
                         }
                         None => { /* do nothing, configuration check may be disabled */ }
@@ -172,6 +176,14 @@ impl Memory {
 
                     // Reset the "not available" error lock since we succeeded
                     self.lock_error_process_information_not_available = false;
+
+                    #[cfg(all(target_os = "linux", feature = "debug_channels"))]
+                    {
+                        epoch::advance().unwrap();
+                        let allocated = tikv_jemalloc_ctl::stats::allocated::read().unwrap();
+                        let resident = stats::resident::read().unwrap();
+                        info!(target: module_path!(), "Jemalloc: allocated = {allocated}, resident = {resident}");
+                    }
                 } else if !self.lock_error_process_information_not_available {
                     error!(
                         target: module_path!(),
@@ -197,7 +209,7 @@ mod tests {
     /// Helper to create a default config for testing.
     fn test_config() -> MemoryConfig {
         MemoryConfig {
-            active: true,
+            active: false,
             execute: false,
             env_variable_name: "dummy".to_string(),
             env_variable_min_val: 0,

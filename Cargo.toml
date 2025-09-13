@@ -42,7 +42,8 @@ ds18b20 = "0.1.1"
 
 # Use jemalloc as the global allocator on non-MSVC targets
 [target.'cfg(not(target_env = "msvc"))'.dependencies]
-tikv-jemallocator = { version = "0.6.0", features = ["profiling"] }
+tikv-jemallocator = { version = "0.6.0", features = ["stats", "profiling"] }
+tikv-jemalloc-ctl = "0.6.0"
 
 [dev-dependencies]
 assert_float_eq = "1"
