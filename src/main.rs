@@ -138,7 +138,6 @@ use crate::water::water_injection::WaterInjection;
 use spin_sleep::SpinSleeper;
 pub use std::sync::{atomic::AtomicBool, Arc, Mutex};
 use std::{env, panic, path::Path, thread::scope, time::Duration};
-use watchmen::memory_config_check::memory_config_check;
 
 cfg_if::cfg_if! {
     if #[cfg(all(target_os = "linux", feature = "target_hw"))] {
@@ -485,21 +484,6 @@ fn run() -> Result<(), StartupError> {
             error!("Could not reset PID file: {error_reset_pid}");
         }
     }));
-
-    // check if the memory configuration is valid
-    match memory_config_check(&config.memory) {
-        Ok(env_var_name_value_tuple_opt) => {
-            match env_var_name_value_tuple_opt {
-                Some((env_var_name, value)) => {
-                    info!("Memory configuration check: {env_var_name} is configured to {value}");
-                }
-                None => { /* do nothing, configuration check may be disabled */ }
-            }
-        }
-        Err(e) => {
-            return Err(StartupError::InvalidMemoryConfig { source: e });
-        }
-    }
 
     // check if the control parameters of heating and ventilation are valid
     if !distinct_thermal_control_interval_check(&config.heating, &config.ventilation) {
@@ -906,7 +890,8 @@ fn run() -> Result<(), StartupError> {
     let mut monitors = Monitors::new(config.monitors);
     let mut watchdog = Watchdog::new(config.watchdog)
         .map_err(|e| StartupError::WatchdogSetupFailure { source: e })?;
-    let mut memory = Memory::new(config.memory);
+    let mut memory = Memory::new(config.memory)
+        .map_err(|e| StartupError::InvalidMemoryConfig { source: e })?;
 
     let mut ds18b20 = Ds18b20::new(config.ds18b20)
         .map_err(|e| StartupError::Ds18b20SetupFailure { source: e })?;

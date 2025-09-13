@@ -66,10 +66,6 @@ pub enum MemoryConfigError {
 pub fn memory_config_check(
     memory_config: &MemoryConfig,
 ) -> Result<Option<(String, u64)>, MemoryConfigError> {
-    if !memory_config.active {
-        return Ok(None);
-    }
-
     if memory_config.env_variable_name.is_empty() {
         return Err(MemoryConfigError::ConfigEnvVarNameEmpty);
     }

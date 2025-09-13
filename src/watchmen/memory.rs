@@ -23,12 +23,13 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 use crate::utilities::proc_ext_req::ProcessExternalRequestTrait;
 use crate::watchmen::memory_channels::MemoryChannels;
 use crate::watchmen::memory_config::MemoryConfig;
-use log::error;
+use log::{error, info};
 #[cfg(not(test))]
 use log::warn;
 use spin_sleep::SpinSleeper;
 use std::time::{Duration, Instant};
 use sysinfo::{Pid, System};
+use crate::watchmen::memory_config_check::{memory_config_check, MemoryConfigError};
 
 /// The main struct for the memory monitoring thread.
 ///
@@ -59,14 +60,33 @@ impl Memory {
     /// * `config` - A reference to the global `ConfigData` containing the memory configuration.
     ///
     /// # Returns
-    /// A new `Memory` instance ready to be executed in its own thread.
-    pub fn new(config: MemoryConfig) -> Memory {
-        Self {
+    /// A new `Memory` instance wrapped in a Result type ready to be executed in its own thread.
+    pub fn new(config: MemoryConfig) -> Result<Memory, MemoryConfigError> {
+        // execute the configuration check
+        if config.active {
+            // check if the memory configuration is valid
+            match memory_config_check(&config) {
+                Ok(env_var_name_value_tuple_opt) => {
+                    match env_var_name_value_tuple_opt {
+                        Some((env_var_name, value)) => {
+                            #[cfg(not(test))]
+                            info!("Memory configuration check: {env_var_name} is configured to {value}");
+                        }
+                        None => { /* do nothing, configuration check may be disabled */ }
+                    }
+                }
+                Err(e) => {
+                    return Err(e);
+                }
+            }
+        }
+
+        Ok(Self {
             config,
             lock_warn_virtual_memory_exceeded: false,
             lock_warn_ram_usage_exceeded: false,
             lock_error_process_information_not_available: false,
-        }
+        })
     }
 
     /// Checks the provided memory usage values against configured limits and updates lock flags.
@@ -194,7 +214,7 @@ mod tests {
         let config = test_config();
 
         // Act
-        let memory = Memory::new(config);
+        let memory = Memory::new(config).unwrap();
 
         // Assert
         assert!(!memory.lock_warn_ram_usage_exceeded);
@@ -207,7 +227,7 @@ mod tests {
     fn test_execute_graceful_shutdown() {
         // Arrange
         let config = test_config();
-        let mut memory = Memory::new(config);
+        let mut memory = Memory::new(config).unwrap();
         let mut channels = Channels::new_for_test();
 
         // Act
@@ -236,7 +256,7 @@ mod tests {
     #[test]
     fn test_check_memory_limits_below_threshold() {
         // Arrange
-        let mut memory = Memory::new(test_config());
+        let mut memory = Memory::new(test_config()).unwrap();
 
         // Act
         memory.check_memory_limits(50, 150); // Values are below 100 and 200 limits
@@ -255,7 +275,7 @@ mod tests {
     #[test]
     fn test_check_memory_limits_above_ram_threshold() {
         // Arrange
-        let mut memory = Memory::new(test_config());
+        let mut memory = Memory::new(test_config()).unwrap();
 
         // Act
         memory.check_memory_limits(150, 150); // RAM is above 100 kByte limit
@@ -274,7 +294,7 @@ mod tests {
     #[test]
     fn test_check_memory_limits_above_virtual_threshold() {
         // Arrange
-        let mut memory = Memory::new(test_config());
+        let mut memory = Memory::new(test_config()).unwrap();
 
         // Act
         memory.check_memory_limits(50, 250); // Virtual memory is above 200 kByte limit
@@ -293,7 +313,7 @@ mod tests {
     #[test]
     fn test_check_memory_limits_resets_lock_when_normal() {
         // Arrange
-        let mut memory = Memory::new(test_config());
+        let mut memory = Memory::new(test_config()).unwrap();
 
         // Set the lock initially by exceeding the limit
         memory.check_memory_limits(150, 250);
