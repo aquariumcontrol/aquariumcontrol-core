@@ -151,7 +151,7 @@ impl Memory {
         let spin_sleeper = SpinSleeper::default();
 
         // Create a new System object.
-        let mut sys = System::new();
+            let mut sys = System::new();
 
         // Get the current process's PID.
         let pid = Pid::from_u32(std::process::id());
@@ -177,13 +177,6 @@ impl Memory {
                     // Reset the "not available" error lock since we succeeded
                     self.lock_error_process_information_not_available = false;
 
-                    #[cfg(all(target_os = "linux", feature = "debug_channels"))]
-                    {
-                        epoch::advance().unwrap();
-                        let allocated = tikv_jemalloc_ctl::stats::allocated::read().unwrap();
-                        let resident = stats::resident::read().unwrap();
-                        info!(target: module_path!(), "Jemalloc: allocated = {allocated}, resident = {resident}");
-                    }
                 } else if !self.lock_error_process_information_not_available {
                     error!(
                         target: module_path!(),
@@ -191,6 +184,16 @@ impl Memory {
                     );
                     self.lock_error_process_information_not_available = true;
                 }
+
+                // Stats from allocator instead from the operating system
+                #[cfg(all(target_os = "linux", feature = "debug_channels"))]
+                {
+                    epoch::advance().unwrap();
+                    let allocated = tikv_jemalloc_ctl::stats::allocated::read().unwrap();
+                    let resident = stats::resident::read().unwrap();
+                    info!(target: module_path!(), "Jemalloc: allocated = {allocated}, resident = {resident}");
+                }
+
                 last_check_instant = Instant::now();
             }
         }
