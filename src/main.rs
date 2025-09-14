@@ -152,12 +152,14 @@ cfg_if::cfg_if! {
     }
 }
 use crate::watchmen::memory::Memory;
-#[cfg(not(target_env = "msvc"))]
-use tikv_jemallocator::Jemalloc;
 
-#[cfg(not(target_env = "msvc"))]
-#[global_allocator]
-static GLOBAL: Jemalloc = Jemalloc;
+cfg_if::cfg_if! {
+    if #[cfg(feature = "jemalloc")] {
+        use tikv_jemallocator::Jemalloc;
+        #[global_allocator]
+        static GLOBAL: Jemalloc = Jemalloc;
+    }
+}
 
 /// Displays the valid command line parameter combinations
 fn display_usage() {
@@ -890,8 +892,8 @@ fn run() -> Result<(), StartupError> {
     let mut monitors = Monitors::new(config.monitors);
     let mut watchdog = Watchdog::new(config.watchdog)
         .map_err(|e| StartupError::WatchdogSetupFailure { source: e })?;
-    let mut memory = Memory::new(config.memory)
-        .map_err(|e| StartupError::InvalidMemoryConfig { source: e })?;
+    let mut memory =
+        Memory::new(config.memory).map_err(|e| StartupError::InvalidMemoryConfig { source: e })?;
 
     let mut ds18b20 = Ds18b20::new(config.ds18b20)
         .map_err(|e| StartupError::Ds18b20SetupFailure { source: e })?;

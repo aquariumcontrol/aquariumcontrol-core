@@ -347,9 +347,7 @@ impl Ds18b20 {
                 break;
             }
 
-            if self.config.active
-                && (last_measurement_instant.elapsed() >= measurement_interval)
-            {
+            if self.config.active && (last_measurement_instant.elapsed() >= measurement_interval) {
                 let water_temp_result = if !self.config.water_temperature_sensor_id.is_empty() {
                     Some(self.read(self.config.water_temperature_sensor_id.as_str()))
                 } else {

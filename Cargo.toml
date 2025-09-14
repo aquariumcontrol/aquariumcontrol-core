@@ -53,6 +53,7 @@ all_asserts = "2.3.1"
 default = []
 target_hw = []
 controllino_hw = []
+jemalloc = []
 debug_schedule_check = []
 debug_signal_handler = []
 debug_data_logger = []

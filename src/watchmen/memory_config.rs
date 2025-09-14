@@ -27,11 +27,13 @@ pub struct MemoryConfig {
     /// maximum value of the environment variable
     pub env_variable_max_val: u64,
 
-    /// maximum allowed virtual memory reservation in kByte
-    pub max_virtual_memory: u64,
+    #[cfg(feature = "jemalloc")]
+    /// maximum allowed allocated memory
+    pub max_allocated: usize,
 
-    /// maximum allowed RAM usage in kByte
-    pub max_ram_usage: u64,
+    #[cfg(feature = "jemalloc")]
+    /// maximum allowed resident memory
+    pub max_resident: usize,
 
     /// check-interval in seconds
     pub check_interval: u64,

@@ -112,8 +112,10 @@ mod tests {
             env_variable_name: "TEST_VAR".to_string(),
             env_variable_min_val: 1,
             env_variable_max_val: 10,
-            max_virtual_memory: 0,
-            max_ram_usage: 0,
+            #[cfg(feature = "jemalloc")]
+            max_resident: 0,
+            #[cfg(feature = "jemalloc")]
+            max_allocated: 0,
             check_interval: 0,
         }
     }
