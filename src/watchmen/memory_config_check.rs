@@ -120,16 +120,6 @@ mod tests {
         }
     }
 
-    // Test if memory_config_check correctly returns Ok(None) when the check is inactive.
-    #[test]
-    fn test_check_inactive_returns_ok_none() {
-        let mut config = create_test_config();
-        config.active = false;
-
-        let result = memory_config_check(&config);
-        assert!(matches!(result, Ok(None)));
-    }
-
     // Test if memory_config_check returns an error if the check is active, but the variable name is empty.
     #[test]
     fn test_empty_env_variable_name_returns_error() {

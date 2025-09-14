@@ -2231,7 +2231,7 @@ pub mod tests {
             let _lock = mutex_temp_clone.lock().unwrap();
             let spin_sleeper = SpinSleeper::default();
             spin_sleeper.sleep(Duration::from_millis(
-                atlas_scientific_constants::MAX_MUTEX_ACCESS_DURATION_MILLIS + 5,
+                atlas_scientific_constants::MAX_MUTEX_ACCESS_DURATION_MILLIS + 15,
             ));
             // Lock is released when the thread finishes.
         });
