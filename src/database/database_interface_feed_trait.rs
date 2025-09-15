@@ -6,6 +6,32 @@ The above copyright notice and this permission notice shall be included in all c
 
 THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
+//! Defines the database interaction contract for the `feed` module.
+//!
+//! This module is central to decoupling the application's feeding logic from the
+//! underlying database implementation. It achieves this by defining the
+//! `DatabaseInterfaceFeedTrait`, which specifies all the database operations
+//! that the `feed` module requires.
+//!
+//! ## Key Components
+//!
+//! - **`DatabaseInterfaceFeedTrait`**: An abstraction layer that defines a set of methods
+//!   for querying and modifying feed-related data, such as feed schedules and
+//!   historical feed events. By depending on this trait instead of a concrete
+//!   database struct, the `feed` module can be tested in isolation using mock
+//!   implementations.
+//!
+//! - **`impl DatabaseInterfaceFeedTrait for SqlInterfaceFeed`**: The production
+//!   implementation of the trait. This block contains the actual SQL queries and
+//!   logic required to interact with an SQL database, translating the high-level
+//!   trait methods into concrete database operations.
+//!
+//! ## Design and Purpose
+//!
+//! The primary goal of this module is to enable **testability and modularity**.
+//! The `feed` thread's logic is complex, and testing it against a live database
+//! is slow, brittle, and requires significant setup. By using a trait object,
+//! we can inject a mock database during testing.
 #[cfg(test)]
 use log::error;
 
@@ -19,6 +45,8 @@ use crate::food::feed_schedule_entry::FeedScheduleEntry;
 use chrono::NaiveDateTime;
 use mysql::params;
 use mysql::prelude::Queryable;
+
+pub const NUM_FEEDPHASES: i32 = 10;
 
 /// Trait for interfacing between feed and SQL database
 /// This trait is prerequisite to use mock implementation for testing
@@ -122,7 +150,7 @@ impl DatabaseInterfaceFeedTrait for SqlInterfaceFeed {
             .exec_drop::<_, _>(
                 sql_query_strings::SQL_QUERY_WRITE_FEED_EVENT.to_owned(),
                 params! {
-                "timestamp" => timestamp.format("%Y-%m-%d %H:%M:%S").to_string(),
+                "timestamp" => timestamp,
                 "feeder_run_time" => feeder_run_time,
                 "profile_name" => profile_name,
                 "profile_id" => profile_id,
@@ -160,7 +188,7 @@ impl DatabaseInterfaceFeedTrait for SqlInterfaceFeed {
         let sql_feedpattern_header = self.get_feedpattern_header_from_database(profile_id)?;
 
         let mut feed_phases = Vec::new();
-        for nr in 1..11 {
+        for nr in 1..=NUM_FEEDPHASES {
             let sql_feed_phase = self.get_feed_phase_from_database(profile_id, nr)?;
 
             let feed_phase = FeedPhase {
@@ -236,8 +264,8 @@ impl DatabaseInterfaceFeedTrait for SqlInterfaceFeed {
                 match self.conn.exec_drop::<_, _>(
                     sql_query_string,
                     params! {
-                        "timestamp_new" => timestamp_tomorrow.format("%Y-%m-%d %H:%M:%S").to_string(),
-                        "timestamp_old" => feedschedule_entry.timestamp.format("%Y-%m-%d %H:%M:%S").to_string(),
+                        "timestamp_new" => timestamp_tomorrow,
+                        "timestamp_old" => feedschedule_entry.timestamp,
                     },
                 ) {
                     Ok(_) => { /* do nothing */ },
@@ -254,7 +282,7 @@ impl DatabaseInterfaceFeedTrait for SqlInterfaceFeed {
                 match self.conn.exec_drop::<_, _>(
                     sql_query_string,
                     params! {
-                        "timestamp" => feedschedule_entry.timestamp.format("%Y-%m-%d %H:%M:%S").to_string(),
+                        "timestamp" => feedschedule_entry.timestamp,
                     },
                 ) {
                     Ok(_) => { /* do nothing */ },
@@ -300,7 +328,7 @@ impl DatabaseInterfaceFeedTrait for SqlInterfaceFeed {
         match self.conn.exec_drop::<_, _>(
             sql_query_string,
             params! {
-            "timestamp" => timestamp.format("%Y-%m-%d %H:%M:%S").to_string(),
+            "timestamp" => timestamp,
             "profile_id" => profile_id,
             "profile_name" => profile_name,
             "is_weekly" => is_weekly,
