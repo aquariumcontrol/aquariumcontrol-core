@@ -6,6 +6,34 @@ The above copyright notice and this permission notice shall be included in all c
 
 THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
+//! Defines a contract for components that permanently use a database connection.
+//!
+//! This module introduces the `Pingable` trait, which provides a generic interface
+//! for sending a lightweight "ping" to a database to prevent it from timing out
+//! due to inactivity.
+//!
+//! ## Key Components
+//!
+//! - **`Pingable` Trait**: A simple trait with a single method, `ping()`. It abstracts
+//!   the action of performing a keep-alive check. By using a trait, generic functions
+//!   and macros can operate on any database interface that implements this behavior
+//!   without needing to know its concrete type. This is heavily used by the
+//!   `check_quit_increment_counter_ping_database!` macro.
+//!
+//! - **Implementations**: The module provides `impl Pingable` blocks for various
+//!   `SqlInterface...` structs (`SqlInterfaceData`, `SqlInterfaceBalling`, etc.).
+//!   Each implementation calls a common `SqlInterface::ping_database` function,
+//!   ensuring consistent behavior across the application.
+//!
+//! ## Design and Purpose
+//!
+//! The primary goal is to create a uniform, "fire-and-forget" keep-alive mechanism.
+//! Long-running threads that interact with the database only intermittently can use
+//! this trait to ensure their connection remains active.
+//!
+//! The `ping` method is designed to be non-disruptive; it logs any errors internally
+//! but does not propagate them. This prevents keep-alive failures from crashing
+//! a main control loop.
 use crate::database::sql_interface::SqlInterface;
 use crate::database::sql_interface_balling::SqlInterfaceBalling;
 use crate::database::sql_interface_data::SqlInterfaceData;
@@ -26,74 +54,35 @@ pub trait Pingable {
     fn ping(&mut self);
 }
 
-impl Pingable for SqlInterfaceData {
-    fn ping(&mut self) {
-        if let Err(e) = SqlInterface::ping_database(&mut self.conn) {
-            log_error_chain(
-                module_path!(),
-                "Encountered error while pinging database.",
-                e,
-            );
-        }
-    }
+/// This macro assumes that each struct provided has a `conn` field which is a
+/// mutable database connection that can be passed to `SqlInterface::ping_database`.
+macro_rules! impl_pingable {
+    // The `$(...)+` syntax allows the macro to accept one or more struct types,
+    // separated by commas.
+    ($($struct_name:ty),+) => {
+        $(
+            impl Pingable for $struct_name {
+                /// Pings the database to check connection health and prevent timeouts.
+                fn ping(&mut self) {
+                    if let Err(e) = SqlInterface::ping_database(&mut self.conn) {
+                        log_error_chain(
+                            module_path!(),
+                            "Encountered error while pinging database.",
+                            e,
+                        );
+                    }
+                }
+            }
+        )+
+    };
 }
 
-impl Pingable for SqlInterfaceBalling {
-    fn ping(&mut self) {
-        if let Err(e) = SqlInterface::ping_database(&mut self.conn) {
-            log_error_chain(
-                module_path!(),
-                "Encountered error while pinging database.",
-                e,
-            );
-        }
-    }
-}
-
-impl Pingable for SqlInterfaceFeed {
-    fn ping(&mut self) {
-        if let Err(e) = SqlInterface::ping_database(&mut self.conn) {
-            log_error_chain(
-                module_path!(),
-                "Encountered error while pinging database.",
-                e,
-            );
-        }
-    }
-}
-
-impl Pingable for SqlInterfaceHeatingStats {
-    fn ping(&mut self) {
-        if let Err(e) = SqlInterface::ping_database(&mut self.conn) {
-            log_error_chain(
-                module_path!(),
-                "Encountered error while pinging database.",
-                e,
-            );
-        }
-    }
-}
-
-impl Pingable for SqlInterfaceRefill {
-    fn ping(&mut self) {
-        if let Err(e) = SqlInterface::ping_database(&mut self.conn) {
-            log_error_chain(
-                module_path!(),
-                "Encountered error while pinging database.",
-                e,
-            );
-        }
-    }
-}
-
-impl Pingable for SqlInterfaceSchedule {
-    fn ping(&mut self) {
-        if let Err(e) = SqlInterface::ping_database(&mut self.conn) {
-            log_error_chain(
-                module_path!(),
-                "Encountered error while pinging database.",
-                e,
-            );
-        }
-    }
-}
+// Now, apply the implementation to all relevant structs in a single, clean call.
+impl_pingable!(
+    SqlInterfaceData,
+    SqlInterfaceBalling,
+    SqlInterfaceFeed,
+    SqlInterfaceHeatingStats,
+    SqlInterfaceRefill,
+    SqlInterfaceSchedule
+);
