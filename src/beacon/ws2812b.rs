@@ -6,6 +6,23 @@ The above copyright notice and this permission notice shall be included in all c
 
 THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
+//! Provides a driver for controlling WS2812B RGB LEDs via SPI on Linux.
+//!
+//! This module serves as a high-level wrapper around the `ws2818-rgb-led-spi-driver`
+//! crate, simplifying the process of controlling a strip of WS2812B LEDs. It is
+//! specifically designed for hardware interaction and is only compiled when the
+//! `target_os` is "linux" and the `target_hw` feature is enabled.
+//!
+//! ## Key Features
+//!
+//! - **Simple API**: Offers a straightforward `new()` constructor and a `set_color()`
+//!   method to control the entire LED strip.
+//! - **Configuration Driven**: Uses a `Ws2812BConfig` struct, deserialized
+//!   from a configuration file, to specify the SPI device and the number of LEDs.
+//! - **Correct Color Encoding**: Automatically handles the common Green-Red-Blue (GRB)
+//!   byte order expected by WS2812B LEDs.
+//! - **Error Handling**: Provides a dedicated `Ws2812BError` enum for clear and
+//!   actionable error reporting during setup or operation.
 cfg_if::cfg_if! {
     if #[cfg(all(target_os = "linux", feature = "target_hw"))] {
         use serde_derive::Deserialize;
@@ -29,24 +46,23 @@ pub enum RgbLedColor {
     Blue,
 }
 
-/// Maps an `RgbLedColor` enum to its corresponding GRB byte representation for a WS2812B LED.
-///
-/// WS2812B LEDs typically expect color data in Green-Red-Blue (GRB) order. This function
-/// provides the correct byte array for each primary color.
-///
-/// # Arguments
-/// * `color` - The `RgbLedColor` to convert.
-///
-/// # Returns
-/// A static reference to a 3-byte array `[G, R, B]`.
 #[cfg(all(target_os = "linux", feature = "target_hw"))]
-pub fn get_ws2812b_color_bytes(color: RgbLedColor) -> &'static [u8; 3] {
-    match color {
-        // WS2812B is commonly GRB: Green, Red, Blue
-        // [G, R, B]
-        RgbLedColor::Red => &[0, 255, 0], // Green=0, Red=255, Blue=0
-        RgbLedColor::Green => &[255, 0, 0], // Green=255, Red=0, Blue=0
-        RgbLedColor::Blue => &[0, 0, 255], // Green=0, Red=0, Blue=255
+impl RgbLedColor {
+    /// Maps an `RgbLedColor` enum to its corresponding GRB byte representation for a WS2812B LED.
+    ///
+    /// WS2812B LEDs typically expect color data in Green-Red-Blue (GRB) order. This function
+    /// provides the correct byte array for each primary color.
+    ///
+    /// # Returns
+    /// A static reference to a 3-byte array `[G, R, B]`.
+    pub fn get_ws2812b_color_bytes(&self) -> &'static [u8; 3] {
+        match self {
+            // WS2812B is commonly GRB: Green, Red, Blue
+            // [G, R, B]
+            RgbLedColor::Red => &[0, 255, 0], // Green=0, Red=255, Blue=0
+            RgbLedColor::Green => &[255, 0, 0], // Green=255, Red=0, Blue=0
+            RgbLedColor::Blue => &[0, 0, 255], // Green=0, Red=0, Blue=255
+        }
     }
 }
 
@@ -138,7 +154,7 @@ impl Ws2812B {
     /// writing the encoded color data to the SPI device fails. This could be due
     /// to an I/O error with the underlying hardware.
     pub fn set_color(&mut self, color: RgbLedColor) -> Result<(), Ws2812BError> {
-        let raw_color_bytes = get_ws2812b_color_bytes(color); // This is [G, R, B]
+        let raw_color_bytes = color.get_ws2812b_color_bytes(); // This is [G, R, B]
 
         // Create a vector to hold the encoded data for all LEDs
         // Each LED needs 3 bytes (GRB) in input, which gets expanded by the driver
