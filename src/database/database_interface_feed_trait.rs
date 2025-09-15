@@ -268,11 +268,12 @@ impl DatabaseInterfaceFeedTrait for SqlInterfaceFeed {
                         "timestamp_old" => feedschedule_entry.timestamp,
                     },
                 ) {
-                    Ok(_) => { /* do nothing */ },
+                    Ok(_) => { /* do nothing */ }
                     Err(e) => {
                         result = Err(SqlInterfaceError::FeedScheduleDropFailure {
                             location: module_path!().to_string(),
-                            source: e });
+                            source: e,
+                        });
                     }
                 };
             } else {
@@ -285,11 +286,12 @@ impl DatabaseInterfaceFeedTrait for SqlInterfaceFeed {
                         "timestamp" => feedschedule_entry.timestamp,
                     },
                 ) {
-                    Ok(_) => { /* do nothing */ },
+                    Ok(_) => { /* do nothing */ }
                     Err(e) => {
                         result = Err(SqlInterfaceError::FeedScheduleDropFailure {
                             location: module_path!().to_string(),
-                            source: e });
+                            source: e,
+                        });
                     }
                 };
             }

@@ -647,7 +647,7 @@ fn run() -> Result<(), StartupError> {
         Err(e) => {
             if matches!(
                 e,
-                SqlInterfaceError::SingleVersionRequestMultipleResults(_, _)
+                SqlInterfaceError::SingleVersionRequestMultipleResults(_, _, _, _, _)
             ) {
                 warn!(
                     target: module_path!(),

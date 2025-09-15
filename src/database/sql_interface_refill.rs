@@ -409,7 +409,7 @@ pub mod tests {
             sql_interface_refill.get_last_refill_timestamp(),
             Err(SqlInterfaceError::TimestampRequestFailure {
                 location: _,
-                source: _
+                query: _
             })
         ));
         println!("* checking timestamp of last refill (FAIL) succeeded.");

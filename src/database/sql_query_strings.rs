@@ -10,7 +10,7 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 /// Provides version information to check if the current application is listed in the table of supported versions.
 /// It informs whether the version is supported and which hash is stored in the database for the version.
 pub const SQL_QUERY_VERSION_INFORMATION: &str =
-    "SELECT hash FROM version WHERE major=#major AND minor=#minor AND build=#build LIMIT 100;";
+    "SELECT hash FROM version WHERE major=:major AND minor=:minor AND build=:build LIMIT 100;";
 
 /// Provides the current database name.
 pub const SQL_QUERY_DATABASE: &str = "select database() LIMIT 1;";

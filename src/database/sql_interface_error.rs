@@ -51,16 +51,16 @@ pub enum SqlInterfaceError {
     ShowTablesWithoutProperResult(String),
 
     /// Could not get a single string from the database.
-    #[error("[{0}] Could not get a single string from the database using query: {1}")]
-    SingleVersionRequestFailure(String, String),
+    #[error("[{0}] Could not get a single string from the database using query: {1} with major={2} and minor={3} and build={4}")]
+    SingleVersionRequestFailure(String, String, i32, i32, i32),
 
     /// Database responded with empty response.
-    #[error("[{0}] Database responded with empty response to query: {1}")]
-    SingleVersionRequestNotListed(String, String),
+    #[error("[{0}] Database responded with empty response to query: {1} with major={2} and minor={3} and build={4}")]
+    SingleVersionRequestNotListed(String, String, i32, i32, i32),
 
     /// The database responded with multiple responses to request.
-    #[error("[{0}] Database responded with multiple responses to request to query: {1}")]
-    SingleVersionRequestMultipleResults(String, String),
+    #[error("[{0}] Database responded with multiple responses to request to query: {1} with major={2} and minor={3} and build={4}")]
+    SingleVersionRequestMultipleResults(String, String, i32, i32, i32),
 
     /// Could not get a string array from the database.
     #[error("[{0}] Could not get a string array from the database using query: {1}")]
@@ -69,6 +69,10 @@ pub enum SqlInterfaceError {
     /// database responded with multiple responses to request.
     #[error("[{0}] database responded with multiple responses to request to query: {1}")]
     SingleStringRequestNoSingleResponse(String, String),
+
+    /// database responded with multiple responses to request.
+    #[error("[{0}] database responded with multiple responses to request to query: {1}")]
+    SingleTimestampRequestNoSingleResponse(String, String),
 
     /// database responded with empty response to request.
     #[error("[{0}] database responded with empty response to request to query: {1}")]
@@ -102,6 +106,10 @@ pub enum SqlInterfaceError {
     #[error("[{0}] Database responded with multiple responses to request to query: {1}")]
     SingleFloatRequestNoSingleResponse(String, String),
 
+    /// could not retrieve timestamp(s) from database.
+    #[error("[{0}] Could not retrieve timestamp(s) using query: {1}")]
+    TimestampArrayRequestFailure(String, String),
+    
     /// Could not get single heating stats entry from the database.
     #[error(
         "[{location}] Could not get single heating stats entry from database using query: {query}"
@@ -405,13 +413,8 @@ pub enum SqlInterfaceError {
     },
 
     /// Could not retrieve timestamp from the database.
-    #[error("[{location}] Could not retrieve timestamp from database.")]
-    TimestampRequestFailure {
-        location: String,
-
-        #[source]
-        source: Box<SqlInterfaceError>,
-    },
+    #[error("[{location}] Could not retrieve timestamp from database using query: {query}")]
+    TimestampRequestFailure { location: String, query: String },
 
     /// Could not retrieve optional timestamp from the database.
     #[error("[{location}] Could not retrieve optional timestamp from database.")]

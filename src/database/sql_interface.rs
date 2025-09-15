@@ -6,9 +6,52 @@ The above copyright notice and this permission notice shall be included in all c
 
 THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
-
-#[cfg(test)]
-use chrono::LocalResult::{Ambiguous, None, Single};
+//! Provides the core SQL database interface and connection management for the application.
+//!
+//! This module is the foundation of the application's database layer. It defines the
+//! main `SqlInterface` struct, which is responsible for establishing and managing a
+//! connection pool to the MySQL database. It also provides a suite of low-level
+//! helper functions for executing common query patterns, which are then used by
+//! more specialized `SqlInterface...` modules throughout the application.
+//!
+//! ## Key Components
+//!
+//! - **`SqlInterface` Struct**: The central struct that holds the `mysql::Pool`. It is
+//!   instantiated once at application startup and provides a `get_connection()` method
+//!   to lend out `PooledConn` objects to other threads and modules.
+//!
+//! - **`new()` Constructor**: Handles the critical task of initializing the database
+//!   connection. It builds the connection URL, creates the pool, and performs
+//!   essential pre-flight checks, such as verifying the database's `wait_timeout`
+//!   setting to prevent unexpected connection drops.
+//!
+//! - **Generic Helper Functions**: A collection of private and public static methods like
+//!   `get_single_string_from_database`, `get_single_integer_from_database`, and
+//!   `get_timestamp`. These functions encapsulate common SQL query patterns (e.g.,
+//!   fetching a single value, fetching an optional value) and provide consistent
+//!   error handling.
+//!
+//! - **`ping_database()`**: A static method that executes a lightweight query (`SELECT 1`)
+//!   to verify that a connection is still alive. This is the core implementation
+//!   used by the `Pingable` trait to prevent connection timeouts.
+//!
+//! ## Design and Purpose
+//!
+//! The primary goals of this module are **efficiency, robustness, and centralization**.
+//!
+//! - **Connection Pooling**: By using `mysql::Pool`, the application avoids the high
+//!   cost of opening and closing a new database connection for every operation. The pool
+//!   manages a set of ready-to-use connections, which is essential for performance in a
+//!   multithreaded environment.
+//!
+//! - **Startup Validation**: The `new()` constructor performs critical checks at startup,
+//!   such as `check_wait_timeout` and `check_required_tables_existing`. This "fail-fast"
+//!   approach ensures that the application does not start in a misconfigured or
+//!   unstable state.
+//!
+//! - **Centralized Logic**: It centralizes the logic for creating connections and
+//!   executing basic queries, preventing this boilerplate from being scattered across
+//!   the application.
 use chrono::*;
 use mysql::prelude::*;
 use mysql::*;
@@ -150,6 +193,70 @@ impl SqlInterface {
         })
     }
 
+    /// Executes a given SQL query and maps the results into a vector of `NaiveDateTime` structs.
+    ///
+    /// # Arguments
+    /// * `conn` - A mutable reference to an active database connection.
+    /// * `sql_query_string` - The SQL query string to be executed.
+    ///
+    /// # Returns
+    /// A `Result` containing a vector of `NaiveDateTime` structs. The vector
+    /// may be empty if the query returns no rows.
+    ///
+    /// # Errors
+    /// This function will return an `(SqlInterfaceError::TimestampArrayRequestFailure)`
+    /// if the database query execution fails for any reason, such as a syntax error
+    /// in the SQL or a connection issue.
+    fn get_timestamp_array_from_database(
+        conn: &mut PooledConn,
+        sql_query_string: &str,
+    ) -> Result<Vec<NaiveDateTime>, SqlInterfaceError> {
+        conn.query_map(sql_query_string, |naive_date_time| naive_date_time)
+            .map_err(|_| {
+                SqlInterfaceError::TimestampArrayRequestFailure(
+                    module_path!().to_string(),
+                    sql_query_string.to_string(),
+                )
+            })
+    }
+
+    /// Executes an SQL query and returns an optional single timestamp value.
+    ///
+    /// # Arguments
+    /// * `conn` - A mutable reference to an active database connection.
+    /// * `sql_query_string` - The SQL query designed to return at most one timestamp value.
+    ///
+    /// # Returns
+    /// A `Result` containing an `Option<NaiveDateTime>` on success.
+    /// - `Ok(Some(NaiveDateTime))` if the query returns exactly one string value.
+    /// - `Ok(None)` if the query returns no rows.
+    ///
+    /// # Errors
+    /// This function will return an error if:
+    /// - The underlying database query fails.
+    /// - The query returns more than one row (`SqlInterfaceError::SingleTimestampRequestNoSingleResponse`).
+    fn get_single_optional_timestamp_from_database(
+        conn: &mut PooledConn,
+        sql_query_string: &str,
+    ) -> Result<Option<NaiveDateTime>, SqlInterfaceError> {
+        // Get a single timestamp value from the database
+        let single_timestamp_array = Self::get_timestamp_array_from_database(conn, sql_query_string)?;
+
+        // return an empty response if there is no response from the database
+        if single_timestamp_array.is_empty() {
+            return Ok(None);
+        }
+
+        // check the error case if there is more than one response
+        if single_timestamp_array.len() > 1 {
+            return Err(SqlInterfaceError::SingleTimestampRequestNoSingleResponse(
+                module_path!().to_string(),
+                sql_query_string.to_string(),
+            ));
+        }
+        Ok(Some(single_timestamp_array[0].clone()))
+    }
+
     /// Executes an SQL query and strictly expects a single string result.
     ///
     /// # Arguments
@@ -189,43 +296,6 @@ impl SqlInterface {
         Ok(single_string_array[0].single_string.clone())
     }
 
-    /// Executes an SQL query and returns an optional single string value.
-    ///
-    /// # Arguments
-    /// * `conn` - A mutable reference to an active database connection.
-    /// * `sql_query_string` - The SQL query designed to return at most one string value.
-    ///
-    /// # Returns
-    /// A `Result` containing an `Option<String>` on success.
-    /// - `Ok(Some(String))` if the query returns exactly one string value.
-    /// - `Ok(None)` if the query returns no rows.
-    ///
-    /// # Errors
-    /// This function will return an error if:
-    /// - The underlying database query fails.
-    /// - The query returns more than one row (`SqlInterfaceError::SingleStringRequestNoSingleResponse`).
-    fn get_single_optional_string_from_database(
-        conn: &mut PooledConn,
-        sql_query_string: &str,
-    ) -> Result<Option<String>, SqlInterfaceError> {
-        // Get a single string value from the database
-        let single_string_array = Self::get_string_array_from_database(conn, sql_query_string)?;
-
-        // return an empty response if there is no response from the database
-        if single_string_array.is_empty() {
-            return Ok(Option::None);
-        }
-
-        // check the error case if there is more than one response
-        if single_string_array.len() > 1 {
-            return Err(SqlInterfaceError::SingleStringRequestNoSingleResponse(
-                module_path!().to_string(),
-                sql_query_string.to_string(),
-            ));
-        }
-        Ok(Some(single_string_array[0].single_string.clone()))
-    }
-
     /// Retrieves the stored hash for a specific software version from the database.
     ///
     /// # Arguments
@@ -244,41 +314,37 @@ impl SqlInterface {
         version_information: &VersionInformation,
     ) -> Result<String, SqlInterfaceError> {
         // Get a single string value from the database
-        let sql_query_string_major_replaced = str::replace(
-            sql_query_strings::SQL_QUERY_VERSION_INFORMATION,
-            "#major",
-            &version_information.major.to_string(),
-        );
-        let sql_query_string_minor_replaced = str::replace(
-            &sql_query_string_major_replaced,
-            "#minor",
-            &version_information.minor.to_string(),
-        );
-        let sql_query_string = str::replace(
-            &sql_query_string_minor_replaced,
-            "#build",
-            &version_information.build.to_string(),
+        let params = params!(
+            "major" => version_information.major,
+            "minor" => version_information.minor,
+            "build" => version_information.build,
         );
 
-        let single_string_array = match self
+        let single_string_array = self
             .conn
-            .query_map(sql_query_string.clone(), |single_string| SingleString {
-                single_string,
-            }) {
-            Ok(c) => c,
-            Err(_) => {
-                return Err(SqlInterfaceError::SingleVersionRequestFailure(
+            .exec_map(
+                sql_query_strings::SQL_QUERY_VERSION_INFORMATION,
+                params,
+                |single_string| SingleString { single_string },
+            )
+            .map_err(|_| {
+                SqlInterfaceError::SingleVersionRequestFailure(
                     module_path!().to_string(),
-                    sql_query_string,
-                ));
-            }
-        };
+                    sql_query_strings::SQL_QUERY_VERSION_INFORMATION.to_string(),
+                    version_information.major,
+                    version_information.minor,
+                    version_information.build,
+                )
+            })?;
 
         // check the error case if there is no response
         if single_string_array.is_empty() {
             return Err(SqlInterfaceError::SingleVersionRequestNotListed(
                 module_path!().to_string(),
-                sql_query_string,
+                sql_query_strings::SQL_QUERY_VERSION_INFORMATION.to_string(),
+                version_information.major,
+                version_information.minor,
+                version_information.build,
             ));
         }
 
@@ -286,7 +352,10 @@ impl SqlInterface {
         if single_string_array.len() > 1 {
             Err(SqlInterfaceError::SingleVersionRequestMultipleResults(
                 module_path!().to_string(),
-                sql_query_string,
+                sql_query_strings::SQL_QUERY_VERSION_INFORMATION.to_string(),
+                version_information.major,
+                version_information.minor,
+                version_information.build,
             ))
         } else {
             Ok(single_string_array[0].single_string.clone())
@@ -500,21 +569,22 @@ impl SqlInterface {
         sql_query_string: &str,
     ) -> Result<NaiveDateTime, SqlInterfaceError> {
         // request timestamp from database
-        let timestamp_string = Self::get_single_string_from_database(conn, sql_query_string)
-            .map_err(|e| SqlInterfaceError::TimestampRequestFailure {
-                location: module_path!().to_string(),
-                source: Box::new(e),
-            })?;
-        // convert data type
-        let parsed_timestamp =
-            NaiveDateTime::parse_from_str(timestamp_string.as_str(), "%Y-%m-%d %H:%M:%S").map_err(
-                |e| SqlInterfaceError::TimestampConversionFailure {
+        let timestamp_opt: Option<NaiveDateTime> =
+            conn.query_first(sql_query_string).map_err(|_| {
+                SqlInterfaceError::TimestampRequestFailure {
                     location: module_path!().to_string(),
-                    timestamp_string,
-                    source: e,
-                },
-            )?;
-        Ok(parsed_timestamp)
+                    query: sql_query_string.to_string(),
+                }
+            })?;
+
+        // Check if we got a result and extract the value.
+        match timestamp_opt {
+            Some(timestamp) => Ok(timestamp),
+            None => Err(SqlInterfaceError::TimestampRequestFailure {
+                location: module_path!().to_string(),
+                query: sql_query_string.to_string(),
+            }),
+        }
     }
 
     // Executes an SQL query to retrieve an optional timestamp and converts it to `NaiveDateTime`.
@@ -547,26 +617,13 @@ impl SqlInterface {
         sql_query_string: &str,
     ) -> Result<Option<NaiveDateTime>, SqlInterfaceError> {
         // Request (optional) timestamp from the database, wrapping any potential error.
-        let timestamp_string_opt =
-            Self::get_single_optional_string_from_database(conn, sql_query_string).map_err(
+        Ok(Self::get_single_optional_timestamp_from_database(conn, sql_query_string).map_err(
                 |e| SqlInterfaceError::OptionalTimestampRequestFailure {
                     location: module_path!().to_string(),
                     source: Box::new(e),
                 },
-            )?;
-
-        // Use `map` to attempt parsing only if the Option is Some, then `transpose`
-        // to convert Option<Result<T, E>> into Result<Option<T>, E>.
-        timestamp_string_opt
-            .map(|timestamp_string| {
-                NaiveDateTime::parse_from_str(timestamp_string.as_str(), "%Y-%m-%d %H:%M:%S")
-                    .map_err(|e| SqlInterfaceError::TimestampConversionFailure {
-                        location: module_path!().to_string(),
-                        timestamp_string,
-                        source: e,
-                    })
-            })
-            .transpose()
+            )?
+        )
     }
 
     /// Fetches the current timestamp directly from the database.
@@ -875,6 +932,8 @@ impl SqlInterface {
     pub fn get_duration_from_naive_timestamp_to_local_now(
         timestamp_naive: NaiveDateTime,
     ) -> Option<i64> {
+        use chrono::LocalResult::{Ambiguous, None, Single};
+
         let reference_current_timestamp = Local::now();
         let timestamp_dt: DateTime<Local> = match Local.from_local_datetime(&timestamp_naive) {
             Single(t) => t,
@@ -1089,7 +1148,7 @@ pub mod tests {
             Err(e) => {
                 assert!(matches!(
                     e,
-                    SqlInterfaceError::SingleVersionRequestNotListed(_, _)
+                    SqlInterfaceError::SingleVersionRequestNotListed(_, _, _, _, _)
                 ));
             }
         }
@@ -1124,7 +1183,7 @@ pub mod tests {
             Err(e) => {
                 assert!(matches!(
                     e,
-                    SqlInterfaceError::SingleVersionRequestNotListed(_, _)
+                    SqlInterfaceError::SingleVersionRequestNotListed(_, _, _, _, _)
                 ))
             }
         }
@@ -1204,5 +1263,81 @@ pub mod tests {
             .expect("Initialization of SQL interface for test failed");
 
         SqlInterface::ping_database(&mut sql_interface.get_connection().unwrap()).unwrap();
+    }
+
+    #[test]
+    // This test case checks the functionality of get_optional_timestamp.
+    // - response when querying an empty table (should be Ok(None))
+    // - response when querying a table with one entry (should be Ok(Some(timestamp)))
+    // - error response when querying a table with multiple entries
+    // Test case uses test database #56.
+    fn test_get_optional_timestamp() {
+        // Setup
+        let config: ConfigData = read_config_file_with_test_database(
+            "/config/aquarium_control_test_generic.toml".to_string(),
+            56,
+        );
+        println!("Testing with database {}", config.sql_interface.db_name);
+        let sql_interface: SqlInterface = SqlInterface::new(config.sql_interface)
+            .expect("Initialization of SQL interface for test failed.");
+        let mut conn = sql_interface.get_connection().unwrap();
+
+        let table_name = "test_optional_timestamp";
+
+        // Create a temporary table for the test
+        conn.query_drop(&format!(
+            "CREATE TABLE IF NOT EXISTS {} (ts TIMESTAMP);",
+            table_name
+        ))
+            .unwrap();
+
+        // --- Test Case 1: Empty table ---
+        println!("* Testing optional timestamp with empty table...");
+        conn.query_drop(&format!("TRUNCATE TABLE {}", table_name))
+            .unwrap();
+
+        let result =
+            SqlInterface::get_optional_timestamp(&mut conn, &format!("SELECT ts FROM {}", table_name));
+        assert_eq!(result.unwrap(), None);
+        println!("* Succeeded: Empty table returns Ok(None).");
+
+        // --- Test Case 2: Table with one entry ---
+        println!("* Testing optional timestamp with a single entry...");
+        let test_timestamp = Local::now().naive_local().trunc_subsecs(0);
+        conn.exec_drop(
+            &format!("INSERT INTO {} (ts) VALUES (:ts)", table_name),
+            params! { "ts" => test_timestamp },
+        )
+            .unwrap();
+
+        let result =
+            SqlInterface::get_optional_timestamp(&mut conn, &format!("SELECT ts FROM {}", table_name));
+        assert_eq!(result.unwrap(), Some(test_timestamp));
+        println!("* Succeeded: Table with one entry returns Ok(Some(timestamp)).");
+
+        // --- Test Case 3: Table with multiple entries ---
+        println!("* Testing optional timestamp with multiple entries...");
+        let another_timestamp = (Local::now() - chrono::Duration::minutes(5))
+            .naive_local()
+            .trunc_subsecs(0);
+        conn.exec_drop(
+            &format!("INSERT INTO {} (ts) VALUES (:ts)", table_name),
+            params! { "ts" => another_timestamp },
+        )
+            .unwrap();
+
+        let result =
+            SqlInterface::get_optional_timestamp(&mut conn, &format!("SELECT ts FROM {}", table_name));
+        // Assert that we get the specific error for a non-single response, wrapped in the outer error type.
+        if let Err(SqlInterfaceError::OptionalTimestampRequestFailure { source, .. }) = result {
+            assert!(matches!(*source, SqlInterfaceError::SingleTimestampRequestNoSingleResponse(_, _)));
+        } else {
+            panic!("Expected OptionalTimestampRequestFailure for multiple results, but got: {:?}", result);
+        }
+        println!("* Succeeded: Table with multiple entries returns an error.");
+
+        // Cleanup
+        conn.query_drop(&format!("DROP TABLE {}", table_name))
+            .unwrap();
     }
 }
