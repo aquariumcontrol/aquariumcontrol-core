@@ -6,6 +6,39 @@ The above copyright notice and this permission notice shall be included in all c
 
 THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
+//! Defines the configuration structure for the application's SQL database interface.
+//!
+//! This module contains the `SqlInterfaceConfig` struct, which is a direct representation
+//! of the `[sql_interface]` section in the application's TOML configuration file. It serves
+//! as a data container for all settings required to establish, manage, and validate the
+//! database connection.
+//!
+//! ## Key Configuration Areas
+//!
+//! The struct is organized into several logical groups of parameters:
+//!
+//! - **Connection Details**: Fields like `db_user`, `db_password`, `db_host`, `db_port`,
+//!   and `db_name` provide the essential credentials for connecting to the MySQL server.
+//!
+//! - **Startup Validation**:
+//!   - `db_tables`: A list of table names that the application expects to exist. The
+//!     `SqlInterface` will verify their presence at startup.
+//!   - `db_min_wait_timeout`: Specifies the minimum required `wait_timeout` on the
+//!     MySQL server to prevent premature connection drops. A value of `0` deactivates this check.
+//!   - `max_rows_*`: A series of fields (`max_rows_balling_set_values`, `max_rows_data`, etc.)
+//!     that define the maximum acceptable number of rows for various log and configuration
+//!     tables. This acts as a safeguard against uncontrolled table growth. A value of `0` deactivates the check for a specific table.
+//!
+//! - **Operational Parameters**:
+//!   - `db_ping_interval`: The interval, in seconds, at which the application should
+//!     ping the database to keep the connection alive and prevent server-side timeouts.
+//!
+//! ## Usage
+//!
+//! An instance of `SqlInterfaceConfig` is created by deserializing the
+//! `[sql_interface]` section of a `.toml` file. This instance is then passed to
+//! `SqlInterface::new()` to initialize the main database connection pool for the
+//! entire application.
 use serde_derive::Deserialize;
 
 /// This struct holds the configuration data for the SQL interface.
