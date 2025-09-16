@@ -6,6 +6,29 @@ The above copyright notice and this permission notice shall be included in all c
 
 THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
+//! Provides the concrete implementation for transferring heating statistics to a SQL database.
+//!
+//! This module acts as a bridge, fulfilling the `HeatingStatsDataTransferTrait` contract
+//! by using the `SqlInterfaceHeatingStats` component. Its primary purpose is to decouple
+//! the core heating logic from the specific details of the database implementation, adhering
+//! to the Dependency Inversion Principle.
+//!
+//! ## Key Components
+//!
+//! - **`HeatingStatsDataTransfer`**: A simple unit struct that serves as the concrete
+//!   implementation of the `HeatingStatsDataTransferTrait`. It contains no data itself;
+//!   its sole role is to provide the `transfer_heating_stats` method.
+//!
+//! ## Design and Purpose
+//!
+//! In a larger system, a high-level component (like a thermal controller) needs to persist
+//! statistics but should not be tightly coupled to the database code. Instead, it depends
+//! on an abstraction—the `HeatingStatsDataTransferTrait`.
+//!
+//! This module provides the "glue" that connects the abstraction to the concrete
+//! `SqlInterfaceHeatingStats` implementation allowing usage of mock-implementation of the trait
+//! to verify that statistics are being generated correctly without needing a real database
+//! connection.
 use crate::database::sql_interface_error::SqlInterfaceError;
 use crate::database::sql_interface_heating_stats::{HeatingStatsEntry, SqlInterfaceHeatingStats};
 use crate::thermal::heating::HeatingStatsDataTransferTrait;
