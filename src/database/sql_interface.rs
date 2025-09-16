@@ -185,11 +185,10 @@ impl SqlInterface {
         conn.query_map(sql_query_string, |single_string| SingleString {
             single_string,
         })
-        .map_err(|_| {
-            SqlInterfaceError::SingleStringRequestFailure(
-                module_path!().to_string(),
-                sql_query_string.to_string(),
-            )
+        .map_err(|e| SqlInterfaceError::SingleStringRequestFailure {
+            location: module_path!().to_string(),
+            query: sql_query_string.to_string(),
+            source: e,
         })
     }
 
@@ -327,11 +326,12 @@ impl SqlInterface {
                     single_string,
                 }) {
                 Ok(c) => c,
-                Err(_) => {
-                    return Err(SqlInterfaceError::SingleStringRequestFailure(
-                        module_path!().to_string(),
-                        sql_query_string.to_string(),
-                    ));
+                Err(e) => {
+                    return Err(SqlInterfaceError::SingleStringRequestFailure {
+                        location: module_path!().to_string(),
+                        query: sql_query_string.to_string(),
+                        source: e,
+                    });
                 }
             };
 

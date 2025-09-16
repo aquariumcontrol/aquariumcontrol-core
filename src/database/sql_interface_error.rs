@@ -6,6 +6,48 @@ The above copyright notice and this permission notice shall be included in all c
 
 THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
+//! Defines the custom error type for all database-related operations.
+//!
+//! This module centralizes error handling for the entire database layer by providing a
+//! single, comprehensive enum, `SqlInterfaceError`. By using the `thiserror` crate,
+//! it automatically derives the `std::error::Error` trait and generates clear,
+//! user-friendly `Display` implementations for each error variant.
+//!
+//! ## Key Features
+//!
+//! - **Centralized Error Handling**: All potential failures within the `sql_interface`
+//!   and its submodules are codified here. This creates a single source of truth for
+//!   what can go wrong with database interactions.
+//!
+//! - **Rich Context**: Most error variants capture valuable context, such as
+//!   - `location`: The module path where the error occurred, provided by `module_path!()`.
+//!   - `query`: The specific SQL query string that failed.
+//!   - Other relevant parameters (e.g., `pump_id`, version numbers).
+//!   This makes debugging significantly easier by pinpointing the exact location and
+//!   cause of a failure.
+//!
+//! - **Error Chaining**: The `#[source]` attribute is used to wrap the underlying
+//!   error (e.g., a `mysql::Error` or `chrono::ParseError`), preserving the original
+//!   error chain for in-depth analysis.
+//!
+//! - **Clarity and Specificity**: Instead of generic "query failed" errors, this enum
+//!   provides specific variants for different failure modes, such as `WaitTimeoutTooLow`,
+//!   `RequiredTablesNotExisting`, or `SingleStringRequestNoSingleResponse`.
+//!
+//! ## Error Categories
+//!
+//! The errors can be grouped into several logical categories:
+//!
+//! - **Connection and Pool Errors**: Failures related to establishing or maintaining a
+//!   connection (e.g., `ConnectionPoolFailure`, `ConnectionFromPool`).
+//! - **Query Execution Errors**: General failures during the execution of a query
+//!   (e.g., `SingleStringRequestFailure`, `InsertDataFrameFailure`).
+//! - **Result Cardinality Errors**: When a query returns an unexpected number of rows
+//!   (e.g., `SingleIntegerRequestNoSingleResponse`, `MultipleStringRequestEmptyResponse`).
+//! - **Data Integrity and Validation Errors**: Failures found during startup or runtime
+//!   validation checks (e.g., `DatabaseBallingSetValTableContainsNull`, `DatabaseDataTableContainsTooManyRows`).
+//! - **Data Conversion Errors**: When data retrieved from the database cannot be parsed
+//!   into the expected Rust type (e.g., `TimestampConversionFailure`).
 use chrono::ParseError;
 use mysql::Error as MySqlError;
 use thiserror::Error;
@@ -63,8 +105,14 @@ pub enum SqlInterfaceError {
     SingleVersionRequestMultipleResults(String, String, i32, i32, i32),
 
     /// Could not get a string array from the database.
-    #[error("[{0}] Could not get a string array from the database using query: {1}")]
-    SingleStringRequestFailure(String, String),
+    #[error("[{location}] Could not get a string array from the database using query: {query}")]
+    SingleStringRequestFailure {
+        location: String,
+        query: String,
+
+        #[source]
+        source: mysql::Error,
+    },
 
     /// database responded with multiple responses to request.
     #[error("[{0}] database responded with multiple responses to request to query: {1}")]
