@@ -348,7 +348,7 @@ pub mod tests {
         // --- Common Setup ---
         let config: ConfigData = read_config_file_with_test_database(
             "/config/aquarium_control_test_generic.toml".to_string(),
-            60, // Using database #60 as requested
+            60,
         );
         println!("Testing with database {}", config.sql_interface.db_name);
         let mut sql_interface: SqlInterface = SqlInterface::new(config.sql_interface.clone())

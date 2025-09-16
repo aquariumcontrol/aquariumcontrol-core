@@ -6,6 +6,47 @@ The above copyright notice and this permission notice shall be included in all c
 
 THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
+//! Manages database interactions for the ventilation system's user-configurable set points.
+//!
+//! This module provides a dedicated interface, `SqlInterfaceVentilationSetVals`, for handling
+//! all SQL operations related to the `ventilationsetvals` table. It encapsulates logic
+//! for reading the ventilation on/off temperature thresholds and implements the
+//! `ThermalSetValueUpdaterTrait` to periodically poll the database for changes.
+//!
+//! ## Key Components
+//!
+//! - **`SqlInterfaceVentilationSetVals` Struct**: The primary struct that holds a database
+//!   connection and manages the periodic update logic.
+//!
+//! - **`VentilationSetVals` Struct**: A simple data structure representing the on/off
+//!   temperature thresholds for the ventilation fans.
+//!
+//! - **`new()` Constructor**: A critical entry point that performs "fail-fast"
+//!   validation at initialization. It checks the database to ensure:
+//!   - The `ventilationsetvals` table contains no `NULL` values.
+//!   - The table contains at most one row, as there should only be a single set of
+//!     ventilation parameters for the system.
+//!
+//! - **`get_ventilation_set_values()`**: The core data-fetching method. It retrieves the
+//!   ventilation thresholds and performs a critical consistency check to ensure the
+//!   `ventilation_switch_on_temperature` is not lower than the `ventilation_switch_off_temperature`.
+//!
+//! - **`ThermalSetValueUpdaterTrait` Implementation**: The `update_set_value` method
+//!   allows this struct to be used by a thermal controller to periodically and
+//!   efficiently check for updated set points from the database without querying on
+//!   every single loop iteration.
+//!
+//! ## Design and Purpose
+//!
+//! The main goal of this module is to provide a robust, encapsulated, and safe
+//! interface for the ventilation subsystem's configuration data.
+//!
+//! - **Encapsulation**: All SQL queries and logic specific to ventilation set points are
+//!   contained within this module, separating concerns.
+//!
+//! - **Data Integrity**: The constructor's validation logic and the consistency checks
+//!   in `get_ventilation_set_values` enforce data integrity rules, preventing runtime
+//!   errors caused by invalid database states.
 use mysql::PooledConn;
 use std::time::{Duration, Instant};
 
@@ -32,6 +73,7 @@ pub struct VentilationSetVals {
     pub ventilation_switch_off_temperature: f32,
 }
 
+#[derive(Debug)]
 pub struct SqlInterfaceVentilationSetVals {
     /// Connection to the database
     pub conn: PooledConn,
@@ -308,9 +350,82 @@ pub mod tests {
     use crate::database::sql_interface_ventilation_setvals::{
         SqlInterfaceVentilationSetVals, VentilationSetVals,
     };
-    use crate::database::sql_query_strings::SQL_TABLE_VENTILATION_SETVALS;
-    use crate::database::{sql_interface::SqlInterface, sql_interface_error::SqlInterfaceError};
+    use crate::database::{sql_interface::SqlInterface, sql_interface_error::SqlInterfaceError, sql_query_strings};
     use crate::utilities::config::{read_config_file_with_test_database, ConfigData};
+
+    #[test]
+    // This test case verifies the validation logic within the `SqlInterfaceVentilationSetVals::new()` constructor.
+    // It covers the following scenarios:
+    // 1. Happy Path: Initialization succeeds when the table is empty or has one valid row.
+    // 2. Failure on Row Limit: Fails when `heatingsetvals` contains more than one row.
+    // Test case uses test database #64.
+    fn test_sql_interface_ventilation_setvals_new() {
+        // --- Common Setup ---
+        let config: ConfigData = read_config_file_with_test_database(
+            "/config/aquarium_control_test_generic.toml".to_string(),
+            64,
+        );
+        println!("Testing with database {}", config.sql_interface.db_name);
+        let mut sql_interface: SqlInterface = SqlInterface::new(config.sql_interface.clone())
+            .expect("Initialization of SQL interface for test failed.");
+
+        // --- Test Case 1: Happy Path (empty table) ---
+        println!("* Testing new() with an empty table (Happy Path)...");
+        SqlInterface::truncate_table(
+            &mut sql_interface,
+            sql_query_strings::SQL_TABLE_VENTILATION_SETVALS.to_string(),
+        )
+            .expect("Test setup failed: Could not truncate table.");
+
+        let result = SqlInterfaceVentilationSetVals::new(
+            sql_interface.get_connection().unwrap(),
+            &config.ventilation,
+        );
+        assert!(
+            result.is_ok(),
+            "Expected new() to succeed with an empty table, but it failed: {:?}",
+            result.err()
+        );
+        println!("* Succeeded: Happy path initialization is successful on empty table.");
+
+        // --- Test Case 2: Failure on too many rows ---
+        println!("* Testing new() with more than one row in the table...");
+        SqlInterface::truncate_table(
+            &mut sql_interface,
+            sql_query_strings::SQL_TABLE_VENTILATION_SETVALS.to_string(),
+        )
+            .expect("Test setup failed: Could not truncate table.");
+        let conn = sql_interface.get_connection().unwrap();
+        let valid_vals = VentilationSetVals {
+            ventilation_switch_off_temperature: 25.0,
+            ventilation_switch_on_temperature: 24.0,
+        };
+        let mut temp_interface = SqlInterfaceVentilationSetVals {
+            conn,
+            update_time: None,
+            update_duration: Default::default(),
+        };
+        temp_interface
+            .insert_ventilation_set_values(&valid_vals)
+            .expect("Test setup failed: Could not insert first row.");
+        temp_interface
+            .insert_ventilation_set_values(&valid_vals)
+            .expect("Test setup failed: Could not insert second row.");
+
+        let result = SqlInterfaceVentilationSetVals::new(
+            sql_interface.get_connection().unwrap(),
+            &config.ventilation,
+        );
+        assert!(
+            matches!(
+                result,
+                Err(SqlInterfaceError::DatabaseVentilationSetValTableContainsTooManyRows(_, _))
+            ),
+            "Expected row limit error, but got {:?}",
+            result
+        );
+        println!("* Succeeded: Initialization fails if table exceeds row limit.");
+    }
 
     #[test]
     // Test case includes all checks for this table combined in one function to limit the number of additional databases.
@@ -326,7 +441,7 @@ pub mod tests {
             .expect("Initialization of SQL interface for test failed.");
         match SqlInterface::truncate_table(
             &mut sql_interface,
-            SQL_TABLE_VENTILATION_SETVALS.to_string(),
+            sql_query_strings::SQL_TABLE_VENTILATION_SETVALS.to_string(),
         ) {
             Ok(_) => {}
             Err(e) => panic!("Could not prepare test case: {e:?}"),
@@ -385,7 +500,7 @@ pub mod tests {
 
         match SqlInterface::truncate_table(
             &mut sql_interface,
-            SQL_TABLE_VENTILATION_SETVALS.to_string(),
+            sql_query_strings::SQL_TABLE_VENTILATION_SETVALS.to_string(),
         ) {
             Ok(_) => {}
             Err(e) => panic!("Could not prepare test case: {e:?}"),
@@ -415,7 +530,7 @@ pub mod tests {
         // test if too many rows are detected
         match SqlInterface::truncate_table(
             &mut sql_interface,
-            SQL_TABLE_VENTILATION_SETVALS.to_string(),
+            sql_query_strings::SQL_TABLE_VENTILATION_SETVALS.to_string(),
         ) {
             Ok(_) => {}
             Err(e) => panic!("Could not prepare test case: {e:?}"),
