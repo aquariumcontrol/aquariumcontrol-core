@@ -183,20 +183,17 @@ pub const SQL_QUERY_DELETE_FEED_SCHEDULE_ENTRY: &str =
 /// Writes the heating statistical data into the database.
 /// If there is already data for the given date, the data will not be inserted. Instead, the existing entry will be updated.
 pub const SQL_QUERY_WRITE_HEATING_STATS: &str = concat!(
-    "insert into heatingstats ",
-    "(Date, Energy, AmbientTempAverage, AmbientTempCounter, ",
+    "INSERT INTO heatingstats (Date, Energy, AmbientTempAverage, AmbientTempCounter, ",
     "WaterTempAverage, WaterTempCounter, HeatingControlRuntime) ",
-    "values (:date, :energy, ",
-    ":ambient_temperature_average, :ambient_temperature_counter, ",
-    ":water_temperature_average, :water_temperature_counter, ",
-    ":heating_control_runtime) ",
-    "ON DUPLICATE KEY Update ",
-    "Energy=#Energy, ",
-    "AmbientTempAverage=#AmbientTempAverage, ",
-    "AmbientTempCounter=#AmbientTempCounter, ",
-    "WaterTempAverage=#WaterTempAverage, ",
-    "WaterTempCounter=#WaterTempCounter, ",
-    "HeatingControlRuntime=#HeatingControlRuntime;"
+    "VALUES (:date, :energy, :ambient_temperature_average, :ambient_temperature_counter, ",
+    ":water_temperature_average, :water_temperature_counter, :heating_control_runtime) ",
+    "ON DUPLICATE KEY UPDATE ",
+    "Energy = VALUES(Energy), ",
+    "AmbientTempAverage = VALUES(AmbientTempAverage), ",
+    "AmbientTempCounter = VALUES(AmbientTempCounter), ",
+    "WaterTempAverage = VALUES(WaterTempAverage), ",
+    "WaterTempCounter = VALUES(WaterTempCounter), ",
+    "HeatingControlRuntime = VALUES(HeatingControlRuntime);"
 );
 
 /// Writes the time-based data into the database.

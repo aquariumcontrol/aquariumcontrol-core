@@ -626,9 +626,8 @@ pub mod tests {
     // This test case verifies the validation logic within the `SqlInterfaceFeed::new()` constructor.
     // It covers the following scenarios:
     // 1. Happy Path: Initialization succeeds with valid data and row counts.
-    // 2. Failure on NULL: Fails when `feedpatterns` or `feedschedule` tables contain NULL values.
-    // 3. Failure on Row Limits: Fails when any of the feed-related tables exceed their max row count.
-    // 4. Deactivated Checks: Succeeds even with excess rows if the limits are set to 0.
+    // 2. Failure on Row Limits: Fails when any of the feed-related tables exceed their max row count.
+    // 3. Deactivated Checks: Succeeds even with excess rows if the limits are set to 0.
     // Test case uses test database #59.
     fn test_sql_interface_feed_new() {
         // --- Common Setup ---

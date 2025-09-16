@@ -6,7 +6,47 @@ The above copyright notice and this permission notice shall be included in all c
 
 THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
-
+//! Manages the aggregation and persistence of daily heating statistics.
+//!
+//! This module provides a dedicated interface, `SqlInterfaceHeatingStats`, for handling
+//! all SQL operations related to the `heatingstats` table. It is responsible for
+//! tracking daily energy consumption, average temperatures, and heater runtime.
+//!
+//! ## Key Components
+//!
+//! - **`SqlInterfaceHeatingStats` Struct**: The primary interface that holds a database
+//!   connection and provides methods for all heating statistics operations.
+//!
+//! - **`HeatingStatsEntry` Struct**: A data structure representing the aggregated
+//!   statistics for a single day. It includes an `update` method for incrementally
+//!   calculating running averages.
+//!
+//! - **`new()` Constructor**: A critical entry point that performs "fail-fast"
+//!   validation at initialization. It checks the database to ensure:
+//!   - The `heatingstats` table contains no `NULL` values.
+//!   - The table's row count does not exceed the configured maximum.
+//!
+//! - **`get_single_heating_stats_from_database()`**: Retrieves the statistics record
+//!   for the current day.
+//!
+//! - **`insert_heating_stats_entry()`**: Writes a `HeatingStatsEntry` to the database
+//!   using an `INSERT ... ON DUPLICATE KEY UPDATE` query to either create a new
+//!   daily record or update an existing one.
+//!
+//! ## Design and Purpose
+//!
+//! The main goal of this module is to provide a robust and encapsulated interface
+//! for managing the application's historical heating data.
+//!
+//! - **Encapsulation**: All SQL logic specific to the `heatingstats` table is
+//!   contained within this module, separating concerns.
+//!
+//! - **Data Integrity**: The constructor's validation logic enforces data integrity
+//!   rules at startup, preventing runtime errors caused by an invalid database state.
+//!
+//! - **Time-Based Logic**: It relies on a `SqlInterfaceMidnightCalculatorTrait` to
+//!   determine when a day has ended, which is crucial for finalizing one day's
+//!   statistics and starting a new record.
 use crate::database::{
     sql_interface::SqlInterface, sql_interface_error::SqlInterfaceError,
     sql_interface_midnight::SqlInterfaceMidnightCalculatorTrait, sql_query_strings,
@@ -140,6 +180,25 @@ impl HeatingStatsEntry {
 
         self.heating_control_runtime += 1;
     }
+
+    #[cfg(test)]
+    pub fn default() -> Self {
+        Self {
+            date: Local::now().date_naive(),
+            energy: 0.0,
+            ambient_temperature_average_value: 0.0,
+            ambient_temperature_average_counter: 0,
+            water_temperature_average_value: 0.0,
+            water_temperature_average_counter: 0,
+            heating_control_runtime: 0,
+        }
+    }
+
+    #[cfg(test)]
+    pub fn increment_date(&mut self) {
+        let tomorrow = self.date.checked_add_days(Days::new(1));
+        self.date = tomorrow.unwrap();
+    }
 }
 
 impl fmt::Display for HeatingStatsEntry {
@@ -171,31 +230,6 @@ impl fmt::Display for HeatingStatsEntry {
             self.heating_control_runtime
         )
     }
-}
-
-/// Holds the statistical data of heating for one day as retrieved from the database.
-/// In the next step, date is postprocessed to NaiveData type.
-pub struct HeatingStatsStringEntry {
-    /// calendar date of the entry before postprocessing to NaiveDate
-    pub date: String,
-
-    /// energy used for heating on a specific date in kWh    
-    pub energy: f64,
-
-    /// average ambient temperature value on a specific date in °C
-    pub ambient_temperature_average_value: f64,
-
-    /// counter how many samples were used to calculate the average value
-    pub ambient_temperature_average_counter: i64,
-
-    /// average water temperature value on a specific date in °C
-    pub water_temperature_average_value: f64,
-
-    /// counter how many samples were used to calculate the average value    
-    pub water_temperature_average_counter: i64,
-
-    /// counter how many seconds the heating control was active on a specific date
-    pub heating_control_runtime: i64,
 }
 
 /// Contains the configuration and the implementation of the SQL interface for heating.
@@ -325,7 +359,7 @@ impl SqlInterfaceHeatingStats {
                     water_temperature_average_value,
                     water_temperature_average_counter,
                     heating_control_runtime,
-                )| HeatingStatsStringEntry {
+                )| HeatingStatsEntry {
                     date,
                     energy,
                     ambient_temperature_average_value,
@@ -357,31 +391,7 @@ impl SqlInterfaceHeatingStats {
                 ),
             );
         }
-        let single_heating_stats_string_entry = &single_heating_stats_entry_array[0];
-
-        // convert String to NaiveDate
-        let date =
-            NaiveDate::parse_from_str(single_heating_stats_string_entry.date.as_str(), "%Y-%m-%d")
-                .map_err(|e| SqlInterfaceError::TimestampConversionFailure {
-                    location: module_path!().to_string(),
-                    timestamp_string: single_heating_stats_string_entry.date.clone(),
-                    source: e,
-                })?;
-
-        let single_heating_stats_entry = HeatingStatsEntry {
-            date,
-            energy: single_heating_stats_string_entry.energy,
-            ambient_temperature_average_value: single_heating_stats_string_entry
-                .ambient_temperature_average_value,
-            ambient_temperature_average_counter: single_heating_stats_string_entry
-                .ambient_temperature_average_counter,
-            water_temperature_average_value: single_heating_stats_string_entry
-                .water_temperature_average_value,
-            water_temperature_average_counter: single_heating_stats_string_entry
-                .water_temperature_average_counter,
-            heating_control_runtime: single_heating_stats_string_entry.heating_control_runtime,
-        };
-        Ok(single_heating_stats_entry)
+        Ok(single_heating_stats_entry_array[0].clone())
     }
 
     /// Inserts new heating statistical data into the database or updates an existing entry for a specific date.
@@ -422,62 +432,23 @@ impl SqlInterfaceHeatingStats {
         &mut self,
         heating_stats_entry: &HeatingStatsEntry,
     ) -> Result<(), SqlInterfaceError> {
-        // replace signals inside the ON DUPLICATE clause
-        let sql_query_energy_replaced = str::replace(
-            sql_query_strings::SQL_QUERY_WRITE_HEATING_STATS,
-            "#Energy",
-            &heating_stats_entry.energy.to_string(),
-        );
-        let sql_query_ambient_temperature_average_replaced = str::replace(
-            &sql_query_energy_replaced,
-            "#AmbientTempAverage",
-            &heating_stats_entry
-                .ambient_temperature_average_value
-                .to_string(),
-        );
-        let sql_query_ambient_temperature_counter_replaced = str::replace(
-            &sql_query_ambient_temperature_average_replaced,
-            "#AmbientTempCounter",
-            &heating_stats_entry
-                .ambient_temperature_average_counter
-                .to_string(),
-        );
-        let sql_query_water_temperature_average_replaced = str::replace(
-            &sql_query_ambient_temperature_counter_replaced,
-            "#WaterTempAverage",
-            &heating_stats_entry
-                .water_temperature_average_value
-                .to_string(),
-        );
-        let sql_query_water_temperature_counter_replaced = str::replace(
-            &sql_query_water_temperature_average_replaced,
-            "#WaterTempCounter",
-            &heating_stats_entry
-                .water_temperature_average_counter
-                .to_string(),
-        );
-        let sql_query_string = str::replace(
-            &sql_query_water_temperature_counter_replaced,
-            "#HeatingControlRuntime",
-            &heating_stats_entry.heating_control_runtime.to_string(),
-        );
+        let params = params! {
+            "date" => heating_stats_entry.date,
+            "energy" => heating_stats_entry.energy,
+            "ambient_temperature_average" => heating_stats_entry.ambient_temperature_average_value,
+            "ambient_temperature_counter" => heating_stats_entry.ambient_temperature_average_counter,
+            "water_temperature_average" => heating_stats_entry.water_temperature_average_value,
+            "water_temperature_counter" => heating_stats_entry.water_temperature_average_counter,
+            "heating_control_runtime" => heating_stats_entry.heating_control_runtime,
+        };
 
-        self.conn.exec_drop::<_, _>(sql_query_string.clone(), params!{
-                "date" => heating_stats_entry.date.format("%Y-%m-%d").to_string(),
-                "energy" => heating_stats_entry.energy,
-                "ambient_temperature_average" => heating_stats_entry.ambient_temperature_average_value,
-                "ambient_temperature_counter" => heating_stats_entry.ambient_temperature_average_counter,
-                "water_temperature_average" => heating_stats_entry.water_temperature_average_value,
-                "water_temperature_counter" => heating_stats_entry.water_temperature_average_counter,
-                "heating_control_runtime" => heating_stats_entry.heating_control_runtime,
-                },
-            ).map_err(|e| SqlInterfaceError::InsertHeatingStatsEntryFailure {
-                    location: module_path!().to_string(),
-                    sql_query_string,
-                    source: e,
-                })?;
-
-        Ok(())
+        self.conn
+            .exec_drop(sql_query_strings::SQL_QUERY_WRITE_HEATING_STATS, params)
+            .map_err(|e| SqlInterfaceError::InsertHeatingStatsEntryFailure {
+                location: module_path!().to_string(),
+                sql_query_string: sql_query_strings::SQL_QUERY_WRITE_HEATING_STATS.to_string(),
+                source: e,
+            })
     }
 
     /// Calculates the duration in seconds until the next midnight.
@@ -501,8 +472,6 @@ impl SqlInterfaceHeatingStats {
 
 #[cfg(test)]
 pub mod tests {
-    use chrono::{Datelike, Local, NaiveDate, NaiveDateTime};
-
     use crate::database::sql_interface_heating_stats::{
         HeatingStatsEntry, SqlInterfaceHeatingStats,
     };
@@ -510,6 +479,89 @@ pub mod tests {
     use crate::database::sql_query_strings::SQL_TABLE_HEATING_STATS;
     use crate::database::{sql_interface::SqlInterface, sql_interface_error::SqlInterfaceError};
     use crate::utilities::config::{read_config_file_with_test_database, ConfigData};
+    use chrono::{Datelike, Local, NaiveDate, NaiveDateTime};
+
+    #[test]
+    // This test case verifies the validation logic within the `SqlInterfaceHeatingStats::new()` constructor.
+    // It covers the following scenarios:
+    // 1. Happy Path: Initialization succeeds when the table has a valid number of rows.
+    // 2. Failure on Row Limit: Fails when `heatingstats` contains more rows than the configured limit.
+    // 3. Deactivated Check: Succeeds even with excess rows if the limit is set to 0.
+    // Test case uses test database #61.
+    fn test_sql_interface_heating_stats_new() {
+        // --- Common Setup ---
+        let config: ConfigData = read_config_file_with_test_database(
+            "/config/aquarium_control_test_generic.toml".to_string(),
+            61, // Using database #61 as requested
+        );
+        println!("Testing with database {}", config.sql_interface.db_name);
+        let mut sql_interface: SqlInterface = SqlInterface::new(config.sql_interface.clone())
+            .expect("Initialization of SQL interface for test failed.");
+
+        // --- Test Case 1: Happy Path (empty table) ---
+        println!("* Testing new() with an empty table (Happy Path)...");
+        SqlInterface::truncate_table(&mut sql_interface, SQL_TABLE_HEATING_STATS.to_string())
+            .expect("Test setup failed: Could not truncate table.");
+
+        let midnight_calc = Box::new(SqlInterfaceMidnightCalculator::new(
+            sql_interface.get_connection().unwrap(),
+        ));
+        let result_happy_case = SqlInterfaceHeatingStats::new(
+            sql_interface.get_connection().unwrap(),
+            10,
+            midnight_calc,
+        );
+        assert!(
+            result_happy_case.is_ok(),
+            "Expected new() to succeed with an empty table, but it failed: {:?}",
+            result_happy_case.err()
+        );
+        println!("* Succeeded: Happy path initialization is successful on an empty table.");
+
+        // --- Test Case 2: Failure on too many rows ---
+        println!("* Testing new() with more rows than the limit...");
+        SqlInterface::truncate_table(&mut sql_interface, SQL_TABLE_HEATING_STATS.to_string())
+            .expect("Test setup failed: Could not truncate table.");
+        let conn = sql_interface.get_connection().unwrap();
+
+        let mut heating_stats_entry = HeatingStatsEntry::default();
+        let mut sql_interface_heating_stats_for_test_setup = result_happy_case.unwrap();
+        _ = sql_interface_heating_stats_for_test_setup
+            .insert_heating_stats_entry(&heating_stats_entry);
+        heating_stats_entry.increment_date();
+        _ = sql_interface_heating_stats_for_test_setup
+            .insert_heating_stats_entry(&heating_stats_entry);
+
+        let midnight_calc = Box::new(SqlInterfaceMidnightCalculator::new(
+            sql_interface.get_connection().unwrap(),
+        ));
+        // Set the limit to 1
+        let result = SqlInterfaceHeatingStats::new(conn, 1, midnight_calc);
+        assert!(matches!(
+            result,
+            Err(SqlInterfaceError::DatabaseHeatingStatsTableContainsTooManyRows(_, _, _))
+        ));
+        println!("* Succeeded: Initialization fails if table exceeds row limit.");
+
+        // --- Test Case 3: Deactivated check (limit is 0) ---
+        println!("* Testing new() with a deactivated row limit check (limit = 0)...");
+        // We reuse the state from the previous test (2 rows in the table)
+        let midnight_calc = Box::new(SqlInterfaceMidnightCalculator::new(
+            sql_interface.get_connection().unwrap(),
+        ));
+        // Set the limit to 0
+        let result = SqlInterfaceHeatingStats::new(
+            sql_interface.get_connection().unwrap(),
+            0,
+            midnight_calc,
+        );
+        assert!(
+            result.is_ok(),
+            "Expected new() to succeed with deactivated check, but it failed: {:?}",
+            result.err()
+        );
+        println!("* Succeeded: Initialization passes when row limit check is deactivated.");
+    }
 
     #[test]
     // Test case includes all checks for this table combined in one function to limit the number of additional databases.

@@ -432,10 +432,9 @@ pub mod tests {
     // This test case verifies the validation logic within the `SqlInterfaceBalling::new()` constructor.
     // It covers the following scenarios:
     // 1. Happy Path: Initialization succeeds with valid data and row counts.
-    // 2. Failure on NULL: Fails when the `ballingsetvals` table contains NULL values.
-    // 3. Failure on Row Limit (SetVals): Fails when `ballingsetvals` exceeds its max row count.
-    // 4. Failure on Row Limit (DosingLog): Fails when `ballingdosinglog` exceeds its max row count.
-    // 5. Deactivated Checks: Succeeds even with excess rows if the limits are set to 0.
+    // 2. Failure on Row Limit (SetVals): Fails when `ballingsetvals` exceeds its max row count.
+    // 3. Failure on Row Limit (DosingLog): Fails when `ballingdosinglog` exceeds its max row count.
+    // 4. Deactivated Checks: Succeeds even with excess rows if the limits are set to 0.
     // Test case uses test database #57.
     fn test_sql_interface_balling_new() {
         // --- Common Setup ---

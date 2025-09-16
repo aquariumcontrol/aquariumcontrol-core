@@ -226,15 +226,6 @@ pub enum SqlInterfaceError {
     )]
     ScheduleTypeNotFound(String, String, String),
 
-    /// Error when trying to convert string to timestamp.
-    #[error("[{location}] Error when trying to convert string to timestamp: {timestamp_string}")]
-    TimestampConversionFailure {
-        location: String,
-        timestamp_string: String,
-        #[source]
-        source: ParseError,
-    },
-
     /// Error when inserting heating stats into the database.
     #[error(
         "[{location}] Error when inserting heating stats into the database using query: {sql_query_string}"

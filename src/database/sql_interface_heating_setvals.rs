@@ -342,8 +342,7 @@ pub mod tests {
     // This test case verifies the validation logic within the `SqlInterfaceHeatingSetVals::new()` constructor.
     // It covers the following scenarios:
     // 1. Happy Path: Initialization succeeds when the table is empty or has one valid row.
-    // 2. Failure on NULL: Fails when the `heatingsetvals` table contains NULL values.
-    // 3. Failure on Row Limit: Fails when `heatingsetvals` contains more than one row.
+    // 2. Failure on Row Limit: Fails when `heatingsetvals` contains more than one row.
     // Test case uses test database #60.
     fn test_sql_interface_heating_setvals_new() {
         // --- Common Setup ---
