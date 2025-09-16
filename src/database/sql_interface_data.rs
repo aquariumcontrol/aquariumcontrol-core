@@ -211,9 +211,7 @@ pub mod tests {
             timestamp: chrono::Local::now().naive_local(),
             ..Default::default()
         };
-        data_db
-            .write_data_frame_to_database(&data_frame)
-            .unwrap();
+        data_db.write_data_frame_to_database(&data_frame).unwrap();
 
         // Check: new() should succeed with a generous limit of 10
         let result = SqlInterfaceData::new(sql_interface.get_connection().unwrap(), 10);
@@ -234,9 +232,7 @@ pub mod tests {
             timestamp: (chrono::Local::now() + chrono::Duration::seconds(1)).naive_local(),
             ..Default::default()
         };
-        data_db
-            .write_data_frame_to_database(&data_frame_2)
-            .unwrap();
+        data_db.write_data_frame_to_database(&data_frame_2).unwrap();
 
         // Check: new() should fail with a strict limit of 1
         let result = SqlInterfaceData::new(sql_interface.get_connection().unwrap(), 1);

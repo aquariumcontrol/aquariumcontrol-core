@@ -76,13 +76,13 @@ pub const SQL_TABLE_FEEDSCHEDULE: &str = "feedschedule";
 
 /// Provides the header of a feed pattern from the database.
 pub const SQL_QUERY_READ_FEEDPATTERN_HEADER: &str =
-    "SELECT ProfileID, ProfileName FROM feedpatterns WHERE ProfileID=profile_id LIMIT 100;";
+    "SELECT ProfileID, ProfileName FROM feedpatterns WHERE ProfileID=:profile_id LIMIT 100;";
 
 /// Provides one phase of a feed pattern from the database.
 pub const SQL_QUERY_READ_FEED_PHASE: &str = concat!(
     "SELECT Pause#Duration, Pause#Skimmer, Pause#MPmp1, Pause#MPmp2, Pause#APmp1, Pause#APmp2, ",
     "Feed#Duration, Feed#Skimmer, Feed#MPmp1, Feed#MPmp2, Feed#APmp1, Feed#APmp2 ",
-    "FROM feedpatterns WHERE ProfileID=profile_id LIMIT 100;"
+    "FROM feedpatterns WHERE ProfileID=:profile_id LIMIT 100;"
 );
 
 /// Provides the timestamp of the last refill event from the database.
