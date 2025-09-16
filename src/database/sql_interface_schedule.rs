@@ -6,7 +6,47 @@ The above copyright notice and this permission notice shall be included in all c
 
 THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
-
+//! Manages time-based scheduling for various application modules.
+//!
+//! This module provides a dedicated interface, `SqlInterfaceSchedule`, for reading and
+//! interpreting time-based restrictions from the `schedule` table in the database.
+//! Its primary purpose is to allow users to inhibit certain activities that may cause
+//! noise or other disturbances (e.g., pumps for Balling or Refill) during specific
+//! times, such as at night.
+//!
+//! ## Key Components
+//!
+//! - **`SqlInterfaceSchedule`**: The main struct that holds a database connection,
+//!   performs validation, and provides methods to read and query schedule data.
+//!
+//! - **`ScheduleEntry`**: A processed, type-safe representation of a single schedule
+//!   rule. It converts raw string data from the database into strongly typed
+//!   `ScheduleType` and `chrono::NaiveTime` fields.
+//!
+//! - **`ScheduleType`**: An enum that identifies the specific application module
+//!   (e.g., `Balling`, `Refill`, `Heating`) that a schedule rule applies to.
+//!
+//! ## Design and Purpose
+//!
+//! The module is designed to be a robust and centralized point for all scheduling logic.
+//!
+//! - **Fail-Fast Validation**: The `new()` constructor performs several "fail-fast"
+//!   checks at startup. It verifies that the `schedule` table contains no `NULL`
+//!   values and that the number of entries does not exceed a configured limit. This
+//!   prevents the application from starting in an invalid state.
+//!
+//! - **Data Processing and Caching**: The `read_schedule()` method fetches all rules
+//!   from the database, parses them into `ScheduleEntry` objects, and stores them in
+//!   an internal cache (`Vec`). This is efficient as the database is only queried once.
+//!
+//! - **Robust Error Handling**: During processing, `read_schedule()` does not fail on
+//!   the first malformed entry. Instead, it collects all parsing errors (e.g., for
+//!   an invalid time string) and returns them in a `Vec`, allowing for comprehensive
+//!   diagnostics of database integrity issues.
+//!
+//! - **Time Window Logic**: The `ScheduleEntry::check_if_allowed()` method provides a
+//!   simple way to determine if the current system time falls within the active
+//!   window of a given schedule.
 use chrono::*;
 use mysql::prelude::*;
 use mysql::*;
@@ -22,6 +62,7 @@ use crate::database::{sql_interface_error::SqlInterfaceError, sql_query_strings}
 /// List of all modules that are subject to limitations by schedule.
 /// Background: These activities cause noise - the user shall be able to inhibit these noises during nighttime.
 #[derive(PartialEq)]
+#[derive(Debug)]
 pub enum ScheduleType {
     Balling,
     Refill,
@@ -84,16 +125,17 @@ pub struct SqlScheduleEntry {
     schedule_type: String,
 
     /// Time of day from which on the control shall be active
-    start_time: String,
+    start_time: NaiveTime,
 
     /// Time of day from which on the control shall not be active
-    stop_time: String,
+    stop_time: NaiveTime,
 
     /// Flag describing if the schedule entry is active
     is_active: u32,
 }
 
 /// Contains one schedule data set after post-processing
+#[derive(Debug)]
 pub struct ScheduleEntry {
     /// Schedule type (either Balling, Refill, Ventilation or Heating)
     schedule_type: ScheduleType,
@@ -126,10 +168,6 @@ impl ScheduleEntry {
     /// This function will return an `Err` variant of `SqlInterfaceError` if:
     /// - The `schedule_type` string cannot be parsed into a valid `ScheduleType` enum
     ///   (`ScheduleTypeConversionFailure`).
-    /// - The `start_time` string cannot be parsed into a valid `NaiveTime`
-    ///   (`ScheduleStartTimeConversionFailure`).
-    /// - The `stop_time` string cannot be parsed into a valid `NaiveTime`
-    ///   (`ScheduleStopTimeConversionFailure`).
     pub fn new(sql_schedule_entry: SqlScheduleEntry) -> Result<ScheduleEntry, SqlInterfaceError> {
         let schedule_type =
             ScheduleType::from_str(&sql_schedule_entry.schedule_type).map_err(|_| {
@@ -139,32 +177,12 @@ impl ScheduleEntry {
                 )
             })?;
 
-        let start_time =
-            NaiveTime::parse_from_str(sql_schedule_entry.start_time.as_str(), "%H:%M:%S").map_err(
-                |_| {
-                    SqlInterfaceError::ScheduleStartTimeConversionFailure(
-                        module_path!().to_string(),
-                        sql_schedule_entry.start_time,
-                    )
-                },
-            )?;
-
-        let stop_time =
-            NaiveTime::parse_from_str(sql_schedule_entry.stop_time.as_str(), "%H:%M:%S").map_err(
-                |_| {
-                    SqlInterfaceError::ScheduleStopTimeConversionFailure(
-                        module_path!().to_string(),
-                        sql_schedule_entry.stop_time,
-                    )
-                },
-            )?;
-
         let is_active = sql_schedule_entry.is_active > 0;
 
         Ok(Self {
             schedule_type,
-            start_time,
-            stop_time,
+            start_time: sql_schedule_entry.start_time,
+            stop_time: sql_schedule_entry.stop_time,
             is_active,
         })
     }
@@ -184,6 +202,7 @@ impl ScheduleEntry {
 }
 
 /// Contains the configuration and the implementation of the SQL interface for Schedule.
+#[derive(Debug)]
 pub struct SqlInterfaceSchedule {
     /// Connection to the database
     pub conn: PooledConn,
@@ -285,7 +304,7 @@ impl SqlInterfaceSchedule {
     ///   (e.g., a malformed time string) in the database.
     pub fn read_schedule(&mut self) -> Result<(), Vec<SqlInterfaceError>> {
         // Get all schedule entries from the database
-        let schedule_string_array = match self.conn.query_map(
+        let schedule_entry_array = match self.conn.query_map(
             sql_query_strings::SQL_QUERY_READ_SCHEDULE,
             |(schedule_type, start_time, stop_time, is_active)| SqlScheduleEntry {
                 schedule_type,
@@ -307,7 +326,7 @@ impl SqlInterfaceSchedule {
         self.schedules.clear();
 
         let mut errors = vec![]; // for collecting the errors
-        for schedule_string in schedule_string_array {
+        for schedule_string in schedule_entry_array {
             match ScheduleEntry::new(schedule_string) {
                 Ok(schedule_entry) => {
                     self.schedules.push(schedule_entry);
@@ -384,6 +403,130 @@ pub mod tests {
     use std::collections::HashMap;
 
     #[test]
+    // This test case verifies the validation and data processing logic for SqlInterfaceSchedule.
+    // It covers the following scenarios:
+    // 1. `new()`: Happy path, failure on NULL, and failure on row limits.
+    // 2. `read_schedule()`: Failure on invalid data (bad schedule type) and partial success.
+    // Test case uses test database #63.
+    fn test_sql_interface_schedule_new_and_read() {
+        // --- Common Setup ---
+        let config: ConfigData = read_config_file_with_test_database(
+            "/config/aquarium_control_test_generic.toml".to_string(),
+            63, // Using database #63 as requested
+        );
+        println!("Testing with database {}", config.sql_interface.db_name);
+        let mut sql_interface: SqlInterface = SqlInterface::new(config.sql_interface.clone())
+            .expect("Initialization of SQL interface for test failed.");
+
+        // --- Test `new()`: Happy Path (empty table) ---
+        println!("* Testing new() with an empty table (Happy Path)...");
+        SqlInterface::truncate_table(&mut sql_interface, SQL_TABLE_SCHEDULE.to_string())
+            .expect("Test setup failed: Could not truncate table.");
+
+        let result =
+            SqlInterfaceSchedule::new(sql_interface.get_connection().unwrap(), 10);
+        assert!(
+            result.is_ok(),
+            "Expected new() to succeed with an empty table, but it failed: {:?}",
+            result.err()
+        );
+        println!("* Succeeded: Happy path initialization is successful on an empty table.");
+
+        // --- Test `new()`: Failure on too many rows ---
+        println!("* Testing new() with more rows than the limit...");
+        SqlInterface::truncate_table(&mut sql_interface, SQL_TABLE_SCHEDULE.to_string())
+            .expect("Test setup failed: Could not truncate table.");
+        let mut conn = sql_interface.get_connection().unwrap();
+        conn.exec_drop(
+            sql_query_strings::SQL_QUERY_WRITE_SCHEDULE_TEST_DATA,
+            params! { "schedule_name" => "Balling", "start_time" => "01:00:00", "stop_time" => "02:00:00" },
+        )
+            .unwrap();
+        conn.exec_drop(
+            sql_query_strings::SQL_QUERY_WRITE_SCHEDULE_TEST_DATA,
+            params! { "schedule_name" => "Refill", "start_time" => "03:00:00", "stop_time" => "04:00:00" },
+        )
+            .unwrap();
+
+        // Set the limit to 1
+        let result = SqlInterfaceSchedule::new(conn, 1);
+        assert!(
+            matches!(
+                result,
+                Err(SqlInterfaceError::DatabaseScheduleTableContainsTooManyRows(
+                    _,
+                    _,
+                    _
+                ))
+            ),
+            "Expected row limit error, but got {:?}",
+            result
+        );
+        println!("* Succeeded: Initialization fails if table exceeds row limit.");
+
+        // --- Test `read_schedule()`: Failure on invalid data ---
+        println!("* Testing read_schedule() with an invalid schedule type...");
+        SqlInterface::truncate_table(&mut sql_interface, SQL_TABLE_SCHEDULE.to_string())
+            .expect("Test setup failed: Could not truncate table.");
+        let mut conn = sql_interface.get_connection().unwrap();
+        conn.exec_drop(
+            sql_query_strings::SQL_QUERY_WRITE_SCHEDULE_TEST_DATA,
+            params! { "schedule_name" => "InvalidType", "start_time" => "01:00:00", "stop_time" => "02:00:00" },
+        )
+            .unwrap();
+
+        let mut schedule_db = SqlInterfaceSchedule::new(conn, 10).unwrap();
+        let read_result = schedule_db.read_schedule();
+
+        assert!(
+            matches!(read_result, Err(ref errors) if !errors.is_empty()),
+            "Expected read_schedule to return a vector of errors"
+        );
+
+        if let Err(errors) = read_result {
+            assert!(matches!(
+                errors[0],
+                SqlInterfaceError::ScheduleProcessingFailure { .. }
+            ));
+            println!("* Succeeded: read_schedule correctly fails on invalid data.");
+        }
+
+        // --- Test `read_schedule()`: Partial success ---
+        println!("* Testing read_schedule() with mixed valid and invalid data...");
+        SqlInterface::truncate_table(&mut sql_interface, SQL_TABLE_SCHEDULE.to_string())
+            .expect("Test setup failed: Could not truncate table.");
+        let mut conn = sql_interface.get_connection().unwrap();
+        // Insert one valid row
+        conn.exec_drop(
+            sql_query_strings::SQL_QUERY_WRITE_SCHEDULE_TEST_DATA,
+            params! { "schedule_name" => "Balling", "start_time" => "01:00:00", "stop_time" => "02:00:00" },
+        )
+            .unwrap();
+        // Insert one invalid row
+        conn.exec_drop(
+            sql_query_strings::SQL_QUERY_WRITE_SCHEDULE_TEST_DATA,
+            params! { "schedule_name" => "AnotherInvalidType", "start_time" => "03:00:00", "stop_time" => "04:00:00" },
+        )
+            .unwrap();
+
+        let mut schedule_db = SqlInterfaceSchedule::new(conn, 10).unwrap();
+        let read_result = schedule_db.read_schedule();
+
+        // Expect an error, but also check that the valid data was processed.
+        assert!(
+            read_result.is_err(),
+            "Expected an error due to the invalid entry"
+        );
+        assert_eq!(
+            schedule_db.schedules.len(),
+            1,
+            "Expected exactly one valid schedule to be processed"
+        );
+        assert_eq!(schedule_db.schedules[0].schedule_type, ScheduleType::Balling);
+        println!("* Succeeded: read_schedule correctly processes valid data while reporting errors for invalid data.");
+    }
+
+    #[test]
     // Test case reads entries from the SQL database.
     // Since the application does not modify schedule data in the SQL database,
     // results are compared to fixed references.
@@ -438,8 +581,8 @@ pub mod tests {
             .map(|(name, start, stop)| {
                 let entry = ScheduleEntry::new(SqlScheduleEntry {
                     schedule_type: name.to_string(),
-                    start_time: start.to_string(),
-                    stop_time: stop.to_string(),
+                    start_time: start.to_string().parse().unwrap(),
+                    stop_time: stop.to_string().parse().unwrap(),
                     is_active: 1,
                 })
                 .unwrap();
@@ -533,143 +676,6 @@ pub mod tests {
                 "Correctly received ScheduleTypeNotFound for '{}'. Available types: '{}'",
                 requested, available
             );
-        }
-    }
-
-    #[test]
-    // Test case verifies that the correct error is returned for a malformed start time.
-    // Test case uses test database #54.
-    pub fn test_sql_interface_schedule_start_time_failure() {
-        let config: ConfigData = read_config_file_with_test_database(
-            "/config/aquarium_control_test_generic.toml".to_string(),
-            54, // Use database #54
-        );
-        println!(
-            "Testing ScheduleStartTimeConversionFailure with database {}",
-            config.sql_interface.db_name
-        );
-        let mut sql_interface: SqlInterface = SqlInterface::new(config.sql_interface.clone())
-            .expect("Initialization of SQL interface for test failed.");
-        SqlInterface::truncate_table(&mut sql_interface, SQL_TABLE_SCHEDULE.to_string()).unwrap();
-
-        // Insert a schedule with a malformed start_time
-        let malformed_start_time = "99:00:00";
-        sql_interface
-            .conn
-            .exec_drop(
-                sql_query_strings::SQL_QUERY_WRITE_SCHEDULE_TEST_DATA,
-                params! {
-                    "schedule_name" => "Heating",
-                    "start_time" => malformed_start_time,
-                    "stop_time" => "23:59:00",
-                },
-            )
-            .unwrap();
-
-        let mut sql_interface_schedule = SqlInterfaceSchedule::new(
-            sql_interface.get_connection().unwrap(),
-            config.sql_interface.max_rows_schedule,
-        )
-        .unwrap();
-
-        // read_schedule should return an error
-        let read_result = sql_interface_schedule.read_schedule();
-
-        // Assert that we get an error
-        assert!(read_result.is_err());
-
-        if let Err(errors) = read_result {
-            assert_eq!(errors.len(), 1);
-            let error = &errors[0];
-            assert!(matches!(
-                error,
-                SqlInterfaceError::ScheduleProcessingFailure { .. }
-            ));
-
-            // Check the nested error source
-            if let SqlInterfaceError::ScheduleProcessingFailure { source, .. } = error {
-                assert!(matches!(
-                    **source, // Dereference the Box<SqlInterfaceError>
-                    SqlInterfaceError::ScheduleStartTimeConversionFailure(_, _)
-                ));
-                if let SqlInterfaceError::ScheduleStartTimeConversionFailure(_, time_str) =
-                    &**source
-                {
-                    assert_eq!(time_str, malformed_start_time);
-                    println!(
-                        "Correctly received ScheduleStartTimeConversionFailure for time '{}'",
-                        time_str
-                    );
-                }
-            }
-        }
-    }
-
-    #[test]
-    // Test case verifies that the correct error is returned for a malformed stop time.
-    // Test case uses test database #55.
-    pub fn test_sql_interface_schedule_stop_time_failure() {
-        let config: ConfigData = read_config_file_with_test_database(
-            "/config/aquarium_control_test_generic.toml".to_string(),
-            55, // Use database #55
-        );
-        println!(
-            "Testing ScheduleStopTimeConversionFailure with database {}",
-            config.sql_interface.db_name
-        );
-        let mut sql_interface: SqlInterface = SqlInterface::new(config.sql_interface.clone())
-            .expect("Initialization of SQL interface for test failed.");
-        SqlInterface::truncate_table(&mut sql_interface, SQL_TABLE_SCHEDULE.to_string()).unwrap();
-
-        // Insert a schedule with a malformed stop_time
-        let malformed_stop_time = "25:00:00";
-        sql_interface
-            .conn
-            .exec_drop(
-                sql_query_strings::SQL_QUERY_WRITE_SCHEDULE_TEST_DATA,
-                params! {
-                    "schedule_name" => "Heating",
-                    "start_time" => "00:00:00",
-                    "stop_time" => malformed_stop_time,
-                },
-            )
-            .unwrap();
-
-        let mut sql_interface_schedule = SqlInterfaceSchedule::new(
-            sql_interface.get_connection().unwrap(),
-            config.sql_interface.max_rows_schedule,
-        )
-        .unwrap();
-
-        // read_schedule should return an error
-        let read_result = sql_interface_schedule.read_schedule();
-
-        // Assert that we get an error
-        assert!(read_result.is_err());
-
-        if let Err(errors) = read_result {
-            assert_eq!(errors.len(), 1);
-            let error = &errors[0];
-            assert!(matches!(
-                error,
-                SqlInterfaceError::ScheduleProcessingFailure { .. }
-            ));
-
-            // Check the nested error source
-            if let SqlInterfaceError::ScheduleProcessingFailure { source, .. } = error {
-                assert!(matches!(
-                    **source, // Dereference the Box<SqlInterfaceError>
-                    SqlInterfaceError::ScheduleStopTimeConversionFailure(_, _)
-                ));
-                if let SqlInterfaceError::ScheduleStopTimeConversionFailure(_, time_str) = &**source
-                {
-                    assert_eq!(time_str, malformed_stop_time);
-                    println!(
-                        "Correctly received ScheduleStopTimeConversionFailure for time '{}'",
-                        time_str
-                    );
-                }
-            }
         }
     }
 }

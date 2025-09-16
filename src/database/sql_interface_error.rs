@@ -212,14 +212,6 @@ pub enum SqlInterfaceError {
     #[error("[{0}] Error in conversion of database result to schedule entry ({1}).")]
     ScheduleTypeConversionFailure(String, String),
 
-    /// Could not convert start time string read from the database.
-    #[error("[{0}] Could not convert start time string read from database ({1}).")]
-    ScheduleStartTimeConversionFailure(String, String),
-
-    /// Could not convert stop time string read from the database
-    #[error("[{0}] Could not convert stop time string read from database ({1}).")]
-    ScheduleStopTimeConversionFailure(String, String),
-
     /// Type-specific schedule could not be found in the database.
     #[error(
         "[{0}] Schedule of type {1} could not be found in database. Existing entries are: {2}."
