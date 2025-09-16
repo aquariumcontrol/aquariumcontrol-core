@@ -193,70 +193,6 @@ impl SqlInterface {
         })
     }
 
-    /// Executes a given SQL query and maps the results into a vector of `NaiveDateTime` structs.
-    ///
-    /// # Arguments
-    /// * `conn` - A mutable reference to an active database connection.
-    /// * `sql_query_string` - The SQL query string to be executed.
-    ///
-    /// # Returns
-    /// A `Result` containing a vector of `NaiveDateTime` structs. The vector
-    /// may be empty if the query returns no rows.
-    ///
-    /// # Errors
-    /// This function will return an `(SqlInterfaceError::TimestampArrayRequestFailure)`
-    /// if the database query execution fails for any reason, such as a syntax error
-    /// in the SQL or a connection issue.
-    fn get_timestamp_array_from_database(
-        conn: &mut PooledConn,
-        sql_query_string: &str,
-    ) -> Result<Vec<NaiveDateTime>, SqlInterfaceError> {
-        conn.query_map(sql_query_string, |naive_date_time| naive_date_time)
-            .map_err(|_| {
-                SqlInterfaceError::TimestampArrayRequestFailure(
-                    module_path!().to_string(),
-                    sql_query_string.to_string(),
-                )
-            })
-    }
-
-    /// Executes an SQL query and returns an optional single timestamp value.
-    ///
-    /// # Arguments
-    /// * `conn` - A mutable reference to an active database connection.
-    /// * `sql_query_string` - The SQL query designed to return at most one timestamp value.
-    ///
-    /// # Returns
-    /// A `Result` containing an `Option<NaiveDateTime>` on success.
-    /// - `Ok(Some(NaiveDateTime))` if the query returns exactly one string value.
-    /// - `Ok(None)` if the query returns no rows.
-    ///
-    /// # Errors
-    /// This function will return an error if:
-    /// - The underlying database query fails.
-    /// - The query returns more than one row (`SqlInterfaceError::SingleTimestampRequestNoSingleResponse`).
-    fn get_single_optional_timestamp_from_database(
-        conn: &mut PooledConn,
-        sql_query_string: &str,
-    ) -> Result<Option<NaiveDateTime>, SqlInterfaceError> {
-        // Get a single timestamp value from the database
-        let single_timestamp_array = Self::get_timestamp_array_from_database(conn, sql_query_string)?;
-
-        // return an empty response if there is no response from the database
-        if single_timestamp_array.is_empty() {
-            return Ok(None);
-        }
-
-        // check the error case if there is more than one response
-        if single_timestamp_array.len() > 1 {
-            return Err(SqlInterfaceError::SingleTimestampRequestNoSingleResponse(
-                module_path!().to_string(),
-                sql_query_string.to_string(),
-            ));
-        }
-        Ok(Some(single_timestamp_array[0].clone()))
-    }
-
     /// Executes an SQL query and strictly expects a single string result.
     ///
     /// # Arguments
@@ -546,21 +482,20 @@ impl SqlInterface {
 
     /// Executes an SQL query to retrieve a single timestamp string and converts it to `NaiveDateTime`.
     ///
-    /// This function fetches a single string from the database (expected to be in
-    /// "YYYY-MM-DD HH:MM:SS" format) and then attempts to parse it into a `NaiveDateTime` object.
+    /// This function fetches a single timestamp from the database of type `NaiveDateTime`.
     ///
     /// # Arguments
     /// * `conn` - A mutable reference to an active database connection.
     /// * `sql_query_string` - The SQL query to retrieve the timestamp as a string.
     ///
     /// # Returns
-    /// A `Result` containing the successfully parsed `NaiveDateTime` on success.
+    /// A `Result` containing `NaiveDateTime` on success.
     ///
     /// # Errors
     /// This function will return an error if:
     /// - The underlying database query to fetch the string fails (`SqlInterfaceError::TimestampRequestFailure`).
     ///   This can happen if the query is invalid, the connection is lost, or if the query
-    ///   does not return exactly one row.
+    ///   does not return at least one row.
     /// - The retrieved string cannot be parsed into a valid `NaiveDateTime`
     ///   (`SqlInterfaceError::TimestampConversionFailure`). This indicates the database
     ///   returned a string in an unexpected format.
@@ -587,7 +522,7 @@ impl SqlInterface {
         }
     }
 
-    // Executes an SQL query to retrieve an optional timestamp and converts it to `NaiveDateTime`.
+    /// Executes an SQL query to retrieve an optional timestamp and converts it to `NaiveDateTime`.
     ///
     /// This function is designed for queries that might return a single timestamp, but where an
     /// empty result is also a valid outcome (e.g., checking for the last event in a log that might be empty).
@@ -616,14 +551,13 @@ impl SqlInterface {
         conn: &mut PooledConn,
         sql_query_string: &str,
     ) -> Result<Option<NaiveDateTime>, SqlInterfaceError> {
-        // Request (optional) timestamp from the database, wrapping any potential error.
-        Ok(Self::get_single_optional_timestamp_from_database(conn, sql_query_string).map_err(
-                |e| SqlInterfaceError::OptionalTimestampRequestFailure {
-                    location: module_path!().to_string(),
-                    source: Box::new(e),
-                },
-            )?
-        )
+        // Request (optional) timestamp from the database.
+        Ok(conn.query_first(sql_query_string).map_err(|_| {
+            SqlInterfaceError::OptionalTimestampRequestFailure {
+                location: module_path!().to_string(),
+                query: sql_query_string.to_string(),
+            }
+        })?)
     }
 
     /// Fetches the current timestamp directly from the database.
@@ -686,10 +620,9 @@ impl SqlInterface {
         Self::get_timestamp(conn, &sql_query_with_offset_resolved)
     }
 
-    // Executes an SQL query to retrieve a single date string and converts it to `NaiveDate`.
+    /// Executes an SQL query to retrieve a single date of type `NaiveDate`.
     ///
-    /// This function fetches a single string from the database, which is expected to be in
-    /// the "YYYY-MM-DD" format, and then attempts to parse it into a `NaiveDate` object.
+    /// This function fetches a date from the database.
     ///
     /// # Arguments
     /// * `conn` - A mutable reference to an active database connection.
@@ -703,31 +636,27 @@ impl SqlInterface {
     /// - The underlying database query to fetch the string fails (`SqlInterfaceError::DateRequestFailure`).
     ///   This can happen if the query is invalid, the connection is lost, or if the query
     ///   does not return exactly one row.
-    /// - The retrieved string cannot be parsed into a valid `NaiveDate`
-    ///   (`SqlInterfaceError::TimestampConversionFailure`). This indicates the database
-    ///   returned a string in an unexpected format.
     fn get_date(
         conn: &mut PooledConn,
         sql_query_string: &str,
     ) -> Result<NaiveDate, SqlInterfaceError> {
-        // trigger SQL call
-        let timestamp_string = Self::get_single_string_from_database(conn, sql_query_string)
-            .map_err(|e| SqlInterfaceError::DateRequestFailure {
+        let date_opt: Option<(NaiveDate,)> = conn.query_first(sql_query_string).map_err(|_| {
+            SqlInterfaceError::DateRequestFailure {
                 location: module_path!().to_string(),
-                source: Box::new(e),
-            })?;
+                query: sql_query_string.to_string(),
+            }
+        })?;
 
-        // convert data type
-        let result =
-            NaiveDate::parse_from_str(timestamp_string.as_str(), "%Y-%m-%d").map_err(|e| {
-                SqlInterfaceError::TimestampConversionFailure {
+        // Handle the case where the query returned no rows.
+        date_opt
+            .map(|(date,)| date) // Extracts the NaiveDate from the tuple `(NaiveDate)`
+            .ok_or_else(|| {
+                // Create the specific error for an empty response, just like the old code did.
+                SqlInterfaceError::DateRequestFailure {
                     location: module_path!().to_string(),
-                    timestamp_string,
-                    source: e,
+                    query: sql_query_string.to_string(),
                 }
-            })?;
-
-        Ok(result)
+            })
     }
 
     /// Fetches the current calendar date directly from the database.
@@ -858,99 +787,6 @@ impl SqlInterface {
         }
     }
 
-    #[cfg(test)]
-    // This helper function **empties the specified database table** using a TRUNCATE command.
-    // The function is only used in test environments across different crates to ensure a clean state
-    // before running tests.
-    //
-    // Arguments:
-    // * `sql_interface`: A mutable reference to the main SQL interface.
-    // * `sql_table_name`: The name of the table to be emptied.
-    //
-    /// # Returns
-    /// An empty `Result` (`Ok(())`) on successful truncation of the table.
-    ///
-    /// # Errors
-    /// This function will return an `Err(SqlInterfaceError::TruncateTableFailure)` if the
-    /// `TRUNCATE TABLE` command fails. This can happen for several reasons, including
-    /// - The specified table does not exist.
-    /// - The database user lacks the necessary permissions to truncate the table.
-    /// - The database connection has been lost.
-    pub fn truncate_table(
-        sql_interface: &mut SqlInterface,
-        sql_table_name: String,
-    ) -> Result<(), SqlInterfaceError> {
-        let sql_query_string = str::replace(
-            sql_query_strings::SQL_QUERY_TRUNCATE_TABLE,
-            "#table",
-            &sql_table_name,
-        );
-        match sql_interface.conn.query_drop(sql_query_string) {
-            Ok(_) => Ok(()),
-            Err(e) => {
-                println!("{e:?}");
-                Err(SqlInterfaceError::TruncateTableFailure(
-                    module_path!().to_string(),
-                    sql_table_name,
-                ))
-            }
-        }
-    }
-
-    #[cfg(test)]
-    // This test-only function calculates a `NaiveDateTime` that is a specific duration
-    // in the past relative to the current local time. This function is used for setting up
-    // historical data scenarios in tests across different crates.
-    //
-    // Arguments:
-    // * `hours_in_past`: The number of hours back in time.
-    // * `seconds_in_past`: The number of additional seconds back in time.
-    //
-    // Returns:
-    // A `NaiveDateTime` representing the calculated past timestamp.
-    #[cfg(test)]
-    pub fn get_naive_timestamp_from_past(
-        hours_in_past: i64,
-        seconds_in_past: i64,
-    ) -> NaiveDateTime {
-        let timestamp_from_past =
-            Local::now() - Duration::hours(hours_in_past) - Duration::seconds(seconds_in_past);
-        timestamp_from_past.naive_local()
-    }
-
-    #[cfg(test)]
-    // This test-only function calculates the time difference in seconds between a
-    // provided `NaiveDateTime` (expected to be in the past) and the current local time.
-    //
-    // Arguments:
-    // * `timestamp_naive`: The past timestamp from which the duration will be measured.
-    //
-    // Returns:
-    // `Some(i64)` representing the duration in seconds if the conversion and calculation
-    // are successful. Returns `None` if the `timestamp_naive` cannot be unambiguously
-    // converted to a local `DateTime`.
-    pub fn get_duration_from_naive_timestamp_to_local_now(
-        timestamp_naive: NaiveDateTime,
-    ) -> Option<i64> {
-        use chrono::LocalResult::{Ambiguous, None, Single};
-
-        let reference_current_timestamp = Local::now();
-        let timestamp_dt: DateTime<Local> = match Local.from_local_datetime(&timestamp_naive) {
-            Single(t) => t,
-            Ambiguous(_t1, _t2) => {
-                return Option::None;
-            }
-            None => {
-                return Option::None;
-            }
-        };
-        Some(
-            reference_current_timestamp
-                .signed_duration_since(timestamp_dt)
-                .num_seconds(),
-        )
-    }
-
     /// Checks if the database's `wait_timeout` setting meets a minimum required value.
     ///
     /// This function retrieves the current `wait_timeout` from the connected database
@@ -1038,11 +874,103 @@ impl SqlInterface {
             })
             .map(|_| ()) // On success, transform the i64 into a unit type
     }
+
+    #[cfg(test)]
+    // This helper function **empties the specified database table** using a TRUNCATE command.
+    // The function is only used in test environments across different crates to ensure a clean state
+    // before running tests.
+    //
+    // Arguments:
+    // * `sql_interface`: A mutable reference to the main SQL interface.
+    // * `sql_table_name`: The name of the table to be emptied.
+    //
+    /// # Returns
+    /// An empty `Result` (`Ok(())`) on successful truncation of the table.
+    ///
+    /// # Errors
+    /// This function will return an `Err(SqlInterfaceError::TruncateTableFailure)` if the
+    /// `TRUNCATE TABLE` command fails. This can happen for several reasons, including
+    /// - The specified table does not exist.
+    /// - The database user lacks the necessary permissions to truncate the table.
+    /// - The database connection has been lost.
+    pub fn truncate_table(
+        sql_interface: &mut SqlInterface,
+        sql_table_name: String,
+    ) -> Result<(), SqlInterfaceError> {
+        let sql_query_string = str::replace(
+            sql_query_strings::SQL_QUERY_TRUNCATE_TABLE,
+            "#table",
+            &sql_table_name,
+        );
+        match sql_interface.conn.query_drop(sql_query_string) {
+            Ok(_) => Ok(()),
+            Err(e) => {
+                println!("{e:?}");
+                Err(SqlInterfaceError::TruncateTableFailure(
+                    module_path!().to_string(),
+                    sql_table_name,
+                ))
+            }
+        }
+    }
+
+    #[cfg(test)]
+    // This test-only function calculates a `NaiveDateTime` that is a specific duration
+    // in the past relative to the current local time. This function is used for setting up
+    // historical data scenarios in tests across different crates.
+    //
+    // Arguments:
+    // * `hours_in_past`: The number of hours back in time.
+    // * `seconds_in_past`: The number of additional seconds back in time.
+    //
+    // Returns:
+    // A `NaiveDateTime` representing the calculated past timestamp.
+    pub fn get_naive_timestamp_from_past(
+        hours_in_past: i64,
+        seconds_in_past: i64,
+    ) -> NaiveDateTime {
+        let timestamp_from_past =
+            Local::now() - Duration::hours(hours_in_past) - Duration::seconds(seconds_in_past);
+        timestamp_from_past.naive_local()
+    }
+
+    #[cfg(test)]
+    // This test-only function calculates the time difference in seconds between a
+    // provided `NaiveDateTime` (expected to be in the past) and the current local time.
+    //
+    // Arguments:
+    // * `timestamp_naive`: The past timestamp from which the duration will be measured.
+    //
+    // Returns:
+    // `Some(i64)` representing the duration in seconds if the conversion and calculation
+    // are successful. Returns `None` if the `timestamp_naive` cannot be unambiguously
+    // converted to a local `DateTime`.
+    pub fn get_duration_from_naive_timestamp_to_local_now(
+        timestamp_naive: NaiveDateTime,
+    ) -> Option<i64> {
+        use chrono::LocalResult::{Ambiguous, None, Single};
+
+        let reference_current_timestamp = Local::now();
+        let timestamp_dt: DateTime<Local> = match Local.from_local_datetime(&timestamp_naive) {
+            Single(t) => t,
+            Ambiguous(_t1, _t2) => {
+                return Option::None;
+            }
+            None => {
+                return Option::None;
+            }
+        };
+        Some(
+            reference_current_timestamp
+                .signed_duration_since(timestamp_dt)
+                .num_seconds(),
+        )
+    }
 }
 
 #[cfg(test)]
 pub mod tests {
-    use chrono::{DateTime, Local, SubsecRound, TimeZone};
+    use chrono::{DateTime, Local, NaiveDate, SubsecRound, TimeZone};
     use mysql::params;
     use mysql::prelude::Queryable;
 
@@ -1051,9 +979,329 @@ pub mod tests {
     use crate::utilities::version_information::VersionInformation;
 
     #[test]
+    // This test case checks the functionality of get_string_array_from_database.
+    // - response when querying an empty table (should be Ok with an empty Vec)
+    // - response when querying a table with one entry (should be Ok with a Vec of 1)
+    // - response when querying a table with multiple entries (should be Ok with a Vec of n)
+    // Test case uses test database #56.
+    fn test_get_string_array_from_database() {
+        // Setup
+        let config: ConfigData = read_config_file_with_test_database(
+            "/config/aquarium_control_test_generic.toml".to_string(),
+            56,
+        );
+        println!("Testing with database {}", config.sql_interface.db_name);
+        let sql_interface: SqlInterface = SqlInterface::new(config.sql_interface)
+            .expect("Initialization of SQL interface for test failed.");
+        let mut conn = sql_interface.get_connection().unwrap();
+
+        let table_name = "test_string_array";
+
+        // Create a temporary table for the test
+        conn.query_drop(&format!(
+            "CREATE TABLE IF NOT EXISTS {} (name VARCHAR(255));",
+            table_name
+        ))
+            .unwrap();
+
+        // --- Test Case 1: Empty table ---
+        println!("* Testing string array with empty table...");
+        conn.query_drop(&format!("TRUNCATE TABLE {}", table_name))
+            .unwrap();
+
+        let result = SqlInterface::get_string_array_from_database(
+            &mut conn,
+            &format!("SELECT name FROM {}", table_name),
+        );
+        let result_vec = result.unwrap();
+        assert!(
+            result_vec.is_empty(),
+            "Expected an empty vector for an empty table"
+        );
+        println!("* Succeeded: Empty table returns an empty Vec.");
+
+        // --- Test Case 2: Table with one entry ---
+        println!("* Testing string array with a single entry...");
+        let test_string_1 = "Hello";
+        conn.exec_drop(
+            &format!("INSERT INTO {} (name) VALUES (:name)", table_name),
+            params! { "name" => test_string_1 },
+        )
+            .unwrap();
+
+        let result = SqlInterface::get_string_array_from_database(
+            &mut conn,
+            &format!("SELECT name FROM {}", table_name),
+        );
+        let result_vec = result.unwrap();
+        assert_eq!(result_vec.len(), 1);
+        assert_eq!(result_vec[0].single_string, test_string_1);
+        println!("* Succeeded: Table with one entry returns a Vec with one element.");
+
+        // --- Test Case 3: Table with multiple entries ---
+        println!("* Testing string array with multiple entries...");
+        let test_string_2 = "World";
+        conn.exec_drop(
+            &format!("INSERT INTO {} (name) VALUES (:name)", table_name),
+            params! { "name" => test_string_2 },
+        )
+            .unwrap();
+
+        // Use ORDER BY to ensure a predictable order for assertions
+        let result = SqlInterface::get_string_array_from_database(
+            &mut conn,
+            &format!("SELECT name FROM {} ORDER BY name ASC", table_name),
+        );
+        let result_vec = result.unwrap();
+        assert_eq!(result_vec.len(), 2);
+        assert_eq!(result_vec[0].single_string, test_string_1); // "Hello"
+        assert_eq!(result_vec[1].single_string, test_string_2); // "World"
+        println!("* Succeeded: Table with multiple entries returns a Vec with all elements.");
+
+        // Cleanup
+        conn.query_drop(&format!("DROP TABLE {}", table_name))
+            .unwrap();
+    }
+
+    #[test]
+    // This test case checks the functionality of get_optional_timestamp.
+    // - response when querying an empty table (should be Ok(None))
+    // - response when querying a table with one entry (should be Ok(Some(timestamp)))
+    // - error response when querying a table with multiple entries
+    // Test case uses test database #56.
+    fn test_get_optional_timestamp() {
+        // Setup
+        let config: ConfigData = read_config_file_with_test_database(
+            "/config/aquarium_control_test_generic.toml".to_string(),
+            56,
+        );
+        println!("Testing with database {}", config.sql_interface.db_name);
+        let sql_interface: SqlInterface = SqlInterface::new(config.sql_interface)
+            .expect("Initialization of SQL interface for test failed.");
+        let mut conn = sql_interface.get_connection().unwrap();
+
+        let table_name = "test_optional_timestamp";
+
+        // Create a temporary table for the test
+        conn.query_drop(&format!(
+            "CREATE TABLE IF NOT EXISTS {} (ts TIMESTAMP);",
+            table_name
+        ))
+            .unwrap();
+
+        // --- Test Case 1: Empty table ---
+        println!("* Testing optional timestamp with empty table...");
+        conn.query_drop(&format!("TRUNCATE TABLE {}", table_name))
+            .unwrap();
+
+        let result =
+            SqlInterface::get_optional_timestamp(&mut conn, &format!("SELECT ts FROM {}", table_name));
+        assert_eq!(result.unwrap(), None);
+        println!("* Succeeded: Empty table returns Ok(None).");
+
+        // --- Test Case 2: Table with one entry ---
+        println!("* Testing optional timestamp with a single entry...");
+        let test_timestamp = Local::now().naive_local().trunc_subsecs(0);
+        conn.exec_drop(
+            &format!("INSERT INTO {} (ts) VALUES (:ts)", table_name),
+            params! { "ts" => test_timestamp },
+        )
+            .unwrap();
+
+        let result =
+            SqlInterface::get_optional_timestamp(&mut conn, &format!("SELECT ts FROM {}", table_name));
+        assert_eq!(result.unwrap(), Some(test_timestamp));
+        println!("* Succeeded: Table with one entry returns Ok(Some(timestamp)).");
+
+        // --- Test Case 3: Table with multiple entries ---
+        println!("* Testing optional timestamp with multiple entries...");
+        let another_timestamp = (Local::now() - chrono::Duration::minutes(5))
+            .naive_local()
+            .trunc_subsecs(0);
+        conn.exec_drop(
+            &format!("INSERT INTO {} (ts) VALUES (:ts)", table_name),
+            params! { "ts" => another_timestamp },
+        )
+            .unwrap();
+
+        let result =
+            SqlInterface::get_optional_timestamp(&mut conn, &format!("SELECT ts FROM {}", table_name));
+        assert_eq!(result.unwrap(), Some(test_timestamp));
+        println!("* Succeeded: Table with multiple entries returns Ok(Some(timestamp)).");
+
+        // Cleanup
+        conn.query_drop(&format!("DROP TABLE {}", table_name))
+            .unwrap();
+    }
+
+    #[test]
+    // This test case checks if current timestamp is local timestamp.
+    // It does not modify any database.
+    pub fn test_get_current_timestamp() {
+        let config: ConfigData = read_config_file_with_test_database(
+            "/config/aquarium_control_test_generic.toml".to_string(),
+            28,
+        );
+        println!("Testing with database {}", config.sql_interface.db_name);
+        let mut sql_interface: SqlInterface = SqlInterface::new(config.sql_interface)
+            .expect("Initialization of SQL interface for test failed.");
+
+        // *** check if current timestamp is local timestamp ***************************************
+        let sql_timestamp = match SqlInterface::get_current_timestamp(&mut sql_interface.conn) {
+            Ok(c) => c,
+            Err(_) => panic!("Could not get current timestamp from the database."),
+        };
+        let date_time: DateTime<Local> = Local.from_local_datetime(&sql_timestamp).unwrap();
+        assert_eq!(date_time, Local::now().trunc_subsecs(0));
+        println!("* checking current timestamp succeeded.");
+        // *****************************************************************************************
+    }
+
+    #[test]
+    // This test case checks the functionality of get_current_timestamp_offset_seconds.
+    // It verifies that the function correctly returns timestamps in the future (positive offset),
+    // in the past (negative offset), and at the present (zero offset).
+    // Test case does not modify any database.
+    fn test_get_current_timestamp_offset_seconds() {
+        // Setup
+        let config: ConfigData = read_config_file_with_test_database(
+            "/config/aquarium_control_test_generic.toml".to_string(),
+            56,
+        );
+        println!("Testing with database {}", config.sql_interface.db_name);
+        let sql_interface: SqlInterface = SqlInterface::new(config.sql_interface)
+            .expect("Initialization of SQL interface for test failed.");
+        let mut conn = sql_interface.get_connection().unwrap();
+
+        // --- Test Case 1: Positive offset (future) ---
+        println!("* Testing timestamp with positive offset...");
+        let offset_future: i64 = 3600; // 1 hour in the future
+        let result_future =
+            SqlInterface::get_current_timestamp_offset_seconds(&mut conn, offset_future as i32)
+                .unwrap();
+        let expected_future = Local::now().naive_local() + chrono::Duration::seconds(offset_future);
+        let diff_future = (expected_future - result_future).num_seconds().abs();
+        assert!(
+            diff_future <= 2,
+            "Future offset test failed. Expected ~{}, got {}. Difference: {}s",
+            expected_future,
+            result_future,
+            diff_future
+        );
+        println!("* Succeeded: Positive offset returns a future timestamp.");
+
+        // --- Test Case 2: Negative offset (past) ---
+        println!("* Testing timestamp with negative offset...");
+        let offset_past: i64 = -1800; // 30 minutes in the past
+        let result_past =
+            SqlInterface::get_current_timestamp_offset_seconds(&mut conn, offset_past as i32)
+                .unwrap();
+        let expected_past = Local::now().naive_local() + chrono::Duration::seconds(offset_past);
+        let diff_past = (expected_past - result_past).num_seconds().abs();
+        assert!(
+            diff_past <= 2,
+            "Past offset test failed. Expected ~{}, got {}. Difference: {}s",
+            expected_past,
+            result_past,
+            diff_past
+        );
+        println!("* Succeeded: Negative offset returns a past timestamp.");
+
+        // --- Test Case 3: Zero offset ---
+        println!("* Testing timestamp with zero offset...");
+        let offset_zero: i64 = 0;
+        let result_zero =
+            SqlInterface::get_current_timestamp_offset_seconds(&mut conn, offset_zero as i32)
+                .unwrap();
+        let expected_now = Local::now().naive_local();
+        let diff_now = (expected_now - result_zero).num_seconds().abs();
+        assert!(
+            diff_now <= 2,
+            "Zero offset test failed. Expected ~{}, got {}. Difference: {}s",
+            expected_now,
+            result_zero,
+            diff_now
+        );
+        println!("* Succeeded: Zero offset returns the current timestamp.");
+    }
+
+    #[test]
+    // This test case checks the functionality of the private `get_date` function
+    // and its public wrappers.
+    // - Verifies the error response when a query returns no rows.
+    // - Verifies the correct response when a query returns exactly one row.
+    // - Verifies that `get_current_date` and `get_tomorrow_date` work as expected.
+    // Test case uses test database #56.
+    fn test_get_date() {
+        // Setup
+        let config: ConfigData = read_config_file_with_test_database(
+            "/config/aquarium_control_test_generic.toml".to_string(),
+            56,
+        );
+        println!("Testing with database {}", config.sql_interface.db_name);
+        let sql_interface: SqlInterface = SqlInterface::new(config.sql_interface)
+            .expect("Initialization of SQL interface for test failed.");
+        let mut conn = sql_interface.get_connection().unwrap();
+
+        let table_name = "test_date_table";
+
+        // Create a temporary table for the test
+        conn.query_drop(&format!(
+            "CREATE TABLE IF NOT EXISTS {} (d DATE);",
+            table_name
+        ))
+            .unwrap();
+
+        // --- Test Case 1: Empty table (should error) ---
+        println!("* Testing get_date with empty table...");
+        conn.query_drop(&format!("TRUNCATE TABLE {}", table_name))
+            .unwrap();
+
+        let result =
+            SqlInterface::get_date(&mut conn, &format!("SELECT d FROM {}", table_name));
+
+        // Assert that we get the specific error for an empty response.
+        if let Err(SqlInterfaceError::DateRequestFailure { .. }) = result {
+            // This is the expected error path.
+        } else {
+            panic!("Expected DateRequestFailure for empty result, but got: {:?}", result);
+        }
+        println!("* Succeeded: Empty table returns a DateRequestFailure error.");
+
+        // --- Test Case 2: Table with one entry ---
+        println!("* Testing get_date with a single entry...");
+        let test_date = NaiveDate::from_ymd_opt(2025, 7, 15).unwrap();
+        conn.exec_drop(
+            &format!("INSERT INTO {} (d) VALUES (:d)", table_name),
+            params! { "d" => test_date },
+        )
+            .unwrap();
+
+        let result =
+            SqlInterface::get_date(&mut conn, &format!("SELECT d FROM {}", table_name));
+        assert_eq!(result.unwrap(), test_date);
+        println!("* Succeeded: Table with one entry returns Ok(date).");
+
+        // --- Test Case 3: Test public wrappers ---
+        println!("* Testing get_current_date and get_tomorrow_date wrappers...");
+        let current_date_from_db = SqlInterface::get_current_date(&mut conn).unwrap();
+        let tomorrow_date_from_db = SqlInterface::get_tomorrow_date(&mut conn).unwrap();
+
+        let local_today = Local::now().date_naive();
+        let local_tomorrow = local_today.succ_opt().unwrap();
+
+        assert_eq!(current_date_from_db, local_today);
+        assert_eq!(tomorrow_date_from_db, local_tomorrow);
+        println!("* Succeeded: Public wrappers return correct dates.");
+
+        // Cleanup
+        conn.query_drop(&format!("DROP TABLE {}", table_name))
+            .unwrap();
+    }
+
+    #[test]
     // This test case checks
     // - if required tables are existing
-    // - if current timestamp is local timestamp
     // Test case uses test database #28.
     pub fn test_sql_interface_required_tables_existing() {
         let config: ConfigData = read_config_file_with_test_database(
@@ -1105,20 +1353,78 @@ pub mod tests {
         assert_eq!(sql_date_string, local_date_string);
         println!("* checking current date succeeded.");
         // *****************************************************************************************
-
-        // *** check if current timestamp is local timestamp ***************************************
-        let sql_timestamp = match SqlInterface::get_current_timestamp(&mut sql_interface.conn) {
-            Ok(c) => c,
-            Err(_) => panic!("Could not get current timestamp from the database."),
-        };
-        let date_time: DateTime<Local> = Local.from_local_datetime(&sql_timestamp).unwrap();
-        assert_eq!(date_time, Local::now().trunc_subsecs(0));
-        println!("* checking current timestamp succeeded.");
-        // *****************************************************************************************
     }
+
+    #[test]
+    // This test case verifies that `check_wait_timeout` successfully validates
+    // that the database's `wait_timeout` setting is greater than or equal to
+    // the minimum value specified in the configuration file.
+    // Test case does not modify any database.
+    fn test_check_wait_timeout_success() {
+        // Setup
+        let config: ConfigData = read_config_file_with_test_database(
+            "/config/aquarium_control_test_generic.toml".to_string(),
+            56,
+        );
+        println!("Testing with database {}", config.sql_interface.db_name);
+        let min_wait_timeout_from_config = config.sql_interface.db_min_wait_timeout;
+
+        // We need a connection to run the check. The `new` function itself
+        // already runs this check, but we call it explicitly for a focused test.
+        let sql_interface: SqlInterface = SqlInterface::new(config.sql_interface)
+            .expect("Initialization of SQL interface for test failed.");
+        let mut conn = sql_interface.get_connection().unwrap();
+
+        // --- Test Execution ---
+        println!(
+            "* Testing check_wait_timeout with value from config: {}s",
+            min_wait_timeout_from_config
+        );
+        let result = SqlInterface::check_wait_timeout(&mut conn, min_wait_timeout_from_config);
+
+        // --- Assertion ---
+        assert!(
+            result.is_ok(),
+            "check_wait_timeout failed, but was expected to succeed. Result: {:?}",
+            result
+        );
+        println!("* Succeeded: Database wait_timeout is sufficient.");
+    }
+
+    #[test]
+    // This test case checks if a zero value for the minimum wait timeout allows instantiation.
+    pub fn test_sql_interface_min_wait_timeout_check_deactivated() {
+        let mut config: ConfigData = read_config_file_with_test_database(
+            "/config/aquarium_control_test_generic.toml".to_string(),
+            28,
+        );
+        config.sql_interface.db_min_wait_timeout = 0;
+        println!("Testing with database {}", config.sql_interface.db_name);
+        _ = SqlInterface::new(config.sql_interface)
+            .expect("Initialization of SQL interface for test failed with min wait timeout=0.");
+    }
+
+    #[test]
+    // This test case checks if an excessively high value for the minimum wait timeout triggers an error.
+    pub fn test_sql_interface_min_wait_timeout_check() {
+        let mut config: ConfigData = read_config_file_with_test_database(
+            "/config/aquarium_control_test_generic.toml".to_string(),
+            28,
+        );
+        config.sql_interface.db_min_wait_timeout = 1000000;
+        println!("Testing with database {}", config.sql_interface.db_name);
+        let result = SqlInterface::new(config.sql_interface);
+
+        assert!(matches!(
+            result,
+            Err(SqlInterfaceError::WaitTimeoutTooLow(_, _, _))
+        ));
+    }
+
 
     pub const SQL_QUERY_WRITE_VERSION_INFORMATION: &str =
         "INSERT into version(major, minor, build, hash) values(:major, :minor, :build, :hash);";
+
 
     #[test]
     // This test case checks
@@ -1222,35 +1528,6 @@ pub mod tests {
         // ***************************************************************************************
     }
 
-    #[test]
-    // This test case checks if a zero value for the minimum wait timeout allows instantiation.
-    pub fn test_sql_interface_min_wait_timeout_check_deactivated() {
-        let mut config: ConfigData = read_config_file_with_test_database(
-            "/config/aquarium_control_test_generic.toml".to_string(),
-            28,
-        );
-        config.sql_interface.db_min_wait_timeout = 0;
-        println!("Testing with database {}", config.sql_interface.db_name);
-        _ = SqlInterface::new(config.sql_interface)
-            .expect("Initialization of SQL interface for test failed with min wait timeout=0.");
-    }
-
-    #[test]
-    // This test case checks if an excessively high value for the minimum wait timeout triggers a panic.
-    pub fn test_sql_interface_min_wait_timeout_check() {
-        let mut config: ConfigData = read_config_file_with_test_database(
-            "/config/aquarium_control_test_generic.toml".to_string(),
-            28,
-        );
-        config.sql_interface.db_min_wait_timeout = 1000000;
-        println!("Testing with database {}", config.sql_interface.db_name);
-        let result = SqlInterface::new(config.sql_interface);
-
-        assert!(matches!(
-            result,
-            Err(SqlInterfaceError::WaitTimeoutTooLow(_, _, _))
-        ));
-    }
 
     #[test]
     // This test case checks if the ping query can be executed
@@ -1263,81 +1540,5 @@ pub mod tests {
             .expect("Initialization of SQL interface for test failed");
 
         SqlInterface::ping_database(&mut sql_interface.get_connection().unwrap()).unwrap();
-    }
-
-    #[test]
-    // This test case checks the functionality of get_optional_timestamp.
-    // - response when querying an empty table (should be Ok(None))
-    // - response when querying a table with one entry (should be Ok(Some(timestamp)))
-    // - error response when querying a table with multiple entries
-    // Test case uses test database #56.
-    fn test_get_optional_timestamp() {
-        // Setup
-        let config: ConfigData = read_config_file_with_test_database(
-            "/config/aquarium_control_test_generic.toml".to_string(),
-            56,
-        );
-        println!("Testing with database {}", config.sql_interface.db_name);
-        let sql_interface: SqlInterface = SqlInterface::new(config.sql_interface)
-            .expect("Initialization of SQL interface for test failed.");
-        let mut conn = sql_interface.get_connection().unwrap();
-
-        let table_name = "test_optional_timestamp";
-
-        // Create a temporary table for the test
-        conn.query_drop(&format!(
-            "CREATE TABLE IF NOT EXISTS {} (ts TIMESTAMP);",
-            table_name
-        ))
-            .unwrap();
-
-        // --- Test Case 1: Empty table ---
-        println!("* Testing optional timestamp with empty table...");
-        conn.query_drop(&format!("TRUNCATE TABLE {}", table_name))
-            .unwrap();
-
-        let result =
-            SqlInterface::get_optional_timestamp(&mut conn, &format!("SELECT ts FROM {}", table_name));
-        assert_eq!(result.unwrap(), None);
-        println!("* Succeeded: Empty table returns Ok(None).");
-
-        // --- Test Case 2: Table with one entry ---
-        println!("* Testing optional timestamp with a single entry...");
-        let test_timestamp = Local::now().naive_local().trunc_subsecs(0);
-        conn.exec_drop(
-            &format!("INSERT INTO {} (ts) VALUES (:ts)", table_name),
-            params! { "ts" => test_timestamp },
-        )
-            .unwrap();
-
-        let result =
-            SqlInterface::get_optional_timestamp(&mut conn, &format!("SELECT ts FROM {}", table_name));
-        assert_eq!(result.unwrap(), Some(test_timestamp));
-        println!("* Succeeded: Table with one entry returns Ok(Some(timestamp)).");
-
-        // --- Test Case 3: Table with multiple entries ---
-        println!("* Testing optional timestamp with multiple entries...");
-        let another_timestamp = (Local::now() - chrono::Duration::minutes(5))
-            .naive_local()
-            .trunc_subsecs(0);
-        conn.exec_drop(
-            &format!("INSERT INTO {} (ts) VALUES (:ts)", table_name),
-            params! { "ts" => another_timestamp },
-        )
-            .unwrap();
-
-        let result =
-            SqlInterface::get_optional_timestamp(&mut conn, &format!("SELECT ts FROM {}", table_name));
-        // Assert that we get the specific error for a non-single response, wrapped in the outer error type.
-        if let Err(SqlInterfaceError::OptionalTimestampRequestFailure { source, .. }) = result {
-            assert!(matches!(*source, SqlInterfaceError::SingleTimestampRequestNoSingleResponse(_, _)));
-        } else {
-            panic!("Expected OptionalTimestampRequestFailure for multiple results, but got: {:?}", result);
-        }
-        println!("* Succeeded: Table with multiple entries returns an error.");
-
-        // Cleanup
-        conn.query_drop(&format!("DROP TABLE {}", table_name))
-            .unwrap();
     }
 }

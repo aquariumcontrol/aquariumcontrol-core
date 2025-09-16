@@ -70,10 +70,6 @@ pub enum SqlInterfaceError {
     #[error("[{0}] database responded with multiple responses to request to query: {1}")]
     SingleStringRequestNoSingleResponse(String, String),
 
-    /// database responded with multiple responses to request.
-    #[error("[{0}] database responded with multiple responses to request to query: {1}")]
-    SingleTimestampRequestNoSingleResponse(String, String),
-
     /// database responded with empty response to request.
     #[error("[{0}] database responded with empty response to request to query: {1}")]
     SingleStringRequestEmptyResponse(String, String),
@@ -106,10 +102,6 @@ pub enum SqlInterfaceError {
     #[error("[{0}] Database responded with multiple responses to request to query: {1}")]
     SingleFloatRequestNoSingleResponse(String, String),
 
-    /// could not retrieve timestamp(s) from database.
-    #[error("[{0}] Could not retrieve timestamp(s) using query: {1}")]
-    TimestampArrayRequestFailure(String, String),
-    
     /// Could not get single heating stats entry from the database.
     #[error(
         "[{location}] Could not get single heating stats entry from database using query: {query}"
@@ -405,12 +397,7 @@ pub enum SqlInterfaceError {
 
     /// Could not retrieve date from the database.
     #[error("[{location}] Could not retrieve date from the database.")]
-    DateRequestFailure {
-        location: String,
-
-        #[source]
-        source: Box<SqlInterfaceError>,
-    },
+    DateRequestFailure { location: String, query: String },
 
     /// Could not retrieve timestamp from the database.
     #[error("[{location}] Could not retrieve timestamp from database using query: {query}")]
@@ -418,12 +405,7 @@ pub enum SqlInterfaceError {
 
     /// Could not retrieve optional timestamp from the database.
     #[error("[{location}] Could not retrieve optional timestamp from database.")]
-    OptionalTimestampRequestFailure {
-        location: String,
-
-        #[source]
-        source: Box<SqlInterfaceError>,
-    },
+    OptionalTimestampRequestFailure { location: String, query: String},
 
     /// Could not ping database.
     #[error("[{location}] Could not ping database.")]
