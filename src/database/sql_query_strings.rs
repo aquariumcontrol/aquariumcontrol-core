@@ -33,39 +33,39 @@ pub const SQL_QUERY_WRITE_FEED_EVENT: &str = concat!(
     "values(:timestamp, :feeder_run_time, :profile_name, :profile_id)"
 );
 
-/// Definition of table name for Data recorder
 #[cfg(test)]
+/// Definition of table name for Data recorder
 pub const SQL_TABLE_DATA: &str = "data";
 
-/// Definition of table name for Balling set values
 #[cfg(test)]
+/// Definition of table name for Balling set values
 pub const SQL_TABLE_BALLING_SETVALS: &str = "ballingsetvals";
 
-/// Definition of table name for Balling dosing log
 #[cfg(test)]
+/// Definition of table name for Balling dosing log
 pub const SQL_TABLE_BALLING_DOSING_LOG: &str = "ballingdosinglog";
 
-/// Definition of table name for schedule
 #[cfg(test)]
+/// Definition of table name for schedule
 pub const SQL_TABLE_SCHEDULE: &str = "schedule";
 
-/// Definition of table name for heating set values
 #[cfg(test)]
+/// Definition of table name for heating set values
 pub const SQL_TABLE_HEATING_SETVALS: &str = "heatingsetvals";
 
-/// Definition of table name for heating statistics
 #[cfg(test)]
+/// Definition of table name for heating statistics
 pub const SQL_TABLE_HEATING_STATS: &str = "heatingstats";
 
-/// Definition of table name for ventilation set values
 #[cfg(test)]
+/// Definition of table name for ventilation set values
 pub const SQL_TABLE_VENTILATION_SETVALS: &str = "ventilationsetvals";
 
 /// Definition of table name for feed log
 pub const SQL_TABLE_FEEDLOG: &str = "feedlog";
 
-/// Definition of table name for refill log
 #[cfg(test)]
+/// Definition of table name for refill log
 pub const SQL_TABLE_REFILL: &str = "refill";
 
 /// Definition of table name for feed patterns
@@ -201,36 +201,25 @@ pub const SQL_QUERY_WRITE_HEATING_STATS: &str = concat!(
 
 /// Writes the time-based data into the database.
 pub const SQL_QUERY_WRITE_DATA: &str = concat!(
-    "insert into data ",
-    "(Timestamp, ",
-    "Temperature, TemperatureFiltered, ",
-    "pH, pHFiltered, ",
-    "Conductivity, ConductivityFiltered, ConductivityCompensated, ",
-    "RefillInProgress, ",
+    "INSERT INTO data (",
+    "Timestamp, Temperature, TemperatureFiltered, pH, pHFiltered, Conductivity, ",
+    "ConductivityFiltered, ConductivityCompensated, RefillInProgress, ",
     "TankLevelSwitchPosition, TankLevelSwitchInvalid, TankLevelSwitchPositionStabilized, ",
-    "SurfaceVentilation, ",
-    "AmbTemp, AmbHum, Heater) ",
-    "values (:timestamp, ",
-    "#TemperatureUnfiltered, #TemperatureFiltered, ",
-    "#pHUnfiltered, #pHFiltered, ",
-    "#ConductivityUnfiltered, #ConductivityFiltered, #ConductivityCompensated, ",
-    "#RefillInProgress, ",
-    "#TankLevelSwitchPosition, #TankLevelSwitchInvalid, #TankLevelSwitchPositionStabilized, ",
-    "#SurfaceVentilation, ",
-    "#AmbTemp, #AmbHum, ",
-    "#Heater) ",
-    "ON DUPLICATE KEY UPDATE ",
-    "Temperature=#TemperatureUnfiltered, TemperatureFiltered=#TemperatureFiltered, ",
-    "pH=#pHUnfiltered, pHFiltered=#pHFiltered, ",
-    "Conductivity=#ConductivityUnfiltered, ConductivityFiltered=#ConductivityFiltered, ",
-    "ConductivityCompensated=#ConductivityCompensated, ",
-    "RefillInProgress=#RefillInProgress, ",
-    "TankLevelSwitchPosition=#TankLevelSwitchPosition, ",
-    "TankLevelSwitchInvalid=#TankLevelSwitchInvalid, ",
-    "TankLevelSwitchPositionStabilized=#TankLevelSwitchPositionStabilized, ",
-    "SurfaceVentilation=#SurfaceVentilation, ",
-    "AmbTemp=#AmbTemp, AmbHum=#AmbHum, ",
-    "Heater=#Heater;"
+    "SurfaceVentilation, AmbTemp, AmbHum, Heater",
+    ") VALUES (",
+    ":timestamp, :temp, :temp_f, :ph, :ph_f, :cond, :cond_f, :cond_c, :refill, ",
+    ":tank_pos, :tank_inv, :tank_stab, :vent, :amb_temp, :amb_hum, :heater",
+    ") ON DUPLICATE KEY UPDATE ",
+    "Temperature=VALUES(Temperature), TemperatureFiltered=VALUES(TemperatureFiltered), ",
+    "pH=VALUES(pH), pHFiltered=VALUES(pHFiltered), Conductivity=VALUES(Conductivity), ",
+    "ConductivityFiltered=VALUES(ConductivityFiltered), ",
+    "ConductivityCompensated=VALUES(ConductivityCompensated), ",
+    "RefillInProgress=VALUES(RefillInProgress), ",
+    "TankLevelSwitchPosition=VALUES(TankLevelSwitchPosition), ",
+    "TankLevelSwitchInvalid=VALUES(TankLevelSwitchInvalid), ",
+    "TankLevelSwitchPositionStabilized=VALUES(TankLevelSwitchPositionStabilized), ",
+    "SurfaceVentilation=VALUES(SurfaceVentilation), AmbTemp=VALUES(AmbTemp), ",
+    "AmbHum=VALUES(AmbHum), Heater=VALUES(Heater);"
 );
 
 /// Checks how many entries there are in the data table.
@@ -473,48 +462,48 @@ pub const SQL_QUERY_READ_TIMEOUT: &str = concat!(
 /// Minimal request to the database to avoid timeouts
 pub const SQL_QUERY_PING: &str = "SELECT 1 LIMIT 1;";
 
+#[cfg(test)]
 // Deletes the content of a specific table.
 // This query is used for testing by multiple modules. Therefore, it resides here and not in the test module.
-#[cfg(test)]
 pub const SQL_QUERY_TRUNCATE_TABLE: &str = "truncate table #table;";
 
-// Provides feed event from the database - used for testing only.
 #[cfg(test)]
+// Provides feed event from the database - used for testing only.
 pub const SQL_QUERY_READ_LAST_FEED_EVENT: &str =
     "SELECT Timestamp, FeederOnTime, ProfileName, ProfileIdx from feedlog LIMIT 100;";
 
-// Provide Balling dosing event from the database - used for testing only.
 #[cfg(test)]
+// Provide Balling dosing event from the database - used for testing only.
 pub const SQL_QUERY_READ_BALLING_EVENT: &str =
     "SELECT Timestamp, pumpid, dosingvolume from ballingdosinglog LIMIT 100;";
 
-// Provides refill event from the database - used for testing only.
 #[cfg(test)]
+// Provides refill event from the database - used for testing only.
 pub const SQL_QUERY_READ_REFILL_EVENT: &str =
     "SELECT Timestamp, Duration, Volume, ErrorCode from refill ORDER BY Timestamp DESC LIMIT 1;";
 
 /// Checks how many entries there are in the refill table.
 pub const SQL_QUERY_CHECK_REFILL_COUNT: &str = "SELECT COUNT(*) FROM refill LIMIT 1;";
 
-/// Calculates a timestamp based on current timestamp and offset in seconds.
 #[cfg(test)]
+/// Calculates a timestamp based on current timestamp and offset in seconds.
 pub const SQL_QUERY_CURRENT_TIMESTAMP_OFFSET_SECONDS: &str =
     "select date_add(current_timestamp(), interval #offset second) LIMIT 100;";
 
-/// Insert test data into the schedule table;
 #[cfg(test)]
+/// Insert test data into the schedule table;
 pub const SQL_QUERY_WRITE_SCHEDULE_TEST_DATA: &str =
     "INSERT INTO schedule VALUES(:schedule_name, :start_time, :stop_time, 1);";
 
-/// Inserts data of one feed schedule entry into the database.
 #[cfg(test)]
+/// Inserts data of one feed schedule entry into the database.
 pub const SQL_QUERY_WRITE_FEED_SCHEDULE_ENTRY: &str = concat!(
     "INSERT into feedschedule (Timestamp, ProfileId, ProfileName, IsWeekly, IsDaily) ",
     "values(:timestamp, :profile_id, :profile_name, :is_weekly, :is_daily)"
 );
 
-/// This query is used for testing: It creates a first feed pattern.
 #[cfg(test)]
+/// This query is used for testing: It creates a first feed pattern.
 pub const SQL_QUERY_WRITE_FEEDPATTERN_TEST: &str = concat!(
     "INSERT INTO feedpatterns VALUES ",
     "(:profile_id,:profile_name,",
@@ -540,8 +529,8 @@ pub const SQL_QUERY_WRITE_FEEDPATTERN_TEST: &str = concat!(
     "19,0,0,0,0,0);"
 );
 
-/// This query is used for testing: It creates a second feed pattern.
 #[cfg(test)]
+/// This query is used for testing: It creates a second feed pattern.
 pub const SQL_QUERY_WRITE_FEEDPATTERN_TEST2: &str = concat!(
     "INSERT INTO feedpatterns VALUES ",
     "(:profile_id,'second',",
@@ -565,4 +554,38 @@ pub const SQL_QUERY_WRITE_FEEDPATTERN_TEST2: &str = concat!(
     "9,9,9,9,9,9,",
     "1,1,1,1,1,1,",
     "1,1,1,1,1,1);"
+);
+
+#[cfg(test)]
+// Query for reading the first part from data for test cases operating on a valid database entry
+pub const SQL_QUERY_READ_DATA_FRAME_1: &str = "SELECT Timestamp, \
+        Temperature, TemperatureFiltered, \
+        pH, pHFiltered, \
+        Conductivity, ConductivityFiltered, ConductivityCompensated \
+        FROM data WHERE Timestamp='#timestamp';";
+
+#[cfg(test)]
+// Query for reading the second part from data for test cases operating on a valid database entry
+pub const SQL_QUERY_READ_DATA_FRAME_2: &str = "SELECT \
+        RefillInProgress, TankLevelSwitchPosition, TankLevelSwitchInvalid, \
+        TankLevelSwitchPositionStabilized, SurfaceVentilation, \
+        AmbTemp, AmbHum, Heater FROM data \
+        WHERE Timestamp = '#timestamp';";
+
+#[cfg(test)]
+// Query for reading a complete data set for test cases with operating on an invalid database entry
+pub const SQL_QUERY_READ_NULL_DATA_FRAME: &str = "SELECT \
+        Temperature, TemperatureFiltered, \
+        pH, pHFiltered, \
+        Conductivity, ConductivityFiltered, ConductivityCompensated \
+        RefillInProgress, TankLevelSwitchPosition, TankLevelSwitchInvalid, \
+        TankLevelSwitchPositionStabilized, SurfaceVentilation, \
+        AmbTemp, AmbHum, Heater FROM data \
+        WHERE Timestamp = '#timestamp';";
+
+#[cfg(test)]
+// Query for writing a set of balling set values for one pump to the database
+pub const SQL_QUERY_WRITE_BALLING_SETVALS: &str = concat!(
+    "INSERT into ballingsetvals(pumpid, dosingspeed, dosingvolume, label) ",
+    "values(:pump_id, :dosing_speed, :dosing_volume, :label);"
 );

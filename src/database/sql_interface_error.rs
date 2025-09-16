@@ -310,10 +310,10 @@ pub enum SqlInterfaceError {
     SingleBallingSetValNoSingleResponse(String, String, i64),
 
     /// Error occurred when inserting data frame into the database.
-    #[error("[{location}] Error occurred when inserting data frame into the database using query: {sql_query_string}")]
+    #[error("[{location}] Error occurred when inserting data frame into the database using query: {query}")]
     InsertDataFrameFailure {
         location: String,
-        sql_query_string: String,
+        query: String,
 
         #[source]
         source: MySqlError,

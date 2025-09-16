@@ -552,12 +552,12 @@ impl SqlInterface {
         sql_query_string: &str,
     ) -> Result<Option<NaiveDateTime>, SqlInterfaceError> {
         // Request (optional) timestamp from the database.
-        Ok(conn.query_first(sql_query_string).map_err(|_| {
+        conn.query_first(sql_query_string).map_err(|_| {
             SqlInterfaceError::OptionalTimestampRequestFailure {
                 location: module_path!().to_string(),
                 query: sql_query_string.to_string(),
             }
-        })?)
+        })
     }
 
     /// Fetches the current timestamp directly from the database.

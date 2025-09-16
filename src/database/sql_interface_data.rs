@@ -6,6 +6,43 @@ The above copyright notice and this permission notice shall be included in all c
 
 THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
+//! Manages all database interactions for time-series sensor and state data.
+//!
+//! This module provides a dedicated interface, `SqlInterfaceData`, for handling
+//! all SQL operations related to the main `data` table. It encapsulates the logic
+//! for writing `RecorderDataFrame` objects, which contain a snapshot of all sensor
+//! readings and system states at a specific point in time.
+//!
+//! ## Key Components
+//!
+//! - **`SqlInterfaceData` Struct**: The primary struct that holds a database
+//!   connection and provides methods for all data-logging database operations.
+//!
+//! - **`new()` Constructor**: A critical entry point that not only creates an
+//!   `SqlInterfaceData` instance but also performs essential "fail-fast"
+//!   validation. At initialization, it checks whether the number of rows in the
+//!   `data` table exceeds the `max_rows_data` limit defined in the application
+//!   configuration. This acts as a safeguard against uncontrolled table size at startup.
+//!
+//! - **`write_data_frame_to_database()`**: The core function of this module. It takes
+//!   a `RecorderDataFrame` and constructs a single `INSERT ... ON DUPLICATE KEY UPDATE`
+//!   query. It intelligently handles optional or invalid floating-point values
+//!   (e.g., `None`, `NaN`, `Infinity`) by converting them to `NULL` before insertion,
+//!   ensuring data integrity in the database.
+//!
+//! ## Design and Purpose
+//!
+//! The main goal of this module is to provide a robust and encapsulated interface
+//! for persisting the application's high-frequency time-series data.
+//!
+//! - **Encapsulation**: All SQL logic specific to the `data` table is contained
+//!   within this module, separating concerns and simplifying the data logger's
+//!   responsibilities.
+//!
+//! - **Data Integrity**: The constructor's validation logic enforces the configured
+//!   row limit at startup. The `write_data_frame_to_database` function ensures that
+//!   invalid or missing data points are correctly stored as `NULL` in the database,
+//!   preventing data corruption.
 use mysql::prelude::*;
 use mysql::*;
 
@@ -61,7 +98,7 @@ impl SqlInterfaceData {
 
         if max_rows_data > 0 {
             // execute the check only when the limit is greater than zero
-            if count_rows > max_rows_data.cast_signed() {
+            if count_rows as u64 > max_rows_data {
                 return Err(SqlInterfaceError::DatabaseDataTableContainsTooManyRows(
                     module_path!().to_string(),
                     count_rows.cast_unsigned(),
@@ -72,32 +109,7 @@ impl SqlInterfaceData {
         Ok(SqlInterfaceData { conn })
     }
 
-    /// Converts an optional `f32` value into its `String` representation,
-    /// specifically handling `None`, `NaN`, and infinite values by returning "NULL".
-    ///
-    /// This helper function ensures that floating-point numbers are correctly formatted
-    /// for database insertion, where `NULL` is used for missing or invalid numerical data.
-    ///
-    /// # Arguments
-    /// * `value` - An `Option<f32>` containing the floating-point value to convert.
-    ///   If `None`, `NaN`, or `Infinity`, it will be represented as "NULL".
-    ///
-    /// # Returns
-    /// A `String` representing the float value, or "NULL" if the input is `None`,
-    /// Not-a-Number (`NaN`), positive infinity (`f32::INFINITY`), or negative infinity (`f32::NEG_INFINITY`).
-    pub fn get_string_from_value(value: Option<f32>) -> String {
-        let null_string = "NULL".to_string();
-
-        match value {
-            Some(c) => match c.is_nan() | c.is_infinite() {
-                true => null_string,
-                false => c.to_string(),
-            },
-            None => null_string,
-        }
-    }
-
-    // Writes a complete `RecorderDataFrame` to the SQL database.
+    /// Writes a complete `RecorderDataFrame` to the SQL database.
     ///
     /// This function processes all data points within the provided `RecorderDataFrame`.
     /// It intelligently handles optional (`Option<f32>`) and floating-point values
@@ -125,165 +137,33 @@ impl SqlInterfaceData {
         &mut self,
         data: &RecorderDataFrame,
     ) -> Result<(), SqlInterfaceError> {
-        let null_string = "NULL".to_string();
-
-        let timestamp_string = data.timestamp.format("%Y-%m-%d %H:%M:%S").to_string();
-
-        // replace signal placeholders with values
-        let water_temperature_string = Self::get_string_from_value(data.water_temperature);
-        let sql_query_water_temperature_replaced = str::replace(
-            sql_query_strings::SQL_QUERY_WRITE_DATA,
-            "#TemperatureUnfiltered",
-            &water_temperature_string,
-        );
-
-        let water_temperature_filtered_string =
-            Self::get_string_from_value(data.water_temperature_filtered);
-        let sql_query_water_temperature_filtered_replaced = str::replace(
-            &sql_query_water_temperature_replaced,
-            "#TemperatureFiltered",
-            &water_temperature_filtered_string,
-        );
-
-        let ph_string = Self::get_string_from_value(data.ph);
-        let sql_query_ph_replaced = str::replace(
-            &sql_query_water_temperature_filtered_replaced,
-            "#pHUnfiltered",
-            &ph_string,
-        );
-
-        let ph_filtered_string = Self::get_string_from_value(data.ph_filtered);
-        let sql_query_ph_filtered_replaced =
-            str::replace(&sql_query_ph_replaced, "#pHFiltered", &ph_filtered_string);
-
-        let conductivity_string = Self::get_string_from_value(data.conductivity);
-        let sql_query_conductivity_replaced = str::replace(
-            &sql_query_ph_filtered_replaced,
-            "#ConductivityUnfiltered",
-            &conductivity_string,
-        );
-
-        let conductivity_filtered_string = Self::get_string_from_value(data.conductivity_filtered);
-        let sql_query_conductivity_filtered_replaced = str::replace(
-            &sql_query_conductivity_replaced,
-            "#ConductivityFiltered",
-            &conductivity_filtered_string,
-        );
-
-        let conductivity_compensated_string =
-            Self::get_string_from_value(data.conductivity_compensated);
-        let sql_query_string_conductivity_compensated_replaced = str::replace(
-            &sql_query_conductivity_filtered_replaced,
-            "#ConductivityCompensated",
-            &conductivity_compensated_string,
-        );
-
-        let refill_in_progress_string: String;
-        let sql_query_refill_in_progress_replaced = str::replace(
-            &sql_query_string_conductivity_compensated_replaced,
-            "#RefillInProgress",
-            match data.refill_in_progress {
-                Some(c) => {
-                    refill_in_progress_string = c.to_string();
-                    &refill_in_progress_string
-                }
-                None => &null_string,
-            },
-        );
-
-        let tank_level_switch_position_stabilized_string: String;
-        let sql_query_main_tank_level_switch_position_stabilized_replaced = str::replace(
-            &sql_query_refill_in_progress_replaced,
-            "#TankLevelSwitchPositionStabilized",
-            match data.tank_level_switch_position_stabilized {
-                Some(c) => {
-                    tank_level_switch_position_stabilized_string = c.to_string();
-                    &tank_level_switch_position_stabilized_string
-                }
-                None => &null_string,
-            },
-        );
-
-        let tank_level_switch_invalid_string: String;
-        let sql_query_main_tank_level_switch_invalid_replaced = str::replace(
-            &sql_query_main_tank_level_switch_position_stabilized_replaced,
-            "#TankLevelSwitchInvalid",
-            match data.tank_level_switch_invalid {
-                Some(c) => {
-                    tank_level_switch_invalid_string = c.to_string();
-                    &tank_level_switch_invalid_string
-                }
-                None => &null_string,
-            },
-        );
-
-        let tank_level_switch_position_string: String;
-        let sql_query_main_tank_level_switch_position_replaced = str::replace(
-            &sql_query_main_tank_level_switch_invalid_replaced,
-            "#TankLevelSwitchPosition",
-            match data.tank_level_switch_position {
-                Some(c) => {
-                    tank_level_switch_position_string = c.to_string();
-                    &tank_level_switch_position_string
-                }
-                None => &null_string,
-            },
-        );
-
-        let surface_ventilation_string: String;
-        let sql_query_surface_ventilation_status_replaced = str::replace(
-            &sql_query_main_tank_level_switch_position_replaced,
-            "#SurfaceVentilation",
-            match data.surface_ventilation_status {
-                Some(c) => {
-                    surface_ventilation_string = c.to_string();
-                    &surface_ventilation_string
-                }
-                None => &null_string,
-            },
-        );
-
-        let ambient_temperature_string = Self::get_string_from_value(data.ambient_temperature);
-        let sql_query_ambient_temperature_replaced = str::replace(
-            &sql_query_surface_ventilation_status_replaced,
-            "#AmbTemp",
-            &ambient_temperature_string,
-        );
-
-        let ambient_humidity_string = Self::get_string_from_value(data.ambient_humidity);
-        let sql_query_ambient_humidity_replaced = str::replace(
-            &sql_query_ambient_temperature_replaced,
-            "#AmbHum",
-            &ambient_humidity_string,
-        );
-
-        let heater_string: String;
-        let sql_query_string = str::replace(
-            &sql_query_ambient_humidity_replaced,
-            "#Heater",
-            match data.heater_status {
-                Some(c) => {
-                    heater_string = c.to_string();
-                    &heater_string
-                }
-                None => &null_string,
-            },
-        );
+        let params = params! {
+            "timestamp" => data.timestamp,
+            "temp" => data.water_temperature,
+            "temp_f" => data.water_temperature_filtered,
+            "ph" => data.ph,
+            "ph_f" => data.ph_filtered,
+            "cond" => data.conductivity,
+            "cond_f" => data.conductivity_filtered,
+            "cond_c" => data.conductivity_compensated,
+            "refill" => data.refill_in_progress,
+            "tank_pos" => data.tank_level_switch_position,
+            "tank_inv" => data.tank_level_switch_invalid,
+            "tank_stab" => data.tank_level_switch_position_stabilized,
+            "vent" => data.surface_ventilation_status,
+            "amb_temp" => data.ambient_temperature,
+            "amb_hum" => data.ambient_humidity,
+            "heater" => data.heater_status,
+        };
 
         // execute the database query and evaluate the result
-        match self.conn.exec_drop::<_, _>(
-            sql_query_string.clone(),
-            params! {
-            "timestamp" => timestamp_string.clone(),
-            },
-        ) {
-            Ok(_) => Ok(()),
-            Err(e) => Err(SqlInterfaceError::InsertDataFrameFailure {
+        self.conn
+            .exec_drop::<_, _>(sql_query_strings::SQL_QUERY_WRITE_DATA, params)
+            .map_err(|e| SqlInterfaceError::InsertDataFrameFailure {
                 location: module_path!().to_string(),
-                sql_query_string,
+                query: sql_query_strings::SQL_QUERY_WRITE_DATA.to_string(),
                 source: e,
-            }),
-        }
+            })
     }
 }
 
@@ -291,7 +171,9 @@ impl SqlInterfaceData {
 pub mod tests {
     use crate::database::sql_interface_data::SqlInterfaceData;
     use crate::database::sql_query_strings::SQL_TABLE_DATA;
-    use crate::database::{sql_interface::SqlInterface, sql_interface_error::SqlInterfaceError};
+    use crate::database::{
+        sql_interface::SqlInterface, sql_interface_error::SqlInterfaceError, sql_query_strings,
+    };
     use crate::recorder::recorder_data_frame::RecorderDataFrame;
     use crate::utilities::config::{read_config_file_with_test_database, ConfigData};
     use chrono::NaiveDateTime;
@@ -329,30 +211,6 @@ pub mod tests {
         pub heater_status: bool,
     }
 
-    // Query for reading the first part from data for test cases operating on a valid database entry
-    pub const SQL_QUERY_READ_DATA_FRAME_1: &str = "SELECT Timestamp, \
-        Temperature, TemperatureFiltered, \
-        pH, pHFiltered, \
-        Conductivity, ConductivityFiltered, ConductivityCompensated \
-        FROM data WHERE Timestamp='#timestamp';";
-
-    // Query for reading the second part from data for test cases operating on a valid database entry
-    pub const SQL_QUERY_READ_DATA_FRAME_2: &str = "SELECT \
-        RefillInProgress, TankLevelSwitchPosition, TankLevelSwitchInvalid, \
-        TankLevelSwitchPositionStabilized, SurfaceVentilation, \
-        AmbTemp, AmbHum, Heater FROM data \
-        WHERE Timestamp = '#timestamp';";
-
-    // Query for reading a complete data set for test cases with operating on an invalid database entry
-    pub const SQL_QUERY_READ_NULL_DATA_FRAME: &str = "SELECT \
-        Temperature, TemperatureFiltered, \
-        pH, pHFiltered, \
-        Conductivity, ConductivityFiltered, ConductivityCompensated \
-        RefillInProgress, TankLevelSwitchPosition, TankLevelSwitchInvalid, \
-        TankLevelSwitchPositionStabilized, SurfaceVentilation, \
-        AmbTemp, AmbHum, Heater FROM data \
-        WHERE Timestamp = '#timestamp';";
-
     // Retrieves a single `RecorderDataFrame` from the 'data' table in the database.
     //
     // This function executes two separate SQL queries to fetch all components of a
@@ -383,8 +241,11 @@ pub mod tests {
     ) -> Result<RecorderDataFrame, SqlInterfaceError> {
         let timestamp_string = timestamp.format("%Y-%m-%d %H:%M:%S").to_string();
         // Get data frame part 1 from the database
-        let sql_query_string_1 =
-            str::replace(SQL_QUERY_READ_DATA_FRAME_1, "#timestamp", &timestamp_string);
+        let sql_query_string_1 = str::replace(
+            sql_query_strings::SQL_QUERY_READ_DATA_FRAME_1,
+            "#timestamp",
+            &timestamp_string,
+        );
         let data_frame_1_array: Vec<SqlDataFrame1> = match conn.query_map(
             sql_query_string_1.clone(),
             |(
@@ -412,8 +273,11 @@ pub mod tests {
                 panic!("Could not get data frame part 1 from SQL database: {e:?} using query string {}", sql_query_string_1);
             }
         };
-        let sql_query_string_2 =
-            str::replace(SQL_QUERY_READ_DATA_FRAME_2, "#timestamp", &timestamp_string);
+        let sql_query_string_2 = str::replace(
+            sql_query_strings::SQL_QUERY_READ_DATA_FRAME_2,
+            "#timestamp",
+            &timestamp_string,
+        );
         let data_frame_2_array: Vec<SqlDataFrame2> = match conn.query_map(
             sql_query_string_2.clone(),
             |(
@@ -494,7 +358,7 @@ pub mod tests {
         let timestamp_string = timestamp.format("%Y-%m-%d %H:%M:%S").to_string();
         // Get a series of NULL values from the database
         let sql_query_string = str::replace(
-            SQL_QUERY_READ_NULL_DATA_FRAME,
+            sql_query_strings::SQL_QUERY_READ_NULL_DATA_FRAME,
             "#timestamp",
             &timestamp_string,
         );

@@ -405,11 +405,7 @@ impl SqlInterfaceBalling {
 
 #[cfg(test)]
 pub mod tests {
-    use crate::database::sql_interface_balling::DateTime;
     use crate::database::sql_interface_balling::SqlInterfaceBalling;
-    use crate::database::sql_query_strings::{
-        SQL_TABLE_BALLING_DOSING_LOG, SQL_TABLE_BALLING_SETVALS,
-    };
     use crate::database::{
         sql_interface::SqlInterface, sql_interface_error::SqlInterfaceError, sql_query_strings,
     };
@@ -432,10 +428,6 @@ pub mod tests {
         dosing_volume: f32,
     }
 
-    pub const SQL_QUERY_WRITE_BALLING_SETVALS: &str = concat!(
-        "INSERT into ballingsetvals(pumpid, dosingspeed, dosingvolume, label) ",
-        "values(:pump_id, :dosing_speed, :dosing_volume, :label);"
-    );
     #[test]
     // This test case verifies the validation logic within the `SqlInterfaceBalling::new()` constructor.
     // It covers the following scenarios:
@@ -457,15 +449,21 @@ pub mod tests {
 
         // --- Test Case 1: Happy Path ---
         println!("* Testing new() with valid data (Happy Path)...");
-        SqlInterface::truncate_table(&mut sql_interface, SQL_TABLE_BALLING_SETVALS.to_string())
-            .unwrap();
-        SqlInterface::truncate_table(&mut sql_interface, SQL_TABLE_BALLING_DOSING_LOG.to_string())
-            .unwrap();
+        SqlInterface::truncate_table(
+            &mut sql_interface,
+            sql_query_strings::SQL_TABLE_BALLING_SETVALS.to_string(),
+        )
+        .unwrap();
+        SqlInterface::truncate_table(
+            &mut sql_interface,
+            sql_query_strings::SQL_TABLE_BALLING_DOSING_LOG.to_string(),
+        )
+        .unwrap();
 
         // Insert one valid row into each table
         let mut conn = sql_interface.get_connection().unwrap();
         conn.exec_drop(
-            SQL_QUERY_WRITE_BALLING_SETVALS,
+            sql_query_strings::SQL_QUERY_WRITE_BALLING_SETVALS,
             params! { "pump_id" => 1, "dosing_speed" => 1.0, "dosing_volume" => 1.0, "label" => "valid" },
         ).unwrap();
         conn.exec_drop(
@@ -483,11 +481,14 @@ pub mod tests {
 
         // --- Test Case 2: Failure on ballingsetvals row limit exceeded ---
         println!("* Testing new() with too many rows in ballingsetvals...");
-        SqlInterface::truncate_table(&mut sql_interface, SQL_TABLE_BALLING_SETVALS.to_string())
-            .unwrap();
+        SqlInterface::truncate_table(
+            &mut sql_interface,
+            sql_query_strings::SQL_TABLE_BALLING_SETVALS.to_string(),
+        )
+        .unwrap();
         let mut conn = sql_interface.get_connection().unwrap();
-        conn.exec_drop(SQL_QUERY_WRITE_BALLING_SETVALS, params! { "pump_id" => 1, "dosing_speed" => 1.0, "dosing_volume" => 1.0, "label" => "row1" }).unwrap();
-        conn.exec_drop(SQL_QUERY_WRITE_BALLING_SETVALS, params! { "pump_id" => 2, "dosing_speed" => 1.0, "dosing_volume" => 1.0, "label" => "row2" }).unwrap();
+        conn.exec_drop(sql_query_strings::SQL_QUERY_WRITE_BALLING_SETVALS, params! { "pump_id" => 1, "dosing_speed" => 1.0, "dosing_volume" => 1.0, "label" => "row1" }).unwrap();
+        conn.exec_drop(sql_query_strings::SQL_QUERY_WRITE_BALLING_SETVALS, params! { "pump_id" => 2, "dosing_speed" => 1.0, "dosing_volume" => 1.0, "label" => "row2" }).unwrap();
 
         let result = SqlInterfaceBalling::new(conn, 1, 10); // Set the limit to 1
         assert!(
@@ -503,8 +504,11 @@ pub mod tests {
         // --- Test Case 3: Failure on ballingdosinglog row limit exceeded ---
         println!("* Testing new() with too many rows in ballingdosinglog...");
         let spin_sleeper = SpinSleeper::default();
-        SqlInterface::truncate_table(&mut sql_interface, SQL_TABLE_BALLING_DOSING_LOG.to_string())
-            .unwrap();
+        SqlInterface::truncate_table(
+            &mut sql_interface,
+            sql_query_strings::SQL_TABLE_BALLING_DOSING_LOG.to_string(),
+        )
+        .unwrap();
         let mut conn = sql_interface.get_connection().unwrap();
         conn.exec_drop(sql_query_strings::SQL_QUERY_WRITE_BALLING_EVENT, params! { "timestamp" => Local::now().naive_local(), "pump_id" => 1, "dosing_volume" => 1.0 }).unwrap();
         spin_sleeper.sleep(Duration::from_millis(500));
@@ -559,7 +563,7 @@ pub mod tests {
         // *** check the timestamp of last Balling dosing ******************************************
         match SqlInterface::truncate_table(
             &mut sql_interface,
-            SQL_TABLE_BALLING_DOSING_LOG.to_string(),
+            sql_query_strings::SQL_TABLE_BALLING_DOSING_LOG.to_string(),
         ) {
             Ok(_) => {}
             Err(e) => panic!("Could not prepare test case: {e:?}"),
@@ -658,7 +662,7 @@ pub mod tests {
         // *** read balling set vals from empty table **********************************************
         match SqlInterface::truncate_table(
             &mut sql_interface,
-            SQL_TABLE_BALLING_SETVALS.to_string(),
+            sql_query_strings::SQL_TABLE_BALLING_SETVALS.to_string(),
         ) {
             Ok(_) => {}
             Err(e) => panic!("Could not prepare test case: {e:?}"),
@@ -679,7 +683,7 @@ pub mod tests {
 
         // *** read balling set vals from pre-filled table *****************************************
         // prepare database: insert Balling set vals
-        let sql_query_string = SQL_QUERY_WRITE_BALLING_SETVALS.to_string();
+        let sql_query_string = sql_query_strings::SQL_QUERY_WRITE_BALLING_SETVALS.to_string();
         match sql_interface_balling.conn.exec_drop::<_, _>(
             sql_query_string.clone(),
             params! {
