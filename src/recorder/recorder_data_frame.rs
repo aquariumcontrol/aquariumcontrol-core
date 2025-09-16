@@ -14,6 +14,7 @@ use std::fmt;
 /// For each signal, where the data could not be acquired, the None value is used.
 /// The None value is represented as NULL in the SQL database.
 /// The struct only contains minimal implementation for development purposes.
+#[derive(Default)]
 pub struct RecorderDataFrame {
     // timestamp when the frame was captured
     pub timestamp: NaiveDateTime,

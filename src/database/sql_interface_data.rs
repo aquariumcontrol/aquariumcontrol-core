@@ -52,6 +52,7 @@ use crate::database::{sql_interface_error::SqlInterfaceError, sql_query_strings}
 use crate::recorder::recorder_data_frame::RecorderDataFrame;
 
 /// Contains the configuration and the implementation of the SQL interface for time-based data.
+#[derive(Debug)]
 pub struct SqlInterfaceData {
     /// Connection to the database
     pub conn: PooledConn,
@@ -101,7 +102,7 @@ impl SqlInterfaceData {
             if count_rows as u64 > max_rows_data {
                 return Err(SqlInterfaceError::DatabaseDataTableContainsTooManyRows(
                     module_path!().to_string(),
-                    count_rows.cast_unsigned(),
+                    count_rows as u64,
                     max_rows_data,
                 ));
             }
@@ -180,6 +181,90 @@ pub mod tests {
     use mysql::{prelude::Queryable, PooledConn, Row, Value};
     use spin_sleep::SpinSleeper;
     use std::time::Duration;
+
+    #[test]
+    // This test case verifies the validation logic within the `SqlInterfaceData::new()` constructor.
+    // It covers the following scenarios:
+    // 1. Happy Path: Initialization succeeds when the row count is within the limit.
+    // 2. Failure on Row Limit: Fails when the `data` table exceeds its max row count.
+    // 3. Deactivated Check: Succeeds even with excess rows if the limit is set to 0.
+    // Test case uses test database #58.
+    fn test_sql_interface_data_new() {
+        // --- Common Setup ---
+        let config: ConfigData = read_config_file_with_test_database(
+            "/config/aquarium_control_test_generic.toml".to_string(),
+            58, // Use a new database number to avoid test conflicts
+        );
+        println!("Testing with database {}", config.sql_interface.db_name);
+        let mut sql_interface: SqlInterface = SqlInterface::new(config.sql_interface)
+            .expect("Initialization of SQL interface for test failed.");
+
+        // --- Test Case 1: Happy Path (row count is within limit) ---
+        println!("* Testing new() with valid row count (Happy Path)...");
+        SqlInterface::truncate_table(&mut sql_interface, SQL_TABLE_DATA.to_string()).unwrap();
+
+        // Insert one row to have some data
+        let mut data_db = SqlInterfaceData {
+            conn: sql_interface.get_connection().unwrap(),
+        };
+        let data_frame = RecorderDataFrame {
+            timestamp: chrono::Local::now().naive_local(),
+            ..Default::default()
+        };
+        data_db
+            .write_data_frame_to_database(&data_frame)
+            .unwrap();
+
+        // Check: new() should succeed with a generous limit of 10
+        let result = SqlInterfaceData::new(sql_interface.get_connection().unwrap(), 10);
+        assert!(
+            result.is_ok(),
+            "Expected new() to succeed on happy path, but it failed: {:?}",
+            result.err()
+        );
+        println!("* Succeeded: Happy path initialization is successful.");
+
+        // --- Test Case 2: Failure on row limit exceeded ---
+        println!("* Testing new() with too many rows in the data table...");
+        // Insert a second row
+        let mut data_db = SqlInterfaceData {
+            conn: sql_interface.get_connection().unwrap(),
+        };
+        let data_frame_2 = RecorderDataFrame {
+            timestamp: (chrono::Local::now() + chrono::Duration::seconds(1)).naive_local(),
+            ..Default::default()
+        };
+        data_db
+            .write_data_frame_to_database(&data_frame_2)
+            .unwrap();
+
+        // Check: new() should fail with a strict limit of 1
+        let result = SqlInterfaceData::new(sql_interface.get_connection().unwrap(), 1);
+        assert!(
+            matches!(
+                result,
+                Err(SqlInterfaceError::DatabaseDataTableContainsTooManyRows(
+                    _,
+                    _,
+                    _
+                ))
+            ),
+            "Expected row limit error, but got {:?}",
+            result
+        );
+        println!("* Succeeded: Initialization fails if data table exceeds row limit.");
+
+        // --- Test Case 3: Deactivated check (limit is 0) ---
+        println!("* Testing new() with deactivated row limit check (limit = 0)...");
+        // We reuse the state from the previous test (2 rows in the table)
+        let result = SqlInterfaceData::new(sql_interface.get_connection().unwrap(), 0); // Set the limit to 0
+        assert!(
+            result.is_ok(),
+            "Expected new() to succeed with deactivated check, but it failed: {:?}",
+            result.err()
+        );
+        println!("* Succeeded: Initialization passes when row limit check is deactivated.");
+    }
 
     // This struct contains the first part of one row from table 'data'
     // Due to limitations of the library, this struct can only contain up to 12 elements.
