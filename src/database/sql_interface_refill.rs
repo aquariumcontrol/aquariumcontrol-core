@@ -6,7 +6,48 @@ The above copyright notice and this permission notice shall be included in all c
 
 THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
-
+//! Manages all database interactions for the automated water refill system.
+//!
+//! This module provides a dedicated interface, `SqlInterfaceRefill`, for handling
+//! all SQL operations related to the refill event log (`refill` table). It also
+//! defines a `DatabaseInterfaceRefillTrait` to decouple the core refill logic
+//! from the specific database implementation, adhering to the Dependency Inversion Principle.
+//!
+//! ## Key Components
+//!
+//! - **`DatabaseInterfaceRefillTrait`**: An abstraction that defines the contract for
+//!   any component that interacts with refill data. This is crucial for testability,
+//!   as it allows for mock implementations to be used in unit tests without needing a
+//!   live database.
+//!
+//! - **`SqlInterfaceRefill` Struct**: The concrete implementation of the trait, holding
+//!   a database connection and providing methods for all refill-related operations.
+//!
+//! - **`new()` Constructor**: A critical entry point that performs "fail-fast"
+//!   validation at initialization. It checks whether the number of rows in the
+//!   `refill` table exceeds the `max_rows_refill` limit defined in the application
+//!   configuration, preventing uncontrolled table growth.
+//!
+//! - **Statistics Methods**: Functions like `get_refill_count_of_last_24h` and
+//!   `get_refill_volume_of_last_24h` provide aggregated data about recent refill
+//!   activity.
+//!
+//! - **`insert_refill_event()`**: The core logging function that persists the details
+//!   of a completed refill operation to the database.
+//!
+//! ## Design and Purpose
+//!
+//! The main goal of this module is to provide a robust, encapsulated, and testable
+//! interface for the refill subsystem's data.
+//!
+//! - **Encapsulation**: All SQL queries and logic specific to the `refill` table are
+//!   contained within this module, separating concerns.
+//!
+//! - **Data Integrity**: The constructor's validation logic enforces the configured
+//!   row limit at startup, ensuring the system doesn't start with an overgrown log table.
+//!
+//! - **Abstraction for Testability**: The `DatabaseInterfaceRefillTrait` allows higher-level
+//!   components to be tested independently of the database.
 use chrono::*;
 use mysql::prelude::*;
 use mysql::*;
@@ -47,13 +88,14 @@ pub trait DatabaseInterfaceRefillTrait: Pingable {
 }
 
 /// Contains the configuration and the implementation of the SQL interface for Refill.
+#[derive(Debug)]
 pub struct SqlInterfaceRefill {
     /// Connection to the database
     pub conn: PooledConn,
 }
 
 impl SqlInterfaceRefill {
-    // Creates a new `SqlInterfaceRefill` instance.
+    /// Creates a new `SqlInterfaceRefill` instance.
     ///
     /// This constructor initializes the refill management SQL interface with an established
     /// database connection. It performs a pre-flight check to ensure the number of rows
@@ -336,12 +378,11 @@ impl DatabaseInterfaceRefillTrait for SqlInterfaceRefill {
         volume: f64,
         error_code: i32,
     ) -> Result<(), SqlInterfaceError> {
-        let sql_query_string = sql_query_strings::SQL_QUERY_WRITE_REFILL_EVENT.to_owned();
         self.conn
             .exec_drop::<_, _>(
-                sql_query_string.clone(),
+                sql_query_strings::SQL_QUERY_WRITE_REFILL_EVENT,
                 params! {
-                "timestamp" => timestamp.format("%Y-%m-%d %H:%M:%S").to_string(),
+                "timestamp" => timestamp,
                 "duration" => duration,
                 "volume" => volume,
                 "error_code" => error_code,
@@ -349,7 +390,7 @@ impl DatabaseInterfaceRefillTrait for SqlInterfaceRefill {
             )
             .map_err(|e| SqlInterfaceError::InsertRefillEventFailure {
                 location: module_path!().to_string(),
-                sql_query_string,
+                query: sql_query_strings::SQL_QUERY_WRITE_REFILL_EVENT.to_string(),
                 source: e,
             })
     }
@@ -357,7 +398,7 @@ impl DatabaseInterfaceRefillTrait for SqlInterfaceRefill {
 
 #[cfg(test)]
 pub mod tests {
-    use chrono::{NaiveDateTime, SubsecRound};
+    use chrono::{Local, NaiveDateTime, SubsecRound};
     use mysql::prelude::Queryable;
 
     use crate::database::sql_interface_refill::{DatabaseInterfaceRefillTrait, SqlInterfaceRefill};
@@ -379,6 +420,94 @@ pub mod tests {
         duration: f32,
         volume: f32,
         error_code: i32,
+    }
+    #[test]
+    // This test case verifies the validation logic within the `SqlInterfaceRefill::new()` constructor.
+    // It covers the following scenarios:
+    // 1. Happy Path: Initialization succeeds when the row count is within the limit.
+    // 2. Failure on Row Limit: Fails when the `refill` table exceeds its max row count.
+    // 3. Deactivated Check: Succeeds even with excess rows if the limit is set to 0.
+    // 4. Edge Case: Succeeds when the row count is exactly the limit.
+    // Test case uses a dedicated test database to avoid conflicts.
+    fn test_sql_interface_refill_new() {
+        // --- Common Setup ---
+        let config: ConfigData = read_config_file_with_test_database(
+            "/config/aquarium_control_test_generic.toml".to_string(),
+            62,
+        );
+        println!("Testing with database {}", config.sql_interface.db_name);
+        let mut sql_interface: SqlInterface = SqlInterface::new(config.sql_interface)
+            .expect("Initialization of SQL interface for test failed.");
+
+        // --- Test Case 1: Happy Path (row count within limit) ---
+        println!("* Testing new() with valid row count (Happy Path)...");
+        SqlInterface::truncate_table(&mut sql_interface, SQL_TABLE_REFILL.to_string())
+            .expect("Test setup failed: Could not truncate table.");
+
+        // Insert one row
+        let mut refill_db = SqlInterfaceRefill {
+            conn: sql_interface.get_connection().unwrap(),
+        };
+        refill_db
+            .insert_refill_event(Local::now().naive_local(), 1.0, 1.0, 0)
+            .expect("Test setup failed: Could not insert row.");
+
+        // Check: new() should succeed with a generous limit of 10
+        let result = SqlInterfaceRefill::new(sql_interface.get_connection().unwrap(), 10);
+        assert!(
+            result.is_ok(),
+            "Expected new() to succeed on happy path, but it failed: {:?}",
+            result.err()
+        );
+        println!("* Succeeded: Happy path initialization is successful.");
+
+        // --- Test Case 2: Failure on row limit exceeded ---
+        println!("* Testing new() with too many rows in the refill table...");
+        // Insert a second row
+        let mut refill_db = SqlInterfaceRefill {
+            conn: sql_interface.get_connection().unwrap(),
+        };
+        refill_db
+            .insert_refill_event(Local::now().naive_local(), 2.0, 2.0, 0)
+            .expect("Test setup failed: Could not insert second row.");
+
+        // Check: new() should fail with a strict limit of 1
+        let result = SqlInterfaceRefill::new(sql_interface.get_connection().unwrap(), 1);
+        assert!(
+            matches!(
+                result,
+                Err(SqlInterfaceError::DatabaseRefillTableContainsTooManyRows(
+                    _,
+                    _,
+                    _
+                ))
+            ),
+            "Expected row limit error, but got {:?}",
+            result
+        );
+        println!("* Succeeded: Initialization fails if refill table exceeds row limit.");
+
+        // --- Test Case 3: Deactivated check (limit is 0) ---
+        println!("* Testing new() with deactivated row limit check (limit = 0)...");
+        // We reuse the state from the previous test (2 rows in the table)
+        let result = SqlInterfaceRefill::new(sql_interface.get_connection().unwrap(), 0); // Set limit to 0
+        assert!(
+            result.is_ok(),
+            "Expected new() to succeed with deactivated check, but it failed: {:?}",
+            result.err()
+        );
+        println!("* Succeeded: Initialization passes when row limit check is deactivated.");
+
+        // --- Test Case 4: Edge case (row count equals limit) ---
+        println!("* Testing new() with row count equal to the limit...");
+        // We reuse the state from the previous test (2 rows in the table)
+        let result = SqlInterfaceRefill::new(sql_interface.get_connection().unwrap(), 2); // Set limit to 2
+        assert!(
+            result.is_ok(),
+            "Expected new() to succeed when row count equals limit, but it failed: {:?}",
+            result.err()
+        );
+        println!("* Succeeded: Initialization passes when row count is exactly the limit.");
     }
 
     #[test]

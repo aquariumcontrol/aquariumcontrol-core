@@ -446,7 +446,7 @@ impl SqlInterfaceHeatingStats {
             .exec_drop(sql_query_strings::SQL_QUERY_WRITE_HEATING_STATS, params)
             .map_err(|e| SqlInterfaceError::InsertHeatingStatsEntryFailure {
                 location: module_path!().to_string(),
-                sql_query_string: sql_query_strings::SQL_QUERY_WRITE_HEATING_STATS.to_string(),
+                query: sql_query_strings::SQL_QUERY_WRITE_HEATING_STATS.to_string(),
                 source: e,
             })
     }

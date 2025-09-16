@@ -228,11 +228,11 @@ pub enum SqlInterfaceError {
 
     /// Error when inserting heating stats into the database.
     #[error(
-        "[{location}] Error when inserting heating stats into the database using query: {sql_query_string}"
+        "[{location}] Error when inserting heating stats into the database using query: {query}"
     )]
     InsertHeatingStatsEntryFailure {
         location: String,
-        sql_query_string: String,
+        query: String,
         #[source]
         source: MySqlError,
     },
@@ -247,10 +247,10 @@ pub enum SqlInterfaceError {
     },
 
     /// Error occurred when trying to insert a refill event into the database.
-    #[error("[{location}] Error occurred when trying to insert a refill event into the database using query: {sql_query_string}.")]
+    #[error("[{location}] Error occurred when trying to insert a refill event into the database using query: {query}.")]
     InsertRefillEventFailure {
         location: String,
-        sql_query_string: String,
+        query: String,
         #[source]
         source: MySqlError,
     },
