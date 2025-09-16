@@ -6,6 +6,35 @@ The above copyright notice and this permission notice shall be included in all c
 
 THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
+
+//! Defines a generic trait for updating thermal set points from a data source.
+//!
+//! This module provides the `ThermalSetValueUpdaterTrait`, an abstraction that decouples
+//! the core thermal control logic (e.g., for heating or ventilation) from the specific
+//! implementation of how set point values are retrieved.
+//!
+//! ## Key Components
+//!
+//! - **`ThermalSetValueUpdaterTrait`**: A trait that defines a single method, `update_set_value`.
+//!   Any struct implementing this trait is responsible for fetching the latest "on" and "off"
+//!   temperature thresholds and updating the provided variables.
+//!
+//! ## Design and Purpose
+//!
+//! The primary purpose of this trait is to enable **Dependency Inversion** and improve
+//! the system's **testability** and **modularity**.
+//!
+//! - **Decoupling**: High-level components, like a `ThermalController`, do not need to know
+//!   *how* or *from where* the set points are fetched. They only need to interact with this
+//!   trait. This means the data could come from a SQL database, a configuration file, or
+//!   even a remote API without changing the controller's code.
+//!
+//! - **Testability**: This abstraction is critical for unit testing. In a test environment,
+//!   a mock implementation of `ThermalSetValueUpdaterTrait` can be created. This mock can
+//!   simulate various scenarios—such as providing fixed values, returning updated values,
+//!   or simulating database errors—all without requiring a live database connection. This
+//!   makes tests fast, reliable, and self-contained.
+
 use crate::database::sql_interface_error::SqlInterfaceError;
 
 /// Trait for updating the set values of either ventilation or heating with values from the database.

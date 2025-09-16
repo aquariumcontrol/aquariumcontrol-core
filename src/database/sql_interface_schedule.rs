@@ -6,6 +6,7 @@ The above copyright notice and this permission notice shall be included in all c
 
 THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
+
 //! Manages time-based scheduling for various application modules.
 //!
 //! This module provides a dedicated interface, `SqlInterfaceSchedule`, for reading and
@@ -47,6 +48,7 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 //! - **Time Window Logic**: The `ScheduleEntry::check_if_allowed()` method provides a
 //!   simple way to determine if the current system time falls within the active
 //!   window of a given schedule.
+
 use chrono::*;
 use mysql::prelude::*;
 use mysql::*;
@@ -61,8 +63,7 @@ use crate::database::{sql_interface_error::SqlInterfaceError, sql_query_strings}
 
 /// List of all modules that are subject to limitations by schedule.
 /// Background: These activities cause noise - the user shall be able to inhibit these noises during nighttime.
-#[derive(PartialEq)]
-#[derive(Debug)]
+#[derive(PartialEq, Debug)]
 pub enum ScheduleType {
     Balling,
     Refill,
@@ -423,8 +424,7 @@ pub mod tests {
         SqlInterface::truncate_table(&mut sql_interface, SQL_TABLE_SCHEDULE.to_string())
             .expect("Test setup failed: Could not truncate table.");
 
-        let result =
-            SqlInterfaceSchedule::new(sql_interface.get_connection().unwrap(), 10);
+        let result = SqlInterfaceSchedule::new(sql_interface.get_connection().unwrap(), 10);
         assert!(
             result.is_ok(),
             "Expected new() to succeed with an empty table, but it failed: {:?}",
@@ -522,7 +522,10 @@ pub mod tests {
             1,
             "Expected exactly one valid schedule to be processed"
         );
-        assert_eq!(schedule_db.schedules[0].schedule_type, ScheduleType::Balling);
+        assert_eq!(
+            schedule_db.schedules[0].schedule_type,
+            ScheduleType::Balling
+        );
         println!("* Succeeded: read_schedule correctly processes valid data while reporting errors for invalid data.");
     }
 

@@ -6,6 +6,7 @@ The above copyright notice and this permission notice shall be included in all c
 
 THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
+
 //! Manages database interactions for the ventilation system's user-configurable set points.
 //!
 //! This module provides a dedicated interface, `SqlInterfaceVentilationSetVals`, for handling
@@ -47,6 +48,7 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 //! - **Data Integrity**: The constructor's validation logic and the consistency checks
 //!   in `get_ventilation_set_values` enforce data integrity rules, preventing runtime
 //!   errors caused by invalid database states.
+
 use mysql::PooledConn;
 use std::time::{Duration, Instant};
 
@@ -350,7 +352,9 @@ pub mod tests {
     use crate::database::sql_interface_ventilation_setvals::{
         SqlInterfaceVentilationSetVals, VentilationSetVals,
     };
-    use crate::database::{sql_interface::SqlInterface, sql_interface_error::SqlInterfaceError, sql_query_strings};
+    use crate::database::{
+        sql_interface::SqlInterface, sql_interface_error::SqlInterfaceError, sql_query_strings,
+    };
     use crate::utilities::config::{read_config_file_with_test_database, ConfigData};
 
     #[test]
@@ -375,7 +379,7 @@ pub mod tests {
             &mut sql_interface,
             sql_query_strings::SQL_TABLE_VENTILATION_SETVALS.to_string(),
         )
-            .expect("Test setup failed: Could not truncate table.");
+        .expect("Test setup failed: Could not truncate table.");
 
         let result = SqlInterfaceVentilationSetVals::new(
             sql_interface.get_connection().unwrap(),
@@ -394,7 +398,7 @@ pub mod tests {
             &mut sql_interface,
             sql_query_strings::SQL_TABLE_VENTILATION_SETVALS.to_string(),
         )
-            .expect("Test setup failed: Could not truncate table.");
+        .expect("Test setup failed: Could not truncate table.");
         let conn = sql_interface.get_connection().unwrap();
         let valid_vals = VentilationSetVals {
             ventilation_switch_off_temperature: 25.0,

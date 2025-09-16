@@ -39,6 +39,7 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 //! `[sql_interface]` section of a `.toml` file. This instance is then passed to
 //! `SqlInterface::new()` to initialize the main database connection pool for the
 //! entire application.
+
 use serde_derive::Deserialize;
 
 /// This struct holds the configuration data for the SQL interface.

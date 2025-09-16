@@ -7,6 +7,25 @@ The above copyright notice and this permission notice shall be included in all c
 THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
+//! A centralized repository for all static SQL query strings used throughout the application.
+//!
+//! This module acts as a single source of truth for database queries, decoupling the raw SQL
+//! from the application's business logic. This design offers several key advantages:
+//!
+//! - **Centralization**: All queries are in one place, making them easy to find, review,
+//!   and manage.
+//! - **Maintainability**: If a table or column name changes, it only needs to be updated
+//!   here, rather than in multiple places across the codebase.
+//! - **Security Auditing**: Having all queries in one file simplifies the process of
+//!   auditing for potential security vulnerabilities like SQL injection.
+//! - **Decoupling**: Rust code that interacts with the database can focus on logic
+//!   without being cluttered with long, embedded SQL strings.
+//!
+//! ## Usage
+//!
+//! Queries are defined as `pub const &str`. They use named parameters (e.g., `:my_param`)
+//! which are compatible with the `mysql` crate's `params!` macro for safe data binding.
+
 /// Provides version information to check if the current application is listed in the table of supported versions.
 /// It informs whether the version is supported and which hash is stored in the database for the version.
 pub const SQL_QUERY_VERSION_INFORMATION: &str =
@@ -137,7 +156,6 @@ pub const SQL_QUERY_READ_REFILL_VOLUME_LAST_24H: &str = concat!(
 );
 
 /// Provides the number of refill events from the last day from the database.
-/// It does not need to use the COALESCE function because the query returns 0 if there is no refill event in the last 24h.    
 pub const SQL_QUERY_READ_REFILL_COUNT_LAST_24H: &str = concat!(
     "SELECT COUNT(Volume) from refill ",
     "WHERE Timestamp > CURRENT_TIMESTAMP() - INTERVAL 1 DAY LIMIT 1;"
