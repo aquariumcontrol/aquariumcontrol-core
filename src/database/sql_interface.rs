@@ -1002,7 +1002,7 @@ pub mod tests {
             "CREATE TABLE IF NOT EXISTS {} (name VARCHAR(255));",
             table_name
         ))
-            .unwrap();
+        .unwrap();
 
         // --- Test Case 1: Empty table ---
         println!("* Testing string array with empty table...");
@@ -1027,7 +1027,7 @@ pub mod tests {
             &format!("INSERT INTO {} (name) VALUES (:name)", table_name),
             params! { "name" => test_string_1 },
         )
-            .unwrap();
+        .unwrap();
 
         let result = SqlInterface::get_string_array_from_database(
             &mut conn,
@@ -1045,7 +1045,7 @@ pub mod tests {
             &format!("INSERT INTO {} (name) VALUES (:name)", table_name),
             params! { "name" => test_string_2 },
         )
-            .unwrap();
+        .unwrap();
 
         // Use ORDER BY to ensure a predictable order for assertions
         let result = SqlInterface::get_string_array_from_database(
@@ -1087,15 +1087,17 @@ pub mod tests {
             "CREATE TABLE IF NOT EXISTS {} (ts TIMESTAMP);",
             table_name
         ))
-            .unwrap();
+        .unwrap();
 
         // --- Test Case 1: Empty table ---
         println!("* Testing optional timestamp with empty table...");
         conn.query_drop(&format!("TRUNCATE TABLE {}", table_name))
             .unwrap();
 
-        let result =
-            SqlInterface::get_optional_timestamp(&mut conn, &format!("SELECT ts FROM {}", table_name));
+        let result = SqlInterface::get_optional_timestamp(
+            &mut conn,
+            &format!("SELECT ts FROM {}", table_name),
+        );
         assert_eq!(result.unwrap(), None);
         println!("* Succeeded: Empty table returns Ok(None).");
 
@@ -1106,10 +1108,12 @@ pub mod tests {
             &format!("INSERT INTO {} (ts) VALUES (:ts)", table_name),
             params! { "ts" => test_timestamp },
         )
-            .unwrap();
+        .unwrap();
 
-        let result =
-            SqlInterface::get_optional_timestamp(&mut conn, &format!("SELECT ts FROM {}", table_name));
+        let result = SqlInterface::get_optional_timestamp(
+            &mut conn,
+            &format!("SELECT ts FROM {}", table_name),
+        );
         assert_eq!(result.unwrap(), Some(test_timestamp));
         println!("* Succeeded: Table with one entry returns Ok(Some(timestamp)).");
 
@@ -1122,10 +1126,12 @@ pub mod tests {
             &format!("INSERT INTO {} (ts) VALUES (:ts)", table_name),
             params! { "ts" => another_timestamp },
         )
-            .unwrap();
+        .unwrap();
 
-        let result =
-            SqlInterface::get_optional_timestamp(&mut conn, &format!("SELECT ts FROM {}", table_name));
+        let result = SqlInterface::get_optional_timestamp(
+            &mut conn,
+            &format!("SELECT ts FROM {}", table_name),
+        );
         assert_eq!(result.unwrap(), Some(test_timestamp));
         println!("* Succeeded: Table with multiple entries returns Ok(Some(timestamp)).");
 
@@ -1250,21 +1256,23 @@ pub mod tests {
             "CREATE TABLE IF NOT EXISTS {} (d DATE);",
             table_name
         ))
-            .unwrap();
+        .unwrap();
 
         // --- Test Case 1: Empty table (should error) ---
         println!("* Testing get_date with empty table...");
         conn.query_drop(&format!("TRUNCATE TABLE {}", table_name))
             .unwrap();
 
-        let result =
-            SqlInterface::get_date(&mut conn, &format!("SELECT d FROM {}", table_name));
+        let result = SqlInterface::get_date(&mut conn, &format!("SELECT d FROM {}", table_name));
 
         // Assert that we get the specific error for an empty response.
         if let Err(SqlInterfaceError::DateRequestFailure { .. }) = result {
             // This is the expected error path.
         } else {
-            panic!("Expected DateRequestFailure for empty result, but got: {:?}", result);
+            panic!(
+                "Expected DateRequestFailure for empty result, but got: {:?}",
+                result
+            );
         }
         println!("* Succeeded: Empty table returns a DateRequestFailure error.");
 
@@ -1275,10 +1283,9 @@ pub mod tests {
             &format!("INSERT INTO {} (d) VALUES (:d)", table_name),
             params! { "d" => test_date },
         )
-            .unwrap();
+        .unwrap();
 
-        let result =
-            SqlInterface::get_date(&mut conn, &format!("SELECT d FROM {}", table_name));
+        let result = SqlInterface::get_date(&mut conn, &format!("SELECT d FROM {}", table_name));
         assert_eq!(result.unwrap(), test_date);
         println!("* Succeeded: Table with one entry returns Ok(date).");
 
@@ -1421,10 +1428,8 @@ pub mod tests {
         ));
     }
 
-
     pub const SQL_QUERY_WRITE_VERSION_INFORMATION: &str =
         "INSERT into version(major, minor, build, hash) values(:major, :minor, :build, :hash);";
-
 
     #[test]
     // This test case checks
@@ -1527,7 +1532,6 @@ pub mod tests {
         }
         // ***************************************************************************************
     }
-
 
     #[test]
     // This test case checks if the ping query can be executed

@@ -295,18 +295,19 @@ pub enum SqlInterfaceError {
     SingleBallingSetValRequestFailure {
         location: String,
         query: String,
+        pump_id: i64,
 
         #[source]
         source: MySqlError,
     },
 
     /// database responded with empty response.
-    #[error("[{0}] Database responded with empty response to query: {1}")]
-    SingleBallingSetValEmptyResponse(String, String),
+    #[error("[{0}] Database responded with empty response to query: {1} with pump_id={2}")]
+    SingleBallingSetValEmptyResponse(String, String, i64),
 
     /// The database responded with multiple responses.
-    #[error("[{0}] Database responded with multiple responses to request to query: {1}")]
-    SingleBallingSetValNoSingleResponse(String, String),
+    #[error("[{0}] Database responded with multiple responses to request to query: {1} with pump_id={2}")]
+    SingleBallingSetValNoSingleResponse(String, String, i64),
 
     /// Error occurred when inserting data frame into the database.
     #[error("[{location}] Error occurred when inserting data frame into the database using query: {sql_query_string}")]
@@ -405,7 +406,7 @@ pub enum SqlInterfaceError {
 
     /// Could not retrieve optional timestamp from the database.
     #[error("[{location}] Could not retrieve optional timestamp from database.")]
-    OptionalTimestampRequestFailure { location: String, query: String},
+    OptionalTimestampRequestFailure { location: String, query: String },
 
     /// Could not ping database.
     #[error("[{location}] Could not ping database.")]

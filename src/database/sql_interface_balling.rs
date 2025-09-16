@@ -6,7 +6,42 @@ The above copyright notice and this permission notice shall be included in all c
 
 THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
-
+//! Manages all database interactions for the Balling dosing system.
+//!
+//! This module provides a dedicated interface, `SqlInterfaceBalling`, for handling
+//! all SQL operations related to the Balling feature. It encapsulates logic for
+//! reading pump configurations (`ballingsetvals`), logging dosing events
+//! (`ballingdosinglog`), and retrieving dosing history.
+//!
+//! ## Key Components
+//!
+//! - **`SqlInterfaceBalling` Struct**: The primary struct that holds a database
+//!   connection and provides methods for all Balling-related database operations.
+//!
+//! - **`BallingSetVal` Struct**: A data structure representing the configuration
+//!   parameters for a single Balling pump, such as dosing speed and volume.
+//!
+//! - **`new()` Constructor**: A critical entry point that not only creates an
+//!   `SqlInterfaceBalling` instance but also performs essential "fail-fast"
+//!   validation. At initialization, it checks the database for:
+//!   - The presence of `NULL` values in the configuration table.
+//!   - Whether the number of rows in the `ballingsetvals` and `ballingdosinglog`
+//!     tables exceeds the limits defined in the application configuration.
+//!   This ensures the system doesn't start in an invalid or inconsistent state.
+//!
+//! ## Design and Purpose
+//!
+//! The main goal of this module is to provide a robust, encapsulated, and safe
+//! interface for the Balling subsystem's data.
+//!
+//! - **Encapsulation**: All SQL queries and logic specific to Balling are contained
+//!   within this module, separating concerns and making the overall database
+//!   architecture cleaner.
+//!
+//! - **Data Integrity**: The constructor's validation logic enforces data integrity
+//!   rules at startup, preventing runtime errors caused by misconfigured or
+//!   overgrown database tables.
+//!
 #[cfg(test)]
 use log::error;
 
@@ -23,6 +58,7 @@ use crate::database::{
 };
 
 /// Contains the configuration and the implementation of the SQL interface for Balling.
+#[derive(Debug)]
 pub struct SqlInterfaceBalling {
     /// Connection to the database
     pub conn: PooledConn,
@@ -123,7 +159,7 @@ impl SqlInterfaceBalling {
 
         if max_rows_balling_set_values > 0 {
             // execute the check only when the limit is greater than zero
-            if count_rows_setvals > max_rows_balling_set_values.cast_signed() {
+            if count_rows_setvals as u64 > max_rows_balling_set_values {
                 return Err(
                     SqlInterfaceError::DatabaseBallingSetValTableContainsTooManyRows(
                         module_path!().to_string(),
@@ -136,7 +172,7 @@ impl SqlInterfaceBalling {
 
         if max_rows_balling_dosing_log > 0 {
             // execute the check only when the limit is greater than zero
-            if count_rows_dosing_log > max_rows_balling_dosing_log.cast_signed() {
+            if count_rows_dosing_log as u64 > max_rows_balling_dosing_log {
                 return Err(
                     SqlInterfaceError::DatabaseBallingDosingLogTableContainsTooManyRows(
                         module_path!().to_string(),
@@ -234,12 +270,11 @@ impl SqlInterfaceBalling {
         pump_id: i64,
         dosing_volume: f64,
     ) -> Result<(), SqlInterfaceError> {
-        let sql_query_string = sql_query_strings::SQL_QUERY_WRITE_BALLING_EVENT.to_owned();
         self.conn
             .exec_drop(
-                sql_query_string,
+                sql_query_strings::SQL_QUERY_WRITE_BALLING_EVENT.to_owned(),
                 params! {
-                    "timestamp" => timestamp.format("%Y-%m-%d %H:%M:%S").to_string(),
+                    "timestamp" => timestamp,
                     "pump_id" => pump_id,
                     "dosing_volume" => dosing_volume,
                 },
@@ -271,14 +306,12 @@ impl SqlInterfaceBalling {
         &mut self,
         pump_id: i64,
     ) -> Result<BallingSetVal, SqlInterfaceError> {
-        let sql_query_string = str::replace(
-            sql_query_strings::SQL_QUERY_READ_BALLING_SETVALS,
-            "#pump_id",
-            &pump_id.to_string(),
-        );
+        let params = params! { "pump_id" => pump_id };
+
         // Get a single data set from the database
-        let mut single_balling_setval_array = match self.conn.query_map(
-            sql_query_string.clone(),
+        let mut single_balling_setval_array = match self.conn.exec_map(
+            sql_query_strings::SQL_QUERY_READ_BALLING_SETVALS,
+            params,
             |(pump_id, dosing_speed, dosing_volume, label)| BallingSetVal {
                 pump_id,
                 dosing_speed,
@@ -290,7 +323,8 @@ impl SqlInterfaceBalling {
             Err(e) => {
                 return Err(SqlInterfaceError::SingleBallingSetValRequestFailure {
                     location: module_path!().to_string(),
-                    query: sql_query_string,
+                    query: sql_query_strings::SQL_QUERY_READ_BALLING_SETVALS.to_string(),
+                    pump_id,
                     source: e,
                 });
             }
@@ -300,7 +334,8 @@ impl SqlInterfaceBalling {
         if single_balling_setval_array.is_empty() {
             return Err(SqlInterfaceError::SingleBallingSetValEmptyResponse(
                 module_path!().to_string(),
-                sql_query_string,
+                sql_query_strings::SQL_QUERY_READ_BALLING_SETVALS.to_string(),
+                pump_id,
             ));
         }
 
@@ -308,7 +343,8 @@ impl SqlInterfaceBalling {
         if single_balling_setval_array.len() > 1 {
             return Err(SqlInterfaceError::SingleBallingSetValNoSingleResponse(
                 module_path!().to_string(),
-                sql_query_string,
+                sql_query_strings::SQL_QUERY_READ_BALLING_SETVALS.to_string(),
+                pump_id,
             ));
         }
         Ok(single_balling_setval_array.remove(0))
@@ -369,9 +405,7 @@ impl SqlInterfaceBalling {
 
 #[cfg(test)]
 pub mod tests {
-    use chrono::NaiveDateTime;
-    use mysql::{params, prelude::Queryable};
-
+    use crate::database::sql_interface_balling::DateTime;
     use crate::database::sql_interface_balling::SqlInterfaceBalling;
     use crate::database::sql_query_strings::{
         SQL_TABLE_BALLING_DOSING_LOG, SQL_TABLE_BALLING_SETVALS,
@@ -380,6 +414,11 @@ pub mod tests {
         sql_interface::SqlInterface, sql_interface_error::SqlInterfaceError, sql_query_strings,
     };
     use crate::utilities::config::{read_config_file_with_test_database, ConfigData};
+    use chrono::Local;
+    use chrono::NaiveDateTime;
+    use mysql::{params, prelude::Queryable};
+    use spin_sleep::SpinSleeper;
+    use std::time::Duration;
 
     pub struct SqlBallingEvent {
         timestamp: String,
@@ -397,6 +436,103 @@ pub mod tests {
         "INSERT into ballingsetvals(pumpid, dosingspeed, dosingvolume, label) ",
         "values(:pump_id, :dosing_speed, :dosing_volume, :label);"
     );
+    #[test]
+    // This test case verifies the validation logic within the `SqlInterfaceBalling::new()` constructor.
+    // It covers the following scenarios:
+    // 1. Happy Path: Initialization succeeds with valid data and row counts.
+    // 2. Failure on NULL: Fails when the `ballingsetvals` table contains NULL values.
+    // 3. Failure on Row Limit (SetVals): Fails when `ballingsetvals` exceeds its max row count.
+    // 4. Failure on Row Limit (DosingLog): Fails when `ballingdosinglog` exceeds its max row count.
+    // 5. Deactivated Checks: Succeeds even with excess rows if the limits are set to 0.
+    // Test case uses test database #57.
+    fn test_sql_interface_balling_new() {
+        // --- Common Setup ---
+        let config: ConfigData = read_config_file_with_test_database(
+            "/config/aquarium_control_test_generic.toml".to_string(),
+            57,
+        );
+        println!("Testing with database {}", config.sql_interface.db_name);
+        let mut sql_interface: SqlInterface = SqlInterface::new(config.sql_interface)
+            .expect("Initialization of SQL interface for test failed.");
+
+        // --- Test Case 1: Happy Path ---
+        println!("* Testing new() with valid data (Happy Path)...");
+        SqlInterface::truncate_table(&mut sql_interface, SQL_TABLE_BALLING_SETVALS.to_string())
+            .unwrap();
+        SqlInterface::truncate_table(&mut sql_interface, SQL_TABLE_BALLING_DOSING_LOG.to_string())
+            .unwrap();
+
+        // Insert one valid row into each table
+        let mut conn = sql_interface.get_connection().unwrap();
+        conn.exec_drop(
+            SQL_QUERY_WRITE_BALLING_SETVALS,
+            params! { "pump_id" => 1, "dosing_speed" => 1.0, "dosing_volume" => 1.0, "label" => "valid" },
+        ).unwrap();
+        conn.exec_drop(
+            sql_query_strings::SQL_QUERY_WRITE_BALLING_EVENT,
+            params! { "timestamp" => Local::now().naive_local(), "pump_id" => 1, "dosing_volume" => 1.0 },
+        ).unwrap();
+
+        let result = SqlInterfaceBalling::new(conn, 10, 10);
+        assert!(
+            result.is_ok(),
+            "Expected new() to succeed on happy path, but it failed: {:?}",
+            result.err()
+        );
+        println!("* Succeeded: Happy path initialization is successful.");
+
+        // --- Test Case 2: Failure on ballingsetvals row limit exceeded ---
+        println!("* Testing new() with too many rows in ballingsetvals...");
+        SqlInterface::truncate_table(&mut sql_interface, SQL_TABLE_BALLING_SETVALS.to_string())
+            .unwrap();
+        let mut conn = sql_interface.get_connection().unwrap();
+        conn.exec_drop(SQL_QUERY_WRITE_BALLING_SETVALS, params! { "pump_id" => 1, "dosing_speed" => 1.0, "dosing_volume" => 1.0, "label" => "row1" }).unwrap();
+        conn.exec_drop(SQL_QUERY_WRITE_BALLING_SETVALS, params! { "pump_id" => 2, "dosing_speed" => 1.0, "dosing_volume" => 1.0, "label" => "row2" }).unwrap();
+
+        let result = SqlInterfaceBalling::new(conn, 1, 10); // Set the limit to 1
+        assert!(
+            matches!(
+                result,
+                Err(SqlInterfaceError::DatabaseBallingSetValTableContainsTooManyRows(_, _, _))
+            ),
+            "Expected row limit error for setvals, but got {:?}",
+            result
+        );
+        println!("* Succeeded: Initialization fails if ballingsetvals exceeds row limit.");
+
+        // --- Test Case 3: Failure on ballingdosinglog row limit exceeded ---
+        println!("* Testing new() with too many rows in ballingdosinglog...");
+        let spin_sleeper = SpinSleeper::default();
+        SqlInterface::truncate_table(&mut sql_interface, SQL_TABLE_BALLING_DOSING_LOG.to_string())
+            .unwrap();
+        let mut conn = sql_interface.get_connection().unwrap();
+        conn.exec_drop(sql_query_strings::SQL_QUERY_WRITE_BALLING_EVENT, params! { "timestamp" => Local::now().naive_local(), "pump_id" => 1, "dosing_volume" => 1.0 }).unwrap();
+        spin_sleeper.sleep(Duration::from_millis(500));
+        conn.exec_drop(sql_query_strings::SQL_QUERY_WRITE_BALLING_EVENT, params! { "timestamp" => Local::now().naive_local(), "pump_id" => 2, "dosing_volume" => 1.0 }).unwrap();
+
+        let result = SqlInterfaceBalling::new(conn, 10, 1); // Set the limit to 1
+        assert!(
+            matches!(
+                result,
+                Err(SqlInterfaceError::DatabaseBallingDosingLogTableContainsTooManyRows(_, _, _))
+            ),
+            "Expected row limit error for the dosing log, but got {:?}",
+            result
+        );
+        println!("* Succeeded: Initialization fails if ballingdosinglog exceeds row limit.");
+
+        // --- Test Case 4: Deactivated checks (limits are 0) ---
+        println!("* Testing new() with deactivated row limit checks (limits = 0)...");
+        // We reuse the state from the previous test (2 rows in the dosing log)
+        let conn = sql_interface.get_connection().unwrap();
+        let result = SqlInterfaceBalling::new(conn, 0, 0); // Set limits to 0
+        assert!(
+            result.is_ok(),
+            "Expected new() to succeed with deactivated checks, but it failed: {:?}",
+            result.err()
+        );
+        println!("* Succeeded: Initialization passes when row limit checks are deactivated.");
+    }
 
     #[test]
     // Test case verifies the behavior of all functions accessing the Balling event log table.
@@ -534,7 +670,7 @@ pub mod tests {
             Err(e) => {
                 assert!(matches!(
                     e,
-                    SqlInterfaceError::SingleBallingSetValEmptyResponse(_, _)
+                    SqlInterfaceError::SingleBallingSetValEmptyResponse(_, _, _)
                 ));
             }
         }

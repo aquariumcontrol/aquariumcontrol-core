@@ -113,7 +113,7 @@ pub const SQL_QUERY_WRITE_PUMP_CONFIGURATION: &str = concat!(
 
 /// Provides the Balling dosing pump configuration for one of the pumps.
 pub const SQL_QUERY_READ_BALLING_SETVALS: &str =
-    "SELECT pumpid, dosingspeed, dosingvolume, label FROM ballingsetvals WHERE pumpid=#pump_id LIMIT 100;";
+    "SELECT pumpid, dosingspeed, dosingvolume, label FROM ballingsetvals WHERE pumpid=:pump_id LIMIT 100;";
 
 /// Provides the refill volume of the last hour from the database.
 /// It needs to use the COALESCE function because a null result is not interpreted correctly by the SQL library.
