@@ -7,6 +7,8 @@ The above copyright notice and this permission notice shall be included in all c
 THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
+#[cfg(target_os = "linux")]
+use crate::dispatch::messaging::Message;
 use std::fmt;
 
 /// Enum is used for internal thread messaging from control circuits to Controllino.
@@ -288,6 +290,32 @@ impl fmt::Display for InternalCommand {
             InternalCommand::Stop => write!(f, "Stop"),
             InternalCommand::Execute(_) => write!(f, "Execute"),
             InternalCommand::Unknown => write!(f, "Unknown"),
+        }
+    }
+}
+
+#[cfg(target_os = "linux")]
+impl InternalCommand {
+    /// Converts contents of a `Message` into an `InternalCommand`.
+    pub fn from_msg(msg: Message) -> Self {
+        match msg.command {
+            // Only convert variants that are implemented.
+            1 => InternalCommand::ResetAllErrors,
+            3 => InternalCommand::Stop,
+            4 => InternalCommand::Start,
+            10 => InternalCommand::Execute(msg.command_param1),
+            _ => InternalCommand::Unknown,
+        }
+    }
+
+    #[cfg(test)]
+    pub fn to_numeric(&self) -> i32 {
+        match self {
+            InternalCommand::ResetAllErrors => 1,
+            InternalCommand::Stop => 3,
+            InternalCommand::Start => 4,
+            InternalCommand::Execute(id) => 10,
+            _ => -1,
         }
     }
 }

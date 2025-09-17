@@ -9,7 +9,7 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 
 //! Provides the Inter-Process Communication (IPC) bridge for external control.
 //!
-//! This module is responsible for listening on a POSIX message queue for commands sent
+//! This module is responsible for listening to a POSIX message queue for commands sent
 //! from external processes (e.g., the command-line utility `aquarium_control` or the web server).
 //! It acts as the central point of dispatcher, translating these external messages into internal
 //! commands and forwarding them to the appropriate application threads
@@ -24,9 +24,6 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 //!
 //! - **`Message` Struct**: A simple data structure representing the raw command received
 //!   from the message queue containing a `domain`, `command`, and parameters.
-//!
-//! - **`messaging_commands` Module**: A collection of public constants (`START`, `STOP`,
-//!   `RESET`, `EXEC`) that define the supported external commands.
 //!
 //! - **`execute()` Method**: The main loop of the `Messaging` thread. It performs the following:
 //!   1.  Listens for incoming byte messages on the POSIX queue.
@@ -88,29 +85,12 @@ cfg_if::cfg_if! {
     }
 }
 
-#[cfg(target_os = "linux")]
-/// Contains constants of all commands provided in IPC messages
-pub mod messaging_commands {
-
-    /// used to reset errors in controllers (refill, monitors)
-    pub const RESET: i32 = 1;
-
-    /// used to stop controller (feed, balling, heating, ventilation, monitors)
-    pub const STOP: i32 = 3;
-
-    /// used to (re-) start controllers (feed, balling, heating, ventilation, monitors)
-    pub const START: i32 = 4;
-
-    /// used for triggering execution of feed profiles
-    pub const EXEC: i32 = 10;
-}
-
 /// Stores the content of the message and provides functionality for testing.
 #[allow(unused)]
 pub struct Message {
     domain: i32,
-    command: i32,
-    command_param1: i32,
+    pub command: i32,
+    pub command_param1: i32,
     command_param2: i32,
 }
 
@@ -339,22 +319,14 @@ impl Messaging {
                         }
 
                         // interpret command in a message
-                        let command: InternalCommand = match msg.command {
-                            messaging_commands::RESET => InternalCommand::ResetAllErrors,
-                            messaging_commands::STOP => InternalCommand::Stop,
-                            messaging_commands::START => InternalCommand::Start,
-                            messaging_commands::EXEC => {
-                                InternalCommand::Execute(msg.command_param1)
-                            }
-                            _ => {
-                                warn!(
-                                    target: module_path!(),
-                                    "Messaging: ignoring message with unknown command {}",
-                                    msg.command
-                                );
-                                InternalCommand::Unknown
-                            }
-                        };
+                        let command = InternalCommand::from_msg(msg);
+                        if command == InternalCommand::Unknown {
+                            warn!(
+                                target: module_path!(),
+                                "Messaging: ignoring message with unknown command {}",
+                                msg.command
+                            );
+                        }
 
                         // prepare and execute communication to domain
                         if (domain != MessagingDomain::Unknown)
@@ -437,7 +409,7 @@ pub mod tests {
     use spin_sleep::SpinSleeper;
     use std::{thread, time::Duration};
 
-    use crate::dispatch::messaging::{messaging_commands, Message, Messaging};
+    use crate::dispatch::messaging::{Message, Messaging};
     use crate::dispatch::messaging_channels::MessagingChannels;
     use crate::dispatch::messaging_domain::MessagingDomain;
     use crate::launch::channels::AquaSender;
@@ -611,11 +583,11 @@ pub mod tests {
 
         let mut msg_start = Message::new();
         msg_start.domain = MessagingDomain::Ventilation;
-        msg_start.command = messaging_commands::START;
+        msg_start.command = InternalCommand::Start.to_numeric();
 
         let mut msg_stop = Message::new();
         msg_stop.domain = MessagingDomain::Ventilation;
-        msg_stop.command = messaging_commands::STOP;
+        msg_stop.command = InternalCommand::Stop.to_numeric();
 
         let messaging = Messaging::new(config.messaging, ExecutionConfig::default()).unwrap();
 
@@ -668,11 +640,11 @@ pub mod tests {
 
         let mut msg_start = Message::new();
         msg_start.domain = MessagingDomain::Heating;
-        msg_start.command = messaging_commands::START;
+        msg_start.command = InternalCommand::Start.to_numeric();
 
         let mut msg_stop = Message::new();
         msg_stop.domain = MessagingDomain::Heating;
-        msg_stop.command = messaging_commands::STOP;
+        msg_stop.command = InternalCommand::Stop.to_numeric();
 
         let messaging = Messaging::new(config.messaging, ExecutionConfig::default()).unwrap();
 
@@ -721,15 +693,15 @@ pub mod tests {
 
         let mut msg_reset = Message::new();
         msg_reset.domain = MessagingDomain::Refill;
-        msg_reset.command = messaging_commands::RESET;
+        msg_reset.command = InternalCommand::ResetAllErrors.to_numeric();
 
         let mut msg_start = Message::new();
         msg_start.domain = MessagingDomain::Refill;
-        msg_start.command = messaging_commands::START;
+        msg_start.command = InternalCommand::Start.to_numeric();
 
         let mut msg_stop = Message::new();
         msg_stop.domain = MessagingDomain::Refill;
-        msg_stop.command = messaging_commands::STOP;
+        msg_stop.command = InternalCommand::Stop.to_numeric();
 
         let messaging = Messaging::new(config.messaging, ExecutionConfig::default()).unwrap();
 
@@ -793,17 +765,17 @@ pub mod tests {
         let mq_filename_for_test_environment = config.messaging.mq_filename.clone();
 
         let mut msg_exec = Message::new();
-        msg_exec.domain = messaging_domains::FEED;
-        msg_exec.command = messaging_commands::EXEC;
+        msg_exec.domain = MessagingDomain::Feed;
+        msg_exec.command = InternalCommand::Execute(13).to_numeric();
         msg_exec.command_param1 = 13;
 
         let mut msg_start = Message::new();
-        msg_start.domain = messaging_domains::FEED;
-        msg_start.command = messaging_commands::START;
+        msg_start.domain = MessagingDomain::Feed;
+        msg_start.command = InternalCommand::Start.to_numeric();
 
         let mut msg_stop = Message::new();
-        msg_stop.domain = messaging_domains::FEED;
-        msg_stop.command = messaging_commands::STOP;
+        msg_stop.domain = MessagingDomain::Feed;
+        msg_stop.command = InternalCommand::Stop.to_numeric();
 
         let messaging = Messaging::new(config.messaging, ExecutionConfig::default()).unwrap();
 
@@ -868,12 +840,12 @@ pub mod tests {
         open_posixmq_test_file(&config.messaging.mq_filename);
 
         let mut msg_start = Message::new();
-        msg_start.domain = messaging_domains::BALLING;
-        msg_start.command = messaging_commands::START;
+        msg_start.domain = MessagingDomain::Balling;
+        msg_start.command = InternalCommand::Start.to_numeric();
 
         let mut msg_stop = Message::new();
-        msg_stop.domain = messaging_domains::BALLING;
-        msg_stop.command = messaging_commands::STOP;
+        msg_stop.domain = MessagingDomain::Balling;
+        msg_stop.command = InternalCommand::Stop.to_numeric();
 
         let messaging = Messaging::new(config.messaging, ExecutionConfig::default()).unwrap();
 
@@ -921,12 +893,12 @@ pub mod tests {
         let mq_filename_for_test_environment = config.messaging.mq_filename.clone();
 
         let mut msg_start = Message::new();
-        msg_start.domain = messaging_domains::WATCHDOG;
-        msg_start.command = messaging_commands::START;
+        msg_start.domain = MessagingDomain::Watchdog;
+        msg_start.command = InternalCommand::Start.to_numeric();
 
         let mut msg_stop = Message::new();
-        msg_stop.domain = messaging_domains::WATCHDOG;
-        msg_stop.command = messaging_commands::STOP;
+        msg_stop.domain = MessagingDomain::Watchdog;
+        msg_stop.command = InternalCommand::Stop.to_numeric();
 
         let messaging = Messaging::new(config.messaging, ExecutionConfig::default()).unwrap();
 
