@@ -6,6 +6,50 @@ The above copyright notice and this permission notice shall be included in all c
 
 THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
+
+//! Defines the single, top-level error type for all application startup failures.
+//!
+//! This module contains the `StartupError` enum, which aggregates every possible error
+//! that can occur during the application's initialization phase. By consolidating all
+//! potential failures into a single type, it provides a unified and robust error
+//! handling mechanism for the `main` function.
+//!
+//! ## Design and Purpose
+//!
+//! The `StartupError` enum is the root of the error handling tree for the entire
+//! application launch sequence. It is designed using the `thiserror` crate to provide
+//! several key benefits:
+//!
+//! - **Unified Error Type**: Functions involved in the startup process can return a
+//!   `Result<_, StartupError>`, simplifying the function signatures and error
+//!   propagation logic.
+//!
+//! - **Automatic Conversion**: Through `#[from]` and `#[error(transparent)]`, many
+//!   lower-level errors (like `ConfigError`) are automatically converted into a
+//!   `StartupError` variant, reducing boilerplate code.
+//!
+//! - **Rich Context and Source Chaining**: Most variants use `#[source]` to wrap the
+//!   original error. This preserves the full error chain, allowing logs to display not
+//!   just *that* a subsystem failed to initialize, but exactly *why* it failed,
+//!   including the original error from the underlying library.
+//!
+//! ## Error Categories
+//!
+//! The startup errors can be grouped into several logical categories:
+//!
+//! 1.  **Configuration and Environment Errors**: Failures related to loading or parsing
+//!     the configuration file, invalid command-line arguments, or environment checks
+//!     (e.g., `NotRoot`, `PidCheckError`).
+//!
+//! 2.  **Subsystem Initialization Failures**: The largest category, covering failures
+//!     when setting up core components like the logger, database connection, or IPC
+//!     messaging (`LoggingSetupFailure`, `Database`, `Messaging`).
+//!
+//! 3.  **Hardware Interface Failures**: Errors that occur when initializing communication
+//!     with physical hardware, such as Controllino, GPIO pins, I2C devices, or specific
+//!     sensors (`ControllinoSetupFailure`, `I2cSetupFailure`, `Ds18b20SetupFailure`).
+//!     These are often conditionally compiled based on the target hardware.
+
 #[cfg(all(feature = "target_hw", target_os = "linux"))]
 use crate::beacon::ws2812b::Ws2812BError;
 use crate::database::sql_interface_error::SqlInterfaceError;
