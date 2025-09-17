@@ -52,10 +52,10 @@ use chrono::NaiveDateTime;
 use mysql::*;
 use std::fmt;
 
+use crate::database::sql_interface_error::SqlInterfaceError::FeedScheduleEntryRepeatDailyOutOfRange;
 use crate::database::{
     sql_interface_error::SqlInterfaceError, sql_interface_feed::SqlFeedScheduleEntry,
 };
-use crate::database::sql_interface_error::SqlInterfaceError::FeedScheduleEntryRepeatDailyOutOfRange;
 
 /// Holds the data of a feed schedule entry derived from data read from the database.
 #[derive(Debug, PartialEq, Clone)]
@@ -86,11 +86,12 @@ impl FeedScheduleEntry {
     pub fn new(
         sql_feed_schedule_entry: &SqlFeedScheduleEntry,
     ) -> Result<FeedScheduleEntry, SqlInterfaceError> {
-        if (sql_feed_schedule_entry.repeat_daily > 1) || (sql_feed_schedule_entry.repeat_daily < 0) {
+        if (sql_feed_schedule_entry.repeat_daily > 1) || (sql_feed_schedule_entry.repeat_daily < 0)
+        {
             return Err(FeedScheduleEntryRepeatDailyOutOfRange {
-                    location: module_path!().to_string(),
-                    repeat_daily: sql_feed_schedule_entry.repeat_daily
-                });
+                location: module_path!().to_string(),
+                repeat_daily: sql_feed_schedule_entry.repeat_daily,
+            });
         }
         Ok(FeedScheduleEntry {
             timestamp: sql_feed_schedule_entry.timestamp,
@@ -238,7 +239,10 @@ mod tests {
         assert!(
             matches!(
                 error,
-                FeedScheduleEntryRepeatDailyOutOfRange { repeat_daily: 2, .. }
+                FeedScheduleEntryRepeatDailyOutOfRange {
+                    repeat_daily: 2,
+                    ..
+                }
             ),
             "Expected FeedScheduleEntryRepeatDailyOutOfRange error with value 2, but got {:?}",
             error
@@ -262,7 +266,10 @@ mod tests {
         assert!(
             matches!(
                 error,
-                FeedScheduleEntryRepeatDailyOutOfRange { repeat_daily: -1, .. }
+                FeedScheduleEntryRepeatDailyOutOfRange {
+                    repeat_daily: -1,
+                    ..
+                }
             ),
             "Expected FeedScheduleEntryRepeatDailyOutOfRange error with value -1, but got {:?}",
             error

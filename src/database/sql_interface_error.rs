@@ -282,10 +282,7 @@ pub enum SqlInterfaceError {
 
     /// Could not convert feedschedule entry string(s) read from the database to timestamp.
     #[error("[{location}] Repetition marker is out of range (repeat_daily = {repeat_daily}).")]
-    FeedScheduleEntryRepeatDailyOutOfRange {
-        location: String,
-        repeat_daily: i16,
-    },
+    FeedScheduleEntryRepeatDailyOutOfRange { location: String, repeat_daily: i16 },
 
     /// Error occurred when processing time stamp results from the database.
     #[error(

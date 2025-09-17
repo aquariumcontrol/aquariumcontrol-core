@@ -516,7 +516,7 @@ impl Feed {
                                 }
                             }
                         }
-                    },
+                    }
                     Err(e) => {
                         #[cfg(not(test))]
                         if !self.lock_error_get_feedschedule_entry {
