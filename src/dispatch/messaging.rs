@@ -6,6 +6,60 @@ The above copyright notice and this permission notice shall be included in all c
 
 THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
+
+//! Provides the Inter-Process Communication (IPC) bridge for external control.
+//!
+//! This module is responsible for listening on a POSIX message queue for commands sent
+//! from external processes (e.g., the command-line utility `aquarium_control` or the web server).
+//! It acts as the central point of dispatcher, translating these external messages into internal
+//! commands and forwarding them to the appropriate application threads
+//! (like `Refill`, `Heating`, `Feed`, etc.).
+//!
+//! This entire module is conditionally compiled and is only available on `target_os = "linux"`.
+//!
+//! ## Key Components
+//!
+//! - **`Messaging` Struct**: The core component that holds the POSIX message queue connection
+//!   and runs the main dispatch loop.
+//!
+//! - **`Message` Struct**: A simple data structure representing the raw command received
+//!   from the message queue containing a `domain`, `command`, and parameters.
+//!
+//! - **`messaging_commands` Module**: A collection of public constants (`START`, `STOP`,
+//!   `RESET`, `EXEC`) that define the supported external commands.
+//!
+//! - **`execute()` Method**: The main loop of the `Messaging` thread. It performs the following:
+//!   1.  Listens for incoming byte messages on the POSIX queue.
+//!   2.  Parses the raw bytes into a `Message` struct.
+//!   3.  Interprets the message's `domain` (e.g., `Refill`, `Heating`) and `command`.
+//!   4.  Sends the corresponding `InternalCommand` to the target thread via its channel.
+//!   5.  Listens for `Quit` and `Terminate` signals from the `signal_handler` for graceful shutdown.
+//!
+//! ## Design and Architecture
+//!
+//! The `Messaging` module serves as a crucial bridge between the running application and
+//! the outside world, allowing for dynamic control without restarting the service.
+//!
+//! - **Decoupling**: It decouples the internal workings of the application from the
+//!   specifics of the external control mechanism.
+//! - **Centralized Dispatch**: All external commands flow through this single point,
+//!   making the control flow easy to understand and debug.
+//! - **Robustness**: It includes logic to handle unknown domains or commands gracefully
+//!   by logging a warning and ignoring the message.
+//!
+//! ### Example Message Flow
+//!
+//! 1.  An external script sends a byte message to the `/aquarium_control` POSIX message queue.
+//!     The message contains bytes representing: `domain=HEATING`, `command=STOP`.
+//! 2.  The `Messaging::execute()` loop receives these bytes.
+//! 3.  It parses the bytes into a `Message` struct.
+//! 4.  It matches the `domain` to `MessagingDomain::Heating` and the `command` to `InternalCommand::Stop`.
+//! 5.  It sends `InternalCommand::Stop` to the `Heating` thread's channel.
+//! 6.  The `Heating` thread receives the command and stops its operation.
+//!
+//! The mermaid diagram in the `Messaging` struct documentation provides a visual overview
+//! of the communication paths.
+
 #[cfg(feature = "debug_messaging")]
 use log::debug;
 
@@ -276,23 +330,14 @@ impl Messaging {
                         );
 
                         // interpret the domain in a message
-                        let domain: MessagingDomain = match msg.domain {
-                            messaging_domains::REFILL => MessagingDomain::Refill,
-                            messaging_domains::VENTILATION => MessagingDomain::Ventilation,
-                            messaging_domains::FEED => MessagingDomain::Feed,
-                            messaging_domains::HEATING => MessagingDomain::Heating,
-                            messaging_domains::BALLING => MessagingDomain::Balling,
-                            messaging_domains::MONITORS => MessagingDomain::Monitors,
-                            messaging_domains::WATCHDOG => MessagingDomain::Watchdog,
-                            _ => {
-                                warn!(
-                                    target: module_path!(),
-                                    "ignoring message for unknown domain {}",
-                                    msg.domain
-                                );
-                                MessagingDomain::Unknown
-                            }
-                        };
+                        let domain = MessagingDomain::from(msg.domain);
+                        if domain == MessagingDomain::Unknown {
+                            warn!(
+                                target: module_path!(),
+                                "ignoring message for unknown domain {}",
+                                msg.domain
+                            );
+                        }
 
                         // interpret command in a message
                         let command: InternalCommand = match msg.command {
@@ -393,8 +438,9 @@ pub mod tests {
     use spin_sleep::SpinSleeper;
     use std::{thread, time::Duration};
 
-    use crate::dispatch::messaging::{messaging_commands, messaging_domains, Message, Messaging};
+    use crate::dispatch::messaging::{messaging_commands, Message, Messaging};
     use crate::dispatch::messaging_channels::MessagingChannels;
+    use crate::dispatch::messaging_domain::MessagingDomain;
     use crate::launch::channels::AquaSender;
     use crate::launch::channels::Channels;
     use crate::launch::execution_config::ExecutionConfig;
@@ -565,11 +611,11 @@ pub mod tests {
         let mq_filename_for_test_environment = config.messaging.mq_filename.clone();
 
         let mut msg_start = Message::new();
-        msg_start.domain = messaging_domains::VENTILATION;
+        msg_start.domain = MessagingDomain::Ventilation;
         msg_start.command = messaging_commands::START;
 
         let mut msg_stop = Message::new();
-        msg_stop.domain = messaging_domains::VENTILATION;
+        msg_stop.domain = MessagingDomain::Ventilation;
         msg_stop.command = messaging_commands::STOP;
 
         let messaging = Messaging::new(config.messaging, ExecutionConfig::default()).unwrap();
@@ -622,11 +668,11 @@ pub mod tests {
         let mq_filename_for_test_environment = config.messaging.mq_filename.clone();
 
         let mut msg_start = Message::new();
-        msg_start.domain = messaging_domains::HEATING;
+        msg_start.domain = MessagingDomain::Heating;
         msg_start.command = messaging_commands::START;
 
         let mut msg_stop = Message::new();
-        msg_stop.domain = messaging_domains::HEATING;
+        msg_stop.domain = MessagingDomain::Heating;
         msg_stop.command = messaging_commands::STOP;
 
         let messaging = Messaging::new(config.messaging, ExecutionConfig::default()).unwrap();
@@ -675,15 +721,15 @@ pub mod tests {
         let mq_file_name_for_test_environment = config.messaging.mq_filename.clone();
 
         let mut msg_reset = Message::new();
-        msg_reset.domain = messaging_domains::REFILL;
+        msg_reset.domain = MessagingDomain::Refill;
         msg_reset.command = messaging_commands::RESET;
 
         let mut msg_start = Message::new();
-        msg_start.domain = messaging_domains::REFILL;
+        msg_start.domain = MessagingDomain::Refill;
         msg_start.command = messaging_commands::START;
 
         let mut msg_stop = Message::new();
-        msg_stop.domain = messaging_domains::REFILL;
+        msg_stop.domain = MessagingDomain::Refill;
         msg_stop.command = messaging_commands::STOP;
 
         let messaging = Messaging::new(config.messaging, ExecutionConfig::default()).unwrap();

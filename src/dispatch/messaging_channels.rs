@@ -6,6 +6,43 @@ The above copyright notice and this permission notice shall be included in all c
 
 THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
+
+//! A central container for all inter-thread communication channels used by the `Messaging` module.
+//!
+//! This module defines the `MessagingChannels` struct, which acts as a "switchboard" or
+//! router for commands received from an external source. Its primary purpose is to hold all
+//! the `mpsc::channel` senders that the main `Messaging` thread needs to dispatch commands
+//! to the various application domains (e.g., `Refill`, `Heating`, `Feed`).
+//!
+//! This entire module is conditionally compiled and is only available on `target_os = "linux"`
+//! (or during tests), as it is a core part of the POSIX message queue IPC mechanism.
+//!
+//! ## Key Components
+//!
+//! - **`MessagingChannels` Struct**: A simple container struct that aggregates all the
+//!   `AquaSender` and `AquaReceiver` endpoints required by the `Messaging` thread.
+//!
+//! - **`send_command_to_domain()` Method**: The core logic of this module. It takes an
+//!   `InternalCommand` and a `MessagingDomain` and uses a `match` statement to select
+//!   the correct channel sender, effectively routing the command to the intended thread.
+//!
+//! ## Design and Architecture
+//!
+//! The `MessagingChannels` struct is a key part of the application's inter-thread
+//! communication strategy, promoting clean and decoupled code.
+//!
+//! - **Centralization**: By gathering all necessary channels into a single struct, it
+//!   provides a clear and explicit declaration of the `Messaging` thread's communication
+//!   dependencies. This makes the overall architecture easier to reason about.
+//!
+//! - **Decoupling**: The `Messaging` thread itself doesn't need to know about every
+//!   channel. It just needs this struct, which it can use to dispatch commands.
+//!   This separates the dispatch logic from the communication infrastructure.
+//!
+//! - **Testability**: The struct can be easily constructed with mock channels during
+//!   unit testing, allowing for isolated testing of the dispatch logic without needing
+//!   to run the entire application.
+
 #[cfg(any(test, target_os = "linux"))]
 use crate::launch::channels::AquaReceiver;
 #[allow(unused)]
@@ -33,30 +70,24 @@ cfg_if::cfg_if! {
 /// This entire struct is conditionally compiled and is only available on Linux
 /// systems, as POSIX message queues are a platform-specific feature.
 pub struct MessagingChannels {
-    #[allow(unused)]
     /// Sender for sending acknowledgments back to the `SignalHandler`.
     pub tx_messaging_to_signal_handler: AquaSender<bool>,
 
-    #[allow(unused)]
     /// Receiver for commands from the `SignalHandler` (e.g., `Quit`, `Terminate`).
     pub rx_messaging_from_signal_handler: AquaReceiver<InternalCommand>,
 
     /// Sender for dispatching commands to the `Refill` module.
     pub tx_messaging_to_refill: AquaSender<InternalCommand>,
 
-    #[allow(unused)]
     /// Sender for dispatching commands to the `Ventilation` module.
     pub tx_messaging_to_ventilation: AquaSender<InternalCommand>,
 
-    #[allow(unused)]
     /// Sender for dispatching commands to the `Heating` module.
     pub tx_messaging_to_heating: AquaSender<InternalCommand>,
 
-    #[allow(unused)]
     /// Sender for dispatching commands to the `Feed` module.
     pub tx_messaging_to_feed: AquaSender<InternalCommand>,
 
-    #[allow(unused)]
     /// Sender for dispatching commands to the `Balling` module.
     pub tx_messaging_to_balling: AquaSender<InternalCommand>,
 

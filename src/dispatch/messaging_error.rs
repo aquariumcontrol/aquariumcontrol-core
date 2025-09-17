@@ -39,7 +39,7 @@ pub enum MessagingError {
     /// Unknown domain: Internal logic error
     #[cfg(target_os = "linux")]
     #[error("[{0}] Internal error: Domain {1} is unknown.")]
-    UnknownDomain(String, String),
+    UnknownDomain(String, i32),
 
     /// Error occurred when trying to send the message via the channel
     #[cfg(target_os = "linux")]
