@@ -87,17 +87,17 @@ pub enum MessagingDomain {
 }
 
 #[cfg(target_os = "linux")]
-impl TryFrom<i32> for MessagingDomain {
+impl From<i32> for MessagingDomain {
     fn from(value: i32) -> Self {
         match value {
-            x if x == MessagingDomain::Refill as i32 => Ok(MessagingDomain::Refill),
-            x if x == MessagingDomain::Ventilation as i32 => Ok(MessagingDomain::Ventilation),
-            x if x == MessagingDomain::Feed as i32 => Ok(MessagingDomain::Feed),
-            x if x == MessagingDomain::Heating as i32 => Ok(MessagingDomain::Heating),
-            x if x == MessagingDomain::Balling as i32 => Ok(MessagingDomain::Balling),
-            x if x == MessagingDomain::Monitors as i32 => Ok(MessagingDomain::Monitors),
-            x if x == MessagingDomain::Watchdog as i32 => Ok(MessagingDomain::Watchdog),
-            _ => MessagingDomain::UnknownDomain,
+            x if x == MessagingDomain::Refill as i32 => MessagingDomain::Refill,
+            x if x == MessagingDomain::Ventilation as i32 => MessagingDomain::Ventilation,
+            x if x == MessagingDomain::Feed as i32 => MessagingDomain::Feed,
+            x if x == MessagingDomain::Heating as i32 => MessagingDomain::Heating,
+            x if x == MessagingDomain::Balling as i32 => MessagingDomain::Balling,
+            x if x == MessagingDomain::Monitors as i32 => MessagingDomain::Monitors,
+            x if x == MessagingDomain::Watchdog as i32 => MessagingDomain::Watchdog,
+            _ => MessagingDomain::Unknown,
         }
     }
 }

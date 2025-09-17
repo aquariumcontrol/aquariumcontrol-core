@@ -81,7 +81,6 @@ cfg_if::cfg_if! {
         use crate::utilities::proc_ext_req::ProcessExternalRequestTrait;
         use crate::utilities::wait_for_termination::WaitForTerminationTrait;
         use crate::utilities::acknowledge_signal_handler::AcknowledgeSignalHandlerTrait;
-        use crate::dispatch::messaging_domain::messaging_domains;
         use crate::dispatch::messaging_domain::MessagingDomain;
         use crate::dispatch::messaging_config::MessagingConfig;
         use crate::launch::execution_config::ExecutionConfig;

@@ -139,7 +139,7 @@ impl MessagingChannels {
             _ => {
                 return Err(MessagingError::UnknownDomain(
                     module_path!().to_string(),
-                    domain.to_string(),
+                    domain as i32,
                 ));
             }
         };

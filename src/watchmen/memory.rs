@@ -32,6 +32,7 @@ cfg_if::cfg_if! {
     }
 }
 use crate::watchmen::memory_config_check::{memory_config_check, MemoryConfigError};
+use log::info;
 use spin_sleep::SpinSleeper;
 use std::time::{Duration, Instant};
 
