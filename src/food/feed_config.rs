@@ -12,7 +12,7 @@ use serde_derive::Deserialize;
 /// Holds the configuration data for the feed control.
 /// The configuration is loaded from the .toml configuration file.
 /// This struct does not contain any implementation.
-#[derive(Deserialize)]
+#[derive(Deserialize, Debug, PartialEq, Clone)]
 pub struct FeedConfig {
     /// control will only be active when the flag is set to true
     pub active: bool,

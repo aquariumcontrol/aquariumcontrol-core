@@ -7,6 +7,66 @@ The above copyright notice and this permission notice shall be included in all c
 THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
+//! Implements the main control logic for automated and manual fish feeding.
+//!
+//! This module contains the `Feed` struct, which runs as a dedicated thread to manage all
+//! aspects of the feeding process. It is responsible for executing scheduled feed profiles,
+//! responding to external commands (e.g., from aquarium_client or the web server), and ensuring
+//! that feeding operations are performed safely and reliably.
+//!
+//! ## Key Components
+//!
+//! - **`Feed` Struct**: The central state machine for the feeding subsystem. It holds the
+//!   configuration, communication channels, and internal state flags like `execution_blocked`.
+//!
+//! - **`execute()` Method**: The main thread loop. It continuously performs the following actions:
+//!   1.  Checks for external commands (`Start`, `Stop`, `Execute`, `Quit`).
+//!   2.  If active, periodically queries the database for overdue feed schedules.
+//!   3.  Uses a configurable strategy to select a single profile if multiple are overdue.
+//!   4.  Executes the selected profile by calling the `FoodInjectionTrait`.
+//!   5.  Logs the feed event to the database.
+//!   6.  Pings the database to keep the connection alive.
+//!
+//! - **`execute_feed()` Method**: A private helper that orchestrates a single feeding event. It
+//!   retrieves the feed pattern from the database, actuates the feeder via the
+//!   `FoodInjectionTrait`, and logs the event.
+//!
+//! ## Design and Architecture
+//!
+//! The `Feed` module is designed to be a robust, testable, and decoupled component.
+//!
+//! - **Dependency Injection**: The module relies on traits for its core dependencies:
+//!   - `FoodInjectionTrait`: An abstraction for the physical act of dispensing food. This
+//!     allows for mock implementations in tests without needing real hardware.
+//!   - `DatabaseInterfaceFeedTrait`: An abstraction for all database operations, enabling
+//!     the use of a mock database during testing.
+//!
+//! - **State Management**: The module maintains an internal state to handle various conditions:
+//!   - `feed_inhibited`: A flag to temporarily pause scheduled feeding based on `Start`/`Stop` commands.
+//!   - `execution_blocked`: A critical safety flag. If any part of a feeding process fails
+//!     (e.g., cannot write to the database), this flag is set to `true`, preventing all
+//!     further feeding operations until it is reset by an external command. This
+//!     prevents unintended behavior due to a faulty system state.
+//!
+//! - **Concurrency Control**: It uses an `Arc<Mutex<i32>>` to coordinate with other device-actuating
+//!   modules, ensuring that only one major physical action (like feeding or dosing) occurs at a time.
+//!
+//! - **Scheduling Strategy**: When multiple scheduled feeds are found in the past, a
+//!   configurable strategy (`strategy_multiple_schedule_entries_in_past`) is used to
+//!   decide which one to execute (e.g., the oldest, the newest, or none).
+//!
+//! ### Example Flow
+//!
+//! 1.  The `execute()` loop starts.
+//! 2.  It checks the database and finds a feed profile was scheduled for 10 minutes ago.
+//! 3.  It calls `execute_feed()` with the profile ID.
+//! 4.  `execute_feed()` retrieves the pattern.
+//! 5.  It calls `food_injection.inject_food()`, which communicates with the `RelayManager`
+//!     to turn the feeder relay on and then off.
+//! 6.  After injection, it writes a record of the event to the `feedlog` table.
+//! 7.  Finally, it updates the `feedschedule` table to mark the entry as completed or to
+//!     reschedule it if it's a repeating event.
+
 #[cfg(not(test))]
 use log::info;
 
@@ -414,8 +474,8 @@ impl Feed {
                 );
 
                 match sql_interface_feed.get_past_feedschedule_entries_from_database() {
-                    Ok(c) => match c {
-                        Some(mut feed_schedule_entries) => {
+                    Ok(feed_schedule_entries_opt) => {
+                        if let Some(mut feed_schedule_entries) = feed_schedule_entries_opt {
                             #[cfg(all(feature = "debug_feed", not(test)))]
                             debug!(
                                 target: module_path!(),
@@ -426,41 +486,36 @@ impl Feed {
                             let feed_schedule_entry_opt = self
                                 .select_feed_schedule_entry_for_execution(&feed_schedule_entries);
 
-                            match feed_schedule_entry_opt {
-                                Some(feed_schedule_entry) => {
-                                    #[cfg(all(feature = "debug_feed", not(test)))]
-                                    debug!(
-                                        target: module_path!(),
-                                        "Selected following feed schedule entry for execution: {}",
-                                        feed_schedule_entry
-                                    );
+                            if let Some(feed_schedule_entry) = feed_schedule_entry_opt {
+                                #[cfg(all(feature = "debug_feed", not(test)))]
+                                debug!(
+                                    target: module_path!(),
+                                    "Selected following feed schedule entry for execution: {}",
+                                    feed_schedule_entry
+                                );
 
-                                    self.lock_error_get_feedschedule_entry = false;
+                                self.lock_error_get_feedschedule_entry = false;
 
-                                    if !self.execution_blocked {
-                                        {
-                                            // scope to limit the lifetime of unlocked mutex
-                                            let mut mutex_data =
-                                                mutex_device_scheduler_feed.lock().unwrap();
+                                if !self.execution_blocked {
+                                    {
+                                        // scope to limit the lifetime of unlocked mutex
+                                        let mut mutex_data =
+                                            mutex_device_scheduler_feed.lock().unwrap();
 
-                                            quit_command_received = self
-                                                .execute_profile_update_database(
-                                                    feed_schedule_entry.profile_id,
-                                                    food_injection,
-                                                    feed_channels,
-                                                    &mut feed_schedule_entries,
-                                                    &mut sql_interface_feed,
-                                                );
+                                        quit_command_received = self
+                                            .execute_profile_update_database(
+                                                feed_schedule_entry.profile_id,
+                                                food_injection,
+                                                feed_channels,
+                                                &mut feed_schedule_entries,
+                                                &mut sql_interface_feed,
+                                            );
 
-                                            *mutex_data = mutex_data.saturating_add(1);
-                                        }
+                                        *mutex_data = mutex_data.saturating_add(1);
                                     }
-                                }
-                                None => { /* do nothing - none of the feed schedule entries in the past has been selected */
                                 }
                             }
                         }
-                        None => { /* do nothing - no feed schedule entry in the past */ }
                     },
                     Err(e) => {
                         #[cfg(not(test))]
@@ -1403,5 +1458,81 @@ pub mod tests {
                 assert_eq!(mock_food_injection.pop_profile_id_executed(), None);
             });
         });
+    }
+
+    #[test]
+    // Verifies that the `Feed::new` constructor correctly initializes the struct.
+    //
+    // This test checks that all fields are set to their expected default values upon creation,
+    // ensuring a predictable starting state for the Feed controller.
+    //
+    // Test case uses test database #65 for configuration loading, as requested.
+    fn test_feed_new() {
+        println!("* Testing Feed::new constructor...");
+
+        // --- Setup ---
+        // Load a test configuration. The database number is part of the config loading
+        // but is not directly used by the `Feed::new` constructor itself.
+        let config = read_config_file_with_test_database(
+            "/config/aquarium_control_test_generic.toml".to_string(),
+            65,
+        );
+        let ping_interval = Duration::from_secs(30);
+
+        // --- Execution ---
+        let feed = Feed::new(config.feed.clone(), ping_interval);
+
+        // --- Assertions ---
+
+        // 1. Check that the configuration and interval were stored correctly.
+        assert_eq!(
+            &feed.config, &config.feed,
+            "The provided FeedConfig should be stored in the struct."
+        );
+        assert_eq!(
+            feed.database_ping_interval, ping_interval,
+            "The provided database_ping_interval should be stored in the struct."
+        );
+        println!("* Succeeded: Config and ping interval are stored correctly.");
+
+        // 2. Check the initial state of command/request flags.
+        assert_eq!(
+            feed.execute_command_received, false,
+            "execute_command_received should be initialized to false."
+        );
+        assert_eq!(
+            feed.profile_id_requested, -1,
+            "profile_id_requested should be initialized to -1."
+        );
+        println!("* Succeeded: Command flags are initialized correctly.");
+
+        // 3. Check the initial state of all blocking and locking flags.
+        assert_eq!(
+            feed.execution_blocked, false,
+            "execution_blocked should be initialized to false."
+        );
+        assert_eq!(
+            feed.lock_error_get_feedschedule_entry, false,
+            "lock_error_get_feedschedule_entry should be initialized to false."
+        );
+        assert_eq!(
+            feed.lock_warn_inapplicable_command_signal_handler, false,
+            "lock_warn_inapplicable_command_signal_handler should be initialized to false."
+        );
+        assert_eq!(
+            feed.lock_error_channel_receive_termination, false,
+            "lock_error_channel_receive_termination should be initialized to false."
+        );
+        println!("* Succeeded: State and lock flags are initialized to false.");
+
+        // 4. Check the `last_ping_instant`.
+        // We can't check for an exact time, but we can assert that it was created very recently.
+        assert!(
+            feed.last_ping_instant.elapsed() < Duration::from_millis(100),
+            "last_ping_instant should be set to a very recent time."
+        );
+        println!("* Succeeded: last_ping_instant is initialized to the current time.");
+
+        println!("* Test for Feed::new completed successfully.");
     }
 }
