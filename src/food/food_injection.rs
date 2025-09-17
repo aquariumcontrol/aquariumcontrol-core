@@ -6,6 +6,59 @@ The above copyright notice and this permission notice shall be included in all c
 
 THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
+
+//! Implements the physical execution of a feed pattern, controlling pumps and the feeder.
+//!
+//! This module provides the `FoodInjectionTrait` and its concrete implementation,
+//! `FoodInjection`. Its core responsibility is to translate a logical `Feedpattern`
+//! into a sequence of physical actions by communicating with the `RelayManager`. It
+//! manages the state of individual actuators, handles precise timing, and allows for
+//! graceful interruption.
+//!
+//! ## Key Components
+//!
+//! - **`FoodInjectionTrait`**: An abstraction for the food injection process. This is a
+//!   critical design element that decouples the main `Feed` controller from the
+//!   concrete implementation, enabling the use of mock injectors for unit testing.
+//!
+//! - **`FoodInjection` Struct**: The primary implementation of the trait. It maintains the
+//!   current known state of all relevant actuators (pumps, skimmer, feeder) to avoid
+//!   sending redundant commands to the `RelayManager`.
+//!
+//! - **`inject_food()` Method**: The main entry point. It iterates through each `FeedPhase`
+//!   of a given `Feedpattern`, orchestrating the complex sequence of pausing pumps,
+//!   running the feeder, and waiting for specified durations.
+//!
+//! - **`switch_skimmer_pumps_feeder()` Method**: A private helper that compares the
+//!   current actuator states with the target states for a given phase. If a state
+//!   mismatch is found, it sends the appropriate `SwitchOn`/`SwitchOff` command and
+//!   waits for confirmation.
+//!
+//! ## Design and Architecture
+//!
+//! The module is designed for robustness and safe operation in a concurrent environment.
+//!
+//! - **Stateful Execution**: By tracking the state of each device (`skimmer_state`,
+//!   `main_pump1_state`, etc.), the `FoodInjection` struct ensures that it only sends
+//!   commands when a state change is actually required.
+//!
+//! - **Interruptible Loops**: The waiting periods within `inject_food` are not simple
+//!   `sleep` calls. They are implemented as tight loops that frequently check for a
+//!   `Quit` command from the `SignalHandler`. This ensures that the entire feeding
+//!   process can be aborted gracefully and quickly at any point.
+//!
+//! - **Guaranteed Cleanup**: Regardless of whether the feed pattern completes, is
+//!   interrupted, or encounters an error, a final cleanup step is always executed.
+//!   This step ensures that all pumps are returned to their active state and the
+//!   feeder is turned off, preventing the system from being left in a hazardous
+//!   or undesirable state.
+//!
+//! - **Comprehensive Error Collection**: Instead of failing on the first error, the
+//!   `inject_food` method collects all errors encountered during the process into a
+//!   `Vec<FoodInjectionError>`. This provides a complete picture of all failures
+//!   that occurred during a single injection attempt, which is invaluable for
+//!   diagnostics.
+
 use spin_sleep::SpinSleeper;
 use std::time::{Duration, Instant};
 
