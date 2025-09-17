@@ -6,6 +6,42 @@ The above copyright notice and this permission notice shall be included in all c
 
 THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
+
+//! A central container for all inter-thread communication channels used by the `Feed` module.
+//!
+//! This module defines the `FeedChannels` struct, which acts as a dedicated "switchboard"
+//! for the `Feed` thread. Its primary purpose is to aggregate all the `mpsc::channel`
+//! senders and receivers that the `Feed` thread needs to communicate with other concurrent
+//! parts of the application, such as the `RelayManager`, `SignalHandler`, and the IPC
+//! `Messaging` thread.
+//!
+//! ## Key Components
+//!
+//! - **`FeedChannels` Struct**: A simple container struct that explicitly declares all the
+//!   communication dependencies of the `Feed` thread.
+//!
+//! - **Helper Methods**: Provides convenient wrapper methods like `send_to_relay_manager()`
+//!   and `receive_from_relay_manager()`. These methods offer a clean, consistent API for
+//!   channel operations and abstract away the direct use of the sender/receiver fields.
+//!
+//! ## Design and Architecture
+//!
+//! The `FeedChannels` struct is a key part of the application's inter-thread
+//! communication strategy, promoting clean and decoupled code.
+//!
+//! - **Centralization**: By gathering all necessary channels into a single struct, it
+//!   provides a clear and explicit declaration of the `Feed` thread's communication
+//!   dependencies. This makes the overall architecture easier to reason about.
+//!
+//! - **Decoupling**: The main `Feed` thread logic doesn't need to manage a list of
+//!   individual channels. It just needs this struct, which it can use to send and
+//!   receive messages. This separates the core control logic from the communication
+//!   infrastructure.
+//!
+//! - **Testability**: The struct can be easily constructed with mock channels during
+//!   unit testing, allowing for isolated testing of the `Feed` thread's logic without
+//!   needing to run the entire application.
+
 use crate::launch::channels::{AquaChannelError, AquaReceiver, AquaSender};
 use crate::utilities::channel_content::InternalCommand;
 use std::fmt;
@@ -72,11 +108,11 @@ impl fmt::Display for FeedChannels {
             "rx_feed_from_signal_handler: {}",
             self.rx_feed_from_signal_handler.count
         )?;
-        if self.rx_feed_from_messaging_opt.is_some() {
+        if let Some(rx_feed_from_messaging) = self.rx_feed_from_messaging_opt {
             write!(
                 f,
                 "rx_feed_from_messaging_opt: {}",
-                self.rx_feed_from_messaging_opt.as_ref().unwrap().count
+                self.rx_feed_from_messaging.count
             )?;
         }
         Ok(())
