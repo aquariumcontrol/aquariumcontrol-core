@@ -6,6 +6,53 @@ The above copyright notice and this permission notice shall be included in all c
 
 THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
+
+//! Defines and constructs the entire inter-thread communication infrastructure for the application.
+//!
+//! This module serves as the central nervous system of the aquarium controller. It is responsible
+//! for two primary tasks:
+//!
+//! 1.  **Defining Channel Wrappers**: It provides `AquaSender` and `AquaReceiver`, which are
+//!     custom wrappers around `std::sync::mpsc` channels. These wrappers add optional
+//!     debugging capabilities.
+//!
+//! 2.  **Constructing the Communication Graph**: The `Channels::build` method instantiates every
+//!     single channel required for the application's threads to communicate. It then bundles
+//!     them into the main `Channels` struct.
+//!
+//! ## Key Components
+//!
+//! - **`AquaSender` / `AquaReceiver`**: These wrappers provide a consistent channel interface.
+//!   When the `debug_channels` feature is enabled, they use bounded `sync_channel`s and
+//!   count the number of messages sent and received. In release builds,
+//!   they compile down to lightweight wrappers around standard, unbounded channels.
+//!
+//! - **`Channels` Struct**: A struct that aggregates all the individual `...Channels`
+//!   structs (e.g., `FeedChannels`, `RelayManagerChannels`). This provides a single, clean
+//!   object that can be used to distribute the correct channel endpoints to each thread
+//!   at startup.
+//!
+//! - **`Channels::build()`**: This is the most critical function in the module. It contains the
+//!   complete "wiring diagram" of the application. It creates all bidirectional and
+//!   unidirectional channels, carefully handling conditional compilation for features like
+//!   the IPC `messaging` system (on Linux) and various simulators used during testing.
+//!
+//! ## Design and Architecture
+//!
+//! - **Centralized Construction**: By creating every channel in one place, this module acts as
+//!   a single source of truth for the application's communication topology. Any change to
+//!   inter-thread communication can be understood by looking at this file.
+//!
+//! - **Decoupling via Aggregation**: Modules like `feed` or `refill` don't need to know about
+//!   the entire system's channel graph. They are simply given their own small `FeedChannels`
+//!   or `RefillChannels` struct, which contains only the endpoints they care about. This
+//!   dramatically reduces coupling between modules.
+//!
+//! - **Compile-Time Flexibility**: The extensive use of `#[cfg]` attributes allows the
+//!   communication graph to be adapted at compile time. For example, channels to the
+//!   `TcpCommunication` simulator are only created and wired up if a simulator is enabled,
+//!   and IPC channels are only created on Linux.
+
 #[cfg(any(test, target_os = "linux"))]
 use crate::dispatch::messaging_channels::MessagingChannels;
 use crate::food::feed_channels::FeedChannels;
