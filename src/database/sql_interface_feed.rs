@@ -43,6 +43,7 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 //!   rules at startup, preventing runtime errors caused by misconfigured or
 //!   overgrown database tables
 
+use chrono::NaiveDateTime;
 use mysql::prelude::*;
 use mysql::*;
 
@@ -102,7 +103,7 @@ pub struct SqlFeedPhase {
 /// Holds the data of a feed schedule entry as retrieved from the database.
 /// It is post-processed in a further step.
 pub struct SqlFeedScheduleEntry {
-    pub timestamp: String,
+    pub timestamp: NaiveDateTime,
     pub profile_id: i32,
     pub profile_name: String,
     pub repeat_daily: i16,

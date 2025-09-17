@@ -50,7 +50,6 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 //! - **Data Conversion Errors**: When data retrieved from the database cannot be parsed
 //!   into the expected Rust type (e.g., `TimestampConversionFailure`).
 
-use chrono::ParseError;
 use mysql::Error as MySqlError;
 use thiserror::Error;
 
@@ -282,11 +281,10 @@ pub enum SqlInterfaceError {
     },
 
     /// Could not convert feedschedule entry string(s) read from the database to timestamp.
-    #[error("[{location}] Could not convert feedschedule entry string(s) read from the database to timestamp.")]
-    FeedScheduleEntryTimeStampConversionFailure {
+    #[error("[{location}] Repetition marker is out of range (repeat_daily = {repeat_daily}).")]
+    FeedScheduleEntryRepeatDailyOutOfRange {
         location: String,
-        #[source]
-        source: ParseError,
+        repeat_daily: i16,
     },
 
     /// Error occurred when processing time stamp results from the database.
