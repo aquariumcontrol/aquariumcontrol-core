@@ -6,6 +6,33 @@ The above copyright notice and this permission notice shall be included in all c
 
 THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
+
+//! Defines a lightweight snapshot of which application threads are configured to run.
+//!
+//! This module provides the `ExecutionConfig` struct, which is created once at application
+//! startup. Its sole purpose is to hold a simple boolean flag for each major,
+//! concurrently running module (like `feed`, `refill`, `heating`, etc.), indicating
+//! whether it was intended to be executed.
+//!
+//! ## Design and Purpose
+//!
+//! The primary role of `ExecutionConfig` is to act as a decoupled, easily passable
+//! source of truth about the runtime configuration.
+//!
+//! - **Decoupling**: Instead of passing the entire, heavy `ConfigData` object throughout
+//!   the application, threads can be given this much simpler struct. This is
+//!   particularly useful for cross-cutting concerns like the IPC `messaging` dispatcher,
+//!   which needs to know if a target thread exists without needing to know its specific
+//!   configuration details.
+//!
+//! - **Simplicity**: It provides a direct and unambiguous way to check if a thread was
+//!   launched. The `new()` constructor handles the one-time translation from the
+//!   more complex `ConfigData` struct.
+//!
+//! - **Testability**: The `Default` implementation provides a convenient way to create
+//!   an `ExecutionConfig` where all modules are considered active, which is useful
+//!   for setting up test environments.
+
 use crate::utilities::config::ConfigData;
 
 /// A snapshot of which application threads are configured to be active at runtime.
