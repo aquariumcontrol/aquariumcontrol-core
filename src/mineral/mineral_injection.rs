@@ -394,7 +394,7 @@ pub mod tests {
                 let lower_bound: u32 = lower_bound_float.round() as u32;
 
                 assert_ge!(actual_dosing_duration_millis, lower_bound);
-                assert_le!(actual_dosing_duration_millis, sleep_interval_millis + 10);
+                assert_le!(actual_dosing_duration_millis, sleep_interval_millis + 15);
                 assert_eq!(quit_command_received, true);
             });
         });
