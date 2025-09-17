@@ -7,6 +7,42 @@ The above copyright notice and this permission notice shall be included in all c
 THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
+//! Defines the custom error type for the food injection process.
+//!
+//! This module contains the `FoodInjectionError` enum, which consolidates all potential
+//! failures that can occur when the `FoodInjection` controller executes a feed pattern.
+//! By using a dedicated, descriptive error type, the system can provide clear diagnostics
+//! when a feeding action fails.
+//!
+//! ## Design and Purpose
+//!
+//! The `FoodInjectionError` enum is designed using the `thiserror` crate to provide
+//! structured and informative error messages.
+//!
+//! - **Source Chaining**: For errors originating from channel communication (e.g.,
+//!   `RelayManagerSend`), the `#[source]` attribute preserves the underlying
+//!   `AquaChannelError`. This creates a full error chain, which is invaluable for
+//!   debugging the root cause of a communication failure.
+//!
+//! - **Contextual Information**: Each error variant includes important context, such as
+//!   the code `location` and the specific `AquariumDevice` that was being controlled
+//!   when the error occurred.
+//!
+//! - **Error Collection**: The `FoodInjection` process is designed to collect multiple
+//!   errors into a `Vec<FoodInjectionError>` rather than failing on the first one.
+//!   This allows it to report a complete set of failures from a single injection
+//!   attempt (e.g., if communication with multiple devices fails).
+//!
+//! ### Error Categories
+//!
+//! The errors fall into two main categories:
+//!
+//! 1.  **Channel Communication Failures**: These occur when sending a command to, or
+//!     receiving a confirmation from, the `RelayManager` thread fails.
+//!
+//! 2.  **Invalid State Errors**: These occur if the logic attempts to set a device to an
+//!     undefined state (i.e., something other than `On` or `Off`).
+
 use crate::launch::channels::AquaChannelError;
 use crate::utilities::channel_content::AquariumDevice;
 use thiserror::Error;
@@ -37,33 +73,8 @@ pub enum FoodInjectionError {
         source: AquaChannelError,
     },
 
-    /// An invalid or unexpected target state was requested for the skimmer.
-    /// The skimmer should only be turned ON or OFF.
-    #[error("[{0}] Received undefined state as target state for skimmer.")]
-    UndefinedTargetStateSkimmer(String),
-
-    /// An invalid or unexpected target state was requested for the feeder.
-    /// The feeder should only be turned ON or OFF.
-    #[error("[{0}] Received undefined target state for Feeder.")]
-    UndefinedTargetStateFeeder(String),
-
-    /// An invalid or unexpected target state was requested for the first main pump.
-    /// The pump should only be turned ON or OFF.
-    #[error("[{0}] Received undefined target state for Main Pump 1.")]
-    UndefinedTargetStateMainPump1(String),
-
-    /// An invalid or unexpected target state was requested for the second main pump.
-    /// The pump should only be turned ON or OFF.
-    #[error("[{0}] Received undefined target state for Main Pump 2.")]
-    UndefinedTargetStateMainPump2(String),
-
-    /// An invalid or unexpected target state was requested for the first auxiliary pump.
-    /// The pump should only be turned ON or OFF.
-    #[error("[{0}] Received undefined target state for aux. pump.")]
-    UndefinedTargetStateAuxPump1(String),
-
-    /// An invalid or unexpected target state was requested for the second auxiliary pump.
-    /// The pump should only be turned ON or OFF.
-    #[error("[{0}] Received undefined target state for aux. pump.")]
-    UndefinedTargetStateAuxPump2(String),
+    /// An invalid or unexpected target state was requested for a device.
+    /// The device should only be turned ON or OFF.
+    #[error("[{0}] Received undefined state as target state for {1}.")]
+    UndefinedTargetState(String, AquariumDevice),
 }

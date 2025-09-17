@@ -250,8 +250,9 @@ impl FoodInjection {
                     }
                 }
                 // Handle undefined state by pushing a specific error.
-                _ => errors.push(FoodInjectionError::UndefinedTargetStateSkimmer(
+                _ => errors.push(FoodInjectionError::UndefinedTargetState(
                     module_path!().to_string(),
+                    AquariumDevice::Skimmer,
                 )),
             }
         }
@@ -294,8 +295,9 @@ impl FoodInjection {
                     }
                 }
                 // Handle undefined state by pushing a specific error.
-                _ => errors.push(FoodInjectionError::UndefinedTargetStateMainPump1(
+                _ => errors.push(FoodInjectionError::UndefinedTargetState(
                     module_path!().to_string(),
+                    AquariumDevice::MainPump1,
                 )),
             }
         }
@@ -338,8 +340,9 @@ impl FoodInjection {
                     }
                 }
                 // Handle undefined state by pushing a specific error.
-                _ => errors.push(FoodInjectionError::UndefinedTargetStateMainPump2(
+                _ => errors.push(FoodInjectionError::UndefinedTargetState(
                     module_path!().to_string(),
+                    AquariumDevice::MainPump2,
                 )),
             }
         }
@@ -382,8 +385,9 @@ impl FoodInjection {
                     }
                 }
                 // Handle undefined state by pushing a specific error.
-                _ => errors.push(FoodInjectionError::UndefinedTargetStateAuxPump1(
+                _ => errors.push(FoodInjectionError::UndefinedTargetState(
                     module_path!().to_string(),
+                    AquariumDevice::AuxPump1,
                 )),
             }
         }
@@ -426,8 +430,9 @@ impl FoodInjection {
                     }
                 }
                 // Handle undefined state by pushing a specific error.
-                _ => errors.push(FoodInjectionError::UndefinedTargetStateAuxPump2(
+                _ => errors.push(FoodInjectionError::UndefinedTargetState(
                     module_path!().to_string(),
+                    AquariumDevice::AuxPump2,
                 )),
             }
         }
@@ -470,8 +475,9 @@ impl FoodInjection {
                     }
                 }
                 // Handle undefined state by pushing a specific error.
-                _ => errors.push(FoodInjectionError::UndefinedTargetStateFeeder(
+                _ => errors.push(FoodInjectionError::UndefinedTargetState(
                     module_path!().to_string(),
+                    AquariumDevice::Feeder,
                 )),
             }
         }
