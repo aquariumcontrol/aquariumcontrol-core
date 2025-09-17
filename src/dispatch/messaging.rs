@@ -319,7 +319,7 @@ impl Messaging {
                         }
 
                         // interpret command in a message
-                        let command = InternalCommand::from_msg(msg);
+                        let command = InternalCommand::from_msg(&msg);
                         if command == InternalCommand::Unknown {
                             warn!(
                                 target: module_path!(),
@@ -498,7 +498,7 @@ pub mod tests {
     // - The new thread cannot be spawned.
     fn create_test_environment(
         msg_commands: Vec<Message>,
-        tx_environment_to_object: AquaSender<InternalCommand>,
+        mut tx_environment_to_object: AquaSender<InternalCommand>,
         signal_handler_channels: SignalHandlerChannels,
         mq_filename: String,
     ) -> thread::JoinHandle<()> {
@@ -522,10 +522,10 @@ pub mod tests {
                 // requesting mock control to quit
                 let _ = tx_environment_to_object.send(InternalCommand::Quit);
 
-                let tx_signal_handler_to_messaging = signal_handler_channels
+                let mut tx_signal_handler_to_messaging = signal_handler_channels
                     .tx_signal_handler_to_messaging_opt
                     .unwrap();
-                let rx_signal_handler_from_messaging = signal_handler_channels
+                let mut rx_signal_handler_from_messaging = signal_handler_channels
                     .rx_signal_handler_from_messaging_opt
                     .unwrap();
 
@@ -582,11 +582,11 @@ pub mod tests {
         let mq_filename_for_test_environment = config.messaging.mq_filename.clone();
 
         let mut msg_start = Message::new();
-        msg_start.domain = MessagingDomain::Ventilation;
+        msg_start.domain = MessagingDomain::Ventilation.into();
         msg_start.command = InternalCommand::Start.to_numeric();
 
         let mut msg_stop = Message::new();
-        msg_stop.domain = MessagingDomain::Ventilation;
+        msg_stop.domain = MessagingDomain::Ventilation.into();
         msg_stop.command = InternalCommand::Stop.to_numeric();
 
         let messaging = Messaging::new(config.messaging, ExecutionConfig::default()).unwrap();
@@ -639,11 +639,11 @@ pub mod tests {
         let mq_filename_for_test_environment = config.messaging.mq_filename.clone();
 
         let mut msg_start = Message::new();
-        msg_start.domain = MessagingDomain::Heating;
+        msg_start.domain = MessagingDomain::Heating.into();
         msg_start.command = InternalCommand::Start.to_numeric();
 
         let mut msg_stop = Message::new();
-        msg_stop.domain = MessagingDomain::Heating;
+        msg_stop.domain = MessagingDomain::Heating.into();
         msg_stop.command = InternalCommand::Stop.to_numeric();
 
         let messaging = Messaging::new(config.messaging, ExecutionConfig::default()).unwrap();
@@ -692,15 +692,15 @@ pub mod tests {
         let mq_file_name_for_test_environment = config.messaging.mq_filename.clone();
 
         let mut msg_reset = Message::new();
-        msg_reset.domain = MessagingDomain::Refill;
+        msg_reset.domain = MessagingDomain::Refill.into();
         msg_reset.command = InternalCommand::ResetAllErrors.to_numeric();
 
         let mut msg_start = Message::new();
-        msg_start.domain = MessagingDomain::Refill;
+        msg_start.domain = MessagingDomain::Refill.into();
         msg_start.command = InternalCommand::Start.to_numeric();
 
         let mut msg_stop = Message::new();
-        msg_stop.domain = MessagingDomain::Refill;
+        msg_stop.domain = MessagingDomain::Refill.into();
         msg_stop.command = InternalCommand::Stop.to_numeric();
 
         let messaging = Messaging::new(config.messaging, ExecutionConfig::default()).unwrap();
@@ -765,16 +765,16 @@ pub mod tests {
         let mq_filename_for_test_environment = config.messaging.mq_filename.clone();
 
         let mut msg_exec = Message::new();
-        msg_exec.domain = MessagingDomain::Feed;
+        msg_exec.domain = MessagingDomain::Feed.into();
         msg_exec.command = InternalCommand::Execute(13).to_numeric();
         msg_exec.command_param1 = 13;
 
         let mut msg_start = Message::new();
-        msg_start.domain = MessagingDomain::Feed;
+        msg_start.domain = MessagingDomain::Feed.into();
         msg_start.command = InternalCommand::Start.to_numeric();
 
         let mut msg_stop = Message::new();
-        msg_stop.domain = MessagingDomain::Feed;
+        msg_stop.domain = MessagingDomain::Feed.into();
         msg_stop.command = InternalCommand::Stop.to_numeric();
 
         let messaging = Messaging::new(config.messaging, ExecutionConfig::default()).unwrap();
@@ -840,11 +840,11 @@ pub mod tests {
         open_posixmq_test_file(&config.messaging.mq_filename);
 
         let mut msg_start = Message::new();
-        msg_start.domain = MessagingDomain::Balling;
+        msg_start.domain = MessagingDomain::Balling.into();
         msg_start.command = InternalCommand::Start.to_numeric();
 
         let mut msg_stop = Message::new();
-        msg_stop.domain = MessagingDomain::Balling;
+        msg_stop.domain = MessagingDomain::Balling.into();
         msg_stop.command = InternalCommand::Stop.to_numeric();
 
         let messaging = Messaging::new(config.messaging, ExecutionConfig::default()).unwrap();
@@ -893,11 +893,11 @@ pub mod tests {
         let mq_filename_for_test_environment = config.messaging.mq_filename.clone();
 
         let mut msg_start = Message::new();
-        msg_start.domain = MessagingDomain::Watchdog;
+        msg_start.domain = MessagingDomain::Watchdog.into();
         msg_start.command = InternalCommand::Start.to_numeric();
 
         let mut msg_stop = Message::new();
-        msg_stop.domain = MessagingDomain::Watchdog;
+        msg_stop.domain = MessagingDomain::Watchdog.into();
         msg_stop.command = InternalCommand::Stop.to_numeric();
 
         let messaging = Messaging::new(config.messaging, ExecutionConfig::default()).unwrap();

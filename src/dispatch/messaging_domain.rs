@@ -102,6 +102,22 @@ impl From<i32> for MessagingDomain {
     }
 }
 
+#[cfg(all(target_os = "linux", test))]
+impl From<MessagingDomain> for i32 {
+    fn from(domain: MessagingDomain) -> Self {
+        match domain {
+            MessagingDomain::Refill => 1,
+            MessagingDomain::Ventilation => 3,
+            MessagingDomain::Feed => 8,
+            MessagingDomain::Heating => 9,
+            MessagingDomain::Balling => 11,
+            MessagingDomain::Monitors => 12,
+            MessagingDomain::Watchdog => 13,
+            MessagingDomain::Unknown => -1,
+        }
+    }
+}
+
 #[cfg(target_os = "linux")]
 impl MessagingDomain {
     /// Checks if the thread corresponding to a specific messaging domain is active.

@@ -8,11 +8,12 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 */
 #[cfg(test)]
 pub mod tests {
+    use crate::launch::channels::AquaReceiver;
     #[cfg(target_os = "linux")]
     use crate::utilities::channel_content::InternalCommand;
     #[cfg(target_os = "linux")]
     pub fn mock_message_command_receiver(
-        rx_message_command: Receiver<InternalCommand>,
+        mut rx_message_command: AquaReceiver<InternalCommand>,
     ) -> Vec<InternalCommand> {
         let mut commands_received: Vec<InternalCommand> = Vec::new();
 

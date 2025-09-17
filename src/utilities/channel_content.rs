@@ -297,7 +297,7 @@ impl fmt::Display for InternalCommand {
 #[cfg(target_os = "linux")]
 impl InternalCommand {
     /// Converts contents of a `Message` into an `InternalCommand`.
-    pub fn from_msg(msg: Message) -> Self {
+    pub fn from_msg(msg: &Message) -> Self {
         match msg.command {
             // Only convert variants that are implemented.
             1 => InternalCommand::ResetAllErrors,
@@ -314,7 +314,7 @@ impl InternalCommand {
             InternalCommand::ResetAllErrors => 1,
             InternalCommand::Stop => 3,
             InternalCommand::Start => 4,
-            InternalCommand::Execute(id) => 10,
+            InternalCommand::Execute(_id) => 10,
             _ => -1,
         }
     }
