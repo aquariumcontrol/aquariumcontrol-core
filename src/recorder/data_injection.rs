@@ -6,6 +6,39 @@ The above copyright notice and this permission notice shall be included in all c
 
 THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
+
+//! Provides the mechanism for injecting collected data frames into the database.
+//!
+//! This module defines the `DataInjectionTrait` and its concrete implementation,
+//! `DataInjection`. Its sole responsibility is to act as the final link in the
+//! data logging pipeline, taking a complete `RecorderDataFrame` and passing it to
+//! the `SqlInterfaceData` for persistence.
+//!
+//! ## Key Components
+//!
+//! - **`DataInjectionTrait`**: An abstraction for the data injection process. This is a
+//!   critical design element that decouples the main `DataLogger` from the concrete
+//!   database implementation, enabling the use of mock injectors for unit testing.
+//!
+//! - **`DataInjection` Struct**: The primary, stateless implementation of the trait. Its
+//!   `inject_data` method simply calls the database interface and logs any errors
+//!   that occur.
+//!
+//! ## Design and Architecture
+//!
+//! The module is designed for testability and clear separation of concerns.
+//!
+//! - **Decoupling via Trait**: The `DataLogger` module depends on the `DataInjectionTrait`,
+//!   not the concrete `DataInjection` struct.
+//!
+//! - **Testability**: Because of the trait-based design, the `DataLogger` can be tested
+//!   without needing a real database connection. A mock implementation of the
+//!   `DataInjectionTrait` is used to verify that `inject_data` was called
+//!   with the expected data frame, as demonstrated in the `DataLogger`'s tests.
+//!
+//! - **Simplicity**: The module has a single, clear responsibility: take a frame of
+//!   data and hand it off to the database interface.
+
 use crate::database::sql_interface_data::SqlInterfaceData;
 use crate::recorder::recorder_data_frame::RecorderDataFrame;
 use crate::utilities::logger::log_error_chain;
