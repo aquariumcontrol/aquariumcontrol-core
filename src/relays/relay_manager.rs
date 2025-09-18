@@ -6,6 +6,59 @@ The above copyright notice and this permission notice shall be included in all c
 
 THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
+
+//! Implements the central hardware actuation dispatcher thread.
+//!
+//! This module provides the `RelayManager` struct, which runs as a dedicated, long-running
+//! thread. Its primary responsibility is to act as the sole arbiter of hardware access,
+//! receiving high-level actuation commands from various control modules (e.g., `Refill`,
+//! `Heating`, `Ventilation`) and translating them into actions performed by a specific
+//! hardware backend.
+//!
+//! ## Key Components
+//!
+//! - **`RelayManager` Struct**: The core state machine for the thread. It holds the
+//!   configuration, a large number of stateful boolean "lock" flags for log
+//!   suppression, and the execution configuration.
+//!
+//! - **`RelayActuationTrait`**: A critical abstraction that decouples the `RelayManager`
+//!   from the concrete hardware implementation. This allows the manager to operate
+//!   identically whether it's controlling a `Controllino` over a serial port, direct
+//!   `GPIO` pins, or a `simulator` during testing.
+//!
+//! - **`execute()` Method**: The main thread loop. It continuously polls the channels
+//!   from all client modules, processes incoming commands, and handles graceful shutdown.
+//!
+//! - **`actuate_with_retries()` Method**: A key robustness feature. When an actuation
+//!   command fails, this function implements a retry mechanism, attempting the command
+//!   multiple times before reporting a final failure. It can also trigger a buffer flush
+//!   on the hardware if a communication error is detected.
+//!
+//! ## Design and Architecture
+//!
+//! This module is designed for robustness, testability, and clear separation of concerns.
+//!
+//! - **Centralized Dispatcher**: The `RelayManager` is the single point of entry for all
+//!   hardware commands. This prevents race conditions and ensures that device actuations
+//!   are handled in a serialized, predictable manner.
+//!
+//! - **Hardware Abstraction**: The use of the `RelayActuationTrait` is a cornerstone of
+//!   the application's design. It allows the entire system to be tested without any
+//!   physical hardware by simply plugging in a mock `ActuateSimulator` implementation.
+//!
+//! - **Robust Error Handling (Retries & Log Flood Prevention)**: The module is designed
+//!   for long-running, unattended operation.
+//!   - The `actuate_with_retries` logic ensures that transient hardware glitches do not
+//!     immediately cause a system failure.
+//!   - The extensive use of `lock_...` flags prevents a single, persistent issue (like a
+//!     disconnected channel) from filling up disk space with thousands of identical
+//!     log messages. The error is logged once, and the lock is engaged until the
+//!     condition is resolved.
+//!
+//! - **Heartbeat Management**: For hardware that requires a periodic "keep-alive" signal
+//!   (like the Controllino), the `RelayManager` automatically sends a heartbeat at the
+//!   configured interval to maintain the connection.
+
 #[cfg(not(test))]
 use log::error;
 #[cfg(all(not(test), target_os = "linux"))]
