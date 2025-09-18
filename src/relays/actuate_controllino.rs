@@ -6,6 +6,62 @@ The above copyright notice and this permission notice shall be included in all c
 
 THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
+
+//! Implements the hardware actuation logic for a Controllino device via serial communication.
+//!
+//! This module provides the `ActuateControllino` struct, which is a concrete implementation
+//! of the `RelayActuationTrait`. Its primary responsibility is to translate high-level,
+//! abstract commands (e.g., "turn on the heater") into the specific, low-level byte
+//! protocol required by the Controllino hardware. It manages the entire lifecycle of
+//! serial port communication, from initialization and configuration validation to sending
+//! commands and verifying responses.
+//!
+//! ## Key Components
+//!
+//! - **`ActuateControllino`**: The main struct that holds the serial port connection and
+//!   configuration. It implements the `actuate`, `heartbeat`, and `flush_buffer` methods
+//!   from the `RelayActuationTrait`.
+//!
+//! - **`get_relay_command`**: A crucial helper function that contains the core business
+//!   logic for mapping an `AquariumDevice` to a physical relay ID. It also handles
+//!   device-specific quirks, such as "inverted" relays where "on" means unsetting the relay.
+//!
+//! - **`create_command_message`**: Constructs the precise 8-byte message packet, including
+//!   the command character, relay ID, and checksums, ready for transmission.
+//!
+//! - **`check_controllino_checksums`**: A validation function that verifies the integrity
+//!   of response messages received from the Controllino, preventing data corruption.
+//!
+//! ## Design and Architecture
+//!
+//! This module is designed to be a robust and reliable hardware abstraction layer.
+//!
+//! ### Serial Communication Protocol
+//!
+//! The module implements a custom 8-byte serial protocol to communicate with the Controllino:
+//! - **Command (1 byte)**: A character representing the action (e.g., 'S' for Set, 'U' for Unset).
+//! - **Relay ID (1 byte)**: The numeric ID of the target relay.
+//! - **Duration (2 bytes)**: For pulse commands, the duration in milliseconds.
+//! - **Checksums (2x2 bytes)**: Two separate XOR-based checksums to ensure message integrity.
+//!
+//! ### Inverted Logic Handling
+//!
+//! A key feature is the handling of inverted relay logic. For safety or hardware reasons,
+//! some devices (like main pumps) are considered "on" when their corresponding relay is
+//! electrically open (unset). The `get_relay_command` function transparently handles this
+//! translation, so the rest of the application doesn't need to be aware of this complexity.
+//!
+//! ### Robustness and Error Handling
+//!
+//! - **Configuration Validation**: The `new()` constructor rigorously validates the configuration,
+//!   checking for out-of-range or duplicate relay IDs to prevent misconfiguration at startup.
+//! - **Checksum Verification**: Every response from the Controllino is checked for valid
+//!   checksums. A failure indicates a communication error and is logged.
+//! - **Buffer Flushing**: The `flush_buffer` method provides a recovery mechanism for when
+//!   the serial communication becomes desynchronized, clearing the buffers to reset the state.
+//! - **Timeouts**: The serial port is configured with a timeout to prevent the `RelayManager`
+//!   thread from blocking indefinitely if the hardware becomes unresponsive.
+
 use crate::relays::actuate_controllino_config::ActuateControllinoConfig;
 use crate::relays::controllino_message::{ControllinoMessage, ControllinoMessageContent};
 use crate::relays::relay_error::RelayError;
