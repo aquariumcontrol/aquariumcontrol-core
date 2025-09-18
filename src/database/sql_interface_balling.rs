@@ -46,10 +46,10 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 #[cfg(test)]
 use log::error;
 
-use std::time::Duration;
 use chrono::NaiveDateTime;
 use mysql::prelude::*;
 use mysql::*;
+use std::time::Duration;
 
 use crate::database::sql_query_strings::{
     SQL_QUERY_CHECK_BALLING_DOSING_LOG_COUNT, SQL_QUERY_CHECK_BALLING_SETVALS_COUNT,
@@ -249,25 +249,26 @@ impl SqlInterfaceBalling {
                     Err(SqlInterfaceError::BallingDosingLogEntryInFuture(
                         module_path!().to_string(),
                         pump_id,
-                        last_dosing_datetime)
-                    )
-                }
-                else {
-                    let duration = (current_datetime - last_dosing_datetime).to_std()
-                        .map_err(|e|
-                            SqlInterfaceError::BallingDosingTimestampConversionFailure {
-                                location: module_path!().to_string(),
-                                pump_id,
-                                current_datetime,
-                                last_dosing_datetime,
-                                source: e
-                            }
-                    )?;
+                        last_dosing_datetime,
+                    ))
+                } else {
+                    let duration =
+                        (current_datetime - last_dosing_datetime)
+                            .to_std()
+                            .map_err(|e| {
+                                SqlInterfaceError::BallingDosingTimestampConversionFailure {
+                                    location: module_path!().to_string(),
+                                    pump_id,
+                                    current_datetime,
+                                    last_dosing_datetime,
+                                    source: e,
+                                }
+                            })?;
 
                     Ok(Some(duration))
                 }
-            },
-            None => Ok(None)
+            }
+            None => Ok(None),
         }
     }
 
@@ -435,12 +436,12 @@ pub mod tests {
         sql_interface::SqlInterface, sql_interface_error::SqlInterfaceError, sql_query_strings,
     };
     use crate::utilities::config::{read_config_file_with_test_database, ConfigData};
+    use all_asserts::assert_le;
     use chrono::Local;
     use chrono::NaiveDateTime;
     use mysql::{params, prelude::Queryable};
     use spin_sleep::SpinSleeper;
     use std::time::Duration;
-    use all_asserts::assert_le;
 
     pub struct SqlBallingEvent {
         timestamp: String,
@@ -651,12 +652,14 @@ pub mod tests {
             match sql_interface_balling.get_duration_since_last_balling_dosing(1) {
                 Ok(c) => c,
                 Err(e) => panic!("Could not calculate duration since last Balling dosing: {e:?}"),
-            }.unwrap();
+            }
+            .unwrap();
         let reference_duration_since_last_balling_dosing =
             SqlInterface::get_duration_from_naive_timestamp_to_local_now(balling_timestamp)
                 .unwrap();
-        let duration_delta_seconds = duration_since_last_balling_dosing.as_secs().abs_diff(
-            reference_duration_since_last_balling_dosing.num_seconds() as u64);
+        let duration_delta_seconds = duration_since_last_balling_dosing
+            .as_secs()
+            .abs_diff(reference_duration_since_last_balling_dosing.num_seconds() as u64);
         assert_le!(duration_delta_seconds, 1);
         println!("* checking duration since last Balling dosing succeeded.");
         // *****************************************************************************************

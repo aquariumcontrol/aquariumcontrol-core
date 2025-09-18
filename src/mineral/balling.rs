@@ -63,10 +63,10 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 //!   current countdown states.
 
 use chrono::Local;
-use log::{error, info};
-use std::fmt;
 #[cfg(feature = "debug_balling")]
 use log::debug;
+use log::{error, info};
+use std::fmt;
 
 #[cfg(all(not(test), target_os = "linux"))]
 use nix::unistd::gettid;
@@ -202,8 +202,11 @@ impl Balling {
 
         // Calculate the initial countdown for each pump when the next dosing shall happen
         for pump_id in 1..=4 {
-            durations_until_next_dosing[pump_id - 1] =
-                Self::calc_duration_until_next_dosing(&config, sql_interface_balling, pump_id as i64)?;
+            durations_until_next_dosing[pump_id - 1] = Self::calc_duration_until_next_dosing(
+                &config,
+                sql_interface_balling,
+                pump_id as i64,
+            )?;
         }
 
         // Transfer the pump configuration data into an array
@@ -387,18 +390,16 @@ impl Balling {
             ));
         }
 
-        let duration_since_balling_dosing_opt =
-            sql_interface_balling.get_duration_since_last_balling_dosing(pump_id)
-                .map_err(|e| BallingError::ReadDurationSinceLastDosingFailure {
-                    location: module_path!().to_string(),
-                    pump_id,
-                    source: Box::new(e),
-                })?;
+        let duration_since_balling_dosing_opt = sql_interface_balling
+            .get_duration_since_last_balling_dosing(pump_id)
+            .map_err(|e| BallingError::ReadDurationSinceLastDosingFailure {
+                location: module_path!().to_string(),
+                pump_id,
+                source: Box::new(e),
+            })?;
 
         let duration_since_balling_dosing: Duration = match duration_since_balling_dosing_opt {
-            Some(duration_since_balling_dosing) => {
-                duration_since_balling_dosing
-            },
+            Some(duration_since_balling_dosing) => duration_since_balling_dosing,
             None => {
                 // No entry found in the database.
                 // For avoiding overdosing, assume that storing dosing event failed.
@@ -416,12 +417,12 @@ impl Balling {
 
         let target_dosing_interval_duration = Duration::from_secs(target_dosing_interval as u64);
 
-        let remaining_time_until_next_dosing = if duration_since_balling_dosing >= target_dosing_interval_duration {
-            Duration::from_secs(0)
-        }
-        else {
-            target_dosing_interval_duration - duration_since_balling_dosing
-        };
+        let remaining_time_until_next_dosing =
+            if duration_since_balling_dosing >= target_dosing_interval_duration {
+                Duration::from_secs(0)
+            } else {
+                target_dosing_interval_duration - duration_since_balling_dosing
+            };
 
         #[cfg(test)]
         println!(
@@ -629,7 +630,8 @@ impl Balling {
 
         // Calculate the target instant for each pump when the next dosing shall happen
         for pump_id in 1..=4 {
-            target_instants_dosing[pump_id - 1] = Instant::now() + self.durations_until_next_dosing[pump_id - 1];
+            target_instants_dosing[pump_id - 1] =
+                Instant::now() + self.durations_until_next_dosing[pump_id - 1];
         }
 
         loop {
@@ -663,17 +665,18 @@ impl Balling {
                 }
                 #[allow(clippy::needless_range_loop)]
                 for pump_array_index in 0..=3 {
-                    if self.pump_is_active[pump_array_index] &&
-                        target_instants_dosing[pump_array_index] <= Instant::now() &&
-                        schedule_check_result &&
-                        !dosing_inhibited {
+                    if self.pump_is_active[pump_array_index]
+                        && target_instants_dosing[pump_array_index] <= Instant::now()
+                        && schedule_check_result
+                        && !dosing_inhibited
+                    {
                         let pump_id = pump_array_index as u32 + 1;
-                        let pump_device= match pump_id {
+                        let pump_device = match pump_id {
                             1 => AquariumDevice::PeristalticPump1,
                             2 => AquariumDevice::PeristalticPump2,
                             3 => AquariumDevice::PeristalticPump3,
                             4 => AquariumDevice::PeristalticPump4,
-                            _ => unreachable!()
+                            _ => unreachable!(),
                         };
                         // inner scope to limit the lifetime of unlocked mutex
                         {
@@ -692,7 +695,8 @@ impl Balling {
                         }
                         // wait a little period between dosings of each pump
                         spin_sleeper.sleep(sleep_duration_pump_switch);
-                        target_instants_dosing[pump_array_index] += self.dosing_intervals[pump_array_index];
+                        target_instants_dosing[pump_array_index] +=
+                            self.dosing_intervals[pump_array_index];
                     }
                 }
             }
@@ -1306,16 +1310,16 @@ pub mod tests {
     // Test case uses test database #05.
     pub fn test_balling_dosing_schedule_allows_multiple_dosings() {
         test_balling_dosing(
-            5,                       // index for determining test database
-            true,                    // schedule allows
-            28,              // execution count
-            34000,                    // maximum time in milliseconds for test execution
-            12,      // number of dosing events for pump #1
-            7,       // number of dosing events for pump #2
-            5,       // number of dosing events for pump #3
-            4,       // number of dosing events for pump #4
-            1,                 // schedule check interval
-            Some((3, 5, 7, 9)),                    // dosing intervals
+            5,                  // index for determining test database
+            true,               // schedule allows
+            28,                 // execution count
+            34000,              // maximum time in milliseconds for test execution
+            12,                 // number of dosing events for pump #1
+            7,                  // number of dosing events for pump #2
+            5,                  // number of dosing events for pump #3
+            4,                  // number of dosing events for pump #4
+            1,                  // schedule check interval
+            Some((3, 5, 7, 9)), // dosing intervals
         );
     }
 

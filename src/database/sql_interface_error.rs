@@ -250,8 +250,10 @@ pub enum SqlInterfaceError {
     },
 
     /// The Database contains log entry which is in the future.
-    #[error("[{0}] Database contains a Balling dosing event for pump {1} which is in the future: {2}.")]
-    BallingDosingLogEntryInFuture (String, i64, NaiveDateTime),
+    #[error(
+        "[{0}] Database contains a Balling dosing event for pump {1} which is in the future: {2}."
+    )]
+    BallingDosingLogEntryInFuture(String, i64, NaiveDateTime),
 
     /// Error occurred when trying to calculate duration from two NaiveDateTime timestamps
     #[error("[{location}] Error occurred when trying to calculate dosing duration for pump {pump_id} from two NaiveDateTime timestamps ({current_datetime}, {last_dosing_datetime}): {source}")]
@@ -262,7 +264,7 @@ pub enum SqlInterfaceError {
         last_dosing_datetime: NaiveDateTime,
 
         #[source]
-        source: OutOfRangeError
+        source: OutOfRangeError,
     },
 
     /// Error occurred when trying to insert a Balling dosing event into the database.

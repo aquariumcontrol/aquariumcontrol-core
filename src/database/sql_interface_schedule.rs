@@ -195,10 +195,36 @@ impl ScheduleEntry {
     ///
     /// # Returns
     /// - `true`: If the current local time is on or after `start_time` AND on or before `stop_time`.
-    /// - `false`: If the current local time is outside of this inclusive window.
+    /// - `false`: Given an active schedule limitation: If the current local time is outside this inclusive window.
     pub fn check_if_allowed(&self) -> bool {
         let current_time = Local::now().time();
-        (current_time >= self.start_time) && (current_time <= self.stop_time)
+        if self.is_active {
+            // allow operation only if time is within the permissible interval
+            (current_time >= self.start_time) && (current_time <= self.stop_time)
+        } else {
+            // allow operation if schedule limitation is not active
+            true
+        }
+    }
+
+    #[cfg(test)]
+    pub fn new_for_test(
+        schedule_type: ScheduleType,
+        start_time: NaiveTime,
+        stop_time: NaiveTime,
+        is_active: bool,
+    ) -> ScheduleEntry {
+        Self {
+            schedule_type,
+            start_time,
+            stop_time,
+            is_active,
+        }
+    }
+
+    #[cfg(test)]
+    pub fn deactivate(&mut self) {
+        self.is_active = false;
     }
 }
 

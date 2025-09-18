@@ -6,6 +6,57 @@ The above copyright notice and this permission notice shall be included in all c
 
 THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
+
+//! Implements the central, schedule-based permission controller for the application.
+//!
+//! This module provides the `ScheduleCheck` struct, which runs as a dedicated, long-running
+//! thread. Its primary responsibility is to act as a centralized "permission oracle" for
+//! modules `Ventilation`, `Heating`, `Refill`, and `Balling`. It determines whether these
+//! modules are allowed to perform their actions (e.g., turn on a pump or heater) based
+//! on time-based schedules stored in the database.
+//!
+//! ## Key Components
+//!
+//! - **`ScheduleCheck` Struct**: The core state machine for the thread. It holds the
+//!   configuration and a set of `ScheduleCheckLocks` for each client module. These locks are
+//!   a crucial part of its design, used to prevent the same recurring error or warning
+//!   from flooding the log files.
+//!
+//! - **`execute()` Method**: The main thread loop. It operates in two modes simultaneously:
+//!   1.  **Proactive Caching**: It periodically re-reads all schedules from the
+//!       database, caching the results in memory. This reduces database load, as it
+//!       avoids querying on every single request.
+//!   2.  **Reactive Service**: In each loop iteration, it polls the channels from each
+//!       client module (`Heating`, `Refill`, etc.), checking for incoming requests.
+//!
+//! - **`check_pending_schedule_request()` Method**: The workhorse function that handles a
+//!   single request. It performs a non-blocking `try_recv` on a client's channel. If a
+//!   `ScheduleCheck` command is found, it consults the cached schedule. Based on the
+//!   schedule entry (or a configured fallback strategy if none is found), it sends a
+//!   simple `true` (allowed) or `false` (disallowed) reply to the client.
+//!
+//! ## Design and Architecture
+//!
+//! This module is a cornerstone of the application's concurrent design, promoting
+//! decoupling and robustness.
+//!
+//! - **Centralized Permission Logic**: By centralizing all schedule-based checks, this
+//!   module simplifies the logic in all other hardware-controlling modules. A module like
+//!   `Heating` doesn't need to know anything about database queries or time calculations;
+//!   it only needs to ask `ScheduleCheck` for permission.
+//!
+//! - **Robust Error Handling (Log Flood Prevention)**: The extensive use of `ScheduleCheckLocks`
+//!   is a deliberate design choice for a resilient, long-running service. If a recurring
+//!   problem occurs (e.g., a missing schedule in the database), the error is logged
+//!   *once*. The lock is then engaged to suppress identical log messages until the
+//!   underlying condition is resolved. This prevents a single, persistent issue from
+//!   filling up disk space with repetitive logs.
+//!
+//! - **Decoupled Request/Reply Pattern**: The communication is based on a simple and
+//!   effective request/reply pattern. A client sends a request and waits for a boolean
+//!   response. This decouples the client modules from the implementation details of the
+//!   permission logic.
+
 #[cfg(feature = "debug_schedule_check")]
 use log::debug;
 
@@ -29,6 +80,22 @@ use crate::utilities::database_ping_trait::DatabasePingTrait;
 use crate::utilities::logger::log_error_chain;
 use crate::utilities::proc_ext_req::ProcessExternalRequestTrait;
 
+/// Contains all inhibition flags for a specific schedule communication
+#[derive(Default)]
+pub struct ScheduleCheckLocks {
+    /// inhibition flag to avoid flooding the log file with repeated messages about not finding schedule entry
+    find_schedule: bool,
+
+    /// inhibition flag to avoid flooding the log file with repeated messages about failure to receive information via the channel
+    channel_receive: bool,
+
+    /// inhibition flag to avoid flooding the log file with repeated messages about failure to send information via the channel
+    channel_send: bool,
+
+    /// inhibition flag to avoid flooding the log file with repeated messages about having received inapplicable command
+    inapplicable_command: bool,
+}
+
 #[cfg_attr(doc, aquamarine::aquamarine)]
 /// Contains the configuration and the implementation for the schedule checker.
 /// Thread communication is as follows:
@@ -49,53 +116,17 @@ pub struct ScheduleCheck {
     /// configuration data for schedule checker
     config: ScheduleCheckConfig,
 
-    /// inhibition flag to avoid flooding the log file with repeated messages about not finding schedule entry for Balling mineral dosing
-    lock_error_find_balling_schedule: bool,
+    /// inhibition flags for Balling
+    locks_balling: ScheduleCheckLocks,
 
-    /// inhibition flag to avoid flooding the log file with repeated messages about not finding schedule entry for refill control
-    lock_error_find_refill_schedule: bool,
+    /// inhibition flags for ventilation
+    locks_ventilation: ScheduleCheckLocks,
 
-    /// inhibition flag to avoid flooding the log file with repeated messages about not finding schedule entry for ventilation control
-    lock_error_find_ventilation_schedule: bool,
+    /// inhibition flags for heating
+    locks_heating: ScheduleCheckLocks,
 
-    /// inhibition flag to avoid flooding the log file with repeated messages about not finding schedule entry for heating control
-    lock_error_find_heating_schedule: bool,
-
-    /// inhibition flag to avoid flooding the log file with repeated messages about failure to receive information from Balling dosing via the channel
-    lock_error_channel_receive_balling: bool,
-
-    /// inhibition flag to avoid flooding the log file with repeated messages about failure to receive information from ventilation control via the channel
-    lock_error_channel_receive_ventilation: bool,
-
-    /// inhibition flag to avoid flooding the log file with repeated messages about failure to receive information from refill control via the channel
-    lock_error_channel_receive_refill: bool,
-
-    /// inhibition flag to avoid flooding the log file with repeated messages about failure to receive information from heating control via the channel
-    lock_error_channel_receive_heating: bool,
-
-    /// inhibition flag to avoid flooding the log file with repeated messages about failure to send information to Balling mineral dosing via the channel
-    lock_error_channel_send_balling: bool,
-
-    /// inhibition flag to avoid flooding the log file with repeated messages about failure to send information to ventilation control via the channel
-    lock_error_channel_send_ventilation: bool,
-
-    /// inhibition flag to avoid flooding the log file with repeated messages about failure to send information to refill control via the channel
-    lock_error_channel_send_refill: bool,
-
-    /// inhibition flag to avoid flooding the log file with repeated messages about failure to send information to heating control via the channel
-    lock_error_channel_send_heating: bool,
-
-    /// inhibition flag to avoid flooding the log file with repeated messages about having received inapplicable command from Balling mineral dosing
-    lock_warn_inapplicable_command_balling: bool,
-
-    /// inhibition flag to avoid flooding the log file with repeated messages about having received inapplicable command from ventilation control
-    lock_warn_inapplicable_command_ventilation: bool,
-
-    /// inhibition flag to avoid flooding the log file with repeated messages about having received inapplicable command from refill control
-    lock_warn_inapplicable_command_refill: bool,
-
-    /// inhibition flag to avoid flooding the log file with repeated messages about having received inapplicable command from heating control
-    lock_warn_inapplicable_command_heating: bool,
+    /// inhibition flags for refill
+    locks_refill: ScheduleCheckLocks,
 
     /// inhibition flag to avoid flooding the log file with repeated messages about failure to read from the database
     lock_error_database_read: bool,
@@ -125,22 +156,10 @@ impl ScheduleCheck {
     pub fn new(config: ScheduleCheckConfig, database_ping_interval: Duration) -> ScheduleCheck {
         ScheduleCheck {
             config,
-            lock_error_find_balling_schedule: false,
-            lock_error_find_refill_schedule: false,
-            lock_error_find_ventilation_schedule: false,
-            lock_error_find_heating_schedule: false,
-            lock_error_channel_receive_balling: false,
-            lock_error_channel_receive_ventilation: false,
-            lock_error_channel_receive_refill: false,
-            lock_error_channel_receive_heating: false,
-            lock_error_channel_send_balling: false,
-            lock_error_channel_send_ventilation: false,
-            lock_error_channel_send_refill: false,
-            lock_error_channel_send_heating: false,
-            lock_warn_inapplicable_command_balling: false,
-            lock_warn_inapplicable_command_ventilation: false,
-            lock_warn_inapplicable_command_refill: false,
-            lock_warn_inapplicable_command_heating: false,
+            locks_balling: Default::default(),
+            locks_ventilation: Default::default(),
+            locks_heating: Default::default(),
+            locks_refill: Default::default(),
             lock_error_database_read: false,
             last_ping_instant: Instant::now(),
             database_ping_interval,
@@ -166,80 +185,138 @@ impl ScheduleCheck {
     ///   or `None` if no schedule was found for that module.
     /// * `lock_error_channel_receive` - A mutable reference to a boolean flag that, when `true`,
     ///   inhibits repeated error logging for channel receive failures.
-    /// * `lock_error_channel_send` - A mutable reference to a boolean flag that, when `true`,
-    ///   inhibits repeated error logging for channel send failures.
-    /// * `lock_warn_inapplicable_command` - A mutable reference to a boolean flag that, when `true`,
-    ///   inhibits repeated warning logging for inapplicable commands received.
+    /// * `locks` - A mutable reference to the struct containing the lock flags.
+    /// * `module_name` - Name of the module for which the schedule shall be checked for logging purposes.
     ///
-    /// # Returns
-    /// * A tuple (bool, bool) indicating a successful send operation and a successful receive-operation.
     fn check_pending_schedule_request(
         config: &ScheduleCheckConfig,
         tx: &mut AquaSender<bool>,
         rx: &mut AquaReceiver<InternalCommand>,
         schedule_entry: Option<&ScheduleEntry>,
-        locks: (&mut bool, &mut bool, &mut bool),
+        locks: &mut ScheduleCheckLocks,
         module_name: &str,
-    ) -> (bool, bool) {
-        let (lock_error_channel_receive, lock_error_channel_send, lock_warn_inapplicable_command) =
-            locks;
-
-        let mut send_success = false;
-        let mut receive_success = false;
-        match tx.send(match rx.try_recv() {
-            Ok(c) => match c {
-                InternalCommand::ScheduleCheck => {
-                    *lock_warn_inapplicable_command = false;
-                    match schedule_entry {
-                        Some(c) => {
-                            receive_success = true;
-                            c.check_if_allowed()
-                        }
-                        None => config.strategy_if_schedule_not_found,
-                    }
-                }
-                _ => {
-                    if !*lock_warn_inapplicable_command {
-                        warn!(
-                            target: module_path!(),
-                            "ignoring inapplicable command ({c}) from {module_name}"
-                        );
-                        *lock_warn_inapplicable_command = true;
-                    }
-                    return (send_success, receive_success);
-                }
-            },
+    ) {
+        // receive request
+        let request = match rx.try_recv() {
+            Ok(c) => {
+                locks.channel_receive = false;
+                c
+            }
             Err(e) => {
                 match e {
                     #[cfg(feature = "debug_channels")]
                     AquaChannelError::Full => { /* Not applicable. Do nothing */ }
                     AquaChannelError::Empty => {
                         /* empty buffer - no action required */
-                        *lock_error_channel_receive = false;
+                        locks.channel_receive = false;
                     }
                     AquaChannelError::Disconnected => {
-                        if !*lock_error_channel_receive {
-                            let context = format!("receiving command from {module_name} failed");
+                        if !locks.channel_receive {
+                            let context = format!("receiving command from {module_name} failed.");
                             log_error_chain(module_path!(), &context, e);
-                            *lock_error_channel_receive = true;
+                            locks.channel_receive = true;
                         }
                     }
                 }
-                return (send_success, receive_success);
+                return;
             }
-        }) {
+        };
+
+        // check if schedule information is present
+        let schedule_status = match request {
+            InternalCommand::ScheduleCheck => {
+                locks.inapplicable_command = false;
+                match schedule_entry {
+                    Some(c) => c.check_if_allowed(),
+                    None => config.strategy_if_schedule_not_found,
+                }
+            }
+            _c => {
+                if !locks.inapplicable_command {
+                    warn!(
+                        target: module_path!(),
+                        "ignoring inapplicable command ({_c}) from {module_name}"
+                    );
+                    locks.inapplicable_command = true;
+                }
+                return;
+            }
+        };
+
+        // send back status to requester
+        match tx.send(schedule_status) {
             Ok(_) => {
-                send_success = true;
-                *lock_error_channel_send = false;
+                locks.channel_send = false;
             }
             Err(e) => {
-                if !*lock_error_channel_send {
-                    log_error_chain(module_path!(), "sending back message failed", e);
-                    *lock_error_channel_send = true;
+                if !locks.channel_send {
+                    let context = format!("sending back message to {module_name} failed");
+                    log_error_chain(module_path!(), &context, e);
+                    locks.channel_send = true;
                 }
             }
         };
-        (send_success, receive_success)
+    }
+
+    /// Finds the relevant schedule for a module and processes any pending requests.
+    ///
+    /// This is a helper function designed to reduce repetitive logic in the main `execute`
+    /// loop. It encapsulates the full sequence of actions for a single client module
+    /// (e.g., "ventilation", "heating").
+    ///
+    /// The function first checks if the target module's thread is running. If so, it
+    /// attempts to find the corresponding schedule entry from the in-memory cache
+    /// (if `config.active` is true). It handles any errors during this lookup, using
+    /// the provided `locks` to prevent log flooding on repeated failures.
+    ///
+    /// Finally, it delegates the task of channel communication (receiving a request
+    /// and sending a reply) to the `check_pending_schedule_request` function.
+    ///
+    /// # Arguments
+    /// * `config` - A reference to the main `ScheduleCheckConfig`.
+    /// * `thread_is_executed` - A boolean indicating if the target client module's thread is active.
+    /// * `sql_interface_schedule` - The database interface used to find the schedule entry.
+    /// * `locks` - A mutable reference to the log-suppression flags for the specific client module.
+    /// * `action` - The name of the client module (e.g., "ventilation"), used for logging.
+    /// * `schedule_check_channels` - A mutable reference to the struct containing all communication channels.
+    fn find_schedule_check_request(
+        schedule_type: ScheduleType,
+        config: &ScheduleCheckConfig,
+        thread_is_executed: bool,
+        sql_interface_schedule: &SqlInterfaceSchedule,
+        locks: &mut ScheduleCheckLocks,
+        module_name: &str,
+        channel_pair: (&mut AquaSender<bool>, &mut AquaReceiver<InternalCommand>),
+    ) {
+        let (tx_schedule_check_to_requester, rx_schedule_check_from_requester) = channel_pair;
+        if thread_is_executed {
+            let schedule_entry_opt: Option<&ScheduleEntry> = if config.active {
+                match sql_interface_schedule.find_schedule(schedule_type) {
+                    Ok(c) => {
+                        locks.find_schedule = false;
+                        Some(c)
+                    }
+                    Err(e) => {
+                        if !locks.find_schedule {
+                            let context = format!("could not find schedule for {module_name}");
+                            log_error_chain(module_path!(), &context, e);
+                            locks.find_schedule = true;
+                        }
+                        None
+                    }
+                }
+            } else {
+                None
+            };
+            Self::check_pending_schedule_request(
+                config,
+                tx_schedule_check_to_requester,
+                rx_schedule_check_from_requester,
+                schedule_entry_opt,
+                locks,
+                module_name,
+            );
+        }
     }
 
     /// Executes the main control loop for the schedule checker.
@@ -313,156 +390,60 @@ impl ScheduleCheck {
             }
 
             //*********** ventilation ***********
-            if execution_config.ventilation {
-                let schedule_entry_ventilation_opt: Option<&ScheduleEntry> = if self.config.active {
-                    match sql_interface_schedule.find_schedule(ScheduleType::Ventilation) {
-                        Ok(c) => {
-                            self.lock_error_find_ventilation_schedule = false;
-                            Some(c)
-                        }
-                        Err(e) => {
-                            if !self.lock_error_find_ventilation_schedule {
-                                log_error_chain(
-                                    module_path!(),
-                                    "could not find schedule for ventilation",
-                                    e,
-                                );
-                                self.lock_error_find_ventilation_schedule = true;
-                            }
-                            None
-                        }
-                    }
-                } else {
-                    None
-                };
-                let (_send_success, _receive_success) = Self::check_pending_schedule_request(
-                    &self.config,
+            Self::find_schedule_check_request(
+                ScheduleType::Ventilation,
+                &self.config,
+                execution_config.ventilation,
+                &sql_interface_schedule,
+                &mut self.locks_ventilation,
+                "ventilation",
+                (
                     &mut schedule_check_channels.tx_schedule_check_to_ventilation,
                     &mut schedule_check_channels.rx_schedule_check_from_ventilation,
-                    schedule_entry_ventilation_opt,
-                    (
-                        &mut self.lock_error_channel_receive_ventilation,
-                        &mut self.lock_error_channel_send_ventilation,
-                        &mut self.lock_warn_inapplicable_command_ventilation,
-                    ),
-                    "ventilation",
-                );
-            }
-            //***************************************
+                ),
+            );
 
             //*********** heating ***********
-            if execution_config.heating {
-                let schedule_entry_heating_opt: Option<&ScheduleEntry> = if self.config.active {
-                    match sql_interface_schedule.find_schedule(ScheduleType::Heating) {
-                        Ok(c) => {
-                            self.lock_error_find_heating_schedule = false;
-                            Some(c)
-                        }
-                        Err(e) => {
-                            if !self.lock_error_find_heating_schedule {
-                                log_error_chain(
-                                    module_path!(),
-                                    "could not find schedule for heating",
-                                    e,
-                                );
-                                self.lock_error_find_heating_schedule = true;
-                            }
-                            None
-                        }
-                    }
-                } else {
-                    None
-                };
-                let (_send_success, _receive_success) = Self::check_pending_schedule_request(
-                    &self.config,
+            Self::find_schedule_check_request(
+                ScheduleType::Heating,
+                &self.config,
+                execution_config.heating,
+                &sql_interface_schedule,
+                &mut self.locks_heating,
+                "heating",
+                (
                     &mut schedule_check_channels.tx_schedule_check_to_heating,
                     &mut schedule_check_channels.rx_schedule_check_from_heating,
-                    schedule_entry_heating_opt,
-                    (
-                        &mut self.lock_error_channel_receive_heating,
-                        &mut self.lock_error_channel_send_heating,
-                        &mut self.lock_warn_inapplicable_command_heating,
-                    ),
-                    "heating",
-                );
-            }
-            //***************************************
+                ),
+            );
 
             //*********** refill ***********
-            if execution_config.refill {
-                let schedule_entry_refill_opt: Option<&ScheduleEntry> = if self.config.active {
-                    match sql_interface_schedule.find_schedule(ScheduleType::Refill) {
-                        Ok(c) => {
-                            self.lock_error_find_refill_schedule = false;
-                            Some(c)
-                        }
-                        Err(e) => {
-                            if !self.lock_error_find_refill_schedule {
-                                log_error_chain(
-                                    module_path!(),
-                                    "could not find schedule for refill",
-                                    e,
-                                );
-                                self.lock_error_find_refill_schedule = true;
-                            }
-                            None
-                        }
-                    }
-                } else {
-                    None
-                };
-                let (_send_success, _receive_success) = Self::check_pending_schedule_request(
-                    &self.config,
+            Self::find_schedule_check_request(
+                ScheduleType::Refill,
+                &self.config,
+                execution_config.refill,
+                &sql_interface_schedule,
+                &mut self.locks_refill,
+                "refill",
+                (
                     &mut schedule_check_channels.tx_schedule_check_to_refill,
                     &mut schedule_check_channels.rx_schedule_check_from_refill,
-                    schedule_entry_refill_opt,
-                    (
-                        &mut self.lock_error_channel_receive_refill,
-                        &mut self.lock_error_channel_send_refill,
-                        &mut self.lock_warn_inapplicable_command_refill,
-                    ),
-                    "refill",
-                );
-            }
-            //***************************************
+                ),
+            );
 
             //*********** Balling ***********
-            if execution_config.balling {
-                let schedule_entry_balling_opt: Option<&ScheduleEntry> = if self.config.active {
-                    match sql_interface_schedule.find_schedule(ScheduleType::Balling) {
-                        Ok(c) => {
-                            self.lock_error_find_balling_schedule = false;
-                            Some(c)
-                        }
-                        Err(e) => {
-                            if !self.lock_error_find_balling_schedule {
-                                log_error_chain(
-                                    module_path!(),
-                                    "could not find schedule for balling",
-                                    e,
-                                );
-                                self.lock_error_find_balling_schedule = true;
-                            }
-                            None
-                        }
-                    }
-                } else {
-                    None
-                };
-                let (_send_success, _receive_success) = Self::check_pending_schedule_request(
-                    &self.config,
+            Self::find_schedule_check_request(
+                ScheduleType::Balling,
+                &self.config,
+                execution_config.balling,
+                &sql_interface_schedule,
+                &mut self.locks_balling,
+                "balling",
+                (
                     &mut schedule_check_channels.tx_schedule_check_to_balling,
                     &mut schedule_check_channels.rx_schedule_check_from_balling,
-                    schedule_entry_balling_opt,
-                    (
-                        &mut self.lock_error_channel_receive_balling,
-                        &mut self.lock_error_channel_send_balling,
-                        &mut self.lock_warn_inapplicable_command_balling,
-                    ),
-                    "balling",
-                );
-            }
-            //***************************************
+                ),
+            );
 
             spin_sleeper.sleep(sleep_duration_hundred_millis);
 
@@ -470,5 +451,288 @@ impl ScheduleCheck {
         }
 
         schedule_check_channels.acknowledge_signal_handler();
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::launch::channels::Channels;
+    use crate::utilities::channel_content::InternalCommand;
+    use chrono::NaiveTime;
+
+    // Helper function to create a default config for tests.
+    fn default_test_config(strategy_if_not_found: bool) -> ScheduleCheckConfig {
+        ScheduleCheckConfig {
+            active: true,
+            execute: true,
+            schedule_check_interval: 60,
+            strategy_if_schedule_not_found: strategy_if_not_found,
+        }
+    }
+
+    // Helper to create a schedule entry that is always active and covers the entire day.
+    fn always_allowed_schedule() -> ScheduleEntry {
+        ScheduleEntry::new_for_test(
+            ScheduleType::Heating,
+            NaiveTime::from_hms_opt(0, 0, 0).unwrap(),
+            NaiveTime::from_hms_opt(23, 59, 59).unwrap(),
+            true,
+        )
+    }
+
+    #[test]
+    fn test_check_request_allowed_by_schedule() {
+        // Arrange
+        let config = default_test_config(false);
+        let mut locks = ScheduleCheckLocks::default();
+        let mut channels = Channels::new_for_test();
+        let schedule = always_allowed_schedule();
+
+        channels
+            .heating
+            .tx_heating_to_schedule_check
+            .send(InternalCommand::ScheduleCheck)
+            .unwrap();
+
+        // Act
+        ScheduleCheck::check_pending_schedule_request(
+            &config,
+            &mut channels.schedule_check.tx_schedule_check_to_heating,
+            &mut channels.schedule_check.rx_schedule_check_from_heating,
+            Some(&schedule),
+            &mut locks,
+            "mock_heating",
+        );
+
+        // Assert
+        let result = channels.heating.receive_from_schedule_check().unwrap();
+        assert_eq!(result, true, "Should be allowed by the active schedule");
+        assert!(!locks.channel_receive, "Receive lock should not be set");
+        assert!(!locks.channel_send, "Send lock should not be set");
+        assert!(
+            !locks.inapplicable_command,
+            "Command lock should not be set"
+        );
+    }
+
+    #[test]
+    fn test_check_request_allowed_by_inactive_schedule() {
+        // Arrange (fallback strategy is irrelevant)
+        let config = default_test_config(true);
+        let mut locks = ScheduleCheckLocks::default();
+        let mut channels = Channels::new_for_test();
+
+        // An inactive schedule is always disallowed.
+        let mut schedule = always_allowed_schedule();
+        schedule.deactivate();
+
+        channels
+            .heating
+            .tx_heating_to_schedule_check
+            .send(InternalCommand::ScheduleCheck)
+            .unwrap();
+
+        // Act
+        ScheduleCheck::check_pending_schedule_request(
+            &config,
+            &mut channels.schedule_check.tx_schedule_check_to_heating,
+            &mut channels.schedule_check.rx_schedule_check_from_heating,
+            Some(&schedule),
+            &mut locks,
+            "mock_heating",
+        );
+
+        // Assert
+        let result = channels.heating.receive_from_schedule_check().unwrap();
+        assert_eq!(
+            result, true,
+            "Should be disallowed by the inactive schedule"
+        );
+    }
+
+    #[test]
+    fn test_check_request_no_schedule_fallback_allow() {
+        // Arrange with fallback strategy to allow
+        let config = default_test_config(true);
+        let mut locks = ScheduleCheckLocks::default();
+        let mut channels = Channels::new_for_test();
+
+        channels
+            .heating
+            .tx_heating_to_schedule_check
+            .send(InternalCommand::ScheduleCheck)
+            .unwrap();
+
+        // Act
+        ScheduleCheck::check_pending_schedule_request(
+            &config,
+            &mut channels.schedule_check.tx_schedule_check_to_heating,
+            &mut channels.schedule_check.rx_schedule_check_from_heating,
+            None, // No schedule entry provided
+            &mut locks,
+            "test_module",
+        );
+
+        // Assert
+        let result = channels.heating.receive_from_schedule_check().unwrap();
+        assert_eq!(result, true, "Should be allowed by the fallback strategy");
+    }
+
+    #[test]
+    fn test_check_request_no_schedule_fallback_disallow() {
+        // Arrange with fallback strategy to disallow
+        let config = default_test_config(false);
+        let mut locks = ScheduleCheckLocks::default();
+        let mut channels = Channels::new_for_test();
+
+        channels
+            .heating
+            .tx_heating_to_schedule_check
+            .send(InternalCommand::ScheduleCheck)
+            .unwrap();
+
+        // Act
+        ScheduleCheck::check_pending_schedule_request(
+            &config,
+            &mut channels.schedule_check.tx_schedule_check_to_heating,
+            &mut channels.schedule_check.rx_schedule_check_from_heating,
+            None, // No schedule entry provided
+            &mut locks,
+            "test_module",
+        );
+
+        // Assert
+        let result = channels.heating.receive_from_schedule_check().unwrap();
+        assert_eq!(
+            result, false,
+            "Should be disallowed by the fallback strategy"
+        );
+    }
+
+    #[test]
+    fn test_check_request_inapplicable_command() {
+        // Arrange
+        let config = default_test_config(false);
+        let mut locks = ScheduleCheckLocks::default();
+        let mut channels = Channels::new_for_test();
+        let schedule = always_allowed_schedule();
+
+        channels
+            .heating
+            .tx_heating_to_schedule_check
+            .send(InternalCommand::ResetAllErrors)
+            .unwrap();
+
+        // Act
+        ScheduleCheck::check_pending_schedule_request(
+            &config,
+            &mut channels.schedule_check.tx_schedule_check_to_heating,
+            &mut channels.schedule_check.rx_schedule_check_from_heating,
+            Some(&schedule),
+            &mut locks,
+            "test_module",
+        );
+
+        assert!(
+            channels
+                .heating
+                .rx_heating_from_schedule_check
+                .try_recv()
+                .is_err(),
+            "Should not send a reply for an inapplicable command"
+        );
+        assert!(
+            locks.inapplicable_command,
+            "The inapplicable_command lock should be engaged"
+        );
+    }
+
+    #[test]
+    fn test_check_request_no_request_on_channel() {
+        // Arrange
+        let config = default_test_config(false);
+        let mut locks = ScheduleCheckLocks::default();
+        let mut channels = Channels::new_for_test();
+        let schedule = always_allowed_schedule();
+
+        // Act
+        ScheduleCheck::check_pending_schedule_request(
+            &config,
+            &mut channels.schedule_check.tx_schedule_check_to_heating,
+            &mut channels.schedule_check.rx_schedule_check_from_heating,
+            Some(&schedule),
+            &mut locks,
+            "test_module",
+        );
+
+        // Assert
+        assert!(
+            channels.heating.rx_heating_from_schedule_check.try_recv().is_err(),
+            "Should not send a reply when no request is received"
+        );
+        assert!(
+            !locks.channel_receive,
+            "Receive lock should not be set on empty channel"
+        );
+    }
+
+    #[test]
+    fn test_check_request_receive_disconnected() {
+        // Arrange
+        let config = default_test_config(false);
+        let mut locks = ScheduleCheckLocks::default();
+        let mut channels = Channels::new_for_test();
+        let schedule = always_allowed_schedule();
+
+        drop(channels.heating.tx_heating_to_schedule_check); // Drop the sender to simulate a disconnected channel
+
+        // Act
+        ScheduleCheck::check_pending_schedule_request(
+            &config,
+            &mut channels.schedule_check.tx_schedule_check_to_heating,
+            &mut channels.schedule_check.rx_schedule_check_from_heating,
+            Some(&schedule),
+            &mut locks,
+            "test_module",
+        );
+
+        // Assert
+        assert!(
+            locks.channel_receive,
+            "The channel_receive lock should be engaged on disconnect"
+        );
+    }
+
+    #[test]
+    fn test_check_request_send_disconnected() {
+        // Arrange
+        let config = default_test_config(true);
+        let mut locks = ScheduleCheckLocks::default();
+        let mut channels = Channels::new_for_test();
+        let schedule = always_allowed_schedule();
+
+        channels
+            .heating
+            .tx_heating_to_schedule_check
+            .send(InternalCommand::ScheduleCheck)
+            .unwrap();
+        drop(channels.heating.rx_heating_from_schedule_check); // Drop the receiver to simulate a disconnected channel
+
+        // Act
+        ScheduleCheck::check_pending_schedule_request(
+            &config,
+            &mut channels.schedule_check.tx_schedule_check_to_heating,
+            &mut channels.schedule_check.rx_schedule_check_from_heating,
+            Some(&schedule),
+            &mut locks,
+            "test_module",
+        );
+
+        // Assert
+        assert!(
+            locks.channel_send,
+            "The channel_send lock should be engaged on disconnect"
+        );
     }
 }

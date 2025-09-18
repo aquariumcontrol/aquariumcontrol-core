@@ -493,7 +493,7 @@ pub mod tests {
         println!("* Testing new() with deactivated row limit check (limit = 0)...");
         // We reuse the state from the previous test (2 rows in the table)
         // Set the limit to 0
-        let result = SqlInterfaceRefill::new(sql_interface.get_connection().unwrap(), 0); 
+        let result = SqlInterfaceRefill::new(sql_interface.get_connection().unwrap(), 0);
         assert!(
             result.is_ok(),
             "Expected new() to succeed with deactivated check, but it failed: {:?}",
@@ -505,7 +505,7 @@ pub mod tests {
         println!("* Testing new() with row count equal to the limit...");
         // We reuse the state from the previous test (2 rows in the table)
         // Set the limit to 2
-        let result = SqlInterfaceRefill::new(sql_interface.get_connection().unwrap(), 2); 
+        let result = SqlInterfaceRefill::new(sql_interface.get_connection().unwrap(), 2);
         assert!(
             result.is_ok(),
             "Expected new() to succeed when row count equals limit, but it failed: {:?}",
@@ -570,7 +570,8 @@ pub mod tests {
             Err(e) => panic!("Could not calculate duration since last refill: {e:?}"),
         };
         let reference_duration_since_last_refill: u64 =
-            SqlInterface::get_duration_from_naive_timestamp_to_local_now(refill_timestamp).unwrap()
+            SqlInterface::get_duration_from_naive_timestamp_to_local_now(refill_timestamp)
+                .unwrap()
                 .num_seconds() as u64;
         assert_eq!(
             duration_since_last_refill,
