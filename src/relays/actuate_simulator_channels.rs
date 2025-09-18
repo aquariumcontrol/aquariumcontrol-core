@@ -6,7 +6,28 @@ The above copyright notice and this permission notice shall be included in all c
 
 THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
-use crate::launch::channels::{AquaChannelError, AquaSender};
+
+//! A container for the communication channel used by the `ActuateSimulator`.
+//!
+//! This module defines the `ActuateSimulatorChannels` struct, which acts as a simple
+//! "switchboard" for the `ActuateSimulator`. Its purpose is to hold the `mpsc::channel`
+//! sender that the simulator uses to broadcast the low-level relay commands it generates.
+//!
+//! ## Key Components
+//!
+//! - **`ActuateSimulatorChannels`**: A simple container struct.
+//!   - `tx_actuate_simulator_to_tcp_opt`: The sender is wrapped in an `Option` because
+//!     the application can also be configured to run without simulator capabilities.
+//!
+//! ## Design and Architecture
+//!
+//! This struct is a key part of the application's hardware-free testing strategy.
+//!
+//! - **Decoupling**: It decouples the `ActuateSimulator` from the test harness that
+//!   receives the commands. The simulator only needs to know about this channel
+//!   container, not the specifics of the TCP listener.
+
+use crate::launch::channels::AquaSender;
 use crate::utilities::channel_content::InternalCommand;
 use std::fmt;
 
@@ -14,31 +35,20 @@ pub struct ActuateSimulatorChannels {
     pub tx_actuate_simulator_to_tcp_opt: Option<AquaSender<InternalCommand>>,
 }
 
-impl ActuateSimulatorChannels {
-    /// Sends a command to the TCP simulator if the channel exists.
-    ///
-    /// This wrapper function sends a command and increments the associated debug
-    /// counter if the `debug_channels` feature is enabled.
-    #[allow(unused)]
-    pub fn send_to_tcp(
-        &mut self,
-        command: InternalCommand,
-    ) -> Option<Result<(), AquaChannelError>> {
-        self.tx_actuate_simulator_to_tcp_opt
-            .as_mut()
-            .map(|tx| tx.send(command))
-    }
-}
-
 #[cfg(feature = "debug_channels")]
 impl fmt::Display for ActuateSimulatorChannels {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         writeln!(f, "=== ActuateSimulatorChannels ===")?;
-        write!(
-            f,
-            "tx_actuate_simulator_to_tcp_opt: {}",
-            self.tx_actuate_simulator_to_tcp_opt.as_ref().unwrap().count
-        )
+
+        let count_str = self
+            .tx_actuate_simulator_to_tcp_opt
+            .as_ref()
+            .map_or_else(
+                || "None".to_string(), // Display "None" if the sender doesn't exist
+                |sender| sender.count.to_string(), // Display the count if it exists
+            );
+
+        write!(f, "tx_actuate_simulator_to_tcp_opt: {}", count_str)
     }
 }
 
