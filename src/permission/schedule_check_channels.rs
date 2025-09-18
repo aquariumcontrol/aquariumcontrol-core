@@ -6,6 +6,32 @@ The above copyright notice and this permission notice shall be included in all c
 
 THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
+
+//! A central container for all inter-thread communication channels used by the `ScheduleCheck` module.
+//!
+//! This module defines the `ScheduleCheckChannels` struct, which acts as a dedicated "switchboard"
+//! for the `ScheduleCheck` thread. Its primary purpose is to aggregate all the `mpsc::channel`
+//! senders and receivers that the `ScheduleCheck` thread needs to communicate with its client
+//! modules (`Ventilation`, `Heating`, `Refill`, `Balling`) and the `SignalHandler`.
+//!
+//! ## Design and Architecture
+//!
+//! The `ScheduleCheckChannels` struct is a key part of the application's inter-thread
+//! communication strategy, promoting clean and decoupled code.
+//!
+//! - **Centralization**: By gathering all necessary channels into a single struct, it
+//!   provides a clear and explicit declaration of the `ScheduleCheck` thread's communication
+//!   dependencies. This makes the overall architecture easier to reason about.
+//!
+//! - **Decoupling**: The main `ScheduleCheck` thread logic doesn't need to manage a list of
+//!   individual channels. It just needs this struct, which it can use to send and
+//!   receive messages. This separates the core permission logic from the communication
+//!   infrastructure.
+//!
+//! - **Testability**: The struct can be easily constructed with mock channels during
+//!   unit testing, allowing for isolated testing of the `ScheduleCheck` thread's logic without
+//!   needing to run the entire application.
+
 use crate::launch::channels::{AquaChannelError, AquaReceiver, AquaSender};
 use crate::utilities::channel_content::InternalCommand;
 use std::fmt;
