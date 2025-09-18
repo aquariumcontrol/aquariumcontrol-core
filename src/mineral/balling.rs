@@ -6,6 +6,62 @@ The above copyright notice and this permission notice shall be included in all c
 
 THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
+
+//! Implements the main control logic for automated Balling mineral dosing.
+//!
+//! This module contains the `Balling` struct, which runs as a dedicated thread to manage
+//! the scheduled dosing of up to four different mineral solutions. It is responsible for
+//! maintaining a precise dosing schedule, responding to external commands, and ensuring
+//! that dosing operations are performed safely and reliably.
+//!
+//! ## Key Components
+//!
+//! - **`Balling` Struct**: The central state machine for the dosing subsystem. It holds the
+//!   configuration and the internal state for each pump, most importantly the
+//!   `countdown_dosing_pumpX` fields which track the time until the next scheduled dose.
+//!
+//! - **`new()` Constructor**: A complex and critical initialization function. It performs
+//!   several pre-flight checks:
+//!   1.  Validates that all configured dosing intervals are logical and non-zero.
+//!   2.  Ensures that every pump marked as `active` in the configuration has a
+//!       corresponding entry in the database.
+//!   3.  Calculates the initial countdown for each pump by querying the database for the
+//!       time of its last dosing event.
+//!
+//! - **`execute()` Method**: The main thread loop. It continuously performs the following actions:
+//!   1.  Periodically decrements the countdown timers for each active pump.
+//!   2.  When a countdown reaches zero, it requests a `schedule_check` to ensure dosing
+//!       is permitted at the current time.
+//!   3.  If permitted, it calls `execute_dosing` to perform the physical action.
+//!   4.  Resets the pump's countdown to its configured interval.
+//!   5.  Listens for and processes external commands like `Start`, `Stop`, and `Execute(pump_id)`.
+//!
+//! - **`execute_dosing()` Method**: A private helper that orchestrates a single dosing event.
+//!   It retrieves pump parameters from the database, calculates the required pump run time,
+//!   invokes the `MineralInjectionTrait` to actuate the pump, and logs the completed
+//!   event back to the database.
+//!
+//! ## Design and Architecture
+//!
+//! The `Balling` module is designed as a robust, decoupled, and testable component.
+//!
+//! - **Time-Based Scheduling**: The core scheduling logic is based on simple countdown timers.
+//!   This is a robust and low-overhead way to manage recurring events without relying on
+//!   a complex external scheduler.
+//!
+//! - **Dependency Injection**: The module relies on a trait for its core dependency:
+//!   - `MineralInjectionTrait`: An abstraction for the physical act of dispensing a
+//!     mineral solution. This allows for mock implementations in tests.
+//!
+//! - **Concurrency Control**: It uses an `Arc<Mutex<i32>>` to coordinate with other
+//!   device-actuating modules (like `Feed`). This mutex acts as semaphore, ensuring
+//!   that only one major physical action occurs at a time across the entire system,
+//!   preventing conflicts.
+//!
+//! - **State Management**: The `dosing_inhibited` flag allows external commands (`Start`/`Stop`)
+//!   to temporarily pause all scheduled dosing without stopping the thread or losing the
+//!   current countdown states.
+
 use chrono::Local;
 use log::{error, info};
 use std::fmt;
@@ -53,17 +109,14 @@ pub struct Balling {
     /// configuration data for Balling dosing control
     config: BallingConfig,
 
-    /// Count down in seconds until the next Balling dosing for pump 1
-    countdown_dosing_pump1: u32,
+    /// Durations until next dosing
+    durations_until_next_dosing: [Duration; 4],
 
-    /// Count down in seconds until next Balling dosing for pump 2
-    countdown_dosing_pump2: u32,
+    /// Configuration data processed into an array: activation
+    pump_is_active: [bool; 4],
 
-    /// Count down in seconds until next Balling dosing for pump 3
-    countdown_dosing_pump3: u32,
-
-    /// Count down in seconds until the next Balling dosing for pump 4
-    countdown_dosing_pump4: u32,
+    /// Configuration data processed into an array: dosing intervals
+    dosing_intervals: [Duration; 4],
 
     /// inhibition flag to avoid flooding the log file with repeated messages to send request via the channel to schedule check
     lock_error_channel_send_schedule_check: bool,
@@ -96,10 +149,10 @@ impl fmt::Display for Balling {
             f,
             "Balling Controller (Active: {}), Initial Countdown (s): [P1: {}, P2: {}, P3: {}, P4: {}]",
             self.config.active,
-            self.countdown_dosing_pump1,
-            self.countdown_dosing_pump2,
-            self.countdown_dosing_pump3,
-            self.countdown_dosing_pump4
+            self.durations_until_next_dosing[0].as_secs(),
+            self.durations_until_next_dosing[1].as_secs(),
+            self.durations_until_next_dosing[2].as_secs(),
+            self.durations_until_next_dosing[3].as_secs()
         )
     }
 }
@@ -146,21 +199,32 @@ impl Balling {
 
         Self::check_database_vs_config(sql_interface_balling, &config)?;
 
-        let countdown_dosing_pump1 =
-            Self::calc_countdown_next_dosing(&config, sql_interface_balling, 1)?;
-        let countdown_dosing_pump2 =
-            Self::calc_countdown_next_dosing(&config, sql_interface_balling, 2)?;
-        let countdown_dosing_pump3 =
-            Self::calc_countdown_next_dosing(&config, sql_interface_balling, 3)?;
-        let countdown_dosing_pump4 =
-            Self::calc_countdown_next_dosing(&config, sql_interface_balling, 4)?;
+        let mut durations_until_next_dosing = [Duration::from_secs(0); 4];
+
+        // Calculate the initial countdown for each pump when the next dosing shall happen
+        for pump_id in 1..=4 {
+            durations_until_next_dosing[pump_id - 1] =
+                Self::calc_duration_until_next_dosing(&config, sql_interface_balling, pump_id as i64)?;
+        }
+
+        // Transfer the pump configuration data into an array
+        let mut pump_is_active = [false; 4];
+        pump_is_active[0] = config.pump1_active;
+        pump_is_active[1] = config.pump2_active;
+        pump_is_active[2] = config.pump3_active;
+        pump_is_active[3] = config.pump4_active;
+
+        let mut dosing_intervals = [Duration::from_secs(0); 4];
+        dosing_intervals[0] = Duration::from_secs(config.dosing_interval_pump1 as u64);
+        dosing_intervals[1] = Duration::from_secs(config.dosing_interval_pump2 as u64);
+        dosing_intervals[2] = Duration::from_secs(config.dosing_interval_pump3 as u64);
+        dosing_intervals[3] = Duration::from_secs(config.dosing_interval_pump4 as u64);
 
         Ok(Balling {
             config,
-            countdown_dosing_pump1,
-            countdown_dosing_pump2,
-            countdown_dosing_pump3,
-            countdown_dosing_pump4,
+            durations_until_next_dosing,
+            pump_is_active,
+            dosing_intervals,
             lock_error_channel_send_schedule_check: false,
             lock_error_channel_receive_schedule_check: false,
             execute_command_received: false,
@@ -172,7 +236,7 @@ impl Balling {
         })
     }
 
-    // Checks that configured dosing intervals are valid and logical.
+    /// Checks that configured dosing intervals are valid and logical.
     ///
     /// This function validates two conditions for each active pump:
     /// 1. The dosing interval must not be zero.
@@ -291,10 +355,11 @@ impl Balling {
 
     /// Calculates the remaining time (countdown) until the next scheduled dosing for a specific pump.
     ///
-    /// This function determines how many seconds are left until a pump's next dosing event.
+    /// This function determines how much time is left until a pump's next dosing event.
     /// It retrieves the target interval from the configuration and the elapsed time since the
-    /// last dosing from the database. The countdown is the interval minus the elapsed time.
-    /// If no previous dosing event exists, the countdown is set to `0` (due immediately).
+    /// last dosing from the database. The duration is the interval minus the elapsed time.
+    /// If no previous dosing event exists, the duration is set to the target interval
+    /// applying a cautious strategy.
     ///
     /// # Arguments
     /// * `config` - A reference to the `BallingConfig` containing the dosing intervals.
@@ -302,7 +367,7 @@ impl Balling {
     /// * `pump_id` - The unique identifier of the pump (1-4) for which to calculate the countdown.
     ///
     /// # Returns
-    /// A `Result` containing the calculated countdown (`u32`) in seconds. This value is `0` if the dosing is overdue.
+    /// A `Result` containing the calculated duration until the next dosing. This value is `0` if the dosing is overdue.
     ///
     /// # Errors
     /// This function will return a `BallingError` if:
@@ -310,11 +375,11 @@ impl Balling {
     /// - The configured dosing interval for the pump is zero (`InvalidDosingInterval`).
     /// - The database query to get the duration since the last dosing fails (`ReadDurationSinceLastDosingFailure`).
     /// - The retrieved duration from the database is negative or cannot be converted to `u32` (`CalculateDurationSinceLastDosingFailure`).
-    fn calc_countdown_next_dosing(
+    fn calc_duration_until_next_dosing(
         config: &BallingConfig,
         sql_interface_balling: &mut SqlInterfaceBalling,
         pump_id: i64,
-    ) -> Result<u32, BallingError> {
+    ) -> Result<Duration, BallingError> {
         let target_dosing_interval = Self::get_target_dosing_interval(config, pump_id)?;
         if target_dosing_interval == 0 {
             return Err(BallingError::InvalidDosingInterval(
@@ -323,50 +388,51 @@ impl Balling {
             ));
         }
 
-        let duration_since_balling_dosing: u32 =
-            match sql_interface_balling.get_duration_since_last_balling_dosing(pump_id) {
-                Ok(duration_opt) => match duration_opt {
-                    Some(duration) => match duration.try_into() {
-                        Ok(c) => c,
-                        Err(e) => {
-                            return Err(BallingError::CalculateDurationSinceLastDosingFailure {
-                                location: module_path!().to_string(),
-                                pump_id,
-                                source: e,
-                            });
-                        }
-                    },
-                    None => target_dosing_interval,
-                },
-                Err(e) => {
-                    return Err(BallingError::ReadDurationSinceLastDosingFailure {
-                        location: module_path!().to_string(),
-                        pump_id,
-                        source: Box::new(e),
-                    });
-                }
-            };
+        let duration_since_balling_dosing_opt =
+            sql_interface_balling.get_duration_since_last_balling_dosing(pump_id)
+                .map_err(|e| BallingError::ReadDurationSinceLastDosingFailure {
+                    location: module_path!().to_string(),
+                    pump_id,
+                    source: Box::new(e),
+                })?;
+
+        let duration_since_balling_dosing: Duration = match duration_since_balling_dosing_opt {
+            Some(duration_since_balling_dosing) => {
+                duration_since_balling_dosing
+            },
+            None => {
+                // No entry found in the database.
+                // For avoiding overdosing, assume that storing dosing event failed.
+                Duration::from_secs(target_dosing_interval as u64)
+            }
+        };
 
         #[cfg(test)]
         println!(
             "{}, Duration since last dosing for pump {} is {} seconds.",
             module_path!(),
             pump_id,
-            duration_since_balling_dosing
+            duration_since_balling_dosing.as_secs()
         );
 
-        // limit subtraction to 0
-        let countdown = target_dosing_interval.saturating_sub(duration_since_balling_dosing);
+        let target_dosing_interval_duration = Duration::from_secs(target_dosing_interval as u64);
+
+        let remaining_time_until_next_dosing = if duration_since_balling_dosing >= target_dosing_interval_duration {
+            Duration::from_secs(0)
+        }
+        else {
+            target_dosing_interval_duration - duration_since_balling_dosing
+        };
 
         #[cfg(test)]
         println!(
-            "{}: Countdown for next dosing of pump {} is {} seconds.",
+            "{}: Duration until next dosing dosing of pump {} is {} seconds.",
             module_path!(),
             pump_id,
-            countdown
+            remaining_time_until_next_dosing.as_secs()
         );
 
-        Ok(countdown)
+        Ok(remaining_time_until_next_dosing)
     }
 
     /// Calculates the target dosing duration in milliseconds based on the pump's flow rate and desired volume.
@@ -560,6 +626,12 @@ impl Balling {
         let mut start_command_received: bool; // the request to (temporarily) stop dosing has been received
         let mut dosing_inhibited: bool = false; // state of dosing control determined if the start/stop command has been received
         let mut schedule_check_result: bool; // flag indicating if operation of Balling is permitted at this time of day
+        let mut target_instants_dosing = [Instant::now(); 4];
+
+        // Calculate the target instant for each pump when the next dosing shall happen
+        for pump_id in 1..=4 {
+            target_instants_dosing[pump_id - 1] = Instant::now() + self.durations_until_next_dosing[pump_id - 1];
+        }
 
         loop {
             if self.config.active
@@ -590,16 +662,25 @@ impl Balling {
                         self.countdown_dosing_pump4,
                     );
                 }
-
-                //*** Peristaltic pump 1 ***
-                if self.countdown_dosing_pump1 == 0 && self.config.pump1_active {
-                    if schedule_check_result && !dosing_inhibited {
+                for pump_array_index in 0..=3 {
+                    if self.pump_is_active[pump_array_index] &&
+                        target_instants_dosing[pump_array_index] <= Instant::now() &&
+                        schedule_check_result &&
+                        !dosing_inhibited {
+                        let pump_id = pump_array_index as u32 + 1;
+                        let pump_device= match pump_id {
+                            1 => AquariumDevice::PeristalticPump1,
+                            2 => AquariumDevice::PeristalticPump2,
+                            3 => AquariumDevice::PeristalticPump3,
+                            4 => AquariumDevice::PeristalticPump4,
+                            _ => unreachable!()
+                        };
                         // inner scope to limit the lifetime of unlocked mutex
                         {
                             let mut mutex_data = mutex_device_scheduler_balling.lock().unwrap();
                             quit_command_received = self.execute_dosing(
-                                1,
-                                AquariumDevice::PeristalticPump1,
+                                pump_id,
+                                pump_device,
                                 mineral_injection,
                                 balling_channels,
                                 &mut sql_interface_balling,
@@ -609,99 +690,14 @@ impl Balling {
                         if quit_command_received {
                             break; // Quit command received during dosing
                         }
-                        self.countdown_dosing_pump1 = self.config.dosing_interval_pump1;
+                        // wait a little period between dosings of each pump
+                        spin_sleeper.sleep(sleep_duration_pump_switch);
+                        target_instants_dosing[pump_array_index] += self.dosing_intervals[pump_array_index];
                     }
-                } else if self.countdown_dosing_pump1 > 0 {
-                    self.countdown_dosing_pump1 = self
-                        .countdown_dosing_pump1
-                        .saturating_sub(self.config.schedule_check_interval);
-                }
-
-                spin_sleeper.sleep(sleep_duration_pump_switch);
-
-                //*** Peristaltic pump 2 ***
-                if self.countdown_dosing_pump2 == 0 && self.config.pump2_active {
-                    if schedule_check_result && !dosing_inhibited {
-                        // inner scope to limit the lifetime of unlocked mutex
-                        {
-                            let mut mutex_data = mutex_device_scheduler_balling.lock().unwrap();
-                            quit_command_received = self.execute_dosing(
-                                2,
-                                AquariumDevice::PeristalticPump2,
-                                mineral_injection,
-                                balling_channels,
-                                &mut sql_interface_balling,
-                            );
-                            *mutex_data = mutex_data.saturating_add(1);
-                        }
-                        if quit_command_received {
-                            break; // Quit command received during dosing
-                        }
-                        self.countdown_dosing_pump2 = self.config.dosing_interval_pump2;
-                    }
-                } else if self.countdown_dosing_pump2 > 0 {
-                    self.countdown_dosing_pump2 = self
-                        .countdown_dosing_pump2
-                        .saturating_sub(self.config.schedule_check_interval);
-                }
-
-                spin_sleeper.sleep(sleep_duration_pump_switch);
-
-                //*** Peristaltic pump 3 ***
-                if self.countdown_dosing_pump3 == 0 && self.config.pump3_active {
-                    if schedule_check_result && !dosing_inhibited {
-                        // inner scope to limit the lifetime of unlocked mutex
-                        {
-                            let mut mutex_data = mutex_device_scheduler_balling.lock().unwrap();
-                            quit_command_received = self.execute_dosing(
-                                3,
-                                AquariumDevice::PeristalticPump3,
-                                mineral_injection,
-                                balling_channels,
-                                &mut sql_interface_balling,
-                            );
-                            *mutex_data = mutex_data.saturating_add(1);
-                        }
-                        if quit_command_received {
-                            break; // Quit command received during dosing
-                        }
-                        self.countdown_dosing_pump3 = self.config.dosing_interval_pump3;
-                    }
-                } else if self.countdown_dosing_pump3 > 0 {
-                    self.countdown_dosing_pump3 = self
-                        .countdown_dosing_pump3
-                        .saturating_sub(self.config.schedule_check_interval);
-                }
-
-                spin_sleeper.sleep(sleep_duration_pump_switch);
-
-                //*** Peristaltic pump 4 ***
-                if self.countdown_dosing_pump4 == 0 && self.config.pump4_active {
-                    if schedule_check_result && !dosing_inhibited {
-                        // inner scope to limit the lifetime of unlocked mutex
-                        {
-                            let mut mutex_data = mutex_device_scheduler_balling.lock().unwrap();
-                            quit_command_received = self.execute_dosing(
-                                4,
-                                AquariumDevice::PeristalticPump4,
-                                mineral_injection,
-                                balling_channels,
-                                &mut sql_interface_balling,
-                            );
-                            *mutex_data = mutex_data.saturating_add(1);
-                        }
-                        if quit_command_received {
-                            break; // Quit command received during dosing
-                        }
-                        self.countdown_dosing_pump4 = self.config.dosing_interval_pump4;
-                    }
-                } else if self.countdown_dosing_pump4 > 0 {
-                    self.countdown_dosing_pump4 = self
-                        .countdown_dosing_pump4
-                        .saturating_sub(self.config.schedule_check_interval);
                 }
             }
 
+            // communication with other threads has to happen more frequently
             (
                 quit_command_received,
                 start_command_received,
@@ -912,10 +908,10 @@ pub mod tests {
         .unwrap();
 
         // check if the countdown calculation was correct
-        assert_eq!(balling.countdown_dosing_pump1, 0);
-        assert_eq!(balling.countdown_dosing_pump2, 0);
-        assert_eq!(balling.countdown_dosing_pump3, 0);
-        assert_eq!(balling.countdown_dosing_pump4, 0);
+        assert_eq!(balling.durations_until_next_dosing[0].as_secs(), 0);
+        assert_eq!(balling.durations_until_next_dosing[1].as_secs(), 0);
+        assert_eq!(balling.durations_until_next_dosing[2].as_secs(), 0);
+        assert_eq!(balling.durations_until_next_dosing[3].as_secs(), 0);
     }
 
     // Helper function to prepare for test cases which require a filled dosing log.
@@ -1014,10 +1010,10 @@ pub mod tests {
 
         // check if the countdown calculation was correct:
         // the countdown depends on the pump-specific dosing interval and the timing of the last dosing event.
-        assert_eq!(balling.countdown_dosing_pump1, 100);
-        assert_eq!(balling.countdown_dosing_pump2, 0);
-        assert_eq!(balling.countdown_dosing_pump3, 0);
-        assert_eq!(balling.countdown_dosing_pump4, 0);
+        assert_eq!(balling.durations_until_next_dosing[0].as_secs(), 100);
+        assert_eq!(balling.durations_until_next_dosing[1].as_secs(), 0);
+        assert_eq!(balling.durations_until_next_dosing[2].as_secs(), 0);
+        assert_eq!(balling.durations_until_next_dosing[3].as_secs(), 0);
 
         // dosing log has four entries
         let test_result = SqlInterfaceBalling::new(sql_interface.get_connection().unwrap(), 0, 1);
@@ -1115,10 +1111,10 @@ pub mod tests {
         schedule_allows: bool,
         execution_count_reference: i32,
         duration_millis: u64,
-        pump1_engagement_durations_reference: usize,
-        pump2_engagement_durations_reference: usize,
-        pump3_engagement_durations_reference: usize,
-        pump4_engagement_durations_reference: usize,
+        pump1_engagement_count_reference: usize,
+        pump2_engagement_count_reference: usize,
+        pump3_engagement_count_reference: usize,
+        pump4_engagement_count_reference: usize,
         schedule_check_interval: u32,
         dosing_intervals: Option<(u32, u32, u32, u32)>,
     ) {
@@ -1126,10 +1122,10 @@ pub mod tests {
         let spin_sleeper_test_environment = SpinSleeper::default();
         let mut config: ConfigData = read_balling_config_with_database(test_db_number);
 
-        config.balling.pump1_active = pump1_engagement_durations_reference > 0;
-        config.balling.pump2_active = pump2_engagement_durations_reference > 0;
-        config.balling.pump3_active = pump3_engagement_durations_reference > 0;
-        config.balling.pump4_active = pump4_engagement_durations_reference > 0;
+        config.balling.pump1_active = pump1_engagement_count_reference > 0;
+        config.balling.pump2_active = pump2_engagement_count_reference > 0;
+        config.balling.pump3_active = pump3_engagement_count_reference > 0;
+        config.balling.pump4_active = pump4_engagement_count_reference > 0;
         config.balling.schedule_check_interval = schedule_check_interval;
 
         match dosing_intervals {
@@ -1166,10 +1162,10 @@ pub mod tests {
         insert_pump_configurations(
             &mut sql_interface,
             &mut sql_interface_balling,
-            pump1_engagement_durations_reference > 0,
-            pump2_engagement_durations_reference > 0,
-            pump3_engagement_durations_reference > 0,
-            pump4_engagement_durations_reference > 0,
+            pump1_engagement_count_reference > 0,
+            pump2_engagement_count_reference > 0,
+            pump3_engagement_count_reference > 0,
+            pump4_engagement_count_reference > 0,
         );
         insert_past_dosing_events(&mut sql_interface, &mut sql_interface_balling);
 
@@ -1244,19 +1240,19 @@ pub mod tests {
 
                 assert_eq!(
                     mock_mineral_injection.pump1_engagement_durations.len(),
-                    pump1_engagement_durations_reference
+                    pump1_engagement_count_reference
                 );
                 assert_eq!(
                     mock_mineral_injection.pump2_engagement_durations.len(),
-                    pump2_engagement_durations_reference
+                    pump2_engagement_count_reference
                 );
                 assert_eq!(
                     mock_mineral_injection.pump3_engagement_durations.len(),
-                    pump3_engagement_durations_reference
+                    pump3_engagement_count_reference
                 );
                 assert_eq!(
                     mock_mineral_injection.pump4_engagement_durations.len(),
-                    pump4_engagement_durations_reference
+                    pump4_engagement_count_reference
                 );
             });
         });
@@ -1310,16 +1306,16 @@ pub mod tests {
     // Test case uses test database #05.
     pub fn test_balling_dosing_schedule_allows_multiple_dosings() {
         test_balling_dosing(
-            5,                  // index for determining test database
-            true,               // schedule allows
-            14,                 // execution count
-            34000,              // maximum time in milliseconds for test execution
-            5,                  // number of dosing events for pump #1
-            4,                  // number of dosing events for pump #2
-            3,                  // number of dosing events for pump #3
-            2,                  // number of dosing events for pump #4
-            1,                  // schedule check interval
-            Some((3, 5, 7, 9)), // dosing intervals
+            5,                       // index for determining test database
+            true,                    // schedule allows
+            28,              // execution count
+            34000,                    // maximum time in milliseconds for test execution
+            12,      // number of dosing events for pump #1
+            7,       // number of dosing events for pump #2
+            5,       // number of dosing events for pump #3
+            4,       // number of dosing events for pump #4
+            1,                 // schedule check interval
+            Some((3, 5, 7, 9)),                    // dosing intervals
         );
     }
 
@@ -1640,7 +1636,7 @@ pub mod tests {
                     .lock()
                     .unwrap();
                 // check the amount of actuation (after start request)
-                assert_eq!(actuation_count_2, 2);
+                assert_eq!(actuation_count_2, 3);
 
                 // requesting Balling dosing control to quit
                 let _ = channels
@@ -1652,7 +1648,7 @@ pub mod tests {
                     .lock()
                     .unwrap();
                 // check the amount of actuation (after Quit command)
-                assert_eq!(actuation_count_3, 2);
+                assert_eq!(actuation_count_3, 3);
                 let _ = channels
                     .signal_handler
                     .send_to_balling(InternalCommand::Terminate);
@@ -1670,7 +1666,7 @@ pub mod tests {
                 );
                 println!("MockMineralInjection:\n{}", mock_mineral_injection);
 
-                assert_eq!(mock_mineral_injection.pump1_engagement_durations.len(), 2);
+                assert_eq!(mock_mineral_injection.pump1_engagement_durations.len(), 3);
                 assert_eq!(mock_mineral_injection.pump2_engagement_durations.len(), 0);
                 assert_eq!(mock_mineral_injection.pump3_engagement_durations.len(), 0);
                 assert_eq!(mock_mineral_injection.pump4_engagement_durations.len(), 0);

@@ -38,7 +38,7 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 //!   receive messages. This separates the core control logic from the communication
 //!   infrastructure.
 //!
-//! - **Testability**: The struct can be easily constructed with mock channels during
+//! - **Testability**: The struct's channels can be used by mock implementation during
 //!   unit testing, allowing for isolated testing of the `Feed` thread's logic without
 //!   needing to run the entire application.
 

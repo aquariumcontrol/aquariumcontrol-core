@@ -46,7 +46,8 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 #[cfg(test)]
 use log::error;
 
-use chrono::*;
+use std::time::Duration;
+use chrono::NaiveDateTime;
 use mysql::prelude::*;
 use mysql::*;
 
@@ -187,7 +188,7 @@ impl SqlInterfaceBalling {
         Ok(SqlInterfaceBalling { conn })
     }
 
-    // Retrieves the timestamp of the last Balling dosing event for a specific pump.
+    /// Retrieves the timestamp of the last Balling dosing event for a specific pump.
     ///
     /// This function queries the database for the most recent dosing timestamp associated
     /// with the given `pump_id`.
@@ -227,24 +228,47 @@ impl SqlInterfaceBalling {
     ///
     /// # Returns
     /// A `Result` containing an `Option<i64>`:
-    /// - `Ok(Some(i64))`: The number of seconds that have passed since the last dosing event.
+    /// - `Ok(Some(Duration::new))`: The duration that has passed since the last dosing event.
     /// - `Ok(None)`: If no previous dosing event is recorded for this pump.
     ///
     /// # Errors
     /// This function will return an error if it fails to retrieve either the current
     /// timestamp or the last dosing timestamp from the database. This could be due to
-    /// a connection loss or other database-side issues.
+    /// a connection loss or other database-side issues. It also will return an error if the
+    /// database contains any entries that are in the future.
     pub fn get_duration_since_last_balling_dosing(
         &mut self,
         pump_id: i64,
-    ) -> Result<Option<i64>, SqlInterfaceError> {
+    ) -> Result<Option<Duration>, SqlInterfaceError> {
         let current_datetime = SqlInterface::get_current_timestamp(&mut self.conn)?;
         let last_dosing_datetime_opt = self.get_last_balling_dosing_timestamp(pump_id)?;
 
-        let duration_opt = last_dosing_datetime_opt
-            .map(|last_dosing_datetime| (current_datetime - last_dosing_datetime).num_seconds());
+        match last_dosing_datetime_opt {
+            Some(last_dosing_datetime) => {
+                if last_dosing_datetime > current_datetime {
+                    Err(SqlInterfaceError::BallingDosingLogEntryInFuture(
+                        module_path!().to_string(),
+                        pump_id,
+                        last_dosing_datetime)
+                    )
+                }
+                else {
+                    let duration = (current_datetime - last_dosing_datetime).to_std()
+                        .map_err(|e|
+                            SqlInterfaceError::BallingDosingTimestampConversionFailure {
+                                location: module_path!().to_string(),
+                                pump_id,
+                                current_datetime,
+                                last_dosing_datetime,
+                                source: e
+                            }
+                    )?;
 
-        Ok(duration_opt)
+                    Ok(Some(duration))
+                }
+            },
+            None => Ok(None)
+        }
     }
 
     /// Inserts a new Balling dosing event record into the SQL database.
@@ -416,6 +440,7 @@ pub mod tests {
     use mysql::{params, prelude::Queryable};
     use spin_sleep::SpinSleeper;
     use std::time::Duration;
+    use all_asserts::assert_le;
 
     pub struct SqlBallingEvent {
         timestamp: String,
@@ -626,14 +651,13 @@ pub mod tests {
             match sql_interface_balling.get_duration_since_last_balling_dosing(1) {
                 Ok(c) => c,
                 Err(e) => panic!("Could not calculate duration since last Balling dosing: {e:?}"),
-            };
+            }.unwrap();
         let reference_duration_since_last_balling_dosing =
             SqlInterface::get_duration_from_naive_timestamp_to_local_now(balling_timestamp)
                 .unwrap();
-        assert_eq!(
-            duration_since_last_balling_dosing,
-            Some(reference_duration_since_last_balling_dosing)
-        );
+        let duration_delta_seconds = duration_since_last_balling_dosing.as_secs().abs_diff(
+            reference_duration_since_last_balling_dosing.num_seconds() as u64);
+        assert_le!(duration_delta_seconds, 1);
         println!("* checking duration since last Balling dosing succeeded.");
         // *****************************************************************************************
     }

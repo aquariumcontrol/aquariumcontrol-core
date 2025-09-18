@@ -441,7 +441,7 @@ pub mod tests {
         let mut sql_interface: SqlInterface = SqlInterface::new(config.sql_interface)
             .expect("Initialization of SQL interface for test failed.");
 
-        // --- Test Case 1: Happy Path (row count within limit) ---
+        // --- Test Case 1: Happy Path (the row count is within limit) ---
         println!("* Testing new() with valid row count (Happy Path)...");
         SqlInterface::truncate_table(&mut sql_interface, SQL_TABLE_REFILL.to_string())
             .expect("Test setup failed: Could not truncate table.");
@@ -492,7 +492,8 @@ pub mod tests {
         // --- Test Case 3: Deactivated check (limit is 0) ---
         println!("* Testing new() with deactivated row limit check (limit = 0)...");
         // We reuse the state from the previous test (2 rows in the table)
-        let result = SqlInterfaceRefill::new(sql_interface.get_connection().unwrap(), 0); // Set limit to 0
+        // Set the limit to 0
+        let result = SqlInterfaceRefill::new(sql_interface.get_connection().unwrap(), 0); 
         assert!(
             result.is_ok(),
             "Expected new() to succeed with deactivated check, but it failed: {:?}",
@@ -503,7 +504,8 @@ pub mod tests {
         // --- Test Case 4: Edge case (row count equals limit) ---
         println!("* Testing new() with row count equal to the limit...");
         // We reuse the state from the previous test (2 rows in the table)
-        let result = SqlInterfaceRefill::new(sql_interface.get_connection().unwrap(), 2); // Set limit to 2
+        // Set the limit to 2
+        let result = SqlInterfaceRefill::new(sql_interface.get_connection().unwrap(), 2); 
         assert!(
             result.is_ok(),
             "Expected new() to succeed when row count equals limit, but it failed: {:?}",
@@ -569,7 +571,7 @@ pub mod tests {
         };
         let reference_duration_since_last_refill: u64 =
             SqlInterface::get_duration_from_naive_timestamp_to_local_now(refill_timestamp).unwrap()
-                as u64;
+                .num_seconds() as u64;
         assert_eq!(
             duration_since_last_refill,
             reference_duration_since_last_refill

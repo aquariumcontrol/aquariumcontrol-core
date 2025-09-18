@@ -39,9 +39,9 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 //!   channel. It just needs this struct, which it can use to dispatch commands.
 //!   This separates the dispatch logic from the communication infrastructure.
 //!
-//! - **Testability**: The struct can be easily constructed with mock channels during
-//!   unit testing, allowing for isolated testing of the dispatch logic without needing
-//!   to run the entire application.
+//! - **Testability**: The struct's channels can be used by mock implementation during
+//!   unit testing, allowing for isolated testing of the `Feed` thread's logic without
+//!   needing to run the entire application.
 
 #[cfg(any(test, target_os = "linux"))]
 use crate::launch::channels::AquaReceiver;

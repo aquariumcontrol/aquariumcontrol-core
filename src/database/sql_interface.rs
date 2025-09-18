@@ -944,12 +944,12 @@ impl SqlInterface {
     // * `timestamp_naive`: The past timestamp from which the duration will be measured.
     //
     // Returns:
-    // `Some(i64)` representing the duration in seconds if the conversion and calculation
+    // `Some(Duration)` representing the duration in seconds if the conversion and calculation
     // are successful. Returns `None` if the `timestamp_naive` cannot be unambiguously
     // converted to a local `DateTime`.
     pub fn get_duration_from_naive_timestamp_to_local_now(
         timestamp_naive: NaiveDateTime,
-    ) -> Option<i64> {
+    ) -> Option<Duration> {
         use chrono::LocalResult::{Ambiguous, None, Single};
 
         let reference_current_timestamp = Local::now();
@@ -962,11 +962,7 @@ impl SqlInterface {
                 return Option::None;
             }
         };
-        Some(
-            reference_current_timestamp
-                .signed_duration_since(timestamp_dt)
-                .num_seconds(),
-        )
+        Some(reference_current_timestamp.signed_duration_since(timestamp_dt))
     }
 }
 

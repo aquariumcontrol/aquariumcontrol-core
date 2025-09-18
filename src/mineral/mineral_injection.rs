@@ -7,6 +7,45 @@ The above copyright notice and this permission notice shall be included in all c
 THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
+//! Implements the physical actuation of a single mineral dosing pump.
+//!
+//! This module provides the `MineralInjectionTrait` and its concrete implementation,
+//! `MineralInjection`. Its sole responsibility is to translate a command to dose a
+//! specific mineral into the physical actions of switching a peristaltic pump on and
+//! off for a precise duration. It acts as the final link between the logical `Balling`
+//! controller and the `RelayManager` that controls the hardware.
+//!
+//! ## Key Components
+//!
+//! - **`MineralInjectionTrait`**: An abstraction for the mineral injection process.
+//!   This is a critical design element that decouples the `Balling` controller from the
+//!   concrete implementation, enabling the use of mock injectors for unit testing.
+//!
+//! - **`MineralInjection` Struct**: The primary, stateless implementation of the trait.
+//!
+//! - **`inject_mineral()` Method**: The main entry point. It orchestrates the sequence of:
+//!   1. Sending a `SwitchOn` command to the `RelayManager`.
+//!   2. Entering a timed loop that keeps the pump running.
+//!   3. Continuously checking for a `Quit` command from the `SignalHandler`.
+//!   4. Sending a `SwitchOff` command upon completion or interruption.
+//!
+//! ## Design and Architecture
+//!
+//! The module is designed for safe, robust, and interruptible operation.
+//!
+//! - **Interruptible Operation**: The waiting period is not a simple `sleep` call. It's
+//!   an active `loop` using a `SpinSleeper` that frequently checks for external `Quit`
+//!   commands. This ensures that a dosing operation can be aborted almost instantly,
+//!   which is a crucial safety and responsiveness feature.
+//!
+//! - **Guaranteed Cleanup**: The `SwitchOff` command is always sent to the `RelayManager`
+//!   at the end of the function, regardless of whether the dosing completed normally or
+//!   was interrupted. This prevents a pump from being left in the "on" state indefinitely.
+//!
+//! - **Trait-based Decoupling**: By depending on the `MineralInjectionTrait`, the main
+//!   `Balling` module can be tested in isolation without needing real hardware or a
+//!   running `RelayManager` thread. The tests in this module use a mock version of `RelayManager`.
+
 use crate::mineral::balling_channels::BallingChannels;
 use crate::utilities::channel_content::{AquariumDevice, InternalCommand};
 use crate::utilities::proc_ext_req::ProcessExternalRequestTrait;
@@ -58,6 +97,30 @@ impl MineralInjection {
     pub fn new() -> MineralInjection {
         MineralInjection
     }
+
+    /// Sends a command to the relay manager and handles the response.
+    /// Logs an error if either the send or receive operation fails.
+    fn send_and_confirm(
+        &self,
+        balling_channels: &mut BallingChannels,
+        command: InternalCommand,
+        action_description: &str,
+    ) {
+        if let Err(e) = balling_channels.send_to_relay_manager(command) {
+            error!(
+                target: module_path!(),
+                "Channel communication to relay manager when {} failed ({:?})", action_description, e
+            );
+            return; // Don't wait for a response if the send-operation failed
+        }
+
+        if let Err(e) = balling_channels.receive_from_relay_manager() {
+            error!(
+                target: module_path!(),
+                "Receiving answer from relay manager when {} failed ({:?})", action_description, e
+            );
+        }
+    }
 }
 
 impl MineralInjectionTrait for MineralInjection {
@@ -90,28 +153,12 @@ impl MineralInjectionTrait for MineralInjection {
         let sleep_duration = Duration::from_millis(sleep_interval_millis as u64);
         let mut quit_command_received: bool;
 
-        match balling_channels
-            .send_to_relay_manager(InternalCommand::SwitchOn(mineral_pump.clone()))
-        {
-            Ok(_) => {
-                // now listen for the response
-                match balling_channels.receive_from_relay_manager() {
-                    Ok(_) => {}
-                    Err(e) => {
-                        error!(
-                            target: module_path!(),
-                            "receiving answer from relay manager when switching on dosing pump failed ({e:?})"
-                        );
-                    }
-                };
-            }
-            Err(e) => {
-                error!(
-                    target: module_path!(),
-                    "channel communication to relay manager when switching on dosing pump failed ({e:?})"
-                );
-            }
-        }
+        // --- Switch On ---
+        self.send_and_confirm(
+            balling_channels,
+            InternalCommand::SwitchOn(mineral_pump.clone()),
+            "switching on dosing pump",
+        );
 
         let instant_start_of_injection = Instant::now();
         let mut dosing_counter: u32 = 0;
@@ -148,26 +195,12 @@ impl MineralInjectionTrait for MineralInjection {
             }
         }
 
-        match balling_channels.send_to_relay_manager(InternalCommand::SwitchOff(mineral_pump)) {
-            Ok(_) => {
-                // now listen for the response
-                match balling_channels.receive_from_relay_manager() {
-                    Ok(_) => {}
-                    Err(e) => {
-                        error!(
-                            target: module_path!(),
-                            "receiving answer from relay manager when switching off dosing pump failed ({e:?})"
-                        );
-                    }
-                };
-            }
-            Err(e) => {
-                error!(
-                    target: module_path!(),
-                    "channel communication to relay manager when switching off dosing pump failed ({e:?})"
-                );
-            }
-        }
+        // --- Switch Off (Guaranteed Cleanup) ---
+        self.send_and_confirm(
+            balling_channels,
+            InternalCommand::SwitchOff(mineral_pump),
+            "switching off dosing pump",
+        );
 
         (quit_command_received, dosing_counter)
     }
