@@ -6,6 +6,16 @@ The above copyright notice and this permission notice shall be included in all c
 
 THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
+
+//! Defines the configuration structure for the central relay management system.
+//!
+//! This module contains the `RelayManagerConfig` struct, which is used with `serde`
+//! to deserialize the `[relay_manager]` section from the application's TOML configuration
+//! file. It holds all the high-level parameters that control the behavior of the
+//! `RelayManager` thread, most importantly, which hardware actuation backend to use
+//! and how to handle communication failures.
+//!
+
 use serde_derive::Deserialize;
 use std::fmt;
 
