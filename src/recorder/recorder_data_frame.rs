@@ -116,7 +116,7 @@ impl fmt::Display for RecorderDataFrame {
         writeln!(f, "ambient_temperature: {}", format_opt(self.ambient_temperature))?;
         writeln!(f, "ambient_humidity: {}", format_opt(self.ambient_humidity))?;
         writeln!(f, "heater_status: {}", format_bool_opt(self.heater_status, "on", "off"))?;
-        write!(f, "**************************************\n")
+        write!(f, "**************************************")
     }
 }
 

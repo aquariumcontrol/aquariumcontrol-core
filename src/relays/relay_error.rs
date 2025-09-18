@@ -87,4 +87,10 @@ pub enum RelayError {
         #[source]
         source: rppal::gpio::Error,
     },
+
+    #[error("[{0}] Simulator not initialized.")]
+    SimulatorNotInitialized(String),
+
+    #[error("[{0}] Simulator send failed.")]
+    SimulatorSendFailed(String),
 }

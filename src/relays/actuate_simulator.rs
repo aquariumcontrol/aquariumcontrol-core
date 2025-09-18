@@ -7,7 +7,45 @@ The above copyright notice and this permission notice shall be included in all c
 THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
-use log::warn;
+//! Provides a simulated hardware actuation layer for testing purposes.
+//!
+//! This module defines the `ActuateSimulator` struct, which is a test-only, "mock"
+//! implementation of the `RelayActuationTrait`. Its purpose is to stand in for a real
+//! hardware actuator (like `ActuateControllino` or `ActuateGpio`) during system tests,
+//! allowing the application (except for the hardware-related parts) to be tested without needing any
+//! physical hardware connected.
+//!
+//! ## Key Components
+//!
+//! - **`ActuateSimulator`**: The main struct that implements the `RelayActuationTrait`.
+//!   Instead of communicating with a serial port or GPIO pins, it sends the final,
+//!   low-level relay commands over an `mpsc` channel.
+//!
+//! - **`actuate()` Method**: The core of the simulation. It performs two key steps:
+//!   1.  It uses the exact same `get_relay_command` logic from the real `actuate_controllino`
+//!       module to translate a high-level `InternalCommand` (e.g., `SwitchOn(Heater)`)
+//!       into a low-level one (e.g., `SetRelay(6)`).
+//!   2.  It sends this low-level command over a channel, where a test harness or a
+//!       TCP listener can receive it to verify that the correct command was generated.
+//!
+//! ## Design and Architecture
+//!
+//! This module is a cornerstone of the application's testability.
+//!
+//! - **High-Fidelity Mocking**: By reusing the `get_relay_command` function, this simulator
+//!   ensures that the commands it generates are identical to what the real Controllino
+//!   hardware would receive. This provides a high degree of confidence that the system's
+//!   logic is correct.
+//!
+//! - **Enabling Hardware-Free Testing**: It allows for comprehensive integration and system
+//!   tests to run in any environment (e.g., a developer's laptop, a CI/CD pipeline)
+//!   without needing access to the specialized Controllino or Raspberry Pi hardware.
+//!
+//! - **Stateless Operation**: The simulator does not manage a persistent connection, so
+//!   methods like `heartbeat()` and `flush_buffer()` are implemented as no-ops, as
+//!   they are not relevant in this context.
+
+use log::{error, warn};
 
 use crate::relays::actuate_controllino::get_relay_command;
 use crate::relays::actuate_controllino_config::ActuateControllinoConfig;
@@ -52,31 +90,40 @@ impl<'a> RelayActuationTrait for ActuateSimulator<'a> {
     /// - `RelayError::SimulatorSendFailed`: If sending the command over the `mpsc`
     ///   channel fails, which typically means the receiver has been dropped.
     fn actuate(&mut self, internal_command: &InternalCommand) -> Result<(), RelayError> {
+        if !matches!(
+            internal_command,
+            InternalCommand::SwitchOn(_) | InternalCommand::SwitchOff(_) | InternalCommand::Pulse(_, _)
+        ) {
+            warn!(
+                target: module_path!(),
+                "ignoring irrelevant internal command {internal_command}."
+            );
+            return Err(RelayError::IrrelevantCommand(
+                module_path!().to_string(),
+                internal_command.clone(),
+            ));
+        }
+        
         let tx_actuate_simulator_to_tcp = self
             .actuate_simulator_channels
             .tx_actuate_simulator_to_tcp_opt
             .as_mut()
-            .unwrap();
+            .ok_or_else(|| {
+                RelayError::SimulatorNotInitialized(module_path!().to_string())
+            })?;
         match internal_command {
             InternalCommand::SwitchOn(ref c) | InternalCommand::SwitchOff(ref c) => {
-                let relay_command = match get_relay_command(
+                let relay_command = get_relay_command(
                     internal_command,
                     c.clone(),
                     &self.config,
-                ) {
-                    Ok(c) => c,
-                    Err(e) => {
-                        panic!("Controllino: Error in preparation of communication to simulator: {e:?}");
-                    }
-                };
-                match tx_actuate_simulator_to_tcp.send(relay_command.clone()) {
-                    Ok(()) => Ok(()),
-                    Err(e) => {
-                        panic!(
-                            "Controllino: error when sending relay command {relay_command} to TCP thread: {e:?}"
-                        );
-                    }
-                }
+                )?;
+                tx_actuate_simulator_to_tcp.send(relay_command.clone()).map_err(|e| {
+                    error!(
+                        "Controllino: error when sending relay command {relay_command} to TCP thread: {e:?}"
+                    );
+                    RelayError::SimulatorSendFailed(module_path!().to_string())
+                })
             }
             _ => {
                 warn!(
