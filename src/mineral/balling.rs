@@ -65,7 +65,6 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 use chrono::Local;
 use log::{error, info};
 use std::fmt;
-
 #[cfg(feature = "debug_balling")]
 use log::debug;
 
@@ -662,6 +661,7 @@ impl Balling {
                         self.countdown_dosing_pump4,
                     );
                 }
+                #[allow(clippy::needless_range_loop)]
                 for pump_array_index in 0..=3 {
                     if self.pump_is_active[pump_array_index] &&
                         target_instants_dosing[pump_array_index] <= Instant::now() &&
