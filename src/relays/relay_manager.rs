@@ -215,7 +215,7 @@ impl RelayManager {
     ) -> Result<(), RelayError> {
         let mut attempts = 0;
         let max_attempts = 1 + self.config.actuation_retries; // 1 initial attempt + `actuation_retries` retries
-        let mut error_to_be_reported = RelayError::InitialValue(module_path!().to_string());
+        let mut error_to_be_reported_opt = None;
 
         while attempts < max_attempts {
             match actuator.actuate(command) {
@@ -237,14 +237,14 @@ impl RelayManager {
                     if matches!(e, RelayError::IncorrectChecksum(_)) {
                         if let Err(f) = actuator.flush_buffer() {
                             // if we cannot flush the buffer, mission abort
-                            error_to_be_reported = f;
+                            error_to_be_reported_opt = Some(f);
                             break;
                         }
                     }
 
                     // Log error only after the final attempt
                     if attempts == max_attempts - 1 {
-                        error_to_be_reported = e;
+                        error_to_be_reported_opt = Some(e);
                         break;
                     } else {
                         // Wait a little before retrying
@@ -254,13 +254,18 @@ impl RelayManager {
                 }
             }
         }
-        Err(RelayError::ActuationFailed {
-            location: module_path!().to_string(),
-            actuation_name: actuation_name.to_string(),
-            last_attempt_number: attempts + 1,
-            max_attempt_allowed: max_attempts,
-            source: Box::new(error_to_be_reported),
-        })
+        if let Some(error_to_be_reported) = error_to_be_reported_opt {
+            Err(RelayError::ActuationFailed {
+                location: module_path!().to_string(),
+                actuation_name: actuation_name.to_string(),
+                last_attempt_number: attempts + 1,
+                max_attempt_allowed: max_attempts,
+                source: Box::new(error_to_be_reported),
+            })
+        }
+        else {
+            Ok(())
+        }
     }
 
     /// Executes the main control loop for the Relay Manager.

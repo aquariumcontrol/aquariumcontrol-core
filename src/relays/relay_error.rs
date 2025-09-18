@@ -6,6 +6,39 @@ The above copyright notice and this permission notice shall be included in all c
 
 THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
+
+//! Defines the centralized error type for the entire relay actuation subsystem.
+//!
+//! This module contains the `RelayError` enum, which consolidates all possible errors
+//! that can occur within the relay management and hardware actuation layers. By using
+//! the `thiserror` crate, it provides a rich, descriptive, and easy-to-use error
+//! type that supports source-chaining for detailed diagnostics.
+//!
+//! ## Design and Architecture
+//!
+//! The `RelayError` enum is designed for robustness and clear, actionable error reporting.
+//!
+//! - **Centralization**: Instead of each hardware module (`actuate_controllino`,
+//!   `actuate_gpio`, etc.) defining its own error types, they all use this single,
+//!   comprehensive enum. This simplifies the error handling logic in the `RelayManager`
+//!   and other upstream components.
+//!
+//! - **Descriptive Messages**: Each variant uses the `#[error("...")]` attribute from
+//!   `thiserror` to generate a human-readable error message. These messages often
+//!   include the location (`module_path!()`) and other contextual information
+//!   (e.g., the command that failed), which is invaluable for debugging.
+//!
+//! - **Source Chaining**: Several variants (like `ActuationFailed` and `GpioGetPinFailure`)
+//!   use the `#[source]` attribute. This captures the underlying, lower-level error
+//!   (e.g., an `io::Error` or `rppal::gpio::Error`), allowing for a full "error chain"
+//!   to be logged. This helps pinpoint the root cause of a failure.
+//!
+//! - **Conditional Compilation**: The `GpioGetPinFailure` variant is conditionally
+//!   compiled using `#[cfg(...)]`. This ensures that GPIO-specific errors are only
+//!   part of the application when it's being built for the intended hardware target
+//!   (Linux with the `target_hw` feature), preventing compilation errors on other
+//!   platforms.
+
 use crate::utilities::channel_content::{AquariumDevice, InternalCommand};
 use thiserror::Error;
 
@@ -49,10 +82,6 @@ pub enum RelayError {
         #[source]
         source: Box<RelayError>,
     },
-
-    /// Used to initialize variable. Value is overwritten with real error.
-    #[error("[{0}] Initial value")]
-    InitialValue(String),
 
     /// Serial port has not been initialized. This is a configuration error.
     #[error("[{0}] Serial port has not been initialized. This is a configuration error.")]
