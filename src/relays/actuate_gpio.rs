@@ -7,6 +7,49 @@ The above copyright notice and this permission notice shall be included in all c
 THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
+//! Implements hardware actuation logic using direct GPIO control on a Linux system.
+//!
+//! This entire module is conditionally compiled and is only active when the application
+//! is built for a `target_os = "linux"` with the `target_hw` feature enabled.
+//!
+//! It provides the `ActuateGpio` struct, a concrete implementation of the
+//! `RelayActuationTrait`. Its purpose is to serve as an alternative to the
+//! `ActuateControllino` backend, allowing the `RelayManager` to control relays
+//! connected directly to the GPIO pins of a single-board computer like a Raspberry Pi.
+//!
+//! ## Key Components
+//!
+//! - **`ActuateGpioConfig`**: A simple configuration struct that holds the mapping
+//!   of each logical `AquariumDevice` to a physical GPIO pin.
+//!
+//! - **`ActuateGpio`**: The main struct that holds the initialized `rppal::gpio::OutputPin`
+//!   for each device. It is responsible for translating high-level commands into
+//!   low-level GPIO state changes.
+//!
+//! - **`actuate()` Method**: The core of the implementation. It takes a `SwitchOn` or
+//!   `SwitchOff` command, determines the correct GPIO pin to use, and sets its
+//!   state to `high` or `low` based on the device's specific logic (e.g., whether
+//!   it uses an inverted "active-low" relay).
+//!
+//! ## Design and Architecture
+//!
+//! This module is designed as a pluggable hardware abstraction layer.
+//!
+//! - **Hardware Abstraction**: By implementing the `RelayActuationTrait`, this module
+//!   allows the `RelayManager` to remain completely agnostic about the underlying
+//!   hardware. The `RelayManager` sends the same `InternalCommand`, whether it's
+//!   being handled by a Controllino over serial or by direct GPIO pins.
+//!
+//! - **Startup Validation**: The `ActuateGpio::new()` constructor attempts to acquire
+//!   and configure every required GPIO pin at application startup. If any pin is
+//!   invalid, already in use, or inaccessible, due to permissions, the constructor
+//!   will fail with a `RelayError`. This "fail-fast" approach prevents the
+//!   application from running in a state where it cannot control its hardware.
+//!
+//! - **Stateless Operation**: Unlike serial communication, direct GPIO control is
+//!   stateless. As a result, the `heartbeat()` and `flush_buffer()` methods of the
+//!   trait are implemented as no-ops, and `Pulse` commands are not supported.
+
 cfg_if::cfg_if! {
     if #[cfg(all(target_os = "linux", feature = "target_hw"))] {
         use log::warn;
