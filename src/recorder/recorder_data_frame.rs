@@ -96,26 +96,76 @@ impl fmt::Display for RecorderDataFrame {
         fn format_bool_opt(val: Option<bool>, true_text: &str, false_text: &str) -> String {
             val.map_or_else(
                 || "None".to_string(),
-                |v| if v { true_text.to_string() } else { false_text.to_string() },
+                |v| {
+                    if v {
+                        true_text.to_string()
+                    } else {
+                        false_text.to_string()
+                    }
+                },
             )
         }
         writeln!(f, "\n**************************************")?;
         writeln!(f, "timestamp: {}", self.timestamp)?;
-        writeln!(f, "water_temperature: {}", format_opt(self.water_temperature))?;
-        writeln!(f, "water_temperature_filtered: {}", format_opt(self.water_temperature_filtered))?;
+        writeln!(
+            f,
+            "water_temperature: {}",
+            format_opt(self.water_temperature)
+        )?;
+        writeln!(
+            f,
+            "water_temperature_filtered: {}",
+            format_opt(self.water_temperature_filtered)
+        )?;
         writeln!(f, "ph: {}", format_opt(self.ph))?;
         writeln!(f, "ph_filtered: {}", format_opt(self.ph_filtered))?;
         writeln!(f, "conductivity: {}", format_opt(self.conductivity))?;
-        writeln!(f, "conductivity_filtered: {}", format_opt(self.conductivity_filtered))?;
-        writeln!(f, "conductivity_compensated: {}", format_opt(self.conductivity_compensated))?;
-        writeln!(f, "refill_in_progress: {}", format_bool_opt(self.refill_in_progress, "yes", "no"))?;
-        writeln!(f, "tank_level_switch_position: {}", format_bool_opt(self.tank_level_switch_position, "high", "low"))?;
-        writeln!(f, "tank_level_switch_position_stabilized: {}", format_bool_opt(self.tank_level_switch_position_stabilized, "high", "low"))?;
-        writeln!(f, "tank_level_switch_invalid: {}", format_bool_opt(self.tank_level_switch_invalid, "invalid", "valid"))?;
-        writeln!(f, "surface_ventilation_status: {}", format_bool_opt(self.surface_ventilation_status, "on", "off"))?;
-        writeln!(f, "ambient_temperature: {}", format_opt(self.ambient_temperature))?;
+        writeln!(
+            f,
+            "conductivity_filtered: {}",
+            format_opt(self.conductivity_filtered)
+        )?;
+        writeln!(
+            f,
+            "conductivity_compensated: {}",
+            format_opt(self.conductivity_compensated)
+        )?;
+        writeln!(
+            f,
+            "refill_in_progress: {}",
+            format_bool_opt(self.refill_in_progress, "yes", "no")
+        )?;
+        writeln!(
+            f,
+            "tank_level_switch_position: {}",
+            format_bool_opt(self.tank_level_switch_position, "high", "low")
+        )?;
+        writeln!(
+            f,
+            "tank_level_switch_position_stabilized: {}",
+            format_bool_opt(self.tank_level_switch_position_stabilized, "high", "low")
+        )?;
+        writeln!(
+            f,
+            "tank_level_switch_invalid: {}",
+            format_bool_opt(self.tank_level_switch_invalid, "invalid", "valid")
+        )?;
+        writeln!(
+            f,
+            "surface_ventilation_status: {}",
+            format_bool_opt(self.surface_ventilation_status, "on", "off")
+        )?;
+        writeln!(
+            f,
+            "ambient_temperature: {}",
+            format_opt(self.ambient_temperature)
+        )?;
         writeln!(f, "ambient_humidity: {}", format_opt(self.ambient_humidity))?;
-        writeln!(f, "heater_status: {}", format_bool_opt(self.heater_status, "on", "off"))?;
+        writeln!(
+            f,
+            "heater_status: {}",
+            format_bool_opt(self.heater_status, "on", "off")
+        )?;
         write!(f, "**************************************")
     }
 }

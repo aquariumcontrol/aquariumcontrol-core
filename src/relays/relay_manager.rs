@@ -315,8 +315,7 @@ impl RelayManager {
                 max_attempt_allowed: max_attempts,
                 source: Box::new(error_to_be_reported),
             })
-        }
-        else {
+        } else {
             Ok(())
         }
     }

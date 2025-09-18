@@ -92,7 +92,9 @@ impl<'a> RelayActuationTrait for ActuateSimulator<'a> {
     fn actuate(&mut self, internal_command: &InternalCommand) -> Result<(), RelayError> {
         if !matches!(
             internal_command,
-            InternalCommand::SwitchOn(_) | InternalCommand::SwitchOff(_) | InternalCommand::Pulse(_, _)
+            InternalCommand::SwitchOn(_)
+                | InternalCommand::SwitchOff(_)
+                | InternalCommand::Pulse(_, _)
         ) {
             warn!(
                 target: module_path!(),
@@ -103,21 +105,15 @@ impl<'a> RelayActuationTrait for ActuateSimulator<'a> {
                 internal_command.clone(),
             ));
         }
-        
+
         let tx_actuate_simulator_to_tcp = self
             .actuate_simulator_channels
             .tx_actuate_simulator_to_tcp_opt
             .as_mut()
-            .ok_or_else(|| {
-                RelayError::SimulatorNotInitialized(module_path!().to_string())
-            })?;
+            .ok_or_else(|| RelayError::SimulatorNotInitialized(module_path!().to_string()))?;
         match internal_command {
             InternalCommand::SwitchOn(ref c) | InternalCommand::SwitchOff(ref c) => {
-                let relay_command = get_relay_command(
-                    internal_command,
-                    c.clone(),
-                    &self.config,
-                )?;
+                let relay_command = get_relay_command(internal_command, c.clone(), &self.config)?;
                 tx_actuate_simulator_to_tcp.send(relay_command.clone()).map_err(|e| {
                     error!(
                         "Controllino: error when sending relay command {relay_command} to TCP thread: {e:?}"

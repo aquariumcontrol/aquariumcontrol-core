@@ -668,7 +668,11 @@ mod tests {
 
         // Assert
         assert!(
-            channels.heating.rx_heating_from_schedule_check.try_recv().is_err(),
+            channels
+                .heating
+                .rx_heating_from_schedule_check
+                .try_recv()
+                .is_err(),
             "Should not send a reply when no request is received"
         );
         assert!(

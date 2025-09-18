@@ -40,13 +40,10 @@ impl fmt::Display for ActuateSimulatorChannels {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         writeln!(f, "=== ActuateSimulatorChannels ===")?;
 
-        let count_str = self
-            .tx_actuate_simulator_to_tcp_opt
-            .as_ref()
-            .map_or_else(
-                || "None".to_string(), // Display "None" if the sender doesn't exist
-                |sender| sender.count.to_string(), // Display the count if it exists
-            );
+        let count_str = self.tx_actuate_simulator_to_tcp_opt.as_ref().map_or_else(
+            || "None".to_string(),             // Display "None" if the sender doesn't exist
+            |sender| sender.count.to_string(), // Display the count if it exists
+        );
 
         write!(f, "tx_actuate_simulator_to_tcp_opt: {}", count_str)
     }

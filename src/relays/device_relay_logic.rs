@@ -74,10 +74,10 @@ enum RelayLogic {
 /// Propagates errors for irrelevant or unsupported commands.
 fn get_gpio_state(command: &InternalCommand, logic: RelayLogic) -> Result<bool, RelayError> {
     match (command, logic) {
-        (InternalCommand::SwitchOn(_), RelayLogic::NormallyOpen) => Ok(true),    // ON is HIGH
+        (InternalCommand::SwitchOn(_), RelayLogic::NormallyOpen) => Ok(true), // ON is HIGH
         (InternalCommand::SwitchOn(_), RelayLogic::NormallyClosed) => Ok(false), // ON is LOW
 
-        (InternalCommand::SwitchOff(_), RelayLogic::NormallyOpen) => Ok(false),  // OFF is LOW
+        (InternalCommand::SwitchOff(_), RelayLogic::NormallyOpen) => Ok(false), // OFF is LOW
         (InternalCommand::SwitchOff(_), RelayLogic::NormallyClosed) => Ok(true), // OFF is HIGH
 
         // Error cases can be handled here as well, though the refactored
