@@ -6,6 +6,13 @@ The above copyright notice and this permission notice shall be included in all c
 
 THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
+
+//! Defines the central data structure for a single snapshot of the aquarium's state.
+//!
+//! This module contains the `RecorderDataFrame` struct, which acts as a comprehensive
+//! data container. Its primary purpose is to aggregate all sensor readings and device
+//! statuses collected during a single logging cycle by the `DataLogger` thread.
+
 use chrono::NaiveDateTime;
 use std::fmt;
 
@@ -80,117 +87,36 @@ impl fmt::Display for RecorderDataFrame {
     /// # Returns
     /// A `fmt::Result` indicating whether the formatting operation was successful.
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        let none_string = "None".to_string();
-        let water_temperature_string = match self.water_temperature {
-            Some(water_temperature) => water_temperature.to_string(),
-            None => none_string.clone(),
-        };
-        let water_temperature_filtered_string = match self.water_temperature_filtered {
-            Some(water_temperature_filtered) => water_temperature_filtered.to_string(),
-            None => none_string.clone(),
-        };
-        let ph_string = match self.ph {
-            Some(ph) => ph.to_string(),
-            None => none_string.clone(),
-        };
-        let ph_filtered_string = match self.ph_filtered {
-            Some(ph_filtered) => ph_filtered.to_string(),
-            None => none_string.clone(),
-        };
-        let conductivity_string = match self.conductivity {
-            Some(conductivity) => conductivity.to_string(),
-            None => none_string.clone(),
-        };
-        let conductivity_filtered_string = match self.conductivity_filtered {
-            Some(conductivity_filtered) => conductivity_filtered.to_string(),
-            None => none_string.clone(),
-        };
-        let conductivity_compensated_string = match self.conductivity_compensated {
-            Some(conductivity_compensated) => conductivity_compensated.to_string(),
-            None => none_string.clone(),
-        };
-        let refill_in_progress_string = match self.refill_in_progress {
-            Some(refill_in_progress) => match refill_in_progress {
-                true => "yes".to_string(),
-                false => "no".to_string(),
-            },
-            None => none_string.clone(),
-        };
-        let tank_level_switch_position_string = match self.tank_level_switch_position {
-            Some(tank_level_switch_position) => match tank_level_switch_position {
-                true => "high".to_string(),
-                false => "low".to_string(),
-            },
-            None => none_string.clone(),
-        };
-        let tank_level_switch_position_stabilized_string =
-            match self.tank_level_switch_position_stabilized {
-                Some(tank_level_switch_position_stabilized) => {
-                    match tank_level_switch_position_stabilized {
-                        true => "high".to_string(),
-                        false => "low".to_string(),
-                    }
-                }
-                None => none_string.clone(),
-            };
-        let tank_level_switch_invalid_string = match self.tank_level_switch_invalid {
-            Some(tank_level_switch_invalid) => match tank_level_switch_invalid {
-                true => "invalid".to_string(),
-                false => "valid".to_string(),
-            },
-            None => none_string.clone(),
-        };
-        let surface_ventilation_status_string = match self.surface_ventilation_status {
-            Some(surface_ventilation_status) => match surface_ventilation_status {
-                true => "on".to_string(),
-                false => "off".to_string(),
-            },
-            None => none_string.clone(),
-        };
-        let ambient_temperature_string = match self.ambient_temperature {
-            Some(ambient_temperature) => ambient_temperature.to_string(),
-            None => none_string.clone(),
-        };
-        let ambient_humidity_string = match self.ambient_humidity {
-            Some(ambient_humidity) => ambient_humidity.to_string(),
-            None => none_string.clone(),
-        };
-        let heater_status_string = match self.heater_status {
-            Some(heater_status) => match heater_status {
-                true => "on".to_string(),
-                false => "off".to_string(),
-            },
-            None => none_string.clone(),
-        };
-        write!(
-            f,
-            "\n**************************************\ntimestamp: {}\
-            \nwater_temperature: {},\nwater_temperature_filtered: {}, \
-            \nph: {},\nph_filtered: {}, \
-            \nconductivity: {},\nconductivity_filtered: {},\nconductivity_compensated: {}, \
-            \nrefill_in_progress: {}, \
-            \ntank_level_switch_position: {},\ntank_level_switch_position_stabilized: {}\ntank_level_switch_invalid: {},\
-            \nsurface_ventilation_status: {},\
-            \nambient_temperature: {},\nambient_humidity: {}, \
-            \nheater_status: {} \n
-            **************************************\n",
-            self.timestamp,
-            water_temperature_string,
-            water_temperature_filtered_string,
-            ph_string,
-            ph_filtered_string,
-            conductivity_string,
-            conductivity_filtered_string,
-            conductivity_compensated_string,
-            refill_in_progress_string,
-            tank_level_switch_position_string,
-            tank_level_switch_position_stabilized_string,
-            tank_level_switch_invalid_string,
-            surface_ventilation_status_string,
-            ambient_temperature_string,
-            ambient_humidity_string,
-            heater_status_string,
-        )
+        // Helper to format any Option<T> where T implements Display.
+        fn format_opt<T: fmt::Display>(val: Option<T>) -> String {
+            val.map_or_else(|| "None".to_string(), |v| v.to_string())
+        }
+
+        // Helper to format an Option<bool> with custom "true" and "false" text.
+        fn format_bool_opt(val: Option<bool>, true_text: &str, false_text: &str) -> String {
+            val.map_or_else(
+                || "None".to_string(),
+                |v| if v { true_text.to_string() } else { false_text.to_string() },
+            )
+        }
+        writeln!(f, "\n**************************************")?;
+        writeln!(f, "timestamp: {}", self.timestamp)?;
+        writeln!(f, "water_temperature: {}", format_opt(self.water_temperature))?;
+        writeln!(f, "water_temperature_filtered: {}", format_opt(self.water_temperature_filtered))?;
+        writeln!(f, "ph: {}", format_opt(self.ph))?;
+        writeln!(f, "ph_filtered: {}", format_opt(self.ph_filtered))?;
+        writeln!(f, "conductivity: {}", format_opt(self.conductivity))?;
+        writeln!(f, "conductivity_filtered: {}", format_opt(self.conductivity_filtered))?;
+        writeln!(f, "conductivity_compensated: {}", format_opt(self.conductivity_compensated))?;
+        writeln!(f, "refill_in_progress: {}", format_bool_opt(self.refill_in_progress, "yes", "no"))?;
+        writeln!(f, "tank_level_switch_position: {}", format_bool_opt(self.tank_level_switch_position, "high", "low"))?;
+        writeln!(f, "tank_level_switch_position_stabilized: {}", format_bool_opt(self.tank_level_switch_position_stabilized, "high", "low"))?;
+        writeln!(f, "tank_level_switch_invalid: {}", format_bool_opt(self.tank_level_switch_invalid, "invalid", "valid"))?;
+        writeln!(f, "surface_ventilation_status: {}", format_bool_opt(self.surface_ventilation_status, "on", "off"))?;
+        writeln!(f, "ambient_temperature: {}", format_opt(self.ambient_temperature))?;
+        writeln!(f, "ambient_humidity: {}", format_opt(self.ambient_humidity))?;
+        writeln!(f, "heater_status: {}", format_bool_opt(self.heater_status, "on", "off"))?;
+        write!(f, "**************************************\n")
     }
 }
 
