@@ -6,6 +6,15 @@ The above copyright notice and this permission notice shall be included in all c
 
 THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
+
+//! Defines the configuration structure for the Controllino hardware actuation layer.
+//!
+//! This module contains the `ActuateControllinoConfig` struct, which is used with `serde`
+//! to deserialize the `[controllino_relay]` section from the application's TOML
+//! configuration file. It holds all the parameters required to establish and manage
+//! communication with the Controllino hardware, from serial port settings to the
+//! critical mapping of application-level devices to their specific physical relay IDs.
+
 use serde_derive::Deserialize;
 
 #[derive(Clone, Deserialize, Debug)]
