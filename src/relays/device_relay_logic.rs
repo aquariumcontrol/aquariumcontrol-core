@@ -84,7 +84,7 @@ fn get_gpio_state(command: &InternalCommand, logic: RelayLogic) -> Result<bool, 
         // public function above already handles them.
         (InternalCommand::Pulse(d, _), _) => Err(RelayError::PulseNotAllowedForDevice(
             module_path!().to_string(),
-            *d,
+            d.clone(),
         )),
         _ => Err(RelayError::IrrelevantCommand(
             module_path!().to_string(),
