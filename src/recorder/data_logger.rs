@@ -7,6 +7,66 @@ The above copyright notice and this permission notice shall be included in all c
 THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
+//! Implements the central data collection, filtering, and logging thread.
+//!
+//! This module provides the `DataLogger` struct, which runs as a dedicated, long-running
+//! thread. Its primary responsibility is to act as the central hub for all sensor data
+//! and device states within the application. It periodically collects this data,
+//! processes it, and then dispatches it to two destinations: an SQL database for
+//! historical persistence and a set of files on a RAM disk for real-time monitoring.
+//!
+//! ## Key Components
+//!
+//! - **`DataLogger` Struct**: The core state machine for the thread. It holds the
+//!   configuration, a large number of stateful boolean "lock" flags for log
+//!   suppression, and the IIR filters for signal smoothing.
+//!
+//! - **`DataLoggerMutexes`**: A container for all the `Arc<Mutex>`-protected data
+//!   points that this thread reads from. This struct represents the "inputs" to the
+//!   data logger.
+//!
+//! - **`execute()` Method**: The main thread loop. In each cycle, it performs a
+//!   sequence of operations:
+//!   1.  **Data Acquisition**: Locks the various mutexes in `DataLoggerMutexes` to
+//!       get the latest raw sensor readings and device statuses.
+//!   2.  **Signal Filtering**: Applies IIR (Infinite Impulse Response) filters to
+//!       the raw water temperature, pH, and conductivity signals to produce
+//!       smoothed, more stable values.
+//!   3.  **Timestamping**: Fetches a reliable timestamp, either from the SQL
+//!       database or the local system clock, based on the configuration.
+//!   4.  **Data Aggregation**: Assembles all raw, filtered, and status data into a
+//!       single `RecorderDataFrame`.
+//!   5.  **Dual Output**:
+//!       - Injects the complete `RecorderDataFrame` into the SQL database via the
+//!         `DataInjectionTrait`.
+//!       - Writes individual data points to separate files on a RAM disk (if
+//!         enabled), used by the web server and mobile applications for live-data display
+//!
+//! ## Design and Architecture
+//!
+//! This module is designed for robustness, testability, and real-time visibility.
+//!
+//! - **Decoupled Data Flow**: The `DataLogger` pulls data from other threads via
+//!   shared mutexes. This decouples it from the sensor-reading threads; the
+//!   `DataLogger` doesn't need to know how the data is produced, only where to find it.
+//!
+//! - **Robust Error Handling (Log Flood Prevention)**: The extensive use of `lock_...`
+//!   flags is a deliberate design choice for a resilient, long-running service. If a
+//!   recurring problem occurs (e.g., failure to write to a file on the RAM disk),
+//!   the error is logged *once*. The lock is then engaged to suppress identical log
+//!   messages until the underlying condition is resolved. This prevents a single,
+//!   persistent issue from filling up disk space with repetitive logs.
+//!
+//! - **Testability**: The database persistence logic is abstracted behind the
+//!   `DataInjectionTrait`. This allows the `DataLogger`'s complex logic to be
+//!   unit-tested by providing a `MockDataInjection` implementation, completely
+//!   isolating the test from any database dependency.
+//!
+//! - **Dual-Destination Logging**: The separation of logging destinations serves two
+//!   distinct purposes: the SQL database provides a structured, long-term historical
+//!   record, while the individual files on the RAM disk offer a low-latency,
+//!   easy-to-parse source for live data visualization.
+
 #![allow(non_snake_case)]
 use chrono::{Local, NaiveDateTime};
 #[cfg(all(not(test), target_os = "linux"))]
@@ -911,6 +971,7 @@ impl DataLogger {
             1.0, // 1 second time step
         );
 
+        // wait for a dedicated period of time before starting the main loop
         let initial_sleep_time_start = Instant::now();
         while Instant::now()
             .duration_since(initial_sleep_time_start)
