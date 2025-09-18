@@ -6,6 +6,48 @@ The above copyright notice and this permission notice shall be included in all c
 
 THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
+
+//! Translates high-level device commands into low-level GPIO pin states.
+//!
+//! This entire module is conditionally compiled and is only active when the application
+//! is built for a `target_os = "linux"` with the `target_hw` feature enabled.
+//!
+//! Its sole purpose is to serve as a pure logic layer that abstracts away the physical
+//! characteristics of the relays being used. It determines whether a GPIO pin should be
+//! set to HIGH or LOW to achieve a desired state (ON or OFF) for a specific device.
+//!
+//! ## Key Components
+//!
+//! - **`RelayLogic` Enum**: A simple but powerful abstraction that defines the two
+//!   possible physical wiring configurations for a relay:
+//!   - `NormallyOpen` (NO): The circuit is open by default. Applying power (HIGH) closes it, turning the device ON.
+//!   - `NormallyClosed` (NC): The circuit is closed by default. Applying power (HIGH) opens it, turning the device OFF.
+//!
+//! - **`get_relay_command_gpio()`**: The public entry point of the module. It acts as a
+//!   central mapping, taking a high-level `AquariumDevice` and determining its
+//!   `RelayLogic`.
+//!
+//! - **`get_gpio_state()`**: A private helper function that contains the core state
+//!   machine. It takes a command (`SwitchOn`/`SwitchOff`) and a `RelayLogic` and
+//!   returns the final boolean state (`true` for HIGH, `false` for LOW) required for the GPIO pin.
+//!
+//! ## Design and Architecture
+//!
+//! This module uses **Separation of Concerns** principle.
+//!
+//! - **Decoupling "What" from "How"**: The `get_relay_command_gpio` function separates the
+//!   question "What device are we controlling?" from "How is that device wired?". It
+//!   first determines the `RelayLogic` for the given device, then passes that logic to
+//!   `get_gpio_state` to get the final pin state.
+//!
+//! - **Simplifying the Actuator**: By handling this translation, the module allows the
+//!   `ActuateGpio` implementation to be extremely simple. The actuator no longer needs
+//!   to know about inverted logic or relay types; it just receives a boolean and calls
+//!   `pin.set_high()` or `pin.set_low()`.
+//!
+//! - **Centralized Logic**: All physical relay logic when using GPIO for actuation is
+//!   centralized in this one file.
+
 #[cfg(all(target_os = "linux", feature = "target_hw"))]
 use crate::relays::relay_error::RelayError;
 #[cfg(all(target_os = "linux", feature = "target_hw"))]
@@ -31,18 +73,18 @@ enum RelayLogic {
 /// # Errors
 /// Propagates errors for irrelevant or unsupported commands.
 fn get_gpio_state(command: &InternalCommand, logic: RelayLogic) -> Result<bool, RelayError> {
-    match command {
-        InternalCommand::SwitchOn(_) => match logic {
-            RelayLogic::NormallyOpen => Ok(true),    // ON is HIGH
-            RelayLogic::NormallyClosed => Ok(false), // ON is LOW
-        },
-        InternalCommand::SwitchOff(_) => match logic {
-            RelayLogic::NormallyOpen => Ok(false),  // OFF is LOW
-            RelayLogic::NormallyClosed => Ok(true), // OFF is HIGH
-        },
-        InternalCommand::Pulse(d, _) => Err(RelayError::PulseNotAllowedForDevice(
+    match (command, logic) {
+        (InternalCommand::SwitchOn(_), RelayLogic::NormallyOpen) => Ok(true),    // ON is HIGH
+        (InternalCommand::SwitchOn(_), RelayLogic::NormallyClosed) => Ok(false), // ON is LOW
+
+        (InternalCommand::SwitchOff(_), RelayLogic::NormallyOpen) => Ok(false),  // OFF is LOW
+        (InternalCommand::SwitchOff(_), RelayLogic::NormallyClosed) => Ok(true), // OFF is HIGH
+
+        // Error cases can be handled here as well, though the refactored
+        // public function above already handles them.
+        (InternalCommand::Pulse(d, _), _) => Err(RelayError::PulseNotAllowedForDevice(
             module_path!().to_string(),
-            d.clone(),
+            *d,
         )),
         _ => Err(RelayError::IrrelevantCommand(
             module_path!().to_string(),
