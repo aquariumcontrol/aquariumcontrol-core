@@ -6,109 +6,177 @@ The above copyright notice and this permission notice shall be included in all c
 
 THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
-use log::error;
+
+//! Implements the sensor management thread for a DHT22 temperature and humidity sensor.
+//!
+//! This module provides the `Dht` struct, which runs as a dedicated, long-running
+//! thread. Its primary responsibility is to periodically read ambient temperature and
+//! humidity from a DHT22 sensor connected via GPIO.
+//!
+//! The implementation handles the entire, highly timing-sensitive communication protocol,
+//! from sending the start signal to parsing the response pulses, validating the checksum,
+//! and calculating the final floating-point values. The latest valid measurement is made
+//! available to the rest of the application through a shared `Arc<Mutex<...>>`.
+//!
+//! ## Key Components
+//!
+//! - **`Dht` Struct**: The core state machine for the thread. It holds the configuration,
+//!   GPIO pins, and internal state like the last measurement time and log
+//!   suppression flags.
+//!
+//! - **`execute()` Method**: The main thread loop. It periodically triggers a sensor
+//!   reading based on the configured `measurement_interval`, writes the result to the
+//!   shared mutex, and handles graceful shutdown commands.
+//!
+//! - **`get_data()` Method**: A robust, high-level read function that implements a retry
+//!   mechanism. It calls the low-level `read()` function multiple times if recoverable
+//!   errors (like a checksum mismatch or timeout) occur.
+//!
+//! - **`read()` Method**: The low-level, hardware-facing function that implements the
+//!   DHT22 protocol. It is conditionally compiled to only run on a Linux target with
+//!   the `target_hw` feature enabled. It uses `rppal::gpio` to manipulate the data pin
+//!   and `set_interrupt` to capture the precise timing of the response pulses.
+//!
+//! - **Protocol Parsing Helpers**: A series of pure functions (`calc_data_bits`,
+//!   `calc_byte_array`, `calc_checksum`, `calc_signals`) that are responsible for
+//!   translating the raw pulse timings into a final, validated temperature and humidity
+//!   reading.
+//!
+//! ## Design and Architecture
+//!
+//! This module is designed as a self-contained, resilient hardware driver.
+//!
+//! - **Dedicated Thread for Timing-Critical Work**: The DHT22 protocol requires microsecond-level
+//!   timing precision. Running this logic in a dedicated thread isolates it from other
+//!   application tasks, ensuring that its timing is not disrupted.
+//!
+//! - **Hardware Abstraction (via Conditional Compilation)**: The `read()` function has two
+//!   implementations. On the target hardware, it uses the `rppal` GPIO library. On all
+//!   other platforms (like a developer's machine), it uses a stub that immediately
+//!   returns an `IncorrectPlatform` error. This allows the entire application to be
+//!   compiled and tested without needing physical hardware.
+//!
+//! - **Shared Data via Mutex**: The module's "output" is a shared `Arc<Mutex<DhtResult>>`.
+//!   This is a classic concurrent pattern that allows other threads (like the `DataLogger`)
+//!   to safely access the latest sensor readings at any time without direct channel
+//!   communication.
+//!
+//! - **Robustness through Retries**: The `get_data()` function makes the driver resilient
+//!   to the transient communication glitches common with DHT sensors by automatically
+//!   retrying failed read attempts.
+//!
+//! ### DHT22 Communication Protocol
+//!
+//! The `read()` function and its helpers implement the following protocol:
+//! 1.  **Start Signal**: The host pulls the data line LOW for ~1ms, then HIGH for ~40µs.
+//! 2.  **Sensor Response**: The sensor pulls the line LOW then HIGH to acknowledge.
+//! 3.  **Data Transmission**: The sensor sends 40 bits of data. Each bit starts with a
+//!     ~50µs LOW pulse. The length of the following HIGH pulse determines the bit's value
+//!     (~26-28µs for a '0', ~70µs for a '1').
+//! 4.  **Data Format**: The 40 bits represent 5 bytes: 2 bytes for humidity, 2 for
+//!     temperature, and 1 for a checksum.
+//! 5.  **Validation**: The checksum (sum of the first 4 bytes, modulo 256) is validated
+//!     to ensure data integrity.
+
 #[cfg(all(not(test), target_os = "linux"))]
 use log::info;
 
-use crate::sensors::dht_channels::DhtChannels;
-use crate::sensors::dht_config::DhtConfig;
 use crate::sensors::dht_error::DhtError;
-use crate::utilities::check_mutex_access_duration::CheckMutexAccessDurationTrait;
-#[cfg(not(test))]
+
+#[cfg(all(not(test), target_os = "linux", feature = "target_hw"))]
 use crate::utilities::logger::log_error_chain;
 
-use crate::utilities::proc_ext_req::ProcessExternalRequestTrait;
 #[cfg(all(not(test), target_os = "linux"))]
 use nix::unistd::gettid;
-use spin_sleep::SpinSleeper;
-use std::sync::{Arc, Mutex};
-use std::time::{Duration, Instant};
+use std::time::Duration;
+cfg_if::cfg_if! {
+    if #[cfg(any(test, all(target_os = "linux", feature = "target_hw")))] {
+        use crate::sensors::dht_channels::DhtChannels;
+        use crate::sensors::dht_config::DhtConfig;
+        use crate::utilities::proc_ext_req::ProcessExternalRequestTrait;
+        use crate::utilities::check_mutex_access_duration::CheckMutexAccessDurationTrait;
+        use std::time::Instant;
+        use spin_sleep::SpinSleeper;
+        use std::sync::{Arc, Mutex};
+        use log::error;
+    }
+}
 
 cfg_if::cfg_if! {
     if #[cfg(all(target_os = "linux", feature = "target_hw"))] {
         use rppal::gpio::{Gpio, Level, Trigger};
         use std::thread::{self, sleep};
+        use crate::sensors::gpio_handler::Gpio;
 
         #[cfg(feature = "debug_dht")]
         use log::debug;
     }
     else {
-        use crate::sensors::gpio_handler::Gpio;
     }
 }
+
+#[cfg(not(all(target_os = "linux", feature = "target_hw")))]
+use crate::sensors::gpio_handler::Gpio;
 
 /// Type definition to avoid linter warnings about complex return types
 pub type DhtResult = Result<(f32, f32), DhtError>; // Temperature and Humidity
 
+#[allow(unused)]
 /// allow max. 10 milliseconds for mutex to be blocked by any other thread
 const MAX_MUTEX_ACCESS_DURATION_MILLIS: u64 = 10;
 
 /// Contains constants for communication with the DHT22 sensor.
 pub mod dht22_constants {
-    #[allow(unused)]
     pub const DHT22_DATA_LEN: usize = 5;
-    #[allow(unused)]
+    #[cfg(any(test, all(target_os = "linux", feature = "target_hw")))]
     pub const DHT22_BYTE0_START_IDX: usize = 1;
-    #[allow(unused)]
+    #[cfg(any(test, all(target_os = "linux", feature = "target_hw")))]
     pub const DHT22_BYTE0_STOP_IDX: usize = 8;
-    #[allow(unused)]
+    #[cfg(any(test, all(target_os = "linux", feature = "target_hw")))]
     pub const DHT22_BYTE1_START_IDX: usize = 9;
-    #[allow(unused)]
+    #[cfg(any(test, all(target_os = "linux", feature = "target_hw")))]
     pub const DHT22_BYTE1_STOP_IDX: usize = 16;
-    #[allow(unused)]
+    #[cfg(any(test, all(target_os = "linux", feature = "target_hw")))]
     pub const DHT22_BYTE2_START_IDX: usize = 17;
-    #[allow(unused)]
+    #[cfg(any(test, all(target_os = "linux", feature = "target_hw")))]
     pub const DHT22_BYTE2_STOP_IDX: usize = 23;
-    #[allow(unused)]
+    #[cfg(any(test, all(target_os = "linux", feature = "target_hw")))]
     pub const DHT22_BYTE3_START_IDX: usize = 24;
-    #[allow(unused)]
+    #[cfg(any(test, all(target_os = "linux", feature = "target_hw")))]
     pub const DHT22_BYTE3_STOP_IDX: usize = 31;
-    #[allow(unused)]
+    #[cfg(any(test, all(target_os = "linux", feature = "target_hw")))]
     pub const DHT22_BYTE4_START_IDX: usize = 32;
-    #[allow(unused)]
+    #[cfg(any(test, all(target_os = "linux", feature = "target_hw")))]
     pub const DHT22_BYTE4_STOP_IDX: usize = 39;
 
-    #[allow(unused)]
+    #[cfg(any(test, all(target_os = "linux", feature = "target_hw")))]
     pub const DHT22_TRANSMISSION_END_IDX: usize = 86;
 
-    #[allow(unused)]
-    pub const DHT22_HUMIDITY_START_IDX: usize = 1;
-    #[allow(unused)]
-    pub const DHT22_HUMIDITY_STOP_IDX: usize = 16;
-
-    #[allow(unused)]
-    pub const DHT22_TEMPERATURE_START_IDX: usize = 1;
-    #[allow(unused)]
-    pub const DHT22_TEMPERATURE_STOP_IDX: usize = 16;
-
     // minimum and maximum value for temperature10 range checks
-    #[allow(unused)]
     pub const DHT22_MINVAL_TEMP10: u32 = 0;
-    #[allow(unused)]
     pub const DHT22_MAXVAL_TEMP10: u32 = 500;
 
     // minimum and maximum value for temperature10 range checks
-    #[allow(unused)]
     pub const DHT22_MINVAL_HUM10: u32 = 0;
-    #[allow(unused)]
     pub const DHT22_MAXVAL_HUM10: u32 = 1000;
 
+    #[cfg(any(test, all(target_os = "linux", feature = "target_hw")))]
     // timing of (neutral) low phase between data bit
-    #[allow(unused)]
     pub const DHT22_NEUTRAL_LEN_MIN: u64 = 30;
-    #[allow(unused)]
+
+    #[cfg(any(test, all(target_os = "linux", feature = "target_hw")))]
     pub const DHT22_NEUTRAL_LEN_MAX: u64 = 60;
 
+    #[cfg(any(test, all(target_os = "linux", feature = "target_hw")))]
     // distinguish between true and false
-    #[allow(unused)]
     pub const DHT22_BIT_TIMING_LIMIT: u64 = 50;
 
+    #[cfg(any(test, all(target_os = "linux", feature = "target_hw")))]
     // maximum number of allowed retries to get valid data
-    #[allow(unused)]
     pub const DHT22_MAX_RETRIES: u64 = 5;
 
+    #[cfg(any(test, all(target_os = "linux", feature = "target_hw")))]
     /// allow max. 10 milliseconds for mutex to be blocked by any other thread
-    #[allow(unused)]
     pub const MAX_MUTEX_ACCESS_DURATION_MILLIS: u64 = 10;
 }
 
@@ -144,50 +212,51 @@ pub mod dht22_constants {
 ///     signal_handler[SignalHandler] --> dht
 /// ```
 pub struct Dht {
-    #[allow(unused)]
+    #[cfg(any(test, all(target_os = "linux", feature = "target_hw")))]
     /// configuration for communication with DHT sensor
     config: DhtConfig,
 
-    /// GPIO interface
     #[allow(unused)]
+    /// GPIO interface
     gpio_opt: Option<Gpio>,
 
     #[allow(unused)]
     /// numeric GPIO pin for communication with DHT22 sensor
     gpio_dht22_io: u8,
 
-    /// numeric GPIO pin for providing power to the DHT22 sensor
     #[allow(unused)]
+    /// numeric GPIO pin for providing power to the DHT22 sensor
     gpio_dht22_vcc: u8,
 
+    #[cfg(any(test, all(target_os = "linux", feature = "target_hw")))]
     /// time instance of the last recording
-    #[allow(unused)] // used in conditionally compiled code
     instant_last_measurement: Instant,
 
+    #[cfg(any(test, all(target_os = "linux", feature = "target_hw")))]
     /// flag to avoid flooding the log file in case mutex cannot be locked
-    #[allow(unused)] // used in conditionally compiled code
     lock_error_mutex: bool,
 
     /// inhibition flag to avoid flooding the log file with repeated messages about excessive access time to mutex
-    #[allow(unused)] // used in conditionally compiled code
-    pub(crate) lock_warn_max_mutex_access_duration: bool,
+    pub lock_warn_max_mutex_access_duration: bool,
 
+    #[cfg(any(test, all(target_os = "linux", feature = "target_hw")))]
     /// inhibition flag to avoid flooding the log file with repeated messages about failure to read from DHT sensor
-    #[allow(unused)] // used in conditionally compiled code
     lock_error_failed_after_retries: bool,
 
     // for testing purposes: record when mutex access time is exceeded without resetting it
     #[cfg(test)]
-    pub(crate) mutex_access_duration_exceeded: bool,
+    pub mutex_access_duration_exceeded: bool,
 
     /// Maximum permissible access duration for Mutex
     pub max_mutex_access_duration: Duration,
 
+    #[cfg(any(test, all(target_os = "linux", feature = "target_hw")))]
     /// Duration between measurements
     pub measurement_interval: Duration,
 }
 
 impl Dht {
+    #[cfg(any(test, all(target_os = "linux", feature = "target_hw")))]
     /// Creates a new **`Dht`** instance for interacting with a DHT22 sensor on the target platform.
     ///
     /// This constructor initializes the DHT sensor module, configuring it with the provided
@@ -203,7 +272,6 @@ impl Dht {
     ///
     /// # Returns
     /// A new **`Dht` struct**, ready to read temperature and humidity.
-    #[allow(unused)] // used in conditionally compiled code
     pub fn new(
         config: DhtConfig,
         gpio_opt: Option<Gpio>,
@@ -228,7 +296,7 @@ impl Dht {
         }
     }
 
-    #[allow(unused)]
+    #[cfg(any(test, all(target_os = "linux", feature = "target_hw")))]
     /// Calculates the raw data bits from the timing sequence of GPIO signal changes during DHT22 sensor communication.
     ///
     /// This private helper function interprets the pulse widths measured from the DHT22 sensor.
@@ -268,7 +336,7 @@ impl Dht {
         data_bits
     }
 
-    #[allow(unused)]
+    #[cfg(any(test, all(target_os = "linux", feature = "target_hw")))]
     /// Converts a specific range of raw boolean data bits into a single `u8` byte.
     ///
     /// This private helper function takes a segment of the `data_bits` array and reconstructs
@@ -292,7 +360,7 @@ impl Dht {
             .fold(0u8, |accumulator, &bit| (accumulator << 1) | (bit as u8))
     }
 
-    #[allow(unused)]
+    #[cfg(any(test, all(target_os = "linux", feature = "target_hw")))]
     /// Arranges the raw boolean bit information received from the DHT22 sensor into a 5-byte array.
     ///
     /// This private helper function takes the array of individual data bits (extracted from pulse timings)
@@ -343,7 +411,7 @@ impl Dht {
         byte_vals
     }
 
-    #[allow(unused)]
+    #[cfg(any(test, all(target_os = "linux", feature = "target_hw")))]
     /// Calculates the checksum of the DHT22 sensor data and validates it against the received checksum.
     ///
     /// This private helper function computes an 8-bit sum (modulo 256) of the first four data bytes
@@ -356,7 +424,6 @@ impl Dht {
     /// # Arguments
     /// * `byte_vals` - A fixed-size array of `u8` (5 bytes) containing the sensor's raw data,
     ///   where the last byte is the received checksum.
-    /// * `try_again` - A mutable reference to a boolean flag. Set to `true` when the top-level calling function may try again.    
     ///
     /// # Returns
     /// An empty `Result` (`Ok(())`) if the calculated checksum matches the received one.
@@ -366,10 +433,7 @@ impl Dht {
     /// - `DhtError::ChecksumError`: If the calculated checksum does not match the received checksum,
     ///   indicating that the data was corrupted during transmission. This is considered a
     ///   recoverable error, and the calling function should retry the read operation.
-    pub fn calc_checksum(
-        byte_vals: [u8; dht22_constants::DHT22_DATA_LEN],
-        try_again: &mut bool,
-    ) -> Result<u8, DhtError> {
+    pub fn calc_checksum(byte_vals: [u8; dht22_constants::DHT22_DATA_LEN]) -> Result<u8, DhtError> {
         // Use `wrapping_add` for a clear and correct 8-bit sum.
         let checksum_calculated = byte_vals[0]
             .wrapping_add(byte_vals[1])
@@ -378,7 +442,6 @@ impl Dht {
 
         let checksum_received: u8 = byte_vals[4];
         if checksum_calculated != checksum_received {
-            *try_again = true;
             return Err(DhtError::ChecksumError(
                 module_path!().to_string(),
                 checksum_calculated,
@@ -474,7 +537,7 @@ impl Dht {
     /// - `DhtError::TemperatureOutOfRange`: If the measured temperature is outside the sensor's specified range.
     /// - `DhtError::HumidityOutOfRange`: If the measured humidity is outside the sensor's specified range.
     /// - `DhtError::IncorrectPlatform`: If called with no gpio lib handle available.
-    pub fn read(&mut self, reset_sensor: bool, try_again: &mut bool) -> DhtResult {
+    pub fn read(&mut self, reset_sensor: bool) -> DhtResult {
         let mut ticks = [0u64; dht22_constants::DHT22_TRANSMISSION_END_IDX];
 
         let gpio: &mut Gpio = if self.gpio_opt.is_some() {
@@ -612,7 +675,6 @@ impl Dht {
         }
 
         if timeout_occurred {
-            *try_again = true;
             return Err(DhtError::Timeout(module_path!().to_string()));
         }
 
@@ -630,10 +692,10 @@ impl Dht {
         let byte_vals = Self::calc_byte_array(data_bits);
 
         // checksum calculation
-        match Self::calc_checksum(byte_vals, try_again) {
-            Ok(_) => { /* do nothing */ }
-            Err(e) => return Err(e),
-        }
+        Self::calc_checksum(byte_vals).map_err(|e| {
+            try_again = true;
+            e
+        });
 
         // calculate signals (or error code) and directly return it
         Self::calc_signals(byte_vals)
@@ -655,6 +717,7 @@ impl Dht {
         Err(DhtError::IncorrectPlatform(module_path!().to_string()))
     }
 
+    #[cfg(any(test, all(target_os = "linux", feature = "target_hw")))]
     /// Initiates a robust reading process from the DHT22 sensor, with retries.
     ///
     /// This function attempts to read temperature and humidity data. It includes an
@@ -668,7 +731,6 @@ impl Dht {
     /// Returns a `DhtError` if the reading fails permanently or after all retries:
     /// - `DhtError::FailedAfterRetries`: If all attempts fail due to recoverable errors.
     /// - Any other `DhtError` variant for non-recoverable hardware or configuration failures.
-    #[allow(unused)] // used in conditionally compiled code
     pub fn get_data(&mut self) -> DhtResult {
         for i in 0..=dht22_constants::DHT22_MAX_RETRIES {
             let mut try_again = false;
@@ -679,10 +741,14 @@ impl Dht {
                 // On success, return immediately.
                 Ok(data) => return Ok(data),
                 Err(e) => {
-                    // If the error is not recoverable, return it immediately.
-                    if !try_again {
-                        return Err(e);
+                    // Check if the error is recoverable
+                    let is_recoverable = matches!(e, DhtError::ChecksumError(..))
+                        || matches!(e, DhtError::Timeout(_));
+
+                    if !is_recoverable {
+                        return Err(e); // Hard failure, return immediately.
                     }
+
                     // If this was the last retry, and it failed, return FailedAfterRetries.
                     if i == dht22_constants::DHT22_MAX_RETRIES {
                         return Err(DhtError::FailedAfterRetries {
@@ -698,6 +764,7 @@ impl Dht {
         unreachable!();
     }
 
+    #[cfg(any(test, all(target_os = "linux", feature = "target_hw")))]
     /// Executes the main loop for the DHT sensor thread, receiving requests and sending measurement responses.
     ///
     /// This function runs indefinitely, acting as a dedicated service for reading ambient
@@ -711,14 +778,16 @@ impl Dht {
     /// # Arguments
     /// * `mutex_dht` - Mutex to store the result of the measurement
     /// * `dht_channels` - Mutable reference to the struct containing the channel
-    #[allow(unused)] // used in conditionally compiled code
     pub fn execute(&mut self, mutex_dht: Arc<Mutex<DhtResult>>, dht_channels: &mut DhtChannels) {
         #[cfg(all(target_os = "linux", not(test)))]
         info!(target: module_path!(), "Thread started with TID: {}", gettid());
 
+        #[allow(unused)]
         let max_mutex_access_duration =
             Duration::from_millis(dht22_constants::MAX_MUTEX_ACCESS_DURATION_MILLIS);
+        #[allow(unused)]
         let mut lock_error_invalid_command: bool = false;
+        #[allow(unused)]
         let mut lock_error_receive: bool = false;
         let spin_sleeper = SpinSleeper::default();
         let sleep_duration_100_millis = Duration::from_millis(100);
@@ -863,35 +932,28 @@ pub mod tests {
     // Test case checks if the implementation correctly calculates a valid checksum.
     // Test case does not require any communication with the database.
     pub fn test_dht_calc_checksum_valid() {
-        let mut try_again: bool = false;
-
         setup_logger(LoggerConfig::default()).unwrap();
 
         let stimuli: [u8; dht22_constants::DHT22_DATA_LEN] = [2, 205, 0, 245, 196];
 
-        let result = Dht::calc_checksum(stimuli, &mut try_again);
+        let result = Dht::calc_checksum(stimuli);
 
         let ok_result = result.unwrap();
 
         assert_eq!(ok_result, 196);
-
-        assert!(!try_again);
     }
 
     #[test]
     // Test case checks if the implementation correctly calculates an invalid checksum.
     // Test case does not require any communication with the database.
     pub fn test_dht_calc_checksum_error() {
-        let mut try_again: bool = false;
-
         setup_logger(LoggerConfig::default()).unwrap();
 
         let stimuli: [u8; dht22_constants::DHT22_DATA_LEN] = [255, 255, 255, 255, 10];
 
-        let result = Dht::calc_checksum(stimuli, &mut try_again);
+        let result = Dht::calc_checksum(stimuli);
 
         assert!(matches!(result, Err(DhtError::ChecksumError(_, _, _))));
-        assert!(try_again);
     }
 
     #[test]
@@ -1031,13 +1093,6 @@ pub mod tests {
         let config = DhtConfig {
             active: false,
             measurement_interval_millis: 2000,
-            sensor_reset_duration_millis: 500,
-            sensor_startup_duration_millis: 1000,
-            sensor_pause_duration_millis: 2000,
-            sensor_init_pin_down_duration_micros: 1000,
-            sensor_init_pin_up_duration_micros: 40,
-            sensor_init_input_duration_micros: 0,
-            timeout_duration_micros: 200,
         };
         let dht = Dht::new(config, None, 0, 0);
         let mutex = Arc::new(Mutex::new(Ok((0.0, 0.0))));
@@ -1107,13 +1162,6 @@ pub mod tests {
         let config = DhtConfig {
             active: true,                    // Enable measurement
             measurement_interval_millis: 50, // Use a short interval for testing
-            sensor_reset_duration_millis: 500,
-            sensor_startup_duration_millis: 1000,
-            sensor_pause_duration_millis: 2000,
-            sensor_init_pin_down_duration_micros: 1000,
-            sensor_init_pin_up_duration_micros: 40,
-            sensor_init_input_duration_micros: 0,
-            timeout_duration_micros: 200,
         };
         let mut dht = Dht::new(config, None, 0, 0);
         let mutex = Arc::new(Mutex::new(Ok((0.0, 0.0))));

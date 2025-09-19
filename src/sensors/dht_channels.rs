@@ -6,6 +6,43 @@ The above copyright notice and this permission notice shall be included in all c
 
 THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
+
+//! A central container for the communication channel used by the `Dht` thread.
+//!
+//! This module defines the `DhtChannels` struct, which acts as a dedicated
+//! "switchboard". Its primary purpose is to aggregate the `mpsc::channel`
+//! receiver that the `Dht` thread needs to communicate with the main
+//! `SignalHandler` for graceful shutdown.
+//!
+//! ## Key Components
+//!
+//! - **`DhtChannels` Struct**: A simple container struct that explicitly declares
+//!   the communication dependencies for the `Dht` thread. In this case, it's
+//!   a single receiver from the `SignalHandler`.
+//!
+//! - **Helper Methods**: Provides a convenient wrapper method,
+//!   `receive_from_signal_handler()`, to offer a clean, consistent API for
+//!   channel operations.
+//!
+//! ## Design and Architecture
+//!
+//! The `DhtChannels` struct is a key part of the application's inter-thread
+//! communication strategy, promoting clean and decoupled code.
+//!
+//! - **Centralization**: By gathering all necessary channels into a single struct, it
+//!   provides a clear and explicit declaration of the `Dht` thread's
+//!   communication dependencies. This makes the overall application architecture easier
+//!   to reason about.
+//!
+//! - **Decoupling**: The main `Dht` thread logic doesn't need to manage
+//!   individual channels. It just needs this struct, which it can use to
+//!   receive messages. This separates the core sensor reading logic from the
+//!   communication infrastructure.
+//!
+//! - **Testability**: The struct can be easily constructed with a mock channel during
+//!   unit testing, allowing for isolated testing of the `Dht` thread's
+//!   shutdown logic without needing to run the entire application.
+
 use crate::launch::channels::{AquaChannelError, AquaReceiver};
 use crate::utilities::channel_content::InternalCommand;
 use std::fmt;
