@@ -7,6 +7,36 @@ The above copyright notice and this permission notice shall be included in all c
 THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
+//! Defines the centralized error type for the DS18B20 1-Wire sensor subsystem.
+//!
+//! This module contains the `Ds18b20Error` enum, which consolidates all possible
+//! errors that can occur within the DS18B20 sensor reading logic. By using
+//! the `thiserror` crate, it provides a rich, descriptive, and easy-to-use error
+//! type that supports source-chaining for detailed diagnostics.
+//!
+//! ## Design and Architecture
+//!
+//! The `Ds18b20Error` enum is designed for robustness and clear, actionable error reporting.
+//!
+//! - **Centralization**: Instead of each function defining its own error types, they all
+//!   use this single, comprehensive enum. This simplifies the error handling logic in
+//!   the `Ds18b20` thread.
+//!
+//! - **Descriptive Messages**: Each variant uses the `#[error("...")]` attribute from
+//!   `thiserror` to generate a human-readable error message. These messages often
+//!   include the location (`module_path!()`) and other contextual information
+//!   (e.g., the sensor ID that failed), which is invaluable for debugging.
+//!
+//! - **Source Chaining**: Many variants (like `FileReadError` and `ParseTemperatureError`)
+//!   use the `#[source]` attribute. This captures the underlying, lower-level error
+//!   (e.g., an `io::Error` or `ParseIntError`), allowing for a full "error chain"
+//!   to be logged. This helps pinpoint the root cause of a failure, such as a
+//!   permission issue on the sensor file or an unexpected data format.
+//!
+//! - **Specific Failure Modes**: The enum includes specific variants for common 1-Wire
+//!   protocol failures, such as `CrcCheckFailed` and `ResponseNotReady`, which
+//!   distinguishes them from more generic I/O errors.
+
 use thiserror::Error;
 
 #[derive(Error, Debug, Clone)]
