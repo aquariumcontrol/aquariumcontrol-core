@@ -606,8 +606,7 @@ impl AtlasScientific {
                             // The final result of this arm is the successfully parsed data.
                             result = Ok(result_data_clone);
                         } else {
-                            // If parsing failed, propagate the specific parsing error
-                            // instead of letting it fall through as a generic 'Initial' error.
+                            // If parsing failed, propagate the specific parsing error.
                             result = parsed_result;
                         }
                     }

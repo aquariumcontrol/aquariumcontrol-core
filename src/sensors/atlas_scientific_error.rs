@@ -6,6 +6,37 @@ The above copyright notice and this permission notice shall be included in all c
 
 THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
+
+//! Defines the centralized error type for the Atlas Scientific sensor subsystem.
+//!
+//! This module contains the `AtlasScientificError` enum, which consolidates all possible
+//! errors that can occur within the Atlas Scientific sensor management thread. By using
+//! the `thiserror` crate, it provides a rich, descriptive, and easy-to-use error
+//! type that supports source-chaining for detailed diagnostics.
+//!
+//! ## Design and Architecture
+//!
+//! The `AtlasScientificError` enum is designed for robustness and clear, actionable error reporting.
+//!
+//! - **Centralization**: Instead of each function defining its own error types, they all
+//!   use this single, comprehensive enum. This simplifies the error handling logic in
+//!   the `AtlasScientific` thread.
+//!
+//! - **Descriptive Messages**: Each variant uses the `#[error("...")]` attribute from
+//!   `thiserror` to generate a human-readable error message. These messages
+//!   include the location (`module_path!()`) and other contextual information
+//!   (e.g., the sensor signal that failed).
+//!
+//! - **Source Chaining**: Many variants (like `I2cCommunicationFailure` and `ConversionFailure`)
+//!   use the `#[source]` attribute. This captures the underlying, lower-level error
+//!   (e.g., an `I2cError` or `ParseFloatError`), allowing for a full "error chain"
+//!   to be logged.
+//!
+//! - **Control Flow via Errors**: The `ChannelIsEmpty` variant is used not just as an
+//!   error but as a signal for control flow. It indicates to the calling code that
+//!   a non-blocking receive operation found no message, and the operation should be
+//!   retried later.
+
 use crate::launch::channels::AquaChannelError;
 use crate::sensors::i2c_error::I2cError;
 use crate::utilities::channel_content::AquariumSignal;
@@ -66,10 +97,6 @@ pub enum AtlasScientificError {
         #[source]
         source: Box<AtlasScientificError>,
     },
-
-    /// Initial value, is overwritten
-    #[error("Initialization value - result has not been set yet")]
-    Initial,
 
     /// Error in I2C communication for a specific signal.
     #[error("[{location}] Error in I2C communication for {signal}.")]
