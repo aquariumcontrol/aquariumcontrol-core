@@ -25,14 +25,14 @@ use crate::watchmen::memory_channels::MemoryChannels;
 use crate::watchmen::memory_config::MemoryConfig;
 cfg_if::cfg_if! {
     if #[cfg(feature = "jemalloc")] {
-        use log::{error, info};
+        use log::error;
         use tikv_jemalloc_ctl::{epoch, stats};
         #[cfg(not(test))]
         use log::warn;
     }
 }
 use crate::watchmen::memory_config_check::{memory_config_check, MemoryConfigError};
-#[cfg(target_os = "linux")]
+#[cfg(any(target_os = "linux", feature = "jemalloc"))]
 use log::info;
 use spin_sleep::SpinSleeper;
 use std::time::{Duration, Instant};
