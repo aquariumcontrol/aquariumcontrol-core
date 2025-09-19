@@ -6,6 +6,71 @@ The above copyright notice and this permission notice shall be included in all c
 
 THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
+
+//! Implements the sensor management thread for Atlas Scientific I2C devices.
+//!
+//! This module provides the `AtlasScientific` struct, which runs as a dedicated, long-running
+//! thread. Its primary responsibility is to periodically and sequentially measure water
+//! temperature, pH, and conductivity. It acts as a client to the `I2cInterface` thread,
+//! sending measurement requests and processing the responses. The final, parsed sensor
+//! values are stored in shared `Mutex`-protected data structures, making them available
+//! to the rest of the application (e.g., the `DataLogger`).
+//!
+//! ## Key Components
+//!
+//! - **`AtlasScientific` Struct**: The core state machine for the thread. It holds the
+//!   configuration, a number of stateful boolean "lock" flags for log
+//!   suppression, and the current state of the measurement cycle.
+//!
+//! - **`execute()` Method**: The main thread loop. It implements a sequential measurement
+//!   state machine:
+//!   1.  **Wait**: Waits for the configured `measurement_interval` to elapse.
+//!   2.  **Send**: Sends a request for the *next* sensor in the sequence (Temperature -> pH -> Conductivity)
+//!       to the `I2cInterface` thread.
+//!   3.  **Receive**: Polls the response channel from the `I2cInterface`.
+//!   4.  **Process**: If a response is received, it is parsed and validated. The result is
+//!       written to the appropriate shared `Mutex`.
+//!   5.  **Cycle**: The state machine advances to the next sensor and returns to the **Wait** step.
+//!
+//! - **`check_response()` Method**: A critical private helper that parses and validates the
+//!   proprietary 8-byte response from an Atlas Scientific sensor, checking magic numbers
+//!   and ensuring the payload is a valid number.
+//!
+//! ## Design and Architecture
+//!
+//! This module is designed for robust, decoupled, and sequential sensor reading.
+//!
+//! - **Sequential Measurement**: The module does not attempt to read all sensors at once.
+//!   This serialized approach simplifies the logic and avoids potential conflicts on the
+//!   I2C bus if it were shared.
+//!
+//! - **Decoupling via I2C Interface**: The `AtlasScientific` thread does not perform
+//!   hardware I/O directly. It is a client of the `I2cInterface` thread. This decouples
+//!   the sensor-specific protocol logic from the low-level bus management, making both
+//!   modules simpler and more testable.
+//!
+//! - **Shared Data via Mutexes**: The module's "outputs" are the `Arc<Mutex<...>>` data
+//!   structures it updates. This allows other threads to safely access the latest sensor.
+//!
+//! - **Robust Error Handling**:
+//!   - **Log Flood Prevention**: The use of `lock_...` flags prevents a single, persistent
+//!     issue (like a disconnected channel or a consistently slow mutex) from filling up
+//!     disk space with repetitive logs.
+//!   - **Mutex Access Monitoring**: The module actively monitors how long it takes to
+//!     acquire a lock on a shared mutex. If the wait time exceeds a threshold, it logs a
+//!     warning, which can help diagnose performance bottlenecks or deadlocks elsewhere
+//!     in the application.
+//!
+//! ### Atlas Scientific 8-Byte Protocol
+//!
+//! The `check_response` function implements the parsing of a fixed-size 8-byte packet:
+//!
+//! | Byte   | Name        | Description                                        |
+//! | -------| :---------- | -------------------------------------------------- |
+//! | `[0]`  | `MagicStart`| A status byte, expected to be `1` for success.     |
+//! | `[1-6]`| `Payload`   | A 6-byte ASCII string representing the float value.|
+//! | `[7]`  | `MagicEnd`  | A null terminator, expected to be `0`.             |
+
 #![allow(non_snake_case)]
 
 #[cfg(all(not(test), target_os = "linux"))]
@@ -158,11 +223,11 @@ pub struct AtlasScientific {
 
     // for testing purposes: record when mutex access time is exceeded without resetting it
     #[cfg(test)]
-    pub(crate) mutex_temperature_access_duration_exceeded: bool,
+    pub mutex_temperature_access_duration_exceeded: bool,
     #[cfg(test)]
-    pub(crate) mutex_ph_access_duration_exceeded: bool,
+    pub mutex_ph_access_duration_exceeded: bool,
     #[cfg(test)]
-    pub(crate) mutex_conductivity_access_duration_exceeded: bool,
+    pub mutex_conductivity_access_duration_exceeded: bool,
 
     /// instant when the last measurement took place
     #[allow(unused)] // used in conditionally compiled code
@@ -175,6 +240,7 @@ pub struct AtlasScientific {
     /// maximum allowed duration for access to mutex
     pub max_mutex_access_duration_millis: Duration,
 }
+
 impl ProcessExternalRequestTrait for AtlasScientific {}
 
 impl GetResponseFromSimulatorTrait for AtlasScientific {}
