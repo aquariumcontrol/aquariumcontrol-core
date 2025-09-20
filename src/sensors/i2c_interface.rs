@@ -94,25 +94,25 @@ const MAX_I2C_COMMAND_LENGTH: usize = 16;
 const MAX_I2C_RESPONSE_LENGTH: usize = 64;
 
 pub struct I2cRequest {
-    #[cfg(all(target_os = "linux", feature = "target_hw"))]
+    #[allow(unused)]
     /// I2C address of the bus participant
     pub i2c_address: u16,
 
-    #[cfg(all(target_os = "linux", feature = "target_hw"))]
+    #[allow(unused)]
     /// input sequence to be sent to the bus participant
-    pub(crate) send_buf: [u8; MAX_I2C_COMMAND_LENGTH],
+    pub send_buf: [u8; MAX_I2C_COMMAND_LENGTH],
 
-    #[cfg(all(target_os = "linux", feature = "target_hw"))]
+    #[allow(unused)]
     /// The actual length of the command in the buffer.
-    pub(crate) send_len: usize,
+    pub send_len: usize,
 
-    #[cfg(all(target_os = "linux", feature = "target_hw"))]
+    #[allow(unused)]
     /// sleep time in milliseconds before retrieving an answer from the bus participant
-    pub(crate) sleep_time_millis: u64,
+    pub sleep_time_millis: u64,
 
-    #[cfg(all(target_os = "linux", feature = "target_hw"))]
+    #[allow(unused)]
     /// length of the expected response in byte
-    pub(crate) expected_response_length: usize,
+    pub expected_response_length: usize,
 }
 
 impl I2cRequest {
@@ -123,11 +123,11 @@ impl I2cRequest {
     /// with the necessary metadata for the I2C interface to execute the request.
     ///
     /// # Arguments
-    /// * `i2c_address` - The 7-bit I2C address of the target device.
+    /// * `_i2c_address` - The 7-bit I2C address of the target device.
     /// * `send_slice` - A byte slice (`&[u8]`) containing the command to be sent.
-    /// * `sleep_time_millis` - The duration in milliseconds to wait after sending the
+    /// * `_sleep_time_millis` - The duration in milliseconds to wait after sending the
     ///   command before attempting to read a response.
-    /// * `expected_response_length` - The number of bytes expected in the response from the device.
+    /// * `_expected_response_length` - The number of bytes expected in the response from the device.
     ///
     /// # Returns
     /// A `Result` containing a new `I2cRequest` struct on success.
@@ -156,19 +156,14 @@ impl I2cRequest {
         send_buf[..send_slice.len()].copy_from_slice(send_slice);
 
         Ok(I2cRequest {
-            #[cfg(all(target_os = "linux", feature = "target_hw"))]
             i2c_address,
 
-            #[cfg(all(target_os = "linux", feature = "target_hw"))]
             send_buf,
 
-            #[cfg(all(target_os = "linux", feature = "target_hw"))]
             send_len: send_slice.len(),
 
-            #[cfg(all(target_os = "linux", feature = "target_hw"))]
             sleep_time_millis,
 
-            #[cfg(all(target_os = "linux", feature = "target_hw"))]
             expected_response_length,
         })
     }
