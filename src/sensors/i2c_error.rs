@@ -6,6 +6,42 @@ The above copyright notice and this permission notice shall be included in all c
 
 THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
+
+//! Defines the centralized error type for the I2C communication subsystem.
+//!
+//! This module contains the `I2cError` enum, which consolidates all possible
+//! errors that can occur when interacting with the I2C bus. By using
+//! the `thiserror` crate, it provides a rich, descriptive, and easy-to-use error
+//! type that supports source-chaining for detailed diagnostics.
+//!
+//! A key feature of this module is its extensive use of conditional compilation
+//! (`#[cfg]`). This allows the application to be compiled and tested on platforms
+//! without I2C hardware (like a developer's machine), while providing detailed,
+//! hardware-specific errors when running on the target device.
+//!
+//! ## Design and Architecture
+//!
+//! The `I2cError` enum is designed for robustness and clear, actionable error reporting.
+//!
+//! - **Centralization**: Instead of each function defining its own error types, they all
+//!   use this single, comprehensive enum. This simplifies the error handling logic in
+//!   the `I2cInterface` thread and its clients.
+//!
+//! - **Platform Abstraction**: The `#[cfg(all(target_os = "linux", feature = "target_hw"))]`
+//!   attribute is used to isolate hardware-specific errors. Variants that depend on the
+//!   `rppal` crate only exist when compiling for the target hardware, preventing
+//!   compilation errors on other systems.
+//!
+//! - **Descriptive Messages**: Each variant uses the `#[error("...")]` attribute from
+//!   `thiserror` to generate a human-readable error message. These messages
+//!   include the location (`module_path!()`) and other contextual information
+//!   (e.g., I2C address or buffer lengths), which is invaluable for debugging.
+//!
+//! - **Source Chaining**: Most hardware-specific variants use the `#[source]` attribute.
+//!   This captures the underlying `rppal::i2c::Error`, allowing for a full "error chain"
+//!   to be logged. This helps pinpoint the root cause of a failure, such as a
+//!   permission issue or a physical bus problem.
+
 use thiserror::Error;
 
 /// Contains error definition occurring in communication via I2C
@@ -32,24 +68,15 @@ pub enum I2cError {
     },
 
     /// The message could not be sent.
-    #[cfg(all(target_os = "linux", feature = "target_hw"))]
+    #[cfg(all(test, not(all(target_os = "linux", feature = "target_hw"))))]
     #[error("[{location}] I2C write operation failed.")]
     WriteFailure {
         location: String,
 
+        #[cfg(all(target_os = "linux", feature = "target_hw"))]
         #[source]
         source: rppal::i2c::Error,
     },
-
-    /// I2C write operation failed.
-    #[cfg(all(test, not(any(target_os = "linux", feature = "target_hw"))))]
-    #[error("[{0}] I2C write operation failed.")]
-    WriteFailure(String),
-
-    /// I2C write operation failed.
-    #[cfg(all(test, not(feature = "target_hw"), target_os = "linux"))]
-    #[error("[{0}] I2C write operation failed.")]
-    WriteFailure(String),
 
     /// Command could not be sent completely to the sensor unit.
     #[cfg(all(target_os = "linux", feature = "target_hw"))]

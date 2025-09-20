@@ -2198,15 +2198,13 @@ pub mod tests {
             source: mock_rppal_error,
         };
 
-        #[cfg(not(any(target_os = "linux", feature = "target_hw")))]
-        let mock_error = I2cError::WriteFailure;
-
-        // for testing on Linux server (without target hardware)
-        #[cfg(all(target_os = "linux", not(feature = "target_hw")))]
-        let mock_error = I2cError::WriteFailure;
+        #[cfg(not(all(target_os = "linux", feature = "target_hw")))]
+        let mock_error = I2cError::WriteFailure {
+            location: module_path!().to_string(),
+        };
 
         let _ = tx_i2c_interface_to_atlas_scientific
-            .send(Err(mock_error(module_path!().to_string())))
+            .send(Err(mock_error))
             .unwrap();
 
         let result = atlas_scientific.receive_response_from_i2c_interface(
