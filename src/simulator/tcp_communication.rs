@@ -7,6 +7,52 @@ The above copyright notice and this permission notice shall be included in all c
 THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
+//! A dedicated thread that acts as a proxy between the application and an external TCP simulator.
+//!
+//! This module implements the `TcpCommunication` struct, which runs as a long-running
+//! thread. Its sole purpose is to manage all communication with a TCP-based hardware
+//! simulator. It listens for commands from various application threads (like `SensorManager`,
+//! `RelayManager`, etc.) via `mpsc` channels, translates them into a specific text-based
+//! protocol, sends them to the simulator, and then parses the responses to send back
+//! to the original requester.
+//!
+//! This architecture is fundamental to the project's testability, as it allows the entire
+//! application to run and be tested on a developer's machine without any physical hardware.
+//!
+//! ## Key Components
+//!
+//! - **`TcpCommunication` Struct**: The core state machine for the thread. It holds the
+//!   TCP stream for reading and writing, and configuration details.
+//!
+//! - **`new()` Method**: Establishes the initial TCP connection to the simulator's IP
+//!   address and port, returning an error if the simulator is not available.
+//!
+//! - **`execute()` Method**: The main thread loop. It continuously polls multiple
+//!   `mpsc` channels for incoming requests from other threads. It also listens for a
+//!   graceful shutdown command from the `SignalHandler`.
+//!
+//! - **`handle_simulated_sensor()`**: A helper function that abstracts the non-blocking,
+//!   request-response cycle for sensor-like modules (`SensorManager`, `TankLevelSwitch`).
+//!
+//! - **`get_signal()` & `change_relay()`**: Private methods that implement the specific
+//!   text-based protocol for querying a sensor value or changing a relay state, respectively.
+//!
+//! ## Design and Architecture
+//!
+//! - **Centralized Simulator Proxy**: All simulator-bound traffic is funneled through this
+//!   single thread. This decouples the core logic of other modules from the details of
+//!   TCP communication and the simulator's specific protocol. Client modules only need
+//!   to know how to send a command on a channel.
+//!
+//! - **Asynchronous Service Model**: The `execute()` loop uses non-blocking `try_recv()`
+//!   calls to poll each client channel. This allows it to service multiple clients
+//!   concurrently in a single-threaded, event-driven manner without getting stuck waiting
+//!   for a single client.
+//!
+//! - **Text-Based Protocol Implementation**: This module is the single source of truth for
+//!   the simulator's communication protocol. If the simulator's protocol changes, only this
+//!   module needs to be updated.
+
 #[cfg(all(not(test), target_os = "linux"))]
 use log::info;
 use log::{debug, error};
@@ -345,7 +391,27 @@ impl TcpCommunication {
         }
     }
 
-    /// Handles a request-response cycle for a simulated sensor if it's active.
+    /// Handles a non-blocking request-response cycle for a single simulated sensor module.
+    ///
+    /// This private helper function encapsulates the logic for servicing a client thread
+    /// (like `SensorManager` or `TankLevelSwitch`) that is running in simulator mode.
+    /// It is designed to be called repeatedly from the main `execute` loop for each potential client.
+    ///
+    /// The function first checks if the client module is configured to be active (`is_active`)
+    /// and if its communication channels have been provided. If both are true, it calls
+    /// `receive_and_answer` to process one potential request. If any communication error
+    /// occurs during this process, it is logged with context, but the function does not
+    /// panic or return an error, allowing the main loop to continue servicing other clients.
+    ///
+    /// # Arguments
+    /// * `is_active` - A boolean flag indicating if the client module is configured to be running.
+    ///   If `false`, the function does nothing.
+    /// * `rx_opt` - A mutable `Option` containing the `AquaReceiver` for incoming `InternalCommand`s
+    ///   from the client.
+    /// * `tx_opt` - A mutable `Option` containing the `AquaSender` to send the `Result<f32, ...>`
+    ///   response back to the client.
+    /// * `module_name` - A string slice identifying the client module (e.g., "sensor manager")
+    ///   for contextual error logging.
     fn handle_simulated_sensor(
         &mut self,
         is_active: bool,

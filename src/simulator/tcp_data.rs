@@ -7,6 +7,14 @@ The above copyright notice and this permission notice shall be included in all c
 THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
+//! Defines the constants for the text-based TCP simulator protocol.
+//!
+//! This module centralizes all the "magic strings" that make up the custom,
+//! text-based protocol used to communicate with the external hardware simulator.
+//! By consolidating these constants into distinct submodules (`command`, `category`,
+//! `signal`), it provides a single source of truth for the protocol, preventing
+//! typos and improving code readability and maintainability.
+
 /// Contains constants representing commands received from the control application.
 #[allow(dead_code)]
 pub mod command {

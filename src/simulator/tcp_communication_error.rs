@@ -7,6 +7,50 @@ The above copyright notice and this permission notice shall be included in all c
 THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
+//! Defines the custom error type for all simulator-related communication.
+//!
+//! This module centralizes all possible failure modes that can occur within the
+//! `TcpCommunication` thread or when other threads attempt to communicate with it.
+//! By using the `thiserror` crate, this enum provides rich, contextual error
+//! messages that are invaluable for logging and debugging.
+//!
+//! ## Key Features
+//!
+//! - **Centralized Error Handling**: Instead of dealing with a mix of `std::io::Error`,
+//!   `ParseFloatError`, and channel errors, the application can handle a single,
+//!   unified `TcpCommunicationError` type.
+//!
+//! - **Rich Context**: Each error variant includes the location (`module_path!`) where
+//!   the error was generated. Many variants also include other contextual information,
+//!   such as the IP address, port, or the specific signal being requested, which
+//!   greatly aids in diagnosing problems.
+//!
+//! - **Error Chaining**: The `#[source]` attribute is used to wrap the underlying,
+//!   lower-level error. This allows logging frameworks (like `log_error_chain`) to
+//!   display the full causal chain of an error, from the high-level application
+//!   context down to the low-level OS or library error.
+//!
+//! ## Error Categories
+//!
+//! The errors can be grouped into three main categories:
+//!
+//! 1.  **Connection and I/O Errors**: These relate to the raw TCP socket communication.
+//!     - `ConnectionFailed`, `StreamCloneFailed`
+//!     - `WritingToStreamFailed`, `ReadingFromStreamFailed`, `FlushFailed`
+//!
+//! 2.  **Protocol and Parsing Errors**: These occur when the data exchanged with the
+//!     simulator does not conform to the expected text-based protocol.
+//!     - `IllegalSignalRequestToSimulator`
+//!     - `ResponseContainsNoWords`, `LastWordOfResponseEmpty`
+//!     - `ResponseConversionError`
+//!
+//! 3.  **Inter-Thread Channel Errors**: These relate to failures in the internal `mpsc`
+//!     channel communication between the `TcpCommunication` thread and its clients.
+//!     - `ChannelDisconnected`
+//!     - `SendingToTCPThreadFailed`, `ReceivingFromTCPThreadFailed`
+//!     - `SendingResponseViaChannelFailure`
+//!
+
 use crate::launch::channels::AquaChannelError;
 use crate::utilities::channel_content::AquariumSignal;
 use std::io;

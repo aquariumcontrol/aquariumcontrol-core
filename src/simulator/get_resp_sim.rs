@@ -7,6 +7,46 @@ The above copyright notice and this permission notice shall be included in all c
 THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
+//! Provides a standardized trait for fetching data from a simulator.
+//!
+//! This module defines the `GetResponseFromSimulatorTrait`, which offers a single,
+//! consistent method for any part of the application to request and receive data
+//! from a simulator thread (typically the `TcpCommunication` module).
+//!
+//! By providing this functionality as a trait with a default implementation, it
+//! ensures that all client modules (like `SensorManager`, `TankLevelSwitch`, etc.)
+//! use the exact same logic for the request/response cycle, reducing code
+//! duplication and centralizing error handling.
+//!
+//! ## Key Components
+//!
+//! - **`GetResponseFromSimulatorTrait`**: A trait that can be implemented by any
+//!   struct that needs to communicate with the simulator.
+//!
+//! - **`get_response_from_simulator()`**: The default method provided by the trait.
+//!   It encapsulates the entire synchronous, blocking communication pattern:
+//!   1.  Sends an `InternalCommand` to the simulator thread.
+//!   2.  Blocks and waits for a `Result<f32, ...>` to be sent back.
+//!   3.  Handles all channel-related errors, mapping them to the application's
+//!       `TcpCommunicationError` type for consistent error handling.
+//!
+//! ## Design and Architecture
+//!
+//! - **Standardization via Trait**: The primary design goal is to enforce a single,
+//!   robust communication pattern. Instead of each sensor module implementing its
+//!   own version of a send/receive loop, they simply implement this empty trait
+//!   to gain access to the pre-built `get_response_from_simulator` method.
+//!
+//! - **Centralized Logic**: All logic for sending, receiving, and handling channel
+//!   disconnection errors is located in one place. If the communication protocol
+//!   needs to be updated (e.g., to add timeouts or retries), it only needs to be
+//!   changed here.
+//!
+//! - **Synchronous Communication**: The method uses a blocking `recv()` call. This
+//!   simplifies the logic for the client threads, as they can treat the call as a
+//!   standard function that returns a value, without needing to manage asynchronous
+//!   callbacks or futures for this specific interaction.
+
 use crate::launch::channels::{AquaReceiver, AquaSender};
 use crate::simulator::tcp_communication_error::TcpCommunicationError;
 use crate::utilities::channel_content::InternalCommand;
