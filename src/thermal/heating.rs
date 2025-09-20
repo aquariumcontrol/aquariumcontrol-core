@@ -376,7 +376,7 @@ impl Heating {
         let mut lock_warn_cycle_time_exceeded: bool = false;
         let mut actuation_mutex_was_blocked_during_actuation: bool = false;
         let cycle_time_duration = Duration::from_millis(CYCLE_TIME_HEATING_MILLIS);
-        let midnight_check_interval = Duration::from_secs(1);
+        let midnight_check_interval = Duration::from_millis(200);
         let mut instant_midnight_check = Instant::now() - midnight_check_interval;
 
         let mut heating_stats_opt = match sql_interface_heating
@@ -1609,7 +1609,7 @@ pub mod tests {
         let spin_sleeper = SpinSleeper::default();
 
         let (mut config, mut heating, sql_interface, mut sql_interface_heating_stats) =
-            prepare_heating_tests_mock_midnight_calculator(3, 15, None);
+            prepare_heating_tests_mock_midnight_calculator(5, 15, None);
 
         // replacement values are used to initialize the mutexes
         config.sensor_manager.replacement_value_water_temperature = 20.0;
@@ -1908,7 +1908,7 @@ pub mod tests {
         let join_handle_test_environment = thread::Builder::new()
             .name("test_environment".to_string())
             .spawn(move || {
-                let sleep_duration = Duration::from_secs(4);
+                let sleep_duration = Duration::from_secs(5);
                 let spin_sleeper = SpinSleeper::default();
                 spin_sleeper.sleep(sleep_duration);
                 let _ = channels

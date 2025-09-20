@@ -47,6 +47,7 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 //!   unit testing, allowing for isolated testing of the `I2cInterface` thread's
 //!   logic without needing to run the entire application.
 
+#[cfg(any(test, all(target_os = "linux", feature = "target_hw")))]
 use crate::launch::channels::AquaChannelError;
 
 use crate::launch::channels::{AquaReceiver, AquaSender};

@@ -296,10 +296,13 @@ impl I2cInterface {
                 source: e,
             })?;
 
+        let read_buffer = [0u8; MAX_I2C_RESPONSE_LENGTH];
+        
         Ok(I2cInterface {
             i2c,
             spin_sleeper: SpinSleeper::default(),
             config,
+            read_buffer,
         })
     }
 
@@ -335,10 +338,10 @@ impl I2cInterface {
         let sleep_duration = Duration::from_millis(i2c_request.sleep_time_millis);
 
         // Check the buffer's capacity against the request's needs.
-        if self.buffer.len() < i2c_request.expected_response_length {
+        if self.read_buffer.len() < i2c_request.expected_response_length {
             return Err(I2cError::ProvidedBufferTooSmall {
                 location: module_path!().to_string(),
-                buffer_size: buffer.len(),
+                buffer_size: self.read_buffer.len(),
                 expected_size: i2c_request.expected_response_length,
             });
         }
@@ -370,7 +373,7 @@ impl I2cInterface {
         self.spin_sleeper.sleep(sleep_duration);
 
         // Use a sub-slice of the provided buffer for the read operation.
-        let read_slice = &mut self.buffer[..i2c_request.expected_response_length];
+        let read_slice = &mut self.read_buffer[..i2c_request.expected_response_length];
 
         let received_message_length =
             self.i2c

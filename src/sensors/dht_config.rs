@@ -38,10 +38,6 @@ pub struct DhtConfig {
     #[cfg(all(target_os = "linux", feature = "target_hw"))]
     pub sensor_init_pin_up_duration_micros: u64,
 
-    /// duration for sensor to respond after sending start signal in microseconds
-    #[cfg(all(target_os = "linux", feature = "target_hw"))]
-    pub sensor_init_input_duration_micros: u64,
-
     /// maximum permissible duration for the sensor to respond in microseconds
     #[cfg(all(target_os = "linux", feature = "target_hw"))]
     pub timeout_duration_micros: u64,

@@ -73,7 +73,7 @@ pub enum GpioHandlerError {
     #[error("Usage of hardware not supported on this platform.")]
     PlatformNotSupported,
 }
-#[cfg_attr(doc, aquamarine::aquamarine)]
+
 /// Contains the configuration and the implementation for the GPIO handler.
 pub struct GpioHandler {
     #[cfg(all(target_os = "linux", feature = "target_hw"))]

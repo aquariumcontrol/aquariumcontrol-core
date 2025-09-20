@@ -78,17 +78,17 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 //! 5.  **Validation**: The checksum (sum of the first 4 bytes, modulo 256) is validated
 //!     to ensure data integrity.
 
-#[cfg(all(not(test), target_os = "linux"))]
-use log::info;
-
 use crate::sensors::dht_error::DhtError;
-
-#[cfg(all(not(test), target_os = "linux", feature = "target_hw"))]
-use crate::utilities::logger::log_error_chain;
-
-#[cfg(all(not(test), target_os = "linux"))]
-use nix::unistd::gettid;
 use std::time::Duration;
+
+cfg_if::cfg_if! {
+    if #[cfg(all(not(test), target_os = "linux", feature = "target_hw"))] {
+        use nix::unistd::gettid;
+        use log::info;
+        use crate::utilities::logger::log_error_chain;
+    }
+}
+
 cfg_if::cfg_if! {
     if #[cfg(any(test, all(target_os = "linux", feature = "target_hw")))] {
         use crate::sensors::dht_channels::DhtChannels;
@@ -106,7 +106,6 @@ cfg_if::cfg_if! {
     if #[cfg(all(target_os = "linux", feature = "target_hw"))] {
         use rppal::gpio::{Gpio, Level, Trigger};
         use std::thread::{self, sleep};
-        use crate::sensors::gpio_handler::Gpio;
 
         #[cfg(feature = "debug_dht")]
         use log::debug;
@@ -692,10 +691,7 @@ impl Dht {
         let byte_vals = Self::calc_byte_array(data_bits);
 
         // checksum calculation
-        Self::calc_checksum(byte_vals).map_err(|e| {
-            try_again = true;
-            e
-        });
+        Self::calc_checksum(byte_vals)?;
 
         // calculate signals (or error code) and directly return it
         Self::calc_signals(byte_vals)
@@ -713,7 +709,7 @@ impl Dht {
     ///
     /// # Errors
     /// Always returns `Err(DhtError::IncorrectPlatform)`.
-    pub fn read(&self, _reset_sensor: bool, _try_again: &mut bool) -> DhtResult {
+    pub fn read(&self, _reset_sensor: bool) -> DhtResult {
         Err(DhtError::IncorrectPlatform(module_path!().to_string()))
     }
 
@@ -733,11 +729,8 @@ impl Dht {
     /// - Any other `DhtError` variant for non-recoverable hardware or configuration failures.
     pub fn get_data(&mut self) -> DhtResult {
         for i in 0..=dht22_constants::DHT22_MAX_RETRIES {
-            let mut try_again = false;
             // Reset power supply only on the first attempt (i == 0).
-            let read_result = self.read(i == 0, &mut try_again);
-
-            match read_result {
+            match self.read(i == 0) {
                 // On success, return immediately.
                 Ok(data) => return Ok(data),
                 Err(e) => {
