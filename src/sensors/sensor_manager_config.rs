@@ -6,6 +6,15 @@ The above copyright notice and this permission notice shall be included in all c
 
 THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
+
+//! Defines the configuration structure for the central `SensorManager` thread.
+//!
+//! This module contains the `SensorManagerConfig` struct, which is used with `serde`
+//! to deserialize the `[sensor_manager]` section from the application's TOML
+//! configuration file. It holds all the parameters that control how the
+//! `SensorManager` aggregates data, including which physical sensors to use for
+//! logical measurements and what fallback values to use in case of a sensor failure.
+
 use serde_derive::Deserialize;
 
 #[derive(Deserialize, Debug)]

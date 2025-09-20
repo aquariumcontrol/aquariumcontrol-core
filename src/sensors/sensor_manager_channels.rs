@@ -6,6 +6,55 @@ The above copyright notice and this permission notice shall be included in all c
 
 THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
+
+//! A central container for all inter-thread communication channels used by the `SensorManager` thread.
+//!
+//! This module defines the `SensorManagerChannels` struct, which acts as a dedicated
+//! "switchboard". Its primary purpose is to aggregate all the `mpsc::channel` senders
+//! and receivers that the `SensorManager` thread needs to communicate with other parts
+//! of the application.
+//!
+//! This includes two main communication pathways:
+//! 1.  **Simulator Communication**: Optional channels (`..._to_tcp_opt`) for sending
+//!     requests to and receiving data from a `TcpCommunication` thread when the
+//!     application is running in simulator mode.
+//! 2.  **Signal Handler Communication**: Channels for receiving graceful shutdown
+//!     commands from and sending acknowledgments to the main `SignalHandler`.
+//!
+//! ## Key Components
+//!
+//! - **`SensorManagerChannels` Struct**: A container that explicitly declares the full
+//!   set of communication dependencies for the `SensorManager` thread. The use of
+//!   `Option` for the TCP channels makes the simulator-specific communication path
+//!   explicit.
+//!
+//! - **Helper Methods**: Provides convenient wrapper methods, such as `send_to_tcp()`
+//!   and `receive_from_signal_handler()`, to offer a clean, consistent API for
+//!   channel operations.
+//!
+//! ## Design and Architecture
+//!
+//! The `SensorManagerChannels` struct is a key part of the application's inter-thread
+//! communication strategy, promoting clean and decoupled code.
+//!
+//! - **Centralization**: By gathering all necessary channels into a single struct, it
+//!   provides a clear and explicit declaration of the `SensorManager` thread's
+//!   communication dependencies. This makes the overall application architecture easier
+//!   to reason about.
+//!
+//! - **Decoupling**: The main `SensorManager` thread logic doesn't need to manage
+//!   individual channels. It just needs this struct. This separates the core sensor
+//!   aggregation logic from the communication infrastructure.
+//!
+//! - **Mode-Specific Communication**: The use of `Option` for the TCP channels is a
+//!   core design element. The channels are only `Some(...)` when the application is
+//!   configured to run in simulator mode, making the hardware vs. simulator logic
+//!   paths type-safe and explicit.
+//!
+//! - **Testability**: The struct can be easily constructed for usage with mock functions during
+//!   unit testing, allowing for isolated testing of the `SensorManager` thread's
+//!   logic without needing to run the entire application.
+
 use crate::launch::channels::{AquaChannelError, AquaReceiver, AquaSender};
 use crate::simulator::tcp_communication::TcpCommunicationError;
 use crate::utilities::channel_content::InternalCommand;
@@ -26,37 +75,9 @@ pub struct SensorManagerChannels {
 }
 
 impl SensorManagerChannels {
-    /// Sends a command to the TCP simulator if the channel exists.
-    #[allow(unused)]
-    pub fn send_to_tcp(
-        &mut self,
-        command: InternalCommand,
-    ) -> Option<Result<(), AquaChannelError>> {
-        self.tx_sensor_manager_to_tcp_opt
-            .as_mut()
-            .map(|tx| tx.send(command))
-    }
-
-    /// Receives a result from the TCP simulator if the channel exists.
-    #[allow(unused)]
-    pub fn receive_from_tcp(
-        &mut self,
-    ) -> Option<Result<Result<f32, TcpCommunicationError>, AquaChannelError>> {
-        self.rx_sensor_manager_from_tcp_opt
-            .as_mut()
-            .map(|rx| rx.recv())
-    }
-
     /// Sends an acknowledgment to the signal handler.
-    #[allow(unused)]
     pub fn send_to_signal_handler(&mut self, ack: bool) -> Result<(), AquaChannelError> {
         self.tx_sensor_manager_to_signal_handler.send(ack)
-    }
-
-    /// Receives a command from the signal handler.
-    #[allow(unused)]
-    pub fn receive_from_signal_handler(&mut self) -> Result<InternalCommand, AquaChannelError> {
-        self.rx_sensor_manager_from_signal_handler.recv()
     }
 }
 

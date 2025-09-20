@@ -6,21 +6,72 @@ The above copyright notice and this permission notice shall be included in all c
 
 THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
+
+//! The central sensor data aggregation and management thread.
+//!
+//! This module implements the `SensorManager`, a dedicated, long-running thread that
+//! acts as the primary hub for all sensor data within the application. Its core
+//! responsibility is to periodically gather the latest readings from various individual
+//! sensor threads (`Ds18b20`, `Dht`, `AtlasScientific`) and consolidate them into a
+//! single, consistent data structure.
+//!
+//! The manager is highly configurable, allowing the user to select the physical sensor
+//! source for logical measurements (e.g., using "ds18b20" or "atlas_scientific" for
+//! water temperature) via the TOML configuration file. The final, consolidated data
+//! is then made available to the rest of the application through a shared `Arc<Mutex<...>>`.
+//!
+//! ## Key Components
+//!
+//! - **`SensorManager` Struct**: The core state machine for the thread. It holds the
+//!   configuration, internal state, and a vast number of log-suppression flags.
+//!
+//! - **`execute()` Method**: The main thread loop. It operates in two distinct modes:
+//!   - **Hardware Mode**: Reads the latest data from shared `Arc<Mutex<...>>` objects
+//!     that are populated by other sensor threads. It uses the configuration to
+//!     select the correct source for each logical signal.
+//!   - **Simulator Mode**: Communicates via TCP channels with a simulator to fetch
+//!     mock sensor data, allowing for development and testing without physical hardware.
+//!
+//! - **`SensorManagerMutexes` Struct**: A container that holds `Arc<Mutex<...>>` handles
+//!   to all the *input* data sources from other sensor threads. This struct is a key
+//!   part of the dependency injection pattern for the `execute` method.
+//!
+//! - **`SensorManagerSignals` Struct**: The *output* data structure. After consolidating
+//!   all readings, the `SensorManager` writes them into this struct, which is wrapped
+//!   in a shared `Arc<Mutex<...>>` for other threads (like the `DataLogger` or UI) to consume.
+//!
+//! ## Design and Architecture
+//!
+//! - **Central Aggregation Hub**: The `SensorManager` decouples sensor data *producers*
+//!   (the individual hardware threads) from data *consumers*. Consumers only need to
+//!   access one well-known mutex to get all the latest, validated data, without
+//!   needing to know which physical sensors are being used.
+//!
+//! - **Configurable Data Sources**: The design allows for flexible hardware setups. By
+//!   changing a string in the `config.toml` file (e.g., `source_water_temperature = "ds18b20"`),
+//!   the user can switch the source for a key measurement without recompiling the application.
+//!   The `new()` constructor validates this configuration at startup to prevent runtime errors.
+//!
+//! - **Concurrent Data Sharing**: The module makes extensive use of `Arc<Mutex<...>>` for
+//!   thread-safe data exchange. It reads from a set of input mutexes and writes to a
+//!   single output mutex, acting as a fan-in data pipeline.
+//!
+//! ### Thread Communication
+//!
+//! The `SensorManager` primarily communicates with the `SignalHandler` for graceful shutdown
+//! and with a `TcpCommunication` thread when in simulator mode.
+
 #![allow(non_snake_case)]
-
-use log::error;
-#[cfg(all(target_os = "linux", not(test)))]
-use log::info;
-
-use std::sync::{Arc, Mutex};
 
 #[cfg(feature = "debug_sensor_manager")]
 use log::debug;
 
-#[cfg(all(target_os = "linux", not(test)))]
-use nix::unistd::gettid;
-
-use spin_sleep::SpinSleeper;
+cfg_if::cfg_if! {
+    if #[cfg(all(target_os = "linux", not(test)))] {
+        use nix::unistd::gettid;
+        use log::info;
+    }
+}
 
 use crate::sensors::atlas_scientific::AtlasScientificResultData;
 use crate::sensors::dht::DhtResult;
@@ -35,9 +86,33 @@ use crate::utilities::check_mutex_access_duration::CheckMutexAccessDurationTrait
 use crate::utilities::logger::log_error_chain;
 use crate::utilities::proc_ext_req::ProcessExternalRequestTrait;
 use crate::utilities::wait_for_termination::WaitForTerminationTrait;
+use log::error;
+use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 use thiserror::Error;
+use spin_sleep::SpinSleeper;
 
+/// Centralizes constants used throughout the `SensorManager` module.
+///
+/// This private module consolidates "magic strings" and other hardcoded values
+/// to prevent them from being scattered throughout the `SensorManager`'s logic.
+/// By keeping them in one place, it improves maintainability and reduces the
+/// risk of typos when comparing against configuration values.
+///
+/// ### Constants
+///
+/// - **Sensor Source Identifiers**:
+///   - `SOURCE_*`: These string constants define the valid values for the
+///     `source_water_temperature` and `source_ambient_temperature` fields in the
+///     `[sensor_manager]` section of the TOML configuration file. They map a
+///     logical measurement to a physical sensor driver (e.g., "ds18b20", "dht").
+///
+/// - **Timing and Performance**:
+///   - `*_MEASUREMENT_INTERVAL_MILLIS`: Define the polling rate for the sensor
+///     manager, with different values for simulator and hardware modes.
+///   - `MAX_MUTEX_ACCESS_DURATION_MILLIS`: Sets a threshold for how long a mutex
+///     lock can be held before a warning is logged. This helps detect performance
+///     bottlenecks or potential deadlocks.
 mod sensor_manager_constants {
     pub const SOURCE_WATER_TEMPERATURE_ATLAS_SCIENTIFIC: &str = "atlas_scientific";
 
