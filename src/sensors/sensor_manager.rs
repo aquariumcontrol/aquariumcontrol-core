@@ -87,10 +87,10 @@ use crate::utilities::logger::log_error_chain;
 use crate::utilities::proc_ext_req::ProcessExternalRequestTrait;
 use crate::utilities::wait_for_termination::WaitForTerminationTrait;
 use log::error;
+use spin_sleep::SpinSleeper;
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 use thiserror::Error;
-use spin_sleep::SpinSleeper;
 
 /// Centralizes constants used throughout the `SensorManager` module.
 ///

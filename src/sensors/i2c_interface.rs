@@ -297,7 +297,7 @@ impl I2cInterface {
             })?;
 
         let read_buffer = [0u8; MAX_I2C_RESPONSE_LENGTH];
-        
+
         Ok(I2cInterface {
             i2c,
             spin_sleeper: SpinSleeper::default(),
@@ -331,10 +331,7 @@ impl I2cInterface {
     /// - `I2cError::InsufficientRead`: If the full response could not be read from the sensor.
     /// - `I2cError::IncorrectResponseLength`: If the number of bytes read does not match
     ///   the `expected_response_length`.
-    pub fn get_response_from_i2c(
-        &mut self,
-        i2c_request: I2cRequest,
-    ) -> I2cResult {
+    pub fn get_response_from_i2c(&mut self, i2c_request: I2cRequest) -> I2cResult {
         let sleep_duration = Duration::from_millis(i2c_request.sleep_time_millis);
 
         // Check the buffer's capacity against the request's needs.
