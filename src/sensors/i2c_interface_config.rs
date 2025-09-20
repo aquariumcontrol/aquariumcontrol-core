@@ -7,6 +7,13 @@ The above copyright notice and this permission notice shall be included in all c
 THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
+//! Defines the configuration structure for the I2C interface service.
+//!
+//! This module contains the `I2cInterfaceConfig` struct, which is used with `serde`
+//! to deserialize the `[i2c_interface]` section from the application's TOML
+//! configuration file. It holds parameters that control the low-level behavior of the
+//! `I2cInterface` thread, such as hardware timeouts.
+
 use serde_derive::Deserialize;
 
 /// Holds the configuration data for the I2C interface.
