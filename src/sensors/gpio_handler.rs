@@ -6,6 +6,25 @@ The above copyright notice and this permission notice shall be included in all c
 
 THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
+
+//! Manages the initialization and validation of the system's GPIO pins.
+//!
+//! This module acts as a central gatekeeper for all GPIO (General Purpose Input/Output)
+//! operations. Its primary responsibility is to be instantiated once at application
+//! startup to perform two critical functions:
+//!
+//! 1.  **Validate Configuration**: It checks the content of the `[gpio_handler]` section of the
+//!     configuration file and rigorously checks that all assigned GPIO pins
+//!     are within a valid hardware range and are unique, preventing conflicts.
+//! 2.  **Initialize Hardware**: On a supported hardware platform (`linux` with the
+//!     `target_hw` feature), it acquires a handle to the system's GPIO interface
+//!     (using the `rppal` crate).
+//!
+//! This module intentionally does not perform any I/O operations itself. Instead, it
+//! provides the validated configuration and the hardware handle to other modules
+//! (like actuators and sensors) that are responsible for the actual reading and
+//! writing of pin states.
+
 #[cfg(not(test))]
 use log::error;
 use std::collections::HashSet;
