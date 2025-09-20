@@ -60,6 +60,7 @@ use crate::simulator::tcp_communication::TcpCommunicationError;
 use crate::utilities::channel_content::InternalCommand;
 use std::fmt;
 
+/// Container for channels used by SensorManager
 pub struct SensorManagerChannels {
     /// Sender part of the channel for communication via TCP wrapped as optional
     pub tx_sensor_manager_to_tcp_opt: Option<AquaSender<InternalCommand>>,

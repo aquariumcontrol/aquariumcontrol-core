@@ -6,6 +6,63 @@ The above copyright notice and this permission notice shall be included in all c
 
 THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
+
+//! A dedicated thread for monitoring and stabilizing a tank water level switch.
+//!
+//! This module implements the `TankLevelSwitch`, a long-running thread responsible
+//! for reading the state of a physical float switch. Its primary purpose is not
+//! just to read the raw signal, but to apply a stabilization algorithm to prevent
+//! rapid state changes ("chatter") caused by water movement.
+//!
+//! The module operates in two distinct modes:
+//! 1.  **Hardware Mode**: Reads the state of a GPIO pin on a Raspberry Pi.
+//! 2.  **Simulator Mode**: Communicates via TCP with a simulator to get mock data.
+//!
+//! The final, stabilized data is written to a shared `Arc<Mutex<...>>` for other
+//! threads (like `RefillControl`) to consume safely.
+//!
+//! ## Key Components
+//!
+//! - **`TankLevelSwitch` Struct**: The core state machine for the thread. It holds the
+//!   configuration, the raw and stabilized switch positions, and state for the
+//!   stabilization counter.
+//!
+//! - **`execute()` Method**: The main thread loop. It runs at a fixed cycle time,
+//!   periodically calling `update_tank_level_switch_signals` to get the raw
+//!   input and `calc_tank_level_switch_position_stabilized` to apply the logic.
+//!
+//! - **`calc_tank_level_switch_position_stabilized()`**: The heart of the module's logic.
+//!   It implements an asymmetric delay:
+//!   - A transition to **high water** (`true`) is immediate.
+//!   - A transition to **low water** (`false`) is delayed, requiring the raw signal
+//!     to remain low for a configured number of cycles. This prevents the refill
+//!     pump from rapidly turning on and off due to waves.
+//!
+//! - **`TankLevelSwitchSignals` Struct**: The output data structure. After processing,
+//!   the `TankLevelSwitch` writes the raw position, stabilized position, and an
+//!   invalid flag into this struct, which is shared via a mutex.
+//!
+//! ## Design and Architecture
+//!
+//! - **Real-Time Monitoring and Stabilization**: By running in its own high-frequency
+//!   loop, this thread can provide responsive and reliable water level data. The
+//!   stabilization logic is critical for robust automation, especially for controlling pumps.
+//!
+//! - **Decoupling via Mutex**: The module acts as a data *producer*. Consumer threads
+//!   (like `RefillControl` or `DataLogger`) are completely decoupled; they simply
+//!   read the latest state from the shared `TankLevelSwitchSignals` mutex without
+//!   needing to know how the data was obtained or processed.
+//!
+//! - **Dual-Mode Operation**: The use of `#[cfg]` attributes and the `use_simulator`
+//!   configuration flag allows the entire application to be developed and tested on a
+//!   machine without GPIO hardware, significantly improving the development workflow.
+//!
+//! ### Thread Communication
+//!
+//! The `TankLevelSwitch` communicates with the `SignalHandler` for graceful shutdown
+//! and with a `TcpCommunication` thread in simulator mode. It provides data to
+//! consumers via a shared mutex.
+
 #[cfg(feature = "debug_tank_level_switch")]
 use log::debug;
 use std::sync::{Arc, Mutex};
@@ -1144,11 +1201,7 @@ pub mod tests {
             read_config_file("/config/aquarium_control_test_generic.toml".to_string());
         config.gpio_handler.use_simulator = false;
         config.tank_level_switch.use_simulator = false;
-
-        let (tx_tank_level_switch_to_signal_handler, rx_signal_handler_from_tank_level_switch) =
-            channel(1);
-        let (tx_signal_handler_to_tank_level_switch, rx_tank_level_switch_from_signal_handler) =
-            channel(1);
+        let mut channels = Channels::new_for_test();
 
         let tank_level_switch_pin = config.gpio_handler.tank_level_switch;
 
@@ -1212,9 +1265,9 @@ pub mod tests {
                     &mut mutex_tank_level_switch_signals
                 );
 
-                let _ = tx_signal_handler_to_tank_level_switch.send(InternalCommand::Quit);
-                rx_signal_handler_from_tank_level_switch.recv().unwrap();
-                let _ = tx_signal_handler_to_tank_level_switch.send(InternalCommand::Terminate);
+                let _ = channels.signal_handler.send_to_tank_level_switch(InternalCommand::Quit).unwrap();
+                let _ = channels.signal_handler.receive_from_tank_level_switch();
+                let _ = channels.signal_handler.send_to_tank_level_switch(InternalCommand::Terminate).unwrap();
                 spin_sleeper.sleep(sleep_duration_part);
             })
             .unwrap();
@@ -1224,10 +1277,7 @@ pub mod tests {
             .name("test_object".to_string())
             .spawn(move || {
                 tank_level_switch.execute(
-                    &None,
-                    &None,
-                    &tx_tank_level_switch_to_signal_handler,
-                    &rx_tank_level_switch_from_signal_handler,
+                    &mut channels.tank_level_switch,
                     mutex_tank_level_switch_signals_clone_for_test_object,
                 );
             })
