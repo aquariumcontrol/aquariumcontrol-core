@@ -7,6 +7,59 @@ The above copyright notice and this permission notice shall be included in all c
 THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
+//! Provides a centralized, thread-safe interface for I2C communication.
+//!
+//! This module implements the `I2cInterface` struct, which runs as a dedicated, long-running
+//! thread acting as a "hardware service". Its sole purpose is to manage all interactions
+//! with the I2C bus, abstracting away the low-level details from the rest of the application.
+//!
+//! Client modules (like `AtlasScientific`) do not perform I/O operations directly. Instead,
+//! they construct an `I2cRequest`, send it to this thread via a channel, and wait for an
+//! `I2cResult` to be sent back. This design prevents bus contention and encapsulates all
+//! timing-sensitive hardware logic in one place.
+//!
+//! The entire module is heavily reliant on conditional compilation (`#[cfg]`) to allow the
+//! application to be compiled and tested on platforms without I2C hardware (e.g., a
+//! developer's machine), where it can run in a simulated mode.
+//!
+//! ## Key Components
+//!
+//! - **`I2cInterface` Struct**: The core of the service thread. On target hardware, it holds
+//!   the `rppal::i2c::I2c` handle, which represents the physical I2C bus.
+//!
+//! - **`execute()` Method**: The main thread loop. It continuously listens for incoming
+//!   `I2cRequest`s, executes them using `get_response_from_i2c`, and sends the
+//!   `I2cResult` back to the original caller. It also handles graceful shutdown signals.
+//!
+//! - **`get_response_from_i2c()` Method**: The low-level, hardware-facing function that
+//!   orchestrates a complete write/read transaction: setting the slave address, writing a
+//!   command, pausing, and reading the response.
+//!
+//! - **`I2cRequest` & `I2cResponse` Structs**: These are the data transfer objects (DTOs)
+//!   for the service.
+//!   - `I2cRequest`: A message containing all information needed to perform a transaction
+//!     (address, command, sleep time, expected response length).
+//!   - `I2cResponse`: A message containing the raw data read from the I2C device.
+//!
+//! ## Design and Architecture
+//!
+//! - **Centralized I2C Service**: By funneling all I2C traffic through this single thread,
+//!   the design eliminates the risk of multiple threads trying to access the bus
+//!   simultaneously, which would lead to data corruption or hardware errors.
+//!
+//! - **Asynchronous Request/Response Model**: The use of `mpsc` channels creates a clean,
+//!   asynchronous API. Clients are completely decoupled from the hardware implementation;
+//!   they only need to know how to construct a request and process a response.
+//!
+//! - **Platform Abstraction via Conditional Compilation**: The use of `#[cfg]` is a core
+//!   design principle. It allows the application to compile and run on any OS (like a
+//!   developer's macOS) for logic testing, as all hardware-specific
+//!   code from the `rppal` crate is excluded from the build on non-target platforms.
+//!
+//! - **Performance and Buffer Management**: The `execute()` loop allocates its read buffer
+//!   once on the stack at startup. This buffer is then reused for every transaction,
+//!   avoiding repeated, potentially costly memory allocations within the main loop.
+
 #[cfg(all(target_os = "linux", feature = "target_hw"))]
 use log::info;
 use spin_sleep::SpinSleeper;
@@ -41,23 +94,23 @@ const MAX_I2C_COMMAND_LENGTH: usize = 16;
 const MAX_I2C_RESPONSE_LENGTH: usize = 64;
 
 pub struct I2cRequest {
-    #[allow(unused)]
+    #[cfg(all(target_os = "linux", feature = "target_hw"))]
     /// I2C address of the bus participant
     pub i2c_address: u16,
 
-    #[allow(unused)]
+    #[cfg(all(target_os = "linux", feature = "target_hw"))]
     /// input sequence to be sent to the bus participant
     pub(crate) send_buf: [u8; MAX_I2C_COMMAND_LENGTH],
 
-    #[allow(unused)]
+    #[cfg(all(target_os = "linux", feature = "target_hw"))]
     /// The actual length of the command in the buffer.
     pub(crate) send_len: usize,
 
-    #[allow(unused)]
+    #[cfg(all(target_os = "linux", feature = "target_hw"))]
     /// sleep time in milliseconds before retrieving an answer from the bus participant
     pub(crate) sleep_time_millis: u64,
 
-    #[allow(unused)]
+    #[cfg(all(target_os = "linux", feature = "target_hw"))]
     /// length of the expected response in byte
     pub(crate) expected_response_length: usize,
 }
@@ -83,7 +136,6 @@ impl I2cRequest {
     /// Returns an `I2cError` if the provided command is too large for the buffer:
     /// - `I2cError::CommandTooLong`: If the length of `send_slice` exceeds the
     ///   `MAX_I2C_COMMAND_LENGTH` constant.
-    #[allow(unused)] // used in conditionally compiled code
     pub fn new(
         i2c_address: u16,
         send_slice: &[u8],
@@ -104,10 +156,19 @@ impl I2cRequest {
         send_buf[..send_slice.len()].copy_from_slice(send_slice);
 
         Ok(I2cRequest {
+            #[cfg(all(target_os = "linux", feature = "target_hw"))]
             i2c_address,
+
+            #[cfg(all(target_os = "linux", feature = "target_hw"))]
             send_buf,
+
+            #[cfg(all(target_os = "linux", feature = "target_hw"))]
             send_len: send_slice.len(),
+
+            #[cfg(all(target_os = "linux", feature = "target_hw"))]
             sleep_time_millis,
+
+            #[cfg(all(target_os = "linux", feature = "target_hw"))]
             expected_response_length,
         })
     }
@@ -202,6 +263,10 @@ pub struct I2cInterface {
 
     /// spin sleeper for waiting response of sensor unit
     spin_sleeper: SpinSleeper,
+
+    #[cfg(all(target_os = "linux", feature = "target_hw"))]
+    /// Read buffer
+    read_buffer: [u8; MAX_I2C_RESPONSE_LENGTH],
 }
 
 impl I2cInterface {
@@ -254,7 +319,6 @@ impl I2cInterface {
     ///
     /// # Arguments
     /// * `i2c_request` - A struct containing the I2C address, command, and timing details.
-    /// * `buffer` - A mutable byte slice that will be used to store the data read from the sensor.
     ///
     /// # Returns
     /// A `Result` containing an `I2cResponse` with the successfully read sensor data.
@@ -272,12 +336,11 @@ impl I2cInterface {
     pub fn get_response_from_i2c(
         &mut self,
         i2c_request: I2cRequest,
-        buffer: &mut [u8],
     ) -> I2cResult {
         let sleep_duration = Duration::from_millis(i2c_request.sleep_time_millis);
 
         // Check the buffer's capacity against the request's needs.
-        if buffer.len() < i2c_request.expected_response_length {
+        if self.buffer.len() < i2c_request.expected_response_length {
             return Err(I2cError::ProvidedBufferTooSmall {
                 location: module_path!().to_string(),
                 buffer_size: buffer.len(),
@@ -312,7 +375,7 @@ impl I2cInterface {
         self.spin_sleeper.sleep(sleep_duration);
 
         // Use a sub-slice of the provided buffer for the read operation.
-        let read_slice = &mut buffer[..i2c_request.expected_response_length];
+        let read_slice = &mut self.buffer[..i2c_request.expected_response_length];
 
         let received_message_length =
             self.i2c
@@ -336,7 +399,7 @@ impl I2cInterface {
     /// Executes the main loop for the I2C interface thread, acting as a request/response service.
     ///
     /// This function runs indefinitely, processing I2C requests received from other modules.
-    /// It listens on the `rx_i2c_interface_from_atlas_scientific` channel for an `I2cRequest`. Upon
+    /// It listens to the `rx_i2c_interface_from_atlas_scientific` channel for an `I2cRequest`. Upon
     /// receiving a request, it calls `get_response_from_i2c` to perform the hardware
     /// communication and sends the resulting `I2cResult` back to the caller via the
     /// channel.
@@ -356,9 +419,6 @@ impl I2cInterface {
         let sleep_time = Duration::from_millis(100);
         let spin_sleeper = SpinSleeper::default();
 
-        // Allocate the read buffer once, here on the stack, using the correct size.
-        let mut read_buffer = [0u8; MAX_I2C_RESPONSE_LENGTH];
-
         loop {
             let (quit_command_received, _, _) = self.process_external_request(
                 &mut i2c_interface_channels.rx_i2c_interface_from_signal_handler,
@@ -371,7 +431,7 @@ impl I2cInterface {
             match i2c_interface_channels.receive_from_atlas_scientific() {
                 Ok(request) => {
                     lock_error_receive_atlas_scientific = false;
-                    let response = self.get_response_from_i2c(request, &mut read_buffer);
+                    let response = self.get_response_from_i2c(request);
                     match i2c_interface_channels.send_to_atlas_scientific(response) {
                         Ok(_) => {
                             lock_error_send_atlas_scientific = false;
