@@ -14,6 +14,7 @@ mod mock_common;
 pub mod mock_data_injection;
 pub mod mock_food_injection;
 pub mod mock_heating;
+pub mod mock_heating_stats;
 pub mod mock_i2c_interface;
 pub mod mock_message_command_receiver;
 pub mod mock_mineral_injection;

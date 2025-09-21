@@ -86,7 +86,7 @@ pub struct HeatingStatsEntry {
     pub water_temperature_average_counter: i64,
 
     /// counter how many seconds the heating control was active on a specific date
-    pub heating_control_runtime: i64,
+    pub heating_control_runtime: f64,
 }
 
 impl HeatingStatsEntry {
@@ -118,7 +118,7 @@ impl HeatingStatsEntry {
             ambient_temperature_average_counter: 0,
             water_temperature_average_value: 0.0,
             water_temperature_average_counter: 0,
-            heating_control_runtime: 0,
+            heating_control_runtime: 0.0,
         }
     }
 
@@ -138,6 +138,7 @@ impl HeatingStatsEntry {
         water_temperature_opt: Option<f64>,
         ambient_temperature_opt: Option<f64>,
         energy_increment: f64,
+        control_runtime_increment: f64,
     ) {
         // add energy to the sum of heating energy
         self.energy += energy_increment;
@@ -180,7 +181,7 @@ impl HeatingStatsEntry {
             }
         };
 
-        self.heating_control_runtime += 1;
+        self.heating_control_runtime += control_runtime_increment;
     }
 
     #[cfg(test)]
@@ -192,7 +193,7 @@ impl HeatingStatsEntry {
             ambient_temperature_average_counter: 0,
             water_temperature_average_value: 0.0,
             water_temperature_average_counter: 0,
-            heating_control_runtime: 0,
+            heating_control_runtime: 0.0,
         }
     }
 
@@ -481,6 +482,7 @@ pub mod tests {
     use crate::database::sql_query_strings::SQL_TABLE_HEATING_STATS;
     use crate::database::{sql_interface::SqlInterface, sql_interface_error::SqlInterfaceError};
     use crate::utilities::config::{read_config_file_with_test_database, ConfigData};
+    use all_asserts::{assert_ge, assert_le};
     use chrono::{Datelike, Local, NaiveDate, NaiveDateTime};
 
     #[test]
@@ -621,7 +623,7 @@ pub mod tests {
             ambient_temperature_average_counter: 72000,
             water_temperature_average_value: 25.0,
             water_temperature_average_counter: 78000,
-            heating_control_runtime: 64000,
+            heating_control_runtime: 64000.0,
         };
         assert!(matches!(
             sql_interface_heating.insert_heating_stats_entry(&heating_stats_entry),
@@ -639,7 +641,7 @@ pub mod tests {
                 assert_eq!(c.ambient_temperature_average_counter, 72000);
                 assert_eq!(c.water_temperature_average_value, 25.0);
                 assert_eq!(c.water_temperature_average_counter, 78000);
-                assert_eq!(c.heating_control_runtime, 64000);
+                assert_eq!(c.heating_control_runtime, 64000.0);
             }
             Err(_) => {
                 panic!("Call to get_single_heating_stats_from_database has failed.");
@@ -654,7 +656,7 @@ pub mod tests {
         heating_stats_entry.ambient_temperature_average_counter += 1;
         heating_stats_entry.water_temperature_average_value += 0.1;
         heating_stats_entry.water_temperature_average_counter += 1;
-        heating_stats_entry.heating_control_runtime += 1;
+        heating_stats_entry.heating_control_runtime += 1.0;
         assert!(matches!(
             sql_interface_heating.insert_heating_stats_entry(&heating_stats_entry),
             Ok(())
@@ -667,7 +669,8 @@ pub mod tests {
                 assert_eq!(c.ambient_temperature_average_counter, 72001);
                 assert_eq!(c.water_temperature_average_value, 25.1);
                 assert_eq!(c.water_temperature_average_counter, 78001);
-                assert_eq!(c.heating_control_runtime, 64001);
+                assert_le!(c.heating_control_runtime, 64001.5);
+                assert_ge!(c.heating_control_runtime, 63999.5);
             }
             Err(_) => {
                 panic!("Call to get_single_heating_stats_from_database has failed.");

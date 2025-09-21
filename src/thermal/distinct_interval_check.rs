@@ -6,13 +6,30 @@ The above copyright notice and this permission notice shall be included in all c
 
 THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
+
+//! Provides a validation function to ensure thermal control intervals do not conflict.
+//!
+//! This module contains a single, critical validation function,
+//! `distinct_thermal_control_interval_check`. Its primary purpose is to be called at
+//! application startup to verify the `[heating]` and `[ventilation]` sections of the
+//! TOML configuration file.
+//!
+//! The check prevents a dangerous and inefficient misconfiguration where the heating
+//! and cooling systems could be active simultaneously, actively working against each
+//! other. This scenario is highly undesirable as it wastes energy and can cause
+//! other system issues, such as excessive water evaporation leading to refill problems.
+//!
+//! ## Logic and Validation
+//!
+//! The function ensures that there is a "dead band" or a non-interfering gap
+//! between the heating and ventilation temperature ranges. Specifically, it verifies
+//! that the temperature at which the heater switches **off** is strictly lower than the
+//! temperature at which the ventilation fans switch **off**.
+
 use crate::thermal::heating_config::HeatingConfig;
 use crate::thermal::ventilation_config::VentilationConfig;
 
 /// The function checks if the control parameters of heating and ventilation do not conflict each other.
-/// This shall avoid the scenario that heating and ventilation are working against each other,
-/// leading to excessive consumption of energy and fresh water and potentially triggering
-/// deactivation of the refill control.
 /// # Arguments
 ///
 /// * `heating_config` - A reference to the `HeatingConfig` struct containing configuration

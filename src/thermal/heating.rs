@@ -7,6 +7,67 @@ The above copyright notice and this permission notice shall be included in all c
 THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
+//! Manages the aquarium's heating system through a dedicated control thread.
+//!
+//! This module implements the `Heating` control thread, a long-running process
+//! responsible for controlling the aquarium's water temperature in conjunction with
+//! the ventilation control. It's a sophisticated controller that integrates sensor data,
+//! safety checks, scheduling, and statistical logging to provide robust and efficient thermal management.
+//!
+//! ## Key Responsibilities
+//!
+//! - **Temperature Control**: Implements a hybrid control strategy:
+//!   - **Hysteresis Control**: Switches the heater fully on when the temperature drops
+//!     below `switch_on_temperature` and fully off when it exceeds `switch_off_temperature`.
+//!   - **Proportional Control**: Within the hysteresis band, it uses a `SawToothProfile`
+//!     to achieve a "PWM-like" effect, modulating the heater's on-time to provide
+//!     smoother temperature regulation.
+//!
+//! - **Safety Interlocks**: A critical safety feature monitors the tank's water level.
+//!   If the level is detected as low for a configured duration, the heater is
+//!   forcibly switched off to prevent overheating and damage.
+//!
+//! - **Daily Statistics Logging**: It continuously tracks energy consumption (in kWh),
+//!   average water temperature, and average ambient temperature. Just after midnight,
+//!   it persists these daily statistics to an SQL database for long-term analysis.
+//!
+//! - **External Control**: Listens for `Start` and `Stop` commands from other parts of
+//!   the system (e.g., a messaging interface), allowing heating to be manually
+//!   inhibited or re-enabled. It also respects a system-wide schedule.
+//!
+//! ## Key Components
+//!
+//! - **`Heating` Struct**: The core state machine for the thread. It holds the
+//!   configuration, internal state, and log-suppression flags.
+//!
+//! - **`execute()` Method**: The main thread loop. This monolithic function orchestrates
+//!   all the module's responsibilities, from reading sensors to actuating the relay
+//!   and logging data.
+//!
+//! - **`actuate_heater()`**: A private helper that encapsulates the channel communication
+//!   required to send a command to the `RelayManager` and wait for its response.
+//!
+//! - **`HeatingMutexes` Struct**: A container holding `Arc<Mutex<...>>` handles to all
+//!   the *input* data sources (from `SensorManager` and `TankLevelSwitch`).
+//!
+//! - **`HeatingStatsDataTransferTrait`**: A trait used for dependency injection, allowing
+//!   the database-writing logic to be mocked during testing.
+//!
+//! ## Design and Architecture
+//!
+//! - **Decoupled and Concurrent**: The `Heating` thread runs independently, communicating
+//!   with other threads asynchronously via channels (for commands) and mutexes (for
+//!   shared state like sensor data). This decouples the control logic from the
+//!   hardware drivers and data sources.
+//!
+//! - **Stateful and Robust**: The thread maintains its own state (`heater_state`,
+//!   `heating_inhibited`) and uses flags to manage log suppression and
+//!   recover from transient errors (like a failed channel send-operation).
+//!
+//! - **Data-Driven**: Its behavior is driven by a combination of real-time sensor data,
+//!   pre-configured parameters from a TOML file, and dynamic setpoints fetched from
+//!   a database.
+
 use log::error;
 
 #[cfg(not(test))]
@@ -159,13 +220,13 @@ fn switch_off_heater(
 /// device states that are used by the heating control.
 pub struct HeatingMutexes {
     /// Mutex for signals from sensor manager
-    pub(crate) mutex_sensor_manager_signals: Arc<Mutex<SensorManagerSignals>>,
+    pub mutex_sensor_manager_signals: Arc<Mutex<SensorManagerSignals>>,
 
     /// Mutex for the tank level switch signals
-    pub(crate) mutex_tank_level_switch_signals: Arc<Mutex<TankLevelSwitchSignals>>,
+    pub mutex_tank_level_switch_signals: Arc<Mutex<TankLevelSwitchSignals>>,
 
     /// Mutex for the heater status
-    pub(crate) mutex_heating_status: Arc<Mutex<bool>>,
+    pub mutex_heating_status: Arc<Mutex<bool>>,
 }
 
 #[cfg_attr(doc, aquamarine::aquamarine)]
@@ -219,6 +280,9 @@ pub struct Heating {
 
     /// Maximum permissible access duration for Mutex
     pub max_mutex_access_duration: Duration,
+
+    /// Instant at which statistics is updated - used for energy consumption calculation
+    pub last_stats_update_instant_opt: Option<Instant>,
 }
 
 impl ProcessExternalRequestTrait for Heating {}
@@ -256,6 +320,7 @@ impl Heating {
             lock_warn_inapplicable_command_signal_handler: false,
             lock_error_channel_receive_termination: false,
             max_mutex_access_duration: Duration::from_millis(MAX_MUTEX_ACCESS_DURATION_MILLIS),
+            last_stats_update_instant_opt: None,
         }
     }
 
@@ -301,13 +366,138 @@ impl Heating {
     fn get_duration_until_midnight(
         &mut self,
         sql_interface_heating: &mut SqlInterfaceHeatingStats,
-    ) -> i64 {
-        sql_interface_heating
+    ) -> u64 {
+        let default_value: u64 = 24 * 3600; // default value for time in seconds until midnight
+
+        let database_seconds_until_midnight = sql_interface_heating
             .get_duration_until_midnight()
             .unwrap_or_else(|e| {
-                log_error_chain(module_path!(), "Could not get duration until midnight.", e);
-                24 * 3600 // default value for time in seconds until midnight
-            })
+                let context = format!(
+                    "Could not get duration until midnight from database - using default value ({}).",
+                    default_value
+                );
+                log_error_chain(module_path!(), &context, e);
+                default_value as i64
+            });
+        if database_seconds_until_midnight < 0 {
+            error!(
+                target: module_path!(),
+                "Database informed invalid time until midnight - using default value ({}).",
+                default_value
+            );
+            default_value
+        } else {
+            database_seconds_until_midnight as u64
+        }
+    }
+
+    /// Updates the running daily statistics based on the current cycle's inputs.
+    ///
+    /// This private helper function is called once per `execute` loop cycle to accumulate
+    /// heating statistics. It calculates the energy consumed and the time elapsed since
+    /// the last update, and then calls the `update` method on the `HeatingStatsEntry`
+    /// to add these values to the daily running totals for energy, average temperatures,
+    /// and runtime.
+    ///
+    /// If sensor readings are marked as invalid (`measurement_error` is true), the
+    /// temperature values are passed as `None` to the statistics entry, ensuring they
+    /// are not included in the daily average calculation.
+    ///
+    /// # Arguments
+    /// * `heating_stats_opt` - A mutable `Option` holding the `HeatingStatsEntry` for the
+    ///   current day. The function does nothing if this is `None`.
+    /// * `measurement_error` - A boolean flag indicating if the current sensor readings
+    ///   are valid.
+    /// * `measured_water_temperature` - The current water temperature reading.
+    /// * `measured_ambient_temperature` - The current ambient temperature reading.
+    /// * `heater_state` - The current `ActuatorState` of the heater (`On` or `Off`), used
+    ///   to calculate energy consumption.
+    fn update_heating_stats(
+        &mut self,
+        heating_stats_opt: &mut Option<HeatingStatsEntry>,
+        measurement_error: bool,
+        measured_water_temperature: f32,
+        measured_ambient_temperature: f32,
+        heater_state: &ActuatorState,
+    ) {
+        // time to update the stats
+        if let Some(ref mut heating_stats) = heating_stats_opt {
+            // check if there is a recording of the last stats update
+            let increment_fraction =
+                if let Some(last_stats_update_instant) = self.last_stats_update_instant_opt {
+                    last_stats_update_instant.elapsed().as_millis() as f64 / 1000.0
+                } else {
+                    0.0
+                };
+            self.last_stats_update_instant_opt = Some(Instant::now());
+
+            // wrap temperatures depending on the status bit
+            let water_temperature_opt =
+                (!measurement_error).then_some(measured_water_temperature as f64);
+            let ambient_temperature_opt =
+                (!measurement_error).then_some(measured_ambient_temperature as f64);
+            // update the heating statistics with recently acquired data
+            let energy_increment = if *heater_state == ActuatorState::On {
+                (self.config.heater_power * increment_fraction as f32 / 3600.0) as f64
+            } else {
+                0.0
+            };
+            println!("***  Updating heating stats ***");
+            heating_stats.update(
+                water_temperature_opt,
+                ambient_temperature_opt,
+                energy_increment,
+                increment_fraction,
+            );
+        }
+    }
+
+    /// Checks if midnight has passed and, if so, records the daily heating statistics.
+    ///
+    /// This private helper function is called once per `execute` loop cycle. It compares
+    /// the current time against a pre-calculated `midnight_instant`. When the current
+    /// time is past midnight, it orchestrates the end-of-day statistics logging process.
+    ///
+    /// This involves taking ownership of the completed `HeatingStatsEntry`, passing it
+    /// to the `heating_stats_transfer` object for persistence in the database, and then
+    /// creating a fresh `HeatingStatsEntry` to begin accumulating stats for the new day.
+    /// It also recalculates and sets the `midnight_instant` for the following day.
+    ///
+    /// # Arguments
+    /// * `midnight_instant` - A mutable `Instant` that marks the moment of midnight.
+    ///   This function will update it to the next day's midnight after a transfer.
+    /// * `heating_stats_opt` - A mutable `Option` holding the `HeatingStatsEntry` for the
+    ///   current day. The function will `take()` the value upon transfer and re-initialize it.
+    /// * `heating_stats_transfer` - A mutable reference to an object implementing the
+    ///   `HeatingStatsDataTransferTrait`, used to perform the actual database write.
+    /// * `sql_interface_heating` - A mutable reference to the SQL interface, required for
+    ///   creating a new `HeatingStatsEntry` and for calculating the time until the next midnight.
+    fn record_heating_stats(
+        &mut self,
+        midnight_instant: &mut Instant,
+        heating_stats_opt: &mut Option<HeatingStatsEntry>,
+        heating_stats_transfer: &mut impl HeatingStatsDataTransferTrait,
+        sql_interface_heating: &mut SqlInterfaceHeatingStats,
+    ) {
+        // check if midnight has arrived
+        if Instant::now() > *midnight_instant {
+            println!("***  Transferring heating stats ***");
+            // Use take() to move the value out of the Option without cloning.
+            if let Some(stats) = heating_stats_opt.take() {
+                if let Err(e) =
+                    heating_stats_transfer.transfer_heating_stats(stats, sql_interface_heating)
+                {
+                    error!(
+                        target: module_path!(),
+                        "Error occurred when trying to store heating stats data in database: {e:?}"
+                    );
+                }
+                // Reset heating stats
+                *heating_stats_opt = Some(HeatingStatsEntry::new(&mut sql_interface_heating.conn));
+                *midnight_instant = Instant::now()
+                    + Duration::from_secs(self.get_duration_until_midnight(sql_interface_heating));
+            }
+        }
     }
 
     /// Executes the **main control loop for the heating module**.
@@ -368,16 +558,14 @@ impl Heating {
         let mut loop_counter = 0;
         let mut heater_state: ActuatorState = ActuatorState::Undefined;
         let mut schedule_check_result: bool;
-        let mut duration_until_midnight =
-            self.get_duration_until_midnight(&mut sql_interface_heating);
+        let duration_until_midnight =
+            Duration::from_secs(self.get_duration_until_midnight(&mut sql_interface_heating));
+        let mut midnight_instant = Instant::now() + duration_until_midnight;
         let mut tank_level_low_counter = 0;
-        let mut energy_increment: f64 = 0.0;
         let mut heating_inhibited: bool = false; // state of heating control determined by if the start/stop command has been received
         let mut lock_warn_cycle_time_exceeded: bool = false;
         let mut actuation_mutex_was_blocked_during_actuation: bool = false;
         let cycle_time_duration = Duration::from_millis(CYCLE_TIME_HEATING_MILLIS);
-        let midnight_check_interval = Duration::from_millis(200);
-        let mut instant_midnight_check = Instant::now() - midnight_check_interval;
 
         let mut heating_stats_opt = match sql_interface_heating
             .get_single_heating_stats_from_database()
@@ -611,54 +799,22 @@ impl Heating {
 
                 saw_tooth_profile.execute_with(TIME_INCREMENT_HEATING_SECS);
 
-                // the update of midnight counter only runs every second
-                if instant_midnight_check.elapsed() >= midnight_check_interval {
-                    // one second closer to midnight
-                    instant_midnight_check = Instant::now();
-                    duration_until_midnight = duration_until_midnight.saturating_sub(1);
-                    match heating_stats_opt {
-                        Some(ref mut heating_stats) => {
-                            // wrap temperatures depending on the status bits
-                            let water_temperature_opt = match measurement_error {
-                                true => None,
-                                false => Some(measured_water_temperature as f64),
-                            };
-                            let ambient_temperature_opt = match measurement_error {
-                                true => None,
-                                false => Some(measured_ambient_temperature as f64),
-                            };
-                            // update the heating statistics with recently acquired data
-                            if heater_state == ActuatorState::On {
-                                energy_increment = (self.config.heater_power / 3600.0) as f64;
-                            }
-                            heating_stats.update(
-                                water_temperature_opt,
-                                ambient_temperature_opt,
-                                energy_increment,
-                            );
-                        }
-                        None => {
-                            // do nothing, heating stats or not mandatory to run heating control
-                        }
-                    }
+                // Update the heating statistics
+                self.update_heating_stats(
+                    &mut heating_stats_opt,
+                    measurement_error,
+                    measured_water_temperature,
+                    measured_ambient_temperature,
+                    &heater_state,
+                );
 
-                    // check if midnight has arrived
-                    if duration_until_midnight <= 0 {
-                        // Use take() to move the value out of the Option without cloning.
-                        if let Some(stats) = heating_stats_opt.take() {
-                            if let Err(e) = heating_stats_transfer
-                                .transfer_heating_stats(stats, &mut sql_interface_heating)
-                            {
-                                error!("Error occurred when trying to store heating stats data in database: {e:?}");
-                            }
-                            // Reset heating stats
-                            heating_stats_opt =
-                                Some(HeatingStatsEntry::new(&mut sql_interface_heating.conn));
-                            duration_until_midnight =
-                                self.get_duration_until_midnight(&mut sql_interface_heating);
-                        }
-                    }
-                }
+                // Transfer the heating statistics to the database once per day
+                self.record_heating_stats(
+                    &mut midnight_instant,
+                    &mut heating_stats_opt,
+                    heating_stats_transfer,
+                    &mut sql_interface_heating,
+                );
             }
 
             let instant_before_locking_mutex = Instant::now();
@@ -743,120 +899,32 @@ impl Heating {
 
 #[cfg(test)]
 pub mod tests {
-    use all_asserts::{assert_ge, assert_le};
-    use chrono::Local;
-    use mysql::PooledConn;
-    use spin_sleep::SpinSleeper;
-    use std::sync::{Arc, Mutex};
-    use std::thread;
-    use std::time::{Duration, Instant};
-
+    use crate::database::sql_interface::SqlInterface;
     use crate::database::sql_interface_heating_stats::{
         HeatingStatsEntry, SqlInterfaceHeatingStats,
     };
-    use crate::database::sql_interface_midnight::SqlInterfaceMidnightCalculatorTrait;
-    use crate::database::{sql_interface::SqlInterface, sql_interface_error::SqlInterfaceError};
     use crate::launch::channels::Channels;
     use crate::mocks::mock_heating::tests::MockSqlInterfaceHeatingSetVals;
     use crate::mocks::mock_relay_manager::tests::mock_relay_manager;
     use crate::mocks::mock_schedule_check::tests::mock_schedule_check;
     use crate::sensors::sensor_manager::SensorManagerSignals;
     use crate::sensors::tank_level_switch::TankLevelSwitchSignals;
-    use crate::thermal::heating::{Heating, HeatingMutexes, HeatingStatsDataTransferTrait};
-    use crate::utilities::channel_content::{AquariumDevice, InternalCommand};
+    use crate::thermal::heating::{Heating, HeatingMutexes, CYCLE_TIME_HEATING_MILLIS};
+    use crate::utilities::channel_content::{ActuatorState, AquariumDevice, InternalCommand};
     use crate::utilities::common::tests::update_min_max_actuation_duration;
     use crate::utilities::config::{read_config_file_with_test_database, ConfigData};
     use crate::utilities::sawtooth_profile::SawToothProfileConfig;
+    use all_asserts::{assert_ge, assert_le};
+    use assert_float_eq::assert_float_absolute_eq;
+    use chrono::Local;
 
-    pub struct HeatingStatsMockDataTransfer {
-        heating_stats_entry_previous: HeatingStatsEntry,
-        heating_stats_entry: HeatingStatsEntry,
-    }
-
-    impl HeatingStatsMockDataTransfer {
-        // Creates a new `HeatingStatsMockDataTransfer` instance.
-        //
-        // This constructor initializes the mock data transfer object for testing heating statistics.
-        // It sets up two `HeatingStatsEntry` instances, both initialized with default (zero) values
-        // for the current date, to simulate the previous and current day's statistics.
-        //
-        // # Returns
-        // A new `HeatingStatsMockDataTransfer` struct.
-        pub fn new(conn: &mut PooledConn) -> HeatingStatsMockDataTransfer {
-            Self {
-                heating_stats_entry_previous: HeatingStatsEntry::new(conn),
-                heating_stats_entry: HeatingStatsEntry::new(conn),
-            }
-        }
-    }
-
-    impl HeatingStatsDataTransferTrait for HeatingStatsMockDataTransfer {
-        // Transfers provides daily heating statistics entry to the SQL database.
-        //
-        // This implementation updates the `date` of the `heating_stats_entry` to the
-        // current database date (ensuring consistency) and then attempts to insert
-        // or update this record in the database. Errors during database operations are logged.
-        //
-        // # Arguments
-        // * `heating_stats_entry` - The `HeatingStatsEntry` containing the statistics for the day.
-        //   This is passed by value, meaning ownership is transferred to this function.
-        // * `sql_interface_heating` - A mutable reference to the `SqlInterfaceHeating` instance,
-        //   used for database interaction.
-        fn transfer_heating_stats(
-            &mut self,
-            heating_stats_entry: HeatingStatsEntry,
-            _sql_interface_heating: &mut SqlInterfaceHeatingStats,
-        ) -> Result<(), SqlInterfaceError> {
-            self.heating_stats_entry_previous = self.heating_stats_entry.clone();
-            self.heating_stats_entry = heating_stats_entry.clone();
-            println!(
-                "Heating: Received command to transfer mock data to SQL database: {}",
-                heating_stats_entry,
-            );
-            Ok(())
-        }
-    }
-
-    pub struct SqlInterfaceHeatingMockMidnightCalculator {
-        seconds_to_midnight: i64,
-    }
-
-    impl SqlInterfaceHeatingMockMidnightCalculator {
-        // Creates a new `SqlInterfaceHeatingMockMidnightCalculator` instance.
-        //
-        // This constructor initializes the mock calculator, setting the specific
-        // number of seconds until midnight that it will consistently return during tests.
-        // This allows for predictable simulation of time progression in testing scenarios.
-        //
-        // # Arguments
-        // * `seconds_to_midnight` - The fixed `i64` value representing the number of
-        //   seconds until midnight that this mock will provide.
-        //
-        // # Returns
-        // A new `SqlInterfaceHeatingMockMidnightCalculator` struct.
-        pub fn new(seconds_to_midnight: i64) -> SqlInterfaceHeatingMockMidnightCalculator {
-            Self {
-                seconds_to_midnight,
-            }
-        }
-    }
-
-    impl SqlInterfaceMidnightCalculatorTrait for SqlInterfaceHeatingMockMidnightCalculator {
-        // Provides a predefined duration until midnight for testing heating statistics transfer.
-        //
-        // This mock implementation of `get_duration_until_midnight` always returns a
-        // fixed `i64` value, `self.seconds_to_midnight`. This allows tests to simulate
-        // various durations until midnight without actually waiting for real-world time to pass,
-        // enabling deterministic and fast testing of the heating statistics transfer logic.
-        //
-        // # Returns
-        // An `Ok(i64)` containing the predefined number of seconds until midnight.
-        // This function will always succeed (`Ok`) as it does not interact with a real database.
-        fn get_duration_until_midnight(&mut self) -> Result<i64, SqlInterfaceError> {
-            Ok(self.seconds_to_midnight) // seconds to midnight after which heating stats are inserted into the database
-                                         // for testing, we do not want to wait until midnight
-        }
-    }
+    use crate::mocks::mock_heating_stats::tests::{
+        HeatingStatsMockDataTransfer, SqlInterfaceHeatingMockMidnightCalculator,
+    };
+    use spin_sleep::SpinSleeper;
+    use std::sync::{Arc, Mutex};
+    use std::thread;
+    use std::time::{Duration, Instant};
 
     // Prepares a `Heating` control instance with a mock midnight calculator and a clean test database.
     //
@@ -1608,8 +1676,11 @@ pub mod tests {
         let sleep_duration_100_millis = Duration::from_millis(100);
         let spin_sleeper = SpinSleeper::default();
 
+        let seconds_to_midnight: i64 = 3;
+        let reference_stats_update_count =
+            seconds_to_midnight * 1000 / CYCLE_TIME_HEATING_MILLIS as i64;
         let (mut config, mut heating, sql_interface, mut sql_interface_heating_stats) =
-            prepare_heating_tests_mock_midnight_calculator(5, 15, None);
+            prepare_heating_tests_mock_midnight_calculator(seconds_to_midnight, 15, None);
 
         // replacement values are used to initialize the mutexes
         config.sensor_manager.replacement_value_water_temperature = 20.0;
@@ -1625,16 +1696,8 @@ pub mod tests {
         let initial_heating_stats_entry = sql_interface_heating_stats
             .get_single_heating_stats_from_database()
             .unwrap_or_else(|_| {
-                // database responded with an empty response - let's create an empty entry
-                HeatingStatsEntry {
-                    date: Local::now().date_naive(),
-                    energy: 0.0,
-                    ambient_temperature_average_value: 0.0,
-                    ambient_temperature_average_counter: 0,
-                    water_temperature_average_value: 0.0,
-                    water_temperature_average_counter: 0,
-                    heating_control_runtime: 0,
-                }
+                println!("Database responded with empty response - using default value");
+                HeatingStatsEntry::default()
             });
 
         // thread for mock schedule check
@@ -1667,7 +1730,7 @@ pub mod tests {
         let join_handle_test_environment = thread::Builder::new()
             .name("test_environment".to_string())
             .spawn(move || {
-                let sleep_duration = Duration::from_secs(4);
+                let sleep_duration = Duration::from_millis(5150);
                 let spin_sleeper = SpinSleeper::default();
                 spin_sleeper.sleep(sleep_duration);
                 let _ = channels
@@ -1717,112 +1780,88 @@ pub mod tests {
                 let _ = tx_heating_to_relay_manager_for_test_case_finish.send(InternalCommand::Quit);
 
                 println!(
+                    "Initial heating stats: {}", initial_heating_stats_entry
+                );
+                println!(
                     "test_heating_wait_for_midnight_calc_stats_heater_on (previous): {}",
                     heating_stats_transfer.heating_stats_entry_previous,
                 );
-                assert_eq!(
+                assert_float_absolute_eq!(
                     heating_stats_transfer
                         .heating_stats_entry_previous
                         .heating_control_runtime
                         - initial_heating_stats_entry.heating_control_runtime,
-                    3
+                    3.0,
+                    0.1
                 );
-                assert_le!(
-                    0.16666666,
-                    heating_stats_transfer.heating_stats_entry_previous.energy
+                assert_float_absolute_eq!(
+                    heating_stats_transfer.heating_stats_entry_previous.energy,
+                    0.1671666,
+                    0.001
                 );
-                assert_ge!(
-                    0.16666667,
-                    heating_stats_transfer.heating_stats_entry_previous.energy
-                );
-                assert_le!(
-                    23.999,
+                assert_float_absolute_eq!(
+                    24.0,
                     heating_stats_transfer
                         .heating_stats_entry_previous
-                        .ambient_temperature_average_value
+                        .ambient_temperature_average_value,
+                    0.001
                 );
-                assert_ge!(
-                    24.001,
+                assert_float_absolute_eq!(
+                    20.0,
                     heating_stats_transfer
                         .heating_stats_entry_previous
-                        .ambient_temperature_average_value
-                );
-                assert_le!(
-                    19.999,
-                    heating_stats_transfer
-                        .heating_stats_entry_previous
-                        .water_temperature_average_value
-                );
-                assert_ge!(
-                    20.001,
-                    heating_stats_transfer
-                        .heating_stats_entry_previous
-                        .water_temperature_average_value
+                        .water_temperature_average_value,
+                    0.001
                 );
                 assert_eq!(
                     heating_stats_transfer
                         .heating_stats_entry_previous
-                        .ambient_temperature_average_counter
-                        - initial_heating_stats_entry.ambient_temperature_average_counter,
-                    3
+                        .ambient_temperature_average_counter,
+                    reference_stats_update_count + 1
                 );
                 assert_eq!(
                     heating_stats_transfer
                         .heating_stats_entry_previous
-                        .water_temperature_average_counter
-                        - initial_heating_stats_entry.water_temperature_average_counter,
-                    3
+                        .water_temperature_average_counter,
+                    reference_stats_update_count + 1
                 );
                 println!(
                     "test_heating_wait_for_midnight_calc_stats_heater_on (current): {}",
                     heating_stats_transfer.heating_stats_entry,
                 );
-                assert_eq!(
+                assert_float_absolute_eq!(
                     heating_stats_transfer
                         .heating_stats_entry
                         .heating_control_runtime
                         - initial_heating_stats_entry.heating_control_runtime,
-                    1
+                    2.0,
+                    0.1
                 );
-                assert_le!(0.0555, heating_stats_transfer.heating_stats_entry.energy);
-                assert_ge!(0.0556, heating_stats_transfer.heating_stats_entry.energy);
-                assert_le!(
-                    23.999,
+                assert_float_absolute_eq!(0.1119444, heating_stats_transfer.heating_stats_entry.energy, 0.001);
+                assert_float_absolute_eq!(24.0,
                     heating_stats_transfer
                         .heating_stats_entry
-                        .ambient_temperature_average_value
+                        .ambient_temperature_average_value,
+                    0.001
                 );
-                assert_ge!(
-                    24.001,
+                assert_float_absolute_eq!(
+                    20.0,
                     heating_stats_transfer
                         .heating_stats_entry
-                        .ambient_temperature_average_value
-                );
-                assert_le!(
-                    19.999,
-                    heating_stats_transfer
-                        .heating_stats_entry
-                        .water_temperature_average_value
-                );
-                assert_ge!(
-                    20.001,
-                    heating_stats_transfer
-                        .heating_stats_entry
-                        .water_temperature_average_value
+                        .water_temperature_average_value,
+                    0.001
                 );
                 assert_eq!(
                     heating_stats_transfer
                         .heating_stats_entry
-                        .ambient_temperature_average_counter
-                        - initial_heating_stats_entry.ambient_temperature_average_counter,
-                    1
+                        .ambient_temperature_average_counter,
+                    4
                 );
                 assert_eq!(
                     heating_stats_transfer
                         .heating_stats_entry
-                        .water_temperature_average_counter
-                        - initial_heating_stats_entry.water_temperature_average_counter,
-                    1
+                        .water_temperature_average_counter,
+                    4
                 );
                 println!("* [Heating] checking heating waiting for midnight and stats calculation with heater on succeeded.");
             })
@@ -1848,9 +1887,12 @@ pub mod tests {
     pub fn test_heating_wait_for_midnight_calc_stats_heater_off() {
         let sleep_duration_100_millis = Duration::from_millis(100);
         let spin_sleeper = SpinSleeper::default();
+        let seconds_to_midnight: i64 = 3;
+        let reference_stats_update_count =
+            seconds_to_midnight * 1000 / CYCLE_TIME_HEATING_MILLIS as i64;
 
         let (mut config, mut heating, sql_interface, mut sql_interface_heating_stats) =
-            prepare_heating_tests_mock_midnight_calculator(3, 16, None);
+            prepare_heating_tests_mock_midnight_calculator(seconds_to_midnight, 16, None);
 
         // replacement values are used to initialize the mutexes
         config.sensor_manager.replacement_value_water_temperature = 30.0;
@@ -1870,7 +1912,7 @@ pub mod tests {
                     ambient_temperature_average_counter: 0,
                     water_temperature_average_value: 0.0,
                     water_temperature_average_counter: 0,
-                    heating_control_runtime: 0,
+                    heating_control_runtime: 0.0,
                 }
             });
 
@@ -1908,7 +1950,7 @@ pub mod tests {
         let join_handle_test_environment = thread::Builder::new()
             .name("test_environment".to_string())
             .spawn(move || {
-                let sleep_duration = Duration::from_secs(5);
+                let sleep_duration = Duration::from_millis(5150);
                 let spin_sleeper = SpinSleeper::default();
                 spin_sleeper.sleep(sleep_duration);
                 let _ = channels
@@ -1961,109 +2003,85 @@ pub mod tests {
                     "test_heating_wait_for_midnight_calc_stats_heater_on (previous): {}",
                     heating_stats_transfer.heating_stats_entry_previous,
                 );
-                assert_eq!(
+                assert_float_absolute_eq!(
                     heating_stats_transfer
                         .heating_stats_entry_previous
                         .heating_control_runtime
                         - initial_heating_stats_entry.heating_control_runtime,
-                    3
+                    3.02,
+                    0.1
                 );
-                assert_le!(
-                    -0.001,
-                    heating_stats_transfer.heating_stats_entry_previous.energy
+                assert_float_absolute_eq!(
+                    0.0,
+                    heating_stats_transfer.heating_stats_entry_previous.energy,
+                    0.001
                 );
-                assert_ge!(
-                    0.001,
-                    heating_stats_transfer.heating_stats_entry_previous.energy
-                );
-                assert_le!(
-                    23.999,
+                assert_float_absolute_eq!(
+                    24.0,
                     heating_stats_transfer
                         .heating_stats_entry_previous
-                        .ambient_temperature_average_value
+                        .ambient_temperature_average_value,
+                    0.001
                 );
-                assert_ge!(
-                    24.001,
+                assert_float_absolute_eq!(
+                    30.0,
                     heating_stats_transfer
                         .heating_stats_entry_previous
-                        .ambient_temperature_average_value
-                );
-                assert_le!(
-                    29.999,
-                    heating_stats_transfer
-                        .heating_stats_entry_previous
-                        .water_temperature_average_value
-                );
-                assert_ge!(
-                    30.001,
-                    heating_stats_transfer
-                        .heating_stats_entry_previous
-                        .water_temperature_average_value
+                        .water_temperature_average_value,
+                    0.001
                 );
                 assert_eq!(
                     heating_stats_transfer
                         .heating_stats_entry_previous
                         .ambient_temperature_average_counter
                         - initial_heating_stats_entry.ambient_temperature_average_counter,
-                    3
+                    reference_stats_update_count + 1
                 );
                 assert_eq!(
                     heating_stats_transfer
                         .heating_stats_entry_previous
                         .water_temperature_average_counter
                         - initial_heating_stats_entry.water_temperature_average_counter,
-                    3
+                    reference_stats_update_count + 1
                 );
                 println!(
                     "test_heating_wait_for_midnight_calc_stats_heater_on (current): {}",
                     heating_stats_transfer.heating_stats_entry,
                 );
-                assert_eq!(
+                assert_float_absolute_eq!(
                     heating_stats_transfer
                         .heating_stats_entry
                         .heating_control_runtime
                         - initial_heating_stats_entry.heating_control_runtime,
-                    1
+                    2.0,
+                    0.01
                 );
-                assert_le!(-0.001, heating_stats_transfer.heating_stats_entry.energy);
-                assert_ge!(0.001, heating_stats_transfer.heating_stats_entry.energy);
-                assert_le!(
-                    23.999,
+                assert_float_absolute_eq!(0.0, heating_stats_transfer.heating_stats_entry.energy, 0.001);
+                assert_float_absolute_eq!(
+                    24.0,
                     heating_stats_transfer
                         .heating_stats_entry
-                        .ambient_temperature_average_value
+                        .ambient_temperature_average_value,
+                    0.001
                 );
-                assert_ge!(
-                    24.001,
+                assert_float_absolute_eq!(
+                    30.0,
                     heating_stats_transfer
                         .heating_stats_entry
-                        .ambient_temperature_average_value
-                );
-                assert_le!(
-                    29.999,
-                    heating_stats_transfer
-                        .heating_stats_entry
-                        .water_temperature_average_value
-                );
-                assert_ge!(
-                    30.001,
-                    heating_stats_transfer
-                        .heating_stats_entry
-                        .water_temperature_average_value
+                        .water_temperature_average_value,
+                    0.001
                 );
                 assert_eq!(
                     heating_stats_transfer
                         .heating_stats_entry
-                        .ambient_temperature_average_counter
-                        - initial_heating_stats_entry.ambient_temperature_average_counter,
-                    1
+                        .ambient_temperature_average_counter,
+                    4
                 );
                 assert_eq!(
                     heating_stats_transfer
                         .heating_stats_entry
-                        .water_temperature_average_counter
-                        - initial_heating_stats_entry.water_temperature_average_counter,
-                    1
+                        .water_temperature_average_counter,
+                    4
                 );
                 println!("* [Heating] checking heating waiting for midnight and stats calculation with heater on succeeded.");
             })
@@ -2869,5 +2887,335 @@ pub mod tests {
         join_handle_test_object
             .join()
             .expect("Test object thread did not finish.");
+    }
+
+    #[test]
+    // Verifies that `record_heating_stats` does nothing when called before midnight.
+    fn test_record_heating_stats_before_midnight() {
+        // 1. Setup
+        let (_config, mut heating, mut sql_interface, mut sql_interface_heating_stats) =
+            prepare_heating_tests_mock_midnight_calculator(3600, 20, None); // Midnight is far away
+        let mut mock_transfer = HeatingStatsMockDataTransfer::new(&mut sql_interface.conn);
+        let mut midnight_instant = Instant::now() + Duration::from_secs(60);
+
+        let mut heating_stats = HeatingStatsEntry::new(&mut sql_interface_heating_stats.conn);
+        heating_stats.energy = 1.23; // Give it some data to track
+        let mut heating_stats_opt = Some(heating_stats.clone());
+
+        // 2. Execute
+        heating.record_heating_stats(
+            &mut midnight_instant,
+            &mut heating_stats_opt,
+            &mut mock_transfer,
+            &mut sql_interface_heating_stats,
+        );
+
+        // 3. Assert
+        assert_eq!(
+            mock_transfer.transfer_counter, 0,
+            "Transfer should not be called before midnight"
+        );
+        assert!(
+            heating_stats_opt.is_some(),
+            "Stats option should still be Some"
+        );
+        // Stats data should be unchanged
+        assert_float_absolute_eq!(heating_stats_opt.unwrap().energy, 1.23, 0.001);
+    }
+
+    #[test]
+    // Verifies that `record_heating_stats` correctly transfers data after midnight.
+    fn test_record_heating_stats_after_midnight_success() {
+        // 1. Setup - mock midnight is one second away
+        let (_config, mut heating, mut sql_interface, mut sql_interface_heating_stats) =
+            prepare_heating_tests_mock_midnight_calculator(1, 21, None);
+        let mut mock_transfer = HeatingStatsMockDataTransfer::new(&mut sql_interface.conn);
+        let mut midnight_instant = Instant::now() - Duration::from_secs(1); // Set midnight in the past
+        let original_midnight_instant = midnight_instant;
+
+        let mut heating_stats = HeatingStatsEntry::new(&mut sql_interface_heating_stats.conn);
+        heating_stats.energy = 4.56;
+        let mut heating_stats_opt = Some(heating_stats.clone());
+
+        // 2. Execute
+        heating.record_heating_stats(
+            &mut midnight_instant,
+            &mut heating_stats_opt,
+            &mut mock_transfer,
+            &mut sql_interface_heating_stats,
+        );
+
+        // 3. Assert
+        assert_eq!(
+            mock_transfer.transfer_counter, 1,
+            "Transfer should be called once"
+        );
+
+        let transferred_stats = mock_transfer.last_transferred_heating_stats_entry;
+        assert!(
+            transferred_stats.is_some(),
+            "Transferred stats should be captured by the mock"
+        );
+        // The correct stats data should be transferred
+        assert_float_absolute_eq!(transferred_stats.as_ref().unwrap().energy, 4.56, 0.001);
+
+        assert!(
+            heating_stats_opt.is_some(),
+            "Stats option should be re-initialized, not None"
+        );
+        // Stats should be reset to a new, default entry
+        assert_float_absolute_eq!(heating_stats_opt.unwrap().energy, 0.0, 0.001);
+
+        assert!(
+            midnight_instant > original_midnight_instant,
+            "Midnight instant should be updated to a future time"
+        );
+    }
+
+    #[test]
+    // Verifies that the function handles a database transfer error gracefully.
+    fn test_record_heating_stats_after_midnight_with_error() {
+        // 1. Setup
+        let (_config, mut heating, mut sql_interface, mut sql_interface_heating_stats) =
+            prepare_heating_tests_mock_midnight_calculator(1, 22, None);
+        let mut mock_transfer = HeatingStatsMockDataTransfer::new(&mut sql_interface.conn);
+        let mut midnight_instant = Instant::now() - Duration::from_secs(1);
+        let original_midnight_instant = midnight_instant;
+
+        let mut heating_stats = HeatingStatsEntry::new(&mut sql_interface_heating_stats.conn);
+        heating_stats.energy = 7.89;
+        let mut heating_stats_opt = Some(heating_stats.clone());
+
+        // 2. Execute
+        heating.record_heating_stats(
+            &mut midnight_instant,
+            &mut heating_stats_opt,
+            &mut mock_transfer,
+            &mut sql_interface_heating_stats,
+        );
+
+        // 3. Assert
+        assert_eq!(
+            mock_transfer.transfer_counter, 1,
+            "Transfer should still be attempted even if it fails"
+        );
+
+        assert!(
+            heating_stats_opt.is_some(),
+            "Stats option should be re-initialized even on error"
+        );
+        // Stats should be reset to a new entry despite the transfer error
+        assert_float_absolute_eq!(heating_stats_opt.unwrap().energy, 0.0, 0.001);
+
+        assert!(
+            midnight_instant > original_midnight_instant,
+            "Midnight instant should still be updated for the next day"
+        );
+    }
+
+    #[test]
+    // Verifies that the function does nothing trigger the transfer call if the optional parameter is None when midnight occurs.
+    fn test_record_heating_stats_with_none_stats() {
+        // 1. Setup
+        let (_config, mut heating, mut sql_interface, mut sql_interface_heating_stats) =
+            prepare_heating_tests_mock_midnight_calculator(1, 23, None);
+        let mut mock_transfer = HeatingStatsMockDataTransfer::new(&mut sql_interface.conn);
+        let mut midnight_instant = Instant::now() - Duration::from_secs(1); // Midnight is in the past
+        let original_midnight_instant = midnight_instant;
+        let mut heating_stats_opt: Option<HeatingStatsEntry> = None;
+
+        // 2. Execute
+        heating.record_heating_stats(
+            &mut midnight_instant,
+            &mut heating_stats_opt,
+            &mut mock_transfer,
+            &mut sql_interface_heating_stats,
+        );
+
+        // 3. Assert
+        assert_eq!(
+            mock_transfer.transfer_counter, 0,
+            "Transfer should not be called if stats are None"
+        );
+        assert!(
+            heating_stats_opt.is_none(),
+            "Stats option should remain None"
+        );
+        assert_eq!(
+            midnight_instant, original_midnight_instant,
+            "Midnight instant should not be updated if no transfer happens"
+        );
+    }
+
+    #[test]
+    // Verifies that stats are updated correctly when the heater is ON and sensor data is valid.
+    fn test_update_heating_stats_heater_on_valid_data() {
+        // 1. Setup
+        let (config, mut heating, _sql_interface, mut sql_interface_heating_stats) =
+            prepare_heating_tests_mock_midnight_calculator(3600, 24, None);
+        let mut heating_stats_opt = Some(HeatingStatsEntry::new(
+            &mut sql_interface_heating_stats.conn,
+        ));
+        let sleep_duration = Duration::from_millis(500);
+
+        // Manually set the last update time to simulate a time delta
+        heating.last_stats_update_instant_opt = Some(Instant::now());
+        thread::sleep(sleep_duration);
+
+        // 2. Execute
+        heating.update_heating_stats(
+            &mut heating_stats_opt,
+            false, // measurement_error
+            25.5,  // water_temperature
+            22.0,  // ambient_temperature
+            &ActuatorState::On,
+        );
+
+        // 3. Assert
+        let stats = heating_stats_opt.unwrap();
+        let expected_energy =
+            config.heating.heater_power as f64 * (sleep_duration.as_secs_f64() / 3600.0);
+
+        assert_float_absolute_eq!(stats.energy, expected_energy, 0.01);
+        assert_float_absolute_eq!(stats.water_temperature_average_value, 25.5, 0.001);
+        assert_eq!(stats.water_temperature_average_counter, 1);
+        assert_float_absolute_eq!(stats.ambient_temperature_average_value, 22.0, 0.001);
+        assert_eq!(stats.ambient_temperature_average_counter, 1);
+        assert_float_absolute_eq!(
+            stats.heating_control_runtime,
+            sleep_duration.as_secs_f64(),
+            0.01
+        );
+    }
+
+    #[test]
+    // Verifies that no energy is added when the heater is OFF.
+    fn test_update_heating_stats_heater_off() {
+        // 1. Setup
+        let (_config, mut heating, _sql_interface, mut sql_interface_heating_stats) =
+            prepare_heating_tests_mock_midnight_calculator(3600, 25, None);
+        let mut heating_stats_opt = Some(HeatingStatsEntry::new(
+            &mut sql_interface_heating_stats.conn,
+        ));
+        let sleep_duration = Duration::from_millis(500);
+
+        heating.last_stats_update_instant_opt = Some(Instant::now());
+        thread::sleep(sleep_duration);
+
+        // 2. Execute
+        heating.update_heating_stats(
+            &mut heating_stats_opt,
+            false, // measurement_error
+            25.5,  // water_temperature
+            22.0,  // ambient_temperature
+            &ActuatorState::Off,
+        );
+
+        // 3. Assert
+        let stats = heating_stats_opt.unwrap();
+        // Energy should be zero when the heater is off
+        assert_float_absolute_eq!(stats.energy, 0.0, 0.001);
+        assert_float_absolute_eq!(stats.water_temperature_average_value, 25.5, 0.001);
+        assert_eq!(stats.water_temperature_average_counter, 1);
+    }
+
+    #[test]
+    // Verifies that temperatures are not included in the average when a measurement error occurs.
+    fn test_update_heating_stats_with_measurement_error() {
+        // 1. Setup
+        let (_config, mut heating, _sql_interface, mut sql_interface_heating_stats) =
+            prepare_heating_tests_mock_midnight_calculator(3600, 26, None);
+        let mut heating_stats_opt = Some(HeatingStatsEntry::new(
+            &mut sql_interface_heating_stats.conn,
+        ));
+        let sleep_duration = Duration::from_millis(500);
+
+        heating.last_stats_update_instant_opt = Some(Instant::now());
+        thread::sleep(sleep_duration);
+
+        // 2. Execute
+        heating.update_heating_stats(
+            &mut heating_stats_opt,
+            true,  // measurement_error
+            -99.0, // water_temperature (should be ignored)
+            -99.0, // ambient_temperature (should be ignored)
+            &ActuatorState::On,
+        );
+
+        // 3. Assert
+        let stats = heating_stats_opt.unwrap();
+        assert!(
+            stats.energy > 0.0,
+            "Energy should still be calculated even with measurement errors"
+        );
+        // Average should not be updated
+        assert_float_absolute_eq!(stats.water_temperature_average_value, 0.0, 0.001);
+        assert_eq!(
+            stats.water_temperature_average_counter, 0,
+            "Counter should not be incremented"
+        );
+        assert_float_absolute_eq!(stats.ambient_temperature_average_value, 0.0, 0.001);
+        assert_eq!(
+            stats.ambient_temperature_average_counter, 0,
+            "Counter should not be incremented"
+        );
+    }
+
+    #[test]
+    // Verifies that the first call to update_heating_stats results in zero energy,
+    // because `last_stats_update_instant_opt` is initially None.
+    fn test_update_heating_stats_first_call_no_energy() {
+        // 1. Setup
+        let (_config, mut heating, _sql_interface, mut sql_interface_heating_stats) =
+            prepare_heating_tests_mock_midnight_calculator(3600, 27, None);
+        let mut heating_stats_opt = Some(HeatingStatsEntry::new(
+            &mut sql_interface_heating_stats.conn,
+        ));
+
+        // `heating.last_stats_update_instant_opt` is None by default from the constructor
+
+        // 2. Execute
+        heating.update_heating_stats(
+            &mut heating_stats_opt,
+            false,
+            25.5,
+            22.0,
+            &ActuatorState::On,
+        );
+
+        // 3. Assert
+        // Energy should be zero on the first call because increment_fraction is 0.0
+        let stats = heating_stats_opt.unwrap();
+        assert_float_absolute_eq!(stats.energy, 0.0, 0.001);
+        // Runtime should be zero on the first call
+        assert_float_absolute_eq!(stats.heating_control_runtime, 0.0, 0.001);
+        assert_eq!(
+            stats.water_temperature_average_counter, 1,
+            "Temperatures should still be recorded"
+        );
+    }
+
+    #[test]
+    // Verifies that the function does not trigger the update if the heating statistic entry is None.
+    fn test_update_heating_stats_with_none_stats_opt() {
+        // 1. Setup
+        let (_config, mut heating, _sql_interface, _sql_interface_heating_stats) =
+            prepare_heating_tests_mock_midnight_calculator(3600, 28, None);
+        let mut heating_stats_opt: Option<HeatingStatsEntry> = None;
+
+        // 2. Execute
+        heating.update_heating_stats(
+            &mut heating_stats_opt,
+            false,
+            25.5,
+            22.0,
+            &ActuatorState::On,
+        );
+
+        // 3. Assert
+        assert!(
+            heating_stats_opt.is_none(),
+            "The stats option should remain None"
+        );
     }
 }
