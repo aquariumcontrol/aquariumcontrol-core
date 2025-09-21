@@ -6,6 +6,41 @@ The above copyright notice and this permission notice shall be included in all c
 
 THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
+
+//! Defines a trait for acknowledging shutdown commands from the `SignalHandler`.
+//!
+//! This module provides the `AcknowledgeSignalHandlerTrait`, an abstraction used to standardize
+//! the shutdown acknowledgment process across all concurrent threads in the application.
+//!
+//! ## Purpose and Design
+//!
+//! During a graceful shutdown, the `SignalHandler` sends a `Quit` command to all
+//! running threads in a specific sequence. It waits for some threads to send back a
+//! confirmation message (`true`) to maintain the correct shutdown sequence.
+//!
+//! This trait encapsulates the boilerplate logic for sending this confirmation. Instead
+//! of each thread implementing its own error-handling and logging for the send operation,
+//! it can simply implement this trait on its `...Channels` struct and call the provided
+//! `acknowledge_signal_handler()` method.
+//!
+//! This design achieves several goals:
+//! - **Reduces Boilerplate**: Eliminates repetitive error-handling code in every thread.
+//! - **Enforces a Protocol**: Provides a single, consistent way for threads to participate
+//!   in the shutdown sequence.
+//! - **Improves Readability**: Makes the shutdown logic within each thread's `execute`
+//!   loop cleaner and more explicit.
+//!
+//! ## Key Components
+//!
+//! - **`AcknowledgeSignalHandlerTrait`**: The core trait of the module.
+//!   - **`send_true_to_signal_handler()`**: The required method that each implementor
+//!     must provide to perform the actual channel send operation.
+//!   - **`location()`**: A required method that provides a string identifier for the
+//!     implementing module, used for contextual logging.
+//!   - **`acknowledge_signal_handler()`**: A provided "default" method that wraps the
+//!     send-call with standardized error logging. This is the method that threads
+//!     should call.
+
 use crate::food::feed_channels::FeedChannels;
 use crate::mineral::balling_channels::BallingChannels;
 use crate::permission::schedule_check_channels::ScheduleCheckChannels;
@@ -60,153 +95,37 @@ pub trait AcknowledgeSignalHandlerTrait {
     }
 }
 
-impl AcknowledgeSignalHandlerTrait for AtlasScientificChannels {
-    fn send_true_to_signal_handler(&mut self) -> Result<(), AquaChannelError> {
-        self.send_to_signal_handler(true)
-    }
+/// A macro to generate the `AcknowledgeSignalHandlerTrait` implementation for a given struct.
+macro_rules! impl_acknowledge_signal_handler {
+    // The macro takes the struct type and the location string as arguments.
+    ($struct_name:ty, $location_str:expr) => {
+        impl AcknowledgeSignalHandlerTrait for $struct_name {
+            fn send_true_to_signal_handler(&mut self) -> Result<(), AquaChannelError> {
+                self.send_to_signal_handler(true)
+            }
 
-    fn location(&self) -> String {
-        "atlas scientific".to_string()
-    }
+            fn location(&self) -> String {
+                $location_str.to_string()
+            }
+        }
+    };
 }
 
-impl AcknowledgeSignalHandlerTrait for FeedChannels {
-    fn send_true_to_signal_handler(&mut self) -> Result<(), AquaChannelError> {
-        self.send_to_signal_handler(true)
-    }
-
-    fn location(&self) -> String {
-        "feed".to_string()
-    }
-}
-
-impl AcknowledgeSignalHandlerTrait for BallingChannels {
-    fn send_true_to_signal_handler(&mut self) -> Result<(), AquaChannelError> {
-        self.send_to_signal_handler(true)
-    }
-
-    fn location(&self) -> String {
-        "balling".to_string()
-    }
-}
-
-impl AcknowledgeSignalHandlerTrait for ScheduleCheckChannels {
-    fn send_true_to_signal_handler(&mut self) -> Result<(), AquaChannelError> {
-        self.send_to_signal_handler(true)
-    }
-
-    fn location(&self) -> String {
-        "schedule_check".to_string()
-    }
-}
-
-impl AcknowledgeSignalHandlerTrait for DataLoggerChannels {
-    fn send_true_to_signal_handler(&mut self) -> Result<(), AquaChannelError> {
-        self.send_to_signal_handler(true)
-    }
-
-    fn location(&self) -> String {
-        "data_logger".to_string()
-    }
-}
-
-impl AcknowledgeSignalHandlerTrait for RelayManagerChannels {
-    fn send_true_to_signal_handler(&mut self) -> Result<(), AquaChannelError> {
-        self.send_to_signal_handler(true)
-    }
-
-    fn location(&self) -> String {
-        "relay_manager".to_string()
-    }
-}
-
-impl AcknowledgeSignalHandlerTrait for SensorManagerChannels {
-    fn send_true_to_signal_handler(&mut self) -> Result<(), AquaChannelError> {
-        self.send_to_signal_handler(true)
-    }
-
-    fn location(&self) -> String {
-        "sensor_manager".to_string()
-    }
-}
-
-impl AcknowledgeSignalHandlerTrait for TankLevelSwitchChannels {
-    fn send_true_to_signal_handler(&mut self) -> Result<(), AquaChannelError> {
-        self.send_to_signal_handler(true)
-    }
-
-    fn location(&self) -> String {
-        "tank_level_switch".to_string()
-    }
-}
-
-impl AcknowledgeSignalHandlerTrait for TcpCommunicationChannels {
-    fn send_true_to_signal_handler(&mut self) -> Result<(), AquaChannelError> {
-        self.send_to_signal_handler(true)
-    }
-
-    fn location(&self) -> String {
-        "tcp_communication".to_string()
-    }
-}
-
-impl AcknowledgeSignalHandlerTrait for HeatingChannels {
-    fn send_true_to_signal_handler(&mut self) -> Result<(), AquaChannelError> {
-        self.send_to_signal_handler(true)
-    }
-
-    fn location(&self) -> String {
-        "heating".to_string()
-    }
-}
-
-impl AcknowledgeSignalHandlerTrait for VentilationChannels {
-    fn send_true_to_signal_handler(&mut self) -> Result<(), AquaChannelError> {
-        self.send_to_signal_handler(true)
-    }
-
-    fn location(&self) -> String {
-        "ventilation".to_string()
-    }
-}
-
-impl AcknowledgeSignalHandlerTrait for MonitorsChannels {
-    fn send_true_to_signal_handler(&mut self) -> Result<(), AquaChannelError> {
-        self.send_to_signal_handler(true)
-    }
-
-    fn location(&self) -> String {
-        "monitors".to_string()
-    }
-}
-
-impl AcknowledgeSignalHandlerTrait for WatchDogChannels {
-    fn send_true_to_signal_handler(&mut self) -> Result<(), AquaChannelError> {
-        self.send_to_signal_handler(true)
-    }
-
-    fn location(&self) -> String {
-        "watchdog".to_string()
-    }
-}
-
-impl AcknowledgeSignalHandlerTrait for RefillChannels {
-    fn send_true_to_signal_handler(&mut self) -> Result<(), AquaChannelError> {
-        self.send_to_signal_handler(true)
-    }
-
-    fn location(&self) -> String {
-        "refill".to_string()
-    }
-}
+// Generate the implementations using the macro
+impl_acknowledge_signal_handler!(AtlasScientificChannels, "atlas scientific");
+impl_acknowledge_signal_handler!(FeedChannels, "feed");
+impl_acknowledge_signal_handler!(BallingChannels, "balling");
+impl_acknowledge_signal_handler!(ScheduleCheckChannels, "schedule_check");
+impl_acknowledge_signal_handler!(DataLoggerChannels, "data_logger");
+impl_acknowledge_signal_handler!(RelayManagerChannels, "relay_manager");
+impl_acknowledge_signal_handler!(SensorManagerChannels, "sensor_manager");
+impl_acknowledge_signal_handler!(TankLevelSwitchChannels, "tank_level_switch");
+impl_acknowledge_signal_handler!(TcpCommunicationChannels, "tcp_communication");
+impl_acknowledge_signal_handler!(HeatingChannels, "heating");
+impl_acknowledge_signal_handler!(VentilationChannels, "ventilation");
+impl_acknowledge_signal_handler!(MonitorsChannels, "monitors");
+impl_acknowledge_signal_handler!(WatchDogChannels, "watchdog");
+impl_acknowledge_signal_handler!(RefillChannels, "refill");
 
 #[cfg(target_os = "linux")]
-impl AcknowledgeSignalHandlerTrait for MessagingChannels {
-    fn send_true_to_signal_handler(&mut self) -> Result<(), AquaChannelError> {
-        self.send_to_signal_handler(true)
-    }
-
-    fn location(&self) -> String {
-        "messaging".to_string()
-    }
-}
+impl_acknowledge_signal_handler!(MessagingChannels, "messaging");
