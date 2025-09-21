@@ -6,6 +6,46 @@ The above copyright notice and this permission notice shall be included in all c
 
 THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
+
+//! Defines a trait for monitoring and logging excessive `Mutex` lock contention.
+//!
+//! This module provides the `CheckMutexAccessDurationTrait`, a standardized mechanism
+//! for detecting when acquiring a `Mutex` lock takes longer than a predefined threshold.
+//! Long lock-wait times can be a symptom of high contention, performance bottlenecks,
+//! or potential deadlocks, and this trait offers a reusable pattern to identify such
+//! issues across the application.
+//!
+//! ## Purpose and Design
+//!
+//! In a multithreaded application, shared data is protected by mutexes. If a thread
+//! has to wait an unexpectedly long time to acquire a lock, it can degrade system
+//! performance. This trait provides a default implementation for `check_mutex_access_duration`
+//! that any struct can use to time its lock acquisitions and log a warning if they
+//! are too slow.
+//!
+//! This design achieves several goals:
+//! - **Standardization**: Provides a single, consistent way to monitor mutex performance.
+//! - **Code Reusability**: Eliminates the need to write timing and logging boilerplate
+//!   in every thread that uses a mutex.
+//! - **Log Flood Prevention**: Includes a `warn_lock` mechanism to ensure that a
+//!   persistent contention issue only generates a single log message, preventing
+//!   log spam.
+//! - **Testability**: Includes hooks (`record_access_duration_violation`) to allow
+//!   unit tests to verify that the violation detection logic is working correctly.
+//!
+//! ## Key Components
+//!
+//! - **`CheckMutexAccessDurationTrait`**: The core trait of the module.
+//!   - **`check_mutex_access_duration()`**: The main-provided method. It takes timestamps
+//!     from before and after a lock attempt, calculates the duration, and logs a
+//!     warning if it exceeds the configured maximum.
+//!   - **`get_warn_lock()` / `set_warn_lock()`**: Required methods for implementing
+//!     the log flood prevention flag.
+//!   - **`get_max_mutex_access_duration()`**: A required method that defines the
+//!     maximum permissible wait time for the implementor.
+//!   - **`get_location()`**: A required method that provides a string identifier for
+//!     the implementing module, used for contextual logging.
+
 use crate::sensors::atlas_scientific::AtlasScientific;
 use crate::sensors::dht::Dht;
 use crate::sensors::ds18b20::Ds18b20;
@@ -303,8 +343,8 @@ impl CheckMutexAccessDurationTrait for Ds18b20 {
 }
 impl CheckMutexAccessDurationTrait for AtlasScientific {
     fn get_warn_lock(&self, key_opt: &Option<&AquariumSignal>) -> bool {
-        if key_opt.is_some() {
-            match key_opt.as_ref().unwrap() {
+        if let Some(key) = key_opt {
+            match key {
                 AquariumSignal::WaterTemperature => {
                     self.lock_warn_max_mutex_access_duration_temperature
                 }
@@ -321,8 +361,8 @@ impl CheckMutexAccessDurationTrait for AtlasScientific {
     }
 
     fn set_warn_lock(&mut self, key_opt: &Option<&AquariumSignal>, value: bool) {
-        if key_opt.is_some() {
-            match key_opt.as_ref().unwrap() {
+        if let Some(key) = key_opt {
+            match key {
                 AquariumSignal::WaterTemperature => {
                     self.lock_warn_max_mutex_access_duration_temperature = value
                 }
@@ -340,8 +380,8 @@ impl CheckMutexAccessDurationTrait for AtlasScientific {
     /// for recording access duration violation
     #[cfg(test)]
     fn record_access_duration_violation(&mut self, key_opt: &Option<&AquariumSignal>) {
-        if key_opt.is_some() {
-            match key_opt.as_ref().unwrap() {
+        if let Some(key) = key_opt {
+            match key {
                 AquariumSignal::WaterTemperature => {
                     self.mutex_temperature_access_duration_exceeded = true
                 }
