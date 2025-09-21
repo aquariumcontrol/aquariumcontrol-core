@@ -186,71 +186,75 @@ impl AquariumSignal {
 /// Enum is used for internal thread messaging.
 /// Note: Relay state and device state do not necessarily correlate.
 #[derive(Clone, Debug, PartialEq, Display)]
-#[repr(i32)]
 pub enum InternalCommand {
     /// Switch on a device
-    SwitchOn(AquariumDevice) = -1,
+    SwitchOn(AquariumDevice),
 
     /// Switch off a device
-    SwitchOff(AquariumDevice) = -2,
+    SwitchOff(AquariumDevice),
 
     /// Pulse a device (switch on, pause, switch off)
     #[allow(dead_code)]
-    Pulse(AquariumDevice, u16) = -3,
+    Pulse(AquariumDevice, u16),
 
     /// Set a relay
-    SetRelay(u16) = - 4,
+    SetRelay(u16),
 
     /// Unset a relay
-    UnsetRelay(u16) = -5,
+    UnsetRelay(u16),
 
     /// Pulse a relay (switch on, pause, switch off)
     #[allow(dead_code)]
-    PulseRelay(u16, u16) = -6,
+    PulseRelay(u16, u16),
 
     /// Request a signal
-    RequestSignal(AquariumSignal) = -7,
+    RequestSignal(AquariumSignal),
 
     #[allow(dead_code)]
     /// Reset existing errors (used for refill control)
-    ResetAllErrors = 1,
+    ResetAllErrors,
 
     /// Quit the application - first step to terminate the application
-    Quit = -8,
+    Quit,
 
     /// Terminate - second step to terminating the application
-    Terminate = -9,
+    Terminate,
 
     /// ScheduleCheck - request permission to run based on time of day
-    ScheduleCheck = -10,
+    ScheduleCheck,
 
     #[allow(dead_code)]
     /// (Re-)start controller (Balling, Ventilation, Refill, Heating)
-    Start = 4,
+    Start,
 
     #[allow(dead_code)]
     /// (Temporarily) stop controller (Balling, Ventilation, Refill, Heating)
-    Stop = 3,
+    Stop,
 
     #[allow(dead_code)]
     /// Execute a (feed) profile with a given ID
-    Execute(i32) = 10,
+    Execute(i32),
 
     #[allow(dead_code)]
     /// Default value used when unknown command is received via IPC-message
-    Unknown = -99,
+    Unknown,
 }
 
 #[cfg(target_os = "linux")]
 impl InternalCommand {
+    pub const CMD_RESET_ALL_ERRORS: i32 = 1;
+    pub const CMD_STOP: i32 = 3;
+    pub const CMD_START: i32 = 4;
+    pub const CMD_EXECUTE: i32 = 10;
+
     /// Converts contents of a `Message` into an `InternalCommand`.
     pub fn from_msg(msg: &Message) -> Self {
         match msg.command {
-            // Only convert variants that are implemented.
-            x if x == InternalCommand::ResetAllErrors as i32 => InternalCommand::ResetAllErrors,
-            x if x == InternalCommand::Stop as i32 => InternalCommand::Stop,
-            x if x == InternalCommand::Start as i32  => InternalCommand::Start,
-            x if x == InternalCommand::Execute as i32 => InternalCommand::Execute(msg.command_param1),
+            Self::CMD_RESET_ALL_ERRORS => InternalCommand::ResetAllErrors,
+            Self::CMD_STOP => InternalCommand::Stop,
+            Self::CMD_START => InternalCommand::Start,
+            // The `Execute` variant carries data, so it's handled distinctly.
+            Self::CMD_EXECUTE => InternalCommand::Execute(msg.command_param1),
             _ => InternalCommand::Unknown,
         }
     }
@@ -258,10 +262,10 @@ impl InternalCommand {
     #[cfg(test)]
     pub fn to_numeric(&self) -> i32 {
         match self {
-            InternalCommand::ResetAllErrors => 1,
-            InternalCommand::Stop => 3,
-            InternalCommand::Start => 4,
-            InternalCommand::Execute(_id) => 10,
+            InternalCommand::ResetAllErrors => Self::CMD_RESET_ALL_ERRORS,
+            InternalCommand::Stop => Self::CMD_STOP,
+            InternalCommand::Start => Self::CMD_START,
+            InternalCommand::Execute(_id) => Self::CMD_EXECUTE,
             _ => -1,
         }
     }
