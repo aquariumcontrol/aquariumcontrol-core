@@ -114,11 +114,13 @@ impl TankLevelSwitchChannels {
 impl fmt::Display for TankLevelSwitchChannels {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         writeln!(f, "=== TankLevelSwitchChannels ===")?;
-        writeln!(
-            f,
-            "tx_tank_level_switch_to_tcp_opt: {}",
-            self.tx_tank_level_switch_to_tcp_opt.as_ref().unwrap().count
-        )?;
+        if let Some(tx_tank_level_switch_to_tcp) = self.tx_tank_level_switch_to_tcp_opt.as_ref() {
+            writeln!(
+                f,
+                "tx_tank_level_switch_to_tcp_opt: {}",
+                self.tx_tank_level_switch_to_tcp.count
+            )?;
+        }
         writeln!(
             f,
             "rx_tank_level_switch_from_tcp_opt: {}",

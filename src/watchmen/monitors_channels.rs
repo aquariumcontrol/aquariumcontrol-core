@@ -81,11 +81,13 @@ impl fmt::Display for MonitorsChannels {
             "rx_monitors_from_signal_handler: {}",
             self.rx_monitors_from_signal_handler.count
         )?;
-        write!(
-            f,
-            "rx_monitors_from_messaging_opt: {}",
-            self.rx_monitors_from_messaging_opt.as_ref().unwrap().count
-        )
+        if let Some(rx_monitors_from_messaging) = self.rx_monitors_from_messaging_opt.as_ref() {
+            write!(
+                f,
+                "rx_monitors_from_messaging_opt: {}",
+                self.rx_monitors_from_messaging.count
+            )
+        }
     }
 }
 

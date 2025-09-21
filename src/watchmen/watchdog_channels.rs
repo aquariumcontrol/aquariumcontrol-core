@@ -66,11 +66,11 @@ impl fmt::Display for WatchDogChannels {
             "rx_watchdog_from_signal_handler: {}",
             self.rx_watchdog_from_signal_handler.count
         )?;
-        if self.rx_watchdog_from_messaging_opt.is_some() {
+        if let Some(rx_watchdog_from_messaging) = self.rx_watchdog_from_messaging_opt.as_ref() {
             write!(
                 f,
                 "rx_watchdog_from_messaging_opt: {}",
-                self.rx_watchdog_from_messaging_opt.as_ref().unwrap().count
+                self.rx_watchdog_from_messaging.count
             )?;
         }
         Ok(())

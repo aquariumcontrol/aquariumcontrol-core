@@ -434,16 +434,20 @@ impl fmt::Display for SignalHandlerChannels {
             "rx_signal_handler_from_schedule_check: {}",
             self.rx_signal_handler_from_schedule_check.count
         )?;
-        writeln!(
-            f,
-            "tx_signal_handler_to_tcp_opt: {}",
-            self.tx_signal_handler_to_tcp_opt.as_ref().unwrap().count
-        )?;
-        writeln!(
-            f,
-            "rx_signal_handler_from_tcp_opt: {}",
-            self.rx_signal_handler_from_tcp_opt.as_ref().unwrap().count
-        )?;
+        if let Some(tx_signal_handler_to_tcp) = self.tx_signal_handler_to_tcp_opt.as_ref() {
+            writeln!(
+                f,
+                "tx_signal_handler_to_tcp_opt: {}",
+                self.tx_signal_handler_to_tcp.count
+            )?;
+        }
+        if let Some(rx_signal_handler_from_tcp) = self.rx_signal_handler_from_tcp_opt.as_ref() {
+            writeln!(
+                f,
+                "rx_signal_handler_from_tcp_opt: {}",
+                self.rx_signal_handler_from_tcp.count
+            )?;
+        }
         writeln!(
             f,
             "tx_signal_handler_to_watchdog: {}",

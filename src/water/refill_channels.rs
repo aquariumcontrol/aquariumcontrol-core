@@ -107,11 +107,13 @@ impl fmt::Display for RefillChannels {
             "rx_refill_from_schedule_check: {}",
             self.rx_refill_from_schedule_check.count
         )?;
-        writeln!(
-            f,
-            "rx_refill_from_messaging_opt: {}",
-            self.rx_refill_from_messaging_opt.as_ref().unwrap().count
-        )?;
+        if let Some(rx_refill_from_messaging) = self.rx_refill_from_messaging_opt.as_ref() {
+            writeln!(
+                f,
+                "rx_refill_from_messaging_opt: {}",
+                self.rx_refill_from_messaging.count
+            )?;
+        }
         write!(
             f,
             "tx_refill_to_monitors: {}",

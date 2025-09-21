@@ -6,6 +6,14 @@ The above copyright notice and this permission notice shall be included in all c
 
 THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
+
+//! Defines the configuration structure for the `Ventilation` control thread.
+//!
+//! This module contains the `VentilationConfig` struct, which is used with `serde`
+//! to deserialize the `[ventilation]` section from the application's TOML
+//! configuration file. It holds all the parameters that govern the behavior of the
+//! cooling system, from basic temperature setpoints to advanced control strategies.
+
 use crate::utilities::sawtooth_profile::SawToothProfileConfig;
 use serde_derive::Deserialize;
 

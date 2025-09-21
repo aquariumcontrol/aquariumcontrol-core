@@ -86,18 +86,18 @@ impl SensorManagerChannels {
 impl fmt::Display for SensorManagerChannels {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         writeln!(f, "=== SensorManagerChannels ===")?;
-        if self.tx_sensor_manager_to_tcp_opt.is_some() {
+        if let Some(tx_sensor_manager_to_tcp) = self.tx_sensor_manager_to_tcp_opt.as_ref() {
             writeln!(
                 f,
                 "tx_sensor_manager_to_tcp_opt: {}",
-                self.tx_sensor_manager_to_tcp_opt.as_ref().unwrap().count
+                self.tx_sensor_manager_to_tcp.count
             )?;
         }
-        if self.rx_sensor_manager_from_tcp_opt.is_some() {
+        if let Some(rx_sensor_manager_from_tcp) = self.rx_sensor_manager_from_tcp_opt.as_ref() {
             writeln!(
                 f,
                 "rx_sensor_manager_from_tcp_opt: {}",
-                self.rx_sensor_manager_from_tcp_opt.as_ref().unwrap().count
+                self.rx_sensor_manager_from_tcp.count
             )?;
         }
         writeln!(
