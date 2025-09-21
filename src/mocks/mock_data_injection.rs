@@ -10,40 +10,43 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 #[cfg(test)]
 pub mod tests {
     use crate::database::sql_interface_data::SqlInterfaceData;
+    use crate::launch::channels::AquaSender;
     use crate::recorder::{
         data_injection::DataInjectionTrait, recorder_data_frame::RecorderDataFrame,
     };
+    use crate::utilities::channel_content::InternalCommand;
+    use std::sync::{Arc, Mutex};
 
-    pub struct MockDataInjection {
-        pub data_frames: Vec<RecorderDataFrame>,
+    /// A mock for the DataInjectionTrait that captures the data frame and then
+    /// immediately sends a Quit signal to terminate the data_logger thread.
+    /// This allows for testing one full cycle of the `execute` loop without
+    /// needing to wait for timers.
+    pub struct MockInjectorWithQuit {
+        pub injected_data: Arc<Mutex<Option<RecorderDataFrame>>>,
+        pub tx_signal_handler_to_data_logger: AquaSender<InternalCommand>,
     }
 
-    impl MockDataInjection {
-        pub fn new() -> MockDataInjection {
-            MockDataInjection {
-                data_frames: Vec::new(),
+    impl DataInjectionTrait for MockInjectorWithQuit {
+        fn inject_data(
+            &mut self,
+            data_frame: RecorderDataFrame,
+            _sql_interface_data: &mut SqlInterfaceData,
+        ) {
+            // Capture the first data frame that gets injected.
+            let mut data = self.injected_data.lock().unwrap();
+            if data.is_none() {
+                *data = Some(data_frame);
             }
-        }
 
-        pub fn output(&self) {
-            if self.data_frames.is_empty() {
-                println!("MockDataInjection has not recorded any data frames.");
-            }
-            for (position, data_frame) in self.data_frames.iter().enumerate() {
-                println!("Dataframe #{}: {}", position, data_frame);
-            }
-        }
-    }
+            let mut tx_signal_handler_to_data_logger_clone =
+                self.tx_signal_handler_to_data_logger.clone();
 
-    impl DataInjectionTrait for MockDataInjection {
-        fn inject_data(&mut self, data_frame: RecorderDataFrame, _: &mut SqlInterfaceData) {
-            println!(
-                "MockDataInjection.inject_data: recording data frame: {}",
-                data_frame
-            );
-
-            // add data frame to vector
-            self.data_frames.push(data_frame);
+            let _ = std::thread::spawn(move || {
+                // Immediately send Quit to stop the loop after one successful injection.
+                // Then wait for acknowledgement and send terminate command.
+                let _ = tx_signal_handler_to_data_logger_clone.send(InternalCommand::Quit);
+                println!("{}: sent quit command", module_path!());
+            });
         }
     }
 }

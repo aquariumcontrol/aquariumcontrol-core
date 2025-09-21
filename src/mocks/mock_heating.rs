@@ -20,6 +20,7 @@ pub mod tests {
     use std::sync::{Arc, Mutex};
     use std::time::{Duration, Instant};
 
+    #[allow(unused)]
     pub fn mock_heating(
         mut tx_heating_to_tank_level_switch_opt: Option<&mut AquaSender<InternalCommand>>,
         mut rx_heating_from_tank_level_switch_opt: Option<&mut AquaReceiver<bool>>,

@@ -20,6 +20,7 @@ pub mod tests {
     use std::sync::{Arc, Mutex};
     use std::time::{Duration, Instant};
 
+    #[allow(unused)]
     pub fn mock_ventilation(
         rx_ventilation_from_signal_handler: &mut AquaReceiver<InternalCommand>,
         mut rx_ventilation_from_test_environment_opt: Option<&mut AquaReceiver<TestCommand>>,

@@ -49,6 +49,7 @@ tikv-jemalloc-ctl = { version = "0.6.0", features = ["stats"] }
 [dev-dependencies]
 assert_float_eq = "1"
 all_asserts = "2.3.1"
+tempfile = "3.22"
 
 [features]
 default = []

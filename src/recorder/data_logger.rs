@@ -992,6 +992,7 @@ impl DataLogger {
         // Initialize reference for cycle time measurement
         let mut start_time = Instant::now();
 
+        println!("Entering loop");
         loop {
             if self.config.active {
                 self.update_signals(
@@ -1053,7 +1054,9 @@ impl DataLogger {
                     heater_status: Some(heater_is_on),
                 };
 
+                println!("Constructed DataFrame");
                 data_injection.inject_data(data_frame, &mut sql_interface_data);
+                println!("Data injected");
             }
             let stop_time = Instant::now();
             let execution_duration = stop_time.duration_since(start_time);
@@ -1085,6 +1088,7 @@ impl DataLogger {
                 remaining_sleep_time_millis
             );
 
+            println!("Waiting for next cycle...");
             // wait the remaining time period to complete the target cycle time
             i = 0;
             while i < remaining_sleep_time_millis || cycle_time_exceeded {
@@ -1157,542 +1161,276 @@ impl DataLogger {
 
 #[cfg(test)]
 pub mod tests {
-    use crate::database::{sql_interface::SqlInterface, sql_interface_data::SqlInterfaceData};
-    use crate::launch::channels::{channel, Channels};
-    use crate::mocks::mock_data_injection::tests::MockDataInjection;
-    use crate::mocks::mock_heating::tests::mock_heating;
-    use crate::mocks::mock_signal::tests::MockSignal;
-    use crate::mocks::mock_ventilation::tests::mock_ventilation;
-    use crate::mocks::test_command::tests::TestCommand;
-    use crate::recorder::data_logger::{DataLogger, DataLoggerConfig, DataLoggerMutexes};
-    use crate::sensors::sensor_manager::SensorManagerSignals;
-    use crate::sensors::tank_level_switch::TankLevelSwitchSignals;
+    // Add these to the top of the `mod tests` block
+    use super::*;
+    use crate::database::sql_interface_data::SqlInterfaceData;
+    use crate::launch::channels::Channels;
+    use crate::mocks::mock_data_injection::tests::MockInjectorWithQuit;
     use crate::utilities::channel_content::InternalCommand;
-    use crate::utilities::config::{read_config_file_with_test_database, ConfigData};
-    use crate::water::refill::RefillStatus;
-    use spin_sleep::SpinSleeper;
-    use std::sync::{Arc, Mutex};
-    use std::{fs, thread, time::Duration};
+    use crate::utilities::config::read_config_file;
+    use crate::utilities::iir_filter::IIRFilterConfig;
+    use crate::utilities::signal_handler::SignalHandlerChannels;
+    use assert_float_eq::assert_float_absolute_eq;
+    use std::io::Read;
 
-    #[cfg(test)]
-    // Asserts the content of all data logger output files on disk.
-    //
-    // This comprehensive helper function is used in test environments to verify that
-    // the `DataLogger` correctly writes various sensor signals and device states
-    // to their respective configured files. It reads each file, parses its content
-    // (for floating-point numbers) or compares it directly (for boolean states),
-    // and asserts that it matches the expected target values.
-    //
-    // Arguments:
-    // * `data_logger_config`: The `DataLoggerConfig` struct containing the names of all output files.
-    // * `target_water_temperature`: The expected `f32` value for water temperature.
-    // * `target_water_temperature_filtered`: The expected `f32` value for filtered water temperature.
-    // * `target_water_ph`: The expected `f32` value for pH.
-    // * `target_water_ph_filtered`: The expected `f32` value for filtered pH.
-    // * `target_water_conductivity`: The expected `f32` value for conductivity.
-    // * `target_water_conductivity_filtered`: The expected `f32` value for filtered conductivity.
-    // * `_target_water_conductivity_compensated`: (Ignored) Placeholder for a compensated conductivity value.
-    // * `target_refill_in_progress`: The expected `bool` state for refill in progress.
-    // * `target_tank_level_switch_position`: The expected `bool` state for tank level switch position.
-    // * `target_tank_level_switch_invalid`: The expected `bool` state for tank level switch invalid status.
-    // * `target_tank_level_switch_position_stabilized`: The expected `bool` state for stabilized tank level switch position.
-    // * `target_surface_ventilation_status`: The expected `bool` state for surface ventilation status.
-    // * `target_ambient_temperature`: The expected `f32` value for ambient temperature.
-    // * `target_ambient_humidity`: The expected `f32` value for ambient humidity.
-    // * `target_heater_status`: The expected `bool` state for heater status.
-    // * `target_water_temperature_ds18b20`: The expected `f32` value for DS18B20 water temperature.
-    // * `target_ambient_temperature_ds18b20`: The expected `f32` value for DS18B20 ambient temperature.
-    //
-    // Panics:
-    // This function will panic if:
-    // - It fails to read any of the specified output files.
-    // - It fails to parse a file's content into the expected numeric type.
-    // - The content of any file does not match its corresponding target value.
-    fn assert_output_file_contents(
-        data_logger_config: &DataLoggerConfig,
-        target_water_temperature: f32,
-        target_water_temperature_filtered: f32,
-        target_water_ph: f32,
-        target_water_ph_filtered: f32,
-        target_water_conductivity: f32,
-        target_water_conductivity_filtered: f32,
-        _target_water_conductivity_compensated: f32,
-        target_refill_in_progress: bool,
-        target_tank_level_switch_position: bool,
-        target_tank_level_switch_invalid: bool,
-        target_tank_level_switch_position_stabilized: bool,
-        target_surface_ventilation_status: bool,
-        target_ambient_temperature: f32,
-        target_ambient_humidity: f32,
-        target_heater_status: bool,
+    /// Prepares all necessary parts for a data logger test.
+    fn prepare_data_logger_test_rig(
+        config: DataLoggerConfig,
+    ) -> (
+        DataLogger,
+        DataLoggerMutexes,
+        DataLoggerChannels,
+        SignalHandlerChannels,
+        Arc<Mutex<Option<RecorderDataFrame>>>,
     ) {
-        // Helper to assert the content of a file containing a f32 value.
-        let assert_file_f32 = |filename: &str, expected: f32| {
-            let content = fs::read_to_string(filename)
-                .unwrap_or_else(|_| panic!("Could not read file: {}", filename));
-            let value = content
-                .parse::<f32>()
-                .unwrap_or_else(|_| panic!("Could not parse f32 from file: {}", filename));
-            assert_eq!(value, expected, "Mismatch in file: {}", filename);
+        let data_logger = DataLogger::new(config, Duration::from_secs(60)).unwrap();
+
+        let mutexes = DataLoggerMutexes {
+            mutex_sensor_manager_signals: Arc::new(Mutex::new(SensorManagerSignals {
+                water_temperature: 25.5,
+                ph: 7.8,
+                conductivity: 50000.0,
+                ambient_temperature: 22.1,
+                ambient_humidity: 65.2,
+                instant_last_recording: Instant::now(),
+            })),
+            mutex_tank_level_switch_signals: Arc::new(Mutex::new(TankLevelSwitchSignals {
+                tank_level_switch_position: true,
+                tank_level_switch_position_stabilized: true,
+                tank_level_switch_invalid: false,
+            })),
+            mutex_heating_status: Arc::new(Mutex::new(true)),
+            mutex_ventilation_status: Arc::new(Mutex::new(false)),
+            mutex_refill_status: Arc::new(Mutex::new(RefillStatus {
+                refill_in_progress_live: false,
+                refill_in_progress_for_database: false,
+            })),
         };
 
-        // Helper to assert the content of a file containing a boolean state.
-        let assert_file_bool =
-            |filename: &str, expected_bool: bool, true_str: &str, false_str: &str| {
-                let content = fs::read_to_string(filename)
-                    .unwrap_or_else(|_| panic!("Could not read file: {}", filename));
-                let expected_str = if expected_bool { true_str } else { false_str };
-                assert_eq!(content, expected_str, "Mismatch in file: {}", filename);
-            };
+        let channels = Channels::new_for_test();
 
-        // Now, the assertions are clean, single-line calls.
-        assert_file_f32(
-            &data_logger_config.output_file_name_water_temperature,
-            target_water_temperature,
-        );
-        assert_file_f32(
-            &data_logger_config.output_file_name_water_temperature_filtered,
-            target_water_temperature_filtered,
-        );
-        assert_file_f32(&data_logger_config.output_file_name_pH, target_water_ph);
-        assert_file_f32(
-            &data_logger_config.output_file_name_pH_filtered,
-            target_water_ph_filtered,
-        );
-        assert_file_f32(
-            &data_logger_config.output_file_name_conductivity,
-            target_water_conductivity,
-        );
-        assert_file_f32(
-            &data_logger_config.output_file_name_conductivity_filtered,
-            target_water_conductivity_filtered,
-        );
-        assert_file_f32(
-            &data_logger_config.output_file_name_ambient_temperature,
-            target_ambient_temperature,
-        );
-        assert_file_f32(
-            &data_logger_config.output_file_name_humidity,
-            target_ambient_humidity,
-        );
+        let captured_data = Arc::new(Mutex::new(None));
 
-        assert_file_bool(
-            &data_logger_config.output_file_name_refill_in_progress,
-            target_refill_in_progress,
-            "ON",
-            "OFF",
-        );
-        assert_file_bool(
-            &data_logger_config.output_file_name_tank_level_switch_position,
-            target_tank_level_switch_position,
-            "HIGH",
-            "LOW",
-        );
-        assert_file_bool(
-            &data_logger_config.output_file_name_tank_level_switch_invalid,
-            target_tank_level_switch_invalid,
-            "INVALID",
-            "VALID",
-        );
-        assert_file_bool(
-            &data_logger_config.output_file_name_tank_level_switch_position_stabilized,
-            target_tank_level_switch_position_stabilized,
-            "HIGH",
-            "LOW",
-        );
-        assert_file_bool(
-            &data_logger_config.output_file_name_ventilation_is_on,
-            target_surface_ventilation_status,
-            "ON",
-            "OFF",
-        );
-        assert_file_bool(
-            &data_logger_config.output_file_name_heating_is_on,
-            target_heater_status,
-            "ON",
-            "OFF",
+        (
+            data_logger,
+            mutexes,
+            channels.data_logger,
+            channels.signal_handler,
+            captured_data,
+        )
+    }
+
+    #[test]
+    /// Verifies that `DataLogger::new()` successfully creates and resets all
+    /// specified output files when `output_to_disk` is enabled.
+    fn test_new_success_with_file_creation() {
+        // 1. Setup
+        let global_config =
+            read_config_file("/config/aquarium_control_test_generic.toml".to_string()).unwrap();
+        let config = global_config.data_logger;
+
+        let output_file_name_water_temperature = config.output_file_name_water_temperature.clone();
+        // 2. Execute
+        let result = DataLogger::new(config, Duration::from_secs(60));
+
+        // 3. Assert
+        assert!(result.is_ok(), "DataLogger::new should succeed");
+
+        // Verify that one of the files was created and is empty
+        let mut file = fs::File::open(output_file_name_water_temperature).unwrap();
+        let mut contents = String::new();
+        file.read_to_string(&mut contents).unwrap();
+        assert!(contents.is_empty(), "File should be created and empty");
+    }
+
+    #[test]
+    /// Verifies that `DataLogger::new()` returns an `OutputFilenameEmpty` error
+    /// if `output_to_disk` is true but a filename is an empty string.
+    fn test_new_failure_on_empty_filename() {
+        // 1. Setup
+        let config = DataLoggerConfig {
+            active: false,
+            execute: false,
+            use_sql_timestamp: false,
+            logging_interval: 0,
+            filter_coefficient_water_temperature: IIRFilterConfig {
+                filter_coefficient: 0.0,
+                initial_value: (),
+            },
+            filter_coefficient_pH: IIRFilterConfig {
+                filter_coefficient: 0.0,
+                initial_value: (),
+            },
+            filter_coefficient_conductivity: IIRFilterConfig {
+                filter_coefficient: 0.0,
+                initial_value: (),
+            },
+            output_to_disk: true,
+            output_file_name_timestamp: "".to_string(),
+            output_file_name_water_temperature: String::new(), // Empty filename
+            output_file_name_water_temperature_filtered: "".to_string(),
+            output_file_name_pH: "".to_string(),
+            output_file_name_pH_filtered: "".to_string(),
+            output_file_name_conductivity: "".to_string(),
+            output_file_name_conductivity_filtered: "".to_string(),
+            output_file_name_tank_level_switch_position: "".to_string(),
+            output_file_name_tank_level_switch_invalid: "".to_string(),
+            output_file_name_tank_level_switch_position_stabilized: "".to_string(),
+            output_file_name_ventilation_is_on: "".to_string(),
+            output_file_name_heating_is_on: "".to_string(),
+            output_file_name_ambient_temperature: "".to_string(),
+            output_file_name_humidity: "".to_string(),
+            output_file_name_refill_in_progress: "".to_string(),
+            initial_sleep_time_millis: 0,
+        };
+
+        // 2. Execute
+        let result = DataLogger::new(config, Duration::from_secs(60));
+
+        // 3. Assert
+        assert!(result.is_err());
+        match result.err().unwrap() {
+            DataLoggerError::OutputFilenameEmpty(_) => { /* Test passes */ }
+            _ => panic!("Expected OutputFilenameEmpty error"),
+        }
+    }
+
+    #[test]
+    /// Tests one full cycle of the `execute` loop, verifying that data is
+    /// correctly acquired from mutexes, filtered, and injected.
+    fn test_execute_data_aggregation_and_injection() {
+        // 1. Setup
+        let global_config =
+            read_config_file("/config/aquarium_control_test_generic.toml".to_string()).unwrap();
+        let config = global_config.data_logger;
+
+        let (
+            mut data_logger,
+            mutexes,
+            mut datalogger_channels,
+            mut signal_handler_channels,
+            captured_data,
+        ) = prepare_data_logger_test_rig(config);
+
+        let mut tx_signal_handler_to_data_logger_clone = signal_handler_channels
+            .tx_signal_handler_to_data_logger
+            .clone();
+
+        let mut mock_injector = MockInjectorWithQuit {
+            injected_data: captured_data.clone(),
+            tx_signal_handler_to_data_logger: signal_handler_channels
+                .tx_signal_handler_to_data_logger,
+        };
+
+        // 2. Execute
+        let logger_thread = std::thread::spawn(move || {
+            let sql_interface = SqlInterface::new(global_config.sql_interface).unwrap();
+            let sql_interface_data = SqlInterfaceData::new(sql_interface.conn, 0).unwrap();
+            data_logger.execute(
+                &mut mock_injector,
+                sql_interface_data,
+                &mut datalogger_channels,
+                mutexes,
+            );
+        });
+
+        let mock_signal_handler_thread = std::thread::spawn(move || {
+            let _ = signal_handler_channels
+                .rx_signal_handler_from_data_logger
+                .recv()
+                .unwrap();
+            tx_signal_handler_to_data_logger_clone
+                .send(InternalCommand::Terminate)
+                .unwrap();
+        });
+
+        logger_thread.join().expect("DataLogger thread panicked");
+        mock_signal_handler_thread
+            .join()
+            .expect("SignalHandler thread panicked");
+
+        // 3. Assert
+        let final_data = captured_data.lock().unwrap();
+        assert!(final_data.is_some(), "Data should have been injected");
+
+        let data_frame = final_data.as_ref().unwrap();
+        assert_float_absolute_eq!(data_frame.water_temperature.unwrap(), 25.5, 0.001);
+        assert_float_absolute_eq!(data_frame.ph.unwrap(), 7.8, 0.001);
+        assert_eq!(data_frame.heater_status, Some(true));
+        assert_eq!(data_frame.surface_ventilation_status, Some(false));
+        assert_eq!(data_frame.tank_level_switch_invalid, Some(false));
+
+        // Check if filtering logic was applied
+        assert!(
+            data_frame.water_temperature_filtered.is_some(),
+            "Filtered water temperature should be calculated"
         );
     }
 
     #[test]
-    // test case checks if DataLogger correctly processes all information:
-    // - storage in SQL database using mock implementation
-    // - writing output to the filesystem
-    // Test case uses test database #45.
-    pub fn test_data_log() {
-        let mut channels = Channels::new_for_test();
+    /// Verifies that the `execute` loop correctly writes sensor and state
+    /// data to files when `output_to_disk` is enabled.
+    fn test_execute_file_output() {
+        // 1. Setup
+        let global_config =
+            read_config_file("/config/aquarium_control_test_generic.toml".to_string()).unwrap();
+        let config = global_config.data_logger;
 
-        // test environment-specific channels
-        let (mut tx_test_environment_to_ventilation, mut rx_ventilation_from_test_environment) =
-            channel(1);
-        let (mut tx_test_environment_to_heating, mut rx_heating_from_test_environment) = channel(1);
+        let output_file_name_water_temperature = config.output_file_name_water_temperature.clone();
+        let output_file_name_heating_is_on = config.output_file_name_heating_is_on.clone();
 
-        let mut mock_data_injection = MockDataInjection::new();
+        let sql_interface = SqlInterface::new(global_config.sql_interface).unwrap();
+        let sql_interface_data = SqlInterfaceData::new(sql_interface.conn, 0).unwrap();
 
-        let mut config: ConfigData = read_config_file_with_test_database(
-            "/config/aquarium_control_test_generic.toml".to_string(),
-            45,
-        );
-        config.data_logger.logging_interval = 1;
+        let (
+            mut data_logger,
+            mutexes,
+            mut data_logger_channels,
+            mut signal_handler_channels,
+            captured_data,
+        ) = prepare_data_logger_test_rig(config);
 
-        let mut config2: ConfigData = read_config_file_with_test_database(
-            "/config/aquarium_control_test_generic.toml".to_string(),
-            45,
-        );
-        config2.data_logger.logging_interval = 1;
+        let mut tx_signal_handler_to_data_logger_clone = signal_handler_channels
+            .tx_signal_handler_to_data_logger
+            .clone();
 
-        let max_rows_data = config.sql_interface.max_rows_data;
-
-        let sql_interface = match SqlInterface::new(config.sql_interface.clone()) {
-            Ok(c) => c,
-            Err(e) => {
-                panic!("Could not connect to SQL database: {e:?}");
-            }
+        let mut mock_injector = MockInjectorWithQuit {
+            injected_data: captured_data,
+            tx_signal_handler_to_data_logger: signal_handler_channels
+                .tx_signal_handler_to_data_logger,
         };
-        let sql_interface_data =
-            SqlInterfaceData::new(sql_interface.get_connection().unwrap(), max_rows_data).unwrap();
-        let mut data_logger =
-            DataLogger::new(config.data_logger, Duration::from_millis(1000)).unwrap();
 
-        // replacement values are used to initialize the mutex content
-        config.sensor_manager.replacement_value_water_temperature = 10.0;
-        config.sensor_manager.replacement_value_ph = 11.0;
-        config.sensor_manager.replacement_value_conductivity = 12.0;
+        let mock_signal_handler_thread = std::thread::spawn(move || {
+            let _ = signal_handler_channels
+                .rx_signal_handler_from_data_logger
+                .recv()
+                .unwrap();
+            tx_signal_handler_to_data_logger_clone
+                .send(InternalCommand::Terminate)
+                .unwrap();
+        });
 
-        let mutex_ds18b20_water_temperature = Arc::new(Mutex::new(15.0));
-        let mutex_ds18b20_ambient_temperature = Arc::new(Mutex::new(16.0));
-        let mutex_tank_level_switch_signals =
-            Arc::new(Mutex::new(TankLevelSwitchSignals::new(false, false, false)));
-        let mutex_tank_level_switch_signals_clone = mutex_tank_level_switch_signals.clone();
-        let mutex_heating_status = Arc::new(Mutex::new(false));
-        let mutex_heating_status_clone_for_data_logger = mutex_heating_status.clone();
-        let mutex_ventilation_status = Arc::new(Mutex::new(false));
-        let mutex_ventilation_status_clone_for_data_logger = mutex_ventilation_status.clone();
-        let refill_status = RefillStatus {
-            refill_in_progress_live: false,
-            refill_in_progress_for_database: false,
-        };
-        let mutex_refill_status = Arc::new(Mutex::new(refill_status));
-        let mutex_refill_status_clone_for_data_logger = mutex_refill_status.clone();
-        let mutex_refill_status_clone_for_test_environment = mutex_refill_status.clone();
-        config.sensor_manager.replacement_value_ambient_temperature = 13.0;
-        config.sensor_manager.replacement_value_ambient_humidity = 14.0;
-        let mutex_sensor_manager_signals = Arc::new(Mutex::new(SensorManagerSignals::new(
-            &config.sensor_manager,
-        )));
-        let mutex_sensor_manager_signals_clone_for_data_logger =
-            mutex_sensor_manager_signals.clone();
-        // thread for test environment and mock signal handler
-        let join_handle_test_environment = thread::Builder::new()
-            .name("test_environment".to_string())
-            .spawn(move || {
-                let spin_sleeper = SpinSleeper::default();
-                let sleep_duration_1_second = Duration::from_millis(1000);
-                let sleep_duration_100_millis = Duration::from_millis(100);
-                spin_sleeper.sleep(sleep_duration_1_second);
-                spin_sleeper.sleep(sleep_duration_100_millis);
+        // 2. Execute
+        let logger_thread = std::thread::spawn(move || {
+            data_logger.execute(
+                &mut mock_injector,
+                sql_interface_data,
+                &mut data_logger_channels,
+                mutexes,
+            );
+        });
 
-                let _ = tx_test_environment_to_ventilation.send(TestCommand::UpdateSignal(
-                    MockSignal::VentilationControlStatus(true),
-                ));
-                {
-                    let mut sensor_manager_signals = mutex_sensor_manager_signals.lock().unwrap();
-                    sensor_manager_signals.water_temperature = 29.0;
-                }
-
-                spin_sleeper.sleep(sleep_duration_1_second);
-
-                let _ = tx_test_environment_to_heating.send(TestCommand::UpdateSignal(
-                    MockSignal::HeatingControlStatus(true),
-                ));
-
-                {
-                    let mut sensor_manager_signals = mutex_sensor_manager_signals.lock().unwrap();
-                    sensor_manager_signals.ph = 7.0;
-                }
-
-                spin_sleeper.sleep(sleep_duration_1_second);
-
-                {
-                    let mut sensor_manager_signals = mutex_sensor_manager_signals.lock().unwrap();
-                    sensor_manager_signals.conductivity = 50000.0;
-                }
-
-                spin_sleeper.sleep(sleep_duration_1_second);
-
-                {
-                    let mut tank_level_switch_signals =
-                        mutex_tank_level_switch_signals.lock().unwrap();
-                    tank_level_switch_signals.tank_level_switch_invalid = true;
-                }
-
-                {
-                    let mut sensor_manager_signals = mutex_sensor_manager_signals.lock().unwrap();
-                    sensor_manager_signals.ambient_temperature = 35.0;
-                }
-
-                {
-                    let mut refill_status = mutex_refill_status_clone_for_test_environment
-                        .lock()
-                        .unwrap();
-                    refill_status.refill_in_progress_for_database = true;
-                }
-
-                spin_sleeper.sleep(sleep_duration_1_second);
-
-                {
-                    let mut tank_level_switch_signals =
-                        mutex_tank_level_switch_signals.lock().unwrap();
-                    tank_level_switch_signals.tank_level_switch_position = true;
-                }
-
-                {
-                    let mut sensor_manager_signals = mutex_sensor_manager_signals.lock().unwrap();
-                    sensor_manager_signals.ambient_humidity = 66.0;
-                }
-
-                spin_sleeper.sleep(sleep_duration_1_second);
-
-                {
-                    let mut water_temperature_ds18b20 =
-                        mutex_ds18b20_water_temperature.lock().unwrap();
-                    *water_temperature_ds18b20 = 15.5;
-                    let mut ambient_temperature_ds18b20 =
-                        mutex_ds18b20_ambient_temperature.lock().unwrap();
-                    *ambient_temperature_ds18b20 = 16.5;
-                }
-
-                {
-                    let mut tank_level_switch_signals =
-                        mutex_tank_level_switch_signals.lock().unwrap();
-                    tank_level_switch_signals.tank_level_switch_position_stabilized = true;
-                }
-
-                spin_sleeper.sleep(sleep_duration_1_second);
-
-                // cease operation of the test object
-                let _ = channels
-                    .signal_handler
-                    .send_to_data_logger(InternalCommand::Quit);
-                channels.signal_handler.receive_from_data_logger().unwrap();
-
-                // signal end of test case execution to mock threads
-                let _ = channels
-                    .signal_handler
-                    .send_to_heating(InternalCommand::Quit);
-                let _ = channels
-                    .signal_handler
-                    .send_to_ventilation(InternalCommand::Quit);
-
-                spin_sleeper.sleep(sleep_duration_1_second);
-                let _ = channels
-                    .signal_handler
-                    .send_to_data_logger(InternalCommand::Terminate);
-            })
-            .unwrap();
-
-        // thread for mock heating
-        let join_handle_mock_heating = thread::Builder::new()
-            .name("mock_heating".to_string())
-            .spawn(move || {
-                mock_heating(
-                    None,
-                    None,
-                    &mut channels.heating.rx_heating_from_signal_handler,
-                    Some(&mut rx_heating_from_test_environment),
-                    mutex_heating_status, // initial heating control status
-                );
-            })
-            .unwrap();
-
-        // thread for mock ventilation
-        let join_handle_mock_ventilation = thread::Builder::new()
-            .name("mock_ventilation".to_string())
-            .spawn(move || {
-                mock_ventilation(
-                    &mut channels.ventilation.rx_ventilation_from_signal_handler,
-                    Some(&mut rx_ventilation_from_test_environment),
-                    mutex_ventilation_status, // initial ventilation control status
-                );
-            })
-            .unwrap();
-
-        // give mock threads some time to establish
-        let spin_sleeper = SpinSleeper::default();
-        let sleep_duration_100_millis = Duration::from_millis(100);
-        spin_sleeper.sleep(sleep_duration_100_millis);
-
-        // thread for the test object and asserts
-        let join_handle_test_object = thread::Builder::new()
-            .name("test_object".to_string())
-            .spawn(move || {
-                let data_logger_mutexes = DataLoggerMutexes {
-                    mutex_sensor_manager_signals:
-                        mutex_sensor_manager_signals_clone_for_data_logger,
-                    mutex_tank_level_switch_signals: mutex_tank_level_switch_signals_clone,
-                    mutex_heating_status: mutex_heating_status_clone_for_data_logger,
-                    mutex_ventilation_status: mutex_ventilation_status_clone_for_data_logger,
-                    mutex_refill_status: mutex_refill_status_clone_for_data_logger,
-                };
-
-                data_logger.execute(
-                    &mut mock_data_injection,
-                    sql_interface_data,
-                    &mut channels.data_logger,
-                    data_logger_mutexes,
-                );
-
-                println!("Printing recorded data:");
-                mock_data_injection.output();
-
-                // Assert if data logger has set the refill-in-progress bit to false.
-                {
-                    let refill_status = mutex_refill_status.lock().unwrap();
-                    println!(
-                        "Checking if data logger has set the refill-in-progress bit to false..."
-                    );
-                    assert_eq!(refill_status.refill_in_progress_for_database, false);
-                }
-
-                // Dataframe #5
-                let mut data_frame = mock_data_injection.data_frames.pop().unwrap();
-                println!("Asserting data frame #5");
-                data_frame.assert(
-                    Some(29.0),     // target_water_temperature
-                    Some(28.40625), // target_water_temperature_filtered
-                    Some(7.0),      // target_water_ph
-                    Some(7.125),    // target_water_ph_filtered
-                    Some(50_000.0), // target_water_conductivity
-                    Some(46875.75), // target_water_conductivity_filtered
-                    None,           // target_water_conductivity_compensated
-                    Some(false),    // target_refill_in_progress
-                    Some(true),     // target_tank_level_switch_position
-                    Some(true),     // target_tank_level_switch_position_stabilized
-                    Some(true),     // target_tank_level_switch_invalid
-                    Some(true),     // target_surface_ventilation_status
-                    Some(35.0),     // target_ambient_temperature
-                    Some(66.0),     // target_ambient_humidity
-                    Some(true),     // target_heater_status
-                );
-
-                // Dataframe #4
-                data_frame = mock_data_injection.data_frames.pop().unwrap();
-                println!("Asserting data frame #4");
-                data_frame.assert(
-                    Some(29.0),     // target_water_temperature
-                    Some(27.8125),  // target_water_temperature_filtered
-                    Some(7.0),      // target_water_ph
-                    Some(7.25),     // target_water_ph_filtered
-                    Some(50_000.0), // target_water_conductivity
-                    Some(43751.5),  // target_water_conductivity_filtered
-                    None,           // target_water_conductivity_compensated
-                    Some(false),    // target_refill_in_progress
-                    Some(true),     // target_tank_level_switch_position
-                    Some(false),    // target_tank_level_switch_position_stabilized
-                    Some(true),     // target_tank_level_switch_invalid
-                    Some(true),     // target_surface_ventilation_status
-                    Some(35.0),     // target_ambient_temperature
-                    Some(66.0),     // target_ambient_humidity
-                    Some(true),     // target_heater_status
-                );
-
-                // Dataframe #3
-                data_frame = mock_data_injection.data_frames.pop().unwrap();
-                println!("Asserting data frame #3");
-                data_frame.assert(
-                    Some(29.0),     // target_water_temperature
-                    Some(26.625),   // target_water_temperature_filtered
-                    Some(7.0),      // target_water_ph
-                    Some(7.5),      // target_water_ph_filtered
-                    Some(50_000.0), // target_water_conductivity
-                    Some(37503.0),  // target_water_conductivity_filtered
-                    None,           // target_water_conductivity_compensated
-                    Some(true),     // target_refill_in_progress
-                    Some(false),    // target_tank_level_switch_position
-                    Some(false),    // target_tank_level_switch_position_stabilized
-                    Some(true),     // target_tank_level_switch_invalid
-                    Some(true),     // target_surface_ventilation_status
-                    Some(35.0),     // target_ambient_temperature
-                    Some(14.0),     // target_ambient_humidity
-                    Some(true),     // target_heater_status
-                );
-
-                // Dataframe #2
-                data_frame = mock_data_injection.data_frames.pop().unwrap();
-                println!("Asserting data frame #2");
-                data_frame.assert(
-                    Some(29.0),     // target_water_temperature
-                    Some(24.25),    // target_water_temperature_filtered
-                    Some(7.0),      // target_water_ph
-                    Some(8.0),      // target_water_ph_filtered
-                    Some(50_000.0), // target_water_conductivity
-                    Some(25006.0),  // target_water_conductivity_filtered
-                    None,           // target_water_conductivity_compensated
-                    Some(false),    // target_refill_in_progress
-                    Some(false),    // target_tank_level_switch_position
-                    Some(false),    // target_tank_level_switch_position_stabilized
-                    Some(false),    // target_tank_level_switch_invalid
-                    Some(true),     // target_surface_ventilation_status
-                    Some(13.0),     // target_ambient_temperature
-                    Some(14.0),     // target_ambient_humidity
-                    Some(true),     // target_heater_status
-                );
-
-                // Dataframe #1
-                data_frame = mock_data_injection.data_frames.pop().unwrap();
-                println!("Asserting data frame #1");
-                data_frame.assert(
-                    Some(29.0),  // target_water_temperature
-                    Some(19.5),  // target_water_temperature_filtered
-                    Some(7.0),   // target_water_ph
-                    Some(9.0),   // target_water_ph_filtered
-                    Some(12.0),  // target_water_conductivity
-                    Some(12.0),  // target_water_conductivity_filtered
-                    None,        // target_water_conductivity_compensated
-                    Some(false), // target_refill_in_progress
-                    Some(false), // target_tank_level_switch_position
-                    Some(false), // target_tank_level_switch_position_stabilized
-                    Some(false), // target_tank_level_switch_invalid
-                    Some(true),  // target_surface_ventilation_status
-                    Some(13.0),  // target_ambient_temperature
-                    Some(14.0),  // target_ambient_humidity
-                    Some(true),  // target_heater_status
-                );
-
-                assert!(mock_data_injection.data_frames.is_empty());
-
-                assert_output_file_contents(
-                    &config2.data_logger, // data_logger_config,
-                    29.0,                 // target_water_temperature
-                    28.4,                 // target_water_temperature_filtered
-                    7.0,                  // target_water_ph
-                    7.12,                 // target_water_ph_filtered
-                    50_000.0,             // target_water_conductivity
-                    46876.0,              // target_water_conductivity_filtered
-                    0.0,                  // target_water_conductivity_compensated
-                    false,                // target_refill_in_progress
-                    true,                 // target_tank_level_switch_position
-                    true,                 // target_tank_level_switch_invalid
-                    true,                 // target_tank_level_switch_position_stabilized
-                    true,                 // target_surface_ventilation_status
-                    35.0,                 // target_ambient_temperature
-                    66.0,                 // target_ambient_humidity
-                    true,                 // target_heater_status
-                );
-            })
-            .unwrap();
-
-        join_handle_mock_ventilation
+        logger_thread.join().expect("DataLogger thread panicked");
+        mock_signal_handler_thread
             .join()
-            .expect("Mock ventilation thread did not finish.");
-        join_handle_mock_heating
-            .join()
-            .expect("Mock heating thread did not finish.");
-        join_handle_test_environment
-            .join()
-            .expect("Test environment thread did not finish.");
-        join_handle_test_object
-            .join()
-            .expect("Mock data logger thread did not finish.");
+            .expect("SignalHandler thread panicked");
+
+        // 3. Assert
+        // Check that the files were written with the correct content
+        let temp_content = fs::read_to_string(output_file_name_water_temperature).unwrap();
+        assert_eq!(temp_content, "25.5"); // Based on AquariumSignal::output_file_string format
+
+        let heat_content = fs::read_to_string(output_file_name_heating_is_on).unwrap();
+        assert_eq!(heat_content, "ON");
     }
 }

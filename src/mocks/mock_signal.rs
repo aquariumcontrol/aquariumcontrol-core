@@ -46,9 +46,11 @@ pub mod tests {
         /// ambient humidity in %
         AmbientHumidity(f32),
 
+        #[allow(unused)]
         /// heating control status
         HeatingControlStatus(bool),
 
+        #[allow(unused)]
         /// status of ventilation control
         VentilationControlStatus(bool),
 
