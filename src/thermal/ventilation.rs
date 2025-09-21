@@ -7,6 +7,65 @@ The above copyright notice and this permission notice shall be included in all c
 THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
+//! Manages the aquarium's cooling system through a dedicated control thread.
+//!
+//! This module implements the `Ventilation` control thread, a long-running process
+//! responsible for controlling the aquarium's water temperature in conjunction with
+//! the heating control. It's a sophisticated controller that integrates sensor data,
+//! scheduling, and external commands to provide robust and efficient evaporative cooling.
+//!
+//! ## Key Responsibilities
+//!
+//! - **Temperature Control**: Implements a hybrid control strategy:
+//!   - **Hysteresis Control**: Switches the ventilation fans fully on when the temperature
+//!     exceeds `switch_on_temperature` and fully off when it drops below `switch_off_temperature`.
+//!   - **Proportional Control**: Within the hysteresis band, it uses a `SawToothProfile`
+//!     to achieve a "PWM-like" effect, modulating the fans' on-time to provide
+//!     smoother temperature regulation and prevent rapid on/off cycling.
+//!
+//! - **External Control**: Listens for `Start` and `Stop` commands from other parts of
+//!   the system (e.g., a messaging interface), allowing ventilation to be manually
+//!   inhibited or re-enabled.
+//!
+//! - **Scheduling**: Respects a system-wide schedule by querying the `ScheduleCheck`
+//!   module. It uses a configurable strategy (`switch_on_when_out_of_schedule`) to
+//!   determine its behavior when outside the allowed time window.
+//!
+//! - **Configurable Shutdown Behavior**: The `switch_on_when_terminating` flag in the
+//!   configuration determines whether the fans should be left ON or OFF when the
+//!   unwinding application shuts down.
+//!
+//! ## Key Components
+//!
+//! - **`Ventilation` Struct**: The core state machine for the thread. It holds the
+//!   configuration and a set of log-suppression flags.
+//!
+//! - **`execute()` Method**: The main thread loop. This monolithic function orchestrates
+//!   all the module's responsibilities, from reading sensor data to actuating the
+//!   ventilation relay.
+//!
+//! - **`actuate_ventilation()`**: A private helper that encapsulates the channel communication
+//!   required to send a command to the `RelayManager` and wait for its response.
+//!
+//! - **`conditional_ventilation_switch()`**: A private helper that encapsulates the logic
+//!   for switching the ventilation ON or OFF only if its state has changed, reducing
+//!   redundant commands.
+//!
+//! ## Design and Architecture
+//!
+//! - **Decoupled and Concurrent**: The `Ventilation` thread runs independently, communicating
+//!   with other threads asynchronously via channels (for commands) and mutexes (for
+//!   shared sensor data). This decouples the control logic from the hardware drivers
+//!   and data sources.
+//!
+//! - **Stateful and Robust**: The thread maintains its own state (`ventilation_state`,
+//!   `ventilation_inhibited`) and uses flags to manage log suppression and
+//!   recover from transient errors.
+//!
+//! - **Data-Driven**: Its behavior is driven by a combination of real-time sensor data,
+//!   pre-configured parameters from a TOML file, and dynamic setpoints fetched from
+//!   a database.
+
 use log::error;
 #[cfg(not(test))]
 use log::warn;
@@ -77,7 +136,7 @@ fn actuate_ventilation(
             log_error_chain(module_path!(), &error_message, e);
         }
     };
-    *mutex_data += 1;
+    *mutex_data = mutex_data.saturating_add(1);
 }
 
 /// The function commands the relay manager to switch on the ventilation device.
