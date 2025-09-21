@@ -925,6 +925,9 @@ pub mod tests {
     use std::sync::{Arc, Mutex};
     use std::thread;
     use std::time::{Duration, Instant};
+    
+    #[cfg(target_os = "linux")]
+    use assert_float_eq::*;
 
     // Prepares a `Heating` control instance with a mock midnight calculator and a clean test database.
     //
