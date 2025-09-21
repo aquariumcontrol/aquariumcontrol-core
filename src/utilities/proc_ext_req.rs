@@ -70,6 +70,7 @@ pub trait ProcessExternalRequestTrait {
             Ok(c) => match c {
                 InternalCommand::Quit => true,
                 _ => {
+                    #[cfg(any(not(test), not(feature = "debug_signal_handler")))]
                     warn!(
                         target: module_path!(),
                         "ProcessExternalRequestTrait: ignoring inapplicable command from signal handler."
@@ -101,6 +102,7 @@ pub trait ProcessExternalRequestTrait {
                         InternalCommand::Start => (true, false),
                         InternalCommand::Stop => (false, true),
                         _ => {
+                            #[cfg(not(test))]
                             warn!(
                                 target: module_path!(),
                                 "ProcessExternalRequestTrait: ignoring inapplicable command from messaging."
@@ -164,6 +166,7 @@ impl ProcessExternalRequestTrait for Refill {
             Ok(c) => match c {
                 InternalCommand::Quit => true,
                 _ => {
+                    #[cfg(any(not(test), feature = "debug_signal_handler"))]
                     warn!(
                         target: module_path!(),
                         "ignoring inapplicable command from signal handler."
@@ -204,6 +207,7 @@ impl ProcessExternalRequestTrait for Refill {
                             (false, false)
                         }
                         _ => {
+                            #[cfg(not(test))]
                             warn!(
                                 target: module_path!(),
                                 "ignoring inapplicable command from messaging."
@@ -263,6 +267,7 @@ fn process_external_request_without_messaging(
         Ok(c) => match c {
             InternalCommand::Quit => true,
             _ => {
+                #[cfg(any(not(test), feature = "debug_signal_handler"))]
                 warn!(
                     target: module_path!(),
                     "ignoring inapplicable command from signal handler."
@@ -613,6 +618,7 @@ fn process_standard_request(rx_from_signal_handler: &mut AquaReceiver<InternalCo
             InternalCommand::Terminate => true,
             InternalCommand::Quit => true,
             _ => {
+                #[cfg(any(not(test), feature = "debug_signal_handler"))]
                 warn!(
                     target: module_path!(),
                     "ignoring inapplicable command {c} from signal handler."
@@ -685,6 +691,7 @@ impl ProcessExternalRequestTrait for Feed {
                             }
                             InternalCommand::Execute(c) => (false, false, true, c),
                             _ => {
+                                #[cfg(not(test))]
                                 warn!(
                                     target: module_path!(),
                                     "ignoring inapplicable command {c} from messaging."
@@ -762,6 +769,7 @@ impl ProcessExternalRequestTrait for Balling {
                             InternalCommand::Stop => (false, true, false, 0),
                             InternalCommand::Execute(c) => (false, false, true, c),
                             _ => {
+                                #[cfg(not(test))]
                                 warn!(
                                     target: module_path!(),
                                     "ignoring inapplicable command {c} from messaging."
@@ -834,6 +842,7 @@ impl ProcessExternalRequestTrait for Watchdog {
                         InternalCommand::Start => (true, false),
                         InternalCommand::Stop => (false, true),
                         _ => {
+                            #[cfg(not(test))]
                             warn!(
                                 target: module_path!(),
                                 "ignoring inapplicable command {c} from messaging."
