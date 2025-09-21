@@ -6,6 +6,46 @@ The above copyright notice and this permission notice shall be included in all c
 
 THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
+
+//! A central container for all inter-thread communication channels used by the `Heating` thread.
+//!
+//! This module defines the `HeatingChannels` struct, which acts as a dedicated
+//! "switchboard". Its primary purpose is to aggregate all the `mpsc::channel` senders
+//! and receivers that the `Heating` control thread needs to interact with other parts
+//! of the application, such as the `RelayManager`, `SignalHandler`, and `ScheduleCheck`.
+//!
+//! By bundling all communication endpoints into a single, clearly defined struct, it
+//! makes the `Heating` thread's dependencies explicit and simplifies its initialization.
+//!
+//! ## Key Components
+//!
+//! - **`HeatingChannels` Struct**: A container that explicitly declares the full
+//!   set of communication dependencies for the `Heating` thread. The use of
+//!   `Option` for the messaging channel (`rx_heating_from_messaging_opt`) makes
+//!   optional communication paths type-safe.
+//!
+//! - **Helper Methods**: Provides a suite of wrapper methods, such as `send_to_relay_manager()`
+//!   and `receive_from_schedule_check()`, to offer a clean, high-level API for channel
+//!   operations, encapsulating the raw `send` and `recv` calls.
+//!
+//! ## Design and Architecture
+//!
+//! The `HeatingChannels` struct is a key part of the application's inter-thread
+//! communication strategy, promoting clean and decoupled code.
+//!
+//! - **Centralization**: By gathering all necessary channels into a single struct, it
+//!   provides a clear and explicit declaration of the `Heating` thread's
+//!   communication dependencies. This makes the overall application architecture easier
+//!   to reason about.
+//!
+//! - **Decoupling**: The main `Heating` thread logic doesn't need to manage
+//!   individual channels or know how they are created. It just needs this struct.
+//!   This separates the core control logic from the application's internal "wiring".
+//!
+//! - **Testability**: The struct can be easily constructed for usage with mock functions during
+//!   unit testing, allowing for isolated testing of the `Heating` thread's
+//!   logic without needing to run the entire application.
+
 use crate::launch::channels::{AquaChannelError, AquaReceiver, AquaSender};
 use crate::utilities::channel_content::InternalCommand;
 use std::fmt;
@@ -101,11 +141,13 @@ impl fmt::Display for HeatingChannels {
             "rx_heating_from_schedule_check: {}",
             self.rx_heating_from_schedule_check.count
         )?;
-        write!(
-            f,
-            "rx_heating_from_messaging_opt: {}",
-            self.rx_heating_from_messaging_opt.as_ref().unwrap().count
-        )
+        if let Some(ref rx_heating_from_messaging) = self.rx_heating_from_messaging_opt {
+            write!(
+                f,
+                "rx_heating_from_messaging_opt: {}",
+                self.rx_heating_from_messaging.count
+            )
+        }
     }
 }
 
