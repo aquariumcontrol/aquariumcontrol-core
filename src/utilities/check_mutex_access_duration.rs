@@ -272,7 +272,7 @@ impl CheckMutexAccessDurationTrait for SensorManager {
     /// inform the location of the warning for logging purposes
     #[cfg(not(test))]
     fn get_location(&self) -> &str {
-        "dht"
+        "sensor_manager"
     }
 }
 
@@ -338,7 +338,7 @@ impl CheckMutexAccessDurationTrait for Ds18b20 {
     /// inform the location of the warning for logging purposes
     #[cfg(not(test))]
     fn get_location(&self) -> &str {
-        "ventilation"
+        "ds18b20"
     }
 }
 impl CheckMutexAccessDurationTrait for AtlasScientific {
