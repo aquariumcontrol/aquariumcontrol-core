@@ -14,7 +14,6 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 /// 2. Sleeping for the remaining time to meet the target cycle duration.
 /// 3. Logging a "log-once" warning if the execution time exceeds the target.
 /// 4. Resetting the cycle timer and associated flags for the next iteration.
-
 #[macro_export]
 macro_rules! manage_cycle_time_thermal {
     (
