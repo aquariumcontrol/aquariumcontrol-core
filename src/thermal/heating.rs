@@ -90,7 +90,6 @@ use crate::thermal::heating_config::HeatingConfig;
 use crate::utilities::acknowledge_signal_handler::AcknowledgeSignalHandlerTrait;
 use crate::utilities::channel_content::{ActuatorState, AquariumDevice, InternalCommand};
 use crate::utilities::check_mutex_access_duration::CheckMutexAccessDurationTrait;
-use crate::utilities::common::check_if_mutex_is_blocked;
 use crate::utilities::database_ping_trait::DatabasePingTrait;
 use crate::utilities::logger::log_error_chain;
 use crate::utilities::proc_ext_req::ProcessExternalRequestTrait;
@@ -152,7 +151,7 @@ fn actuate_heater(
     heating_channels: &mut HeatingChannels,
 ) {
     // reduce the probability of wrong warning
-    *mutex_blocked_during_actuation |= check_if_mutex_is_blocked(mutex_device_scheduler_heating);
+    *mutex_blocked_during_actuation |= mutex_device_scheduler_heating.try_lock().is_err();
 
     // avoid electrical overloads through parallel device actuation
     let mut mutex_data = mutex_device_scheduler_heating.lock().unwrap();
@@ -442,7 +441,6 @@ impl Heating {
             } else {
                 0.0
             };
-            println!("***  Updating heating stats ***");
             heating_stats.update(
                 water_temperature_opt,
                 ambient_temperature_opt,
@@ -911,7 +909,6 @@ pub mod tests {
     use crate::sensors::tank_level_switch::TankLevelSwitchSignals;
     use crate::thermal::heating::{Heating, HeatingMutexes, CYCLE_TIME_HEATING_MILLIS};
     use crate::utilities::channel_content::{ActuatorState, AquariumDevice, InternalCommand};
-    use crate::utilities::common::tests::update_min_max_actuation_duration;
     use crate::utilities::config::{read_config_file_with_test_database, ConfigData};
     use crate::utilities::sawtooth_profile::SawToothProfileConfig;
     use all_asserts::{assert_ge, assert_le};
@@ -1351,76 +1348,66 @@ pub mod tests {
                     .time
                     .duration_since(third_last_actuation_event.time)
                     .as_millis();
-                (min_actuation_duration, max_actuation_duration) =
-                    update_min_max_actuation_duration(
-                        min_actuation_duration,
-                        max_actuation_duration,
-                        second_last_actuation_duration,
-                    );
+
                 println!(
                     "second_last_actuation_duration={}",
                     second_last_actuation_duration
                 );
 
+                min_actuation_duration = min_actuation_duration.min(second_last_actuation_duration);
+                max_actuation_duration = max_actuation_duration.max(second_last_actuation_duration);
+
                 let third_last_actuation_duration = third_last_actuation_event
                     .time
                     .duration_since(fourth_last_actuation_event.time)
                     .as_millis();
-                (min_actuation_duration, max_actuation_duration) =
-                    update_min_max_actuation_duration(
-                        min_actuation_duration,
-                        max_actuation_duration,
-                        second_last_actuation_duration,
-                    );
+
                 println!(
                     "third_last_actuation_duration={}",
                     third_last_actuation_duration
                 );
 
+                min_actuation_duration = min_actuation_duration.min(third_last_actuation_duration);
+                max_actuation_duration = max_actuation_duration.max(third_last_actuation_duration);
+
                 let fourth_last_actuation_duration = fourth_last_actuation_event
                     .time
                     .duration_since(fifth_last_actuation_event.time)
                     .as_millis();
-                (min_actuation_duration, max_actuation_duration) =
-                    update_min_max_actuation_duration(
-                        min_actuation_duration,
-                        max_actuation_duration,
-                        second_last_actuation_duration,
-                    );
+
                 println!(
                     "fourth_last_actuation_duration={}",
                     fourth_last_actuation_duration
                 );
 
+                min_actuation_duration = min_actuation_duration.min(fourth_last_actuation_duration);
+                max_actuation_duration = max_actuation_duration.max(fourth_last_actuation_duration);
+
                 let fifth_last_actuation_duration = fifth_last_actuation_event
                     .time
                     .duration_since(sixth_last_actuation_event.time)
                     .as_millis();
-                (min_actuation_duration, max_actuation_duration) =
-                    update_min_max_actuation_duration(
-                        min_actuation_duration,
-                        max_actuation_duration,
-                        second_last_actuation_duration,
-                    );
+
                 println!(
                     "fifth_last_actuation_duration={}",
                     fifth_last_actuation_duration
                 );
 
+                min_actuation_duration = min_actuation_duration.min(fifth_last_actuation_duration);
+                max_actuation_duration = max_actuation_duration.max(fifth_last_actuation_duration);
+
                 let sixth_last_actuation_duration = sixth_last_actuation_event
                     .time
                     .duration_since(seventh_last_actuation_event.time)
                     .as_millis();
-                (min_actuation_duration, max_actuation_duration) =
-                    update_min_max_actuation_duration(
-                        min_actuation_duration,
-                        max_actuation_duration,
-                        second_last_actuation_duration,
-                    );
+
                 println!(
                     "sixth_last_actuation_duration={}",
                     sixth_last_actuation_duration
                 );
+
+                min_actuation_duration = min_actuation_duration.min(sixth_last_actuation_duration);
+                max_actuation_duration = max_actuation_duration.max(sixth_last_actuation_duration);
 
                 let delta_min_max_duration = max_actuation_duration - min_actuation_duration;
 
@@ -1452,6 +1439,7 @@ pub mod tests {
                         assert_ge!(sixth_last_actuation_duration, 6400);
                     }
                 }
+                println!("delta_min_max_duration={}", delta_min_max_duration);
                 assert_le!(delta_min_max_duration, 50);
                 mock_actuator_states.check_terminal_condition_heating();
             })
@@ -2919,7 +2907,7 @@ pub mod tests {
             heating_stats_opt.is_some(),
             "Stats option should still be Some"
         );
-        // Stats data should be unchanged
+        // Statistical data should be unchanged
         assert_float_absolute_eq!(heating_stats_opt.unwrap().energy, 1.23, 0.001);
     }
 

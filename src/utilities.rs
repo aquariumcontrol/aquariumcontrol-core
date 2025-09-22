@@ -10,9 +10,6 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 /// Defines enums and structs for inter-thread communication via channels.
 pub mod channel_content;
 
-/// Provides common, shared functions and constants used across multiple modules.
-pub mod common;
-
 /// Handles the loading and parsing of the main application configuration from a TOML file.
 pub mod config;
 

@@ -19,7 +19,7 @@ use nix::unistd::gettid;
 use crate::launch::channels::{AquaReceiver, AquaSender};
 use crate::launch::execution_config::ExecutionConfig;
 use crate::utilities::channel_content::InternalCommand;
-pub(crate) use crate::utilities::signal_handler_channels::SignalHandlerChannels;
+pub use crate::utilities::signal_handler_channels::SignalHandlerChannels;
 use spin_sleep::SpinSleeper;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::{sync::Arc, time::Duration};
@@ -147,7 +147,7 @@ pub fn handle_signals(
     mut signal_handler_channels: SignalHandlerChannels,
     execution_config: ExecutionConfig,
 ) {
-    #[cfg(target_os = "linux")]
+    #[cfg(all(target_os = "linux", not(test)))]
     info!(target: module_path!(), "Thread started with TID: {}", gettid());
 
     if signal_handler_channels
