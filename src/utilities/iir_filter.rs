@@ -6,6 +6,48 @@ The above copyright notice and this permission notice shall be included in all c
 
 THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
+
+//! Provides a configurable single-pole IIR (Infinite Impulse Response) low-pass filter.
+//!
+//! This module is designed to smooth out noisy or fluctuating sensor readings, such as
+//! temperature or pH, by applying a simple and efficient digital filter. The filter
+//! reduces rapid changes in a signal, providing a more stable output value over time.
+//!
+//! ## Core Logic
+//!
+//! The filter implements a first-order IIR low-pass filter using the formula:
+//!
+//! `y[n] = (1 - a) * y[n-1] + a * x[n]`
+//!
+//! Where:
+//! - `y[n]` is the new filtered value.
+//! - `y[n-1]` is the previous filtered value.
+//! - `x[n]` is the new, unfiltered input value.
+//! - `a` is the `filter_coefficient`.
+//!
+//! A coefficient closer to `0.0` results in heavy filtering (a slow-responding output),
+//! while a coefficient closer to `1.0` results in light filtering (a fast-responding output).
+//!
+//! ## Key Components
+//!
+//! - **`IIRFilter`**: The main runtime struct that holds the filter's state (`old_value`)
+//!   and performs the filtering calculation via its `get_filtered_value()` method.
+//!
+//! - **`IIRFilterConfig`**: A `serde`-compatible struct for deserializing filter settings
+//!   from a TOML configuration file. It is designed to be flexible about where the
+//!   filter's initial value comes from.
+//!
+//! - **`new_requires_initial()`**: The primary constructor for `IIRFilter`. It is designed
+//!   to take a static `filter_coefficient` from the config file but requires the
+//!   `initial_value` to be provided dynamically at runtime. It also accepts a `time_step`
+//!   parameter to normalize the filter's behavior in simulations or variable-rate
+//!   sampling environments.
+//!
+//! ## Configuration Pattern
+//!
+//! The module uses a generic `IIRFilterConfig<T>` and a private `FilterDefault` trait
+//! to enforce configuration rules. The primary usage pattern involves `IIRFilterConfig<()>`:
+
 use log::warn;
 use serde_derive::Deserialize;
 

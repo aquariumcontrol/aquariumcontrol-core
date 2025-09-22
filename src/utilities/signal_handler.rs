@@ -10,10 +10,14 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 #[cfg(any(feature = "debug_signal_handler", feature = "debug_channels"))]
 use log::debug;
 use log::error;
-#[cfg(any(target_os = "linux", feature = "debug_signal_handler", not(test)))]
+#[cfg(any(
+    all(target_os = "linux", not(test)),
+    feature = "debug_signal_handler",
+    not(test)
+))]
 use log::info;
 
-#[cfg(target_os = "linux")]
+#[cfg(all(target_os = "linux", not(test)))]
 use nix::unistd::gettid;
 
 use crate::launch::channels::{AquaReceiver, AquaSender};

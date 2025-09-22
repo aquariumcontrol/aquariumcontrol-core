@@ -927,7 +927,7 @@ pub mod tests {
     use std::sync::{Arc, Mutex};
     use std::thread;
     use std::time::{Duration, Instant};
-    
+
     #[cfg(target_os = "linux")]
     use assert_float_eq::*;
 
@@ -1416,34 +1416,17 @@ pub mod tests {
 
                 let delta_min_max_duration = max_actuation_duration - min_actuation_duration;
 
-                // execution timing differs between platforms.
-                // hence, platform-specific asserts are necessary
-                cfg_if::cfg_if! {
-                    if #[cfg(target_os = "linux")] {
-                        assert_le!(second_last_actuation_duration, 7100);
-                        assert_ge!(second_last_actuation_duration, 6400);
-                        assert_le!(third_last_actuation_duration, 7100);
-                        assert_ge!(third_last_actuation_duration, 6400);
-                        assert_le!(fourth_last_actuation_duration, 7100);
-                        assert_ge!(fourth_last_actuation_duration, 6400);
-                        assert_le!(fifth_last_actuation_duration, 7100);
-                        assert_ge!(fifth_last_actuation_duration, 6400);
-                        assert_le!(sixth_last_actuation_duration, 7100);
-                        assert_ge!(sixth_last_actuation_duration, 6400);
-                }
-                    else {
-                        assert_le!(second_last_actuation_duration, 7400);
-                        assert_ge!(second_last_actuation_duration, 6400);
-                        assert_le!(third_last_actuation_duration, 7400);
-                        assert_ge!(third_last_actuation_duration, 6400);
-                        assert_le!(fourth_last_actuation_duration, 7400);
-                        assert_ge!(fourth_last_actuation_duration, 6400);
-                        assert_le!(fifth_last_actuation_duration, 7400);
-                        assert_ge!(fifth_last_actuation_duration, 6400);
-                        assert_le!(sixth_last_actuation_duration, 7400);
-                        assert_ge!(sixth_last_actuation_duration, 6400);
-                    }
-                }
+                assert_le!(second_last_actuation_duration, 6600);
+                assert_ge!(second_last_actuation_duration, 6400);
+                assert_le!(third_last_actuation_duration, 6600);
+                assert_ge!(third_last_actuation_duration, 6400);
+                assert_le!(fourth_last_actuation_duration, 6600);
+                assert_ge!(fourth_last_actuation_duration, 6400);
+                assert_le!(fifth_last_actuation_duration, 6600);
+                assert_ge!(fifth_last_actuation_duration, 6400);
+                assert_le!(sixth_last_actuation_duration, 6600);
+                assert_ge!(sixth_last_actuation_duration, 6400);
+
                 println!("delta_min_max_duration={}", delta_min_max_duration);
                 assert_le!(delta_min_max_duration, 50);
                 mock_actuator_states.check_terminal_condition_heating();
@@ -1640,34 +1623,17 @@ pub mod tests {
                     sixth_last_actuation_duration, second_last_actuation_event.command
                 );
 
-                // execution timing differs between platforms.
-                // hence, platform-specific asserts are necessary
-                cfg_if::cfg_if! {
-                    if #[cfg(target_os = "linux")] {
-                        //assert_le!(second_last_actuation_duration, 7100);
-                        //assert_ge!(second_last_actuation_duration, 6400);
-                        //assert_le!(third_last_actuation_duration, 7100);
-                        //assert_ge!(third_last_actuation_duration, 6400);
-                        //assert_le!(fourth_last_actuation_duration, 7100);
-                        //assert_ge!(fourth_last_actuation_duration, 6400);
-                        //assert_le!(fifth_last_actuation_duration, 7100);
-                        //assert_ge!(fifth_last_actuation_duration, 6400);
-                        //assert_le!(sixth_last_actuation_duration, 7100);
-                        //assert_ge!(sixth_last_actuation_duration, 6400);
-                }
-                    else {
-                        assert_le!(second_last_actuation_duration, 1600);
-                        assert_ge!(second_last_actuation_duration, 1400);
-                        assert_le!(third_last_actuation_duration, 11650);
-                        assert_ge!(third_last_actuation_duration, 11450);
-                        assert_le!(fourth_last_actuation_duration, 1600);
-                        assert_ge!(fourth_last_actuation_duration, 1400);
-                        assert_le!(fifth_last_actuation_duration, 11650);
-                        assert_ge!(fifth_last_actuation_duration, 11450);
-                        assert_le!(sixth_last_actuation_duration, 1600);
-                        assert_ge!(sixth_last_actuation_duration, 1400);
-                    }
-                }
+                assert_le!(second_last_actuation_duration, 1600);
+                assert_ge!(second_last_actuation_duration, 1400);
+                assert_le!(third_last_actuation_duration, 11650);
+                assert_ge!(third_last_actuation_duration, 11450);
+                assert_le!(fourth_last_actuation_duration, 1600);
+                assert_ge!(fourth_last_actuation_duration, 1400);
+                assert_le!(fifth_last_actuation_duration, 11650);
+                assert_ge!(fifth_last_actuation_duration, 11450);
+                assert_le!(sixth_last_actuation_duration, 1600);
+                assert_ge!(sixth_last_actuation_duration, 1400);
+
                 mock_actuator_states.check_terminal_condition_heating();
             })
             .unwrap();

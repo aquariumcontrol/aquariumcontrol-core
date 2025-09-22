@@ -190,7 +190,10 @@ impl SawToothProfile {
             self.level_normalized = 0.0;
         }
         #[cfg(feature = "debug_sawtooth_profile")]
-        println!("[saw_tooth_profile] level_normalized={}", self.level_normalized);
+        println!(
+            "[saw_tooth_profile] level_normalized={}",
+            self.level_normalized
+        );
     }
 }
 

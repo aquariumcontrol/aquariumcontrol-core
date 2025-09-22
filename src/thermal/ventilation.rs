@@ -604,13 +604,13 @@ pub mod tests {
     use crate::thermal::ventilation::Ventilation;
     use crate::utilities::channel_content::{AquariumDevice, InternalCommand};
     use crate::utilities::config::{read_config_file, ConfigData};
+    use crate::utilities::sawtooth_profile::SawToothProfileConfig;
     use crate::utilities::signal_handler::SignalHandlerChannels;
     use all_asserts::{assert_ge, assert_le};
     use spin_sleep::SpinSleeper;
     use std::sync::{Arc, Mutex};
     use std::thread;
     use std::time::Duration;
-    use crate::utilities::sawtooth_profile::SawToothProfileConfig;
 
     // Prepares and returns a new `Ventilation` struct for use in test cases.
     //
@@ -620,7 +620,9 @@ pub mod tests {
     //
     // # Returns
     // A freshly initialized `Ventilation` struct, ready for testing.
-    fn prepare_ventilation_tests(saw_tooth_profile_config_opt: Option<SawToothProfileConfig>) -> (ConfigData, Ventilation) {
+    fn prepare_ventilation_tests(
+        saw_tooth_profile_config_opt: Option<SawToothProfileConfig>,
+    ) -> (ConfigData, Ventilation) {
         // prepare struct Ventilation for subsequent tests
         let mut config_for_ventilation: ConfigData =
             read_config_file("/config/aquarium_control_test_generic.toml".to_string()).unwrap();
@@ -947,9 +949,8 @@ pub mod tests {
         let sleep_duration_100_millis = Duration::from_millis(100);
         let spin_sleeper = SpinSleeper::default();
 
-        let (mut config, mut ventilation) = prepare_ventilation_tests(
-            Some(SawToothProfileConfig::new(6, 1, 6, 1))
-        );
+        let (mut config, mut ventilation) =
+            prepare_ventilation_tests(Some(SawToothProfileConfig::new(6, 1, 6, 1)));
 
         println!(
             "Temperature control range is {} deg C to {} deg C.",
@@ -1081,34 +1082,17 @@ pub mod tests {
 
                 let delta_min_max_duration = max_actuation_duration - min_actuation_duration;
 
-                // execution timing differs between platforms.
-                // hence, platform-specific asserts are necessary
-                cfg_if::cfg_if! {
-                    if #[cfg(target_os = "linux")] {
-                        assert_le!(second_last_actuation_duration, 7600);
-                        assert_ge!(second_last_actuation_duration, 5400);
-                        assert_le!(third_last_actuation_duration, 7600);
-                        assert_ge!(third_last_actuation_duration, 5400);
-                        assert_le!(fourth_last_actuation_duration, 7600);
-                        assert_ge!(fourth_last_actuation_duration, 5400);
-                        assert_le!(fifth_last_actuation_duration, 7600);
-                        assert_ge!(fifth_last_actuation_duration, 5400);
-                        assert_le!(sixth_last_actuation_duration, 7600);
-                        assert_ge!(sixth_last_actuation_duration, 5400);
-                    }
-                    else {
-                        assert_le!(second_last_actuation_duration, 7600);
-                        assert_ge!(second_last_actuation_duration, 5000);
-                        assert_le!(third_last_actuation_duration, 7600);
-                        assert_ge!(third_last_actuation_duration, 5000);
-                        assert_le!(fourth_last_actuation_duration, 7600);
-                        assert_ge!(fourth_last_actuation_duration, 5000);
-                        assert_le!(fifth_last_actuation_duration, 7600);
-                        assert_ge!(fifth_last_actuation_duration, 5000);
-                        assert_le!(sixth_last_actuation_duration, 7600);
-                        assert_ge!(sixth_last_actuation_duration, 5000);
-                    }
-                }
+                assert_le!(second_last_actuation_duration, 6600);
+                assert_ge!(second_last_actuation_duration, 6400);
+                assert_le!(third_last_actuation_duration, 6600);
+                assert_ge!(third_last_actuation_duration, 6400);
+                assert_le!(fourth_last_actuation_duration, 6600);
+                assert_ge!(fourth_last_actuation_duration, 6400);
+                assert_le!(fifth_last_actuation_duration, 6600);
+                assert_ge!(fifth_last_actuation_duration, 6400);
+                assert_le!(sixth_last_actuation_duration, 6600);
+                assert_ge!(sixth_last_actuation_duration, 6400);
+
                 println!("delta_min_max_duration={}", delta_min_max_duration);
                 assert_le!(delta_min_max_duration, 50);
                 mock_actuator_states.check_terminal_condition_ventilation();
@@ -1177,9 +1161,8 @@ pub mod tests {
         let sleep_duration_100_millis = Duration::from_millis(100);
         let spin_sleeper = SpinSleeper::default();
 
-        let (mut config, mut ventilation) = prepare_ventilation_tests(
-            Some(SawToothProfileConfig::new(6, 1, 6, 1))
-        );
+        let (mut config, mut ventilation) =
+            prepare_ventilation_tests(Some(SawToothProfileConfig::new(6, 1, 6, 1)));
 
         // replacement value is used for initializing mutex
         config.sensor_manager.replacement_value_water_temperature = 27.5;
@@ -1287,34 +1270,17 @@ pub mod tests {
                     sixth_last_actuation_duration, sixth_last_actuation_event.command
                 );
 
-                // execution timing differs between platforms.
-                // hence, platform-specific asserts are necessary
-                cfg_if::cfg_if! {
-                    if #[cfg(target_os = "linux")] {
-                        //assert_le!(second_last_actuation_duration, 7600);
-                        //assert_ge!(second_last_actuation_duration, 5400);
-                        //assert_le!(third_last_actuation_duration, 7600);
-                        //assert_ge!(third_last_actuation_duration, 5400);
-                        //assert_le!(fourth_last_actuation_duration, 7600);
-                        //assert_ge!(fourth_last_actuation_duration, 5400);
-                        //assert_le!(fifth_last_actuation_duration, 7600);
-                        //assert_ge!(fifth_last_actuation_duration, 5400);
-                        //assert_le!(sixth_last_actuation_duration, 7600);
-                        //assert_ge!(sixth_last_actuation_duration, 5400);
-                    }
-                    else {
-                        assert_le!(second_last_actuation_duration, 1100);
-                        assert_ge!(second_last_actuation_duration, 900);
-                        assert_le!(third_last_actuation_duration, 12150);
-                        assert_ge!(third_last_actuation_duration, 12000);
-                        assert_le!(fourth_last_actuation_duration, 1100);
-                        assert_ge!(fourth_last_actuation_duration, 900);
-                        assert_le!(fifth_last_actuation_duration, 12150);
-                        assert_ge!(fifth_last_actuation_duration, 12000);
-                        assert_le!(sixth_last_actuation_duration, 1100);
-                        assert_ge!(sixth_last_actuation_duration, 900);
-                    }
-                }
+                assert_le!(second_last_actuation_duration, 1100);
+                assert_ge!(second_last_actuation_duration, 900);
+                assert_le!(third_last_actuation_duration, 12150);
+                assert_ge!(third_last_actuation_duration, 11950);
+                assert_le!(fourth_last_actuation_duration, 1100);
+                assert_ge!(fourth_last_actuation_duration, 900);
+                assert_le!(fifth_last_actuation_duration, 12150);
+                assert_ge!(fifth_last_actuation_duration, 11950);
+                assert_le!(sixth_last_actuation_duration, 1100);
+                assert_ge!(sixth_last_actuation_duration, 900);
+
                 mock_actuator_states.check_terminal_condition_ventilation();
             })
             .unwrap();

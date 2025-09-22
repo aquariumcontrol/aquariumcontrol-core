@@ -22,7 +22,11 @@ pub mod tests {
 
     impl MockActuationEvent {
         pub fn new(command: InternalCommand) -> MockActuationEvent {
-            println!("MockActuationEvent created with command = {} at {}", command, Local::now());
+            println!(
+                "MockActuationEvent created with command = {} at {}",
+                command,
+                Local::now()
+            );
             MockActuationEvent {
                 time: Instant::now(),
                 command,
