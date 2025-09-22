@@ -9,10 +9,10 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 
 #[cfg(test)]
 pub mod tests {
+    use crate::utilities::channel_content::InternalCommand;
+    use chrono::Local;
     use std::fmt;
     use std::time::Instant;
-
-    use crate::utilities::channel_content::InternalCommand;
 
     #[derive(Clone)]
     pub struct MockActuationEvent {
@@ -22,6 +22,7 @@ pub mod tests {
 
     impl MockActuationEvent {
         pub fn new(command: InternalCommand) -> MockActuationEvent {
+            println!("MockActuationEvent created with command = {} at {}", command, Local::now());
             MockActuationEvent {
                 time: Instant::now(),
                 command,

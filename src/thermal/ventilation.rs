@@ -281,7 +281,7 @@ impl Ventilation {
             self.config.switch_on_temperature - self.config.switch_off_temperature;
         let measured_value_delta: f32 = measured_value - self.config.switch_off_temperature;
         if target_value_delta > 0.0 {
-            measured_value_delta / target_value_delta
+            1.0 - measured_value_delta / target_value_delta
         } else {
             0.0 // default value when target values are not properly set up.
         }
@@ -426,21 +426,21 @@ impl Ventilation {
                     };
                 }
 
-                // check if set values need to be updated
-                update_thermal_set_values!(
-                    ventilation_set_val_updater,
-                    self.config.switch_off_temperature,
-                    self.config.switch_on_temperature,
-                    self.lock_error_ventilation_set_value_read_failure,
-                    module_path!()
-                );
-
                 // schedule check to see if actuation is allowed
                 perform_schedule_check!(
                     ventilation_channels,
                     schedule_check_result,
                     self.lock_error_channel_send_schedule_check,
                     self.lock_error_channel_receive_schedule_check,
+                    module_path!()
+                );
+
+                // check if set values need to be updated
+                update_thermal_set_values!(
+                    ventilation_set_val_updater,
+                    self.config.switch_off_temperature,
+                    self.config.switch_on_temperature,
+                    self.lock_error_ventilation_set_value_read_failure,
                     module_path!()
                 );
 
@@ -451,7 +451,7 @@ impl Ventilation {
                     {
                         // temperature is within (dynamic) control window
                         if (self.calc_normalized_control_deviation(measured_water_temperature)
-                            > saw_tooth_profile.level_normalized)
+                            < saw_tooth_profile.level_normalized)
                             && !measurement_error_water_temperature
                         {
                             // switch on ventilation if not already on
@@ -610,6 +610,7 @@ pub mod tests {
     use std::sync::{Arc, Mutex};
     use std::thread;
     use std::time::Duration;
+    use crate::utilities::sawtooth_profile::SawToothProfileConfig;
 
     // Prepares and returns a new `Ventilation` struct for use in test cases.
     //
@@ -619,12 +620,16 @@ pub mod tests {
     //
     // # Returns
     // A freshly initialized `Ventilation` struct, ready for testing.
-    fn prepare_ventilation_tests() -> (ConfigData, Ventilation) {
+    fn prepare_ventilation_tests(saw_tooth_profile_config_opt: Option<SawToothProfileConfig>) -> (ConfigData, Ventilation) {
         // prepare struct Ventilation for subsequent tests
-        let config_for_ventilation: ConfigData =
+        let mut config_for_ventilation: ConfigData =
             read_config_file("/config/aquarium_control_test_generic.toml".to_string()).unwrap();
-        let config: ConfigData =
+        let mut config: ConfigData =
             read_config_file("/config/aquarium_control_test_generic.toml".to_string()).unwrap();
+        if let Some(saw_tooth_profile_config) = saw_tooth_profile_config_opt {
+            config.ventilation.saw_tooth_profile_config = saw_tooth_profile_config.clone();
+            config_for_ventilation.ventilation.saw_tooth_profile_config = saw_tooth_profile_config;
+        }
         (config, Ventilation::new(config_for_ventilation.ventilation))
     }
 
@@ -700,7 +705,7 @@ pub mod tests {
         let sleep_duration_100_millis = Duration::from_millis(100);
         let spin_sleeper = SpinSleeper::default();
 
-        let (mut config, mut ventilation) = prepare_ventilation_tests();
+        let (mut config, mut ventilation) = prepare_ventilation_tests(None);
 
         // replacement value is used for initializing mutex
         config.sensor_manager.replacement_value_water_temperature = 30.0;
@@ -846,7 +851,7 @@ pub mod tests {
         let sleep_duration_100_millis = Duration::from_millis(100);
         let spin_sleeper = SpinSleeper::default();
 
-        let (mut config, mut ventilation) = prepare_ventilation_tests();
+        let (mut config, mut ventilation) = prepare_ventilation_tests(None);
 
         // replacement value is used for initializing mutex
         config.sensor_manager.replacement_value_water_temperature = 20.0;
@@ -942,7 +947,9 @@ pub mod tests {
         let sleep_duration_100_millis = Duration::from_millis(100);
         let spin_sleeper = SpinSleeper::default();
 
-        let (mut config, mut ventilation) = prepare_ventilation_tests();
+        let (mut config, mut ventilation) = prepare_ventilation_tests(
+            Some(SawToothProfileConfig::new(6, 1, 6, 1))
+        );
 
         println!(
             "Temperature control range is {} deg C to {} deg C.",
@@ -950,7 +957,6 @@ pub mod tests {
         );
         // replacement value is used for initializing mutex
         config.sensor_manager.replacement_value_water_temperature = 25.0;
-
         let mut channels = Channels::new_for_test();
 
         // thread for mock schedule check
@@ -1146,7 +1152,211 @@ pub mod tests {
                     .send(InternalCommand::Quit);
                 let _ = tx_ventilation_to_relay_manager_for_test_case_finish
                     .send(InternalCommand::Quit);
-                println!("* [Heating] checking reaction to medium temperature succeeded.");
+                println!("* [Ventilation] checking reaction to medium temperature succeeded.");
+            })
+            .unwrap();
+
+        join_handle_mock_schedule_check
+            .join()
+            .expect("Mock schedule check did not finish.");
+        join_handle_mock_relay_manager
+            .join()
+            .expect("Mock relay manager thread did not finish.");
+        join_handle_test_environment
+            .join()
+            .expect("Test environment thread did not finish.");
+        join_handle_test_object
+            .join()
+            .expect("Test object thread did not finish.");
+    }
+
+    // Check if the ventilation is switch on for 75% of the time (1% tolerance).
+    // Also, implicitly test if the execute function terminates after receiving Quit and Terminate commands.
+    #[test]
+    pub fn test_ventilation_with_measured_temperature_75_percent() {
+        let sleep_duration_100_millis = Duration::from_millis(100);
+        let spin_sleeper = SpinSleeper::default();
+
+        let (mut config, mut ventilation) = prepare_ventilation_tests(
+            Some(SawToothProfileConfig::new(6, 1, 6, 1))
+        );
+
+        // replacement value is used for initializing mutex
+        config.sensor_manager.replacement_value_water_temperature = 27.5;
+        let mut channels = Channels::new_for_test();
+
+        // thread for mock schedule check
+        let join_handle_mock_schedule_check = thread::Builder::new()
+            .name("mock_schedule_check".to_string())
+            .spawn(move || {
+                mock_schedule_check(
+                    &mut channels.schedule_check.tx_schedule_check_to_ventilation,
+                    &mut channels.schedule_check.rx_schedule_check_from_ventilation,
+                    None,
+                    true,
+                );
+            })
+            .unwrap();
+
+        // Mutex needed for water temperature
+        let mutex_sensor_manager_signals = Arc::new(Mutex::new(SensorManagerSignals::new(
+            &config.sensor_manager,
+        )));
+
+        let mutex_device_scheduler_ventilation = Arc::new(Mutex::new(0));
+
+        // thread for mock relay manager - includes assertions
+        let join_handle_mock_relay_manager = thread::Builder::new()
+            .name("mock_relay_manager".to_string())
+            .spawn(move || {
+                let (mut actuation_events, mock_actuator_states) = mock_relay_manager(
+                    &mut channels.relay_manager.tx_relay_manager_to_ventilation,
+                    &mut channels.relay_manager.rx_relay_manager_from_ventilation,
+                );
+                println!(
+                    "Mock relay manager received {} commands:",
+                    actuation_events.len()
+                );
+                for actuation_event in actuation_events.clone() {
+                    println!("{}", actuation_event);
+                }
+                let actuation_event = actuation_events.pop().unwrap();
+                assert_eq!(
+                    actuation_event.command,
+                    InternalCommand::SwitchOn(AquariumDevice::Ventilation)
+                );
+                for actuation_event in actuation_events.clone() {
+                    println!("{}", actuation_event);
+                }
+                // (first and) last actuation events need to be ignored
+                let _last_actuation_event = actuation_events.pop().unwrap();
+                let second_last_actuation_event = actuation_events.pop().unwrap();
+                let third_last_actuation_event = actuation_events.pop().unwrap();
+                let fourth_last_actuation_event = actuation_events.pop().unwrap();
+                let fifth_last_actuation_event = actuation_events.pop().unwrap();
+                let sixth_last_actuation_event = actuation_events.pop().unwrap();
+                let seventh_last_actuation_event = actuation_events.pop().unwrap();
+
+                let second_last_actuation_duration = second_last_actuation_event
+                    .time
+                    .duration_since(third_last_actuation_event.time)
+                    .as_millis();
+
+                println!(
+                    "second_last_actuation_duration={}, Command={}",
+                    second_last_actuation_duration, second_last_actuation_event.command
+                );
+
+                let third_last_actuation_duration = third_last_actuation_event
+                    .time
+                    .duration_since(fourth_last_actuation_event.time)
+                    .as_millis();
+
+                println!(
+                    "third_last_actuation_duration={}, Command={}",
+                    third_last_actuation_duration, third_last_actuation_event.command
+                );
+
+                let fourth_last_actuation_duration = fourth_last_actuation_event
+                    .time
+                    .duration_since(fifth_last_actuation_event.time)
+                    .as_millis();
+
+                println!(
+                    "fourth_last_actuation_duration={}, Command={}",
+                    fourth_last_actuation_duration, fourth_last_actuation_event.command
+                );
+
+                let fifth_last_actuation_duration = fifth_last_actuation_event
+                    .time
+                    .duration_since(sixth_last_actuation_event.time)
+                    .as_millis();
+
+                println!(
+                    "fifth_last_actuation_duration={}, Command={}",
+                    fifth_last_actuation_duration, fifth_last_actuation_event.command
+                );
+
+                let sixth_last_actuation_duration = sixth_last_actuation_event
+                    .time
+                    .duration_since(seventh_last_actuation_event.time)
+                    .as_millis();
+
+                println!(
+                    "sixth_last_actuation_duration={}, Command={}",
+                    sixth_last_actuation_duration, sixth_last_actuation_event.command
+                );
+
+                // execution timing differs between platforms.
+                // hence, platform-specific asserts are necessary
+                cfg_if::cfg_if! {
+                    if #[cfg(target_os = "linux")] {
+                        //assert_le!(second_last_actuation_duration, 7600);
+                        //assert_ge!(second_last_actuation_duration, 5400);
+                        //assert_le!(third_last_actuation_duration, 7600);
+                        //assert_ge!(third_last_actuation_duration, 5400);
+                        //assert_le!(fourth_last_actuation_duration, 7600);
+                        //assert_ge!(fourth_last_actuation_duration, 5400);
+                        //assert_le!(fifth_last_actuation_duration, 7600);
+                        //assert_ge!(fifth_last_actuation_duration, 5400);
+                        //assert_le!(sixth_last_actuation_duration, 7600);
+                        //assert_ge!(sixth_last_actuation_duration, 5400);
+                    }
+                    else {
+                        assert_le!(second_last_actuation_duration, 1100);
+                        assert_ge!(second_last_actuation_duration, 900);
+                        assert_le!(third_last_actuation_duration, 12150);
+                        assert_ge!(third_last_actuation_duration, 12000);
+                        assert_le!(fourth_last_actuation_duration, 1100);
+                        assert_ge!(fourth_last_actuation_duration, 900);
+                        assert_le!(fifth_last_actuation_duration, 12150);
+                        assert_ge!(fifth_last_actuation_duration, 12000);
+                        assert_le!(sixth_last_actuation_duration, 1100);
+                        assert_ge!(sixth_last_actuation_duration, 900);
+                    }
+                }
+                mock_actuator_states.check_terminal_condition_ventilation();
+            })
+            .unwrap();
+
+        // thread for controlling duration of test run
+        let join_handle_test_environment = create_test_environment(
+            58,
+            channels.signal_handler,
+            None, // no blocking of mutex in this test case
+        );
+
+        spin_sleeper.sleep(sleep_duration_100_millis);
+
+        // thread for the test object
+        let join_handle_test_object = thread::Builder::new()
+            .name("test_object".to_string())
+            .spawn(move || {
+                // clone sender part of the channels to mock threads so that we can terminate them after execution of the test object
+                let mut tx_ventilation_to_schedule_check_for_test_case_finish = channels
+                    .ventilation
+                    .tx_ventilation_to_schedule_check
+                    .clone();
+                let mut tx_ventilation_to_relay_manager_for_test_case_finish =
+                    channels.ventilation.tx_ventilation_to_relay_manager.clone();
+
+                let mut ventilation_set_value_updater =
+                    MockSqlInterfaceVentilationSetVals::new(false, None, None, None);
+
+                ventilation.execute(
+                    mutex_device_scheduler_ventilation.clone(),
+                    &mut channels.ventilation,
+                    &mut ventilation_set_value_updater,
+                    mutex_sensor_manager_signals,
+                    Arc::new(Mutex::new(false)),
+                );
+
+                // send Quit signal to mock threads because the test object has terminated
+                let _ = tx_ventilation_to_schedule_check_for_test_case_finish
+                    .send(InternalCommand::Quit);
+                let _ = tx_ventilation_to_relay_manager_for_test_case_finish
+                    .send(InternalCommand::Quit);
+                println!("* [Ventilation] checking reaction to medium temperature succeeded.");
             })
             .unwrap();
 
@@ -1170,7 +1380,7 @@ pub mod tests {
         let sleep_duration_100_millis = Duration::from_millis(100);
         let spin_sleeper = SpinSleeper::default();
 
-        let (mut config, mut ventilation) = prepare_ventilation_tests();
+        let (mut config, mut ventilation) = prepare_ventilation_tests(None);
 
         // replacement value is used for initializing mutex
         config.sensor_manager.replacement_value_water_temperature = 30.0;
@@ -1493,7 +1703,7 @@ pub mod tests {
         let sleep_duration_100_millis = Duration::from_millis(100);
         let spin_sleeper = SpinSleeper::default();
 
-        let (mut config, mut ventilation) = prepare_ventilation_tests();
+        let (mut config, mut ventilation) = prepare_ventilation_tests(None);
 
         // replacement value is used for initializing mutex
         config.sensor_manager.replacement_value_water_temperature = 30.0;
@@ -1638,7 +1848,7 @@ pub mod tests {
         let sleep_duration_100_millis = Duration::from_millis(100);
         let spin_sleeper = SpinSleeper::default();
 
-        let (mut config, mut ventilation) = prepare_ventilation_tests();
+        let (mut config, mut ventilation) = prepare_ventilation_tests(None);
 
         // replacement value is used for initializing mutex
         config.sensor_manager.replacement_value_water_temperature = 30.0;

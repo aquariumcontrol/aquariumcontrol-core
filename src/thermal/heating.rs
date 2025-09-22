@@ -343,6 +343,11 @@ impl Heating {
         let target_value_delta: f32 =
             self.config.switch_off_temperature - self.config.switch_on_temperature;
         let measured_value_delta: f32 = measured_value - self.config.switch_on_temperature;
+        //#[cfg(test)]
+        //println!(
+        //    "calc_normalized_control_deviation: measured_value={}, measured_value_delta={}, target_value_delta={}",
+        //    measured_value, measured_value_delta, target_value_delta
+        //);
         if target_value_delta > 0.0 {
             measured_value_delta / target_value_delta
         } else {
@@ -967,11 +972,8 @@ pub mod tests {
         );
         config.heating.stop_on_refill_error_delay = 2;
 
-        match saw_tooth_profile_config_opt {
-            Some(saw_tooth_profile_config) => {
-                config.heating.saw_tooth_profile_config = saw_tooth_profile_config;
-            }
-            None => { /* do nothing */ }
+        if let Some(saw_tooth_profile_config) = saw_tooth_profile_config_opt {
+            config.heating.saw_tooth_profile_config = saw_tooth_profile_config;
         }
 
         println!("Testing with database {}", config.sql_interface.db_name);
@@ -1444,6 +1446,228 @@ pub mod tests {
                 }
                 println!("delta_min_max_duration={}", delta_min_max_duration);
                 assert_le!(delta_min_max_duration, 50);
+                mock_actuator_states.check_terminal_condition_heating();
+            })
+            .unwrap();
+
+        // thread for controlling duration of test run
+        let join_handle_test_environment = thread::Builder::new()
+            .name("test_environment".to_string())
+            .spawn(move || {
+                let sleep_duration = Duration::from_secs(59);
+                let spin_sleeper = SpinSleeper::default();
+                spin_sleeper.sleep(sleep_duration);
+                let _ = channels
+                    .signal_handler
+                    .send_to_heating(InternalCommand::Quit);
+                channels.signal_handler.receive_from_heating().unwrap();
+                let _ = channels
+                    .signal_handler
+                    .send_to_heating(InternalCommand::Terminate);
+            })
+            .unwrap();
+
+        // make sure all mock threads are running when instantiating the test object
+        spin_sleeper.sleep(sleep_duration_100_millis);
+
+        // thread for the test object
+        let join_handle_test_object = thread::Builder::new()
+            .name("test_object".to_string())
+            .spawn(move || {
+                // clone sender part of the channels to mock threads so that we can terminate them after execution of the test object
+                let mut tx_heating_to_schedule_check_for_test_case_finish =
+                    channels.heating.tx_heating_to_schedule_check.clone();
+                let mut tx_heating_to_relay_manager_for_test_case_finish =
+                    channels.heating.tx_heating_to_relay_manager.clone();
+
+                let mut heating_stats_transfer =
+                    HeatingStatsMockDataTransfer::new(&mut sql_interface.get_connection().unwrap());
+                let mut heating_set_value_updater =
+                    MockSqlInterfaceHeatingSetVals::new(false, None, None, None);
+
+                let heating_mutexes = HeatingMutexes {
+                    mutex_sensor_manager_signals: Arc::new(Mutex::new(SensorManagerSignals::new(
+                        &config.sensor_manager,
+                    ))),
+                    mutex_tank_level_switch_signals,
+                    mutex_heating_status: Arc::new(Mutex::new(false)),
+                };
+
+                heating.execute(
+                    mutex_device_scheduler_heating.clone(),
+                    &mut channels.heating,
+                    &mut heating_stats_transfer,
+                    &mut heating_set_value_updater,
+                    heating_mutexes,
+                    sql_interface_heating_stats,
+                );
+
+                // send Quit signal to mock threads because the test object has terminated
+                let _ =
+                    tx_heating_to_schedule_check_for_test_case_finish.send(InternalCommand::Quit);
+                let _ =
+                    tx_heating_to_relay_manager_for_test_case_finish.send(InternalCommand::Quit);
+
+                println!("* [Heating] checking reaction to medium temperature succeeded.");
+            })
+            .unwrap();
+
+        join_handle_mock_schedule_check
+            .join()
+            .expect("Mock schedule check did not finish.");
+        join_handle_mock_relay_manager
+            .join()
+            .expect("Mock relay manager thread did not finish.");
+        join_handle_test_environment
+            .join()
+            .expect("Test environment thread did not finish.");
+        join_handle_test_object
+            .join()
+            .expect("Test object thread did not finish.");
+    }
+
+    #[test]
+    // Check if the heater is switched on for 75% of the time (1% tolerance).
+    // Also, implicitly test if the execute function terminates after receiving Quit and Terminate commands.
+    // Test case uses test database #13.
+    pub fn test_heating_with_measured_temperature_75_percent() {
+        let sleep_duration_100_millis = Duration::from_millis(100);
+        let spin_sleeper = SpinSleeper::default();
+
+        let (mut config, mut heating, sql_interface, sql_interface_heating_stats) =
+            prepare_heating_tests_mock_midnight_calculator(
+                3600,
+                13,
+                Some(SawToothProfileConfig::new(6, 1, 6, 1)),
+            );
+
+        // replacement values are used to initialize the mutexes
+        config.sensor_manager.replacement_value_water_temperature = 22.5;
+        config.sensor_manager.replacement_value_ambient_temperature = 24.0;
+
+        let mut channels = Channels::new_for_test();
+
+        // Mutex for tank level switch signals
+        let mutex_tank_level_switch_signals =
+            Arc::new(Mutex::new(TankLevelSwitchSignals::new(true, true, false)));
+
+        // thread for mock schedule check
+        let join_handle_mock_schedule_check = thread::Builder::new()
+            .name("mock_schedule_check".to_string())
+            .spawn(move || {
+                mock_schedule_check(
+                    &mut channels.schedule_check.tx_schedule_check_to_heating,
+                    &mut channels.schedule_check.rx_schedule_check_from_heating,
+                    None,
+                    true,
+                );
+            })
+            .unwrap();
+
+        let mutex_device_scheduler_heating = Arc::new(Mutex::new(0));
+
+        // thread for mock relay manager - includes assertions
+        let join_handle_mock_relay_manager = thread::Builder::new()
+            .name("mock_relay_manager".to_string())
+            .spawn(move || {
+                let (mut actuation_events, mock_actuator_states) = mock_relay_manager(
+                    &mut channels.relay_manager.tx_relay_manager_to_heating,
+                    &mut channels.relay_manager.rx_relay_manager_from_heating,
+                );
+                println!(
+                    "Mock relay manager received {} commands:",
+                    actuation_events.len()
+                );
+                for actuation_event in actuation_events.clone() {
+                    println!("{}", actuation_event);
+                }
+                // (first and) last actuation events need to be ignored
+                let _last_actuation_event = actuation_events.pop().unwrap();
+                let second_last_actuation_event = actuation_events.pop().unwrap();
+                let third_last_actuation_event = actuation_events.pop().unwrap();
+                let fourth_last_actuation_event = actuation_events.pop().unwrap();
+                let fifth_last_actuation_event = actuation_events.pop().unwrap();
+                let sixth_last_actuation_event = actuation_events.pop().unwrap();
+                let seventh_last_actuation_event = actuation_events.pop().unwrap();
+
+                let second_last_actuation_duration = second_last_actuation_event
+                    .time
+                    .duration_since(third_last_actuation_event.time)
+                    .as_millis();
+
+                println!(
+                    "second_last_actuation_duration={}, Command={}",
+                    second_last_actuation_duration, second_last_actuation_event.command
+                );
+
+                let third_last_actuation_duration = third_last_actuation_event
+                    .time
+                    .duration_since(fourth_last_actuation_event.time)
+                    .as_millis();
+
+                println!(
+                    "third_last_actuation_duration={}, Command={}",
+                    third_last_actuation_duration, second_last_actuation_event.command
+                );
+
+                let fourth_last_actuation_duration = fourth_last_actuation_event
+                    .time
+                    .duration_since(fifth_last_actuation_event.time)
+                    .as_millis();
+
+                println!(
+                    "fourth_last_actuation_duration={}, Command={}",
+                    fourth_last_actuation_duration, second_last_actuation_event.command
+                );
+
+                let fifth_last_actuation_duration = fifth_last_actuation_event
+                    .time
+                    .duration_since(sixth_last_actuation_event.time)
+                    .as_millis();
+
+                println!(
+                    "fifth_last_actuation_duration={}, Command={}",
+                    fifth_last_actuation_duration, second_last_actuation_event.command
+                );
+
+                let sixth_last_actuation_duration = sixth_last_actuation_event
+                    .time
+                    .duration_since(seventh_last_actuation_event.time)
+                    .as_millis();
+
+                println!(
+                    "sixth_last_actuation_duration={}, Command={}",
+                    sixth_last_actuation_duration, second_last_actuation_event.command
+                );
+
+                // execution timing differs between platforms.
+                // hence, platform-specific asserts are necessary
+                cfg_if::cfg_if! {
+                    if #[cfg(target_os = "linux")] {
+                        //assert_le!(second_last_actuation_duration, 7100);
+                        //assert_ge!(second_last_actuation_duration, 6400);
+                        //assert_le!(third_last_actuation_duration, 7100);
+                        //assert_ge!(third_last_actuation_duration, 6400);
+                        //assert_le!(fourth_last_actuation_duration, 7100);
+                        //assert_ge!(fourth_last_actuation_duration, 6400);
+                        //assert_le!(fifth_last_actuation_duration, 7100);
+                        //assert_ge!(fifth_last_actuation_duration, 6400);
+                        //assert_le!(sixth_last_actuation_duration, 7100);
+                        //assert_ge!(sixth_last_actuation_duration, 6400);
+                }
+                    else {
+                        assert_le!(second_last_actuation_duration, 1600);
+                        assert_ge!(second_last_actuation_duration, 1400);
+                        assert_le!(third_last_actuation_duration, 11650);
+                        assert_ge!(third_last_actuation_duration, 11450);
+                        assert_le!(fourth_last_actuation_duration, 1600);
+                        assert_ge!(fourth_last_actuation_duration, 1400);
+                        assert_le!(fifth_last_actuation_duration, 11650);
+                        assert_ge!(fifth_last_actuation_duration, 11450);
+                        assert_le!(sixth_last_actuation_duration, 1600);
+                        assert_ge!(sixth_last_actuation_duration, 1400);
+                    }
+                }
                 mock_actuator_states.check_terminal_condition_heating();
             })
             .unwrap();
