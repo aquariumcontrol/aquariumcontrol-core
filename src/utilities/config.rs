@@ -7,7 +7,39 @@ The above copyright notice and this permission notice shall be included in all c
 THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
-#[cfg(not(test))]
+//! Manages the application's configuration loading and structure.
+//!
+//! This module is the central hub for all configurations in the application. It defines
+//! the top-level `ConfigData` struct, which aggregates configuration settings from all
+//! other modules. It uses the `serde` framework to deserialize a TOML file into this
+//! strongly typed Rust struct, providing a safe and convenient way to access configuration
+//! parameters throughout the system.
+//!
+//! ## Key Components
+//!
+//! - **`ConfigData`**: The main configuration struct. It is a composite of smaller,
+//!   module-specific configuration structs (e.g., `HeatingConfig`, `DataLoggerConfig`).
+//!   This composition makes the configuration modular and easy to manage.
+//!
+//! - **`read_config_file()`**: The primary function for loading the configuration.
+//!   It has two distinct implementations controlled by `#[cfg(test)]`:
+//!   - **Production (`not(test)`)**: Reads a file from a given absolute path and returns
+//!     a `Result`, allowing for graceful error handling if the file is missing or invalid.
+//!   - **Test (`test`)**: Constructs the file path relative to the project's root
+//!     (using `CARGO_MANIFEST_DIR`) and panics on failure. This is a common pattern
+//!     in tests to ensure that a misconfigured test environment fails immediately.
+//!
+//! - **`read_config_file_with_test_database()`**: A test-only helper that loads the
+//!   configuration and then programmatically overrides the database name to ensure
+//!   test isolation.
+//!
+//! ## Conditional Compilation
+//!
+//! The `ConfigData` struct uses `#[cfg(...)]` attributes to include or exclude certain
+//! configuration fields based on the target operating system (`target_os = "linux"`) or
+//! enabled features (`feature = "target_hw"`). This allows the application to have a single
+//! configuration file format while only compiling the necessary fields for a given build target.
+
 use log::info;
 
 use serde_derive::Deserialize;
