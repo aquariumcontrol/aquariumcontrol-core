@@ -1,3 +1,46 @@
+/* Copyright 2025 Uwe Martin
+
+Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the “Software”), to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+*/
+
+//! Defines a trait for periodically pinging a database connection to keep it alive.
+//!
+//! This module provides the `DatabasePingTrait`, a reusable abstraction for handling
+//! a common problem in long-running applications: database connection timeouts.
+//! Many database systems will close idle connections after a certain period. This
+//! trait encapsulates a standardized pattern for sending a lightweight "ping"
+//! command to the database at a regular interval, ensuring the connection remains active.
+//!
+//! ## Purpose and Design
+//!
+//! Instead of each concurrent thread implementing its own timing and pinging logic,
+//! this trait provides a single, consistent implementation. This achieves several goals:
+//!
+//! - **Reduces Boilerplate**: Eliminates repetitive timing and pinging code across
+//!   multiple modules (`Heating`, `DataLogger`, `Feed`, etc.).
+//! - **Enforces a Standard**: Ensures all modules use the same robust logic for
+//!   connection keep-alive.
+//! - **Decoupling**: The trait depends on a generic `Pingable` object, decoupling the
+//!   timing logic from the specific database implementation.
+//!
+//! ## Key Components
+//!
+//! - **`DatabasePingTrait`**: The core trait.
+//!   - **`get_ping_interval()`**, **`get_last_ping_instant()`**, **`update_last_ping_instant()`**:
+//!     A set of required methods that implementor must provide to manage the state
+//!     (the interval and the last ping time).
+//!   - **`check_timing_and_ping_database()`**: A provided "default" method that contains
+//!     the core logic. It checks if the interval has elapsed and, if so, calls the
+//!     `ping()` method on the provided `Pingable` object and resets its internal timer.
+//!
+//! - **`Pingable` Trait**: An external trait (defined in `database::pingable`) that
+//!   this module depends on. It represents any object that has a `.ping()` method,
+//!   typically a database connection pool.
+
 use crate::database::pingable::Pingable;
 use crate::food::feed::Feed;
 use crate::mineral::balling::Balling;
@@ -29,89 +72,33 @@ pub trait DatabasePingTrait {
     }
 }
 
-impl DatabasePingTrait for DataLogger {
-    fn get_ping_interval(&self) -> Duration {
-        self.database_ping_interval
-    }
+/// A macro to generate the `DatabasePingTrait` implementation for a given struct.
+/// This avoids boilerplate code for structs that share the same field names
+/// for the ping interval and the last ping timestamp.
+macro_rules! impl_database_ping_trait {
+    ($struct_name:ty) => {
+        impl DatabasePingTrait for $struct_name {
+            fn get_ping_interval(&self) -> Duration {
+                self.database_ping_interval
+            }
 
-    fn get_last_ping_instant(&self) -> Instant {
-        self.last_ping_instant
-    }
+            fn get_last_ping_instant(&self) -> Instant {
+                self.last_ping_instant
+            }
 
-    fn update_last_ping_instant(&mut self) {
-        self.last_ping_instant = Instant::now();
-    }
+            fn update_last_ping_instant(&mut self) {
+                self.last_ping_instant = Instant::now();
+            }
+        }
+    };
 }
 
-impl DatabasePingTrait for Feed {
-    fn get_ping_interval(&self) -> Duration {
-        self.database_ping_interval
-    }
-
-    fn get_last_ping_instant(&self) -> Instant {
-        self.last_ping_instant
-    }
-
-    fn update_last_ping_instant(&mut self) {
-        self.last_ping_instant = Instant::now();
-    }
-}
-
-impl DatabasePingTrait for Refill {
-    fn get_ping_interval(&self) -> Duration {
-        self.database_ping_interval
-    }
-
-    fn get_last_ping_instant(&self) -> Instant {
-        self.last_ping_instant
-    }
-
-    fn update_last_ping_instant(&mut self) {
-        self.last_ping_instant = Instant::now();
-    }
-}
-
-impl DatabasePingTrait for Heating {
-    fn get_ping_interval(&self) -> Duration {
-        self.database_ping_interval
-    }
-
-    fn get_last_ping_instant(&self) -> Instant {
-        self.last_ping_instant
-    }
-
-    fn update_last_ping_instant(&mut self) {
-        self.last_ping_instant = Instant::now();
-    }
-}
-
-impl DatabasePingTrait for Balling {
-    fn get_ping_interval(&self) -> Duration {
-        self.database_ping_interval
-    }
-
-    fn get_last_ping_instant(&self) -> Instant {
-        self.last_ping_instant
-    }
-
-    fn update_last_ping_instant(&mut self) {
-        self.last_ping_instant = Instant::now();
-    }
-}
-
-impl DatabasePingTrait for ScheduleCheck {
-    fn get_ping_interval(&self) -> Duration {
-        self.database_ping_interval
-    }
-
-    fn get_last_ping_instant(&self) -> Instant {
-        self.last_ping_instant
-    }
-
-    fn update_last_ping_instant(&mut self) {
-        self.last_ping_instant = Instant::now();
-    }
-}
+impl_database_ping_trait!(DataLogger);
+impl_database_ping_trait!(Feed);
+impl_database_ping_trait!(Refill);
+impl_database_ping_trait!(Heating);
+impl_database_ping_trait!(Balling);
+impl_database_ping_trait!(ScheduleCheck);
 
 #[cfg(test)]
 mod tests {

@@ -40,6 +40,7 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 //! enabled features (`feature = "target_hw"`). This allows the application to have a single
 //! configuration file format while only compiling the necessary fields for a given build target.
 
+#[cfg(not(test))]
 use log::info;
 
 use serde_derive::Deserialize;
