@@ -36,7 +36,7 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 //!   which is useful for initialization.
 //! - **`fmt::Display`**: Provides a human-readable summary of the stats, which is
 //!   valuable for logging and debugging.
-//! 
+//!
 use std::fmt;
 
 /// Contains the data retrieved from the SQL database.
