@@ -7,8 +7,44 @@ The above copyright notice and this permission notice shall be included in all c
 THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
-#[cfg(feature = "debug_sawtooth_profile")]
-use log::debug;
+//! Provides a configurable, four-phase sawtooth wave generator.
+//!
+//! This module is designed to create a periodic, normalized signal (`0.0` to `1.0`)
+//! that follows a sawtooth (or trapezoidal) pattern. Its primary purpose is to
+//! provide a "PWM-like" modulation for simple on/off actuators, such as the
+//! heater or ventilation fans.
+//!
+//! ## Purpose and Design
+//!
+//! In the `Heating` and `Ventilation` modules, this profile is used for proportional
+//! control. When the measured temperature is within the control band, the actuator's
+//! on/off state is determined by comparing the sawtooth's current output level
+//! against a normalized control deviation. This allows the system to modulate the
+//! "duty cycle" of the actuator, providing smoother control than a simple on/off
+//! hysteresis.
+//!
+//! The profile consists of four distinct phases, each with a configurable length:
+//! 1.  **Phase 1**: A linear ramp-up from 0.0 to 1.0.
+//! 2.  **Phase 2**: A constant "high" period where the output is 1.0.
+//! 3.  **Phase 3**: A linear ramp-down from 1.0 to 0.0.
+//! 4.  **Phase 4**: A constant "low" period where the output is 0.0.
+//!
+//! The cycle then repeats.
+//!
+//! ## Key Components
+//!
+//! - **`SawToothProfileConfig`**: A `serde`-compatible struct for deserializing the
+//!   lengths of the four phases from the main TOML configuration file.
+//!
+//! - **`SawToothProfile`**: The main runtime struct that holds the generator's state,
+//!   including the internal `counter` and the current `level_normalized` output.
+//!
+//! - **`new()`**: The constructor, which takes a `SawToothProfileConfig` and
+//!   pre-calculates the counter-limits for each phase for efficient runtime execution.
+//!
+//! - **`execute_with()`**: The core method that advances the profile's internal
+//!   counter by a given `increment` and recalculates the `level_normalized` output
+//!   based on the current phase. This is typically called once per control loop cycle.
 
 use serde_derive::Deserialize;
 use std::fmt;
@@ -176,17 +212,17 @@ impl SawToothProfile {
             self.level_normalized = self.counter / self.phase1_counter_limit;
         }
         // for the next phase, keep the signal at 1
-        if self.counter >= self.phase1_counter_limit && self.counter <= self.phase2_counter_limit {
+        else if self.counter >= self.phase1_counter_limit && self.counter <= self.phase2_counter_limit {
             self.level_normalized = 1.0;
         }
         // for the next phase, ramp down from 1 to 0
-        if self.counter > self.phase2_counter_limit && self.counter < self.phase3_counter_limit {
+        else if self.counter > self.phase2_counter_limit && self.counter < self.phase3_counter_limit {
             self.level_normalized = 1.0
                 - (self.counter - self.phase2_counter_limit)
                     / (self.phase3_counter_limit - self.phase2_counter_limit);
         }
         // for the next phase, keep the signal at 0
-        if self.counter >= self.phase3_counter_limit && self.counter <= self.phase4_counter_limit {
+        else if self.counter >= self.phase3_counter_limit && self.counter <= self.phase4_counter_limit {
             self.level_normalized = 0.0;
         }
         #[cfg(feature = "debug_sawtooth_profile")]

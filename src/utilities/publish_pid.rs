@@ -7,6 +7,39 @@ The above copyright notice and this permission notice shall be included in all c
 THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
+//! Manages the application's process ID (PID) file to ensure a single instance.
+//!
+//! This module provides the `PublishPid` struct and associated logic to implement a
+//! "singleton" pattern for the application. By creating and managing a PID file, it
+//! prevents multiple instances of the service from running simultaneously, which could
+//! lead to resource conflicts or unpredictable behavior.
+//!
+//! ## Core Logic
+//!
+//! The primary logic is encapsulated in the `PublishPid::new()` constructor, which is
+//! intended to be called once at application startup. It performs the following sequence:
+//!
+//! 1.  **Check for Existing PID File**: It attempts to read the PID file specified in the configuration.
+//! 2.  **Validate Content**:
+//!     - If the file exists and contains a valid, non-zero process ID, it assumes another
+//!       instance is already running and returns a `PidFileContainsPid` error, preventing startup.
+//!     - If the file does not exist, is empty, or contains "0", it proceeds.
+//! 3.  **Publish Current PID**: It writes the current process's ID to the file, effectively
+//!     "locking" it and signaling that this instance is now the active one.
+//!
+//! The `erase_pid()` method is called during graceful shutdown to write "0" back to the
+//! file, releasing the lock and allowing a new instance to start later.
+//!
+//! ## Key Components
+//!
+//! - **`PublishPid`**: A simple struct that holds the configuration and provides the main
+//!   functionality.
+//!
+//! - **`PublishPidError`**: A custom, `thiserror`-based error enum that represents all
+//!   possible failures during PID publication. This allows the main application to
+//!   provide clear, actionable feedback if it fails to start (e.g., "Another instance
+//!   is already running").
+
 use crate::utilities::publish_pid_config::PublishPidConfig;
 use std::num::ParseIntError;
 use std::{fs, process};
@@ -15,6 +48,7 @@ use thiserror::Error;
 /// Contains the error definition for PublishPid
 #[derive(Debug, Error)]
 pub enum PublishPidError {
+    /// Reading from the PID file failed.
     #[error("[{location}] Unable to read PID file ({file}).")]
     UnableToReadPidFile {
         location: String,
@@ -24,6 +58,7 @@ pub enum PublishPidError {
         source: std::io::Error,
     },
 
+    /// The PID file contains invalid content.
     #[error("[{location}] PID file ({file}) contains invalid content.")]
     PidFileParseError {
         location: String,
@@ -33,6 +68,7 @@ pub enum PublishPidError {
         source: ParseIntError,
     },
 
+    /// The PID file already contains published PID.
     #[error("[{location}] PID file ({file}) already contains published PID: {pid}")]
     PidFileContainsPid {
         location: String,
@@ -40,6 +76,7 @@ pub enum PublishPidError {
         pid: u32,
     },
 
+    /// Writing to the PID file failed.
     #[error("[{location}] Unable to write PID file ({file}).")]
     UnableToWritePidFile {
         location: String,
