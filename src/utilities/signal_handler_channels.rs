@@ -35,13 +35,6 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 //! - **Unidirectional Communication**: Some fields are senders only, representing
 //!   communication with modules that are not expected to send acknowledgements
 //!   back to the signal handler (e.g., simple hardware interface threads).
-//!
-//! ## Usage
-//!
-//! An instance of `SignalHandlerChannels` is constructed in the main `launch` module,
-//! where all the channels are created. This single struct is then moved into the
-//! `signal_handler` thread, giving it the handles it needs to send `Quit` and
-//! `Terminate` commands to all other threads in a controlled, phased sequence.
 
 use crate::launch::channels::{AquaReceiver, AquaSender};
 use crate::utilities::channel_content::InternalCommand;

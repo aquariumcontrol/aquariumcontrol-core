@@ -760,7 +760,7 @@ impl Refill {
         let mut cycle_time_exceeded: bool; // ensures that signal handler/messaging are polled at least once even if cycle time is exceeded
 
         // retrieving data from SQL data base
-        let mut refill_stats_data = RefillStatsData::new();
+        let mut refill_stats_data = RefillStatsData::default();
         self.get_refill_stats_data(&mut refill_stats_data, &mut *sql_interface_refill);
 
         let mut refill_inhibited = false; // a flag indicating the external request to inhibit refill from injecting water
@@ -2833,7 +2833,7 @@ pub mod tests {
         // this test case does not use the SQL database, so no conflict arises
         // when concurrently executing other test cases on the same DB.
 
-        let mut sql_refill_stats_data = RefillStatsData::new();
+        let mut sql_refill_stats_data = RefillStatsData::default();
         sql_refill_stats_data.duration_since_last_refill =
             config.refill.min_interval_last_refill + 1;
 

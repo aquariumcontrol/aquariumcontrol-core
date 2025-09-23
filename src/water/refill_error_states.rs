@@ -6,6 +6,47 @@ The above copyright notice and this permission notice shall be included in all c
 
 THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
+
+//! Defines a struct for tracking the persistent error states of the `Refill` module.
+//!
+//! This module provides the `RefillErrorStates` struct, which acts as a state machine
+//! for tracking various non-fatal but critical error conditions that can occur within
+//! the `Refill` thread. Unlike transient `Result::Err` values, these states persist
+//! until they are explicitly reset.
+//!
+//! ## Purpose and Design
+//!
+//! The `Refill` system needs to remember certain failures over time to prevent
+//! unsafe operations. For example, if a database read fails, the system should
+//! inhibit all future refills until the problem is resolved and the error is reset.
+//! This struct centralizes all such boolean error flags.
+//!
+//! ## Key Components
+//!
+//! - **`RefillErrorStates`**: The main struct containing boolean flags for specific
+//!   error conditions, such as:
+//!   - `error_switch_stuck_high`: The level switch has not indicated a low level for an
+//!     unusually long time.
+//!   - `error_switch_stuck_low`: The level switch failed to indicate a high level after
+//!     a refill operation.
+//!   - `error_sql_get_historic_data_failed`: A database query to fetch historical
+//!     refill data failed.
+//!
+//! - **`has_error()`**: A convenient helper method to check if *any* of the error flags
+//!   are currently set to `true`. This allows the `Refill` thread to quickly determine
+//!   if it should inhibit its operations.
+//!
+//! - **`reset_all_errors()`**: A method to clear all error flags, typically triggered by
+//!   an external command (e.g., from the `Messaging` system) after an operator has
+//!   addressed the underlying issue.
+//!
+//! ## Usage
+//!
+//! An instance of `RefillErrorStates` is owned by the main `Refill` struct. In its
+//! main loop, the `Refill` thread checks `self.errors.has_error()` at the beginning
+//! of each cycle. If it returns `true`, the refill logic is skipped until the errors
+//! are cleared.
+
 use std::fmt;
 
 /// Contains the error flags for the refill component.

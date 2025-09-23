@@ -31,12 +31,6 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 //! - **Optionality**: The channel for receiving commands from `Messaging` is wrapped
 //!   in an `Option`, allowing the application to be compiled with or without the
 //!   messaging feature.
-//!
-//! ## Usage
-//!
-//! An instance of `MonitorsChannels` is constructed in the main `launch` module,
-//! where all the channels are created. This single struct is then moved into the
-//! `Monitors` thread, giving it all the handles it needs to operate.
 
 use crate::launch::channels::{AquaReceiver, AquaSender};
 use crate::utilities::channel_content::InternalCommand;

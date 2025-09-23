@@ -6,6 +6,39 @@ The above copyright notice and this permission notice shall be included in all c
 
 THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
+
+//! Defines the data structure for communicating refill system status to the monitor.
+//!
+//! This module provides the `RefillMonitorView` struct, which acts as a Data Transfer
+//! Object (DTO). Its primary purpose is to create a "snapshot" of the `Refill` module's
+//! safety-check status at a specific moment in time and communicate it to the central
+//! `Monitors` thread.
+//!
+//! ## Purpose and Design
+//!
+//! The `Refill` thread continuously checks historical data to ensure that it does not
+//! exceed configured safety limits (e.g., maximum refill volume per hour). If a limit
+//! is breached, it could indicate a problem like a tank leak or a stuck sensor.
+//!
+//! This `RefillMonitorView` struct captures the boolean result of each of these checks.
+//! By sending this compact struct to the `Monitors` thread, the application can:
+//!
+//! - **Decouple Logic**: The `Monitors` thread doesn't need to know *how* the `Refill`
+//!   module performs its checks; it only needs to see the results.
+//! - **Store Historical State**: The `Monitors` thread can maintain a history of these
+//!   views, allowing for later analysis of recurring issues.
+//! - **Efficient Communication**: It's a small, simple struct, making for efficient
+//!   inter-thread communication.
+//!
+//! ## Key Components
+//!
+//! - **`RefillMonitorView`**: The main struct containing a boolean flag for each safety
+//!   check performed by the `Refill` module.
+//! - **`has_any_issue()`**: A convenient helper method that efficiently checks if *any*
+//!   of the safety flags are `true`.
+//! - **`fmt::Display`**: Provides a human-readable summary of the view's status, which
+//!   is useful for logging and debugging.
+
 use std::fmt;
 
 /// Struct collects the information for the reporting to the monitor

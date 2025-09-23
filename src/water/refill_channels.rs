@@ -6,6 +6,33 @@ The above copyright notice and this permission notice shall be included in all c
 
 THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
+
+//! Defines the channel aggregation struct for the `Refill` thread.
+//!
+//! This module provides the `RefillChannels` struct, which acts as a "switchboard"
+//! by consolidating all the `mpsc` channel endpoints that the `Refill` thread
+//! needs to communicate with other application components.
+//!
+//! ## Purpose and Design
+//!
+//! The primary purpose of this struct is to provide a single, organized container
+//! for the communication infrastructure required by the `Refill` thread.
+//!
+//! - **Centralization**: By gathering all channel senders (`AquaSender`) and receivers
+//!   (`AquaReceiver`) into one place, it simplifies the process of passing the
+//!   necessary communication lines to the `Refill` thread at startup.
+//!
+//! - **Data Flow**: It defines the pathways for:
+//!   - Sending `CheckSchedule` commands to the `ScheduleCheck` module and receiving `bool` responses.
+//!   - Sending `Activate`/`Deactivate` commands to the `RelayManager` and receiving `bool` acknowledgements.
+//!   - Sending `RefillMonitorView` data to the `Monitors` thread.
+//!   - Receiving `Start`/`Stop` commands from the `Messaging` module.
+//!   - Receiving `Quit`/`Terminate` commands from the `signal_handler` and sending back acknowledgements.
+//!
+//! - **Optionality**: The channel for receiving commands from `Messaging` is wrapped
+//!   in an `Option`, allowing the application to be compiled with or without the
+//!   messaging feature.
+
 use crate::launch::channels::{AquaChannelError, AquaReceiver, AquaSender};
 use crate::utilities::channel_content::InternalCommand;
 use crate::water::refill_monitor_view::RefillMonitorView;

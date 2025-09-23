@@ -6,6 +6,34 @@ The above copyright notice and this permission notice shall be included in all c
 
 THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
+
+//! Defines the configuration structure for the automated freshwater refill system.
+//!
+//! This module provides the `RefillConfig` struct, which is used by `serde` to
+//! deserialize the `[refill]` section of the main TOML configuration file. It holds
+//! all the necessary parameters for the `Refill` thread, which intelligently
+//! controls the water top-off process.
+//!
+//! ## Key Configuration Groups
+//!
+//! The parameters in `RefillConfig` can be grouped by their function:
+//!
+//! - **General Control**: Fields like `active`, `execute`, `initial_wait_interval`,
+//!   and `check_interval` control the basic operation and timing of the refill thread.
+//!
+//! - **Safety Limits**: A crucial set of parameters (`max_refill_count_24h`,
+//!   `max_refill_volume_hour`, `min_interval_last_refill`, etc.) that prevent
+//!   over-filling the tank. If any of these historical limits are exceeded, refills
+//!   are inhibited to prevent potential leaks or sensor failures from causing a flood.
+//!
+//! - **Error Detection**: The `max_duration_since_last_refill` field helps detect a
+//!   "stuck high" sensor by flagging an error if an unusually long time passes
+//!   without a refill request.
+//!
+//! - **Physical Properties**: Fields like `refill_pump_flow`, `max_refill_volume`, and
+//!   `additional_refill_volume` describe the physical characteristics of the pump
+//!   and the desired behavior of a single refill operation.
+
 use serde_derive::Deserialize;
 
 /// Holds the configuration data for the refill control.

@@ -21,12 +21,6 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 //!     `InternalCommand::Quit` message from the central `signal_handler`. This
 //!     ensures the thread can be terminated gracefully during an application-wide
 //!     shutdown.
-//!
-//! ## Usage
-//!
-//! An instance of `MemoryChannels` is created in the main `launch` module and moved
-//! into the `Memory` thread upon its creation. The thread's main loop uses the
-//! receiver to perform a non-blocking check for the quit signal on each iteration.
 
 use crate::launch::channels::AquaReceiver;
 use crate::utilities::channel_content::InternalCommand;
