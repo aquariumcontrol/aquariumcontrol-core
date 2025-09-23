@@ -87,7 +87,7 @@ impl IIRFilter {
         initial_value_opt: Option<f32>,
         signal_name: &str
     ) -> Self {
-        let safe_filter_coefficient = filter_config.filter_coefficient.min(1.0).max(0.0);
+        let safe_filter_coefficient = filter_config.filter_coefficient.clamp(0.0, 1.0);
         if safe_filter_coefficient != filter_config.filter_coefficient {
             warn!(
                 target: module_path!(),

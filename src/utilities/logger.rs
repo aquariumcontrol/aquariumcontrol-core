@@ -6,6 +6,41 @@ The above copyright notice and this permission notice shall be included in all c
 
 THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
+
+//! Manages the setup and configuration of the application's global logger.
+//!
+//! This module provides the core functionality for initializing the `fern`-based
+//! logging system. It is designed to be called once at application startup to
+//! configure a logger that dispatches messages to both the console (`stdout`) and
+//! a persistent log file.
+//!
+//! ## Key Components
+//!
+//! - **`setup_logger()`**: The primary function responsible for logger initialization.
+//!   It performs robust validation on the provided log file path before setting up
+//!   the logger. This prevents the application from starting with a misconfigured
+//!   logging setup. The log format includes a high-precision timestamp, log level,
+//!   and the source module path.
+//!
+//! - **`LoggerSetupError`**: A custom, `thiserror`-based error enum that represents
+//!   all possible validation failures during logger setup. By providing specific
+//!   error variants (e.g., `PathIsADirectory`, `ParentDirDoesNotExist`), it allows
+//!   the application to give clear, actionable feedback if the configuration is invalid.
+//!
+//! - **`log_error_chain()`**: A utility function that provides a standardized way to
+//!   log an error and its complete chain of underlying causes. This is used for
+//!   debugging, as it reveals the full context of a failure, from the high-level
+//!   operation down to the low-level system error.
+//!
+//! ## Path Validation Logic
+//!
+//! Before creating the log file, `setup_logger` ensures that:
+//! 1. The configured log file path is not empty.
+//! 2. The path does not point to an existing directory.
+//! 3. The path has a valid filename component.
+//! 4. The parent directory of the log file exists and is actually a directory.
+//! 5. The application has the necessary permissions to create and write to the log file.
+
 use crate::utilities::logger_config::LoggerConfig;
 use log::error;
 use std::error::Error;

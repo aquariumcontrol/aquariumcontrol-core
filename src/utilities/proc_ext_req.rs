@@ -7,6 +7,49 @@ The above copyright notice and this permission notice shall be included in all c
 THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
+//! Defines a standardized trait for processing external commands across various modules.
+//!
+//! This module provides the `ProcessExternalRequestTrait`, a common interface that
+//! allows different concurrent threads (like `Heating`, `Refill`, `DataLogger`, etc.)
+//! to handle commands from central sources like the `SignalHandler` (for shutdown)
+//! and `Messaging` (for runtime control).
+//!
+//! ## Purpose and Design
+//!
+//! The primary goal is to abstract and unify the non-blocking check for external
+//! commands, which is a repetitive pattern in each thread's main loop. By using a
+//! trait, the application achieves:
+//!
+//! - **Standardization**: Enforces a consistent method signature for command processing.
+//! - **Code Reusability**: A default implementation handles the most common commands
+//!   (`Quit`, `Start`, `Stop`), reducing boilerplate in many modules.
+//! - **Specialization**: Allows modules with unique command requirements (e.g., `Refill`,
+//!   `Feed`) to provide their own specific implementations while still conforming to
+//!   the trait.
+//!
+//! ## Key Components
+//!
+//! - **`ProcessExternalRequestTrait`**: The core trait.
+//!   - **`process_external_request()`**: The main method. It performs a non-blocking
+//!     `try_recv()` on the `SignalHandler` channel and an optional `Messaging` channel.
+//!
+//! - **Default Implementation**: The trait provides a default implementation of
+//!   `process_external_request()` that is used by most control threads (e.g., `Heating`,
+//!   `Ventilation`). It handles:
+//!   - `InternalCommand::Quit` from the signal handler.
+//!   - `InternalCommand::Start` and `InternalCommand::Stop` from the messaging system.
+//!
+//! - **Specialized Implementations**: Several modules provide their own `impl` block
+//!   to handle commands specific to their function:
+//!   - **`Refill`**: Overrides the default to also handle `InternalCommand::ResetAllErrors`.
+//!   - **`Feed` / `Balling`**: Override the default to handle `InternalCommand::Execute(id)`.
+//!   - **Simpler Modules** (`DataLogger`, `RelayManager`, etc.): Use a helper function
+//!     (`process_external_request_without_messaging`) that only listens for the `Quit`
+//!      command, as they do not need runtime start/stop control.
+//!
+//! This pattern of a default implementation with targeted overrides is a powerful way
+//! to share common code while still allowing for necessary specialization.
+
 use log::{error, warn};
 
 #[cfg(not(test))]
@@ -294,248 +337,6 @@ fn process_external_request_without_messaging(
     (quit_command_received, false, false)
 }
 
-impl ProcessExternalRequestTrait for DataLogger {
-    /// Checks for and processes new commands relevant to the Data Logger module from external channels.
-    ///
-    /// This is the specialized implementation of `ProcessExternalRequestTrait` for the `DataLogger`.
-    /// It delegates directly to `process_external_request_without_messaging`, indicating
-    /// that the `DataLogger` only processes commands from the signal handler and
-    /// ignores any input from a messaging channel.
-    ///
-    /// # Arguments
-    /// * `rx_from_signal_handler` - A reference to the receiver end of the channel
-    ///   for commands originating from the signal handler.
-    /// * `_` - This parameter is ignored, as the `DataLogger` does not process
-    ///   messages from a messaging channel.
-    ///
-    /// # Returns
-    /// A tuple `(bool, bool, bool)` indicating the status of commands received:
-    /// - The first `bool` is `true` if a `Quit` command was received; otherwise `false`.
-    /// - The second `bool` is always `false` (no "Start" commands processed).
-    /// - The third `bool` is always `false` (no "Stop" commands processed).
-    fn process_external_request(
-        &mut self,
-        rx_from_signal_handler: &mut AquaReceiver<InternalCommand>,
-        _: Option<&mut AquaReceiver<InternalCommand>>,
-    ) -> (bool, bool, bool) {
-        process_external_request_without_messaging(rx_from_signal_handler, "DataLogger".to_string())
-    }
-}
-
-impl ProcessExternalRequestTrait for Dht {
-    /// Checks for and processes new commands relevant to the Dht module from external channels.
-    ///
-    /// This is the specialized implementation of `ProcessExternalRequestTrait` for the `DataLogger`.
-    /// It delegates directly to `process_external_request_without_messaging`, indicating
-    /// that the `DataLogger` only processes commands from the signal handler and
-    /// ignores any input from a messaging channel.
-    ///
-    /// # Arguments
-    /// * `rx_from_signal_handler` - A reference to the receiver end of the channel
-    ///   for commands originating from the signal handler.
-    /// * `_` - This parameter is ignored, as the `DataLogger` does not process
-    ///   messages from a messaging channel.
-    ///
-    /// # Returns
-    /// A tuple `(bool, bool, bool)` indicating the status of commands received:
-    /// - The first `bool` is `true` if a `Quit` command was received; otherwise `false`.
-    /// - The second `bool` is always `false` (no "Start" commands processed).
-    /// - The third `bool` is always `false` (no "Stop" commands processed).
-    fn process_external_request(
-        &mut self,
-        rx_from_signal_handler: &mut AquaReceiver<InternalCommand>,
-        _: Option<&mut AquaReceiver<InternalCommand>>,
-    ) -> (bool, bool, bool) {
-        process_external_request_without_messaging(rx_from_signal_handler, "Dht".to_string())
-    }
-}
-
-impl ProcessExternalRequestTrait for FoodInjection {
-    /// Checks for and processes new commands relevant to the Food Injection module from external channels.
-    ///
-    /// This is the specialized implementation of `ProcessExternalRequestTrait` for `FoodInjection`.
-    /// It delegates directly to `process_external_request_without_messaging`, indicating
-    /// that the `FoodInjection` module only processes commands from the signal handler
-    /// and ignores any input from a messaging channel.
-    ///
-    /// # Arguments
-    /// * `rx_from_signal_handler` - A reference to the receiver end of the channel
-    ///   for commands originating from the signal handler.
-    /// * `_` - This parameter is ignored, as the `FoodInjection` module does not process
-    ///   messages from a messaging channel.
-    ///
-    /// # Returns
-    /// A tuple `(bool, bool, bool)` indicating the status of commands received:
-    /// - The first `bool` is `true` if a `Quit` command was received; otherwise `false`.
-    /// - The second `bool` is always `false` (no "Start" commands processed).
-    /// - The third `bool` is always `false` (no "Stop" commands processed).
-    fn process_external_request(
-        &mut self,
-        rx_from_signal_handler: &mut AquaReceiver<InternalCommand>,
-        _: Option<&mut AquaReceiver<InternalCommand>>,
-    ) -> (bool, bool, bool) {
-        process_external_request_without_messaging(
-            rx_from_signal_handler,
-            "FoodInjection".to_string(),
-        )
-    }
-}
-
-impl ProcessExternalRequestTrait for MineralInjection {
-    /// Checks for and processes new commands relevant to the Mineral Injection module from external channels.
-    ///
-    /// This is the specialized implementation of `ProcessExternalRequestTrait` for `MineralInjection`.
-    /// It delegates directly to `process_external_request_without_messaging`, indicating
-    /// that the `MineralInjection` module only processes commands from the signal handler
-    /// and ignores any input from a messaging channel.
-    ///
-    /// # Arguments
-    /// * `rx_from_signal_handler` - A reference to the receiver end of the channel
-    ///   for commands originating from the signal handler.
-    /// * `_` - This parameter is ignored, as the `MineralInjection` module does not process
-    ///   messages from a messaging channel.
-    ///
-    /// # Returns
-    /// A tuple `(bool, bool, bool)` indicating the status of commands received:
-    /// - The first `bool` is `true` if a `Quit` command was received; otherwise `false`.
-    /// - The second `bool` is always `false` (no "Start" commands processed).
-    /// - The third `bool` is always `false` (no "Stop" commands processed).
-    fn process_external_request(
-        &mut self,
-        rx_from_signal_handler: &mut AquaReceiver<InternalCommand>,
-        _: Option<&mut AquaReceiver<InternalCommand>>,
-    ) -> (bool, bool, bool) {
-        process_external_request_without_messaging(
-            rx_from_signal_handler,
-            "MineralInjection".to_string(),
-        )
-    }
-}
-
-impl ProcessExternalRequestTrait for WaterInjection {
-    /// Checks for and processes new commands relevant to the Water Injection module from external channels.
-    ///
-    /// This is the specialized implementation of `ProcessExternalRequestTrait` for `WaterInjection`.
-    /// It delegates directly to `process_external_request_without_messaging`, indicating
-    /// that the `WaterInjection` module only processes commands from the signal handler
-    /// and ignores any input from a messaging channel.
-    ///
-    /// # Arguments
-    /// * `rx_from_signal_handler` - A reference to the receiver end of the channel
-    ///   for commands originating from the signal handler.
-    /// * `_` - This parameter is ignored, as the `WaterInjection` module does not process
-    ///   messages from a messaging channel.
-    ///
-    /// # Returns
-    /// A tuple `(bool, bool, bool)` indicating the status of commands received:
-    /// - The first `bool` is `true` if a `Quit` command was received; otherwise `false`.
-    /// - The second `bool` is always `false` (no "Start" commands processed).
-    /// - The third `bool` is always `false` (no "Stop" commands processed).
-    fn process_external_request(
-        &mut self,
-        rx_from_signal_handler: &mut AquaReceiver<InternalCommand>,
-        _: Option<&mut AquaReceiver<InternalCommand>>,
-    ) -> (bool, bool, bool) {
-        process_external_request_without_messaging(
-            rx_from_signal_handler,
-            "WaterInjection".to_string(),
-        )
-    }
-}
-
-impl ProcessExternalRequestTrait for I2cInterface {
-    /// Checks for and processes new commands relevant to the I2cInterface module from external channels.
-    ///
-    /// This is the specialized implementation of `ProcessExternalRequestTrait` for `I2cInterface`.
-    /// It delegates directly to `process_external_request_without_messaging`, indicating
-    /// that the `I2cInterface` module only processes commands from the signal handler
-    /// and ignores any input from a messaging channel.
-    ///
-    /// # Arguments
-    /// * `rx_from_signal_handler` - A reference to the receiver end of the channel
-    ///   for commands originating from the signal handler.
-    /// * `_` - This parameter is ignored, as the `I2cInterface` module does not process
-    ///   messages from a messaging channel.
-    ///
-    /// # Returns
-    /// A tuple `(bool, bool, bool)` indicating the status of commands received:
-    /// - The first `bool` is `true` if a `Quit` command was received; otherwise `false`.
-    /// - The second `bool` is always `false` (no "Start" commands processed).
-    /// - The third `bool` is always `false` (no "Stop" commands processed).
-    fn process_external_request(
-        &mut self,
-        rx_from_signal_handler: &mut AquaReceiver<InternalCommand>,
-        _: Option<&mut AquaReceiver<InternalCommand>>,
-    ) -> (bool, bool, bool) {
-        process_external_request_without_messaging(
-            rx_from_signal_handler,
-            "I2cInterface".to_string(),
-        )
-    }
-}
-
-impl ProcessExternalRequestTrait for ScheduleCheck {
-    /// Checks for and processes new commands relevant to the Schedule Check module from external channels.
-    ///
-    /// This is the specialized implementation of `ProcessExternalRequestTrait` for `ScheduleCheck`.
-    /// It delegates directly to `process_external_request_without_messaging`, indicating
-    /// that the `ScheduleCheck` module only processes commands from the signal handler
-    /// and ignores any input from a messaging channel.
-    ///
-    /// # Arguments
-    /// * `rx_from_signal_handler` - A reference to the receiver end of the channel
-    ///   for commands originating from the signal handler.
-    /// * `_` - This parameter is ignored, as the `ScheduleCheck` module does not process
-    ///   messages from a messaging channel.
-    ///
-    /// # Returns
-    /// A tuple `(bool, bool, bool)` indicating the status of commands received:
-    /// - The first `bool` is `true` if a `Quit` command was received; otherwise `false`.
-    /// - The second `bool` is always `false` (no "Start" commands processed).
-    /// - The third `bool` is always `false` (no "Stop" commands processed).
-    fn process_external_request(
-        &mut self,
-        rx_from_signal_handler: &mut AquaReceiver<InternalCommand>,
-        _: Option<&mut AquaReceiver<InternalCommand>>,
-    ) -> (bool, bool, bool) {
-        process_external_request_without_messaging(
-            rx_from_signal_handler,
-            "ScheduleCheck".to_string(),
-        )
-    }
-}
-
-impl ProcessExternalRequestTrait for RelayManager {
-    /// Checks for and processes new commands relevant to the Relay Manager module from external channels.
-    ///
-    /// This is the specialized implementation of `ProcessExternalRequestTrait` for `RelayManager`.
-    /// It delegates directly to `process_external_request_without_messaging`, indicating
-    /// that the `RelayManager` (which often interacts with hardware like Controllino)
-    /// only processes commands from the signal handler and ignores any input from a messaging channel.
-    ///
-    /// # Arguments
-    /// * `rx_from_signal_handler` - A reference to the receiver end of the channel
-    ///   for commands originating from the signal handler.
-    /// * `_` - This parameter is ignored, as the `RelayManager` does not process
-    ///   messages from a messaging channel.
-    ///
-    /// # Returns
-    /// A tuple `(bool, bool, bool)` indicating the status of commands received:
-    /// - The first `bool` is `true` if a `Quit` command was received; otherwise `false`.
-    /// - The second `bool` is always `false` (no "Start" commands processed).
-    /// - The third `bool` is always `false` (no "Stop" commands processed).
-    fn process_external_request(
-        &mut self,
-        rx_from_signal_handler: &mut AquaReceiver<InternalCommand>,
-        _: Option<&mut AquaReceiver<InternalCommand>>,
-    ) -> (bool, bool, bool) {
-        process_external_request_without_messaging(
-            rx_from_signal_handler,
-            "RelayManager".to_string(),
-        )
-    }
-}
-
 #[cfg(target_os = "linux")]
 impl ProcessExternalRequestTrait for Messaging {
     /// Checks for and processes new commands relevant to the Messaging module from external channels.
@@ -565,37 +366,6 @@ impl ProcessExternalRequestTrait for Messaging {
         _: Option<&mut AquaReceiver<InternalCommand>>,
     ) -> (bool, bool, bool) {
         process_external_request_without_messaging(rx_from_signal_handler, "Messaging".to_string())
-    }
-}
-
-impl ProcessExternalRequestTrait for TcpCommunication {
-    /// Checks for and processes new commands relevant to the TCP Communication module from external channels.
-    ///
-    /// This is the specialized implementation of `ProcessExternalRequestTrait` for `TcpCommunication`.
-    /// It delegates directly to `process_external_request_without_messaging`, indicating
-    /// that the `TcpCommunication` module primarily processes commands from the signal handler
-    /// and does not use a separate messaging channel for external requests.
-    ///
-    /// # Arguments
-    /// * `rx_from_signal_handler` - A reference to the receiver end of the channel
-    ///   for commands originating from the signal handler.
-    /// * `_` - This parameter is ignored, as the `TcpCommunication` module does not process
-    ///   messages from a messaging channel in this context.
-    ///
-    /// # Returns
-    /// A tuple `(bool, bool, bool)` indicating the status of commands received:
-    /// - The first `bool` is `true` if a `Quit` command was received; otherwise `false`.
-    /// - The second `bool` is always `false` (no "Start" commands processed).
-    /// - The third `bool` is always `false` (no "Stop" commands processed).
-    fn process_external_request(
-        &mut self,
-        rx_from_signal_handler: &mut AquaReceiver<InternalCommand>,
-        _: Option<&mut AquaReceiver<InternalCommand>>,
-    ) -> (bool, bool, bool) {
-        process_external_request_without_messaging(
-            rx_from_signal_handler,
-            "TcpCommunication".to_string(),
-        )
     }
 }
 
@@ -878,30 +648,43 @@ impl ProcessExternalRequestTrait for Watchdog {
     }
 }
 
-impl ProcessExternalRequestTrait for Memory {
-    /// Checks for and processes new commands relevant to the Memory module from external channels.
-    ///
-    /// This is the specialized implementation of `ProcessExternalRequestTrait` for `TcpCommunication`.
-    /// It delegates directly to `process_external_request_without_messaging`, indicating
-    /// that the `Memory` module primarily processes commands from the signal handler
-    /// and does not use a separate messaging channel for external requests.
-    ///
-    /// # Arguments
-    /// * `rx_from_memory` - A reference to the receiver end of the channel
-    ///   for commands originating from the signal handler.
-    /// * `_` - This parameter is ignored, as the `Memory` module does not process
-    ///   messages from a messaging channel in this context.
-    ///
-    /// # Returns
-    /// A tuple `(bool, bool, bool)` indicating the status of commands received:
-    /// - The first `bool` is `true` if a `Quit` command was received; otherwise `false`.
-    /// - The second `bool` is always `false` (no "Start" commands processed).
-    /// - The third `bool` is always `false` (no "Stop" commands processed).
-    fn process_external_request(
-        &mut self,
-        rx_from_signal_handler: &mut AquaReceiver<InternalCommand>,
-        _: Option<&mut AquaReceiver<InternalCommand>>,
-    ) -> (bool, bool, bool) {
-        process_external_request_without_messaging(rx_from_signal_handler, "Memory".to_string())
-    }
+/// A macro to generate the `ProcessExternalRequestTrait` implementation for structs
+/// that only need to listen for commands from the signal handler (i.e., no messaging).
+macro_rules! impl_process_request_no_messaging {
+    // The `$(...)+` syntax allows the macro to accept one or more struct types,
+    // separated by commas.
+    ($($struct_name:ty),+) => {
+        $(
+            impl ProcessExternalRequestTrait for $struct_name {
+                fn process_external_request(
+                    &mut self,
+                    rx_from_signal_handler: &mut AquaReceiver<InternalCommand>,
+                    _: Option<&mut AquaReceiver<InternalCommand>>,
+                ) -> (bool, bool, bool) {
+                    // Use stringify! to get the name of the struct for logging.
+                    process_external_request_without_messaging(
+                        rx_from_signal_handler,
+                        stringify!($struct_name).to_string(),
+                    )
+                }
+            }
+        )+
+    };
 }
+
+impl_process_request_no_messaging!(
+    DataLogger,
+    Dht,
+    FoodInjection,
+    MineralInjection,
+    WaterInjection,
+    I2cInterface,
+    ScheduleCheck,
+    RelayManager,
+    TcpCommunication,
+    Memory
+);
+
+// The impl for Messaging is conditional, so it gets its own call.
+#[cfg(target_os = "linux")]
+impl_process_request_no_messaging!(Messaging);
