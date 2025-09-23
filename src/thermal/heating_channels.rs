@@ -88,11 +88,6 @@ impl HeatingChannels {
         self.rx_heating_from_relay_manager.recv()
     }
 
-    /// Sends an acknowledgment to the signal handler.
-    pub fn send_to_signal_handler(&mut self, ack: bool) -> Result<(), AquaChannelError> {
-        self.tx_heating_to_signal_handler.send(ack)
-    }
-
     /// Sends a command to the schedule checker.
     pub fn send_to_schedule_check(
         &mut self,
@@ -145,9 +140,11 @@ impl fmt::Display for HeatingChannels {
             write!(
                 f,
                 "rx_heating_from_messaging_opt: {}",
-                self.rx_heating_from_messaging.count
-            )
+                rx_heating_from_messaging.count
+            )?;
         }
+
+        Ok(())
     }
 }
 

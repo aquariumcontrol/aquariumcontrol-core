@@ -108,143 +108,42 @@ pub trait WaitForTerminationTrait {
     }
 }
 
-impl WaitForTerminationTrait for TankLevelSwitch {
-    /// Method connects the default trait implementation with the specific implementation
-    /// accessing the warn-lock.
-    fn get_warn_lock_mut(&mut self) -> &mut bool {
-        &mut self.lock_warn_inapplicable_command_signal_handler
-    }
+/// A macro to generate the `WaitForTerminationTrait` implementation for structs
+/// that follow the standard pattern of having `lock_warn...` and `lock_error...` fields.
+macro_rules! impl_wait_for_termination {
+    // The `$(...)+` syntax allows the macro to accept one or more struct types,
+    // separated by commas.
+    ($($struct_name:ty),+) => {
+        $(
+            impl WaitForTerminationTrait for $struct_name {
+                /// Method connects the default trait implementation with the specific implementation
+                /// accessing the warn-lock.
+                fn get_warn_lock_mut(&mut self) -> &mut bool {
+                    &mut self.lock_warn_inapplicable_command_signal_handler
+                }
 
-    /// Method connects the default trait implementation with the specific implementation
-    /// for accessing the error-lock.
-    fn get_error_lock_mut(&mut self) -> &mut bool {
-        &mut self.lock_error_channel_receive_termination
-    }
+                /// Method connects the default trait implementation with the specific implementation
+                /// for accessing the error-lock.
+                fn get_error_lock_mut(&mut self) -> &mut bool {
+                    &mut self.lock_error_channel_receive_termination
+                }
+            }
+        )+
+    };
 }
 
-impl WaitForTerminationTrait for Ventilation {
-    /// Method connects the default trait implementation with the specific implementation
-    /// accessing the warn-lock.
-    fn get_warn_lock_mut(&mut self) -> &mut bool {
-        &mut self.lock_warn_inapplicable_command_signal_handler
-    }
+impl_wait_for_termination!(
+    TankLevelSwitch,
+    Ventilation,
+    Refill,
+    Heating,
+    Feed,
+    Balling,
+    SensorManager,
+    AtlasScientific,
+    DataLogger
+);
 
-    /// Method connects the default trait implementation with the specific implementation
-    /// for accessing the error-lock.
-    fn get_error_lock_mut(&mut self) -> &mut bool {
-        &mut self.lock_error_channel_receive_termination
-    }
-}
-
-impl WaitForTerminationTrait for Refill {
-    /// Method connects the default trait implementation with the specific implementation
-    /// accessing the warn-lock.
-    fn get_warn_lock_mut(&mut self) -> &mut bool {
-        &mut self.lock_warn_inapplicable_command_signal_handler
-    }
-
-    /// Method connects the default trait implementation with the specific implementation
-    /// for accessing the error-lock.
-    fn get_error_lock_mut(&mut self) -> &mut bool {
-        &mut self.lock_error_channel_receive_termination
-    }
-}
-
-impl WaitForTerminationTrait for Heating {
-    /// Method connects the default trait implementation with the specific implementation
-    /// accessing the warn-lock.
-    fn get_warn_lock_mut(&mut self) -> &mut bool {
-        &mut self.lock_warn_inapplicable_command_signal_handler
-    }
-
-    /// Method connects the default trait implementation with the specific implementation
-    /// for accessing the error-lock.
-    fn get_error_lock_mut(&mut self) -> &mut bool {
-        &mut self.lock_error_channel_receive_termination
-    }
-}
-
-impl WaitForTerminationTrait for Feed {
-    /// Method connects the default trait implementation with the specific implementation
-    /// accessing the warn-lock.
-    fn get_warn_lock_mut(&mut self) -> &mut bool {
-        &mut self.lock_warn_inapplicable_command_signal_handler
-    }
-
-    /// Method connects the default trait implementation with the specific implementation
-    /// for accessing the error-lock.
-    fn get_error_lock_mut(&mut self) -> &mut bool {
-        &mut self.lock_error_channel_receive_termination
-    }
-}
-
-impl WaitForTerminationTrait for Balling {
-    /// Method connects the default trait implementation with the specific implementation
-    /// accessing the warn-lock.
-    fn get_warn_lock_mut(&mut self) -> &mut bool {
-        &mut self.lock_warn_inapplicable_command_signal_handler
-    }
-
-    /// Method connects the default trait implementation with the specific implementation
-    /// for accessing the error-lock.
-    fn get_error_lock_mut(&mut self) -> &mut bool {
-        &mut self.lock_error_channel_receive_termination
-    }
-}
-
-impl WaitForTerminationTrait for SensorManager {
-    /// Method connects the default trait implementation with the specific implementation
-    /// accessing the warn-lock.
-    fn get_warn_lock_mut(&mut self) -> &mut bool {
-        &mut self.lock_warn_inapplicable_command_signal_handler
-    }
-
-    /// Method connects the default trait implementation with the specific implementation
-    /// for accessing the error-lock.
-    fn get_error_lock_mut(&mut self) -> &mut bool {
-        &mut self.lock_error_channel_receive_termination
-    }
-}
-
-impl WaitForTerminationTrait for AtlasScientific {
-    /// Method connects the default trait implementation with the specific implementation
-    /// accessing the warn-lock.
-    fn get_warn_lock_mut(&mut self) -> &mut bool {
-        &mut self.lock_warn_inapplicable_command_signal_handler
-    }
-
-    /// Method connects the default trait implementation with the specific implementation
-    /// for accessing the error-lock.
-    fn get_error_lock_mut(&mut self) -> &mut bool {
-        &mut self.lock_error_channel_receive_termination
-    }
-}
-
+// The impl for Messaging is conditional, so it gets its own call.
 #[cfg(target_os = "linux")]
-impl WaitForTerminationTrait for Messaging {
-    /// Method connects the default trait implementation with the specific implementation
-    /// accessing the warn-lock.
-    fn get_warn_lock_mut(&mut self) -> &mut bool {
-        &mut self.lock_warn_inapplicable_command_signal_handler
-    }
-
-    /// Method connects the default trait implementation with the specific implementation
-    /// for accessing the error-lock.
-    fn get_error_lock_mut(&mut self) -> &mut bool {
-        &mut self.lock_error_channel_receive_termination
-    }
-}
-
-impl WaitForTerminationTrait for DataLogger {
-    /// Method connects the default trait implementation with the specific implementation
-    /// accessing the warn-lock.
-    fn get_warn_lock_mut(&mut self) -> &mut bool {
-        &mut self.lock_warn_inapplicable_command_signal_handler
-    }
-
-    /// Method connects the default trait implementation with the specific implementation
-    /// for accessing the error-lock.
-    fn get_error_lock_mut(&mut self) -> &mut bool {
-        &mut self.lock_error_channel_receive_termination
-    }
-}
+impl_wait_for_termination!(Messaging);

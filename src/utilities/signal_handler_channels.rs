@@ -6,314 +6,184 @@ The above copyright notice and this permission notice shall be included in all c
 
 THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
-use crate::launch::channels::{AquaChannelError, AquaReceiver, AquaSender};
+
+//! Defines the central channel aggregation struct for the application's signal handler.
+//!
+//! This module provides the `SignalHandlerChannels` struct, which acts as a "switchboard"
+//! by consolidating all the `mpsc` channel endpoints that the main `signal_handler`
+//! thread needs to communicate with every other concurrent module in the application.
+//!
+//! ## Purpose and Design
+//!
+//! The primary purpose of this struct is to provide a single, organized container
+//! for the communication infrastructure required for orchestrating a graceful,
+//! application-wide shutdown.
+//!
+//! - **Centralization**: By gathering all channel senders (`AquaSender`) and receivers
+//!   (`AquaReceiver`) into one place, it simplifies the process of passing the
+//!   necessary communication lines to the `signal_handler` thread at startup.
+//!
+//! - **Explicit Naming**: The fields follow a strict `tx_source_to_destination` and
+//!   `rx_source_from_destination` naming convention. This makes the direction of
+//!   data flow for commands (`InternalCommand`) and acknowledgements (`bool`)
+//!   unambiguous.
+//!
+//! - **Optionality**: Fields for optional modules (like `messaging` or the `tcp`
+//!   simulator) are wrapped in `Option`, allowing the application to be compiled
+//!   with different feature sets without breaking the communication structure.
+//!
+//! - **Unidirectional Communication**: Some fields are senders only, representing
+//!   communication with modules that are not expected to send acknowledgements
+//!   back to the signal handler (e.g., simple hardware interface threads).
+//!
+//! ## Usage
+//!
+//! An instance of `SignalHandlerChannels` is constructed in the main `launch` module,
+//! where all the channels are created. This single struct is then moved into the
+//! `signal_handler` thread, giving it the handles it needs to send `Quit` and
+//! `Terminate` commands to all other threads in a controlled, phased sequence.
+
+use crate::launch::channels::{AquaReceiver, AquaSender};
 use crate::utilities::channel_content::InternalCommand;
 use std::fmt;
 
+/// A container for all `mpsc` channel endpoints required by the `signal_handler`.
+///
+/// This struct acts as a central "switchboard" by aggregating the sender and receiver
+/// handles for communication between the main signal handler thread and all other
+/// concurrent modules. Its primary purpose is to simplify passing the entire communication
+/// infrastructure to the signal handler upon its creation.
+///
+/// The fields follow a strict naming convention:
+/// - `tx_source_to_destination`: A sender (`AquaSender`) from the source to the destination.
+/// - `rx_source_from_destination`: A receiver (`AquaReceiver`) at the source, listening for messages from the destination.
+///
+/// Fields for optional modules (e.g., `messaging`, `tcp`) are wrapped in `Option`,
+/// allowing for flexible compilation with different feature sets. They have a postfix `_opt`.
 pub struct SignalHandlerChannels {
-    // --- Channels for each module ---
+    /// (Optional) Sender to the `Messaging` thread for `Quit`/`Terminate` commands.
     pub tx_signal_handler_to_messaging_opt: Option<AquaSender<InternalCommand>>,
 
+    /// (Optional) Receiver from the `Messaging` thread for shutdown acknowledgements.
     pub rx_signal_handler_from_messaging_opt: Option<AquaReceiver<bool>>,
 
+    /// Sender to the `Refill` thread for `Quit`/`Terminate` commands.
     pub tx_signal_handler_to_refill: AquaSender<InternalCommand>,
 
+    /// Receiver from the `Refill` thread for shutdown acknowledgements.
     pub rx_signal_handler_from_refill: AquaReceiver<bool>,
 
+    /// Sender to the `TankLevelSwitch` thread for `Quit`/`Terminate` commands.
     pub tx_signal_handler_to_tank_level_switch: AquaSender<InternalCommand>,
 
+    /// Receiver from the `TankLevelSwitch` thread for shutdown acknowledgements.
     pub rx_signal_handler_from_tank_level_switch: AquaReceiver<bool>,
 
+    /// Sender to the `Heating` thread for `Quit`/`Terminate` commands.
     pub tx_signal_handler_to_heating: AquaSender<InternalCommand>,
 
+    /// Receiver from the `Heating` thread for shutdown acknowledgements.
     pub rx_signal_handler_from_heating: AquaReceiver<bool>,
 
+    /// Sender to the `RelayManager` thread for `Quit`/`Terminate` commands.
     pub tx_signal_handler_to_relay_manager: AquaSender<InternalCommand>,
 
+    /// Receiver from the `RelayManager` thread for shutdown acknowledgements.
     pub rx_signal_handler_from_relay_manager: AquaReceiver<bool>,
 
+    /// Sender to the `AtlasScientific` thread for `Quit`/`Terminate` commands.
     pub tx_signal_handler_to_atlas_scientific: AquaSender<InternalCommand>,
 
+    /// Receiver from the `AtlasScientific` thread for shutdown acknowledgements.
     pub rx_signal_handler_from_atlas_scientific: AquaReceiver<bool>,
 
+    /// Sender to the `SensorManager` thread for `Quit`/`Terminate` commands.
     pub tx_signal_handler_to_sensor_manager: AquaSender<InternalCommand>,
 
+    /// Receiver from the `SensorManager` thread for shutdown acknowledgements.
     pub rx_signal_handler_from_sensor_manager: AquaReceiver<bool>,
 
+    /// Sender to the `DataLogger` thread for `Quit`/`Terminate` commands.
     pub tx_signal_handler_to_data_logger: AquaSender<InternalCommand>,
 
+    /// Receiver from the `DataLogger` thread for shutdown acknowledgements.
     pub rx_signal_handler_from_data_logger: AquaReceiver<bool>,
 
+    /// Sender to the `Balling` thread for `Quit`/`Terminate` commands.
     pub tx_signal_handler_to_balling: AquaSender<InternalCommand>,
 
+    /// Receiver from the `Balling` thread for shutdown acknowledgements.
     pub rx_signal_handler_from_balling: AquaReceiver<bool>,
 
+    /// Sender to the `Ventilation` thread for `Quit`/`Terminate` commands.
     pub tx_signal_handler_to_ventilation: AquaSender<InternalCommand>,
 
+    /// Receiver from the `Ventilation` thread for shutdown acknowledgements.
     pub rx_signal_handler_from_ventilation: AquaReceiver<bool>,
 
+    /// Sender to the `Monitors` thread for `Quit`/`Terminate` commands.
     pub tx_signal_handler_to_monitors: AquaSender<InternalCommand>,
 
+    /// Receiver from the `Monitors` thread for shutdown acknowledgements.
     pub rx_signal_handler_from_monitors: AquaReceiver<bool>,
 
+    /// Sender to the `Feed` thread for `Quit`/`Terminate` commands.
     pub tx_signal_handler_to_feed: AquaSender<InternalCommand>,
 
+    /// Receiver from the `Feed` thread for shutdown acknowledgements.
     pub rx_signal_handler_from_feed: AquaReceiver<bool>,
 
+    /// Sender to the `ScheduleCheck` thread for `Quit`/`Terminate` commands.
     pub tx_signal_handler_to_schedule_check: AquaSender<InternalCommand>,
 
+    /// Receiver from the `ScheduleCheck` thread for shutdown acknowledgements.
     pub rx_signal_handler_from_schedule_check: AquaReceiver<bool>,
 
+    /// (Optional) Sender to the `TcpCommunication` (simulator) thread for `Quit`/`Terminate` commands.
     pub tx_signal_handler_to_tcp_opt: Option<AquaSender<InternalCommand>>,
 
+    /// (Optional) Receiver from the `TcpCommunication` (simulator) thread for shutdown acknowledgements.
     pub rx_signal_handler_from_tcp_opt: Option<AquaReceiver<bool>>,
 
+    /// Sender to the `Watchdog` thread for `Quit`/`Terminate` commands.
     pub tx_signal_handler_to_watchdog: AquaSender<InternalCommand>,
 
+    /// Receiver from the `Watchdog` thread for shutdown acknowledgements.
     pub rx_signal_handler_from_watchdog: AquaReceiver<bool>,
 
+    /// Sender to the `Memory` monitor thread for `Quit` command (one-way).
     pub tx_signal_handler_to_memory: AquaSender<InternalCommand>,
 
-    // Hardware-specific channels
+    #[cfg(all(target_os = "linux", feature = "target_hw"))]
+    /// Sender to the `Dht` sensor thread for `Quit` command.
     pub tx_signal_handler_to_dht: AquaSender<InternalCommand>,
 
+    #[cfg(any(test, all(target_os = "linux", feature = "target_hw")))]
+    /// Sender to the `I2cInterface` thread for `Quit` command.
     pub tx_signal_handler_to_i2c_interface: AquaSender<InternalCommand>,
 
+    /// Sender to the `Ds18b20` sensor thread for `Quit` command.
     pub tx_signal_handler_to_ds18b20: AquaSender<InternalCommand>,
-}
-
-impl SignalHandlerChannels {
-    // --- Optional Modules ---
-    #[allow(unused)]
-    pub fn send_to_messaging(
-        &mut self,
-        command: InternalCommand,
-    ) -> Option<Result<(), AquaChannelError>> {
-        self.tx_signal_handler_to_messaging_opt
-            .as_mut()
-            .map(|mut tx| tx.send(command))
-    }
-
-    #[allow(unused)]
-    pub fn receive_from_messaging(&mut self) -> Option<Result<bool, AquaChannelError>> {
-        self.rx_signal_handler_from_messaging_opt
-            .as_mut()
-            .map(|rx| rx.recv())
-    }
-
-    #[allow(unused)]
-    pub fn send_to_tcp(
-        &mut self,
-        command: InternalCommand,
-    ) -> Option<Result<(), AquaChannelError>> {
-        self.tx_signal_handler_to_tcp_opt
-            .as_mut()
-            .map(|mut tx| tx.send(command))
-    }
-
-    #[allow(unused)]
-    pub fn receive_from_tcp(&mut self) -> Option<Result<bool, AquaChannelError>> {
-        self.rx_signal_handler_from_tcp_opt
-            .as_mut()
-            .map(|rx| rx.recv())
-    }
-
-    #[allow(unused)]
-    pub fn send_to_refill(&mut self, command: InternalCommand) -> Result<(), AquaChannelError> {
-        self.tx_signal_handler_to_refill.send(command)
-    }
-
-    #[allow(unused)]
-    pub fn receive_from_refill(&mut self) -> Result<bool, AquaChannelError> {
-        self.rx_signal_handler_from_refill.recv()
-    }
-
-    #[allow(unused)]
-    pub fn send_to_tank_level_switch(
-        &mut self,
-        command: InternalCommand,
-    ) -> Result<(), AquaChannelError> {
-        self.tx_signal_handler_to_tank_level_switch.send(command)
-    }
-
-    #[allow(unused)]
-    pub fn receive_from_tank_level_switch(&mut self) -> Result<bool, AquaChannelError> {
-        self.rx_signal_handler_from_tank_level_switch.recv()
-    }
-
-    #[allow(unused)]
-    pub fn send_to_heating(&mut self, command: InternalCommand) -> Result<(), AquaChannelError> {
-        self.tx_signal_handler_to_heating.send(command)
-    }
-
-    #[allow(unused)]
-    pub fn receive_from_heating(&mut self) -> Result<bool, AquaChannelError> {
-        self.rx_signal_handler_from_heating.recv()
-    }
-
-    #[allow(unused)]
-    pub fn send_to_relay_manager(
-        &mut self,
-        command: InternalCommand,
-    ) -> Result<(), AquaChannelError> {
-        self.tx_signal_handler_to_relay_manager.send(command)
-    }
-
-    #[allow(unused)]
-    pub fn receive_from_relay_manager(&mut self) -> Result<bool, AquaChannelError> {
-        self.rx_signal_handler_from_relay_manager.recv()
-    }
-
-    #[allow(unused)]
-    pub fn send_to_atlas_scientific(
-        &mut self,
-        command: InternalCommand,
-    ) -> Result<(), AquaChannelError> {
-        self.tx_signal_handler_to_atlas_scientific.send(command)
-    }
-
-    #[allow(unused)]
-    pub fn receive_from_atlas_scientific(&mut self) -> Result<bool, AquaChannelError> {
-        self.rx_signal_handler_from_atlas_scientific.recv()
-    }
-
-    #[allow(unused)]
-    pub fn send_to_sensor_manager(
-        &mut self,
-        command: InternalCommand,
-    ) -> Result<(), AquaChannelError> {
-        self.tx_signal_handler_to_sensor_manager.send(command)
-    }
-
-    #[allow(unused)]
-    pub fn receive_from_sensor_manager(&mut self) -> Result<bool, AquaChannelError> {
-        self.rx_signal_handler_from_sensor_manager.recv()
-    }
-
-    #[allow(unused)]
-    pub fn send_to_data_logger(
-        &mut self,
-        command: InternalCommand,
-    ) -> Result<(), AquaChannelError> {
-        self.tx_signal_handler_to_data_logger.send(command)
-    }
-
-    #[allow(unused)]
-    pub fn receive_from_data_logger(&mut self) -> Result<bool, AquaChannelError> {
-        self.rx_signal_handler_from_data_logger.recv()
-    }
-
-    #[allow(unused)]
-    pub fn send_to_balling(&mut self, command: InternalCommand) -> Result<(), AquaChannelError> {
-        self.tx_signal_handler_to_balling.send(command)
-    }
-
-    #[allow(unused)]
-    pub fn receive_from_balling(&mut self) -> Result<bool, AquaChannelError> {
-        self.rx_signal_handler_from_balling.recv()
-    }
-
-    #[allow(unused)]
-    pub fn send_to_ventilation(
-        &mut self,
-        command: InternalCommand,
-    ) -> Result<(), AquaChannelError> {
-        self.tx_signal_handler_to_ventilation.send(command)
-    }
-
-    #[allow(unused)]
-    pub fn receive_from_ventilation(&mut self) -> Result<bool, AquaChannelError> {
-        self.rx_signal_handler_from_ventilation.recv()
-    }
-
-    #[allow(unused)]
-    pub fn send_to_monitors(&mut self, command: InternalCommand) -> Result<(), AquaChannelError> {
-        self.tx_signal_handler_to_monitors.send(command)
-    }
-
-    #[allow(unused)]
-    pub fn receive_from_monitors(&mut self) -> Result<bool, AquaChannelError> {
-        self.rx_signal_handler_from_monitors.recv()
-    }
-
-    #[allow(unused)]
-    pub fn send_to_feed(&mut self, command: InternalCommand) -> Result<(), AquaChannelError> {
-        self.tx_signal_handler_to_feed.send(command)
-    }
-
-    #[allow(unused)]
-    pub fn receive_from_feed(&mut self) -> Result<bool, AquaChannelError> {
-        self.rx_signal_handler_from_feed.recv()
-    }
-
-    #[allow(unused)]
-    pub fn send_to_schedule_check(
-        &mut self,
-        command: InternalCommand,
-    ) -> Result<(), AquaChannelError> {
-        self.tx_signal_handler_to_schedule_check.send(command)
-    }
-
-    #[allow(unused)]
-    pub fn receive_from_schedule_check(&mut self) -> Result<bool, AquaChannelError> {
-        self.rx_signal_handler_from_schedule_check.recv()
-    }
-
-    #[allow(unused)]
-    pub fn send_to_watchdog(&mut self, command: InternalCommand) -> Result<(), AquaChannelError> {
-        self.tx_signal_handler_to_watchdog.send(command)
-    }
-
-    #[allow(unused)]
-    pub fn receive_from_watchdog(&mut self) -> Result<bool, AquaChannelError> {
-        self.rx_signal_handler_from_watchdog.recv()
-    }
-
-    #[allow(unused)]
-    pub fn send_to_memory(&mut self, command: InternalCommand) -> Result<(), AquaChannelError> {
-        self.tx_signal_handler_to_memory.send(command)
-    }
-
-    // --- Hardware-Specific Modules (Send only) ---
-    #[allow(unused)]
-    pub fn send_to_dht(&mut self, command: InternalCommand) -> Result<(), AquaChannelError> {
-        self.tx_signal_handler_to_dht.send(command)
-    }
-
-    #[allow(unused)]
-    pub fn send_to_i2c_interface(
-        &mut self,
-        command: InternalCommand,
-    ) -> Result<(), AquaChannelError> {
-        self.tx_signal_handler_to_i2c_interface.send(command)
-    }
-
-    #[allow(unused)]
-    pub fn send_to_ds18b20(&mut self, command: InternalCommand) -> Result<(), AquaChannelError> {
-        self.tx_signal_handler_to_ds18b20.send(command)
-    }
 }
 
 #[cfg(feature = "debug_channels")]
 impl fmt::Display for SignalHandlerChannels {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         writeln!(f, "=== Signal Handler Channel Status ===")?;
-        writeln!(
-            f,
-            "tx_signal_handler_to_messaging_opt: {}",
-            self.tx_signal_handler_to_messaging_opt
-                .as_ref()
-                .unwrap()
-                .count
-        )?;
-        writeln!(
-            f,
-            "rx_signal_handler_from_messaging_opt: {}",
-            self.rx_signal_handler_from_messaging_opt
-                .as_ref()
-                .unwrap()
-                .count
-        )?;
+        if let Some(tx_signal_handler_to_messaging) = &self.tx_signal_handler_to_messaging_opt {
+            writeln!(
+                f,
+                "tx_signal_handler_to_messaging_opt: {}",
+                tx_signal_handler_to_messaging.count
+            )?;
+        }
+        if let Some(rx_signal_handler_from_messaging) = &self.rx_signal_handler_from_messaging_opt {
+            writeln!(
+                f,
+                "rx_signal_handler_from_messaging_opt: {}",
+                rx_signal_handler_from_messaging.count
+            )?;
+        }
         writeln!(
             f,
             "tx_signal_handler_to_refill: {}",
@@ -438,14 +308,14 @@ impl fmt::Display for SignalHandlerChannels {
             writeln!(
                 f,
                 "tx_signal_handler_to_tcp_opt: {}",
-                self.tx_signal_handler_to_tcp.count
+                tx_signal_handler_to_tcp.count
             )?;
         }
         if let Some(rx_signal_handler_from_tcp) = self.rx_signal_handler_from_tcp_opt.as_ref() {
             writeln!(
                 f,
                 "rx_signal_handler_from_tcp_opt: {}",
-                self.rx_signal_handler_from_tcp.count
+                rx_signal_handler_from_tcp.count
             )?;
         }
         writeln!(
@@ -459,16 +329,21 @@ impl fmt::Display for SignalHandlerChannels {
             self.rx_signal_handler_from_watchdog.count
         )?;
 
+        #[cfg(all(target_os = "linux", feature = "target_hw"))]
         writeln!(
             f,
             "tx_signal_handler_to_dht: {}",
             self.tx_signal_handler_to_dht.count
         )?;
-        writeln!(
-            f,
-            "tx_signal_handler_to_i2c_interface: {}",
-            self.tx_signal_handler_to_i2c_interface.count
-        )?;
+
+        #[cfg(all(target_os = "linux", feature = "target_hw"))]
+        if let Some(tx_signal_handler_to_i2c) = self.tx_signal_handler_to_i2c_interface_opt {
+            writeln!(
+                f,
+                "tx_signal_handler_to_i2c_interface: {}",
+                tx_signal_handler_to_i2c_interface.count
+            )?;
+        }
         writeln!(
             f,
             "tx_signal_handler_to_ds18b20: {}",

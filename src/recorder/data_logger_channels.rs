@@ -40,7 +40,7 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 //!   unit testing, allowing for isolated testing of the `DataLogger` thread's logic without
 //!   needing to run the entire application.
 
-use crate::launch::channels::{AquaChannelError, AquaReceiver, AquaSender};
+use crate::launch::channels::{AquaReceiver, AquaSender};
 use crate::utilities::channel_content::InternalCommand;
 use std::fmt;
 
@@ -52,16 +52,6 @@ pub struct DataLoggerChannels {
     pub tx_data_logger_to_signal_handler: AquaSender<bool>,
     /// Receiver part of the channel for communication from the signal handler                
     pub rx_data_logger_from_signal_handler: AquaReceiver<InternalCommand>,
-}
-
-impl DataLoggerChannels {
-    /// Sends an acknowledgment to the signal handler.
-    ///
-    /// This wrapper function sends a boolean acknowledgment and increments the
-    /// associated debug counter if the `debug_channels` feature is enabled.
-    pub fn send_to_signal_handler(&mut self, ack: bool) -> Result<(), AquaChannelError> {
-        self.tx_data_logger_to_signal_handler.send(ack)
-    }
 }
 
 #[cfg(feature = "debug_channels")]

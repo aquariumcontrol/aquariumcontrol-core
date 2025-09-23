@@ -1215,14 +1215,20 @@ pub mod tests {
                 // now we can send the quit command
                 let _ = channels
                     .signal_handler
-                    .send_to_balling(InternalCommand::Quit);
-                channels.signal_handler.receive_from_balling().unwrap();
+                    .tx_signal_handler_to_balling
+                    .send(InternalCommand::Quit);
+                channels
+                    .signal_handler
+                    .rx_signal_handler_from_balling
+                    .recv()
+                    .unwrap();
                 println!(
                     "test_balling_dosing: Received confirmation of Quit command from test object."
                 );
                 let _ = channels
                     .signal_handler
-                    .send_to_balling(InternalCommand::Terminate);
+                    .tx_signal_handler_to_balling
+                    .send(InternalCommand::Terminate);
             });
 
             // thread for the test object
@@ -1645,8 +1651,13 @@ pub mod tests {
                 // requesting Balling dosing control to quit
                 let _ = channels
                     .signal_handler
-                    .send_to_balling(InternalCommand::Quit);
-                channels.signal_handler.receive_from_balling().unwrap();
+                    .tx_signal_handler_to_balling
+                    .send(InternalCommand::Quit);
+                channels
+                    .signal_handler
+                    .rx_signal_handler_from_balling
+                    .recv()
+                    .unwrap();
 
                 let actuation_count_3 = *mutex_device_scheduler_balling_test_environment
                     .lock()
@@ -1655,7 +1666,8 @@ pub mod tests {
                 assert_eq!(actuation_count_3, 3);
                 let _ = channels
                     .signal_handler
-                    .send_to_balling(InternalCommand::Terminate);
+                    .tx_signal_handler_to_balling
+                    .send(InternalCommand::Terminate);
             });
 
             spin_sleeper.sleep(sleep_duration_100_millis);
@@ -1890,14 +1902,20 @@ pub mod tests {
                 // now we can send the quit command
                 let _ = channels
                     .signal_handler
-                    .send_to_balling(InternalCommand::Quit);
-                channels.signal_handler.receive_from_balling().unwrap();
+                    .tx_signal_handler_to_balling
+                    .send(InternalCommand::Quit);
+                channels
+                    .signal_handler
+                    .rx_signal_handler_from_balling
+                    .recv()
+                    .unwrap();
                 println!(
                     "test_balling_dosing: Received confirmation of Quit command from test object."
                 );
                 let _ = channels
                     .signal_handler
-                    .send_to_balling(InternalCommand::Terminate);
+                    .tx_signal_handler_to_balling
+                    .send(InternalCommand::Terminate);
             });
 
             // thread for the test object

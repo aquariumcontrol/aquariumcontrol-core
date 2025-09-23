@@ -897,8 +897,8 @@ pub mod tests {
 
                 spin_sleeper.sleep(sleep_duration); // wait for two seconds to test the heartbeat
 
-                let _ = channels.signal_handler.send_to_relay_manager(InternalCommand::Quit);
-                channels.signal_handler.receive_from_relay_manager().unwrap();
+                let _ = channels.signal_handler.tx_signal_handler_to_relay_manager.send(InternalCommand::Quit);
+                channels.signal_handler.rx_signal_handler_from_relay_manager.recv().unwrap();
             });
 
             // thread for the test object
@@ -952,8 +952,8 @@ pub mod tests {
                     }
                 }
 
-                let _ = channels.signal_handler.send_to_relay_manager(InternalCommand::Quit);
-                channels.signal_handler.receive_from_relay_manager().unwrap();
+                let _ = channels.signal_handler.tx_signal_handler_to_relay_manager.send(InternalCommand::Quit);
+                channels.signal_handler.rx_signal_handler_from_relay_manager.recv().unwrap();
             });
 
             // thread for the test object
@@ -1003,8 +1003,8 @@ pub mod tests {
                     }
                 }
 
-                let _ = channels.signal_handler.send_to_relay_manager(InternalCommand::Quit);
-                channels.signal_handler.receive_from_relay_manager().unwrap();
+                let _ = channels.signal_handler.tx_signal_handler_to_relay_manager.send(InternalCommand::Quit);
+                channels.signal_handler.rx_signal_handler_from_relay_manager.recv().unwrap();
             });
 
             // thread for the test object

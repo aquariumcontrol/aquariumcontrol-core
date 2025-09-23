@@ -771,14 +771,17 @@ pub mod tests {
                 spin_sleeper.sleep(sleep_duration_thread_processing);
                 let _ = channels
                     .signal_handler
-                    .send_to_tank_level_switch(InternalCommand::Quit);
+                    .tx_signal_handler_to_tank_level_switch
+                    .send(InternalCommand::Quit);
                 channels
                     .signal_handler
-                    .receive_from_tank_level_switch()
+                    .rx_signal_handler_from_tank_level_switch
+                    .recv()
                     .unwrap();
                 let _ = channels
                     .signal_handler
-                    .send_to_tank_level_switch(InternalCommand::Terminate);
+                    .tx_signal_handler_to_tank_level_switch
+                    .send(InternalCommand::Terminate);
             })
             .unwrap();
 
@@ -905,28 +908,35 @@ pub mod tests {
                 spin_sleeper.sleep(sleep_duration_part_2);
                 let _ = channels
                     .signal_handler
-                    .send_to_heating(InternalCommand::Quit);
+                    .tx_signal_handler_to_heating
+                    .send(InternalCommand::Quit);
                 let _ = channels
                     .signal_handler
-                    .send_to_refill(InternalCommand::Quit);
+                    .tx_signal_handler_to_refill
+                    .send(InternalCommand::Quit);
                 spin_sleeper.sleep(sleep_duration_thread_processing);
                 let _ = channels
                     .signal_handler
-                    .send_to_tank_level_switch(InternalCommand::Quit);
+                    .tx_signal_handler_to_tank_level_switch
+                    .send(InternalCommand::Quit);
                 channels
                     .signal_handler
-                    .receive_from_tank_level_switch()
+                    .rx_signal_handler_from_tank_level_switch
+                    .recv()
                     .unwrap();
                 let _ = channels
                     .signal_handler
-                    .send_to_heating(InternalCommand::Terminate);
+                    .tx_signal_handler_to_heating
+                    .send(InternalCommand::Terminate);
                 let _ = channels
                     .signal_handler
-                    .send_to_refill(InternalCommand::Terminate);
+                    .tx_signal_handler_to_refill
+                    .send(InternalCommand::Terminate);
                 let _ = tx_test_environment_to_tcp_for_test_case_finish.send(InternalCommand::Quit);
                 let _ = channels
                     .signal_handler
-                    .send_to_tank_level_switch(InternalCommand::Terminate);
+                    .tx_signal_handler_to_tank_level_switch
+                    .send(InternalCommand::Terminate);
             })
             .unwrap();
 
@@ -1007,28 +1017,35 @@ pub mod tests {
                 spin_sleeper.sleep(sleep_duration_part_2);
                 let _ = channels
                     .signal_handler
-                    .send_to_heating(InternalCommand::Quit);
+                    .tx_signal_handler_to_heating
+                    .send(InternalCommand::Quit);
                 let _ = channels
                     .signal_handler
-                    .send_to_refill(InternalCommand::Quit);
+                    .tx_signal_handler_to_refill
+                    .send(InternalCommand::Quit);
                 spin_sleeper.sleep(sleep_duration_thread_processing);
                 let _ = channels
                     .signal_handler
-                    .send_to_tank_level_switch(InternalCommand::Quit);
+                    .tx_signal_handler_to_tank_level_switch
+                    .send(InternalCommand::Quit);
                 channels
                     .signal_handler
-                    .receive_from_tank_level_switch()
+                    .rx_signal_handler_from_tank_level_switch
+                    .recv()
                     .unwrap();
                 let _ = channels
                     .signal_handler
-                    .send_to_heating(InternalCommand::Terminate);
+                    .tx_signal_handler_to_heating
+                    .send(InternalCommand::Terminate);
                 let _ = channels
                     .signal_handler
-                    .send_to_refill(InternalCommand::Terminate);
+                    .tx_signal_handler_to_refill
+                    .send(InternalCommand::Terminate);
                 let _ = tx_test_environment_to_tcp_for_test_case_finish.send(InternalCommand::Quit);
                 let _ = channels
                     .signal_handler
-                    .send_to_tank_level_switch(InternalCommand::Terminate);
+                    .tx_signal_handler_to_tank_level_switch
+                    .send(InternalCommand::Terminate);
             })
             .unwrap();
 
@@ -1112,28 +1129,35 @@ pub mod tests {
                 }
                 let _ = channels
                     .signal_handler
-                    .send_to_heating(InternalCommand::Quit);
+                    .tx_signal_handler_to_heating
+                    .send(InternalCommand::Quit);
                 let _ = channels
                     .signal_handler
-                    .send_to_refill(InternalCommand::Quit);
+                    .tx_signal_handler_to_refill
+                    .send(InternalCommand::Quit);
                 spin_sleeper.sleep(sleep_duration_thread_processing);
                 let _ = channels
                     .signal_handler
-                    .send_to_tank_level_switch(InternalCommand::Quit);
+                    .tx_signal_handler_to_tank_level_switch
+                    .send(InternalCommand::Quit);
                 channels
                     .signal_handler
-                    .receive_from_tank_level_switch()
+                    .rx_signal_handler_from_tank_level_switch
+                    .recv()
                     .unwrap();
                 let _ = channels
                     .signal_handler
-                    .send_to_heating(InternalCommand::Terminate);
+                    .tx_signal_handler_to_heating
+                    .send(InternalCommand::Terminate);
                 let _ = channels
                     .signal_handler
-                    .send_to_refill(InternalCommand::Terminate);
+                    .tx_signal_handler_to_refill
+                    .send(InternalCommand::Terminate);
                 let _ = tx_test_environment_to_tcp_for_test_case_finish.send(InternalCommand::Quit);
                 let _ = channels
                     .signal_handler
-                    .send_to_tank_level_switch(InternalCommand::Terminate);
+                    .tx_signal_handler_to_tank_level_switch
+                    .send(InternalCommand::Terminate);
             })
             .unwrap();
 
@@ -1358,28 +1382,35 @@ pub mod tests {
                 }
                 let _ = channels
                     .signal_handler
-                    .send_to_heating(InternalCommand::Quit);
+                    .tx_signal_handler_to_heating
+                    .send(InternalCommand::Quit);
                 let _ = channels
                     .signal_handler
-                    .send_to_refill(InternalCommand::Quit);
+                    .tx_signal_handler_to_refill
+                    .send(InternalCommand::Quit);
                 spin_sleeper.sleep(sleep_duration_thread_processing);
                 let _ = channels
                     .signal_handler
-                    .send_to_tank_level_switch(InternalCommand::Quit);
+                    .tx_signal_handler_to_tank_level_switch
+                    .send(InternalCommand::Quit);
                 channels
                     .signal_handler
-                    .receive_from_tank_level_switch()
+                    .rx_signal_handler_from_tank_level_switch
+                    .recv()
                     .unwrap();
                 let _ = channels
                     .signal_handler
-                    .send_to_heating(InternalCommand::Terminate);
+                    .tx_signal_handler_to_heating
+                    .send(InternalCommand::Terminate);
                 let _ = channels
                     .signal_handler
-                    .send_to_refill(InternalCommand::Terminate);
+                    .tx_signal_handler_to_refill
+                    .send(InternalCommand::Terminate);
                 let _ = tx_test_environment_to_tcp_for_test_case_finish.send(InternalCommand::Quit);
                 let _ = channels
                     .signal_handler
-                    .send_to_tank_level_switch(InternalCommand::Terminate);
+                    .tx_signal_handler_to_tank_level_switch
+                    .send(InternalCommand::Terminate);
             })
             .unwrap();
 

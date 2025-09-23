@@ -22,10 +22,6 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 //! - **`I2cInterfaceChannels` Struct**: A simple container struct that explicitly
 //!   declares the full set of communication dependencies for the `I2cInterface` thread.
 //!
-//! - **Helper Methods**: Provides convenient wrapper methods, such as
-//!   `send_to_atlas_scientific()` and `receive_from_atlas_scientific()`, to offer a
-//!   clean, consistent API for channel operations on supported platforms.
-//!
 //! ## Design and Architecture
 //!
 //! The `I2cInterfaceChannels` struct is a key part of the application's inter-thread
@@ -47,9 +43,6 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 //!   unit testing, allowing for isolated testing of the `I2cInterface` thread's
 //!   logic without needing to run the entire application.
 
-#[cfg(any(test, all(target_os = "linux", feature = "target_hw")))]
-use crate::launch::channels::AquaChannelError;
-
 use crate::launch::channels::{AquaReceiver, AquaSender};
 use crate::sensors::i2c_interface::{I2cRequest, I2cResult};
 use crate::utilities::channel_content::InternalCommand;
@@ -65,20 +58,6 @@ pub struct I2cInterfaceChannels {
 
     #[allow(unused)] // used in conditionally compiled code
     pub rx_i2c_interface_from_signal_handler: AquaReceiver<InternalCommand>,
-}
-
-impl I2cInterfaceChannels {
-    #[cfg(any(test, all(target_os = "linux", feature = "target_hw")))]
-    /// Sends a result to the Atlas Scientific module.
-    pub fn send_to_atlas_scientific(&mut self, result: I2cResult) -> Result<(), AquaChannelError> {
-        self.tx_i2c_interface_to_atlas_scientific.send(result)
-    }
-
-    #[cfg(all(target_os = "linux", feature = "target_hw"))]
-    /// Receives a request from the Atlas Scientific module.
-    pub fn receive_from_atlas_scientific(&mut self) -> Result<I2cRequest, AquaChannelError> {
-        self.rx_i2c_interface_from_atlas_scientific.try_recv()
-    }
 }
 
 #[cfg(feature = "debug_channels")]

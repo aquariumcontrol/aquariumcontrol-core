@@ -694,4 +694,8 @@ pub enum SqlInterfaceError {
     #[cfg(test)]
     #[error("[{0}] Database responded with multiple responses to queries: {1} {2}")]
     SingleDataFrameRequestNoSingleResponse(String, String, String),
+
+    #[cfg(test)]
+    #[error("Mock error for testing read_refill_stats")]
+    ReadRefillStatsError,
 }

@@ -6,6 +6,59 @@ The above copyright notice and this permission notice shall be included in all c
 
 THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
+
+//! Manages the system's hardware or software watchdog timer.
+//!
+//! This module provides the `Watchdog` struct, which runs as a dedicated thread
+//! responsible for periodically "petting" a system watchdog (e.g., `/dev/watchdog`).
+//! Its primary purpose is to ensure the application's liveness. If this
+//! thread fails to send its regular heartbeat, the watchdog will trigger a system
+//! reset, preventing the application from freezing indefinitely.
+//!
+//! ## Core Functionality
+//!
+//! - **Periodic Heartbeats**: The thread runs in a loop, sending a configured
+//!   heartbeat message to the watchdog file at a regular interval. This action is
+//!   often called "petting the dog."
+//!
+//! - **Graceful Deactivation**: During a controlled shutdown (initiated by the
+//!   `signal_handler`), the thread sends a final deactivation message to the
+//!   watchdog. This informs the system that the application is shutting down
+//!   intentionally and prevents an unintended reset.
+//!
+//! - **Runtime Control**: The watchdog's petting can be temporarily inhibited at
+//!   runtime by sending `Stop` and `Start` commands via the `Messaging` system.
+//!   This is useful for debugging or testing scenarios where a system reset is
+//!   desired.
+//!
+//! - **Robust Validation**: Before starting, the `Watchdog::new()` constructor
+//!   performs several critical validation checks on the configuration to prevent
+//!   common errors, such as empty messages or a zero-duration heartbeat.
+//!
+//! ## Platform-Specific Behavior
+//!
+//! While the code is written to be platform-agnostic and will compile on any
+//! target, the actual watchdog functionality is only effective on systems that
+//! provide a watchdog interface, such as Linux via `/dev/watchdog`.
+//!
+//! ## Key Components
+//!
+//! - **`WatchdogError`**: A `thiserror`-based enum defining all possible
+//!   configuration validation failures.
+//!
+//! - **`Watchdog`**: The main struct that holds the configuration and runs the
+//!   main execution loop.
+//!
+//! - **`new()`**: The constructor that validates the `WatchdogConfig` and returns
+//!   a `Result<Watchdog, WatchdogError>`.
+//!
+//! - **`execute()`**: The entry point and main loop for the thread. It orchestrates
+//!   the periodic petting, command processing, and graceful shutdown.
+//!
+//! - **`PettingTrait`**: An abstraction for the I/O operation of writing to the
+//!   watchdog file. This allows for easy mocking and testing of the core logic
+//!   without actual filesystem interaction.
+
 use crate::utilities::proc_ext_req::ProcessExternalRequestTrait;
 use crate::watchmen::petting::PettingTrait;
 use crate::watchmen::watchdog_channels::WatchDogChannels;
@@ -333,9 +386,14 @@ pub mod tests {
                 spin_sleeper_test_environment.sleep(sleep_duration_test_environment);
                 channels
                     .signal_handler
-                    .send_to_watchdog(InternalCommand::Terminate)
+                    .tx_signal_handler_to_watchdog
+                    .send(InternalCommand::Terminate)
                     .unwrap();
-                channels.signal_handler.receive_from_watchdog().unwrap();
+                channels
+                    .signal_handler
+                    .rx_signal_handler_from_watchdog
+                    .recv()
+                    .unwrap();
             });
 
             // thread for the test object
@@ -421,9 +479,14 @@ pub mod tests {
                 spin_sleeper_test_environment.sleep(sleep_duration_test_environment);
                 channels
                     .signal_handler
-                    .send_to_watchdog(InternalCommand::Terminate)
+                    .tx_signal_handler_to_watchdog
+                    .send(InternalCommand::Terminate)
                     .unwrap();
-                channels.signal_handler.receive_from_watchdog().unwrap();
+                channels
+                    .signal_handler
+                    .rx_signal_handler_from_watchdog
+                    .recv()
+                    .unwrap();
             });
 
             // thread for the assertions

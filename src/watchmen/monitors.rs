@@ -7,6 +7,52 @@ The above copyright notice and this permission notice shall be included in all c
 THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
+//! Manages the central monitoring thread for aggregating and storing system state.
+//!
+//! This module provides the `Monitors` struct, which runs as a dedicated thread
+//! responsible for collecting real-time data from other application modules. Its
+//! primary function is to maintain a historical record of specific system states,
+//! such as the data provided by the `Refill` module.
+//!
+//! ## Core Functionality
+//!
+//! The `Monitors` thread operates in a continuous loop, performing the following tasks:
+//!
+//! 1.  **Data Aggregation**: It listens for `RefillMonitorView` updates sent from the
+//!     `Refill` thread. To conserve memory and reduce redundant data, it only stores
+//!     a new view if its content has changed from the previously received one.
+//!
+//! 2.  **Historical Window**: It maintains a rolling window of the most recent
+//!     `RefillMonitorView` structs. The maximum size of this history is configurable,
+//!     preventing unbounded memory growth. When the limit is reached, the oldest
+//!     entry is discarded to make room for the new one.
+//!
+//! 3.  **Runtime Control**: The monitoring activity can be dynamically enabled or
+//!     disabled at runtime via `Start` and `Stop` commands received from the
+//!     `Messaging` system. This allows for flexible control without restarting the
+//!     application.
+//!
+//! 4.  **Graceful Shutdown**: The thread continuously listens for a `Quit` command
+//!     from the `signal_handler`. Upon receipt, it breaks its main loop and sends
+//!     an acknowledgment, ensuring it participates correctly in the application's
+//!     phased shutdown sequence.
+//!
+//! ## Key Components
+//!
+//! - **`Monitors`**: The main struct that holds the configuration, state (like the
+//!   vector of views), and log-suppression flags. It uses the default implementation
+//!   of the `ProcessExternalRequestTrait` to handle `Start`, `Stop`, and `Quit` commands.
+//!
+//! - **`execute()`**: The entry point and main loop for the thread. It orchestrates
+//!   data reception, state management, and command processing.
+//!
+//! - **`append_refill_monitor_view()`**: A helper method that manages the `Vec<RefillMonitorView>`,
+//!   enforcing the configured size limit.
+//!
+//! - **`MonitorsChannels`**: (Defined in `monitors_channels.rs`) A struct that
+//!   encapsulates all the `mpsc` channels required for the `Monitors` thread to
+//!   communicate with other parts of the application.
+
 use log::{error, info};
 
 #[cfg(any(feature = "debug_channels", test))]
@@ -143,7 +189,7 @@ impl Monitors {
                     );
                 }
 
-                match monitors_channels.receive_from_refill() {
+                match monitors_channels.rx_monitors_from_refill.try_recv() {
                     Ok(new_refill_view) => match old_refill_view_opt {
                         Some(ref old_refill_view) => {
                             if &new_refill_view != old_refill_view {

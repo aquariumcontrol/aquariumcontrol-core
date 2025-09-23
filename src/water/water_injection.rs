@@ -423,12 +423,14 @@ pub mod tests {
                 spin_sleeper.sleep(sleep_duration_six_seconds);
                 let _ = channels
                     .signal_handler
-                    .send_to_refill(InternalCommand::Quit);
+                    .tx_signal_handler_to_refill
+                    .send(InternalCommand::Quit);
                 spin_sleeper.sleep(sleep_duration_two_seconds);
                 let _ = tx_signal_handler_to_relay_manager.send(InternalCommand::Quit);
                 let _ = channels
                     .signal_handler
-                    .send_to_refill(InternalCommand::Quit);
+                    .tx_signal_handler_to_refill
+                    .send(InternalCommand::Quit);
             })
             .unwrap();
 
@@ -526,7 +528,8 @@ pub mod tests {
                 let spin_sleeper = SpinSleeper::default();
                 let _ = channels
                     .signal_handler
-                    .send_to_refill(InternalCommand::Quit);
+                    .tx_signal_handler_to_refill
+                    .send(InternalCommand::Quit);
                 println!("Sent quit signal for refill.");
                 spin_sleeper.sleep(sleep_duration_two_seconds);
                 let _ = tx_text_environment_to_relay_manager.send(InternalCommand::Quit);
@@ -737,7 +740,8 @@ pub mod tests {
                 spin_sleeper.sleep(sleep_duration_ten_seconds);
                 let _ = channels
                     .signal_handler
-                    .send_to_refill(InternalCommand::Quit);
+                    .tx_signal_handler_to_refill
+                    .send(InternalCommand::Quit);
 
                 // wait for inject_water to terminate
                 spin_sleeper.sleep(sleep_duration_two_seconds);

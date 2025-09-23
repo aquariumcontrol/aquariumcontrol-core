@@ -32,7 +32,7 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 //!   unit testing, allowing for isolated testing of the `ScheduleCheck` thread's logic without
 //!   needing to run the entire application.
 
-use crate::launch::channels::{AquaChannelError, AquaReceiver, AquaSender};
+use crate::launch::channels::{AquaReceiver, AquaSender};
 use crate::utilities::channel_content::InternalCommand;
 use std::fmt;
 
@@ -67,13 +67,6 @@ pub struct ScheduleCheckChannels {
 
     /// Receiver part of the channel for communication from the signal handler
     pub rx_schedule_check_from_signal_handler: AquaReceiver<InternalCommand>,
-}
-
-impl ScheduleCheckChannels {
-    /// Sends an acknowledgment to the signal handler.
-    pub fn send_to_signal_handler(&mut self, ack: bool) -> Result<(), AquaChannelError> {
-        self.tx_schedule_check_to_signal_handler.send(ack)
-    }
 }
 
 #[cfg(feature = "debug_channels")]

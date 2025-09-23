@@ -949,7 +949,10 @@ pub mod tests {
                     );
                 }
                 println!("test_food_injection_interrupted: sending Quit signal");
-                _ = channels.signal_handler.send_to_feed(InternalCommand::Quit);
+                _ = channels
+                    .signal_handler
+                    .tx_signal_handler_to_feed
+                    .send(InternalCommand::Quit);
                 for i in 0..1 {
                     println!("test_food_injection: loop #{}", i);
                     let command = test_food_injection_receive_actuation_command_send_confirmation(

@@ -97,11 +97,11 @@ pub trait AcknowledgeSignalHandlerTrait {
 
 /// A macro to generate the `AcknowledgeSignalHandlerTrait` implementation for a given struct.
 macro_rules! impl_acknowledge_signal_handler {
-    // The macro takes the struct type and the location string as arguments.
-    ($struct_name:ty, $location_str:expr) => {
+    // The macro takes the struct type, the location string and the channel as arguments.
+    ($struct_name:ty, $location_str:expr, $channel:ident) => {
         impl AcknowledgeSignalHandlerTrait for $struct_name {
             fn send_true_to_signal_handler(&mut self) -> Result<(), AquaChannelError> {
-                self.send_to_signal_handler(true)
+                self.$channel.send(true)
             }
 
             fn location(&self) -> String {
@@ -112,20 +112,56 @@ macro_rules! impl_acknowledge_signal_handler {
 }
 
 // Generate the implementations using the macro
-impl_acknowledge_signal_handler!(AtlasScientificChannels, "atlas scientific");
-impl_acknowledge_signal_handler!(FeedChannels, "feed");
-impl_acknowledge_signal_handler!(BallingChannels, "balling");
-impl_acknowledge_signal_handler!(ScheduleCheckChannels, "schedule_check");
-impl_acknowledge_signal_handler!(DataLoggerChannels, "data_logger");
-impl_acknowledge_signal_handler!(RelayManagerChannels, "relay_manager");
-impl_acknowledge_signal_handler!(SensorManagerChannels, "sensor_manager");
-impl_acknowledge_signal_handler!(TankLevelSwitchChannels, "tank_level_switch");
-impl_acknowledge_signal_handler!(TcpCommunicationChannels, "tcp_communication");
-impl_acknowledge_signal_handler!(HeatingChannels, "heating");
-impl_acknowledge_signal_handler!(VentilationChannels, "ventilation");
-impl_acknowledge_signal_handler!(MonitorsChannels, "monitors");
-impl_acknowledge_signal_handler!(WatchDogChannels, "watchdog");
-impl_acknowledge_signal_handler!(RefillChannels, "refill");
+impl_acknowledge_signal_handler!(
+    AtlasScientificChannels,
+    "atlas scientific",
+    tx_atlas_scientific_to_signal_handler
+);
+impl_acknowledge_signal_handler!(FeedChannels, "feed", tx_feed_to_signal_handler);
+impl_acknowledge_signal_handler!(BallingChannels, "balling", tx_balling_to_signal_handler);
+impl_acknowledge_signal_handler!(
+    ScheduleCheckChannels,
+    "schedule_check",
+    tx_schedule_check_to_signal_handler
+);
+impl_acknowledge_signal_handler!(
+    DataLoggerChannels,
+    "data_logger",
+    tx_data_logger_to_signal_handler
+);
+impl_acknowledge_signal_handler!(
+    RelayManagerChannels,
+    "relay_manager",
+    tx_relay_manager_to_signal_handler
+);
+impl_acknowledge_signal_handler!(
+    SensorManagerChannels,
+    "sensor_manager",
+    tx_sensor_manager_to_signal_handler
+);
+impl_acknowledge_signal_handler!(
+    TankLevelSwitchChannels,
+    "tank_level_switch",
+    tx_tank_level_switch_to_signal_handler
+);
+impl_acknowledge_signal_handler!(
+    TcpCommunicationChannels,
+    "tcp_communication",
+    tx_tcp_communication_to_signal_handler
+);
+impl_acknowledge_signal_handler!(HeatingChannels, "heating", tx_heating_to_signal_handler);
+impl_acknowledge_signal_handler!(
+    VentilationChannels,
+    "ventilation",
+    tx_ventilation_to_signal_handler
+);
+impl_acknowledge_signal_handler!(MonitorsChannels, "monitors", tx_monitors_to_signal_handler);
+impl_acknowledge_signal_handler!(WatchDogChannels, "watchdog", tx_watchdog_to_signal_handler);
+impl_acknowledge_signal_handler!(RefillChannels, "refill", tx_refill_to_signal_handler);
 
 #[cfg(target_os = "linux")]
-impl_acknowledge_signal_handler!(MessagingChannels, "messaging");
+impl_acknowledge_signal_handler!(
+    MessagingChannels,
+    "messaging",
+    tx_messaging_to_signal_handler
+);

@@ -403,7 +403,8 @@ pub mod tests {
                 spin_sleeper.sleep(sleep_duration);
                 let _ = channels
                     .signal_handler
-                    .send_to_balling(InternalCommand::Quit);
+                    .tx_signal_handler_to_balling
+                    .send(InternalCommand::Quit);
             });
 
             // thread for the rest of test environment

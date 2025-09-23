@@ -118,7 +118,7 @@ impl fmt::Display for TankLevelSwitchChannels {
             writeln!(
                 f,
                 "tx_tank_level_switch_to_tcp_opt: {}",
-                self.tx_tank_level_switch_to_tcp.count
+                tx_tank_level_switch_to_tcp.count
             )?;
         }
         writeln!(

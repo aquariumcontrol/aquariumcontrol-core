@@ -979,11 +979,19 @@ pub mod tests {
                 assert_eq!(actuation_count_3, 2);
 
                 // requesting feed control to quit
-                let _ = channels.signal_handler.send_to_feed(InternalCommand::Quit);
-                channels.signal_handler.receive_from_feed().unwrap();
                 let _ = channels
                     .signal_handler
-                    .send_to_feed(InternalCommand::Terminate);
+                    .tx_signal_handler_to_feed
+                    .send(InternalCommand::Quit);
+                channels
+                    .signal_handler
+                    .rx_signal_handler_from_feed
+                    .recv()
+                    .unwrap();
+                let _ = channels
+                    .signal_handler
+                    .tx_signal_handler_to_feed
+                    .send(InternalCommand::Terminate);
             })
             .unwrap();
 
@@ -1059,11 +1067,19 @@ pub mod tests {
                 assert_eq!(actuation_count_1, 0);
 
                 // requesting feed control to quit
-                let _ = channels.signal_handler.send_to_feed(InternalCommand::Quit);
-                channels.signal_handler.receive_from_feed().unwrap();
                 let _ = channels
                     .signal_handler
-                    .send_to_feed(InternalCommand::Terminate);
+                    .tx_signal_handler_to_feed
+                    .send(InternalCommand::Quit);
+                channels
+                    .signal_handler
+                    .rx_signal_handler_from_feed
+                    .recv()
+                    .unwrap();
+                let _ = channels
+                    .signal_handler
+                    .tx_signal_handler_to_feed
+                    .send(InternalCommand::Terminate);
             })
             .unwrap();
 

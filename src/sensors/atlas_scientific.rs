@@ -453,7 +453,10 @@ impl AtlasScientific {
             source: e,
         })?;
 
-        match atlas_scientific_channels.send_to_i2c_interface(request) {
+        match atlas_scientific_channels
+            .tx_atlas_scientific_to_i2c_interface
+            .send(request)
+        {
             Ok(()) => {
                 self.lock_error_channel_send_i2c_interface = false;
                 Ok(())
@@ -1136,7 +1139,8 @@ pub mod tests {
         // Sending stimuli for water temperature before triggering try_recv from the test object
         _ = channels
             .i2c_interface
-            .send_to_atlas_scientific(Ok(stimuli_i2c_response_temperature));
+            .tx_i2c_interface_to_atlas_scientific
+            .send(Ok(stimuli_i2c_response_temperature));
 
         _ = atlas_scientific.receive_response_from_i2c_interface(
             &AquariumSignal::WaterTemperature,
@@ -1159,7 +1163,8 @@ pub mod tests {
         // Sending stimuli for pH before triggering try_recv from the test object
         _ = channels
             .i2c_interface
-            .send_to_atlas_scientific(Ok(stimuli_i2c_response_ph));
+            .tx_i2c_interface_to_atlas_scientific
+            .send(Ok(stimuli_i2c_response_ph));
 
         _ = atlas_scientific.receive_response_from_i2c_interface(
             &AquariumSignal::pH,
@@ -1182,7 +1187,8 @@ pub mod tests {
         // Sending stimuli for conductivity before triggering try_recv from the test object
         _ = channels
             .i2c_interface
-            .send_to_atlas_scientific(Ok(stimuli_i2c_response_conductivity));
+            .tx_i2c_interface_to_atlas_scientific
+            .send(Ok(stimuli_i2c_response_conductivity));
 
         _ = atlas_scientific.receive_response_from_i2c_interface(
             &AquariumSignal::Conductivity,
@@ -1307,15 +1313,18 @@ pub mod tests {
                 spin_sleeper.sleep(sleep_time);
                 channels
                     .signal_handler
-                    .send_to_atlas_scientific(InternalCommand::Quit)
+                    .tx_signal_handler_to_atlas_scientific
+                    .send(InternalCommand::Quit)
                     .unwrap();
                 channels
                     .signal_handler
-                    .send_to_i2c_interface(InternalCommand::Quit)
+                    .tx_signal_handler_to_i2c_interface
+                    .send(InternalCommand::Quit)
                     .unwrap();
                 channels
                     .signal_handler
-                    .send_to_atlas_scientific(InternalCommand::Terminate)
+                    .tx_signal_handler_to_atlas_scientific
+                    .send(InternalCommand::Terminate)
                     .unwrap();
             })
             .unwrap();
@@ -1516,15 +1525,18 @@ pub mod tests {
 
                 channels
                     .signal_handler
-                    .send_to_atlas_scientific(InternalCommand::Quit)
+                    .tx_signal_handler_to_atlas_scientific
+                    .send(InternalCommand::Quit)
                     .unwrap();
                 channels
                     .signal_handler
-                    .send_to_i2c_interface(InternalCommand::Quit)
+                    .tx_signal_handler_to_i2c_interface
+                    .send(InternalCommand::Quit)
                     .unwrap();
                 channels
                     .signal_handler
-                    .send_to_atlas_scientific(InternalCommand::Terminate)
+                    .tx_signal_handler_to_atlas_scientific
+                    .send(InternalCommand::Terminate)
                     .unwrap();
             })
             .unwrap();

@@ -12,7 +12,7 @@ use std::fmt;
 /// The information represents no execution error, but critical states of the control object.
 /// In this case, the monitor view informs about excessive triggering of refill operation
 /// which may be caused by a defective sensor or leakage of the main tank.
-#[derive(PartialEq, Debug, Clone)]
+#[derive(PartialEq, Debug, Clone, Default)]
 pub struct RefillMonitorView {
     /// refill volume within the last 24h exceeded the threshold
     pub refill_check_volume_last_24h: bool,
@@ -30,19 +30,23 @@ pub struct RefillMonitorView {
     pub refill_check_interval_last_refill: bool,
 }
 
-#[cfg(test)]
 impl RefillMonitorView {
-    pub(crate) fn default() -> Self {
-        RefillMonitorView {
-            refill_check_volume_last_24h: false,
-            refill_check_count_last_24h: false,
-            refill_check_volume_last_hour: false,
-            refill_check_count_last_hour: false,
-            refill_check_interval_last_refill: false,
-        }
+    /// Checks if any of the monitoring flags are set to true.
+    ///
+    /// This is an efficient way to determine if there is any active refill
+    /// warning without checking each flag individually. It uses short-circuiting,
+    /// so it returns as soon as the first `true` flag is found.
+    ///
+    /// # Returns
+    /// `true` if at least one check flag is true, otherwise `false`.
+    pub fn has_any_issue(&self) -> bool {
+        self.refill_check_volume_last_24h
+            || self.refill_check_count_last_24h
+            || self.refill_check_volume_last_hour
+            || self.refill_check_count_last_hour
+            || self.refill_check_interval_last_refill
     }
 }
-
 #[cfg(test)]
 impl RefillMonitorView {
     // Helper function to assert the state of a RefillMonitorView

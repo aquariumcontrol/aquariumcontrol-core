@@ -6,7 +6,39 @@ The above copyright notice and this permission notice shall be included in all c
 
 THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
-use crate::launch::channels::{AquaChannelError, AquaReceiver, AquaSender};
+
+//! Defines the channel aggregation struct for the `Monitors` thread.
+//!
+//! This module provides the `MonitorsChannels` struct, which acts as a "switchboard"
+//! by consolidating all the `mpsc` channel endpoints that the `Monitors` thread
+//! needs to communicate with other application components.
+//!
+//! ## Purpose and Design
+//!
+//! The primary purpose of this struct is to provide a single, organized container
+//! for the communication infrastructure required by the `Monitors` thread.
+//!
+//! - **Centralization**: By gathering all channel senders (`AquaSender`) and receivers
+//!   (`AquaReceiver`) into one place, it simplifies the process of passing the
+//!   necessary communication lines to the `Monitors` thread at startup.
+//!
+//! - **Data Flow**: It defines the pathways for:
+//!   - Receiving `RefillMonitorView` data from the `Refill` module.
+//!   - Receiving `Start`/`Stop` commands from the `Messaging` module.
+//!   - Receiving `Quit`/`Terminate` commands from the `signal_handler`.
+//!   - Sending shutdown acknowledgements back to the `signal_handler`.
+//!
+//! - **Optionality**: The channel for receiving commands from `Messaging` is wrapped
+//!   in an `Option`, allowing the application to be compiled with or without the
+//!   messaging feature.
+//!
+//! ## Usage
+//!
+//! An instance of `MonitorsChannels` is constructed in the main `launch` module,
+//! where all the channels are created. This single struct is then moved into the
+//! `Monitors` thread, giving it all the handles it needs to operate.
+
+use crate::launch::channels::{AquaReceiver, AquaSender};
 use crate::utilities::channel_content::InternalCommand;
 use crate::water::refill_monitor_view::RefillMonitorView;
 use std::fmt;
@@ -26,42 +58,6 @@ pub struct MonitorsChannels {
     pub rx_monitors_from_messaging_opt: Option<AquaReceiver<InternalCommand>>,
 }
 
-impl MonitorsChannels {
-    /// Receives a monitor view from the refill module.
-    ///
-    /// This wrapper performs a non-blocking receive-operation and increments the debug counter on success.
-    #[allow(unused)]
-    pub fn receive_from_refill(&mut self) -> Result<RefillMonitorView, AquaChannelError> {
-        self.rx_monitors_from_refill.try_recv()
-    }
-
-    /// Sends an acknowledgment to the signal handler.
-    ///
-    /// This wrapper sends a boolean acknowledgment and increments the debug counter.
-    #[allow(unused)]
-    pub fn send_to_signal_handler(&mut self, ack: bool) -> Result<(), AquaChannelError> {
-        self.tx_monitors_to_signal_handler.send(ack)
-    }
-
-    /// Receives a command from the signal handler.
-    ///
-    /// This wrapper performs a non-blocking receive-operation and increments the debug counter on success.
-    #[allow(unused)]
-    pub fn receive_from_signal_handler(&mut self) -> Result<InternalCommand, AquaChannelError> {
-        self.rx_monitors_from_signal_handler.try_recv()
-    }
-
-    /// Receives a command from messaging if the channel exists.
-    ///
-    /// This wrapper performs a non-blocking receive-operation and increments the debug counter on success.
-    #[allow(unused)]
-    pub fn receive_from_messaging(&mut self) -> Option<Result<InternalCommand, AquaChannelError>> {
-        self.rx_monitors_from_messaging_opt
-            .as_mut()
-            .map(|rx| rx.try_recv())
-    }
-}
-
 #[cfg(feature = "debug_channels")]
 impl fmt::Display for MonitorsChannels {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -76,18 +72,19 @@ impl fmt::Display for MonitorsChannels {
             "tx_monitors_to_signal_handler: {}",
             self.tx_monitors_to_signal_handler.count
         )?;
+        if let Some(rx_monitors_from_messaging) = &self.rx_monitors_from_messaging_opt {
+            write!(
+                f,
+                "rx_monitors_from_messaging_opt: {}",
+                rx_monitors_from_messaging.count
+            )?;
+        }
         writeln!(
             f,
             "rx_monitors_from_signal_handler: {}",
             self.rx_monitors_from_signal_handler.count
         )?;
-        if let Some(rx_monitors_from_messaging) = self.rx_monitors_from_messaging_opt.as_ref() {
-            write!(
-                f,
-                "rx_monitors_from_messaging_opt: {}",
-                self.rx_monitors_from_messaging.count
-            )
-        }
+        Ok(())
     }
 }
 

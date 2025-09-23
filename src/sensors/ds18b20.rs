@@ -779,7 +779,8 @@ pub mod tests {
                 spin_sleeper.sleep(sleep_time);
                 channels
                     .signal_handler
-                    .send_to_ds18b20(InternalCommand::Quit)
+                    .tx_signal_handler_to_ds18b20
+                    .send(InternalCommand::Quit)
                     .unwrap();
             })
             .unwrap();

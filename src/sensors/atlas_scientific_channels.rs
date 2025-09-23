@@ -78,11 +78,6 @@ impl AtlasScientificChannels {
     pub fn receive_from_i2c_interface(&mut self) -> Result<I2cResult, AquaChannelError> {
         self.rx_atlas_scientific_from_i2c_interface.try_recv()
     }
-
-    /// Sends a request to the I2C interface.
-    pub fn send_to_signal_handler(&mut self, status: bool) -> Result<(), AquaChannelError> {
-        self.tx_atlas_scientific_to_signal_handler.send(status)
-    }
 }
 
 #[cfg(feature = "debug_channels")]

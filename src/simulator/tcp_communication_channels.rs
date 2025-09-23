@@ -134,11 +134,6 @@ impl TcpCommunicationChannels {
             .map(|tx| tx.send(data))
     }
 
-    /// Sends an acknowledgment to the signal handler.
-    pub fn send_to_signal_handler(&mut self, ack: bool) -> Result<(), AquaChannelError> {
-        self.tx_tcp_communication_to_signal_handler.send(ack)
-    }
-
     /// Receives a command from the signal handler.
     #[allow(unused)]
     pub fn receive_from_signal_handler(&mut self) -> Result<InternalCommand, AquaChannelError> {

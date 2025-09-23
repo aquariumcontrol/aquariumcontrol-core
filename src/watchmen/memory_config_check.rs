@@ -6,6 +6,33 @@ The above copyright notice and this permission notice shall be included in all c
 
 THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
+
+//! Provides a startup validation function for memory-related environment variables.
+//!
+//! This module contains the logic to perform a one-time check at application startup
+//! to ensure that a specific environment variable (e.g., `MALLOC_ARENA_MAX`) is set
+//! and its value falls within a configured range. The primary goal is to prevent the
+//! application from launching in a misconfigured or potentially unstable environment.
+//!
+//! ## Key Components
+//!
+//! - **`memory_config_check()`**: The main function that orchestrates the validation.
+//!   It reads the name of an environment variable and its expected min/max values
+//!   from the `MemoryConfig` struct. It then fetches the variable from the
+//!   environment, parses it as an integer, and verifies it against the configured
+//!   bounds.
+//!
+//! - **`MemoryConfigError`**: A custom, `thiserror`-based error enum that represents
+//!   all possible validation failures. By providing specific error variants (e.g.,
+//!   `EnvVarNotSet`, `EnvVarValueTooLow`), it allows the application to terminate
+//!   on startup with a clear, actionable error message explaining what needs to be
+//!   fixed in the environment or configuration.
+//!
+//! ## Usage
+//!
+//! This function is intended to be called once from the main `launch` module. If the
+//! check is active, and it returns an error, the application will abort startup.
+
 use crate::watchmen::memory_config::MemoryConfig;
 use thiserror::Error;
 

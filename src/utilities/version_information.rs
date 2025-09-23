@@ -7,9 +7,53 @@ The above copyright notice and this permission notice shall be included in all c
 THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
+//! Manages the retrieval, parsing, and storage of the application's version and build information.
+//!
+//! This module provides a robust mechanism to identify the running application instance
+//! by its semantic version (major, minor, build) and a unique cryptographic hash of its
+//! executable binary. This information is vital for debugging, configuration management,
+//! and ensuring that the correct software version is deployed.
+//!
+//! ## Core Functionality
+//!
+//! - **Version Extraction**: Automatically extracts the application's version string
+//!   from `Cargo.toml` at compile time using `env!("CARGO_PKG_VERSION")`.
+//! - **Executable Hashing**: Calculates an SHA-256 hash of the currently running
+//!   executable. This hash serves as a unique fingerprint, allowing for precise
+//!   identification of the exact build, even if the version string is the same.
+//! - **Semantic Version Parsing**: Parses the version string (e.g., "1.2.3" or
+//!   "0.4.5-beta.1") into its constituent major, minor, and build numbers. It
+//!   gracefully handles pre-release tags by extracting only the numeric part of the
+//!   build number.
+//! - **Error Handling**: Provides a detailed custom error type (`VersionInformationError`)
+//!   to clearly indicate specific failures during path retrieval, file reading, or
+//!   version string parsing/conversion.
+//!
+//! ## Key Components
+//!
+//! - **`VersionInformationError`**: A `thiserror`-based enum defining all possible
+//!   errors that can occur when retrieving or parsing version data. This includes
+//!   failures to find the executable, read its contents, or parse the version string
+//!   components.
+//! - **`VersionInformation`**: A struct that holds the parsed major, minor, and build
+//!   numbers, along with the calculated SHA-256 hash of the executable.
+//! - **`VersionInformation::new()`**: The primary constructor for production use. It
+//!   orchestrates the retrieval of the `CARGO_PKG_VERSION`, determines the executable
+//!   path, reads the executable's bytes, calculates the hash, and then delegates to
+//!   `from_string_and_hash` for parsing.
+//! - **`VersionInformation::from_string_and_hash()`**: A testable constructor that
+//!   parses a given version string and accepts a pre-calculated hash. This is useful
+//!   for unit testing the parsing logic without filesystem dependencies.
+//! - **`Display` implementation for `VersionInformation`**: Provides a human-readable,
+//!   multi-line format for printing the version details.
+//!
+//! ## Usage
+//!
+//! An instance of `VersionInformation` is created once at application startup and used for
+//! a preflight compatibility check between the application and the database.
+
 #[cfg(not(test))]
 use log::info;
-
 use std::env;
 use std::fmt::{Display, Formatter};
 use std::num::ParseIntError;
@@ -95,7 +139,7 @@ impl VersionInformation {
     ///     environment variable, which Cargo sets at compile time.
     /// 2.  Determines the full path to the running executable.
     /// 3.  Reads the executable file's binary content.
-    /// 4.  Calculates a SHA-256 hash of the binary content to serve as a unique fingerprint.
+    /// 4.  Calculates the SHA-256 hash of the binary content to serve as a unique fingerprint.
     /// 5.  Parses the version string and combines it with the hash.
     ///
     /// # Returns

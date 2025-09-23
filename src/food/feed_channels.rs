@@ -77,11 +77,6 @@ impl FeedChannels {
     pub fn receive_from_relay_manager(&mut self) -> Result<bool, AquaChannelError> {
         self.rx_feed_from_relay_manager.recv()
     }
-
-    /// Sends an acknowledgment to the signal handler.
-    pub fn send_to_signal_handler(&mut self, ack: bool) -> Result<(), AquaChannelError> {
-        self.tx_feed_to_signal_handler.send(ack)
-    }
 }
 
 #[cfg(feature = "debug_channels")]
@@ -108,11 +103,11 @@ impl fmt::Display for FeedChannels {
             "rx_feed_from_signal_handler: {}",
             self.rx_feed_from_signal_handler.count
         )?;
-        if let Some(rx_feed_from_messaging) = self.rx_feed_from_messaging_opt {
+        if let Some(rx_feed_from_messaging) = &self.rx_feed_from_messaging_opt {
             write!(
                 f,
                 "rx_feed_from_messaging_opt: {}",
-                self.rx_feed_from_messaging.count
+                rx_feed_from_messaging.count
             )?;
         }
         Ok(())

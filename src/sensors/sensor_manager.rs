@@ -796,11 +796,16 @@ pub mod tests {
                 }
             }
         }
-        let _ = signal_handler_channels.send_to_sensor_manager(InternalCommand::Quit);
+        let _ = signal_handler_channels
+            .tx_signal_handler_to_sensor_manager
+            .send(InternalCommand::Quit);
         signal_handler_channels
-            .receive_from_sensor_manager()
+            .rx_signal_handler_from_sensor_manager
+            .recv()
             .unwrap();
-        let _ = signal_handler_channels.send_to_sensor_manager(InternalCommand::Terminate);
+        let _ = signal_handler_channels
+            .tx_signal_handler_to_sensor_manager
+            .send(InternalCommand::Terminate);
     }
 
     fn execute_and_assert_sensor_manager(

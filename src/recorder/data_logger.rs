@@ -1393,8 +1393,9 @@ pub mod tests {
         // 1. Setup
         let global_config =
             read_config_file("/config/aquarium_control_test_generic.toml".to_string()).unwrap();
-        let config = global_config.data_logger;
+        let mut config = global_config.data_logger;
 
+        config.output_file_name_water_temperature += "2";
         let output_file_name_water_temperature = config.output_file_name_water_temperature.clone();
         let output_file_name_heating_is_on = config.output_file_name_heating_is_on.clone();
 
@@ -1447,7 +1448,7 @@ pub mod tests {
         // 3. Assert
         // Check that the files were written with the correct content
         let temp_content = fs::read_to_string(output_file_name_water_temperature).unwrap();
-        assert_eq!(temp_content, "25.5"); // Based on AquariumSignal::output_file_string format
+        assert_eq!(temp_content, "25.5");
 
         let heat_content = fs::read_to_string(output_file_name_heating_is_on).unwrap();
         assert_eq!(heat_content, "ON");

@@ -693,9 +693,16 @@ pub mod tests {
                     let spin_sleeper = SpinSleeper::default();
                     spin_sleeper.sleep(sleep_duration_ten_seconds);
                 }
-                let _ = signal_handler_channels.send_to_ventilation(InternalCommand::Quit);
-                signal_handler_channels.receive_from_ventilation().unwrap();
-                let _ = signal_handler_channels.send_to_ventilation(InternalCommand::Terminate);
+                let _ = signal_handler_channels
+                    .tx_signal_handler_to_ventilation
+                    .send(InternalCommand::Quit);
+                signal_handler_channels
+                    .rx_signal_handler_from_ventilation
+                    .recv()
+                    .unwrap();
+                let _ = signal_handler_channels
+                    .tx_signal_handler_to_ventilation
+                    .send(InternalCommand::Terminate);
             })
             .unwrap()
     }
@@ -1789,14 +1796,20 @@ pub mod tests {
                 // requesting ventilation control to quit
                 let _ = channels
                     .signal_handler
-                    .send_to_ventilation(InternalCommand::Quit);
-                channels.signal_handler.receive_from_ventilation().unwrap();
+                    .tx_signal_handler_to_ventilation
+                    .send(InternalCommand::Quit);
+                channels
+                    .signal_handler
+                    .rx_signal_handler_from_ventilation
+                    .recv()
+                    .unwrap();
 
                 // check if ventilation is actuated
                 assert_eq!(*mutex_device_scheduler_test_environment.lock().unwrap(), 5);
                 let _ = channels
                     .signal_handler
-                    .send_to_ventilation(InternalCommand::Terminate);
+                    .tx_signal_handler_to_ventilation
+                    .send(InternalCommand::Terminate);
             })
             .unwrap();
 

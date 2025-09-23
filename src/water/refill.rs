@@ -6,6 +6,64 @@ The above copyright notice and this permission notice shall be included in all c
 
 THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
+
+//! Manages the automated freshwater refill system for the aquarium.
+//!
+//! This module provides the `Refill` struct, which runs as a dedicated thread to
+//! intelligently control the water refill process. It acts as a central coordinator,
+//! integrating sensor data, historical usage from the database, and external commands
+//! to ensure the aquarium's water level is maintained safely and efficiently.
+//!
+//! ## Core Functionality
+//!
+//! The `Refill` thread operates in a continuous loop, performing a sophisticated
+//! sequence of checks and actions:
+//!
+//! 1.  **Sensor-Driven Activation**: The primary trigger for a refill is the `TankLevelSwitch`
+//!     indicating a low water level.
+//!
+//! 2.  **Historical Data Analysis**: Before every potential refill, it queries the
+//!     database for critical statistics:
+//!     - Time elapsed since the last refill.
+//!     - Total volume and number of refills in the last hour.
+//!     - Total volume and number of refills in the last 24 hours.
+//!
+//! 3.  **Safety Limit Enforcement**: It strictly enforces configured safety limits. A refill
+//!     is **inhibited** if any of the following conditions are met:
+//!     - The maximum refill volume or count per hour/24h has been exceeded.
+//!     - The minimum time interval between refills has not yet passed.
+//!
+//! 4.  **Error Detection & Handling**: It includes logic to detect and react to
+//!     potential hardware or system failures:
+//!     - **Switch Stuck High**: If an unusually long time passes without a refill, it flags a
+//!       `error_switch_stuck_high` condition.
+//!     - **Switch Stuck Low**: The underlying `WaterInjectionTrait` implementation detects if the
+//!       level switch fails to go high during a refill, flagging `error_switch_stuck_low`.
+//!     - **Database Failures**: Errors during database reads or writes will inhibit refills.
+//!     - All errors can be reset via a `ResetAllErrors` command.
+//!
+//! 5.  **Schedule Adherence**: It communicates with the `ScheduleCheck` module to ensure
+//!     refills only occur during permitted time windows.
+//!
+//! 6.  **External Control**: It responds to `Start` and `Stop` commands from the `Messaging`
+//!     system, allowing for dynamic runtime control without restarting the application.
+//!
+//! 7.  **Coordinated Actuation**: It uses a shared `device_scheduler` mutex to acquire an
+//!     exclusive lock before activating the pump, preventing conflicts with other hardware.
+//!
+//! 8.  **Graceful Shutdown**: It handles `Quit` and `Terminate` signals for a clean shutdown,
+//!     acknowledging the signal handler and waiting for final termination.
+//!
+//! ## Key Components
+//!
+//! - **`Refill`**: The main struct holding configuration, state, and many log-suppression flags.
+//! - **`RefillStatus`**: A simple struct shared via a `Mutex` to provide a live status
+//!   (`refill_in_progress_live`) to other modules, such as the `DataLogger`.
+//! - **`execute()`**: The main entry point and control loop for the thread.
+//! - **`WaterInjectionTrait`**: An abstraction for the physical act of adding water. This is
+//!   the component that directly controls the pump relay and monitors the level switch during injection.
+//! - **`DatabaseInterfaceRefillTrait`**: An abstraction for all database interactions.
+
 #[cfg(feature = "debug_refill")]
 use log::debug;
 
@@ -22,6 +80,7 @@ use spin_sleep::SpinSleeper;
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
+use crate::database::sql_interface_error::SqlInterfaceError;
 use crate::database::sql_interface_refill::DatabaseInterfaceRefillTrait;
 use crate::sensors::tank_level_switch::TankLevelSwitchSignals;
 use crate::utilities::acknowledge_signal_handler::AcknowledgeSignalHandlerTrait;
@@ -48,6 +107,21 @@ pub struct RefillStatus {
     /// - It is set with the start when the refill pump is actuated.
     /// - It is unset by the data logger to make sure the data logger has captured the refill.
     pub refill_in_progress_for_database: bool,
+}
+
+#[derive(Default)]
+pub struct RefillLocks {
+    /// inhibition flag to avoid flooding the log file with repeated messages about refill volume of last 24h
+    volume_last_24h: bool,
+
+    /// inhibition flag to avoid flooding the log file with repeated messages about refill count of last 24h
+    count_last_24h: bool,
+
+    /// inhibition flag to avoid flooding the log file with repeated messages about refill volume of last hour
+    volume_last_hour: bool,
+
+    /// inhibition flag to avoid flooding the log file with repeated messages about refill count of last hour
+    count_last_hour: bool,
 }
 
 /// Contains the configuration and the implementation for the refill control.
@@ -100,17 +174,8 @@ pub struct Refill {
     /// inhibition flag to avoid flooding the log file with repeated messages about start command being received
     lock_info_start_command_received: bool,
 
-    /// inhibition flag to avoid flooding the log file with repeated messages about refill volume check of last 24h
-    lock_info_refill_check_volume_last_24h: bool,
-
-    /// inhibition flag to avoid flooding the log file with repeated messages about refill count check of last 24h
-    lock_info_refill_check_count_last_24h: bool,
-
-    /// inhibition flag to avoid flooding the log file with repeated messages about refill volume check of last hour
-    lock_info_refill_check_volume_last_hour: bool,
-
-    /// inhibition flag to avoid flooding the log file with repeated messages about refill count check of last hour
-    lock_info_refill_check_count_last_hour: bool,
+    /// inhibition flags to avoid flooding the log file with repeated messages about refill count or volume
+    locks_info_check: RefillLocks,
 
     /// inhibition flag to avoid flooding the log file with repeated messages about refill interval check
     lock_info_refill_check_interval_last_refill: bool,
@@ -121,17 +186,8 @@ pub struct Refill {
     /// inhibition flag to avoid flooding the log file with repeated messages about failure to check if the refill log table is empty
     lock_error_check_empty: bool,
 
-    /// inhibition flag to avoid flooding the log file with repeated messages about failure to read refill volume of last 24h from SQL database
-    lock_error_read_refill_volume_last_24h: bool,
-
-    /// inhibition flag to avoid flooding the log file with repeated messages about failure to read refill count of last 24h from SQL database
-    lock_error_read_refill_count_last_24h: bool,
-
-    /// inhibition flag to avoid flooding the log file with repeated messages about failure to read refill volume of last hour from SQL database
-    lock_error_read_refill_volume_last_hour: bool,
-
-    /// inhibition flag to avoid flooding the log file with repeated messages about failure to read refill count of last hour from SQL database
-    lock_error_read_refill_count_last_hour: bool,
+    /// inhibition flags to avoid flooding the log file with repeated messages about failure to read refill volume or count
+    locks_error_read: RefillLocks,
 
     /// inhibition flag to avoid flooding the log file with repeated messages about failure to request to schedule check via the channel
     lock_error_channel_send_schedule_check: bool,
@@ -186,17 +242,9 @@ impl Refill {
             },
             lock_info_stop_command_received: false,
             lock_info_start_command_received: false,
-            lock_info_refill_check_volume_last_24h: false,
-            lock_info_refill_check_count_last_24h: false,
-            lock_info_refill_check_volume_last_hour: false,
-            lock_info_refill_check_count_last_hour: false,
             lock_info_refill_check_interval_last_refill: false,
             lock_error_read_duration_since_last_refill: false,
             lock_error_check_empty: false,
-            lock_error_read_refill_volume_last_24h: false,
-            lock_error_read_refill_count_last_24h: false,
-            lock_error_read_refill_volume_last_hour: false,
-            lock_error_read_refill_count_last_hour: false,
             lock_error_channel_send_schedule_check: false,
             lock_error_channel_receive_schedule_check: false,
             lock_error_channel_send_monitors: false,
@@ -205,6 +253,8 @@ impl Refill {
             last_ping_instant: Instant::now(),
             database_ping_interval,
             last_sent_monitor_view: None,
+            locks_info_check: Default::default(),
+            locks_error_read: Default::default(),
         }
     }
 
@@ -230,17 +280,9 @@ impl Refill {
             refill_errors,
             lock_info_stop_command_received: false,
             lock_info_start_command_received: false,
-            lock_info_refill_check_volume_last_24h: false,
-            lock_info_refill_check_count_last_24h: false,
-            lock_info_refill_check_volume_last_hour: false,
-            lock_info_refill_check_count_last_hour: false,
             lock_info_refill_check_interval_last_refill: false,
             lock_error_read_duration_since_last_refill: false,
             lock_error_check_empty: false,
-            lock_error_read_refill_volume_last_24h: false,
-            lock_error_read_refill_count_last_24h: false,
-            lock_error_read_refill_volume_last_hour: false,
-            lock_error_read_refill_count_last_hour: false,
             lock_error_channel_send_schedule_check: false,
             lock_error_channel_receive_schedule_check: false,
             lock_error_channel_send_monitors: false,
@@ -249,6 +291,61 @@ impl Refill {
             last_ping_instant: Instant::now(),
             database_ping_interval: Duration::from_secs(1000),
             last_sent_monitor_view: None,
+            locks_info_check: Default::default(),
+            locks_error_read: Default::default(),
+        }
+    }
+
+    /// Processes the result of a database query for a single refill statistic.
+    ///
+    /// This generic helper function is designed to handle the outcome of a database
+    /// call that fetches a specific piece of historical refill data (e.g., total volume,
+    /// total count). It encapsulates the logic for both success and failure scenarios.
+    ///
+    /// On success (`Ok`), it updates the target `stats_value` with the new data and resets
+    /// the associated `lock_flag`, indicating the operation was successful.
+    ///
+    /// On failure (`Err`), it logs the error using `log_error_chain` and sets the
+    /// `lock_flag` to `true`. This built-in log suppression prevents the log file from
+    /// being flooded with identical error messages on further failed attempts. The
+    /// error is only logged the first time it occurs after a successful read.
+    ///
+    /// # Type Parameters
+    /// * `T`: The type of the statistic being read from the database.
+    ///
+    /// # Arguments
+    /// * `database_result`: The `Result` returned from the database interface method.
+    /// * `stats_value`: A mutable reference to the field where the successful result will be stored.
+    /// * `lock_flag`: A mutable reference to a boolean flag used for log suppression.
+    /// * `check_type`: A string slice describing the type of check (e.g., "volume", "count"), used for logging.
+    /// * `duration`: A string slice describing the time window (e.g., "24h", "hour"), used for logging.
+    ///
+    /// # Returns
+    /// * `false` if the database query was successful.
+    /// * `true` if the database query failed, indicating an error occurred.
+    fn read_refill_stats<T>(
+        database_result: Result<T, SqlInterfaceError>,
+        stats_value: &mut T,
+        lock_flag: &mut bool,
+        #[cfg(not(test))] check_type: &str,
+        #[cfg(not(test))] duration: &str,
+    ) -> bool {
+        match database_result {
+            Ok(value) => {
+                *lock_flag = false;
+                *stats_value = value;
+                false
+            }
+            Err(_e) => {
+                #[cfg(not(test))]
+                if !*lock_flag {
+                    let context =
+                        format!("Could not get refill {} of last {}.", check_type, duration);
+                    log_error_chain(module_path!(), &context, _e);
+                    *lock_flag = true;
+                }
+                true
+            }
         }
     }
 
@@ -313,81 +410,45 @@ impl Refill {
             }
         };
 
-        match sql_interface_refill.get_refill_volume_of_last_24h() {
-            Ok(volume) => {
-                self.lock_error_read_refill_volume_last_24h = false;
-                refill_stats_data.refill_volume_last_24h = volume;
-            }
-            Err(_e) => {
-                self.refill_errors.error_sql_get_historic_data_failed = true;
-                #[cfg(not(test))]
-                if !self.lock_error_read_refill_volume_last_24h {
-                    log_error_chain(
-                        module_path!(),
-                        "could not get refill volume of last 24 hours",
-                        _e,
-                    );
-                    self.lock_error_read_refill_volume_last_24h = true;
-                }
-            }
-        };
+        self.refill_errors.error_sql_get_historic_data_failed |= Self::read_refill_stats(
+            sql_interface_refill.get_refill_volume_of_last_24h(),
+            &mut refill_stats_data.refill_volume_last_24h,
+            &mut self.locks_error_read.volume_last_24h,
+            #[cfg(not(test))]
+            "volume",
+            #[cfg(not(test))]
+            "24h",
+        );
 
-        match sql_interface_refill.get_refill_count_of_last_24h() {
-            Ok(count) => {
-                self.lock_error_read_refill_count_last_24h = false;
-                refill_stats_data.refill_count_last_24h = count;
-            }
-            Err(_e) => {
-                self.refill_errors.error_sql_get_historic_data_failed = true;
-                #[cfg(not(test))]
-                if !self.lock_error_read_refill_count_last_24h {
-                    log_error_chain(
-                        module_path!(),
-                        "could not get refill count of last 24 hours",
-                        _e,
-                    );
-                    self.lock_error_read_refill_count_last_24h = true;
-                }
-            }
-        };
+        self.refill_errors.error_sql_get_historic_data_failed |= Self::read_refill_stats(
+            sql_interface_refill.get_refill_count_of_last_24h(),
+            &mut refill_stats_data.refill_count_last_24h,
+            &mut self.locks_error_read.count_last_24h,
+            #[cfg(not(test))]
+            "count",
+            #[cfg(not(test))]
+            "24h",
+        );
 
-        match sql_interface_refill.get_refill_volume_of_last_hour() {
-            Ok(volume) => {
-                self.lock_error_read_refill_volume_last_hour = false;
-                refill_stats_data.refill_volume_last_hour = volume;
-            }
-            Err(_e) => {
-                self.refill_errors.error_sql_get_historic_data_failed = true;
-                #[cfg(not(test))]
-                if !self.lock_error_read_refill_volume_last_hour {
-                    log_error_chain(
-                        module_path!(),
-                        "Could not get refill volume of last hour",
-                        _e,
-                    );
-                    self.lock_error_read_refill_volume_last_hour = true;
-                }
-            }
-        };
+        self.refill_errors.error_sql_get_historic_data_failed |= Self::read_refill_stats(
+            sql_interface_refill.get_refill_volume_of_last_hour(),
+            &mut refill_stats_data.refill_volume_last_hour,
+            &mut self.locks_error_read.volume_last_hour,
+            #[cfg(not(test))]
+            "volume",
+            #[cfg(not(test))]
+            "hour",
+        );
 
-        match sql_interface_refill.get_refill_count_of_last_hour() {
-            Ok(count) => {
-                self.lock_error_read_refill_count_last_hour = false;
-                refill_stats_data.refill_count_last_hour = count;
-            }
-            Err(_e) => {
-                self.refill_errors.error_sql_get_historic_data_failed = true;
-                #[cfg(not(test))]
-                if !self.lock_error_read_refill_count_last_hour {
-                    log_error_chain(
-                        module_path!(),
-                        "Could not get refill count of last hour",
-                        _e,
-                    );
-                    self.lock_error_read_refill_count_last_hour = true;
-                }
-            }
-        };
+        self.refill_errors.error_sql_get_historic_data_failed |= Self::read_refill_stats(
+            sql_interface_refill.get_refill_count_of_last_hour(),
+            &mut refill_stats_data.refill_count_last_hour,
+            &mut self.locks_error_read.count_last_hour,
+            #[cfg(not(test))]
+            "count",
+            #[cfg(not(test))]
+            "hour",
+        );
     }
 
     /// Checks if the duration since the last refill operation exceeds a configurable safety limit, indicating a potential "switch stuck high" error.
@@ -460,6 +521,57 @@ impl Refill {
         new_state
     }
 
+    /// Checks a given value against a maximum limit and logs a warning if exceeded.
+    ///
+    /// This generic helper function is used to check various refill statistics (like
+    /// volume or count) against their configured maximums. It returns `true` if the
+    /// limit is exceeded, indicating a potential problem.
+    ///
+    /// A key feature is its built-in log suppression. It uses a mutable `lock_flag`
+    /// to ensure that a warning message for a specific transgression is logged only
+    /// once. The lock is automatically reset when the value returns to a normal range,
+    /// allowing future warnings if the limit is exceeded again.
+    ///
+    /// # Type Parameters
+    /// * `T`: A generic type that must support comparison (`PartialOrd`) and display
+    ///   formatting (`Display`). This allows the function to work with both integers
+    ///   (for counts) and floating-point numbers (for volumes).
+    ///
+    /// # Arguments
+    /// * `actual_value`: The current measured value (e.g., `150.0` liters).
+    /// * `max_value`: The configured maximum permissible value (e.g., `100.0` liters).
+    /// * `lock_flag`: A mutable reference to a boolean flag used for log suppression.
+    /// * `check_type`: A string slice describing the type of check (e.g., "volume", "count").
+    /// * `duration`: A string slice describing the time window (e.g., "24h", "hour").
+    ///
+    /// # Returns
+    /// * `true` if `actual_value` is greater than `max_value`.
+    /// * `false` if `actual_value` is within the limit.
+    fn check_volume_count_time_limit<T: std::fmt::Display + PartialOrd>(
+        actual_value: T,
+        max_value: T,
+        lock_flag: &mut bool,
+        #[cfg(not(test))] check_type: &str,
+        #[cfg(not(test))] duration: &str,
+    ) -> bool {
+        if actual_value > max_value {
+            if !*lock_flag {
+                #[cfg(not(test))]
+                info!(
+                    target: module_path!(),
+                    "refill {} of last {} exceeds permissible {} per {} of {} L",
+                    check_type, duration, check_type, duration, max_value
+                );
+
+                *lock_flag = true;
+            }
+            true
+        } else {
+            *lock_flag = false;
+            false
+        }
+    }
+
     /// Checks if historical refill data (volume, count, and time interval) **exceeds configured limitations**.
     ///
     /// This private helper function performs a series of checks against the `RefillConfig`'s
@@ -490,74 +602,46 @@ impl Refill {
             target: module_path!(),
             "check_volume_count_time_limits called.",
         );
-        let refill_check_volume_last_24h =
-            sql_refill_data.refill_volume_last_24h > self.config.max_refill_volume_24h;
 
-        if refill_check_volume_last_24h {
-            if !self.lock_info_refill_check_volume_last_24h {
-                #[cfg(not(test))]
-                info!(
-                    target: module_path!(),
-                    "refill volume of last 24h exceeds permissible refill volume per 24h of {} L",
-                    self.config.max_refill_volume_24h
-                );
+        let check_result_volume_last_24h = Self::check_volume_count_time_limit(
+            sql_refill_data.refill_volume_last_24h,
+            self.config.max_refill_volume_24h,
+            &mut self.locks_info_check.volume_last_24h,
+            #[cfg(not(test))]
+            "volume",
+            #[cfg(not(test))]
+            "24h",
+        );
 
-                self.lock_info_refill_check_volume_last_24h = true;
-            }
-        } else {
-            self.lock_info_refill_check_volume_last_24h = false;
-        }
+        let check_result_count_last_24h = Self::check_volume_count_time_limit(
+            sql_refill_data.refill_count_last_24h,
+            self.config.max_refill_count_24h,
+            &mut self.locks_info_check.count_last_24h,
+            #[cfg(not(test))]
+            "count",
+            #[cfg(not(test))]
+            "24h",
+        );
 
-        let refill_check_count_last_24h =
-            sql_refill_data.refill_count_last_24h > self.config.max_refill_count_24h;
-        if refill_check_count_last_24h {
-            if !self.lock_info_refill_check_count_last_24h {
-                #[cfg(not(test))]
-                info!(
-                    target: module_path!(),
-                    "refill count of last 24h exceeds permissible refill count per 24h of {} L",
-                    self.config.max_refill_count_24h
-                );
+        let check_result_volume_last_hour = Self::check_volume_count_time_limit(
+            sql_refill_data.refill_volume_last_hour,
+            self.config.max_refill_volume_hour,
+            &mut self.locks_info_check.volume_last_hour,
+            #[cfg(not(test))]
+            "volume",
+            #[cfg(not(test))]
+            "hour",
+        );
 
-                self.lock_info_refill_check_count_last_24h = true;
-            }
-        } else {
-            self.lock_info_refill_check_count_last_24h = false;
-        }
-
-        let refill_check_volume_last_hour =
-            sql_refill_data.refill_volume_last_hour > self.config.max_refill_volume_hour;
-        if refill_check_volume_last_hour {
-            if !self.lock_info_refill_check_volume_last_hour {
-                #[cfg(not(test))]
-                info!(
-                    target: module_path!(),
-                    "refill volume of last hour exceeds permissible refill volume per hour of {}",
-                    self.config.max_refill_volume_hour
-                );
-
-                self.lock_info_refill_check_volume_last_hour = true;
-            }
-        } else {
-            self.lock_info_refill_check_volume_last_hour = false;
-        }
-
-        let refill_check_count_last_hour =
-            sql_refill_data.refill_count_last_hour > self.config.max_refill_count_hour;
-        if refill_check_count_last_hour {
-            if !self.lock_info_refill_check_count_last_hour {
-                #[cfg(not(test))]
-                info!(
-                    target: module_path!(),
-                    "refill count of last 24h exceeds permissible refill count per hour of {}",
-                    self.config.max_refill_count_hour
-                );
-
-                self.lock_info_refill_check_count_last_hour = true;
-            }
-        } else {
-            self.lock_info_refill_check_count_last_hour = false;
-        }
+        let check_result_count_last_hour = Self::check_volume_count_time_limit(
+            sql_refill_data.refill_count_last_hour,
+            self.config.max_refill_count_hour,
+            &mut self.locks_info_check.count_last_hour,
+            #[cfg(not(test))]
+            "count",
+            #[cfg(not(test))]
+            "hour",
+        );
 
         let refill_check_interval_last_refill =
             sql_refill_data.duration_since_last_refill < self.config.min_interval_last_refill;
@@ -577,12 +661,14 @@ impl Refill {
         }
 
         let refill_monitor_view = RefillMonitorView {
-            refill_check_volume_last_24h,
-            refill_check_count_last_24h,
-            refill_check_volume_last_hour,
-            refill_check_count_last_hour,
+            refill_check_volume_last_24h: check_result_volume_last_24h,
+            refill_check_count_last_24h: check_result_count_last_24h,
+            refill_check_volume_last_hour: check_result_volume_last_hour,
+            refill_check_count_last_hour: check_result_count_last_hour,
             refill_check_interval_last_refill,
         };
+
+        let has_issue = refill_monitor_view.has_any_issue();
 
         // Only send the view if it's different from the last one we sent.
         let mut monitor_view_is_different = true;
@@ -606,11 +692,7 @@ impl Refill {
             }
         }
 
-        refill_check_volume_last_24h
-            | refill_check_count_last_24h
-            | refill_check_volume_last_hour
-            | refill_check_count_last_hour
-            | refill_check_interval_last_refill
+        has_issue
     }
 
     /// Executes the **main control loop for the refill module**.
@@ -954,6 +1036,7 @@ impl Refill {
 
 #[cfg(test)]
 pub mod tests {
+    use crate::database::sql_interface_error::SqlInterfaceError;
     use crate::database::{sql_interface::SqlInterface, sql_interface_refill::SqlInterfaceRefill};
     use crate::launch::channels::{channel, AquaChannelError, AquaReceiver, AquaSender, Channels};
     use crate::sensors::tank_level_switch::TankLevelSwitchSignals;
@@ -1243,13 +1326,19 @@ pub mod tests {
 
                 let _ = channels
                     .signal_handler
-                    .send_to_refill(InternalCommand::Quit);
-                channels.signal_handler.receive_from_refill().unwrap();
+                    .tx_signal_handler_to_refill
+                    .send(InternalCommand::Quit);
+                channels
+                    .signal_handler
+                    .rx_signal_handler_from_refill
+                    .recv()
+                    .unwrap();
 
                 let _ = tx_test_environment_to_monitors.send(InternalCommand::Quit);
                 let _ = channels
                     .signal_handler
-                    .send_to_refill(InternalCommand::Terminate);
+                    .tx_signal_handler_to_refill
+                    .send(InternalCommand::Terminate);
                 let finish_time = Instant::now();
                 let finalization_duration_millis =
                     finish_time.duration_since(start_time).as_millis();
@@ -1395,13 +1484,19 @@ pub mod tests {
 
                 let _ = channels
                     .signal_handler
-                    .send_to_refill(InternalCommand::Quit);
-                channels.signal_handler.receive_from_refill().unwrap();
+                    .tx_signal_handler_to_refill
+                    .send(InternalCommand::Quit);
+                channels
+                    .signal_handler
+                    .rx_signal_handler_from_refill
+                    .recv()
+                    .unwrap();
                 let _ = tx_test_environment_to_monitors.send(InternalCommand::Quit);
 
                 let _ = channels
                     .signal_handler
-                    .send_to_refill(InternalCommand::Terminate);
+                    .tx_signal_handler_to_refill
+                    .send(InternalCommand::Terminate);
                 let finish_time = Instant::now();
                 let finalization_duration_millis =
                     finish_time.duration_since(start_time).as_millis();
@@ -1550,14 +1645,20 @@ pub mod tests {
                 // now we can send the quit command
                 let _ = channels
                     .signal_handler
-                    .send_to_refill(InternalCommand::Quit);
-                channels.signal_handler.receive_from_refill().unwrap();
+                    .tx_signal_handler_to_refill
+                    .send(InternalCommand::Quit);
+                channels
+                    .signal_handler
+                    .rx_signal_handler_from_refill
+                    .recv()
+                    .unwrap();
                 let _ = tx_test_environment_to_monitors.send(InternalCommand::Quit);
                 let _ = tx_test_environment_to_monitors.send(InternalCommand::Quit);
 
                 let _ = channels
                     .signal_handler
-                    .send_to_refill(InternalCommand::Terminate);
+                    .tx_signal_handler_to_refill
+                    .send(InternalCommand::Terminate);
                 let finish_time = Instant::now();
                 let initial_wait_duration_millis = initial_waiting_time_passed
                     .duration_since(start_time)
@@ -1755,13 +1856,19 @@ pub mod tests {
                 println!("sending quit signal to test object...");
                 let _ = channels
                     .signal_handler
-                    .send_to_refill(InternalCommand::Quit);
-                channels.signal_handler.receive_from_refill().unwrap();
+                    .tx_signal_handler_to_refill
+                    .send(InternalCommand::Quit);
+                channels
+                    .signal_handler
+                    .rx_signal_handler_from_refill
+                    .recv()
+                    .unwrap();
                 let _ = tx_test_environment_to_monitors.send(InternalCommand::Quit);
 
                 let _ = channels
                     .signal_handler
-                    .send_to_refill(InternalCommand::Terminate);
+                    .tx_signal_handler_to_refill
+                    .send(InternalCommand::Terminate);
 
                 // wait for the test object to finish so that mock threads receive
                 // the termination request before the end of this (test environment) thread
@@ -1909,13 +2016,19 @@ pub mod tests {
                 println!("sending quit signal to test object...");
                 let _ = channels
                     .signal_handler
-                    .send_to_refill(InternalCommand::Quit);
-                channels.signal_handler.receive_from_refill().unwrap();
+                    .tx_signal_handler_to_refill
+                    .send(InternalCommand::Quit);
+                channels
+                    .signal_handler
+                    .rx_signal_handler_from_refill
+                    .recv()
+                    .unwrap();
                 let _ = tx_test_environment_to_monitors.send(InternalCommand::Quit);
 
                 let _ = channels
                     .signal_handler
-                    .send_to_refill(InternalCommand::Terminate);
+                    .tx_signal_handler_to_refill
+                    .send(InternalCommand::Terminate);
 
                 // wait for the test object to finish so that mock threads receive
                 // the termination request before the end of this (test environment) thread
@@ -2070,13 +2183,19 @@ pub mod tests {
 
                 let _ = channels
                     .signal_handler
-                    .send_to_refill(InternalCommand::Quit);
-                channels.signal_handler.receive_from_refill().unwrap();
+                    .tx_signal_handler_to_refill
+                    .send(InternalCommand::Quit);
+                channels
+                    .signal_handler
+                    .rx_signal_handler_from_refill
+                    .recv()
+                    .unwrap();
                 let _ = tx_test_environment_to_monitors.send(InternalCommand::Quit);
 
                 let _ = channels
                     .signal_handler
-                    .send_to_refill(InternalCommand::Terminate);
+                    .tx_signal_handler_to_refill
+                    .send(InternalCommand::Terminate);
 
                 // wait for the test object to finish so that mock threads receive
                 // the termination request before the end of this (test environment) thread
@@ -2229,13 +2348,19 @@ pub mod tests {
                 println!("sending quit signal to test object...");
                 let _ = channels
                     .signal_handler
-                    .send_to_refill(InternalCommand::Quit);
-                channels.signal_handler.receive_from_refill().unwrap();
+                    .tx_signal_handler_to_refill
+                    .send(InternalCommand::Quit);
+                channels
+                    .signal_handler
+                    .rx_signal_handler_from_refill
+                    .recv()
+                    .unwrap();
                 let _ = tx_test_environment_to_monitors.send(InternalCommand::Quit);
 
                 let _ = channels
                     .signal_handler
-                    .send_to_refill(InternalCommand::Terminate);
+                    .tx_signal_handler_to_refill
+                    .send(InternalCommand::Terminate);
 
                 // wait for the test object to finish so that mock threads receive
                 // the termination request before the end of this (test environment) thread
@@ -2435,13 +2560,19 @@ pub mod tests {
                 println!("sending quit signal to test object...");
                 let _ = channels
                     .signal_handler
-                    .send_to_refill(InternalCommand::Quit);
-                channels.signal_handler.receive_from_refill().unwrap();
+                    .tx_signal_handler_to_refill
+                    .send(InternalCommand::Quit);
+                channels
+                    .signal_handler
+                    .rx_signal_handler_from_refill
+                    .recv()
+                    .unwrap();
                 let _ = tx_test_environment_to_monitors.send(InternalCommand::Quit);
 
                 let _ = channels
                     .signal_handler
-                    .send_to_refill(InternalCommand::Terminate);
+                    .tx_signal_handler_to_refill
+                    .send(InternalCommand::Terminate);
 
                 // wait for the test object to finish so that mock threads receive
                 // the termination request before the end of this (test environment) thread
@@ -2585,13 +2716,19 @@ pub mod tests {
                 println!("sending quit signal to test object...");
                 let _ = channels
                     .signal_handler
-                    .send_to_refill(InternalCommand::Quit);
-                channels.signal_handler.receive_from_refill().unwrap();
+                    .tx_signal_handler_to_refill
+                    .send(InternalCommand::Quit);
+                channels
+                    .signal_handler
+                    .rx_signal_handler_from_refill
+                    .recv()
+                    .unwrap();
                 let _ = tx_test_environment_to_monitors.send(InternalCommand::Quit);
 
                 let _ = channels
                     .signal_handler
-                    .send_to_refill(InternalCommand::Terminate);
+                    .tx_signal_handler_to_refill
+                    .send(InternalCommand::Terminate);
 
                 // wait for the test object to finish so that mock threads receive
                 // the termination request before the end of this (test environment) thread
@@ -2773,5 +2910,215 @@ pub mod tests {
         join_handle_mock_monitors
             .join()
             .expect("Mock monitor check did not finish.");
+    }
+
+    #[test]
+    // Tests the `read_refill_stats` helper function for both success and failure cases.
+    fn test_read_refill_stats() {
+        // === Test Case 1: Successful read with u64 ===
+        // This tests the happy path where the database returns a valid u64 value.
+        let mut stats_value_u64: u64 = 0;
+        let mut lock_flag_u64 = true; // Start with lock ON to see if it gets turned OFF.
+        let db_result_ok_u64: Result<u64, SqlInterfaceError> = Ok(123);
+
+        let error_occurred_u64 = Refill::read_refill_stats(
+            db_result_ok_u64,
+            &mut stats_value_u64,
+            &mut lock_flag_u64,
+            #[cfg(not(test))]
+            "dummy_value_type_not_used",
+            #[cfg(not(test))]
+            "dummy_duration_not_used",
+        );
+
+        assert!(!error_occurred_u64, "Should return false on success (u64)");
+        assert_eq!(
+            stats_value_u64, 123,
+            "stats_value should be updated on success (u64)"
+        );
+        assert!(
+            !lock_flag_u64,
+            "lock_flag should be reset to false on success (u64)"
+        );
+
+        // === Test Case 2: Successful read with f32 ===
+        // This confirms the function's generic implementation works for f32 as well.
+        let mut stats_value_f32: f32 = 0.0;
+        let mut lock_flag_f32 = true;
+        let db_result_ok_f32: Result<f32, SqlInterfaceError> = Ok(45.6);
+
+        let error_occurred_f32 = Refill::read_refill_stats(
+            db_result_ok_f32,
+            &mut stats_value_f32,
+            &mut lock_flag_f32,
+            #[cfg(not(test))]
+            "dummy_value_type_not_used",
+            #[cfg(not(test))]
+            "dummy_duration_not_used",
+        );
+
+        assert!(!error_occurred_f32, "Should return false on success (f32)");
+        assert_eq!(
+            stats_value_f32, 45.6,
+            "stats_value should be updated on success (f32)"
+        );
+        assert!(
+            !lock_flag_f32,
+            "lock_flag should be reset to false on success (f32)"
+        );
+
+        // === Test Case 3: Failed read ===
+        // This tests the failure path where the database returns an error.
+        let mut stats_value_fail: u64 = 999;
+        let mut lock_flag_fail = false; // Start with lock OFF.
+        let db_result_err: Result<u64, SqlInterfaceError> =
+            Err(SqlInterfaceError::ReadRefillStatsError);
+
+        let error_occurred_fail = Refill::read_refill_stats(
+            db_result_err,
+            &mut stats_value_fail,
+            &mut lock_flag_fail,
+            #[cfg(not(test))]
+            "dummy_value_type_not_used",
+            #[cfg(not(test))]
+            "dummy_duration_not_used",
+        );
+
+        assert!(error_occurred_fail, "Should return true on failure");
+        assert_eq!(
+            stats_value_fail, 999,
+            "stats_value should NOT be changed on failure"
+        );
+        // Because of #[cfg(not(test))], the logging and lock flag modification
+        // are compiled out in test builds. We verify the flag is unchanged.
+        assert!(
+            !lock_flag_fail,
+            "lock_flag should NOT be changed on failure in test builds"
+        );
+    }
+
+    #[test]
+    // Tests the `check_volume_count_time_limit` helper function.
+    fn test_check_volume_count_time_limit() {
+        // === Test Case 1: Value is below the limit (u64) ===
+        // Should return false, indicating no limit was exceeded.
+        // The lock flag should not be changed.
+        let mut lock_flag = false;
+        let result = Refill::check_volume_count_time_limit(
+            50u64,
+            100u64,
+            &mut lock_flag,
+            #[cfg(not(test))]
+            "dummy_value_type_not_used",
+            #[cfg(not(test))]
+            "dummy_duration_not_used",
+        );
+        assert!(!result, "Should return false when value is below limit");
+        assert!(!lock_flag, "Lock flag should remain false");
+
+        // === Test Case 2: Value is equal to the limit (u64) ===
+        // Should return false, as the check is for values *greater than* the max.
+        let mut lock_flag = false;
+        let result = Refill::check_volume_count_time_limit(
+            100u64,
+            100u64,
+            &mut lock_flag,
+            #[cfg(not(test))]
+            "dummy_value_type_not_used",
+            #[cfg(not(test))]
+            "dummy_duration_not_used",
+        );
+        assert!(!result, "Should return false when value is equal to limit");
+        assert!(!lock_flag, "Lock flag should remain false");
+
+        // === Test Case 3: Value exceeds the limit for the first time (u64) ===
+        // Should return true and set the lock flag to prevent log spam.
+        let mut lock_flag = false;
+        let result = Refill::check_volume_count_time_limit(
+            101u64,
+            100u64,
+            &mut lock_flag,
+            #[cfg(not(test))]
+            "dummy_value_type_not_used",
+            #[cfg(not(test))]
+            "dummy_duration_not_used",
+        );
+        assert!(result, "Should return true when value exceeds limit");
+        assert!(
+            lock_flag,
+            "Lock flag should be set to true when limit is exceeded"
+        );
+
+        // === Test Case 4: Value exceeds the limit again (the lock flag is already set) ===
+        // Should still return true. The logging logic (which is compiled out in tests)
+        // would be skipped. The lock flag should remain true.
+        let mut lock_flag = true;
+        let result = Refill::check_volume_count_time_limit(
+            102u64,
+            100u64,
+            &mut lock_flag,
+            #[cfg(not(test))]
+            "dummy_value_type_not_used",
+            #[cfg(not(test))]
+            "dummy_duration_not_used",
+        );
+        assert!(result, "Should return true on subsequent exceedance");
+        assert!(lock_flag, "Lock flag should remain true");
+
+        // === Test Case 5: Value returns to normal after being over the limit ===
+        // Should return false and, importantly, reset the lock flag to false,
+        // allowing future warnings to be logged if the limit is exceeded again.
+        let mut lock_flag = true; // Start with the lock on
+        let result = Refill::check_volume_count_time_limit(
+            99u64,
+            100u64,
+            &mut lock_flag,
+            #[cfg(not(test))]
+            "dummy_value_type_not_used",
+            #[cfg(not(test))]
+            "dummy_duration_not_used",
+        );
+        assert!(!result, "Should return false when value is back to normal");
+        assert!(
+            !lock_flag,
+            "Lock flag should be reset to false when value is back to normal"
+        );
+
+        // === Test Case 6: Test with f32 values to confirm generic implementation ===
+        // Same logic as above, but with floating-point numbers.
+        let mut lock_flag_f32 = false;
+        let result_f32 = Refill::check_volume_count_time_limit(
+            100.1f32,
+            100.0f32,
+            &mut lock_flag_f32,
+            #[cfg(not(test))]
+            "dummy_value_type_not_used",
+            #[cfg(not(test))]
+            "dummy_duration_not_used",
+        );
+        assert!(
+            result_f32,
+            "Should return true for f32 values exceeding limit"
+        );
+        assert!(lock_flag_f32, "Lock flag should be set for f32 values");
+
+        let mut lock_flag_f32_reset = true;
+        let result_f32_reset = Refill::check_volume_count_time_limit(
+            99.9f32,
+            100.0f32,
+            &mut lock_flag_f32_reset,
+            #[cfg(not(test))]
+            "dummy_value_type_not_used",
+            #[cfg(not(test))]
+            "dummy_duration_not_used",
+        );
+        assert!(
+            !result_f32_reset,
+            "Should return false for f32 values below limit"
+        );
+        assert!(
+            !lock_flag_f32_reset,
+            "Lock flag should be reset for f32 values"
+        );
     }
 }

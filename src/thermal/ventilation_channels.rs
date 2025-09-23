@@ -100,11 +100,6 @@ impl VentilationChannels {
     pub fn receive_from_schedule_check(&mut self) -> Result<bool, AquaChannelError> {
         self.rx_ventilation_from_schedule_check.recv()
     }
-
-    /// Sends a command to the schedule checker.
-    pub fn send_to_signal_handler(&mut self, status: bool) -> Result<(), AquaChannelError> {
-        self.tx_ventilation_to_signal_handler.send(status)
-    }
 }
 
 #[cfg(feature = "debug_channels")]
@@ -141,13 +136,15 @@ impl fmt::Display for VentilationChannels {
             "rx_ventilation_from_schedule_check: {}",
             self.rx_ventilation_from_schedule_check.count
         )?;
-        if let Some(rx_ventilation_from_messaging_opt) = self.rx_ventilation_from_messaging {
+        if let Some(rx_ventilation_from_messaging) = &self.rx_ventilation_from_messaging_opt {
             write!(
                 f,
                 "rx_ventilation_from_messaging_opt: {}",
-                self.rx_ventilation_from_messaging.count
-            )
+                rx_ventilation_from_messaging.count
+            )?;
         }
+
+        Ok(())
     }
 }
 

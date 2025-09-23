@@ -67,10 +67,6 @@ impl RefillChannels {
     pub fn send_to_monitor(&mut self, view: RefillMonitorView) -> Result<(), AquaChannelError> {
         self.tx_refill_to_monitors.send(view)
     }
-
-    pub fn send_to_signal_handler(&mut self, status: bool) -> Result<(), AquaChannelError> {
-        self.tx_refill_to_signal_handler.send(status)
-    }
 }
 
 #[cfg(feature = "debug_channels")]
@@ -111,7 +107,7 @@ impl fmt::Display for RefillChannels {
             writeln!(
                 f,
                 "rx_refill_from_messaging_opt: {}",
-                self.rx_refill_from_messaging.count
+                rx_refill_from_messaging.count
             )?;
         }
         write!(

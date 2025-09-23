@@ -6,50 +6,50 @@ The above copyright notice and this permission notice shall be included in all c
 
 THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
-use crate::launch::channels::{AquaChannelError, AquaReceiver, AquaSender};
+
+//! Defines the channel aggregation struct for the `Watchdog` thread.
+//!
+//! This module provides the `WatchDogChannels` struct, which acts as a "switchboard"
+//! by consolidating all the `mpsc` channel endpoints that the `Watchdog` thread
+//! needs to communicate with other application components.
+//!
+//! ## Purpose and Design
+//!
+//! The primary purpose of this struct is to provide a single, organized container
+//! for the communication infrastructure required by the `Watchdog` thread.
+//!
+//! - **Centralization**: By gathering all channel senders (`AquaSender`) and receivers
+//!   (`AquaReceiver`) into one place, it simplifies the process of passing the
+//!   necessary communication lines to the `Watchdog` thread at startup.
+//!
+//! - **Data Flow**: It defines the pathways for:
+//!   - Receiving `Start`/`Stop` commands from the `Messaging` module to inhibit petting.
+//!   - Receiving `Quit`/`Terminate` commands from the `signal_handler` for shutdown.
+//!   - Sending shutdown acknowledgements back to the `signal_handler`.
+//!
+//! - **Optionality**: The channel for receiving commands from `Messaging` is wrapped
+//!   in an `Option`, allowing the application to be compiled with or without the
+//!   messaging feature.
+//!
+//! ## Usage
+//!
+//! An instance of `WatchDogChannels` is constructed in the main `launch` module,
+//! where all the channels are created. This single struct is then moved into the
+//! `Watchdog` thread, giving it all the handles it needs to operate.
+
+use crate::launch::channels::{AquaReceiver, AquaSender};
 use crate::utilities::channel_content::InternalCommand;
 use std::fmt;
 
 pub struct WatchDogChannels {
+    /// Sender part of channel to signal handler
     pub tx_watchdog_to_signal_handler: AquaSender<bool>,
 
+    /// Receiver part of channel from signal handler
     pub rx_watchdog_from_signal_handler: AquaReceiver<InternalCommand>,
 
+    /// Receiver part of channel from messaging
     pub rx_watchdog_from_messaging_opt: Option<AquaReceiver<InternalCommand>>,
-}
-
-impl WatchDogChannels {
-    /// Sends an acknowledgment to the signal handler.
-    ///
-    /// This wrapper function sends a boolean acknowledgment and increments the
-    /// associated debug counter if the `debug_channels` feature is enabled and
-    /// the send operation is successful.
-    #[allow(unused)]
-    pub fn send_to_signal_handler(&mut self, ack: bool) -> Result<(), AquaChannelError> {
-        self.tx_watchdog_to_signal_handler.send(ack)
-    }
-
-    /// Receives a command from the signal handler (non-blocking).
-    ///
-    /// This wrapper function performs a non-blocking receive-operation for a command and increments
-    /// the associated debug counter if the `debug_channels` feature is enabled and a
-    /// message is successfully received.
-    #[allow(unused)]
-    pub fn receive_from_signal_handler(&mut self) -> Result<InternalCommand, AquaChannelError> {
-        self.rx_watchdog_from_signal_handler.try_recv()
-    }
-
-    /// Receives a command from the messaging module, if the channel exists (non-blocking).
-    ///
-    /// This wrapper function performs a non-blocking receive-operation and increments the
-    /// associated debug counter if the `debug_channels` feature is enabled and a
-    /// message is successfully received.
-    #[allow(unused)]
-    pub fn receive_from_messaging(&mut self) -> Option<Result<InternalCommand, AquaChannelError>> {
-        self.rx_watchdog_from_messaging_opt
-            .as_mut()
-            .map(|mut rx| rx.try_recv())
-    }
 }
 
 #[cfg(feature = "debug_channels")]
@@ -70,7 +70,7 @@ impl fmt::Display for WatchDogChannels {
             write!(
                 f,
                 "rx_watchdog_from_messaging_opt: {}",
-                self.rx_watchdog_from_messaging.count
+                rx_watchdog_from_messaging.count
             )?;
         }
         Ok(())

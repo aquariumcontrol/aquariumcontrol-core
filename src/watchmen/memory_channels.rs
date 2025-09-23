@@ -6,7 +6,29 @@ The above copyright notice and this permission notice shall be included in all c
 
 THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
-use crate::launch::channels::{AquaChannelError, AquaReceiver};
+
+//! Defines the channel structure for the `Memory` monitoring thread.
+//!
+//! This module provides the `MemoryChannels` struct, which encapsulates the communication
+//! channel required by the `Memory` monitor. The `Memory` monitor is a simple,
+//! one-way thread that periodically reports memory usage and only needs to listen
+//! for a shutdown command.
+//!
+//! ## Key Components
+//!
+//! - **`MemoryChannels`**: The primary struct that holds the receiving end of a channel.
+//!   - **`rx_memory_from_signal_handler`**: The `mpsc` receiver that listens for an
+//!     `InternalCommand::Quit` message from the central `signal_handler`. This
+//!     ensures the thread can be terminated gracefully during an application-wide
+//!     shutdown.
+//!
+//! ## Usage
+//!
+//! An instance of `MemoryChannels` is created in the main `launch` module and moved
+//! into the `Memory` thread upon its creation. The thread's main loop uses the
+//! receiver to perform a non-blocking check for the quit signal on each iteration.
+
+use crate::launch::channels::AquaReceiver;
 use crate::utilities::channel_content::InternalCommand;
 use std::fmt;
 
@@ -14,14 +36,6 @@ use std::fmt;
 pub struct MemoryChannels {
     /// Receiver part of the channel for communication from the signal handler
     pub rx_memory_from_signal_handler: AquaReceiver<InternalCommand>,
-}
-
-impl MemoryChannels {
-    /// Receives a command from the signal handler.
-    #[allow(unused)]
-    pub fn receive_from_signal_handler(&mut self) -> Result<InternalCommand, AquaChannelError> {
-        self.rx_memory_from_signal_handler.try_recv()
-    }
 }
 
 #[cfg(feature = "debug_channels")]

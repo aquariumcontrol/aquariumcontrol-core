@@ -55,7 +55,7 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 //!   unit testing, allowing for isolated testing of the `SensorManager` thread's
 //!   logic without needing to run the entire application.
 
-use crate::launch::channels::{AquaChannelError, AquaReceiver, AquaSender};
+use crate::launch::channels::{AquaReceiver, AquaSender};
 use crate::simulator::tcp_communication::TcpCommunicationError;
 use crate::utilities::channel_content::InternalCommand;
 use std::fmt;
@@ -75,13 +75,6 @@ pub struct SensorManagerChannels {
     pub rx_sensor_manager_from_signal_handler: AquaReceiver<InternalCommand>,
 }
 
-impl SensorManagerChannels {
-    /// Sends an acknowledgment to the signal handler.
-    pub fn send_to_signal_handler(&mut self, ack: bool) -> Result<(), AquaChannelError> {
-        self.tx_sensor_manager_to_signal_handler.send(ack)
-    }
-}
-
 #[cfg(feature = "debug_channels")]
 impl fmt::Display for SensorManagerChannels {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -90,14 +83,14 @@ impl fmt::Display for SensorManagerChannels {
             writeln!(
                 f,
                 "tx_sensor_manager_to_tcp_opt: {}",
-                self.tx_sensor_manager_to_tcp.count
+                tx_sensor_manager_to_tcp.count
             )?;
         }
         if let Some(rx_sensor_manager_from_tcp) = self.rx_sensor_manager_from_tcp_opt.as_ref() {
             writeln!(
                 f,
                 "rx_sensor_manager_from_tcp_opt: {}",
-                self.rx_sensor_manager_from_tcp.count
+                rx_sensor_manager_from_tcp.count
             )?;
         }
         writeln!(

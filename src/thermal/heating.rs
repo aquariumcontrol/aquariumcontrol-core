@@ -1078,11 +1078,17 @@ pub mod tests {
                 spin_sleeper.sleep(sleep_duration_ten_seconds);
                 let _ = channels
                     .signal_handler
-                    .send_to_heating(InternalCommand::Quit);
-                channels.signal_handler.receive_from_heating().unwrap();
+                    .tx_signal_handler_to_heating
+                    .send(InternalCommand::Quit);
+                channels
+                    .signal_handler
+                    .rx_signal_handler_from_heating
+                    .recv()
+                    .unwrap();
                 let _ = channels
                     .signal_handler
-                    .send_to_heating(InternalCommand::Terminate);
+                    .tx_signal_handler_to_heating
+                    .send(InternalCommand::Terminate);
             })
             .unwrap();
 
@@ -1214,11 +1220,17 @@ pub mod tests {
                 spin_sleeper.sleep(sleep_duration_ten_seconds);
                 let _ = channels
                     .signal_handler
-                    .send_to_heating(InternalCommand::Quit);
-                channels.signal_handler.receive_from_heating().unwrap();
+                    .tx_signal_handler_to_heating
+                    .send(InternalCommand::Quit);
+                channels
+                    .signal_handler
+                    .rx_signal_handler_from_heating
+                    .recv()
+                    .unwrap();
                 let _ = channels
                     .signal_handler
-                    .send_to_heating(InternalCommand::Terminate);
+                    .tx_signal_handler_to_heating
+                    .send(InternalCommand::Terminate);
             })
             .unwrap();
 
@@ -1442,11 +1454,17 @@ pub mod tests {
                 spin_sleeper.sleep(sleep_duration);
                 let _ = channels
                     .signal_handler
-                    .send_to_heating(InternalCommand::Quit);
-                channels.signal_handler.receive_from_heating().unwrap();
+                    .tx_signal_handler_to_heating
+                    .send(InternalCommand::Quit);
+                channels
+                    .signal_handler
+                    .rx_signal_handler_from_heating
+                    .recv()
+                    .unwrap();
                 let _ = channels
                     .signal_handler
-                    .send_to_heating(InternalCommand::Terminate);
+                    .tx_signal_handler_to_heating
+                    .send(InternalCommand::Terminate);
             })
             .unwrap();
 
@@ -1510,7 +1528,7 @@ pub mod tests {
     }
 
     #[test]
-    // Check if the heater is switched on for most of the time when measured temperature is low.
+    // Check if the heater is switched on for most of the time when a measured temperature is low.
     // Also, implicitly test if the execute function terminates after receiving Quit and Terminate commands.
     // Test case uses test database #13.
     pub fn test_heating_with_measured_temperature_low_inside_interval() {
@@ -1647,11 +1665,17 @@ pub mod tests {
                 spin_sleeper.sleep(sleep_duration);
                 let _ = channels
                     .signal_handler
-                    .send_to_heating(InternalCommand::Quit);
-                channels.signal_handler.receive_from_heating().unwrap();
+                    .tx_signal_handler_to_heating
+                    .send(InternalCommand::Quit);
+                channels
+                    .signal_handler
+                    .rx_signal_handler_from_heating
+                    .recv()
+                    .unwrap();
                 let _ = channels
                     .signal_handler
-                    .send_to_heating(InternalCommand::Terminate);
+                    .tx_signal_handler_to_heating
+                    .send(InternalCommand::Terminate);
             })
             .unwrap();
 
@@ -1854,11 +1878,17 @@ pub mod tests {
                 spin_sleeper.sleep(sleep_duration);
                 let _ = channels
                     .signal_handler
-                    .send_to_heating(InternalCommand::Quit);
-                channels.signal_handler.receive_from_heating().unwrap();
+                    .tx_signal_handler_to_heating
+                    .send(InternalCommand::Quit);
+                channels
+                    .signal_handler
+                    .rx_signal_handler_from_heating
+                    .recv()
+                    .unwrap();
                 let _ = channels
                     .signal_handler
-                    .send_to_heating(InternalCommand::Terminate);
+                    .tx_signal_handler_to_heating
+                    .send(InternalCommand::Terminate);
             })
             .unwrap();
 
@@ -1987,11 +2017,17 @@ pub mod tests {
             .spawn(move || {
                 let _ = channels
                     .signal_handler
-                    .send_to_heating(InternalCommand::Quit);
-                channels.signal_handler.receive_from_heating().unwrap();
+                    .tx_signal_handler_to_heating
+                    .send(InternalCommand::Quit);
+                channels
+                    .signal_handler
+                    .rx_signal_handler_from_heating
+                    .recv()
+                    .unwrap();
                 let _ = channels
                     .signal_handler
-                    .send_to_heating(InternalCommand::Terminate);
+                    .tx_signal_handler_to_heating
+                    .send(InternalCommand::Terminate);
             })
             .unwrap();
 
@@ -2123,11 +2159,17 @@ pub mod tests {
                 spin_sleeper.sleep(sleep_duration);
                 let _ = channels
                     .signal_handler
-                    .send_to_heating(InternalCommand::Quit);
-                channels.signal_handler.receive_from_heating().unwrap();
+                    .tx_signal_handler_to_heating
+                    .send(InternalCommand::Quit);
+                channels
+                    .signal_handler
+                    .rx_signal_handler_from_heating
+                    .recv()
+                    .unwrap();
                 let _ = channels
                     .signal_handler
-                    .send_to_heating(InternalCommand::Terminate);
+                    .tx_signal_handler_to_heating
+                    .send(InternalCommand::Terminate);
             })
             .unwrap();
 
@@ -2343,11 +2385,17 @@ pub mod tests {
                 spin_sleeper.sleep(sleep_duration);
                 let _ = channels
                     .signal_handler
-                    .send_to_heating(InternalCommand::Quit);
-                channels.signal_handler.receive_from_heating().unwrap();
+                    .tx_signal_handler_to_heating
+                    .send(InternalCommand::Quit);
+                channels
+                    .signal_handler
+                    .rx_signal_handler_from_heating
+                    .recv()
+                    .unwrap();
                 let _ = channels
                     .signal_handler
-                    .send_to_heating(InternalCommand::Terminate);
+                    .tx_signal_handler_to_heating
+                    .send(InternalCommand::Terminate);
             })
             .unwrap();
 
@@ -2551,11 +2599,17 @@ pub mod tests {
                 spin_sleeper.sleep(sleep_duration_ten_seconds);
                 let _ = channels
                     .signal_handler
-                    .send_to_heating(InternalCommand::Quit);
-                channels.signal_handler.receive_from_heating().unwrap();
+                    .tx_signal_handler_to_heating
+                    .send(InternalCommand::Quit);
+                channels
+                    .signal_handler
+                    .rx_signal_handler_from_heating
+                    .recv()
+                    .unwrap();
                 let _ = channels
                     .signal_handler
-                    .send_to_heating(InternalCommand::Terminate);
+                    .tx_signal_handler_to_heating
+                    .send(InternalCommand::Terminate);
             })
             .unwrap();
 
@@ -2683,11 +2737,17 @@ pub mod tests {
                 spin_sleeper.sleep(sleep_duration_ten_seconds);
                 let _ = channels
                     .signal_handler
-                    .send_to_heating(InternalCommand::Quit);
-                channels.signal_handler.receive_from_heating().unwrap();
+                    .tx_signal_handler_to_heating
+                    .send(InternalCommand::Quit);
+                channels
+                    .signal_handler
+                    .rx_signal_handler_from_heating
+                    .recv()
+                    .unwrap();
                 let _ = channels
                     .signal_handler
-                    .send_to_heating(InternalCommand::Terminate);
+                    .tx_signal_handler_to_heating
+                    .send(InternalCommand::Terminate);
             })
             .unwrap();
 
@@ -2906,14 +2966,20 @@ pub mod tests {
                 // requesting heating control to quit
                 let _ = channels
                     .signal_handler
-                    .send_to_heating(InternalCommand::Quit);
-                channels.signal_handler.receive_from_heating().unwrap();
+                    .tx_signal_handler_to_heating
+                    .send(InternalCommand::Quit);
+                channels
+                    .signal_handler
+                    .rx_signal_handler_from_heating
+                    .recv()
+                    .unwrap();
 
                 // check if heating is not actuated
                 assert_eq!(*mutex_device_scheduler_test_environment.lock().unwrap(), 4);
                 let _ = channels
                     .signal_handler
-                    .send_to_heating(InternalCommand::Terminate);
+                    .tx_signal_handler_to_heating
+                    .send(InternalCommand::Terminate);
             })
             .unwrap();
 
@@ -3047,11 +3113,17 @@ pub mod tests {
                 spin_sleeper.sleep(sleep_duration_twelve_seconds);
                 let _ = channels
                     .signal_handler
-                    .send_to_heating(InternalCommand::Quit);
-                channels.signal_handler.receive_from_heating().unwrap();
+                    .tx_signal_handler_to_heating
+                    .send(InternalCommand::Quit);
+                channels
+                    .signal_handler
+                    .rx_signal_handler_from_heating
+                    .recv()
+                    .unwrap();
                 let _ = channels
                     .signal_handler
-                    .send_to_heating(InternalCommand::Terminate);
+                    .tx_signal_handler_to_heating
+                    .send(InternalCommand::Terminate);
             })
             .unwrap();
 
@@ -3208,11 +3280,17 @@ pub mod tests {
                 }
                 let _ = channels
                     .signal_handler
-                    .send_to_heating(InternalCommand::Quit);
-                channels.signal_handler.receive_from_heating().unwrap();
+                    .tx_signal_handler_to_heating
+                    .send(InternalCommand::Quit);
+                channels
+                    .signal_handler
+                    .rx_signal_handler_from_heating
+                    .recv()
+                    .unwrap();
                 let _ = channels
                     .signal_handler
-                    .send_to_heating(InternalCommand::Terminate);
+                    .tx_signal_handler_to_heating
+                    .send(InternalCommand::Terminate);
             })
             .unwrap();
 

@@ -84,11 +84,6 @@ impl BallingChannels {
         self.rx_balling_from_relay_manager.recv()
     }
 
-    /// Sends an acknowledgment to the signal handler.
-    pub fn send_to_signal_handler(&mut self, ack: bool) -> Result<(), AquaChannelError> {
-        self.tx_balling_to_signal_handler.send(ack)
-    }
-
     /// Sends a command to the schedule checker.
     pub fn send_to_schedule_check(
         &mut self,
@@ -137,7 +132,7 @@ impl fmt::Display for BallingChannels {
             "rx_balling_from_schedule_check: {}",
             self.rx_balling_from_schedule_check.count
         )?;
-        if let Some(rx_balling_from_messaging) = self.rx_balling_from_messaging_opt {
+        if let Some(rx_balling_from_messaging) = &self.rx_balling_from_messaging_opt {
             write!(
                 f,
                 "rx_balling_from_messaging_opt: {}",

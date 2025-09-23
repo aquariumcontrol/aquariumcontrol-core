@@ -702,7 +702,9 @@ impl Channels {
             rx_signal_handler_from_schedule_check,
             tx_signal_handler_to_tcp_opt,
             rx_signal_handler_from_tcp_opt,
+            #[cfg(all(target_os = "linux", feature = "target_hw"))]
             tx_signal_handler_to_dht,
+            #[cfg(any(test, all(target_os = "linux", feature = "target_hw")))]
             tx_signal_handler_to_i2c_interface,
             tx_signal_handler_to_watchdog,
             rx_signal_handler_from_watchdog,
