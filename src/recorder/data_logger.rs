@@ -302,29 +302,40 @@ impl DataLogger {
         }
 
         // check the validity of filter coefficients
-        if !(config.filter_coefficient_conductivity.filter_coefficient > 0.0 &&
-            config.filter_coefficient_conductivity.filter_coefficient <= 1.0) {
+        if !(config.filter_coefficient_conductivity.filter_coefficient > 0.0
+            && config.filter_coefficient_conductivity.filter_coefficient <= 1.0)
+        {
             return Err(DataLoggerError::InvalidFilterCoefficient(
                 module_path!().to_string(),
                 "conductivity".to_string(),
                 config.filter_coefficient_conductivity.filter_coefficient,
-            ))
+            ));
         }
-        if !(config.filter_coefficient_water_temperature.filter_coefficient > 0.0 &&
-            config.filter_coefficient_water_temperature.filter_coefficient <= 1.0) {
+        if !(config
+            .filter_coefficient_water_temperature
+            .filter_coefficient
+            > 0.0
+            && config
+                .filter_coefficient_water_temperature
+                .filter_coefficient
+                <= 1.0)
+        {
             return Err(DataLoggerError::InvalidFilterCoefficient(
                 module_path!().to_string(),
                 "water temperature".to_string(),
-                config.filter_coefficient_water_temperature.filter_coefficient,
-            ))
+                config
+                    .filter_coefficient_water_temperature
+                    .filter_coefficient,
+            ));
         }
-        if !(config.filter_coefficient_pH.filter_coefficient > 0.0 &&
-            config.filter_coefficient_pH.filter_coefficient <= 1.0) {
+        if !(config.filter_coefficient_pH.filter_coefficient > 0.0
+            && config.filter_coefficient_pH.filter_coefficient <= 1.0)
+        {
             return Err(DataLoggerError::InvalidFilterCoefficient(
                 module_path!().to_string(),
                 "pH".to_string(),
                 config.filter_coefficient_pH.filter_coefficient,
-            ))
+            ));
         }
 
         Ok(Self {
@@ -967,17 +978,13 @@ impl DataLogger {
         let mut filter_water_temperature = IIRFilter::new(
             &self.config.filter_coefficient_water_temperature,
             water_temperature,
-            "water temperature"
+            "water temperature",
         );
-        let mut filter_pH = IIRFilter::new(
-            &self.config.filter_coefficient_pH,
-            ph,
-            "pH"
-        );
+        let mut filter_pH = IIRFilter::new(&self.config.filter_coefficient_pH, ph, "pH");
         let mut filter_conductivity = IIRFilter::new(
             &self.config.filter_coefficient_conductivity,
             conductivity,
-            "conductivity"
+            "conductivity",
         );
 
         // wait for a dedicated period of time before starting the main loop

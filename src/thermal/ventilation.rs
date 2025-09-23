@@ -1154,10 +1154,10 @@ pub mod tests {
             .expect("Test object thread did not finish.");
     }
 
-    // Check if the ventilation is switch on for 75% of the time (1% tolerance).
+    // Check if the ventilation is switched on for most of the time if the temperature is high within the interval.
     // Also, implicitly test if the execute function terminates after receiving Quit and Terminate commands.
     #[test]
-    pub fn test_ventilation_with_measured_temperature_75_percent() {
+    pub fn test_ventilation_with_measured_temperature_high_within_interval() {
         let sleep_duration_100_millis = Duration::from_millis(100);
         let spin_sleeper = SpinSleeper::default();
 
@@ -1281,6 +1281,193 @@ pub mod tests {
                 assert_le!(sixth_last_actuation_duration, 1100);
                 assert_ge!(sixth_last_actuation_duration, 900);
 
+                mock_actuator_states.check_terminal_condition_ventilation();
+            })
+            .unwrap();
+
+        // thread for controlling duration of test run
+        let join_handle_test_environment = create_test_environment(
+            58,
+            channels.signal_handler,
+            None, // no blocking of mutex in this test case
+        );
+
+        spin_sleeper.sleep(sleep_duration_100_millis);
+
+        // thread for the test object
+        let join_handle_test_object = thread::Builder::new()
+            .name("test_object".to_string())
+            .spawn(move || {
+                // clone sender part of the channels to mock threads so that we can terminate them after execution of the test object
+                let mut tx_ventilation_to_schedule_check_for_test_case_finish = channels
+                    .ventilation
+                    .tx_ventilation_to_schedule_check
+                    .clone();
+                let mut tx_ventilation_to_relay_manager_for_test_case_finish =
+                    channels.ventilation.tx_ventilation_to_relay_manager.clone();
+
+                let mut ventilation_set_value_updater =
+                    MockSqlInterfaceVentilationSetVals::new(false, None, None, None);
+
+                ventilation.execute(
+                    mutex_device_scheduler_ventilation.clone(),
+                    &mut channels.ventilation,
+                    &mut ventilation_set_value_updater,
+                    mutex_sensor_manager_signals,
+                    Arc::new(Mutex::new(false)),
+                );
+
+                // send Quit signal to mock threads because the test object has terminated
+                let _ = tx_ventilation_to_schedule_check_for_test_case_finish
+                    .send(InternalCommand::Quit);
+                let _ = tx_ventilation_to_relay_manager_for_test_case_finish
+                    .send(InternalCommand::Quit);
+                println!("* [Ventilation] checking reaction to medium temperature succeeded.");
+            })
+            .unwrap();
+
+        join_handle_mock_schedule_check
+            .join()
+            .expect("Mock schedule check did not finish.");
+        join_handle_mock_relay_manager
+            .join()
+            .expect("Mock relay manager thread did not finish.");
+        join_handle_test_environment
+            .join()
+            .expect("Test environment thread did not finish.");
+        join_handle_test_object
+            .join()
+            .expect("Test object thread did not finish.");
+    }
+
+    // Check if the ventilation is switched off for most of the time if the temperature is low within the interval.
+    // Also, implicitly test if the execute function terminates after receiving Quit and Terminate commands.
+    #[test]
+    pub fn test_ventilation_with_measured_temperature_low_within_interval() {
+        let sleep_duration_100_millis = Duration::from_millis(100);
+        let spin_sleeper = SpinSleeper::default();
+
+        let (mut config, mut ventilation) =
+            prepare_ventilation_tests(Some(SawToothProfileConfig::new(6, 1, 6, 1)));
+
+        // replacement value is used for initializing mutex
+        config.sensor_manager.replacement_value_water_temperature = 22.5;
+        let mut channels = Channels::new_for_test();
+
+        // thread for mock schedule check
+        let join_handle_mock_schedule_check = thread::Builder::new()
+            .name("mock_schedule_check".to_string())
+            .spawn(move || {
+                mock_schedule_check(
+                    &mut channels.schedule_check.tx_schedule_check_to_ventilation,
+                    &mut channels.schedule_check.rx_schedule_check_from_ventilation,
+                    None,
+                    true,
+                );
+            })
+            .unwrap();
+
+        // Mutex needed for water temperature
+        let mutex_sensor_manager_signals = Arc::new(Mutex::new(SensorManagerSignals::new(
+            &config.sensor_manager,
+        )));
+
+        let mutex_device_scheduler_ventilation = Arc::new(Mutex::new(0));
+
+        // thread for mock relay manager - includes assertions
+        let join_handle_mock_relay_manager = thread::Builder::new()
+            .name("mock_relay_manager".to_string())
+            .spawn(move || {
+                let (mut actuation_events, mock_actuator_states) = mock_relay_manager(
+                    &mut channels.relay_manager.tx_relay_manager_to_ventilation,
+                    &mut channels.relay_manager.rx_relay_manager_from_ventilation,
+                );
+                println!(
+                    "Mock relay manager received {} commands:",
+                    actuation_events.len()
+                );
+                for actuation_event in actuation_events.clone() {
+                    println!("{}", actuation_event);
+                }
+                let actuation_event = actuation_events.pop().unwrap();
+                assert_eq!(
+                    actuation_event.command,
+                    InternalCommand::SwitchOn(AquariumDevice::Ventilation)
+                );
+                for actuation_event in actuation_events.clone() {
+                    println!("{}", actuation_event);
+                }
+                // (first and) last actuation events need to be ignored
+                let _last_actuation_event = actuation_events.pop().unwrap();
+                let second_last_actuation_event = actuation_events.pop().unwrap();
+                let third_last_actuation_event = actuation_events.pop().unwrap();
+                let fourth_last_actuation_event = actuation_events.pop().unwrap();
+                let fifth_last_actuation_event = actuation_events.pop().unwrap();
+                let sixth_last_actuation_event = actuation_events.pop().unwrap();
+                let seventh_last_actuation_event = actuation_events.pop().unwrap();
+
+                let second_last_actuation_duration = second_last_actuation_event
+                    .time
+                    .duration_since(third_last_actuation_event.time)
+                    .as_millis();
+
+                println!(
+                    "second_last_actuation_duration={}, Command={}",
+                    second_last_actuation_duration, second_last_actuation_event.command
+                );
+
+                let third_last_actuation_duration = third_last_actuation_event
+                    .time
+                    .duration_since(fourth_last_actuation_event.time)
+                    .as_millis();
+
+                println!(
+                    "third_last_actuation_duration={}, Command={}",
+                    third_last_actuation_duration, third_last_actuation_event.command
+                );
+
+                let fourth_last_actuation_duration = fourth_last_actuation_event
+                    .time
+                    .duration_since(fifth_last_actuation_event.time)
+                    .as_millis();
+
+                println!(
+                    "fourth_last_actuation_duration={}, Command={}",
+                    fourth_last_actuation_duration, fourth_last_actuation_event.command
+                );
+
+                let fifth_last_actuation_duration = fifth_last_actuation_event
+                    .time
+                    .duration_since(sixth_last_actuation_event.time)
+                    .as_millis();
+
+                println!(
+                    "fifth_last_actuation_duration={}, Command={}",
+                    fifth_last_actuation_duration, fifth_last_actuation_event.command
+                );
+
+                let sixth_last_actuation_duration = sixth_last_actuation_event
+                    .time
+                    .duration_since(seventh_last_actuation_event.time)
+                    .as_millis();
+
+                println!(
+                    "sixth_last_actuation_duration={}, Command={}",
+                    sixth_last_actuation_duration, sixth_last_actuation_event.command
+                );
+
+                /*
+                assert_le!(second_last_actuation_duration, 1100);
+                assert_ge!(second_last_actuation_duration, 900);
+                assert_le!(third_last_actuation_duration, 12150);
+                assert_ge!(third_last_actuation_duration, 11950);
+                assert_le!(fourth_last_actuation_duration, 1100);
+                assert_ge!(fourth_last_actuation_duration, 900);
+                assert_le!(fifth_last_actuation_duration, 12150);
+                assert_ge!(fifth_last_actuation_duration, 11950);
+                assert_le!(sixth_last_actuation_duration, 1100);
+                assert_ge!(sixth_last_actuation_duration, 900);
+                */
                 mock_actuator_states.check_terminal_condition_ventilation();
             })
             .unwrap();

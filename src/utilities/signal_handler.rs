@@ -7,6 +7,58 @@ The above copyright notice and this permission notice shall be included in all c
 THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
+//! Manages the application's response to operating system termination signals,
+//! orchestrating a safe and phased shutdown of all running modules.
+//!
+//! This module is responsible for registering hooks for standard termination signals
+//! (e.g., `SIGTERM`, `SIGINT`) and, upon receiving such a signal, initiating a
+//! controlled, multiphase shutdown sequence across the entire application.
+//! The goal is to ensure that all threads and resources are gracefully
+//! released, preventing data corruption or resource leaks.
+//!
+//! ## Core Functionality
+//!
+//! The primary function, `handle_signals()`, runs in its own dedicated thread.
+//! It continuously monitors an atomic boolean flag, which is set by the `signal_hook`
+//! crate when a termination signal is received. Once the flag is set, `handle_signals()`
+//! proceeds to send specific `InternalCommand` messages (`Quit` followed by `Terminate`)
+//! to each active application module via their respective `mpsc` channels.
+//!
+//! ## Phased Shutdown Strategy
+//!
+//! The shutdown process is divided into multiple phases to respect inter-module
+//! dependencies. Modules that depend on others are typically shut down first with a
+//! `Quit` command (allowing them to finish current tasks and acknowledge receipt),
+//! followed by their dependencies, and finally a `Terminate` command to ensure
+//! all threads exit cleanly. This hierarchical approach minimizes the risk of
+//! deadlocks or unexpected behavior during shutdown.
+//!
+//! The communication flow and shutdown order are visualized in the Mermaid diagram
+//! within the `handle_signals` function documentation.
+//!
+//! ## Key Components
+//!
+//! - **`handle_signals()`**: The main entry point for the signal handling thread.
+//!   It registers OS signal hooks, waits for a termination signal, and then
+//!   orchestrates the multiphase shutdown.
+//! - **`send_command()`**: A helper function used by `handle_signals()` to
+//!   dispatch `InternalCommand` messages to individual module channels. It
+//!   supports optional acknowledgment from the receiving thread, which is used
+//!   to ensure modules have processed the `Quit` command before proceeding.
+//! - **`SignalHandlerChannels`**: (Defined in `signal_handler_channels.rs`)
+//!   A struct encapsulating all the `mpsc` sender and receiver channels
+//!   necessary for the signal handler to communicate with every other module.
+//! - **`InternalCommand`**: (Defined in `channel_content.rs`) An enum
+//!   representing the various control commands (e.g., `Quit`, `Terminate`, `Start`, `Stop`)
+//!   that can be sent between application threads.
+//!
+//! ## Error Handling
+//!
+//! The module panics if it encounters critical configuration issues (e.g.,
+//! inconsistent channel setup for TCP communication) or if it fails to register
+//! the necessary OS signal hooks. This ensures that the application does not
+//! proceed with an unreliable signal handling mechanism.
+
 #[cfg(any(feature = "debug_signal_handler", feature = "debug_channels"))]
 use log::debug;
 use log::error;
@@ -493,8 +545,6 @@ pub fn handle_signals(
         None,
         "memory",
     );
-
-    println!("Termination of application completed");
 
     #[cfg(feature = "debug_channels")]
     debug!(target: module_path!(), "{signal_handler_channels}");

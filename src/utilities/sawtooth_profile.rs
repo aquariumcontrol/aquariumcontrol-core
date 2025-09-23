@@ -212,17 +212,23 @@ impl SawToothProfile {
             self.level_normalized = self.counter / self.phase1_counter_limit;
         }
         // for the next phase, keep the signal at 1
-        else if self.counter >= self.phase1_counter_limit && self.counter <= self.phase2_counter_limit {
+        else if self.counter >= self.phase1_counter_limit
+            && self.counter <= self.phase2_counter_limit
+        {
             self.level_normalized = 1.0;
         }
         // for the next phase, ramp down from 1 to 0
-        else if self.counter > self.phase2_counter_limit && self.counter < self.phase3_counter_limit {
+        else if self.counter > self.phase2_counter_limit
+            && self.counter < self.phase3_counter_limit
+        {
             self.level_normalized = 1.0
                 - (self.counter - self.phase2_counter_limit)
                     / (self.phase3_counter_limit - self.phase2_counter_limit);
         }
         // for the next phase, keep the signal at 0
-        else if self.counter >= self.phase3_counter_limit && self.counter <= self.phase4_counter_limit {
+        else if self.counter >= self.phase3_counter_limit
+            && self.counter <= self.phase4_counter_limit
+        {
             self.level_normalized = 0.0;
         }
         #[cfg(feature = "debug_sawtooth_profile")]

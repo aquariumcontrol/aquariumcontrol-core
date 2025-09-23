@@ -85,7 +85,7 @@ impl IIRFilter {
     pub fn new(
         filter_config: &IIRFilterConfig,
         initial_value_opt: Option<f32>,
-        signal_name: &str
+        signal_name: &str,
     ) -> Self {
         let safe_filter_coefficient = filter_config.filter_coefficient.clamp(0.0, 1.0);
         if safe_filter_coefficient != filter_config.filter_coefficient {
@@ -132,8 +132,8 @@ pub mod tests {
     use crate::utilities::iir_filter::IIRFilter;
     #[cfg(test)]
     pub mod tests {
-        use assert_float_eq::*;
         use crate::utilities::iir_filter::{IIRFilter, IIRFilterConfig};
+        use assert_float_eq::*;
 
         /// Helper to create a default config for tests.
         fn prepare_filter_config() -> IIRFilterConfig {
@@ -158,10 +158,10 @@ pub mod tests {
             // The filter should use the `fallback_initial_value` from the config (100.0).
             let filter_with_none = IIRFilter::new(&config, None, signal_name);
             assert_float_absolute_eq!(
-            filter_with_none.old_value,
-            config.fallback_initial_value,
-            0.001
-        );
+                filter_with_none.old_value,
+                config.fallback_initial_value,
+                0.001
+            );
         }
 
         #[test]
