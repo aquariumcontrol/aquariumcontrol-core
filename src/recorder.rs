@@ -21,3 +21,6 @@ pub mod data_logger_channels;
 
 /// Configuration data for DataLogger
 pub mod data_logger_config;
+
+/// Container for errors produced by DataLogger
+pub mod data_logger_error;

@@ -34,65 +34,35 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 //!   and performs the filtering calculation via its `get_filtered_value()` method.
 //!
 //! - **`IIRFilterConfig`**: A `serde`-compatible struct for deserializing filter settings
-//!   from a TOML configuration file. It is designed to be flexible about where the
-//!   filter's initial value comes from.
+//!   from a TOML configuration file.
 //!
-//! - **`new_requires_initial()`**: The primary constructor for `IIRFilter`. It is designed
-//!   to take a static `filter_coefficient` from the config file but requires the
+//! - **`new()`**: The primary constructor for `IIRFilter`. It is designed
+//!   to take a static `filter_coefficient` from the config file but can use the
 //!   `initial_value` to be provided dynamically at runtime. It also accepts a `time_step`
 //!   parameter to normalize the filter's behavior in simulations or variable-rate
 //!   sampling environments.
 //!
-//! ## Configuration Pattern
-//!
-//! The module uses a generic `IIRFilterConfig<T>` and a private `FilterDefault` trait
-//! to enforce configuration rules. The primary usage pattern involves `IIRFilterConfig<()>`:
 
 use log::warn;
 use serde_derive::Deserialize;
 
-trait FilterDefault {
-    fn filter_default() -> Self;
-}
-
-impl FilterDefault for () {
-    /// Provides a default (empty) value for filter initialization when no specific initial value is needed.
-    ///
-    /// This implementation for the unit type `()` signifies that for certain filter configurations,
-    /// an explicit `initial_value` might not be strictly required or can be implicit `()`.
-    fn filter_default() -> Self {}
-}
-
-impl FilterDefault for f32 {
-    /// Provides a default value for filter initialization, specifically for `f32` types.
-    ///
-    /// **Panics:**
-    /// This implementation is designed to **panic** if called. This indicates that an
-    /// `initial_value` for the filter was expected in the configuration but was not
-    /// explicitly provided, and for `f32` filters, a meaningful default cannot be
-    /// automatically assumed without a specific initial state.
-    fn filter_default() -> Self {
-        panic!("{}: initial value was required for filter", module_path!())
-    }
-}
-
 /// Configuration for a filter
-#[allow(private_bounds)]
 #[derive(Deserialize)]
-pub struct IIRFilterConfig<T: FilterDefault> {
+pub struct IIRFilterConfig {
     /// filter coefficient: value between 1 (no filtering) and 0 (strongest filter, value remains same as initial value)
     pub filter_coefficient: f32,
 
-    /// value which is used to initialize the filter
-    #[serde(default = "T::filter_default")]
-    #[allow(unused)]
-    pub initial_value: T,
+    /// value which is used to initialize the filter in case no measurement value is available
+    pub fallback_initial_value: f32,
 }
 
 /// Contains the configuration data for a filter and implements calculation of an infinite impulse response (IIR) filter.
 /// The filtering works with the formula: New filtered value = (1 - filter coefficient) * Old filtered value + filter coefficient * new unfiltered value
 pub struct IIRFilter {
+    /// filter coefficient taken over from the configuration or default (safe) value
     filter_coefficient: f32,
+
+    /// value from a previous step
     old_value: f32,
 }
 
@@ -107,29 +77,33 @@ impl IIRFilter {
     /// # Arguments
     /// * `filter_config` - A reference to the filter's static configuration, which provides
     ///   the base `filter_coefficient`.
-    /// * `initial_value` - The `f32` value used to set the filter's initial output state.
-    /// * `time_step` - The delta time (in seconds) used in the simulation or sampling.
-    ///   This value corrects the filter coefficient: a smaller `time_step` makes the
-    ///   filter react faster, while a larger one slows it down.
+    /// * `initial_value_opt` - The optional `f32` value used to set the filter's initial output state.
     ///
     /// # Returns
     /// A new `IIRFilter` struct, initialized with the provided values and a
     /// time-step-corrected filter coefficient.
-    pub fn new_requires_initial(
-        filter_config: &IIRFilterConfig<()>,
-        initial_value: f32,
-        mut time_step: f32,
+    pub fn new(
+        filter_config: &IIRFilterConfig,
+        initial_value_opt: Option<f32>,
+        signal_name: &str
     ) -> Self {
-        if time_step == 0.0 {
+        let safe_filter_coefficient = filter_config.filter_coefficient.min(1.0).max(0.0);
+        if safe_filter_coefficient != filter_config.filter_coefficient {
             warn!(
-                "{}: filter initialized with invalid time step value ({}) - using fallback default of 1.0.",
-                module_path!(), time_step
-            );
-            time_step = 1.0;
+                target: module_path!(),
+                "filter configuration for {} contains invalid coefficient of {} - replacing with {}",
+                signal_name,
+                filter_config.filter_coefficient,
+                safe_filter_coefficient
+            )
         }
+
         Self {
-            filter_coefficient: filter_config.filter_coefficient * 1.0 / time_step,
-            old_value: initial_value,
+            filter_coefficient: safe_filter_coefficient,
+            old_value: match initial_value_opt {
+                Some(initial_value) => initial_value,
+                None => filter_config.fallback_initial_value,
+            },
         }
     }
 
@@ -156,6 +130,91 @@ pub mod tests {
     use assert_float_eq::*;
 
     use crate::utilities::iir_filter::IIRFilter;
+    #[cfg(test)]
+    pub mod tests {
+        use assert_float_eq::*;
+        use crate::utilities::iir_filter::{IIRFilter, IIRFilterConfig};
+
+        /// Helper to create a default config for tests.
+        fn prepare_filter_config() -> IIRFilterConfig {
+            IIRFilterConfig {
+                filter_coefficient: 0.5,
+                fallback_initial_value: 100.0,
+            }
+        }
+
+        #[test]
+        /// Verifies the `new` constructor correctly initializes the filter's starting value.
+        fn test_new_constructor_initialization() {
+            let config = prepare_filter_config();
+            let signal_name = "test_signal";
+
+            // Scenario 1: An explicit initial value is provided via Some(10.0).
+            // The filter's `old_value` should be 10.0.
+            let filter_with_some = IIRFilter::new(&config, Some(10.0), signal_name);
+            assert_float_absolute_eq!(filter_with_some.old_value, 10.0, 0.001);
+
+            // Scenario 2: The initial value is None.
+            // The filter should use the `fallback_initial_value` from the config (100.0).
+            let filter_with_none = IIRFilter::new(&config, None, signal_name);
+            assert_float_absolute_eq!(
+            filter_with_none.old_value,
+            config.fallback_initial_value,
+            0.001
+        );
+        }
+
+        #[test]
+        /// Verifies the constructor sanitizes invalid coefficients from the config file.
+        fn test_new_constructor_sanitizes_config_coefficient() {
+            let signal_name = "test_signal";
+
+            // Scenario 1: Coefficient is > 1.0
+            let config_high = IIRFilterConfig {
+                filter_coefficient: 1.5,
+                fallback_initial_value: 0.0,
+            };
+            let filter_high = IIRFilter::new(&config_high, Some(0.0), signal_name);
+            // It should be clamped to 1.0
+            assert_float_absolute_eq!(filter_high.filter_coefficient, 1.0, 0.001);
+
+            // Scenario 2: Coefficient is < 0.0
+            let config_low = IIRFilterConfig {
+                filter_coefficient: -0.5,
+                fallback_initial_value: 0.0,
+            };
+            let filter_low = IIRFilter::new(&config_low, Some(0.0), signal_name);
+            // It should be clamped to 0.0
+            assert_float_absolute_eq!(filter_low.filter_coefficient, 0.0, 0.001);
+        }
+
+        #[test]
+        /// Verifies filter behavior when the coefficient is 0.0 (strongest filtering).
+        fn test_filter_with_coefficient_zero() {
+            let mut filter = IIRFilter {
+                filter_coefficient: 0.0,
+                old_value: 50.0,
+            };
+            // With a zero coefficient, the output should never change from its initial value,
+            // regardless of the new input.
+            assert_float_absolute_eq!(filter.get_filtered_value(10.0), 50.0, 0.001);
+            assert_float_absolute_eq!(filter.get_filtered_value(-20.0), 50.0, 0.001);
+            assert_float_absolute_eq!(filter.get_filtered_value(100.0), 50.0, 0.001);
+        }
+
+        #[test]
+        /// Verifies filter behavior when the coefficient is 1.0 (no filtering).
+        fn test_filter_with_coefficient_one() {
+            let mut filter = IIRFilter {
+                filter_coefficient: 1.0,
+                old_value: 50.0,
+            };
+            // With a coefficient of one, the output should always be exactly the new input value.
+            assert_float_absolute_eq!(filter.get_filtered_value(10.0), 10.0, 0.001);
+            assert_float_absolute_eq!(filter.get_filtered_value(-20.0), -20.0, 0.001);
+            assert_float_absolute_eq!(filter.get_filtered_value(100.0), 100.0, 0.001);
+        }
+    }
 
     #[test]
     fn test_zero_to_one_with_coefficient_0_5() {

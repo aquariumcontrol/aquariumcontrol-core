@@ -84,13 +84,13 @@ use spin_sleep::SpinSleeper;
 use std::fs;
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
-use thiserror::Error;
 
 use crate::database::sql_interface::SqlInterface;
 use crate::database::sql_interface_data::SqlInterfaceData;
 use crate::recorder::data_injection::DataInjectionTrait;
 use crate::recorder::data_logger_channels::DataLoggerChannels;
 use crate::recorder::data_logger_config::DataLoggerConfig;
+use crate::recorder::data_logger_error::DataLoggerError;
 use crate::recorder::recorder_data_frame::RecorderDataFrame;
 use crate::sensors::sensor_manager::SensorManagerSignals;
 use crate::sensors::tank_level_switch::TankLevelSwitchSignals;
@@ -123,23 +123,6 @@ pub struct DataLoggerMutexes {
 
     /// Mutex for refill status
     pub mutex_refill_status: Arc<Mutex<RefillStatus>>,
-}
-
-/// Contains the error definition for DataLogger
-#[derive(Error, Debug)]
-pub enum DataLoggerError {
-    #[error("[{0}] One of the output file names for the data logging to filesystem is empty.")]
-    OutputFilenameEmpty(String),
-
-    #[error("Could not reset content of output file for {signal_name} ({output_file_name})")]
-    FileResetFailure {
-        location: String,
-        signal_name: String,
-        output_file_name: String,
-
-        #[source]
-        source: std::io::Error,
-    },
 }
 
 #[cfg_attr(doc, aquamarine::aquamarine)]
@@ -316,6 +299,32 @@ impl DataLogger {
                     }
                 })?;
             }
+        }
+
+        // check the validity of filter coefficients
+        if !(config.filter_coefficient_conductivity.filter_coefficient > 0.0 &&
+            config.filter_coefficient_conductivity.filter_coefficient <= 1.0) {
+            return Err(DataLoggerError::InvalidFilterCoefficient(
+                module_path!().to_string(),
+                "conductivity".to_string(),
+                config.filter_coefficient_conductivity.filter_coefficient,
+            ))
+        }
+        if !(config.filter_coefficient_water_temperature.filter_coefficient > 0.0 &&
+            config.filter_coefficient_water_temperature.filter_coefficient <= 1.0) {
+            return Err(DataLoggerError::InvalidFilterCoefficient(
+                module_path!().to_string(),
+                "water temperature".to_string(),
+                config.filter_coefficient_water_temperature.filter_coefficient,
+            ))
+        }
+        if !(config.filter_coefficient_pH.filter_coefficient > 0.0 &&
+            config.filter_coefficient_pH.filter_coefficient <= 1.0) {
+            return Err(DataLoggerError::InvalidFilterCoefficient(
+                module_path!().to_string(),
+                "pH".to_string(),
+                config.filter_coefficient_pH.filter_coefficient,
+            ))
         }
 
         Ok(Self {
@@ -955,20 +964,20 @@ impl DataLogger {
             &mut ambient_humidity,
         );
 
-        let mut filter_water_temperature = IIRFilter::new_requires_initial(
+        let mut filter_water_temperature = IIRFilter::new(
             &self.config.filter_coefficient_water_temperature,
-            water_temperature.unwrap_or(25.0),
-            1.0, // 1 second time step
+            water_temperature,
+            "water temperature"
         );
-        let mut filter_pH = IIRFilter::new_requires_initial(
+        let mut filter_pH = IIRFilter::new(
             &self.config.filter_coefficient_pH,
-            ph.unwrap_or(7.0),
-            1.0, // 1 second time step
+            ph,
+            "pH"
         );
-        let mut filter_conductivity = IIRFilter::new_requires_initial(
+        let mut filter_conductivity = IIRFilter::new(
             &self.config.filter_coefficient_conductivity,
-            conductivity.unwrap_or(50_000.0),
-            1.0, // 1 second time step
+            conductivity,
+            "conductivity"
         );
 
         // wait for a dedicated period of time before starting the main loop
@@ -1258,15 +1267,15 @@ pub mod tests {
             logging_interval: 0,
             filter_coefficient_water_temperature: IIRFilterConfig {
                 filter_coefficient: 0.0,
-                initial_value: (),
+                fallback_initial_value: 25.0,
             },
             filter_coefficient_pH: IIRFilterConfig {
                 filter_coefficient: 0.0,
-                initial_value: (),
+                fallback_initial_value: 7.0,
             },
             filter_coefficient_conductivity: IIRFilterConfig {
                 filter_coefficient: 0.0,
-                initial_value: (),
+                fallback_initial_value: 50000.0,
             },
             output_to_disk: true,
             output_file_name_timestamp: "".to_string(),

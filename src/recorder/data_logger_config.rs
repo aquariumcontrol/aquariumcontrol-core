@@ -37,13 +37,13 @@ pub struct DataLoggerConfig {
     pub logging_interval: u64,
 
     /// filter coefficient for the filtered version of the water temperature signal
-    pub filter_coefficient_water_temperature: IIRFilterConfig<()>,
+    pub filter_coefficient_water_temperature: IIRFilterConfig,
 
     /// filter coefficient for the filtered version of the pH signal
-    pub filter_coefficient_pH: IIRFilterConfig<()>,
+    pub filter_coefficient_pH: IIRFilterConfig,
 
     /// filter coefficient for the filtered version of the conductivity signal
-    pub filter_coefficient_conductivity: IIRFilterConfig<()>,
+    pub filter_coefficient_conductivity: IIRFilterConfig,
 
     /// switch if output to file (in ramdisk) shall be written
     pub output_to_disk: bool,

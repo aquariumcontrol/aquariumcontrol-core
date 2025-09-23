@@ -56,9 +56,9 @@ active = true                                                                   
 execute = true                                          # used for testing purposes
 use_sql_timestamp = true                                                                        # switch for defining the data source of timestamp
 logging_interval = 60                                                                           # log data every x seconds
-filter_coefficient_water_temperature = { filter_coefficient = 0.5 }                             # filter configuration for the water temperature
-filter_coefficient_pH = { filter_coefficient = 0.5 }                                            # filter configuration for the pH value
-filter_coefficient_conductivity = { filter_coefficient = 0.5 }                                  # filter configuration for the conductivity
+filter_coefficient_water_temperature = { filter_coefficient = 0.5, fallback_initial_value=25.0 }    # filter configuration for the water temperature
+filter_coefficient_pH = { filter_coefficient = 0.5, fallback_initial_value = 7.0 }                  # filter configuration for the pH value
+filter_coefficient_conductivity = { filter_coefficient = 0.5, fallback_initial_value = 50000.0 }    # filter configuration for the conductivity
 output_to_disk = true                                                                           # switch to enable writing selected signals to (RAM) disk
 output_file_name_timestamp = "/var/local/aquarium-ctrl/aquarium-ctrl-ts"                        # output file name (in ramdisk) for the current time stamp
 output_file_name_water_temperature = "/var/local/aquarium-ctrl/atlsscntfc-temp"                 # output file name (in ramdisk) for the current value of water temperature
