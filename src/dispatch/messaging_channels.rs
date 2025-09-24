@@ -55,7 +55,6 @@ cfg_if::cfg_if! {
         use std::fmt;
         use crate::dispatch::messaging_domain::MessagingDomain;
         use crate::dispatch::messaging_error::MessagingError;
-        use crate::launch::channels::AquaChannelError;
     }
 }
 
@@ -153,11 +152,6 @@ impl MessagingChannels {
             })?;
 
         Ok(())
-    }
-
-    /// Sends an acknowledgment to the signal handler.
-    pub fn send_to_signal_handler(&mut self, ack: bool) -> Result<(), AquaChannelError> {
-        self.tx_messaging_to_signal_handler.send(ack)
     }
 }
 

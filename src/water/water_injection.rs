@@ -13,7 +13,9 @@ use spin_sleep::SpinSleeper;
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
-use crate::database::sql_interface_refill::{DatabaseInterfaceRefillTrait, DatabaseRefillErrorCode};
+use crate::database::sql_interface_refill::{
+    DatabaseInterfaceRefillTrait, DatabaseRefillErrorCode,
+};
 use crate::sensors::tank_level_switch::TankLevelSwitchSignals;
 use crate::utilities::channel_content::{AquariumDevice, InternalCommand};
 use crate::utilities::check_mutex_access_duration::CheckMutexAccessDurationTrait;

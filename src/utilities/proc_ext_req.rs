@@ -337,38 +337,6 @@ fn process_external_request_without_messaging(
     (quit_command_received, false, false)
 }
 
-#[cfg(target_os = "linux")]
-impl ProcessExternalRequestTrait for Messaging {
-    /// Checks for and processes new commands relevant to the Messaging module from external channels.
-    ///
-    /// This is the specialized implementation of `ProcessExternalRequestTrait` for `Messaging`.
-    /// It delegates directly to `process_external_request_without_messaging`, indicating
-    /// that the `Messaging` module only processes commands from the signal handler
-    /// and ignores any input from a separate messaging channel.
-    ///
-    /// # Arguments
-    /// * `rx_from_signal_handler` - A reference to the receiver end of the channel
-    ///   for commands originating from the signal handler.
-    /// * `_` - This parameter is ignored, as the `Messaging` module does not process
-    ///   messages from a secondary messaging channel.
-    ///
-    /// # Returns
-    /// A tuple `(bool, bool, bool)` indicating the status of commands received:
-    /// - The first `bool` is `true` if a `Quit` command was received; otherwise `false`.
-    /// - The second `bool` is always `false` (no "Start" commands processed).
-    /// - The third `bool` is always `false` (no "Stop" commands processed).
-    ///
-    /// This code is specific for a Linux operating system because the messaging system
-    /// is only implemented for that platform.
-    fn process_external_request(
-        &mut self,
-        rx_from_signal_handler: &mut AquaReceiver<InternalCommand>,
-        _: Option<&mut AquaReceiver<InternalCommand>>,
-    ) -> (bool, bool, bool) {
-        process_external_request_without_messaging(rx_from_signal_handler, "Messaging".to_string())
-    }
-}
-
 /// Checks for specific standard commands (Terminate or Quit) from the signal handler channel.
 ///
 /// This associated function is a streamlined helper for implementations that

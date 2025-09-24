@@ -86,8 +86,7 @@ impl IIRFilter {
     pub fn new(
         filter_config: &IIRFilterConfig,
         initial_value_opt: Option<f32>,
-        #[cfg(not(test))]
-        signal_name: &str,
+        #[cfg(not(test))] signal_name: &str,
     ) -> Self {
         let safe_filter_coefficient = filter_config.filter_coefficient.clamp(0.0, 1.0);
         #[cfg(not(test))]
@@ -159,7 +158,7 @@ pub mod tests {
                 &config,
                 Some(10.0),
                 #[cfg(not(test))]
-                signal_name
+                signal_name,
             );
             assert_float_absolute_eq!(filter_with_some.old_value, 10.0, 0.001);
 
@@ -169,7 +168,7 @@ pub mod tests {
                 &config,
                 None,
                 #[cfg(not(test))]
-                signal_name
+                signal_name,
             );
             assert_float_absolute_eq!(
                 filter_with_none.old_value,
@@ -190,9 +189,10 @@ pub mod tests {
                 fallback_initial_value: 0.0,
             };
             let filter_high = IIRFilter::new(
-                &config_high, Some(0.0),
+                &config_high,
+                Some(0.0),
                 #[cfg(not(test))]
-                signal_name
+                signal_name,
             );
 
             // It should be clamped to 1.0
@@ -204,9 +204,10 @@ pub mod tests {
                 fallback_initial_value: 0.0,
             };
             let filter_low = IIRFilter::new(
-                &config_low, Some(0.0),
+                &config_low,
+                Some(0.0),
                 #[cfg(not(test))]
-                signal_name
+                signal_name,
             );
             // It should be clamped to 0.0
             assert_float_absolute_eq!(filter_low.filter_coefficient, 0.0, 0.001);
