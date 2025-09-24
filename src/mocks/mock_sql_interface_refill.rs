@@ -11,7 +11,7 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 pub mod tests {
     use crate::database::pingable::Pingable;
     use crate::database::sql_interface_error::SqlInterfaceError;
-    use crate::database::sql_interface_refill::DatabaseInterfaceRefillTrait;
+    use crate::database::sql_interface_refill::{DatabaseInterfaceRefillTrait, DatabaseRefillErrorCode};
     use chrono::NaiveDateTime;
 
     pub struct MockSqlInterfaceRefill {}
@@ -59,7 +59,7 @@ pub mod tests {
             _timestamp: NaiveDateTime,
             _duration: f64,
             _volume: f64,
-            _error_code: i32,
+            _error_code: DatabaseRefillErrorCode,
         ) -> Result<(), SqlInterfaceError> {
             Err(SqlInterfaceError::MockError(module_path!().to_string()))
         }

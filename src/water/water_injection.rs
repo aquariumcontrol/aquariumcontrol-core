@@ -13,7 +13,7 @@ use spin_sleep::SpinSleeper;
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
-use crate::database::sql_interface_refill::DatabaseInterfaceRefillTrait;
+use crate::database::sql_interface_refill::{DatabaseInterfaceRefillTrait, DatabaseRefillErrorCode};
 use crate::sensors::tank_level_switch::TankLevelSwitchSignals;
 use crate::utilities::channel_content::{AquariumDevice, InternalCommand};
 use crate::utilities::check_mutex_access_duration::CheckMutexAccessDurationTrait;
@@ -45,8 +45,6 @@ pub trait WaterInjectionTrait {
 /// graph LR
 ///     water_injection[Water Injection] --> relay_manager[Relay Manager]
 ///     relay_manager --> water_injection
-///     water_injection --> data_logger[Data Logger]
-///     data_logger --> water_injection
 ///     tank_level_switch[TankLevelSwitch] -.-> water_injection
 ///     signal_handler[Signal Handler] --> water_injection
 /// ```
@@ -184,7 +182,7 @@ impl WaterInjectionTrait for WaterInjection {
         //*** wait for condition to stop refilling ***
         let mut refill_volume = 0.0;
         let mut refill_time_seconds = 0.0;
-        let mut refill_error_code = 0;
+        let mut refill_error_code = DatabaseRefillErrorCode::Success;
         let mut additional_refill_volume_executed = 0.0;
         let mut tank_level_switch_position = false;
         let mut tank_level_switch_invalid = false;
@@ -226,7 +224,7 @@ impl WaterInjectionTrait for WaterInjection {
             }
             if tank_level_switch_invalid {
                 // switch signal is invalid
-                refill_error_code = 1;
+                refill_error_code = DatabaseRefillErrorCode::InvalidSwitch;
                 break;
             }
 
@@ -242,7 +240,7 @@ impl WaterInjectionTrait for WaterInjection {
             }
             if refill_volume > self.max_refill_volume {
                 refill_errors.error_switch_stuck_low = true;
-                refill_error_code = 2;
+                refill_error_code = DatabaseRefillErrorCode::StuckLowTimeout;
                 break;
             }
         }
@@ -573,8 +571,6 @@ pub mod tests {
     //   commands to the `WaterInjection` test object, simulating the signal handler.
     // * `tx_signal_handler_to_relay_manager` - The sender channel for this mock environment to send
     //   commands to the mock `RelayManager` thread.
-    // * `tx_signal_handler_to_data_logger` - The sender channel for this mock environment to send
-    //   commands to the mock `DataLogger` thread.
     //
     // # Returns
     // A `thread::JoinHandle<()>` which can be used by the main test thread to wait for this

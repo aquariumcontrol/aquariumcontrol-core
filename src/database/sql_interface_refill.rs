@@ -60,6 +60,14 @@ use crate::database::{
     sql_interface::SqlInterface, sql_interface_error::SqlInterfaceError, sql_query_strings,
 };
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[repr(i32)]
+pub enum DatabaseRefillErrorCode {
+    Success = 0,
+    InvalidSwitch = -1,
+    StuckLowTimeout = -2,
+}
+
 /// Trait for interfacing between refill and SQL database
 /// This trait is prerequisite to use mock implementation for testing
 pub trait DatabaseInterfaceRefillTrait: Pingable {
@@ -85,7 +93,7 @@ pub trait DatabaseInterfaceRefillTrait: Pingable {
         timestamp: NaiveDateTime,
         duration: f64,
         volume: f64,
-        error_code: i32,
+        error_code: DatabaseRefillErrorCode,
     ) -> Result<(), SqlInterfaceError>;
 }
 
@@ -378,7 +386,7 @@ impl DatabaseInterfaceRefillTrait for SqlInterfaceRefill {
         timestamp: NaiveDateTime,
         duration: f64,
         volume: f64,
-        error_code: i32,
+        error_code: DatabaseRefillErrorCode,
     ) -> Result<(), SqlInterfaceError> {
         self.conn
             .exec_drop::<_, _>(
@@ -387,7 +395,7 @@ impl DatabaseInterfaceRefillTrait for SqlInterfaceRefill {
                 "timestamp" => timestamp,
                 "duration" => duration,
                 "volume" => volume,
-                "error_code" => error_code,
+                "error_code" => error_code as i32,
                 },
             )
             .map_err(|e| SqlInterfaceError::InsertRefillEventFailure {
@@ -403,7 +411,7 @@ pub mod tests {
     use chrono::{Local, NaiveDateTime, SubsecRound};
     use mysql::prelude::Queryable;
 
-    use crate::database::sql_interface_refill::{DatabaseInterfaceRefillTrait, SqlInterfaceRefill};
+    use crate::database::sql_interface_refill::{DatabaseInterfaceRefillTrait, DatabaseRefillErrorCode, SqlInterfaceRefill};
     use crate::database::sql_query_strings::SQL_TABLE_REFILL;
     use crate::database::{
         sql_interface::SqlInterface, sql_interface_error::SqlInterfaceError, sql_query_strings,
@@ -451,7 +459,7 @@ pub mod tests {
             conn: sql_interface.get_connection().unwrap(),
         };
         refill_db
-            .insert_refill_event(Local::now().naive_local(), 1.0, 1.0, 0)
+            .insert_refill_event(Local::now().naive_local(), 1.0, 1.0, DatabaseRefillErrorCode::Success)
             .expect("Test setup failed: Could not insert row.");
 
         // Check: new() should succeed with a generous limit of 10
@@ -470,7 +478,7 @@ pub mod tests {
             conn: sql_interface.get_connection().unwrap(),
         };
         refill_db
-            .insert_refill_event(Local::now().naive_local(), 2.0, 2.0, 0)
+            .insert_refill_event(Local::now().naive_local(), 2.0, 2.0, DatabaseRefillErrorCode::Success)
             .expect("Test setup failed: Could not insert second row.");
 
         // Check: new() should fail with a strict limit of 1
@@ -551,7 +559,7 @@ pub mod tests {
         // *** check timestamp of last refill - ****************************************************
         let refill_timestamp =
             NaiveDateTime::parse_from_str("2025-04-12 07:00:00", "%Y-%m-%d %H:%M:%S").unwrap();
-        match sql_interface_refill.insert_refill_event(refill_timestamp, 3.6, 0.4, 0) {
+        match sql_interface_refill.insert_refill_event(refill_timestamp, 3.6, 0.4, DatabaseRefillErrorCode::Success) {
             Ok(_) => {}
             Err(e) => panic!("Could not insert refill event into database: {e:?}"),
         };
@@ -622,7 +630,7 @@ pub mod tests {
 
         // *** check refill count of last 24h (one) - *********************************************
         let naive_datetime_12h_ago = SqlInterface::get_naive_timestamp_from_past(12, 0);
-        match sql_interface_refill.insert_refill_event(naive_datetime_12h_ago, 5.0, 0.25, -2) {
+        match sql_interface_refill.insert_refill_event(naive_datetime_12h_ago, 5.0, 0.25, DatabaseRefillErrorCode::StuckLowTimeout) {
             Ok(_) => {}
             Err(e) => {
                 panic!("Could not insert refill event in data base for test preparation: {e:?}")
@@ -649,7 +657,7 @@ pub mod tests {
 
         // *** check refill count of last hour (one) - *********************************************
         let naive_datetime_30min_ago = SqlInterface::get_naive_timestamp_from_past(0, 30);
-        match sql_interface_refill.insert_refill_event(naive_datetime_30min_ago, 5.0, 0.25, -2) {
+        match sql_interface_refill.insert_refill_event(naive_datetime_30min_ago, 5.0, 0.25, DatabaseRefillErrorCode::StuckLowTimeout) {
             Ok(_) => {}
             Err(e) => {
                 panic!("Could not insert refill event in data base for test preparation: {e:?}")
