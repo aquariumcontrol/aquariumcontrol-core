@@ -767,6 +767,7 @@ impl Refill {
         let mut quit_command_received = false; // the request to end the application has been received
         let mut start_command_received; // the request to (re-)start refill control has been received
         let mut stop_command_received; // the request to (temporarily) stop the refill control has been received
+        let mut water_injected = false; // inhibit cycle time monitoring when water injection happens
 
         // initial waiting time
         if self.config.initial_wait_interval > 0 {
@@ -896,6 +897,7 @@ impl Refill {
                                 &mutex_tank_level_switch_signals_clone_for_refill,
                             );
                             *mutex_data = mutex_data.saturating_add(1);
+                            water_injected = true;
 
                             {
                                 // internal scope to limit lifetime of mutex lock
@@ -941,7 +943,7 @@ impl Refill {
 
             let mut remaining_sleep_time_millis: u64 = 0;
             if execution_duration >= cycle_time_duration {
-                if !lock_warn_cycle_time_exceeded {
+                if !lock_warn_cycle_time_exceeded && !water_injected {
                     warn!(target: module_path!(),
                         "execution duration of {} ms exceeds cycle time of {} ms",
                         execution_duration.as_millis(),
@@ -958,6 +960,7 @@ impl Refill {
                 cycle_time_exceeded = false;
                 lock_warn_cycle_time_exceeded = false;
             }
+            water_injected = false;
 
             #[cfg(feature = "debug_refill")]
             debug!(
