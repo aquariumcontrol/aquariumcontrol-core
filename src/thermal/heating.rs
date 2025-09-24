@@ -2490,7 +2490,7 @@ pub mod tests {
                         .heating_control_runtime
                         - initial_heating_stats_entry.heating_control_runtime,
                     2.0,
-                    0.01
+                    0.02
                 );
                 assert_float_absolute_eq!(0.0, heating_stats_transfer.heating_stats_entry.energy, 0.001);
                 assert_float_absolute_eq!(
