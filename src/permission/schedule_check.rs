@@ -212,7 +212,9 @@ impl ScheduleCheck {
                     }
                     AquaChannelError::Disconnected => {
                         if !locks.channel_receive {
+                            #[cfg(not(test))]
                             let context = format!("receiving command from {module_name} failed.");
+                            #[cfg(not(test))]
                             log_error_chain(module_path!(), &context, e);
                             locks.channel_receive = true;
                         }
@@ -233,6 +235,7 @@ impl ScheduleCheck {
             }
             _c => {
                 if !locks.inapplicable_command {
+                    #[cfg(not(test))]
                     warn!(
                         target: module_path!(),
                         "ignoring inapplicable command ({_c}) from {module_name}"
