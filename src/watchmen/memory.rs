@@ -76,6 +76,7 @@ impl Memory {
             // check if the memory configuration is valid
             match memory_config_check(&config) {
                 Ok(_env_var_name_value_tuple_opt) => {
+                    #[cfg(debug_assertions)]
                     #[cfg(target_os = "linux")]
                     match _env_var_name_value_tuple_opt {
                         Some((env_var_name, value)) => {

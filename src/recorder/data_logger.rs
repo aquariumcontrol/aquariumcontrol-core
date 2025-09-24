@@ -978,12 +978,19 @@ impl DataLogger {
         let mut filter_water_temperature = IIRFilter::new(
             &self.config.filter_coefficient_water_temperature,
             water_temperature,
+            #[cfg(not(test))]
             "water temperature",
         );
-        let mut filter_pH = IIRFilter::new(&self.config.filter_coefficient_pH, ph, "pH");
+        let mut filter_pH = IIRFilter::new(
+            &self.config.filter_coefficient_pH, ph,
+            #[cfg(not(test))]
+            "pH"
+        );
+        
         let mut filter_conductivity = IIRFilter::new(
             &self.config.filter_coefficient_conductivity,
             conductivity,
+            #[cfg(not(test))]
             "conductivity",
         );
 

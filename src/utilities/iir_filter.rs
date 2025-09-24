@@ -43,6 +43,7 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 //!   sampling environments.
 //!
 
+#[cfg(not(test))]
 use log::warn;
 use serde_derive::Deserialize;
 
@@ -85,9 +86,11 @@ impl IIRFilter {
     pub fn new(
         filter_config: &IIRFilterConfig,
         initial_value_opt: Option<f32>,
+        #[cfg(not(test))]
         signal_name: &str,
     ) -> Self {
         let safe_filter_coefficient = filter_config.filter_coefficient.clamp(0.0, 1.0);
+        #[cfg(not(test))]
         if safe_filter_coefficient != filter_config.filter_coefficient {
             warn!(
                 target: module_path!(),
@@ -147,16 +150,27 @@ pub mod tests {
         /// Verifies the `new` constructor correctly initializes the filter's starting value.
         fn test_new_constructor_initialization() {
             let config = prepare_filter_config();
+            #[cfg(not(test))]
             let signal_name = "test_signal";
 
             // Scenario 1: An explicit initial value is provided via Some(10.0).
             // The filter's `old_value` should be 10.0.
-            let filter_with_some = IIRFilter::new(&config, Some(10.0), signal_name);
+            let filter_with_some = IIRFilter::new(
+                &config,
+                Some(10.0),
+                #[cfg(not(test))]
+                signal_name
+            );
             assert_float_absolute_eq!(filter_with_some.old_value, 10.0, 0.001);
 
             // Scenario 2: The initial value is None.
             // The filter should use the `fallback_initial_value` from the config (100.0).
-            let filter_with_none = IIRFilter::new(&config, None, signal_name);
+            let filter_with_none = IIRFilter::new(
+                &config,
+                None,
+                #[cfg(not(test))]
+                signal_name
+            );
             assert_float_absolute_eq!(
                 filter_with_none.old_value,
                 config.fallback_initial_value,
@@ -167,6 +181,7 @@ pub mod tests {
         #[test]
         /// Verifies the constructor sanitizes invalid coefficients from the config file.
         fn test_new_constructor_sanitizes_config_coefficient() {
+            #[cfg(not(test))]
             let signal_name = "test_signal";
 
             // Scenario 1: Coefficient is > 1.0
@@ -174,7 +189,12 @@ pub mod tests {
                 filter_coefficient: 1.5,
                 fallback_initial_value: 0.0,
             };
-            let filter_high = IIRFilter::new(&config_high, Some(0.0), signal_name);
+            let filter_high = IIRFilter::new(
+                &config_high, Some(0.0),
+                #[cfg(not(test))]
+                signal_name
+            );
+
             // It should be clamped to 1.0
             assert_float_absolute_eq!(filter_high.filter_coefficient, 1.0, 0.001);
 
@@ -183,7 +203,11 @@ pub mod tests {
                 filter_coefficient: -0.5,
                 fallback_initial_value: 0.0,
             };
-            let filter_low = IIRFilter::new(&config_low, Some(0.0), signal_name);
+            let filter_low = IIRFilter::new(
+                &config_low, Some(0.0),
+                #[cfg(not(test))]
+                signal_name
+            );
             // It should be clamped to 0.0
             assert_float_absolute_eq!(filter_low.filter_coefficient, 0.0, 0.001);
         }
