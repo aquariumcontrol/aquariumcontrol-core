@@ -423,11 +423,11 @@ impl I2cInterface {
                 break;
             }
 
-            match i2c_interface_channels.receive_from_atlas_scientific() {
+            match i2c_interface_channels.rx_i2c_interface_from_atlas_scientific.try_recv() {
                 Ok(request) => {
                     lock_error_receive_atlas_scientific = false;
                     let response = self.get_response_from_i2c(request);
-                    match i2c_interface_channels.send_to_atlas_scientific(response) {
+                    match i2c_interface_channels.tx_i2c_interface_to_atlas_scientific.send(response) {
                         Ok(_) => {
                             lock_error_send_atlas_scientific = false;
                         }
@@ -442,7 +442,7 @@ impl I2cInterface {
                 Err(e) => {
                     match e {
                         #[cfg(feature = "debug_channels")]
-                        AquaChannelError::Full => { /* not applicable, do nothin */ }
+                        AquaChannelError::Full => { /* Not applicable. Do nothing */ }
                         AquaChannelError::Empty => { /* empty buffer - no action required */ }
                         AquaChannelError::Disconnected => {
                             if !lock_error_receive_atlas_scientific {
