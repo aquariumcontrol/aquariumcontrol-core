@@ -255,8 +255,11 @@ impl ScheduleCheck {
             }
             Err(e) => {
                 if !locks.channel_send {
-                    let context = format!("sending back message to {module_name} failed");
-                    log_error_chain(module_path!(), &context, e);
+                    #[cfg(not(test))]
+                    {
+                        let context = format!("sending back message to {module_name} failed");
+                        log_error_chain(module_path!(), &context, e);
+                    }
                     locks.channel_send = true;
                 }
             }

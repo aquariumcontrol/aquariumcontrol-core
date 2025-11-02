@@ -484,7 +484,7 @@ pub const SQL_QUERY_TRUNCATE_TABLE: &str = "truncate table #table;";
 #[cfg(test)]
 // Provides feed event from the database - used for testing only.
 pub const SQL_QUERY_READ_LAST_FEED_EVENT: &str =
-    "SELECT Timestamp, FeederOnTime, ProfileName, ProfileIdx from feedlog LIMIT 100;";
+    "SELECT Timestamp, FeederOnTime, ProfileIdx from feedlog LIMIT 100;";
 
 #[cfg(test)]
 // Provide Balling dosing event from the database - used for testing only.
