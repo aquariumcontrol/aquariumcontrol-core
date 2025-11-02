@@ -53,6 +53,7 @@ pub struct Feedpattern {
     pub profile_id: i32,
 
     /// name of the feed profile
+    #[allow(unused)]
     pub profile_name: String,
 
     /// vector of type FeedPhase
