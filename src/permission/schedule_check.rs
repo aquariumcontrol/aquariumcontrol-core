@@ -62,13 +62,15 @@ use log::debug;
 
 #[cfg(all(not(test), target_os = "linux"))]
 use log::info;
-use log::warn;
 
 #[cfg(all(target_os = "linux", not(test)))]
 use nix::unistd::gettid;
+
+#[cfg(not(test))]
+use log::warn;
+
 use spin_sleep::SpinSleeper;
 use std::time::{Duration, Instant};
-
 use crate::database::sql_interface_schedule::{ScheduleEntry, ScheduleType, SqlInterfaceSchedule};
 use crate::launch::channels::{AquaChannelError, AquaReceiver, AquaSender};
 use crate::launch::execution_config::ExecutionConfig;

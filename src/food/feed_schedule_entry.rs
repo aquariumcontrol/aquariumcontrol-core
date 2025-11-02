@@ -62,7 +62,6 @@ use crate::database::{
 pub struct FeedScheduleEntry {
     pub timestamp: NaiveDateTime,
     pub profile_id: i32,
-    pub profile_name: String,
     pub repeat_daily: bool,
 }
 
@@ -96,7 +95,6 @@ impl FeedScheduleEntry {
         Ok(FeedScheduleEntry {
             timestamp: sql_feed_schedule_entry.timestamp,
             profile_id: sql_feed_schedule_entry.profile_id,
-            profile_name: sql_feed_schedule_entry.profile_name.clone(),
             repeat_daily: sql_feed_schedule_entry.repeat_daily != 0,
         })
     }
@@ -110,7 +108,6 @@ impl FeedScheduleEntry {
     /// # Arguments
     /// * `timestamp_string` - A string slice representing the timestamp in `YYYY-MM-DD HH:MM:SS` format.
     /// * `profile_id` - The numeric identifier for the feed profile.
-    /// * `profile_name` - A string slice for the name of the feed profile.
     /// * `repeat_daily` - A boolean indicating if the schedule should repeat daily.
     ///
     /// # Returns
@@ -123,14 +120,12 @@ impl FeedScheduleEntry {
     pub fn new_for_test(
         timestamp_string: &str,
         profile_id: i32,
-        profile_name: &str,
         repeat_daily: bool,
     ) -> FeedScheduleEntry {
         FeedScheduleEntry {
             timestamp: NaiveDateTime::parse_from_str(timestamp_string, "%Y-%m-%d %H:%M:%S")
                 .unwrap(),
             profile_id,
-            profile_name: profile_name.to_string(),
             repeat_daily,
         }
     }
@@ -157,8 +152,8 @@ impl fmt::Display for FeedScheduleEntry {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(
             f,
-            "timestamp={}, profile_id={}, profile_name={}, repeat_daily={}",
-            self.timestamp, self.profile_id, self.profile_name, self.repeat_daily,
+            "timestamp={}, profile_id={}, repeat_daily={}",
+            self.timestamp, self.profile_id, self.repeat_daily,
         )
     }
 }
@@ -176,7 +171,6 @@ mod tests {
                 .and_hms_opt(12, 0, 0)
                 .unwrap(),
             profile_id: 101,
-            profile_name: "Test Profile".to_string(),
             repeat_daily,
         }
     }
@@ -199,7 +193,6 @@ mod tests {
             "repeat_daily should be false when the input is 0"
         );
         assert_eq!(entry.profile_id, 101);
-        assert_eq!(entry.profile_name, "Test Profile");
         println!("* Succeeded: Correctly created entry with repeat_daily=false.");
     }
 

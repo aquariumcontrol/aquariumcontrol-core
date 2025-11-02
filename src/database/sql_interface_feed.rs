@@ -105,7 +105,6 @@ pub struct SqlFeedPhase {
 pub struct SqlFeedScheduleEntry {
     pub timestamp: NaiveDateTime,
     pub profile_id: i32,
-    pub profile_name: String,
     pub repeat_daily: i16,
 }
 
@@ -301,10 +300,9 @@ impl SqlInterfaceFeed {
     ) -> Result<Option<Vec<FeedScheduleEntry>>, SqlInterfaceError> {
         let sql_feedschedule_entry_array = match self.conn.query_map(
             sql_query,
-            |(timestamp, profile_id, profile_name, repeat_daily)| SqlFeedScheduleEntry {
+            |(timestamp, profile_id, repeat_daily)| SqlFeedScheduleEntry {
                 timestamp,
                 profile_id,
-                profile_name,
                 repeat_daily,
             },
         ) {
@@ -569,14 +567,12 @@ pub mod tests {
     pub struct SqlFeedEvent {
         timestamp: String,
         feeder_run_time: f32,
-        feed_profile_name: String,
         feed_profile_id: i32,
     }
 
     pub struct FeedEvent {
         timestamp: NaiveDateTime,
         feeder_run_time: f32,
-        feed_profile_name: String,
         feed_profile_id: i32,
     }
 
@@ -659,11 +655,11 @@ pub mod tests {
         .unwrap();
         conn.exec_drop(
             sql_query_strings::SQL_QUERY_WRITE_FEED_SCHEDULE_ENTRY,
-            params! { "timestamp" => "2024-01-01 12:00:00", "profile_id" => 1, "profile_name" => "test_profile1", "is_weekly" => false, "is_daily" => true },
+            params! { "timestamp" => "2024-01-01 12:00:00", "profile_id" => 1, "is_weekly" => false, "is_daily" => true },
         ).unwrap();
         conn.exec_drop(
             sql_query_strings::SQL_QUERY_WRITE_FEED_EVENT,
-            params! { "timestamp" => Local::now().naive_local(), "feeder_run_time" => 1.0, "profile_name" => "test_profile1", "profile_id" => 1 },
+            params! { "timestamp" => Local::now().naive_local(), "feeder_run_time" => 1.0, "profile_id" => 1 },
         ).unwrap();
 
         let result = SqlInterfaceFeed::new(conn, 10, 10, 10);
@@ -972,17 +968,16 @@ pub mod tests {
         }
         let feed_timestamp =
             NaiveDateTime::parse_from_str("2022-04-11 11:00:00", "%Y-%m-%d %H:%M:%S").unwrap();
-        match sql_interface_feed.insert_feed_event(feed_timestamp, 5.5, "Test".to_string(), 1) {
+        match sql_interface_feed.insert_feed_event(feed_timestamp, 5.5, 1) {
             Ok(_) => {}
             Err(e) => panic!("Could not insert feed event into database: {e:?}"),
         }
         // Read back feed log entry from the database
         let single_feed_event_entry_array = match sql_interface_feed.conn.query_map(
             sql_query_strings::SQL_QUERY_READ_LAST_FEED_EVENT,
-            |(timestamp, feeder_run_time, feed_profile_name, feed_profile_id)| SqlFeedEvent {
+            |(timestamp, feeder_run_time, feed_profile_id)| SqlFeedEvent {
                 timestamp,
                 feeder_run_time,
-                feed_profile_name,
                 feed_profile_id,
             },
         ) {
@@ -1001,12 +996,10 @@ pub mod tests {
             )
             .expect("conversion of timestamp to NaiveDate failed."),
             feeder_run_time: single_feed_event_entry_array[0].feeder_run_time,
-            feed_profile_name: single_feed_event_entry_array[0].feed_profile_name.clone(),
             feed_profile_id: single_feed_event_entry_array[0].feed_profile_id,
         };
         assert_eq!(feed_event.timestamp, feed_timestamp);
         assert_eq!(feed_event.feeder_run_time, 5.5);
-        assert_eq!(feed_event.feed_profile_name, "Test");
         assert_eq!(feed_event.feed_profile_id, 1);
         println!("* checking inserting of feed event into log succeeded.");
         // *****************************************************************************************
@@ -1014,7 +1007,7 @@ pub mod tests {
         // add one more entry to check max row check
         let feed_timestamp =
             NaiveDateTime::parse_from_str("2022-04-12 11:00:00", "%Y-%m-%d %H:%M:%S").unwrap();
-        match sql_interface_feed.insert_feed_event(feed_timestamp, 5.5, "Test2".to_string(), 2) {
+        match sql_interface_feed.insert_feed_event(feed_timestamp, 5.5, 2) {
             Ok(_) => {}
             Err(e) => panic!("Could not insert feed event into database: {e:?}"),
         }
@@ -1070,7 +1063,6 @@ pub mod tests {
         // *** check trying to load feed schedule entry *****************************************
         let timestamp_reference = "2024-04-10 14:00:00";
         let profile_id_reference = 1;
-        let profile_name_reference = "test";
         let repeat_daily_reference = true;
 
         let sql_query_string = sql_query_strings::SQL_QUERY_WRITE_FEED_SCHEDULE_ENTRY.to_string();
@@ -1079,7 +1071,6 @@ pub mod tests {
             params! {
             "timestamp" => timestamp_reference,
             "profile_id" => profile_id_reference,
-            "profile_name" => profile_name_reference,
             "is_weekly" => false,
             "is_daily" => repeat_daily_reference,
             },
@@ -1089,6 +1080,7 @@ pub mod tests {
                 panic!("Error when inserting feed schedule entry into database: {e:?}");
             }
         };
+        println!("* wrote feed schedule entry into database.");
 
         let feedschedule_entry_before_update = match sql_interface_feed
             .get_past_feedschedule_entries_from_database()
@@ -1112,7 +1104,6 @@ pub mod tests {
                         feedschedule_entry.timestamp
                     );
                     assert_eq!(feedschedule_entry.profile_id, profile_id_reference);
-                    assert_eq!(feedschedule_entry.profile_name, profile_name_reference);
                     assert_eq!(feedschedule_entry.repeat_daily, repeat_daily_reference);
                     feedschedule_entry
                 }
@@ -1153,6 +1144,8 @@ pub mod tests {
             }
         }
 
+        println!("* updated database entry");
+
         let mut feedschedule_entry_after_update = match sql_interface_feed
             .get_future_feedschedule_entry_from_database()
         {
@@ -1160,7 +1153,6 @@ pub mod tests {
                 Some(d) => {
                     assert_eq!(d.timestamp, reference_timestamp_tomorrow_same_time);
                     assert_eq!(d.profile_id, profile_id_reference);
-                    assert_eq!(d.profile_name, profile_name_reference);
                     assert_eq!(d.repeat_daily, repeat_daily_reference);
                     d
                 }
@@ -1214,7 +1206,6 @@ pub mod tests {
 
         let timestamp_0 = "2024-04-10 14:00:00";
         let profile_id_0 = 0;
-        let profile_name_0 = "test0";
         let repeat_daily_0 = true;
 
         let sql_query_string = sql_query_strings::SQL_QUERY_WRITE_FEED_SCHEDULE_ENTRY.to_string();
@@ -1223,7 +1214,6 @@ pub mod tests {
             params! {
                 "timestamp" => timestamp_0,
                 "profile_id" => profile_id_0,
-                "profile_name" => profile_name_0,
                 "is_weekly" => false,
                 "is_daily" => repeat_daily_0,
             },
@@ -1236,7 +1226,6 @@ pub mod tests {
 
         let timestamp_1 = "2024-04-10 15:00:00";
         let profile_id_1 = 1;
-        let profile_name_1 = "test1";
         let repeat_daily_1 = true;
 
         let sql_query_string = sql_query_strings::SQL_QUERY_WRITE_FEED_SCHEDULE_ENTRY.to_string();
@@ -1245,7 +1234,6 @@ pub mod tests {
             params! {
                 "timestamp" => timestamp_1,
                 "profile_id" => profile_id_1,
-                "profile_name" => profile_name_1,
                 "is_weekly" => false,
                 "is_daily" => repeat_daily_1,
             },
@@ -1308,14 +1296,12 @@ pub mod tests {
                         reference_timestamp0_tomorrow_same_time
                     );
                     assert_eq!(d.get(0).unwrap().profile_id, profile_id_0);
-                    assert_eq!(d.get(0).unwrap().profile_name, profile_name_0);
                     assert_eq!(d.get(0).unwrap().repeat_daily, repeat_daily_0);
                     assert_eq!(
                         d.get(1).unwrap().timestamp,
                         reference_timestamp1_tomorrow_same_time
                     );
                     assert_eq!(d.get(1).unwrap().profile_id, profile_id_1);
-                    assert_eq!(d.get(1).unwrap().profile_name, profile_name_1);
                     assert_eq!(d.get(1).unwrap().repeat_daily, repeat_daily_1);
                 }
                 None => {

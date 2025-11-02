@@ -49,7 +49,6 @@ pub mod tests {
             &mut self,
             _timestamp: NaiveDateTime,
             _feeder_run_time: f64,
-            _profile_name: String,
             _profile_id: i32,
         ) -> Result<(), SqlInterfaceError> {
             Err(SqlInterfaceError::MockError(module_path!().to_string()))
@@ -74,7 +73,6 @@ pub mod tests {
             &mut self,
             _timestamp: NaiveDateTime,
             _profile_id: i32,
-            _profile_name: String,
             _is_weekly: bool,
             _is_daily: bool,
         ) -> Result<(), SqlInterfaceError> {

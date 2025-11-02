@@ -63,7 +63,6 @@ pub trait DatabaseInterfaceFeedTrait: Pingable {
         &mut self,
         timestamp: NaiveDateTime,
         feeder_run_time: f64,
-        profile_name: String,
         profile_id: i32,
     ) -> mysql::Result<(), SqlInterfaceError>;
 
@@ -82,7 +81,6 @@ pub trait DatabaseInterfaceFeedTrait: Pingable {
         &mut self,
         timestamp: NaiveDateTime,
         profile_id: i32,
-        profile_name: String,
         is_weekly: bool,
         is_daily: bool,
     ) -> mysql::Result<(), SqlInterfaceError>;
@@ -131,7 +129,6 @@ impl DatabaseInterfaceFeedTrait for SqlInterfaceFeed {
     /// # Arguments
     /// * `timestamp` - The `NaiveDateTime` when the feed event occurred.
     /// * `feeder_run_time` - The duration (in seconds) the feeder motor was active.
-    /// * `profile_name` - The name of the feed profile that was executed for this event.
     /// * `profile_id` - The unique identifier of the feed profile that was executed.
     ///
     /// # Returns
@@ -145,7 +142,6 @@ impl DatabaseInterfaceFeedTrait for SqlInterfaceFeed {
         &mut self,
         timestamp: NaiveDateTime,
         feeder_run_time: f64,
-        profile_name: String,
         profile_id: i32,
     ) -> mysql::Result<(), SqlInterfaceError> {
         self.conn
@@ -154,7 +150,6 @@ impl DatabaseInterfaceFeedTrait for SqlInterfaceFeed {
                 params! {
                 "timestamp" => timestamp,
                 "feeder_run_time" => feeder_run_time,
-                "profile_name" => profile_name,
                 "profile_id" => profile_id,
                 },
             )
@@ -324,7 +319,6 @@ impl DatabaseInterfaceFeedTrait for SqlInterfaceFeed {
         &mut self,
         timestamp: NaiveDateTime,
         profile_id: i32,
-        profile_name: String,
         is_weekly: bool,
         is_daily: bool,
     ) -> mysql::Result<(), SqlInterfaceError> {
@@ -334,7 +328,6 @@ impl DatabaseInterfaceFeedTrait for SqlInterfaceFeed {
             params! {
             "timestamp" => timestamp,
             "profile_id" => profile_id,
-            "profile_name" => profile_name,
             "is_weekly" => is_weekly,
             "is_daily" => is_daily,
             },

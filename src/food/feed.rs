@@ -184,7 +184,7 @@ impl Feed {
         let mut output: String = "Vec<FeedscheduleEntry>=".to_string();
         for (i, s) in feedschedule_entries.iter().enumerate() {
             output +=
-                &(" #".to_owned() + &format!("{}: ID= {} ", i, s.profile_id) + &s.profile_name);
+                &(" #".to_owned() + &format!("{}: ID= {} ", i, s.profile_id));
         }
         output
     }
@@ -283,7 +283,6 @@ impl Feed {
         let log_result = match sql_interface_feed.insert_feed_event(
             current_timestamp,
             feed_pattern.calc_feeder_runtime(),
-            feed_pattern.profile_name,
             profile_id,
         ) {
             Ok(_) => Ok(()),
@@ -764,7 +763,6 @@ pub mod tests {
             .insert_feed_schedule_entry(
                 time_stamp_feed_schedule_entry_one_time,
                 1,
-                "testOneTime".to_string(),
                 false,
                 false,
             )
@@ -774,7 +772,6 @@ pub mod tests {
             .insert_feed_schedule_entry(
                 time_stamp_feed_schedule_entry_repeat,
                 2,
-                "testRepeat".to_string(),
                 false,
                 true,
             )
@@ -877,7 +874,6 @@ pub mod tests {
             .insert_feed_schedule_entry(
                 time_stamp_feed_schedule_entry,
                 1,
-                "testOneTime".to_string(),
                 false,
                 false,
             )
@@ -1118,19 +1114,16 @@ pub mod tests {
         feedschedule_entries.push(FeedScheduleEntry::new_for_test(
             "2024-10-24 10:00:00",
             77,
-            "dummy1",
             true,
         ));
         feedschedule_entries.push(FeedScheduleEntry::new_for_test(
             "2024-10-24 11:00:00",
             78,
-            "dummy2",
             true,
         ));
         feedschedule_entries.push(FeedScheduleEntry::new_for_test(
             "2024-10-24 12:00:00",
             79,
-            "dummy3",
             true,
         ));
 
@@ -1303,7 +1296,6 @@ pub mod tests {
             .insert_feed_schedule_entry(
                 time_stamp_feed_schedule_entry_one_time,
                 1,
-                "testOneTimePast".to_string(),
                 false,
                 false,
             )
@@ -1313,7 +1305,6 @@ pub mod tests {
             .insert_feed_schedule_entry(
                 time_stamp_feed_schedule_entry_repeat,
                 2,
-                "testRepeatPast".to_string(),
                 false,
                 true,
             )
@@ -1427,7 +1418,6 @@ pub mod tests {
             .insert_feed_schedule_entry(
                 time_stamp_feed_schedule_entry_one_time,
                 1,
-                "testOneTimePast".to_string(),
                 false,
                 false,
             )
@@ -1437,7 +1427,6 @@ pub mod tests {
             .insert_feed_schedule_entry(
                 time_stamp_feed_schedule_entry_repeat,
                 2,
-                "testRepeatPast".to_string(),
                 false,
                 true,
             )

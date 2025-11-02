@@ -48,8 +48,8 @@ pub const SQL_QUERY_READ_CURRENT_TIMESTAMP: &str = "SELECT CURRENT_TIMESTAMP() L
 
 /// Inserts data of one feed event into the database.
 pub const SQL_QUERY_WRITE_FEED_EVENT: &str = concat!(
-    "INSERT into feedlog (Timestamp, FeederOnTime, ProfileName, ProfileIdx) ",
-    "values(:timestamp, :feeder_run_time, :profile_name, :profile_id)"
+    "INSERT into feedlog (Timestamp, FeederOnTime, ProfileIdx) ",
+    "values(:timestamp, :feeder_run_time, :profile_id)"
 );
 
 #[cfg(test)]
@@ -177,14 +177,14 @@ pub const SQL_QUERY_READ_HEATING_STATS: &str =
 
 /// Provides the feed schedule entries which lie in the past in descending order
 pub const SQL_QUERY_READ_PAST_FEED_SCHEDULE_ENTRY: &str = concat!(
-    "SELECT TimeStamp, ProfileId, ProfileName, IsDaily FROM feedschedule ",
+    "SELECT TimeStamp, ProfileId, IsDaily FROM feedschedule ",
     "WHERE TimeStamp < CURRENT_TIMESTAMP() ORDER BY TimeStamp DESC LIMIT 100;"
 );
 
 #[cfg(test)]
 /// Provides the feed schedule entries which lie in the future in ascending order
 pub const SQL_QUERY_READ_FUTURE_FEED_SCHEDULE_ENTRY: &str = concat!(
-    "SELECT TimeStamp, ProfileId, ProfileName, IsDaily FROM feedschedule ",
+    "SELECT TimeStamp, ProfileId, IsDaily FROM feedschedule ",
     "WHERE TimeStamp > CURRENT_TIMESTAMP() ORDER BY TimeStamp ASC LIMIT 100;"
 );
 
@@ -394,7 +394,6 @@ pub const SQL_QUERY_CHECK_FEEDSCHEDULE_NULL: &str = concat!(
     "SELECT EXISTS(SELECT 1 FROM feedschedule ",
     "WHERE Timestamp IS NULL OR ",
     "ProfileId IS NULL OR ",
-    "ProfileName IS NULL OR ",
     "IsWeekly IS NULL OR ",
     "IsDaily IS NULL) LIMIT 100;"
 );
@@ -513,8 +512,8 @@ pub const SQL_QUERY_WRITE_SCHEDULE_TEST_DATA: &str =
 #[cfg(test)]
 /// Inserts data of one feed schedule entry into the database.
 pub const SQL_QUERY_WRITE_FEED_SCHEDULE_ENTRY: &str = concat!(
-    "INSERT into feedschedule (Timestamp, ProfileId, ProfileName, IsWeekly, IsDaily) ",
-    "values(:timestamp, :profile_id, :profile_name, :is_weekly, :is_daily)"
+    "INSERT into feedschedule (Timestamp, ProfileId, IsWeekly, IsDaily) ",
+    "values(:timestamp, :profile_id, :is_weekly, :is_daily)"
 );
 
 #[cfg(test)]
