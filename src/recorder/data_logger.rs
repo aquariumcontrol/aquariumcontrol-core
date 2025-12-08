@@ -1196,9 +1196,6 @@ pub mod tests {
     use assert_float_eq::assert_float_absolute_eq;
     use std::io::Read;
 
-    #[cfg(target_os = "linux")]
-    use assert_float_eq::*;
-
     /// Prepares all necessary parts for a data logger test.
     fn prepare_data_logger_test_rig(
         config: DataLoggerConfig,

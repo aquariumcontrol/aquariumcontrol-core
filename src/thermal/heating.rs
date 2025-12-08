@@ -928,8 +928,6 @@ pub mod tests {
     use std::thread;
     use std::time::{Duration, Instant};
 
-    #[cfg(target_os = "linux")]
-    use assert_float_eq::*;
     use crate::database::sql_query_strings::SQL_TABLE_HEATING_STATS;
 
     // Prepares a `Heating` control instance with a mock midnight calculator and a clean test database.
