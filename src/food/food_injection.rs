@@ -7,10 +7,10 @@ The above copyright notice and this permission notice shall be included in all c
 THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
-//! Implements the physical execution of a feed pattern, controlling pumps and the feeder.
+//! Implements the physical execution of a feed profile, controlling pumps and the feeder.
 //!
 //! This module provides the `FoodInjectionTrait` and its concrete implementation,
-//! `FoodInjection`. Its core responsibility is to translate a logical `Feedpattern`
+//! `FoodInjection`. Its core responsibility is to translate a logical `FeedProfile`
 //! into a sequence of physical actions by communicating with the `RelayManager`. It
 //! manages the state of individual actuators, handles precise timing, and allows for
 //! graceful interruption.
@@ -26,7 +26,7 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 //!   sending redundant commands to the `RelayManager`.
 //!
 //! - **`inject_food()` Method**: The main entry point. It iterates through each `FeedPhase`
-//!   of a given `Feedpattern`, orchestrating the complex sequence of pausing pumps,
+//!   of a given `FeedProfile`, orchestrating the complex sequence of pausing pumps,
 //!   running the feeder, and waiting for specified durations.
 //!
 //! - **`switch_skimmer_pumps_feeder()` Method**: A private helper that compares the
@@ -47,7 +47,7 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 //!   `Quit` command from the `SignalHandler`. This ensures that the entire feeding
 //!   process can be aborted gracefully and quickly at any point.
 //!
-//! - **Guaranteed Cleanup**: Regardless of whether the feed pattern completes, is
+//! - **Guaranteed Cleanup**: Regardless of whether the execution of the feed profile completes, is
 //!   interrupted, or encounters an error, a final cleanup step is always executed.
 //!   This step ensures that all pumps are returned to their active state and the
 //!   feeder is turned off, preventing the system from being left in a hazardous
@@ -64,23 +64,23 @@ use std::time::{Duration, Instant};
 
 use crate::food::feed_channels::FeedChannels;
 use crate::food::food_injection_error::FoodInjectionError;
-use crate::food::{feed_config::FeedConfig, feed_pattern::Feedpattern};
+use crate::food::{feed_config::FeedConfig, feed_profile::FeedProfile};
 use crate::utilities::channel_content::{ActuatorState, AquariumDevice, InternalCommand};
 use crate::utilities::proc_ext_req::ProcessExternalRequestTrait;
 
-/// Trait for the execution of the feed pattern.
+/// Trait for the execution of the feed profile.
 /// This trait allows running the main control with a mock implementation for testing.
 pub trait FoodInjectionTrait {
-    /// Actuates the feeder according to the specified feed pattern to inject food.
+    /// Actuates the feeder according to the specified feed profile to inject food.
     ///
     /// This trait method defines the interface for physically dispensing food based
-    /// on a detailed feed pattern. Implementations will control relevant pumps and
+    /// on a detailed feed profile. Implementations will control relevant pumps and
     /// the feeder motor through communication with a hardware manager (e.g., relay manager),
     /// while also monitoring for external shutdown commands.
     ///
     /// # Arguments
     /// * `feed_channels` - A mutable reference to the struct containing the channels.
-    /// * `feed_pattern` - A reference to the struct holding the description of the feed pattern.
+    /// * `feed_profile` - A reference to the struct holding the description of the feed profile.
     ///
     /// # Returns
     /// A tuple `(bool, Result<(), Vec<FoodInjectionError>>)` where:
@@ -98,7 +98,7 @@ pub trait FoodInjectionTrait {
     fn inject_food(
         &mut self,
         feed_channels: &mut FeedChannels,
-        feedpattern: &Feedpattern,
+        feed_profile: &FeedProfile,
     ) -> (bool, Result<(), Vec<FoodInjectionError>>);
 }
 
@@ -124,7 +124,7 @@ pub struct FoodInjectionTargetActuatorStates {
 }
 
 #[cfg_attr(doc, aquamarine::aquamarine)]
-/// Struct implements the FoodInjectionTrait for executing the feed pattern.
+/// Struct implements the FoodInjectionTrait for executing the feed profile.
 /// It also contains state attributes for the actuators.
 /// Thread communication is as follows:
 /// ```mermaid
@@ -491,9 +491,9 @@ impl FoodInjection {
 }
 
 impl FoodInjectionTrait for FoodInjection {
-    /// Actuates the feeder according to the specified feed pattern to inject food.
+    /// Actuates the feeder according to the specified feed profile to inject food.
     ///
-    /// This implementation executes a sequence of feed phases defined in the `feedpattern`.
+    /// This implementation executes a sequence of feed phases defined in the `feed_profile`.
     /// For each phase, it sets the state of various pumps and the feeder, waits for a
     /// specified duration, and continuously checks for a `Quit` command from the signal
     /// handler to allow for graceful interruption.
@@ -503,7 +503,7 @@ impl FoodInjectionTrait for FoodInjection {
     ///
     /// # Arguments
     /// * `feed_channels` - A mutable reference to the struct containing the channels.
-    /// * `feedpattern` - A reference to the struct holding the description of the feed pattern.
+    /// * `feed_profile` - A reference to the struct holding the description of the feed profile.
     ///
     /// # Returns
     /// A tuple `(bool, Result<(), Vec<FoodInjectionError>>)` where:
@@ -520,7 +520,7 @@ impl FoodInjectionTrait for FoodInjection {
     fn inject_food(
         &mut self,
         feed_channels: &mut FeedChannels,
-        feedpattern: &Feedpattern,
+        feed_profile: &FeedProfile,
     ) -> (bool, Result<(), Vec<FoodInjectionError>>) {
         let spin_sleeper = SpinSleeper::default();
         let sleep_interval_millis: i16 = 1;
@@ -533,7 +533,7 @@ impl FoodInjectionTrait for FoodInjection {
         let mut quit_command_received: bool = false;
         let mut collected_errors_cumulated: Vec<FoodInjectionError> = vec![];
 
-        for feedphase in &feedpattern.feedphases {
+        for feedphase in &feed_profile.feedphases {
             // check if there is a quit request
             (quit_command_received, _, _) =
                 self.process_external_request(&mut feed_channels.rx_feed_from_signal_handler, None);
@@ -678,7 +678,7 @@ impl FoodInjectionTrait for FoodInjection {
 
 #[cfg(test)]
 pub mod tests {
-    use crate::food::feed_pattern::{FeedPhase, Feedpattern};
+    use crate::food::feed_profile::{FeedPhase, FeedProfile};
     use crate::food::food_injection::{FoodInjection, FoodInjectionTrait};
     use crate::launch::channels::{AquaReceiver, AquaSender, Channels};
     use crate::utilities::channel_content::{ActuatorState, AquariumDevice, InternalCommand};
@@ -882,14 +882,14 @@ pub mod tests {
                 // After all phases are executed, the feeder will be switched off
                 // and 5 devices will be switched on
 
-                let feedpattern = Feedpattern {
+                let feed_profile = FeedProfile {
                     profile_id: 1,
                     profile_name: "Test1".to_string(),
                     feedphases,
                 };
 
                 let start_time = Instant::now();
-                let result_tuple = food_injection.inject_food(&mut channels.feed, &feedpattern);
+                let result_tuple = food_injection.inject_food(&mut channels.feed, &feed_profile);
                 let end_time = Instant::now();
 
                 let execution_duration = end_time - start_time;
@@ -1006,14 +1006,14 @@ pub mod tests {
                 // After all phases are executed, the feeder will be switched off
                 // and 5 devices will be switched on
 
-                let feedpattern = Feedpattern {
+                let feed_profile = FeedProfile {
                     profile_id: 1,
                     profile_name: "Test1".to_string(),
                     feedphases,
                 };
 
                 let start_time = Instant::now();
-                let result_tuple = food_injection.inject_food(&mut channels.feed, &feedpattern);
+                let result_tuple = food_injection.inject_food(&mut channels.feed, &feed_profile);
                 let end_time = Instant::now();
 
                 let execution_duration = end_time - start_time;

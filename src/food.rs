@@ -11,7 +11,7 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 pub mod feed;
 
 /// Contains the data definition for the time profile of the feed
-pub mod feed_pattern;
+pub mod feed_profile;
 
 /// Contains the trait implementation for the execution of the feed
 pub mod food_injection;

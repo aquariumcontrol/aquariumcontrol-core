@@ -38,10 +38,10 @@ pub mod sql_interface_midnight;
 pub mod sql_query_strings;
 
 /// Contains functions for execution of all queries relevant for heating set values (thermal)
-pub mod sql_interface_heating_setvals;
+pub mod sql_interface_heating_set_vals;
 
 /// Contains functions for execution of all queries relevant for ventilation set values (thermal)
-pub mod sql_interface_ventilation_setvals;
+pub mod sql_interface_ventilation_set_vals;
 
 /// Contains data structure for transfer of heating statistics to the database
 pub mod sql_interface_heating_stats_data_transfer;

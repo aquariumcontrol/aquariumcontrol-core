@@ -11,7 +11,7 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 //!
 //! This module provides a dedicated interface, `SqlInterfaceBalling`, for handling
 //! all SQL operations related to the Balling feature. It encapsulates logic for
-//! reading pump configurations (`ballingsetvals`), logging dosing events
+//! reading pump configurations (`balling_set_vals`), logging dosing events
 //! (`ballingdosinglog`), and retrieving dosing history.
 //!
 //! ## Key Components
@@ -26,7 +26,7 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 //!   `SqlInterfaceBalling` instance but also performs essential "fail-fast"
 //!   validation. At initialization, it checks the database for:
 //!   - The presence of `NULL` values in the configuration table.
-//!   - Whether the number of rows in the `ballingsetvals` and `ballingdosinglog`
+//!   - Whether the number of rows in the `balling_set_vals` and `balling_log`
 //!     tables exceeds the limits defined in the application configuration.
 //!   This ensures the system doesn't start in an invalid or inconsistent state.
 //!
@@ -52,8 +52,8 @@ use mysql::*;
 use std::time::Duration;
 
 use crate::database::sql_query_strings::{
-    SQL_QUERY_CHECK_BALLING_DOSING_LOG_COUNT, SQL_QUERY_CHECK_BALLING_SETVALS_COUNT,
-    SQL_QUERY_CHECK_BALLING_SETVALS_NULL,
+    SQL_QUERY_CHECK_BALLING_LOG_COUNT, SQL_QUERY_CHECK_BALLING_SET_VALS_COUNT,
+    SQL_QUERY_CHECK_BALLING_SET_VALS_NULL,
 };
 use crate::database::{
     sql_interface::SqlInterface, sql_interface_error::SqlInterfaceError, sql_query_strings,
@@ -119,7 +119,7 @@ impl SqlInterfaceBalling {
         // query the database
         let count_null_values = SqlInterface::get_single_integer_from_database(
             &mut conn,
-            SQL_QUERY_CHECK_BALLING_SETVALS_NULL,
+            SQL_QUERY_CHECK_BALLING_SET_VALS_NULL,
         )
         .map_err(|e| SqlInterfaceError::DatabaseCheckBallingSetValsFailure {
             location: module_path!().to_string(),
@@ -127,7 +127,7 @@ impl SqlInterfaceBalling {
         })?;
         let count_rows_setvals = SqlInterface::get_single_integer_from_database(
             &mut conn,
-            SQL_QUERY_CHECK_BALLING_SETVALS_COUNT,
+            SQL_QUERY_CHECK_BALLING_SET_VALS_COUNT,
         )
         .map_err(|e| SqlInterfaceError::DatabaseCheckBallingSetValsFailure {
             location: module_path!().to_string(),
@@ -135,7 +135,7 @@ impl SqlInterfaceBalling {
         })?;
         let count_rows_dosing_log = SqlInterface::get_single_integer_from_database(
             &mut conn,
-            SQL_QUERY_CHECK_BALLING_DOSING_LOG_COUNT,
+            SQL_QUERY_CHECK_BALLING_LOG_COUNT,
         )
         .map_err(|e| SqlInterfaceError::DatabaseCheckBallingSetValsFailure {
             location: module_path!().to_string(),
@@ -336,7 +336,7 @@ impl SqlInterfaceBalling {
 
         // Get a single data set from the database
         let mut single_balling_setval_array = match self.conn.exec_map(
-            sql_query_strings::SQL_QUERY_READ_BALLING_SETVALS,
+            sql_query_strings::SQL_QUERY_READ_BALLING_SET_VALS,
             params,
             |(pump_id, dosing_speed, dosing_volume, label)| BallingSetVal {
                 pump_id,
@@ -349,7 +349,7 @@ impl SqlInterfaceBalling {
             Err(e) => {
                 return Err(SqlInterfaceError::SingleBallingSetValRequestFailure {
                     location: module_path!().to_string(),
-                    query: sql_query_strings::SQL_QUERY_READ_BALLING_SETVALS.to_string(),
+                    query: sql_query_strings::SQL_QUERY_READ_BALLING_SET_VALS.to_string(),
                     pump_id,
                     source: e,
                 });
@@ -360,7 +360,7 @@ impl SqlInterfaceBalling {
         if single_balling_setval_array.is_empty() {
             return Err(SqlInterfaceError::SingleBallingSetValEmptyResponse(
                 module_path!().to_string(),
-                sql_query_strings::SQL_QUERY_READ_BALLING_SETVALS.to_string(),
+                sql_query_strings::SQL_QUERY_READ_BALLING_SET_VALS.to_string(),
                 pump_id,
             ));
         }
@@ -369,7 +369,7 @@ impl SqlInterfaceBalling {
         if single_balling_setval_array.len() > 1 {
             return Err(SqlInterfaceError::SingleBallingSetValNoSingleResponse(
                 module_path!().to_string(),
-                sql_query_strings::SQL_QUERY_READ_BALLING_SETVALS.to_string(),
+                sql_query_strings::SQL_QUERY_READ_BALLING_SET_VALS.to_string(),
                 pump_id,
             ));
         }
@@ -477,7 +477,7 @@ pub mod tests {
         println!("* Testing new() with valid data (Happy Path)...");
         SqlInterface::truncate_table(
             &mut sql_interface,
-            sql_query_strings::SQL_TABLE_BALLING_SETVALS.to_string(),
+            sql_query_strings::SQL_TABLE_BALLING_SET_VALS.to_string(),
         )
         .unwrap();
         SqlInterface::truncate_table(
@@ -489,7 +489,7 @@ pub mod tests {
         // Insert one valid row into each table
         let mut conn = sql_interface.get_connection().unwrap();
         conn.exec_drop(
-            sql_query_strings::SQL_QUERY_WRITE_BALLING_SETVALS,
+            sql_query_strings::SQL_QUERY_WRITE_BALLING_SET_VALS,
             params! { "pump_id" => 1, "dosing_speed" => 1.0, "dosing_volume" => 1.0, "label" => "valid" },
         ).unwrap();
         conn.exec_drop(
@@ -509,12 +509,12 @@ pub mod tests {
         println!("* Testing new() with too many rows in ballingsetvals...");
         SqlInterface::truncate_table(
             &mut sql_interface,
-            sql_query_strings::SQL_TABLE_BALLING_SETVALS.to_string(),
+            sql_query_strings::SQL_TABLE_BALLING_SET_VALS.to_string(),
         )
         .unwrap();
         let mut conn = sql_interface.get_connection().unwrap();
-        conn.exec_drop(sql_query_strings::SQL_QUERY_WRITE_BALLING_SETVALS, params! { "pump_id" => 1, "dosing_speed" => 1.0, "dosing_volume" => 1.0, "label" => "row1" }).unwrap();
-        conn.exec_drop(sql_query_strings::SQL_QUERY_WRITE_BALLING_SETVALS, params! { "pump_id" => 2, "dosing_speed" => 1.0, "dosing_volume" => 1.0, "label" => "row2" }).unwrap();
+        conn.exec_drop(sql_query_strings::SQL_QUERY_WRITE_BALLING_SET_VALS, params! { "pump_id" => 1, "dosing_speed" => 1.0, "dosing_volume" => 1.0, "label" => "row1" }).unwrap();
+        conn.exec_drop(sql_query_strings::SQL_QUERY_WRITE_BALLING_SET_VALS, params! { "pump_id" => 2, "dosing_speed" => 1.0, "dosing_volume" => 1.0, "label" => "row2" }).unwrap();
 
         let result = SqlInterfaceBalling::new(conn, 1, 10); // Set the limit to 1
         assert!(
@@ -654,12 +654,15 @@ pub mod tests {
                 Err(e) => panic!("Could not calculate duration since last Balling dosing: {e:?}"),
             }
             .unwrap();
-        let reference_duration_since_last_balling_dosing =
-            SqlInterface::get_duration_from_naive_timestamp_to_local_now(balling_timestamp)
-                .unwrap();
+
+        // Reference calculation uses the database clock to avoid timezone and DST issues
+        let db_now = SqlInterface::get_current_timestamp(&mut sql_interface_balling.conn)
+            .expect("Failed to get current timestamp from DB for reference calculation.");
+        let reference_duration_since_last_balling_dosing = (db_now - balling_timestamp).num_seconds();
+
         let duration_delta_seconds = duration_since_last_balling_dosing
             .as_secs()
-            .abs_diff(reference_duration_since_last_balling_dosing.num_seconds() as u64);
+            .abs_diff(reference_duration_since_last_balling_dosing as u64);
         assert_le!(duration_delta_seconds, 1);
         println!("* checking duration since last Balling dosing succeeded.");
         // *****************************************************************************************
@@ -669,7 +672,7 @@ pub mod tests {
     // Test case verifies the behavior of all functions accessing the Balling set value table.
     // They are all combined in one function to limit the number of additional databases.
     // Test case uses test database #31.
-    pub fn test_sql_interface_balling_setvals() {
+    pub fn test_sql_interface_balling_set_vals() {
         let config: ConfigData = read_config_file_with_test_database(
             "/config/aquarium_control_test_generic.toml".to_string(),
             31,
@@ -689,7 +692,7 @@ pub mod tests {
         // *** read balling set vals from empty table **********************************************
         match SqlInterface::truncate_table(
             &mut sql_interface,
-            sql_query_strings::SQL_TABLE_BALLING_SETVALS.to_string(),
+            sql_query_strings::SQL_TABLE_BALLING_SET_VALS.to_string(),
         ) {
             Ok(_) => {}
             Err(e) => panic!("Could not prepare test case: {e:?}"),
@@ -710,7 +713,7 @@ pub mod tests {
 
         // *** read balling set vals from pre-filled table *****************************************
         // prepare database: insert Balling set vals
-        let sql_query_string = sql_query_strings::SQL_QUERY_WRITE_BALLING_SETVALS.to_string();
+        let sql_query_string = sql_query_strings::SQL_QUERY_WRITE_BALLING_SET_VALS.to_string();
         match sql_interface_balling.conn.exec_drop::<_, _>(
             sql_query_string.clone(),
             params! {

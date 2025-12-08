@@ -14,7 +14,7 @@ pub mod tests {
     use crate::database::database_interface_feed_trait::DatabaseInterfaceFeedTrait;
     use crate::database::pingable::Pingable;
     use crate::database::sql_interface_error::SqlInterfaceError;
-    use crate::food::feed_pattern::Feedpattern;
+    use crate::food::feed_profile::FeedProfile;
     use crate::food::feed_schedule_entry::FeedScheduleEntry;
 
     /// Contains the configuration and the implementation of the mock SQL interface for Feed.
@@ -39,7 +39,7 @@ pub mod tests {
             Err(SqlInterfaceError::MockError(module_path!().to_string()))
         }
 
-        fn get_past_feedschedule_entries_from_database(
+        fn get_past_feed_schedule_entries_from_database(
             &mut self,
         ) -> Result<Option<Vec<FeedScheduleEntry>>, SqlInterfaceError> {
             Err(SqlInterfaceError::MockError(module_path!().to_string()))
@@ -54,14 +54,14 @@ pub mod tests {
             Err(SqlInterfaceError::MockError(module_path!().to_string()))
         }
 
-        fn get_single_feedpattern_from_database(
+        fn get_single_feed_profile_from_database(
             &mut self,
             _profile_id: i32,
-        ) -> Result<Feedpattern, SqlInterfaceError> {
+        ) -> Result<FeedProfile, SqlInterfaceError> {
             Err(SqlInterfaceError::MockError(module_path!().to_string()))
         }
 
-        fn update_feedschedule_entries_in_database(
+        fn update_feed_schedule_entries_in_database(
             &mut self,
             _feedschedule_entry: &mut Vec<FeedScheduleEntry>,
         ) -> Result<(), SqlInterfaceError> {

@@ -142,21 +142,20 @@ impl SqlInterfaceData {
     ) -> Result<(), SqlInterfaceError> {
         let params = params! {
             "timestamp" => data.timestamp,
-            "temp" => data.water_temperature,
-            "temp_f" => data.water_temperature_filtered,
-            "ph" => data.ph,
-            "ph_f" => data.ph_filtered,
-            "cond" => data.conductivity,
-            "cond_f" => data.conductivity_filtered,
-            "cond_c" => data.conductivity_compensated,
-            "refill" => data.refill_in_progress,
-            "tank_pos" => data.tank_level_switch_position,
-            "tank_inv" => data.tank_level_switch_invalid,
-            "tank_stab" => data.tank_level_switch_position_stabilized,
-            "vent" => data.surface_ventilation_status,
-            "amb_temp" => data.ambient_temperature,
-            "amb_hum" => data.ambient_humidity,
-            "heater" => data.heater_status,
+            "water_temperature" => data.water_temperature,
+            "water_temperature_filtered" => data.water_temperature_filtered,
+            "ph_value" => data.ph,
+            "ph_value_filtered" => data.ph_filtered,
+            "conductivity" => data.conductivity,
+            "conductivity_filtered" => data.conductivity_filtered,
+            "refill_in_progress" => data.refill_in_progress,
+            "tank_level_switch_position" => data.tank_level_switch_position,
+            "tank_level_switch_invalid" => data.tank_level_switch_invalid,
+            "tank_level_switch_position_stabilized" => data.tank_level_switch_position_stabilized,
+            "surface_ventilation_status" => data.surface_ventilation_status,
+            "ambient_temperature" => data.ambient_temperature,
+            "ambient_humidity" => data.ambient_humidity,
+            "heater_status" => data.heater_status,
         };
 
         // execute the database query and evaluate the result
@@ -276,7 +275,6 @@ pub mod tests {
         pub ph_filtered: f32,
         pub conductivity: f32,
         pub conductivity_filtered: f32,
-        pub conductivity_compensated: f32,
     }
 
     // This struct contains the second part of one row from table 'data'
@@ -339,7 +337,6 @@ pub mod tests {
                 ph_filt,
                 conduc,
                 conduc_filt,
-                conduc_comp,
             )| SqlDataFrame1 {
                 timestamp,
                 water_temperature: water_temp,
@@ -348,7 +345,6 @@ pub mod tests {
                 ph_filtered: ph_filt,
                 conductivity: conduc,
                 conductivity_filtered: conduc_filt,
-                conductivity_compensated: conduc_comp,
             },
         ) {
             Ok(c) => c,
@@ -417,7 +413,6 @@ pub mod tests {
             ph_filtered: Some(data_frame_1.ph_filtered),
             conductivity: Some(data_frame_1.conductivity),
             conductivity_filtered: Some(data_frame_1.conductivity_filtered),
-            conductivity_compensated: Some(data_frame_1.conductivity_compensated),
             refill_in_progress: Some(data_frame_2.refill_in_progress),
             tank_level_switch_position: Some(data_frame_2.tank_level_switch_position),
             tank_level_switch_invalid: Some(data_frame_2.tank_level_switch_invalid),
@@ -498,7 +493,6 @@ pub mod tests {
             ph_filtered: Some(7.5),
             conductivity: Some(50000.0),
             conductivity_filtered: Some(51000.0),
-            conductivity_compensated: Some(52000.0),
             refill_in_progress: Some(false),
             tank_level_switch_position: Some(false),
             tank_level_switch_invalid: Some(false),
@@ -536,7 +530,6 @@ pub mod tests {
             ph_filtered: Some(8.5),
             conductivity: Some(50001.0),
             conductivity_filtered: Some(51001.0),
-            conductivity_compensated: Some(52001.0),
             refill_in_progress: Some(true),
             tank_level_switch_position: Some(true),
             tank_level_switch_invalid: Some(true),
@@ -584,7 +577,6 @@ pub mod tests {
             ph_filtered: None,
             conductivity: None,
             conductivity_filtered: None,
-            conductivity_compensated: None,
             refill_in_progress: None,
             tank_level_switch_position: None,
             tank_level_switch_invalid: None,

@@ -171,11 +171,11 @@ pub enum SqlInterfaceError {
     #[error("[{0}] Database responded with multiple responses to request to query: {1}")]
     SingleHeatingStatsRequestNoSingleResponse(String, String),
 
-    /// Could not get feed pattern header from the database
+    /// Could not get feed profile header from the database
     #[error(
-        "[{location}] Could not get feed pattern header from the database with query: {query} with profile_id={profile_id}"
+        "[{location}] Could not get feed profile header from the database with query: {query} with profile_id={profile_id}"
     )]
-    SingleFeedpatternRequestFailure {
+    SingleFeedProfileRequestFailure {
         location: String,
         query: String,
         profile_id: i32,
@@ -186,11 +186,11 @@ pub enum SqlInterfaceError {
 
     /// database responded with empty response.
     #[error("[{0}] Database responded with empty response to query: {1} with profile_id={2}")]
-    SingleFeedpatternRequestEmptyResponse(String, String, i32),
+    SingleFeedProfileRequestEmptyResponse(String, String, i32),
 
     /// The database responded with multiple responses.
     #[error("[{0}] Database responded with multiple responses to request to query: {1} with profile_id={2}")]
-    SingleFeedpatternRequestNoSingleResponse(String, String, i32),
+    SingleFeedProfileRequestNoSingleResponse(String, String, i32),
 
     /// Could not get schedule entries from the database.
     #[error("[{location}] Could not get schedule entries from database using query: {query}")]

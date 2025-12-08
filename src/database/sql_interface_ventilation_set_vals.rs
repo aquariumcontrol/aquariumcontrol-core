@@ -59,7 +59,7 @@ use crate::database::sql_interface::SqlInterface;
 use crate::database::sql_interface_error::SqlInterfaceError;
 use crate::database::sql_query_strings;
 use crate::database::sql_query_strings::{
-    SQL_QUERY_CHECK_VENTILATION_SETVALS_COUNT, SQL_QUERY_CHECK_VENTILATION_SETVALS_NULL,
+    SQL_QUERY_CHECK_VENTILATION_SET_VALS_COUNT, SQL_QUERY_CHECK_VENTILATION_SET_VALS_NULL,
 };
 use crate::database::thermal_set_value_updater_trait::ThermalSetValueUpdaterTrait;
 use crate::thermal::ventilation_config::VentilationConfig;
@@ -92,7 +92,7 @@ impl SqlInterfaceVentilationSetVals {
     ///
     /// This constructor initializes the SQL interface for ventilation set values. It performs
     /// several pre-flight checks to ensure data integrity, such as verifying that the
-    /// `ventilationsetvals` table contains no NULL values and has at most one row.
+    /// `ventilation_set_vals` table contains no NULL values and has at most one row.
     ///
     /// # Arguments
     /// * `conn` - An active, pooled database connection.
@@ -105,15 +105,15 @@ impl SqlInterfaceVentilationSetVals {
     /// This function will return an error if:
     /// - Any of the initial database queries to get table counts fail (`DatabaseCheckVentilationSetValsFailure`).
     /// - Any of the retrieved counts are negative, indicating a database issue (`DatabaseVentilationSetValTableNegativeValue`).
-    /// - The `ventilationsetvals` table contains entries with `NULL` values (`DatabaseVentilationSetValTableContainsNull`).
-    /// - The `ventilationsetvals` table contains more than one row (`DatabaseVentilationSetValTableContainsTooManyRows`).
+    /// - The `ventilation_set_vals` table contains entries with `NULL` values (`DatabaseVentilationSetValTableContainsNull`).
+    /// - The `ventilation_set_vals` table contains more than one row (`DatabaseVentilationSetValTableContainsTooManyRows`).
     pub fn new(
         mut conn: PooledConn,
         config: &VentilationConfig,
     ) -> Result<Self, SqlInterfaceError> {
         let count_null_values = SqlInterface::get_single_integer_from_database(
             &mut conn,
-            SQL_QUERY_CHECK_VENTILATION_SETVALS_NULL,
+            SQL_QUERY_CHECK_VENTILATION_SET_VALS_NULL,
         )
         .map_err(
             |e| SqlInterfaceError::DatabaseCheckVentilationSetValsFailure {
@@ -124,7 +124,7 @@ impl SqlInterfaceVentilationSetVals {
 
         let count_rows = SqlInterface::get_single_integer_from_database(
             &mut conn,
-            SQL_QUERY_CHECK_VENTILATION_SETVALS_COUNT,
+            SQL_QUERY_CHECK_VENTILATION_SET_VALS_COUNT,
         )
         .map_err(
             |e| SqlInterfaceError::DatabaseCheckVentilationSetValsFailure {
@@ -208,7 +208,7 @@ impl SqlInterfaceVentilationSetVals {
         let sql_ventilation_setvals_array = self
             .conn
             .query_map(
-                sql_query_strings::SQL_QUERY_READ_VENTILATION_SETVALS,
+                sql_query_strings::SQL_QUERY_READ_VENTILATION_SET_VALS,
                 |(ventilationSwitchOffTemp, ventilationSwitchOnTemp)| VentilationSetVals {
                     ventilation_switch_off_temperature: ventilationSwitchOffTemp,
                     ventilation_switch_on_temperature: ventilationSwitchOnTemp,
@@ -216,7 +216,7 @@ impl SqlInterfaceVentilationSetVals {
             )
             .map_err(|e| SqlInterfaceError::VentilationSetValsRequestFailure {
                 location: module_path!().to_string(),
-                query: sql_query_strings::SQL_QUERY_READ_VENTILATION_SETVALS.to_string(),
+                query: sql_query_strings::SQL_QUERY_READ_VENTILATION_SET_VALS.to_string(),
                 source: e,
             })?;
 
@@ -229,7 +229,7 @@ impl SqlInterfaceVentilationSetVals {
         if sql_ventilation_setvals_array.len() > 1 {
             return Err(SqlInterfaceError::VentilationSetValsNoSingleResponse(
                 module_path!().to_string(),
-                sql_query_strings::SQL_QUERY_READ_VENTILATION_SETVALS.to_string(),
+                sql_query_strings::SQL_QUERY_READ_VENTILATION_SET_VALS.to_string(),
             ));
         }
 
@@ -276,7 +276,7 @@ impl SqlInterfaceVentilationSetVals {
         ventilation_set_vals: &VentilationSetVals,
     ) -> Result<(), SqlInterfaceError> {
         match self.conn.exec_drop::<_, _>(
-            sql_query_strings::SQL_QUERY_WRITE_VENTILATION_SETVALS, params!{
+            sql_query_strings::SQL_QUERY_WRITE_VENTILATION_SET_VALS, params!{
                 "ventilation_switch_off_temp" => ventilation_set_vals.ventilation_switch_off_temperature,
                 "ventilation_switch_on_temp" => ventilation_set_vals.ventilation_switch_on_temperature,
              },
@@ -286,7 +286,7 @@ impl SqlInterfaceVentilationSetVals {
                 println!("{e:?}");
                 Err(SqlInterfaceError::InsertVentilationSetValuesFailure {
                     location: module_path!().to_string(),
-                    query: sql_query_strings::SQL_QUERY_WRITE_VENTILATION_SETVALS.to_string(),
+                    query: sql_query_strings::SQL_QUERY_WRITE_VENTILATION_SET_VALS.to_string(),
                     source: e,
                 })
             }
@@ -349,7 +349,7 @@ impl ThermalSetValueUpdaterTrait for SqlInterfaceVentilationSetVals {
 
 #[cfg(test)]
 pub mod tests {
-    use crate::database::sql_interface_ventilation_setvals::{
+    use crate::database::sql_interface_ventilation_set_vals::{
         SqlInterfaceVentilationSetVals, VentilationSetVals,
     };
     use crate::database::{
@@ -363,7 +363,7 @@ pub mod tests {
     // 1. Happy Path: Initialization succeeds when the table is empty or has one valid row.
     // 2. Failure on Row Limit: Fails when `heatingsetvals` contains more than one row.
     // Test case uses test database #64.
-    fn test_sql_interface_ventilation_setvals_new() {
+    fn test_sql_interface_ventilation_set_vals_new() {
         // --- Common Setup ---
         let config: ConfigData = read_config_file_with_test_database(
             "/config/aquarium_control_test_generic.toml".to_string(),
@@ -377,7 +377,7 @@ pub mod tests {
         println!("* Testing new() with an empty table (Happy Path)...");
         SqlInterface::truncate_table(
             &mut sql_interface,
-            sql_query_strings::SQL_TABLE_VENTILATION_SETVALS.to_string(),
+            sql_query_strings::SQL_TABLE_VENTILATION_SET_VALS.to_string(),
         )
         .expect("Test setup failed: Could not truncate table.");
 
@@ -396,7 +396,7 @@ pub mod tests {
         println!("* Testing new() with more than one row in the table...");
         SqlInterface::truncate_table(
             &mut sql_interface,
-            sql_query_strings::SQL_TABLE_VENTILATION_SETVALS.to_string(),
+            sql_query_strings::SQL_TABLE_VENTILATION_SET_VALS.to_string(),
         )
         .expect("Test setup failed: Could not truncate table.");
         let conn = sql_interface.get_connection().unwrap();
@@ -434,7 +434,7 @@ pub mod tests {
     #[test]
     // Test case includes all checks for this table combined in one function to limit the number of additional databases.
     // Test case uses the test database #51.
-    pub fn test_sql_interface_ventilation_setvals() {
+    pub fn test_sql_interface_ventilation_set_vals() {
         let config: ConfigData = read_config_file_with_test_database(
             "/config/aquarium_control_test_generic.toml".to_string(),
             51,
@@ -445,21 +445,21 @@ pub mod tests {
             .expect("Initialization of SQL interface for test failed.");
         match SqlInterface::truncate_table(
             &mut sql_interface,
-            sql_query_strings::SQL_TABLE_VENTILATION_SETVALS.to_string(),
+            sql_query_strings::SQL_TABLE_VENTILATION_SET_VALS.to_string(),
         ) {
             Ok(_) => {}
             Err(e) => panic!("Could not prepare test case: {e:?}"),
         }
 
         // instantiation of the test object
-        let mut sql_interface_ventilation_setvals = SqlInterfaceVentilationSetVals::new(
+        let mut sql_interface_ventilation_set_vals = SqlInterfaceVentilationSetVals::new(
             sql_interface.get_connection().unwrap(),
             &config.ventilation,
         )
         .unwrap();
 
         // check if reading an empty table returns None
-        match sql_interface_ventilation_setvals.get_ventilation_set_values() {
+        match sql_interface_ventilation_set_vals.get_ventilation_set_values() {
             Ok(c) => {
                 assert_eq!(c.is_some(), false);
             }
@@ -477,13 +477,13 @@ pub mod tests {
 
         // insert valid values
         assert!(matches!(
-            sql_interface_ventilation_setvals
+            sql_interface_ventilation_set_vals
                 .insert_ventilation_set_values(&valid_ventilation_set_vals),
             Ok(())
         ));
         println!("* inserting valid ventilation set values as precondition succeeded.");
 
-        match sql_interface_ventilation_setvals.get_ventilation_set_values() {
+        match sql_interface_ventilation_set_vals.get_ventilation_set_values() {
             Ok(c) => {
                 assert_eq!(c.is_some(), true);
                 let ventilation_set_vals = c.unwrap();
@@ -504,7 +504,7 @@ pub mod tests {
 
         match SqlInterface::truncate_table(
             &mut sql_interface,
-            sql_query_strings::SQL_TABLE_VENTILATION_SETVALS.to_string(),
+            sql_query_strings::SQL_TABLE_VENTILATION_SET_VALS.to_string(),
         ) {
             Ok(_) => {}
             Err(e) => panic!("Could not prepare test case: {e:?}"),
@@ -518,7 +518,7 @@ pub mod tests {
 
         // insert invalid values
         assert!(matches!(
-            sql_interface_ventilation_setvals
+            sql_interface_ventilation_set_vals
                 .insert_ventilation_set_values(&invalid_ventilation_set_vals),
             Ok(())
         ));
@@ -526,7 +526,7 @@ pub mod tests {
 
         // check if reading an invalid value combination returns an error
         assert!(matches!(
-            sql_interface_ventilation_setvals.get_ventilation_set_values(),
+            sql_interface_ventilation_set_vals.get_ventilation_set_values(),
             Err(SqlInterfaceError::VentilationSetValsInvalid(_, _, _))
         ));
         println!("* reading  invalid ventilation set values succeeded.");
@@ -534,18 +534,18 @@ pub mod tests {
         // test if too many rows are detected
         match SqlInterface::truncate_table(
             &mut sql_interface,
-            sql_query_strings::SQL_TABLE_VENTILATION_SETVALS.to_string(),
+            sql_query_strings::SQL_TABLE_VENTILATION_SET_VALS.to_string(),
         ) {
             Ok(_) => {}
             Err(e) => panic!("Could not prepare test case: {e:?}"),
         }
         assert!(matches!(
-            sql_interface_ventilation_setvals
+            sql_interface_ventilation_set_vals
                 .insert_ventilation_set_values(&valid_ventilation_set_vals),
             Ok(())
         ));
         assert!(matches!(
-            sql_interface_ventilation_setvals
+            sql_interface_ventilation_set_vals
                 .insert_ventilation_set_values(&valid_ventilation_set_vals),
             Ok(())
         ));

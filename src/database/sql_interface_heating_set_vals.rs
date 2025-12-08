@@ -59,7 +59,7 @@ use crate::database::sql_interface::SqlInterface;
 use crate::database::sql_interface_error::SqlInterfaceError;
 use crate::database::sql_query_strings;
 use crate::database::sql_query_strings::{
-    SQL_QUERY_CHECK_HEATING_SETVALS_COUNT, SQL_QUERY_CHECK_HEATING_SETVALS_NULL,
+    SQL_QUERY_CHECK_HEATING_SET_VALS_COUNT, SQL_QUERY_CHECK_HEATING_SET_VALS_NULL,
 };
 use crate::database::thermal_set_value_updater_trait::ThermalSetValueUpdaterTrait;
 use crate::thermal::heating_config::HeatingConfig;
@@ -113,7 +113,7 @@ impl SqlInterfaceHeatingSetVals {
     ) -> Result<SqlInterfaceHeatingSetVals, SqlInterfaceError> {
         let count_null_values = SqlInterface::get_single_integer_from_database(
             &mut conn,
-            SQL_QUERY_CHECK_HEATING_SETVALS_NULL,
+            SQL_QUERY_CHECK_HEATING_SET_VALS_NULL,
         )
         .map_err(|e| SqlInterfaceError::DatabaseCheckHeatingSetValsFailure {
             location: module_path!().to_string(),
@@ -121,7 +121,7 @@ impl SqlInterfaceHeatingSetVals {
         })?;
         let count_rows = SqlInterface::get_single_integer_from_database(
             &mut conn,
-            SQL_QUERY_CHECK_HEATING_SETVALS_COUNT,
+            SQL_QUERY_CHECK_HEATING_SET_VALS_COUNT,
         )
         .map_err(|e| SqlInterfaceError::DatabaseCheckHeatingSetValsFailure {
             location: module_path!().to_string(),
@@ -192,7 +192,7 @@ impl SqlInterfaceHeatingSetVals {
     ///   which is a critical configuration error (`HeatingSetValsInvalid`).
     pub fn get_heating_set_values(&mut self) -> Result<Option<HeatingSetVals>, SqlInterfaceError> {
         let sql_heating_setvals_array = match self.conn.query_map(
-            sql_query_strings::SQL_QUERY_READ_HEATING_SETVALS,
+            sql_query_strings::SQL_QUERY_READ_HEATING_SET_VALS,
             |(heatingSwitchOffTemp, heatingSwitchOnTemp)| HeatingSetVals {
                 heating_switch_off_temperature: heatingSwitchOffTemp,
                 heating_switch_on_temperature: heatingSwitchOnTemp,
@@ -202,7 +202,7 @@ impl SqlInterfaceHeatingSetVals {
             Err(e) => {
                 return Err(SqlInterfaceError::HeatingSetValsRequestFailure {
                     location: module_path!().to_string(),
-                    query: sql_query_strings::SQL_QUERY_READ_HEATING_SETVALS.to_string(),
+                    query: sql_query_strings::SQL_QUERY_READ_HEATING_SET_VALS.to_string(),
                     source: e,
                 });
             }
@@ -217,7 +217,7 @@ impl SqlInterfaceHeatingSetVals {
         if sql_heating_setvals_array.len() > 1 {
             return Err(SqlInterfaceError::HeatingSetValsNoSingleResponse(
                 module_path!().to_string(),
-                sql_query_strings::SQL_QUERY_READ_HEATING_SETVALS.to_string(),
+                sql_query_strings::SQL_QUERY_READ_HEATING_SET_VALS.to_string(),
             ));
         }
 
@@ -263,7 +263,7 @@ impl SqlInterfaceHeatingSetVals {
     ) -> Result<(), SqlInterfaceError> {
         self.conn
             .exec_drop::<_, _>(
-                sql_query_strings::SQL_QUERY_WRITE_HEATING_SETVALS,
+                sql_query_strings::SQL_QUERY_WRITE_HEATING_SET_VALS,
                 params! {
                    "heating_switch_off_temp" => heating_set_vals.heating_switch_off_temperature,
                    "heating_switch_on_temp" => heating_set_vals.heating_switch_on_temperature,
@@ -271,7 +271,7 @@ impl SqlInterfaceHeatingSetVals {
             )
             .map_err(|e| SqlInterfaceError::InsertHeatingSetValuesFailure {
                 location: module_path!().to_string(),
-                query: sql_query_strings::SQL_QUERY_WRITE_HEATING_SETVALS.to_string(),
+                query: sql_query_strings::SQL_QUERY_WRITE_HEATING_SET_VALS.to_string(),
                 source: e,
             })?;
         Ok(())
@@ -332,7 +332,7 @@ impl ThermalSetValueUpdaterTrait for SqlInterfaceHeatingSetVals {
 
 #[cfg(test)]
 pub mod tests {
-    use crate::database::sql_interface_heating_setvals::{
+    use crate::database::sql_interface_heating_set_vals::{
         HeatingSetVals, SqlInterfaceHeatingSetVals,
     };
     use crate::database::{
@@ -346,7 +346,7 @@ pub mod tests {
     // 1. Happy Path: Initialization succeeds when the table is empty or has one valid row.
     // 2. Failure on Row Limit: Fails when `heatingsetvals` contains more than one row.
     // Test case uses test database #60.
-    fn test_sql_interface_heating_setvals_new() {
+    fn test_sql_interface_heating_set_vals_new() {
         // --- Common Setup ---
         let config: ConfigData = read_config_file_with_test_database(
             "/config/aquarium_control_test_generic.toml".to_string(),
@@ -360,7 +360,7 @@ pub mod tests {
         println!("* Testing new() with an empty table (Happy Path)...");
         SqlInterface::truncate_table(
             &mut sql_interface,
-            sql_query_strings::SQL_TABLE_HEATING_SETVALS.to_string(),
+            sql_query_strings::SQL_TABLE_HEATING_SET_VALS.to_string(),
         )
         .expect("Test setup failed: Could not truncate table.");
 
@@ -379,7 +379,7 @@ pub mod tests {
         println!("* Testing new() with more than one row in the table...");
         SqlInterface::truncate_table(
             &mut sql_interface,
-            sql_query_strings::SQL_TABLE_HEATING_SETVALS.to_string(),
+            sql_query_strings::SQL_TABLE_HEATING_SET_VALS.to_string(),
         )
         .expect("Test setup failed: Could not truncate table.");
         let conn = sql_interface.get_connection().unwrap();
@@ -417,7 +417,7 @@ pub mod tests {
     #[test]
     // Test case includes all checks for this table combined in one function to limit the number of additional databases.
     // Test case uses the test database #36 - focussing on heatingsetvals table only.
-    pub fn test_sql_interface_heating_setvals() {
+    pub fn test_sql_interface_heating_set_vals() {
         let config: ConfigData = read_config_file_with_test_database(
             "/config/aquarium_control_test_generic.toml".to_string(),
             36,
@@ -428,7 +428,7 @@ pub mod tests {
             .expect("Initialization of SQL interface for test failed.");
         match SqlInterface::truncate_table(
             &mut sql_interface,
-            sql_query_strings::SQL_TABLE_HEATING_SETVALS.to_string(),
+            sql_query_strings::SQL_TABLE_HEATING_SET_VALS.to_string(),
         ) {
             Ok(_) => {}
             Err(e) => panic!("Could not prepare test case: {e:?}"),
@@ -486,7 +486,7 @@ pub mod tests {
 
         match SqlInterface::truncate_table(
             &mut sql_interface,
-            sql_query_strings::SQL_TABLE_HEATING_SETVALS.to_string(),
+            sql_query_strings::SQL_TABLE_HEATING_SET_VALS.to_string(),
         ) {
             Ok(_) => {}
             Err(e) => panic!("Could not prepare test case: {e:?}"),
@@ -515,7 +515,7 @@ pub mod tests {
         // test if too many rows are detected
         match SqlInterface::truncate_table(
             &mut sql_interface,
-            sql_query_strings::SQL_TABLE_HEATING_SETVALS.to_string(),
+            sql_query_strings::SQL_TABLE_HEATING_SET_VALS.to_string(),
         ) {
             Ok(_) => {}
             Err(e) => panic!("Could not prepare test case: {e:?}"),

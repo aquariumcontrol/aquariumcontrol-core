@@ -28,7 +28,7 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 //!   6.  Pings the database to keep the connection alive.
 //!
 //! - **`execute_feed()` Method**: A private helper that orchestrates a single feeding event. It
-//!   retrieves the feed pattern from the database, actuates the feeder via the
+//!   retrieves the feed profile from the database, actuates the feeder via the
 //!   `FoodInjectionTrait`, and logs the event.
 //!
 //! ## Design and Architecture
@@ -60,11 +60,11 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 //! 1.  The `execute()` loop starts.
 //! 2.  It checks the database and finds a feed profile was scheduled for 10 minutes ago.
 //! 3.  It calls `execute_feed()` with the profile ID.
-//! 4.  `execute_feed()` retrieves the pattern.
+//! 4.  `execute_feed()` retrieves the profile.
 //! 5.  It calls `food_injection.inject_food()`, which communicates with the `RelayManager`
 //!     to turn the feeder relay on and then off.
 //! 6.  After injection, it writes a record of the event to the `feedlog` table.
-//! 7.  Finally, it updates the `feedschedule` table to mark the entry as completed or to
+//! 7.  Finally, it updates the `feed_schedule` table to mark the entry as completed or to
 //!     reschedule it if it's a repeating event.
 
 #[cfg(not(test))]
@@ -123,7 +123,7 @@ pub struct Feed {
     pub execution_blocked: bool,
 
     /// Inhibition flag to avoid flooding the log file with repeated messages about failure to read feed schedule entry from the database
-    lock_error_get_feedschedule_entry: bool,
+    lock_error_get_feed_schedule_entry: bool,
 
     /// recording when the last database ping happened
     pub last_ping_instant: Instant,
@@ -158,7 +158,7 @@ impl Feed {
             execute_command_received: false,
             profile_id_requested: -1,
             execution_blocked: false,
-            lock_error_get_feedschedule_entry: false,
+            lock_error_get_feed_schedule_entry: false,
             last_ping_instant: Instant::now(),
             database_ping_interval,
             lock_warn_inapplicable_command_signal_handler: false,
@@ -180,11 +180,10 @@ impl Feed {
     //
     // # Returns
     // A `String` representation of the feed schedule entries.
-    fn feedschedule_entries_to_string(feedschedule_entries: Vec<FeedScheduleEntry>) -> String {
+    fn feed_schedule_entries_to_string(feedschedule_entries: Vec<FeedScheduleEntry>) -> String {
         let mut output: String = "Vec<FeedscheduleEntry>=".to_string();
         for (i, s) in feedschedule_entries.iter().enumerate() {
-            output +=
-                &(" #".to_owned() + &format!("{}: ID= {} ", i, s.profile_id));
+            output += &(" #".to_owned() + &format!("{}: ID= {} ", i, s.profile_id));
         }
         output
     }
@@ -192,9 +191,9 @@ impl Feed {
     /// Loads a specified feed profile from the database, executes it via food injection, and logs the event.
     ///
     /// This private helper function orchestrates the process of executing a single feed profile.
-    /// It first attempts to retrieve the full `Feedpattern` from the database. If successful,
+    /// It first attempts to retrieve the full `FeedProfile` from the database. If successful,
     /// it then calls the `food_injection` trait method to actuate the feeder according to the
-    /// pattern. Finally, it records the completed feed event in the database.
+    /// feed profile. Finally, it records the completed feed event in the database.
     ///
     /// The function also monitors for a `Quit` command from the signal handler during the
     /// food injection process, indicating an early termination request.
@@ -219,7 +218,7 @@ impl Feed {
     /// # Errors
     /// This function does not return a distinct error type. Instead, it returns `Err(())`
     /// in the result tuple to signify failure. The function can fail if:
-    /// - It cannot read the specified feed pattern from the database.
+    /// - It cannot read the specified feed profile from the database.
     /// - The `food_injection.inject_food` method reports an error.
     /// - It cannot retrieve the current timestamp from the database after injection.
     /// - It fails to insert the feed event log into the database.
@@ -232,25 +231,25 @@ impl Feed {
         feed_channels: &mut FeedChannels,
         sql_interface_feed: &mut Box<dyn DatabaseInterfaceFeedTrait + Sync + Send>,
     ) -> (Result<(), ()>, bool) {
-        // First, load the feed pattern from the database.
-        let feed_pattern = match sql_interface_feed.get_single_feedpattern_from_database(profile_id)
-        {
-            Ok(pattern) => pattern,
-            Err(e) => {
-                log_error_chain(
+        // First, load the feed profile from the database.
+        let feed_profile =
+            match sql_interface_feed.get_single_feed_profile_from_database(profile_id) {
+                Ok(feed_profile) => feed_profile,
+                Err(e) => {
+                    log_error_chain(
                     module_path!(),
-                    "Error occurred when trying to read feed pattern {profile_id} from database.",
+                    "Error occurred when trying to read feed profile {profile_id} from database.",
                     e,
                 );
-                return (Err(()), false); // Return failure, no quit command received yet.
-            }
-        };
+                    return (Err(()), false); // Return failure, no quit command received yet.
+                }
+            };
 
-        // *** Execute the feed pattern and destructure the returned tuple ***
+        // *** Execute the feed profile and destructure the returned tuple ***
         // 1. `quit_during_injection`: A bool indicating if a quit command was received.
         // 2. `injection_result`: A Result indicating if the injection itself succeeded.
         let (quit_during_injection, injection_result) =
-            food_injection.inject_food(feed_channels, &feed_pattern);
+            food_injection.inject_food(feed_channels, &feed_profile);
         // *** Handle the Result part of the tuple independently ***
         // If errors occurred during injection, log each one.
         if let Err(errors) = &injection_result {
@@ -282,7 +281,7 @@ impl Feed {
         //*** Insert the feed event into the log ***
         let log_result = match sql_interface_feed.insert_feed_event(
             current_timestamp,
-            feed_pattern.calc_feeder_runtime(),
+            feed_profile.calc_feeder_runtime(),
             profile_id,
         ) {
             Ok(_) => Ok(()),
@@ -402,7 +401,7 @@ impl Feed {
         }
 
         //*** update schedule ***
-        match sql_interface_feed.update_feedschedule_entries_in_database(feed_schedule_entries) {
+        match sql_interface_feed.update_feed_schedule_entries_in_database(feed_schedule_entries) {
             Ok(()) => {
                 // do nothing
             }
@@ -472,7 +471,7 @@ impl Feed {
                     "Starting feed control cycle"
                 );
 
-                match sql_interface_feed.get_past_feedschedule_entries_from_database() {
+                match sql_interface_feed.get_past_feed_schedule_entries_from_database() {
                     Ok(feed_schedule_entries_opt) => {
                         if let Some(mut feed_schedule_entries) = feed_schedule_entries_opt {
                             #[cfg(all(feature = "debug_feed", not(test)))]
@@ -493,7 +492,7 @@ impl Feed {
                                     feed_schedule_entry
                                 );
 
-                                self.lock_error_get_feedschedule_entry = false;
+                                self.lock_error_get_feed_schedule_entry = false;
 
                                 if !self.execution_blocked {
                                     {
@@ -518,17 +517,17 @@ impl Feed {
                     }
                     Err(e) => {
                         #[cfg(not(test))]
-                        if !self.lock_error_get_feedschedule_entry {
+                        if !self.lock_error_get_feed_schedule_entry {
                             log_error_chain(
                                 module_path!(),
                                 "Could not retrieve feed schedule information from database.",
                                 e,
                             );
-                            self.lock_error_get_feedschedule_entry = true;
+                            self.lock_error_get_feed_schedule_entry = true;
                         }
                         #[cfg(test)]
                         let _e = e; // Explicitly declare and "use" with an underscore
-                        self.lock_error_get_feedschedule_entry = true;
+                        self.lock_error_get_feed_schedule_entry = true;
                     }
                 };
             }
@@ -658,8 +657,8 @@ pub mod tests {
     use crate::utilities::logger::setup_logger;
     use crate::utilities::logger_config::LoggerConfig;
 
-    use crate::database::sql_interface_feed::tests::insert_feed_patterns;
-    use crate::database::sql_query_strings::{SQL_TABLE_FEEDLOG, SQL_TABLE_FEEDSCHEDULE};
+    use crate::database::sql_interface_feed::tests::insert_feed_profiles;
+    use crate::database::sql_query_strings::{SQL_TABLE_FEED_LOG, SQL_TABLE_FEED_SCHEDULE};
     use crate::launch::channels::{AquaReceiver, AquaSender, Channels};
     use crate::mocks::mock_food_injection::MockFoodInjection;
     use crate::mocks::mock_sql_interface_feed::tests::MockSqlInterfaceFeed;
@@ -712,26 +711,27 @@ pub mod tests {
 
         let mut sql_interface_feed_unboxed = SqlInterfaceFeed::new(
             sql_interface.get_connection().unwrap(),
-            config.sql_interface.max_rows_feed_pattern,
+            config.sql_interface.max_rows_feed_profile,
             config.sql_interface.max_rows_feed_schedule,
             config.sql_interface.max_rows_feed_log,
         )
         .unwrap();
 
-        insert_feed_patterns(&mut sql_interface, &mut sql_interface_feed_unboxed);
+        insert_feed_profiles(&mut sql_interface, &mut sql_interface_feed_unboxed);
 
         let mut sql_interface_feed: Box<dyn DatabaseInterfaceFeedTrait + Sync + Send> =
             Box::new(sql_interface_feed_unboxed);
 
         // empty the feed schedule table
-        match SqlInterface::truncate_table(&mut sql_interface, SQL_TABLE_FEEDSCHEDULE.to_string()) {
+        match SqlInterface::truncate_table(&mut sql_interface, SQL_TABLE_FEED_SCHEDULE.to_string())
+        {
             Ok(_) => {}
             Err(e) => {
                 panic!("Could not prepare test case: {e:?}")
             }
         }
         // empty the feed log table
-        match SqlInterface::truncate_table(&mut sql_interface, SQL_TABLE_FEEDLOG.to_string()) {
+        match SqlInterface::truncate_table(&mut sql_interface, SQL_TABLE_FEED_LOG.to_string()) {
             Ok(_) => {}
             Err(e) => {
                 panic!("Could not prepare test case: {e:?}")
@@ -760,21 +760,11 @@ pub mod tests {
 
         // manipulation of the database: inserting feed schedule entries with future timestamp
         sql_interface_feed
-            .insert_feed_schedule_entry(
-                time_stamp_feed_schedule_entry_one_time,
-                1,
-                false,
-                false,
-            )
+            .insert_feed_schedule_entry(time_stamp_feed_schedule_entry_one_time, 1, false, false)
             .expect("test_feed_schedule_execution: Could not insert stimuli into database: {e:?}");
 
         sql_interface_feed
-            .insert_feed_schedule_entry(
-                time_stamp_feed_schedule_entry_repeat,
-                2,
-                false,
-                true,
-            )
+            .insert_feed_schedule_entry(time_stamp_feed_schedule_entry_repeat, 2, false, true)
             .expect("test_feed_schedule_execution: Could not insert stimuli into database: {e:?}");
 
         let mut feed = Feed::new(config.feed, Duration::from_millis(1000));
@@ -840,19 +830,20 @@ pub mod tests {
 
         let mut sql_interface_feed_unboxed = SqlInterfaceFeed::new(
             sql_interface.get_connection().unwrap(),
-            config.sql_interface.max_rows_feed_pattern,
+            config.sql_interface.max_rows_feed_profile,
             config.sql_interface.max_rows_feed_schedule,
             config.sql_interface.max_rows_feed_log,
         )
         .unwrap();
 
-        insert_feed_patterns(&mut sql_interface, &mut sql_interface_feed_unboxed);
+        insert_feed_profiles(&mut sql_interface, &mut sql_interface_feed_unboxed);
 
         let mut sql_interface_feed: Box<dyn DatabaseInterfaceFeedTrait + Sync + Send> =
             Box::new(sql_interface_feed_unboxed);
 
         // empty the feed schedule
-        match SqlInterface::truncate_table(&mut sql_interface, SQL_TABLE_FEEDSCHEDULE.to_string()) {
+        match SqlInterface::truncate_table(&mut sql_interface, SQL_TABLE_FEED_SCHEDULE.to_string())
+        {
             Ok(_) => {}
             Err(e) => {
                 panic!("Could not prepare test case: {e:?}")
@@ -871,12 +862,7 @@ pub mod tests {
 
         // manipulation of the database: inserting feed schedule entries with future timestamp
         sql_interface_feed
-            .insert_feed_schedule_entry(
-                time_stamp_feed_schedule_entry,
-                1,
-                false,
-                false,
-            )
+            .insert_feed_schedule_entry(time_stamp_feed_schedule_entry, 1, false, false)
             .expect("test_feed_schedule_execution: Could not insert stimuli into database: {e:?}");
 
         // create the test object
@@ -1108,26 +1094,26 @@ pub mod tests {
 
     // Helper function that creates an array of feed schedule entries
     // with data from the past.
-    fn create_mock_feedschedule_entries() -> Vec<FeedScheduleEntry> {
-        let mut feedschedule_entries: Vec<FeedScheduleEntry> = Vec::new();
+    fn create_mock_feed_schedule_entries() -> Vec<FeedScheduleEntry> {
+        let mut feed_schedule_entries: Vec<FeedScheduleEntry> = Vec::new();
 
-        feedschedule_entries.push(FeedScheduleEntry::new_for_test(
+        feed_schedule_entries.push(FeedScheduleEntry::new_for_test(
             "2024-10-24 10:00:00",
             77,
             true,
         ));
-        feedschedule_entries.push(FeedScheduleEntry::new_for_test(
+        feed_schedule_entries.push(FeedScheduleEntry::new_for_test(
             "2024-10-24 11:00:00",
             78,
             true,
         ));
-        feedschedule_entries.push(FeedScheduleEntry::new_for_test(
+        feed_schedule_entries.push(FeedScheduleEntry::new_for_test(
             "2024-10-24 12:00:00",
             79,
             true,
         ));
 
-        feedschedule_entries
+        feed_schedule_entries
     }
 
     #[test]
@@ -1144,10 +1130,10 @@ pub mod tests {
         let feed = Feed::new(config.feed, Duration::from_millis(1000));
 
         // input for the function to be tested
-        let feedschedule_entries = create_mock_feedschedule_entries();
+        let feed_schedule_entries = create_mock_feed_schedule_entries();
 
         assert_eq!(
-            feed.select_feed_schedule_entry_for_execution(&feedschedule_entries),
+            feed.select_feed_schedule_entry_for_execution(&feed_schedule_entries),
             None
         );
     }
@@ -1166,10 +1152,10 @@ pub mod tests {
         let feed = Feed::new(config.feed, Duration::from_millis(1000));
 
         // input for the function to be tested
-        let feedschedule_entries = create_mock_feedschedule_entries();
+        let feed_schedule_entries = create_mock_feed_schedule_entries();
 
         assert_eq!(
-            feed.select_feed_schedule_entry_for_execution(&feedschedule_entries)
+            feed.select_feed_schedule_entry_for_execution(&feed_schedule_entries)
                 .unwrap()
                 .profile_id,
             77
@@ -1190,10 +1176,10 @@ pub mod tests {
         let feed = Feed::new(config.feed, Duration::from_millis(1000));
 
         // input for the function to be tested
-        let feedschedule_entries = create_mock_feedschedule_entries();
+        let feed_schedule_entries = create_mock_feed_schedule_entries();
 
         assert_eq!(
-            feed.select_feed_schedule_entry_for_execution(&feedschedule_entries)
+            feed.select_feed_schedule_entry_for_execution(&feed_schedule_entries)
                 .unwrap()
                 .profile_id,
             78
@@ -1213,10 +1199,10 @@ pub mod tests {
         let feed = Feed::new(config.feed, Duration::from_millis(1000));
 
         // input for the function to be tested
-        let feedschedule_entries = create_mock_feedschedule_entries();
+        let feed_schedule_entries = create_mock_feed_schedule_entries();
 
         assert_eq!(
-            feed.select_feed_schedule_entry_for_execution(&feedschedule_entries)
+            feed.select_feed_schedule_entry_for_execution(&feed_schedule_entries)
                 .unwrap()
                 .profile_id,
             79
@@ -1252,19 +1238,20 @@ pub mod tests {
 
         let mut sql_interface_feed_unboxed = SqlInterfaceFeed::new(
             sql_interface.get_connection().unwrap(),
-            config.sql_interface.max_rows_feed_pattern,
+            config.sql_interface.max_rows_feed_profile,
             config.sql_interface.max_rows_feed_schedule,
             config.sql_interface.max_rows_feed_log,
         )
         .unwrap();
 
-        insert_feed_patterns(&mut sql_interface, &mut sql_interface_feed_unboxed);
+        insert_feed_profiles(&mut sql_interface, &mut sql_interface_feed_unboxed);
 
         let mut sql_interface_feed: Box<dyn DatabaseInterfaceFeedTrait + Sync + Send> =
             Box::new(sql_interface_feed_unboxed);
 
         // empty the feed schedule table
-        match SqlInterface::truncate_table(&mut sql_interface, SQL_TABLE_FEEDSCHEDULE.to_string()) {
+        match SqlInterface::truncate_table(&mut sql_interface, SQL_TABLE_FEED_SCHEDULE.to_string())
+        {
             Ok(_) => {}
             Err(e) => {
                 panic!("Could not prepare test case: {e:?}")
@@ -1293,21 +1280,11 @@ pub mod tests {
 
         // manipulation of the database: inserting feed schedule entries with future timestamp
         sql_interface_feed
-            .insert_feed_schedule_entry(
-                time_stamp_feed_schedule_entry_one_time,
-                1,
-                false,
-                false,
-            )
+            .insert_feed_schedule_entry(time_stamp_feed_schedule_entry_one_time, 1, false, false)
             .expect("test_feed_schedule_execution: Could not insert stimuli into database: {e:?}");
 
         sql_interface_feed
-            .insert_feed_schedule_entry(
-                time_stamp_feed_schedule_entry_repeat,
-                2,
-                false,
-                true,
-            )
+            .insert_feed_schedule_entry(time_stamp_feed_schedule_entry_repeat, 2, false, true)
             .expect("test_feed_schedule_execution: Could not insert stimuli into database: {e:?}");
 
         let mut feed = Feed::new(config.feed, Duration::from_millis(1000));
@@ -1374,19 +1351,20 @@ pub mod tests {
 
         let mut sql_interface_feed_unboxed = SqlInterfaceFeed::new(
             sql_interface.get_connection().unwrap(),
-            config.sql_interface.max_rows_feed_pattern,
+            config.sql_interface.max_rows_feed_profile,
             config.sql_interface.max_rows_feed_schedule,
             config.sql_interface.max_rows_feed_log,
         )
         .unwrap();
 
-        insert_feed_patterns(&mut sql_interface, &mut sql_interface_feed_unboxed);
+        insert_feed_profiles(&mut sql_interface, &mut sql_interface_feed_unboxed);
 
         let mut sql_interface_feed: Box<dyn DatabaseInterfaceFeedTrait + Sync + Send> =
             Box::new(sql_interface_feed_unboxed);
 
         // empty the feed schedule table
-        match SqlInterface::truncate_table(&mut sql_interface, SQL_TABLE_FEEDSCHEDULE.to_string()) {
+        match SqlInterface::truncate_table(&mut sql_interface, SQL_TABLE_FEED_SCHEDULE.to_string())
+        {
             Ok(_) => {}
             Err(e) => {
                 panic!("Could not prepare test case: {e:?}")
@@ -1415,21 +1393,11 @@ pub mod tests {
 
         // manipulation of the database: inserting feed schedule entries with future timestamp
         sql_interface_feed
-            .insert_feed_schedule_entry(
-                time_stamp_feed_schedule_entry_one_time,
-                1,
-                false,
-                false,
-            )
+            .insert_feed_schedule_entry(time_stamp_feed_schedule_entry_one_time, 1, false, false)
             .expect("test_feed_schedule_execution: Could not insert stimuli into database: {e:?}");
 
         sql_interface_feed
-            .insert_feed_schedule_entry(
-                time_stamp_feed_schedule_entry_repeat,
-                2,
-                false,
-                true,
-            )
+            .insert_feed_schedule_entry(time_stamp_feed_schedule_entry_repeat, 2, false, true)
             .expect("test_feed_schedule_execution: Could not insert stimuli into database: {e:?}");
 
         let mut feed = Feed::new(config.feed, Duration::from_millis(1000));
@@ -1517,7 +1485,7 @@ pub mod tests {
             "execution_blocked should be initialized to false."
         );
         assert_eq!(
-            feed.lock_error_get_feedschedule_entry, false,
+            feed.lock_error_get_feed_schedule_entry, false,
             "lock_error_get_feedschedule_entry should be initialized to false."
         );
         assert_eq!(

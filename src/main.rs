@@ -81,13 +81,13 @@ use crate::database::sql_interface_balling::SqlInterfaceBalling;
 use crate::database::sql_interface_data::SqlInterfaceData;
 use crate::database::sql_interface_error::SqlInterfaceError;
 use crate::database::sql_interface_feed::SqlInterfaceFeed;
-use crate::database::sql_interface_heating_setvals::SqlInterfaceHeatingSetVals;
+use crate::database::sql_interface_heating_set_vals::SqlInterfaceHeatingSetVals;
 use crate::database::sql_interface_heating_stats::SqlInterfaceHeatingStats;
 use crate::database::sql_interface_heating_stats_data_transfer::HeatingStatsDataTransfer;
 use crate::database::sql_interface_midnight::SqlInterfaceMidnightCalculator;
 use crate::database::sql_interface_refill::{DatabaseInterfaceRefillTrait, SqlInterfaceRefill};
 use crate::database::sql_interface_schedule::SqlInterfaceSchedule;
-use crate::database::sql_interface_ventilation_setvals::SqlInterfaceVentilationSetVals;
+use crate::database::sql_interface_ventilation_set_vals::SqlInterfaceVentilationSetVals;
 #[cfg(target_os = "linux")]
 use crate::dispatch::messaging::Messaging;
 
@@ -497,7 +497,7 @@ fn run() -> Result<(), StartupError> {
 
     // get values from config before moving the config
     let max_rows_balling_set_values = config.sql_interface.max_rows_balling_set_values;
-    let max_rows_feed_pattern = config.sql_interface.max_rows_feed_pattern;
+    let max_rows_feed_profile = config.sql_interface.max_rows_feed_profile;
     let max_rows_feed_schedule = config.sql_interface.max_rows_feed_schedule;
     let max_rows_heating_stats = config.sql_interface.max_rows_heating_stats;
     let max_rows_schedule = config.sql_interface.max_rows_schedule;
@@ -606,7 +606,7 @@ fn run() -> Result<(), StartupError> {
     let sql_interface_feed: Box<dyn DatabaseInterfaceFeedTrait + Sync + Send> = Box::new(
         SqlInterfaceFeed::new(
             database_connection_feed,
-            max_rows_feed_pattern,
+            max_rows_feed_profile,
             max_rows_feed_schedule,
             max_rows_feed_log,
         )

@@ -44,9 +44,6 @@ pub struct RecorderDataFrame {
     // filtered conductivity of water in uS/cm
     pub conductivity_filtered: Option<f32>,
 
-    // conductivity in uS/cm compensated for temperature deviation
-    pub conductivity_compensated: Option<f32>,
-
     // status bit indicating that fresh water refill is ongoing
     pub refill_in_progress: Option<bool>,
 
@@ -124,11 +121,6 @@ impl fmt::Display for RecorderDataFrame {
             f,
             "conductivity_filtered: {}",
             format_opt(self.conductivity_filtered)
-        )?;
-        writeln!(
-            f,
-            "conductivity_compensated: {}",
-            format_opt(self.conductivity_compensated)
         )?;
         writeln!(
             f,

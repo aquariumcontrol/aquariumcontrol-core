@@ -69,8 +69,6 @@ use nix::unistd::gettid;
 #[cfg(not(test))]
 use log::warn;
 
-use spin_sleep::SpinSleeper;
-use std::time::{Duration, Instant};
 use crate::database::sql_interface_schedule::{ScheduleEntry, ScheduleType, SqlInterfaceSchedule};
 use crate::launch::channels::{AquaChannelError, AquaReceiver, AquaSender};
 use crate::launch::execution_config::ExecutionConfig;
@@ -81,6 +79,8 @@ use crate::utilities::channel_content::InternalCommand;
 use crate::utilities::database_ping_trait::DatabasePingTrait;
 use crate::utilities::logger::log_error_chain;
 use crate::utilities::proc_ext_req::ProcessExternalRequestTrait;
+use spin_sleep::SpinSleeper;
+use std::time::{Duration, Instant};
 
 /// Contains all inhibition flags for a specific schedule communication
 #[derive(Default)]
@@ -188,7 +188,7 @@ impl ScheduleCheck {
     /// * `lock_error_channel_receive` - A mutable reference to a boolean flag that, when `true`,
     ///   inhibits repeated error logging for channel receive failures.
     /// * `locks` - A mutable reference to the struct containing the lock flags.
-    /// * `module_name` - Name of the module for which the schedule shall be checked for logging purposes.
+    /// * `_module_name` - Name of the module for which the schedule shall be checked for logging purposes.
     ///
     fn check_pending_schedule_request(
         config: &ScheduleCheckConfig,
@@ -196,7 +196,7 @@ impl ScheduleCheck {
         rx: &mut AquaReceiver<InternalCommand>,
         schedule_entry: Option<&ScheduleEntry>,
         locks: &mut ScheduleCheckLocks,
-        module_name: &str,
+        _module_name: &str,
     ) {
         // receive request
         let request = match rx.try_recv() {
@@ -215,7 +215,7 @@ impl ScheduleCheck {
                     AquaChannelError::Disconnected => {
                         if !locks.channel_receive {
                             #[cfg(not(test))]
-                            let context = format!("receiving command from {module_name} failed.");
+                            let context = format!("receiving command from {_module_name} failed.");
                             #[cfg(not(test))]
                             log_error_chain(module_path!(), &context, e);
                             locks.channel_receive = true;
@@ -240,7 +240,7 @@ impl ScheduleCheck {
                     #[cfg(not(test))]
                     warn!(
                         target: module_path!(),
-                        "ignoring inapplicable command ({_c}) from {module_name}"
+                        "ignoring inapplicable command ({_c}) from {_module_name}"
                     );
                     locks.inapplicable_command = true;
                 }
@@ -253,12 +253,12 @@ impl ScheduleCheck {
             Ok(_) => {
                 locks.channel_send = false;
             }
-            Err(e) => {
+            Err(_e) => {
                 if !locks.channel_send {
                     #[cfg(not(test))]
                     {
-                        let context = format!("sending back message to {module_name} failed");
-                        log_error_chain(module_path!(), &context, e);
+                        let context = format!("sending back message to {_module_name} failed");
+                        log_error_chain(module_path!(), &context, _e);
                     }
                     locks.channel_send = true;
                 }

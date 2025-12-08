@@ -1056,7 +1056,7 @@ pub mod tests {
     use std::sync::{Arc, Mutex};
     use std::thread;
     use std::time::{Duration, Instant};
-
+    use crate::database::sql_query_strings::SQL_TABLE_REFILL;
     use crate::mocks::mock_monitors::tests::MockMonitors;
     use crate::mocks::mock_schedule_check::tests::mock_schedule_check;
     use crate::mocks::mock_sql_interface_refill::tests::MockSqlInterfaceRefill;
@@ -1261,7 +1261,7 @@ pub mod tests {
         let mut mock_monitors = MockMonitors::new();
 
         // empty the refill table
-        match SqlInterface::truncate_table(&mut sql_interface, "refill".to_string()) {
+        match SqlInterface::truncate_table(&mut sql_interface, SQL_TABLE_REFILL.to_string()) {
             Ok(_) => {}
             Err(e) => {
                 panic!("Could not prepare test case: {e:?}")
@@ -1418,7 +1418,7 @@ pub mod tests {
         setup_logger(LoggerConfig::default()).unwrap();
 
         // empty the refill table
-        match SqlInterface::truncate_table(&mut sql_interface, "refill".to_string()) {
+        match SqlInterface::truncate_table(&mut sql_interface, SQL_TABLE_REFILL.to_string()) {
             Ok(_) => {}
             Err(e) => {
                 panic!("Could not prepare test case: {e:?}")
@@ -1579,7 +1579,7 @@ pub mod tests {
             channel::<InternalCommand>(1);
 
         // empty the refill table
-        match SqlInterface::truncate_table(&mut sql_interface, "refill".to_string()) {
+        match SqlInterface::truncate_table(&mut sql_interface, SQL_TABLE_REFILL.to_string()) {
             Ok(_) => {}
             Err(e) => {
                 panic!("Could not prepare test case: {e:?}")
@@ -1752,7 +1752,7 @@ pub mod tests {
         let mutex_refill_status = Arc::new(Mutex::new(refill_status));
 
         // empty the refill table
-        match SqlInterface::truncate_table(&mut sql_interface, "refill".to_string()) {
+        match SqlInterface::truncate_table(&mut sql_interface, SQL_TABLE_REFILL.to_string()) {
             Ok(_) => {}
             Err(e) => {
                 panic!("Could not prepare test case: {e:?}")
@@ -1945,7 +1945,7 @@ pub mod tests {
             channel::<InternalCommand>(1);
 
         // empty the refill table
-        match SqlInterface::truncate_table(&mut sql_interface, "refill".to_string()) {
+        match SqlInterface::truncate_table(&mut sql_interface, SQL_TABLE_REFILL.to_string()) {
             Ok(_) => {}
             Err(e) => {
                 panic!("Could not prepare test case: {e:?}")
@@ -2119,7 +2119,7 @@ pub mod tests {
         let mut mock_monitors = MockMonitors::new();
 
         // empty the refill table
-        match SqlInterface::truncate_table(&mut sql_interface, "refill".to_string()) {
+        match SqlInterface::truncate_table(&mut sql_interface, SQL_TABLE_REFILL.to_string()) {
             Ok(_) => {}
             Err(e) => {
                 panic!("Could not prepare test case: {e:?}")
@@ -2278,7 +2278,7 @@ pub mod tests {
             channel::<InternalCommand>(1);
 
         // empty the refill table
-        match SqlInterface::truncate_table(&mut sql_interface, "refill".to_string()) {
+        match SqlInterface::truncate_table(&mut sql_interface, "refill_log".to_string()) {
             Ok(_) => {}
             Err(e) => {
                 panic!("Could not prepare test case: {e:?}")
@@ -2439,7 +2439,7 @@ pub mod tests {
             channel::<InternalCommand>(1);
 
         // empty the refill table
-        match SqlInterface::truncate_table(&mut sql_interface, "refill".to_string()) {
+        match SqlInterface::truncate_table(&mut sql_interface, SQL_TABLE_REFILL.to_string()) {
             Ok(_) => {}
             Err(e) => {
                 panic!("Could not prepare test case: {e:?}")

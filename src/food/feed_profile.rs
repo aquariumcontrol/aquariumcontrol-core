@@ -9,18 +9,18 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 
 //! Defines the data structures that represent a complete, multistep feeding process.
 //!
-//! This module provides the `Feedpattern` and `FeedPhase` structs, which together describe
+//! This module provides the `FeedProfile` and `FeedPhase` structs, which together describe
 //! a single, executable feeding profile. These structures are typically populated with data
 //! retrieved from the database and are used by the `Feed` controller to orchestrate the
 //! feeding sequence.
 //!
 //! ## Key Components
 //!
-//! - **`Feedpattern`**: Represents a complete feeding profile. It consists of a profile name
+//! - **`FeedProfile`**: Represents a complete feeding profile. It consists of a profile name
 //!   and a vector of one or more `FeedPhase`s. It acts as a container for the entire
 //!   sequence of actions.
 //!
-//! - **`FeedPhase`**: Represents a single step within a `Feedpattern`. Each phase is composed
+//! - **`FeedPhase`**: Represents a single step within a `FeedProfile`. Each phase is composed
 //!   of two parts:
 //!   1.  A **pause** period, during which certain pumps can be temporarily disabled.
 //!   2.  A **feed** period, where the feeder motor is activated for a specific duration.
@@ -32,21 +32,21 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 //!
 //! The design allows for complex and flexible feeding schedules. A simple feeding might
 //! consist of a single `FeedPhase` (e.g., "pause pumps, run feeder, resume pumps"). A more
-//! complex pattern could involve multiple phases to dispense multiple quantities of food or
+//! complex profile could involve multiple phases to dispense multiple quantities of food or
 //! to allow food to circulate before resuming full filtration.
 //!
-//! ### Example of a Multi-Phase Pattern
+//! ### Example of a Multi-Phase Profile
 //!
-//! A `Feedpattern` could be configured to:
+//! A `FeedProfile` could be configured to:
 //! 1.  **Phase 1**: Pause the main pumps and skimmer, then run the feeder for 2 seconds to dispense food.
 //! 2.  **Phase 2**: Keep pumps off for a 10-second pause to let fish eat, with no feeder activity.
 //! 3.  **Phase 3**: Run the feeder for 5 seconds to dispense more food.
 //! 4.  **Phase 4**: Wait another 15 seconds before all devices resume normal operation.
 //!
-//! This entire sequence would be contained within a single `Feedpattern` struct as a `Vec<FeedPhase>`.
+//! This entire sequence would be contained within a single `FeedProfile` struct as a `Vec<FeedPhase>`.
 
-/// Holds the configuration data of one feed pattern.
-pub struct Feedpattern {
+/// Holds the configuration data of one feed profile.
+pub struct FeedProfile {
     /// Numeric ID of the feed profile
     /// Data is not used in the implementation. Therefore, it is tagged as unused.
     #[allow(unused)]
@@ -60,15 +60,15 @@ pub struct Feedpattern {
     pub feedphases: Vec<FeedPhase>,
 }
 
-impl Feedpattern {
-    /// Calculates the total duration (in seconds) that the feeder motor will be active for this feed pattern.
+impl FeedProfile {
+    /// Calculates the total duration (in seconds) that the feeder motor will be active for this feed profile.
     ///
-    /// This function iterates through all defined `FeedPhase`es within the pattern and sums
+    /// This function iterates through all defined `FeedPhase`es within the profile and sums
     /// their individual `feed_duration` values. This total runtime is typically logged
     /// as part of a completed feed event.
     ///
     /// # Returns
-    /// The total feeder run time for this pattern, expressed as an `f64` in seconds.
+    /// The total feeder run time for this profile, expressed as an `f64` in seconds.
     pub fn calc_feeder_runtime(&self) -> f64 {
         self.feedphases
             .iter()
@@ -176,22 +176,22 @@ impl FeedPhase {
 mod tests {
     use super::*;
 
-    /// Tests that `calc_feeder_runtime` returns 0.0 for a pattern with no feed phases.
+    /// Tests that `calc_feeder_runtime` returns 0.0 for a profile with no feed phases.
     #[test]
     fn test_calc_feeder_runtime_empty() {
         println!("* Testing calc_feeder_runtime with an empty phase list...");
-        let pattern = Feedpattern {
+        let profile = FeedProfile {
             profile_id: 1,
-            profile_name: "Empty Pattern".to_string(),
+            profile_name: "Empty Profile".to_string(),
             feedphases: vec![],
         };
 
         assert_eq!(
-            pattern.calc_feeder_runtime(),
+            profile.calc_feeder_runtime(),
             0.0,
-            "Runtime for an empty pattern should be 0.0"
+            "Runtime for an empty profile should be 0.0"
         );
-        println!("* Succeeded: Empty pattern runtime is correct.");
+        println!("* Succeeded: Empty profile runtime is correct.");
     }
 
     /// Tests that `calc_feeder_runtime` correctly calculates the runtime for a single feed phase.
@@ -201,14 +201,14 @@ mod tests {
         let phase = FeedPhase::new(
             1000, false, false, false, false, false, 2500, false, false, false, false, false,
         );
-        let pattern = Feedpattern {
+        let profile = FeedProfile {
             profile_id: 2,
-            profile_name: "Single Phase Pattern".to_string(),
+            profile_name: "Single Phase Profile".to_string(),
             feedphases: vec![phase],
         };
 
         assert_eq!(
-            pattern.calc_feeder_runtime(),
+            profile.calc_feeder_runtime(),
             2500.0,
             "Runtime for a single phase should match its feed_duration"
         );
@@ -229,15 +229,15 @@ mod tests {
             0, false, false, false, false, false, 1500, false, false, false, false, false,
         );
 
-        let pattern = Feedpattern {
+        let profile = FeedProfile {
             profile_id: 3,
-            profile_name: "Multi-Phase Pattern".to_string(),
+            profile_name: "Multi-Phase Profile".to_string(),
             feedphases: vec![phase1, phase2, phase3],
         };
 
         // Expected: 2000 + 3000 + 1500 = 6500
         assert_eq!(
-            pattern.calc_feeder_runtime(),
+            profile.calc_feeder_runtime(),
             6500.0,
             "Runtime for multiple phases should be the sum of their feed_durations"
         );
@@ -259,15 +259,15 @@ mod tests {
             1000, false, false, false, false, false, 2500, false, false, false, false, false,
         );
 
-        let pattern = Feedpattern {
+        let profile = FeedProfile {
             profile_id: 4,
-            profile_name: "Zero Duration Pattern".to_string(),
+            profile_name: "Zero Duration Profile".to_string(),
             feedphases: vec![phase1, phase2, phase3],
         };
 
         // Expected: 5000 + 0 + 2500 = 7500
         assert_eq!(
-            pattern.calc_feeder_runtime(),
+            profile.calc_feeder_runtime(),
             7500.0,
             "Phases with zero feed_duration should not contribute to the total runtime"
         );
@@ -286,15 +286,15 @@ mod tests {
             1000, false, false, false, false, false, -1000, false, false, false, false, false,
         );
 
-        let pattern = Feedpattern {
+        let profile = FeedProfile {
             profile_id: 5,
-            profile_name: "Negative Duration Pattern".to_string(),
+            profile_name: "Negative Duration Profile".to_string(),
             feedphases: vec![phase1, phase2],
         };
 
         // Expected: 5000 + (-1000) = 4000
         assert_eq!(
-            pattern.calc_feeder_runtime(),
+            profile.calc_feeder_runtime(),
             4000.0,
             "Negative feed_duration should be summed correctly"
         );

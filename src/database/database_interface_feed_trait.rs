@@ -42,7 +42,7 @@ use crate::database::sql_interface::SqlInterface;
 use crate::database::sql_interface_error::SqlInterfaceError;
 use crate::database::sql_interface_feed::SqlInterfaceFeed;
 use crate::database::sql_query_strings;
-use crate::food::feed_pattern::{FeedPhase, Feedpattern};
+use crate::food::feed_profile::{FeedPhase, FeedProfile};
 use crate::food::feed_schedule_entry::FeedScheduleEntry;
 use chrono::NaiveDateTime;
 use mysql::params;
@@ -55,7 +55,7 @@ pub const NUM_FEEDPHASES: i32 = 10;
 pub trait DatabaseInterfaceFeedTrait: Pingable {
     fn get_current_timestamp(&mut self) -> mysql::Result<NaiveDateTime, SqlInterfaceError>;
 
-    fn get_past_feedschedule_entries_from_database(
+    fn get_past_feed_schedule_entries_from_database(
         &mut self,
     ) -> mysql::Result<Option<Vec<FeedScheduleEntry>>, SqlInterfaceError>;
 
@@ -66,12 +66,12 @@ pub trait DatabaseInterfaceFeedTrait: Pingable {
         profile_id: i32,
     ) -> mysql::Result<(), SqlInterfaceError>;
 
-    fn get_single_feedpattern_from_database(
+    fn get_single_feed_profile_from_database(
         &mut self,
         profile_id: i32,
-    ) -> mysql::Result<Feedpattern, SqlInterfaceError>;
+    ) -> mysql::Result<FeedProfile, SqlInterfaceError>;
 
-    fn update_feedschedule_entries_in_database(
+    fn update_feed_schedule_entries_in_database(
         &mut self,
         feedschedule_entries: &mut Vec<FeedScheduleEntry>,
     ) -> mysql::Result<(), SqlInterfaceError>;
@@ -113,10 +113,10 @@ impl DatabaseInterfaceFeedTrait for SqlInterfaceFeed {
     /// - `Ok(None)` if no past feed schedule entries are found in the database.
     /// - `Err(SqlInterfaceError)` if any error occurs during the database query
     ///   or during the conversion of raw database data into `FeedScheduleEntry` structs.
-    fn get_past_feedschedule_entries_from_database(
+    fn get_past_feed_schedule_entries_from_database(
         &mut self,
     ) -> mysql::Result<Option<Vec<FeedScheduleEntry>>, SqlInterfaceError> {
-        self.get_feedschedule_entries_from_database(
+        self.get_feed_schedule_entries_from_database(
             sql_query_strings::SQL_QUERY_READ_PAST_FEED_SCHEDULE_ENTRY,
         )
     }
@@ -178,11 +178,11 @@ impl DatabaseInterfaceFeedTrait for SqlInterfaceFeed {
     /// - The query for the feed pattern header fails, the header is not found, or multiple headers are found.
     /// - The query for any of the 10 feed phases fails, a phase is not found, or multiple phases are found.
     /// - A retrieved feed phase contains an invalid (negative) duration value.
-    fn get_single_feedpattern_from_database(
+    fn get_single_feed_profile_from_database(
         &mut self,
         profile_id: i32,
-    ) -> mysql::Result<Feedpattern, SqlInterfaceError> {
-        let sql_feedpattern_header = self.get_feedpattern_header_from_database(profile_id)?;
+    ) -> mysql::Result<FeedProfile, SqlInterfaceError> {
+        let sql_feedpattern_header = self.get_feed_profile_header_from_database(profile_id)?;
 
         let mut feed_phases = Vec::new();
         for nr in 1..=NUM_FEEDPHASES {
@@ -204,7 +204,7 @@ impl DatabaseInterfaceFeedTrait for SqlInterfaceFeed {
             };
             feed_phases.push(feed_phase);
         }
-        Ok(Feedpattern {
+        Ok(FeedProfile {
             profile_id: sql_feedpattern_header.profile_id,
             profile_name: sql_feedpattern_header.profile_name,
             feedphases: feed_phases,
@@ -229,7 +229,7 @@ impl DatabaseInterfaceFeedTrait for SqlInterfaceFeed {
     /// This function will return an error if an operation fails. This can be:
     /// - `FeedScheduleUpdateFailure`: If fetching tomorrow's date fails.
     /// - `FeedScheduleDropFailure`: If a database `UPDATE` or `DELETE` command fails. This can be due to a lost connection or other database-side issues.
-    fn update_feedschedule_entries_in_database(
+    fn update_feed_schedule_entries_in_database(
         &mut self,
         feedschedule_entries: &mut Vec<FeedScheduleEntry>,
     ) -> mysql::Result<(), SqlInterfaceError> {

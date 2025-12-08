@@ -7,7 +7,7 @@ The above copyright notice and this permission notice shall be included in all c
 THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 use crate::food::feed_channels::FeedChannels;
-use crate::food::feed_pattern::Feedpattern;
+use crate::food::feed_profile::FeedProfile;
 use crate::food::food_injection::FoodInjectionTrait;
 use crate::food::food_injection_error::FoodInjectionError;
 use std::fmt;
@@ -69,7 +69,7 @@ impl FoodInjectionTrait for MockFoodInjection {
     fn inject_food(
         &mut self,
         _feed_channels: &mut FeedChannels,
-        feed_pattern: &Feedpattern,
+        feed_pattern: &FeedProfile,
     ) -> (bool, Result<(), Vec<FoodInjectionError>>) {
         // do nothing except for logging the profile id of the feed pattern
         self.profile_ids_executed.push(feed_pattern.profile_id);

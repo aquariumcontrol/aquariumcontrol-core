@@ -1067,7 +1067,6 @@ impl DataLogger {
                     ph_filtered: pH_filtered,
                     conductivity,
                     conductivity_filtered,
-                    conductivity_compensated: None,
                     refill_in_progress: Some(refill_in_progress_for_database),
                     tank_level_switch_position,
                     tank_level_switch_position_stabilized,
@@ -1403,7 +1402,24 @@ pub mod tests {
             read_config_file("/config/aquarium_control_test_generic.toml".to_string()).unwrap();
         let mut config = global_config.data_logger;
 
-        config.output_file_name_water_temperature += "2";
+        // Make all file paths unique for this test case to avoid concurrency issues.
+        let unique_suffix = "_test_file_output";
+        config.output_file_name_timestamp += unique_suffix;
+        config.output_file_name_water_temperature += unique_suffix;
+        config.output_file_name_water_temperature_filtered += unique_suffix;
+        config.output_file_name_pH += unique_suffix;
+        config.output_file_name_pH_filtered += unique_suffix;
+        config.output_file_name_conductivity += unique_suffix;
+        config.output_file_name_conductivity_filtered += unique_suffix;
+        config.output_file_name_tank_level_switch_position += unique_suffix;
+        config.output_file_name_tank_level_switch_invalid += unique_suffix;
+        config.output_file_name_tank_level_switch_position_stabilized += unique_suffix;
+        config.output_file_name_ventilation_is_on += unique_suffix;
+        config.output_file_name_heating_is_on += unique_suffix;
+        config.output_file_name_ambient_temperature += unique_suffix;
+        config.output_file_name_humidity += unique_suffix;
+        config.output_file_name_refill_in_progress += unique_suffix;
+
         let output_file_name_water_temperature = config.output_file_name_water_temperature.clone();
         let output_file_name_heating_is_on = config.output_file_name_heating_is_on.clone();
 

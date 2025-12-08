@@ -75,7 +75,7 @@ pub struct SqlInterfaceConfig {
     pub max_rows_balling_set_values: u64,
 
     /// maximum allowed rows for feed pattern table
-    pub max_rows_feed_pattern: u64,
+    pub max_rows_feed_profile: u64,
 
     /// maximum allowed rows for feed schedule table
     pub max_rows_feed_schedule: u64,

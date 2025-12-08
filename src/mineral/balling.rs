@@ -299,7 +299,7 @@ impl Balling {
     ///
     /// # Errors
     /// Returns `BallingError::SetValueRetrievalError` if an active pump is missing its
-    /// corresponding configuration entry in the `ballingsetvals` table. The error will
+    /// corresponding configuration entry in the `balling_set_vals` table. The error will
     /// wrap the underlying `SqlInterfaceError`.
     fn check_database_vs_config(
         sql_interface_balling: &mut SqlInterfaceBalling,
@@ -791,7 +791,7 @@ pub mod tests {
     use crate::database::sql_interface::SqlInterface;
     use crate::database::sql_interface_balling::{BallingSetVal, SqlInterfaceBalling};
     use crate::database::sql_interface_error::SqlInterfaceError;
-    use crate::database::sql_query_strings::SQL_TABLE_BALLING_DOSING_LOG;
+    use crate::database::sql_query_strings::{SQL_TABLE_BALLING_DOSING_LOG, SQL_TABLE_BALLING_SET_VALS};
     use crate::launch::channels::Channels;
     use crate::mineral::balling::{Balling, BallingError};
     use crate::mocks::mock_mineral_injection::tests::MockMineralInjection;
@@ -1052,7 +1052,7 @@ pub mod tests {
         pump4: bool,
     ) {
         // empty the Balling pump configuration table
-        match SqlInterface::truncate_table(sql_interface, "ballingsetvals".to_string()) {
+        match SqlInterface::truncate_table(sql_interface, SQL_TABLE_BALLING_SET_VALS.to_string()) {
             Ok(_) => {}
             Err(e) => {
                 panic!("Could not prepare test case: {e:?}")
