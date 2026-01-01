@@ -404,7 +404,7 @@ fn run() -> Result<(), StartupError> {
     let args: Vec<String> = env::args().collect();
 
     // initialize with a default configuration file name
-    let mut config_file_name = "/etc/aquarium_control/config/aquarium_control.toml".to_string();
+    let mut config_file_name = "/etc/aquarium_control/aquarium_control.toml".to_string();
 
     // Check command line parameters
     if args.len() > 1 {
