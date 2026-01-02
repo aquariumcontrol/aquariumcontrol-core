@@ -296,7 +296,7 @@ pub mod tests {
         pub fn test_show_tank_level_switch() {
             let config: ConfigData = read_config_file("/config/aquarium_control.toml".to_string());
             let (_, tank_level_switch_input_pin_opt, _dht_opt) =
-                GpioHandler::new(config.gpio_handler, config.dht);
+                GpioHandler::new(config.gpio_handler, config.dht).unwrap();
 
             let tank_level_switch_input_pin = match tank_level_switch_input_pin_opt {
                 Some(c) => c,

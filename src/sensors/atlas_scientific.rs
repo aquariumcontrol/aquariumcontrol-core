@@ -341,6 +341,8 @@ impl AtlasScientific {
         buffer: [u8; atlas_scientific_constants::MESSAGE_SIZE],
         is_ph: bool,
     ) -> Result<f32, AtlasScientificError> {
+        println!("check_response buffer: {:?}", buffer);
+
         // first check: first character not magic
         let first_character = buffer[atlas_scientific_constants::INDEX_FIRST_CHARACTER];
         if first_character != atlas_scientific_constants::MESSAGE_START_MAGIC {

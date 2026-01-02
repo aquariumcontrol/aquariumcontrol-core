@@ -740,7 +740,7 @@ pub mod tests {
             true,
             None,
             config.gpio_handler.tank_level_switch,
-        );
+        ).unwrap();
         #[cfg(any(not(target_os = "linux"), not(feature = "target_hw")))]
         let mut tank_level_switch = TankLevelSwitch::new(config.tank_level_switch, true).unwrap();
 
@@ -868,7 +868,7 @@ pub mod tests {
             false,
             None,
             config.gpio_handler.tank_level_switch,
-        );
+        ).unwrap();
         #[cfg(any(not(target_os = "linux"), not(feature = "target_hw")))]
         let tank_level_switch = TankLevelSwitch::new(config.tank_level_switch, false).unwrap();
         let mutex_tank_level_switch_signals =
@@ -977,7 +977,7 @@ pub mod tests {
             true,
             None,
             config.gpio_handler.tank_level_switch,
-        );
+        ).unwrap();
         #[cfg(any(not(target_os = "linux"), not(feature = "target_hw")))]
         let tank_level_switch = TankLevelSwitch::new(config.tank_level_switch, true).unwrap();
         let mutex_tank_level_switch_signals =
@@ -1085,7 +1085,7 @@ pub mod tests {
             true,
             None,
             config.gpio_handler.tank_level_switch,
-        );
+        ).unwrap();
         #[cfg(any(not(target_os = "linux"), not(feature = "target_hw")))]
         let tank_level_switch = TankLevelSwitch::new(config.tank_level_switch, true).unwrap();
         let mutex_tank_level_switch_signals =
@@ -1336,7 +1336,7 @@ pub mod tests {
             false,
             None,
             config.gpio_handler.tank_level_switch,
-        );
+        ).unwrap();
         #[cfg(any(not(target_os = "linux"), not(feature = "target_hw")))]
         let mut tank_level_switch = TankLevelSwitch::new(config.tank_level_switch, false).unwrap();
         let mutex_tank_level_switch_signals =

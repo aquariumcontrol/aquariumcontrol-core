@@ -414,7 +414,7 @@ pub mod tests {
 
         let water_temperature_sensor_id = config.ds18b20.water_temperature_sensor_id.clone();
 
-        let ds18b20 = Ds18b20::new(config.ds18b20);
+        let ds18b20 = Ds18b20::new(config.ds18b20).unwrap();
 
         match ds18b20.read(&water_temperature_sensor_id) {
             Ok(temperature) => {
