@@ -831,6 +831,10 @@ pub mod tests {
     use std::sync::{Arc, Mutex};
     use std::thread;
     use std::time::{Duration, Instant};
+    use std::io;
+
+    #[cfg(all(target_os = "linux", feature = "target_hw"))]
+    use crate::sensors::i2c_interface::{I2cInterface};
 
     #[test]
     // happy case for evaluating response from pH sensor unit
@@ -2210,6 +2214,7 @@ pub mod tests {
         #[cfg(all(target_os = "linux", feature = "target_hw"))]
         let mock_error = I2cError::WriteFailure {
             source: mock_rppal_error,
+            location: module_path!().to_string(),
         };
 
         #[cfg(not(all(target_os = "linux", feature = "target_hw")))]
@@ -2410,19 +2415,19 @@ pub mod tests {
     // - temperature
     pub fn test_atlas_scientific_interface_read_sensors() {
         let config: ConfigData =
-            read_config_file("/config/aquarium_control_test_generic.toml".to_string());
-        let mut i2c_interface = I2cInterface::new(config.i2c_interface);
+            read_config_file("/config/aquarium_control_test_generic.toml".to_string()).unwrap();
+        let mut i2c_interface = I2cInterface::new(config.i2c_interface).unwrap();
 
         let send_buf = [atlas_scientific_constants::COMMAND_READ];
         let request_ph = I2cRequest::new(
             config.atlas_scientific.address_atlas_scientific_ph,
-            send_buf.clone(),
+            &send_buf,
             config.atlas_scientific.sleep_time_millis_ph,
             atlas_scientific_constants::MESSAGE_SIZE,
         );
         let request_temperature = I2cRequest::new(
             config.atlas_scientific.address_atlas_scientific_temperature,
-            send_buf.clone(),
+            &send_buf,
             config.atlas_scientific.sleep_time_millis_temperature,
             atlas_scientific_constants::MESSAGE_SIZE,
         );
@@ -2430,40 +2435,40 @@ pub mod tests {
             config
                 .atlas_scientific
                 .address_atlas_scientific_conductivity,
-            send_buf,
+            &send_buf,
             config.atlas_scientific.sleep_time_millis_conductivity,
             atlas_scientific_constants::MESSAGE_SIZE,
         );
 
-        let response_ph = i2c_interface.get_response_from_i2c(request_ph);
+        let response_ph = i2c_interface.get_response_from_i2c(request_ph.unwrap()).unwrap();
         println!("Atlas Scientific response for pH: {:?}", response_ph);
 
-        let response_temperature = i2c_interface.get_response_from_i2c(request_temperature);
+        let response_temperature = i2c_interface.get_response_from_i2c(request_temperature.unwrap()).unwrap();
         println!(
             "Atlas Scientific response for temperature: {:?}",
             response_temperature
         );
 
-        let response_conductivity = i2c_interface.get_response_from_i2c(request_conductivity);
+        let response_conductivity = i2c_interface.get_response_from_i2c(request_conductivity.unwrap()).unwrap();
         println!(
             "Atlas Scientific response for conductivity: {:?}",
             response_conductivity
         );
 
         let ph = AtlasScientific::check_response(
-            response_ph.unwrap().read_buf.try_into().unwrap(),
+            response_ph.read_buf[..atlas_scientific_constants::MESSAGE_SIZE].try_into().unwrap(),
             true,
         )
         .unwrap();
         println!("pH={}", ph);
         let temperature = AtlasScientific::check_response(
-            response_temperature.unwrap().read_buf.try_into().unwrap(),
+            response_temperature.read_buf[..atlas_scientific_constants::MESSAGE_SIZE].try_into().unwrap(),
             true,
         )
         .unwrap();
         println!("temperature={}", temperature);
         let conductivity = AtlasScientific::check_response(
-            response_conductivity.unwrap().read_buf.try_into().unwrap(),
+            response_conductivity.read_buf[..atlas_scientific_constants::MESSAGE_SIZE].try_into().unwrap(),
             true,
         )
         .unwrap();

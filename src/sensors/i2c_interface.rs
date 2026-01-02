@@ -1,4 +1,4 @@
-/* Copyright 2024 Uwe Martin
+/* Copyright u2024 Uwe Martin
 
 Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the “Software”), to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions:
 
@@ -60,7 +60,7 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 //!   once on the stack at startup. This buffer is then reused for every transaction,
 //!   avoiding repeated, potentially costly memory allocations within the main loop.
 
-#[cfg(all(target_os = "linux", feature = "target_hw"))]
+#[cfg(all(target_os = "linux", feature = "target_hw", not(test)))]
 use log::info;
 use spin_sleep::SpinSleeper;
 use std::fmt;
@@ -83,7 +83,6 @@ cfg_if::cfg_if! {
         use crate::utilities::proc_ext_req::ProcessExternalRequestTrait;
         use crate::sensors::i2c_error::I2cError::{InitializationFailure, SetTimeoutError};
         use crate::sensors::i2c_interface_channels::I2cInterfaceChannels;
-        use nix::unistd::gettid;
     }
 }
 

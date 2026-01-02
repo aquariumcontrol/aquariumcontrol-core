@@ -410,7 +410,7 @@ pub mod tests {
     // For this test case to succeed, the DS18B20 sensor needs to be connected,
     // and the 1-wire interface needs to be enabled (see rasp-config)
     fn test_read_ds18b20() {
-        let config = read_config_file("config/aquarium_control_test_generic.toml".to_string());
+        let config = read_config_file("config/aquarium_control_test_generic.toml".to_string()).unwrap();
 
         let water_temperature_sensor_id = config.ds18b20.water_temperature_sensor_id.clone();
 

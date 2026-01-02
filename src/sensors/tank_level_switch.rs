@@ -863,7 +863,7 @@ pub mod tests {
         let duration_test_case_part_2: u64 = 2; // two seconds with level switch in high position
 
         #[cfg(all(target_os = "linux", feature = "target_hw"))]
-        let mut tank_level_switch = TankLevelSwitch::new(
+        let tank_level_switch = TankLevelSwitch::new(
             config.tank_level_switch,
             false,
             None,
@@ -972,7 +972,7 @@ pub mod tests {
         let duration_test_case_part_1: u64 = 3; // three seconds with level switch in low position
         let duration_test_case_part_2: u64 = 8; // two seconds with level switch in high position
         #[cfg(all(target_os = "linux", feature = "target_hw"))]
-        let mut tank_level_switch = TankLevelSwitch::new(
+        let tank_level_switch = TankLevelSwitch::new(
             config.tank_level_switch,
             true,
             None,
@@ -1080,7 +1080,7 @@ pub mod tests {
         let duration_test_case_part: u64 = 2; // two seconds with the level switch before toggling
 
         #[cfg(all(target_os = "linux", feature = "target_hw"))]
-        let mut tank_level_switch = TankLevelSwitch::new(
+        let tank_level_switch = TankLevelSwitch::new(
             config.tank_level_switch,
             true,
             None,
@@ -1222,26 +1222,26 @@ pub mod tests {
     // test functionality on real hardware
     pub fn test_tank_level_switch_position_on_hardware() {
         let mut config: ConfigData =
-            read_config_file("/config/aquarium_control_test_generic.toml".to_string());
+            read_config_file("/config/aquarium_control_test_generic.toml".to_string()).unwrap();
         config.gpio_handler.use_simulator = false;
         config.tank_level_switch.use_simulator = false;
         let mut channels = Channels::new_for_test();
 
         let tank_level_switch_pin = config.gpio_handler.tank_level_switch;
 
-        let gpio_handler = GpioHandler::new(config.gpio_handler).unwrap();
+        let gpio_handler = GpioHandler::new(config.gpio_handler).unwrap().unwrap();
 
         let gpio_lib_handle = gpio_handler.gpio_lib_handle_opt.clone().unwrap();
 
         let mut stimuli_pin =
-            actuate_gpio::get_output_pin(&gpio_lib_handle, 21, "Tank level switch stimuli");
+            actuate_gpio::get_output_pin(&gpio_lib_handle, 21, "Tank level switch stimuli").unwrap();
 
         let mut tank_level_switch = TankLevelSwitch::new(
             config.tank_level_switch,
             true,
             Some(gpio_handler.gpio_lib_handle_opt.unwrap()),
             tank_level_switch_pin,
-        );
+        ).unwrap();
 
         let mut mutex_tank_level_switch_signals =
             Arc::new(Mutex::new(TankLevelSwitchSignals::new(true, true, false)));
@@ -1289,9 +1289,9 @@ pub mod tests {
                     &mut mutex_tank_level_switch_signals
                 );
 
-                let _ = channels.signal_handler.send_to_tank_level_switch(InternalCommand::Quit).unwrap();
-                let _ = channels.signal_handler.receive_from_tank_level_switch();
-                let _ = channels.signal_handler.send_to_tank_level_switch(InternalCommand::Terminate).unwrap();
+                let _ = channels.signal_handler.tx_signal_handler_to_tank_level_switch.send(InternalCommand::Quit);
+                let _ = channels.signal_handler.rx_signal_handler_from_tank_level_switch.recv().unwrap();
+                let _ = channels.signal_handler.tx_signal_handler_to_tank_level_switch.send(InternalCommand::Terminate);
                 spin_sleeper.sleep(sleep_duration_part);
             })
             .unwrap();
@@ -1300,7 +1300,7 @@ pub mod tests {
         let join_handle_test_object = thread::Builder::new()
             .name("test_object".to_string())
             .spawn(move || {
-                tank_level_switch.execute(
+                let _ = tank_level_switch.execute(
                     &mut channels.tank_level_switch,
                     mutex_tank_level_switch_signals_clone_for_test_object,
                 );

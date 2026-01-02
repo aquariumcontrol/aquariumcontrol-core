@@ -1008,7 +1008,7 @@ pub mod tests {
         setup_logger(LoggerConfig::default()).unwrap();
 
         let config: ConfigData =
-            read_config_file("/config/aquarium_control_test_generic.toml".to_string());
+            read_config_file("/config/aquarium_control_test_generic.toml".to_string()).unwrap();
 
         // open interface to the GPIO library
         let gpio = match Gpio::new() {
@@ -1086,6 +1086,13 @@ pub mod tests {
         let config = DhtConfig {
             active: false,
             measurement_interval_millis: 2000,
+            execute: true,
+            sensor_init_pin_down_duration_micros: 1000,
+            sensor_init_pin_up_duration_micros: 1000,
+            sensor_pause_duration_millis: 50,
+            sensor_reset_duration_millis: 50,
+            sensor_startup_duration_millis: 50,
+            timeout_duration_micros: 5000,
         };
         let dht = Dht::new(config, None, 0, 0);
         let mutex = Arc::new(Mutex::new(Ok((0.0, 0.0))));
