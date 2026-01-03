@@ -1040,8 +1040,14 @@ impl Refill {
 #[cfg(test)]
 pub mod tests {
     use crate::database::sql_interface_error::SqlInterfaceError;
+    use crate::database::sql_query_strings::SQL_TABLE_REFILL;
     use crate::database::{sql_interface::SqlInterface, sql_interface_refill::SqlInterfaceRefill};
     use crate::launch::channels::{channel, AquaChannelError, AquaReceiver, AquaSender, Channels};
+    use crate::mocks::mock_monitors::tests::MockMonitors;
+    use crate::mocks::mock_schedule_check::tests::mock_schedule_check;
+    use crate::mocks::mock_sql_interface_refill::tests::MockSqlInterfaceRefill;
+    use crate::mocks::mock_water_injection::tests::MockWaterInjection;
+    use crate::mocks::test_command::tests::TestCommand;
     use crate::sensors::tank_level_switch::TankLevelSwitchSignals;
     use crate::utilities::channel_content::InternalCommand;
     use crate::utilities::config::{
@@ -1056,12 +1062,6 @@ pub mod tests {
     use std::sync::{Arc, Mutex};
     use std::thread;
     use std::time::{Duration, Instant};
-    use crate::database::sql_query_strings::SQL_TABLE_REFILL;
-    use crate::mocks::mock_monitors::tests::MockMonitors;
-    use crate::mocks::mock_schedule_check::tests::mock_schedule_check;
-    use crate::mocks::mock_sql_interface_refill::tests::MockSqlInterfaceRefill;
-    use crate::mocks::mock_water_injection::tests::MockWaterInjection;
-    use crate::mocks::test_command::tests::TestCommand;
 
     use crate::utilities::logger::setup_logger;
     use crate::utilities::logger_config::LoggerConfig;

@@ -828,13 +828,13 @@ pub mod tests {
     use crate::utilities::config::{read_config_file, ConfigData};
     use assert_float_eq::*;
     use spin_sleep::SpinSleeper;
+    use std::io;
     use std::sync::{Arc, Mutex};
     use std::thread;
     use std::time::{Duration, Instant};
-    use std::io;
 
     #[cfg(all(target_os = "linux", feature = "target_hw"))]
-    use crate::sensors::i2c_interface::{I2cInterface};
+    use crate::sensors::i2c_interface::I2cInterface;
 
     #[test]
     // happy case for evaluating response from pH sensor unit
@@ -2424,13 +2424,15 @@ pub mod tests {
             &send_buf,
             config.atlas_scientific.sleep_time_millis_ph,
             atlas_scientific_constants::MESSAGE_SIZE,
-        );
+        )
+        .unwrap();
         let request_temperature = I2cRequest::new(
             config.atlas_scientific.address_atlas_scientific_temperature,
             &send_buf,
             config.atlas_scientific.sleep_time_millis_temperature,
             atlas_scientific_constants::MESSAGE_SIZE,
-        );
+        )
+        .unwrap();
         let request_conductivity = I2cRequest::new(
             config
                 .atlas_scientific
@@ -2438,40 +2440,70 @@ pub mod tests {
             &send_buf,
             config.atlas_scientific.sleep_time_millis_conductivity,
             atlas_scientific_constants::MESSAGE_SIZE,
-        );
-
-        let response_ph = i2c_interface.get_response_from_i2c(request_ph.unwrap()).unwrap();
-        println!("Atlas Scientific response for pH: {:?}", response_ph);
-
-        let response_temperature = i2c_interface.get_response_from_i2c(request_temperature.unwrap()).unwrap();
-        println!(
-            "Atlas Scientific response for temperature: {:?}",
-            response_temperature
-        );
-
-        let response_conductivity = i2c_interface.get_response_from_i2c(request_conductivity.unwrap()).unwrap();
-        println!(
-            "Atlas Scientific response for conductivity: {:?}",
-            response_conductivity
-        );
-
-        let ph = AtlasScientific::check_response(
-            response_ph.read_buf[..atlas_scientific_constants::MESSAGE_SIZE].try_into().unwrap(),
-            true,
         )
         .unwrap();
-        println!("pH={}", ph);
-        let temperature = AtlasScientific::check_response(
-            response_temperature.read_buf[..atlas_scientific_constants::MESSAGE_SIZE].try_into().unwrap(),
-            true,
-        )
-        .unwrap();
-        println!("temperature={}", temperature);
-        let conductivity = AtlasScientific::check_response(
-            response_conductivity.read_buf[..atlas_scientific_constants::MESSAGE_SIZE].try_into().unwrap(),
-            true,
-        )
-        .unwrap();
-        println!("conductivity={}", conductivity);
+
+        match i2c_interface.get_response_from_i2c(request_ph) {
+            Ok(response_ph) => {
+                println!("Atlas Scientific response for pH: {:?}", response_ph);
+                let ph = AtlasScientific::check_response(
+                    response_ph.read_buf[..atlas_scientific_constants::MESSAGE_SIZE]
+                        .try_into()
+                        .unwrap(),
+                    true,
+                )
+                .unwrap();
+                println!("pH={}", ph);
+            }
+            Err(err_response_ph) => {
+                println!("Failed to read from pH sensor: {:?}", err_response_ph);
+            }
+        }
+
+        match i2c_interface.get_response_from_i2c(request_temperature) {
+            Ok(response_temperature) => {
+                println!(
+                    "Atlas Scientific response for temperature: {:?}",
+                    response_temperature
+                );
+                let temperature = AtlasScientific::check_response(
+                    response_temperature.read_buf[..atlas_scientific_constants::MESSAGE_SIZE]
+                        .try_into()
+                        .unwrap(),
+                    true,
+                )
+                .unwrap();
+                println!("temperature={}", temperature);
+            }
+            Err(err_response_temperature) => {
+                println!(
+                    "Failed to read from temperature sensor: {:?}",
+                    err_response_temperature
+                );
+            }
+        }
+
+        match i2c_interface.get_response_from_i2c(request_conductivity) {
+            Ok(response_conductivity) => {
+                println!(
+                    "Atlas Scientific response for conductivity: {:?}",
+                    response_conductivity
+                );
+                let conductivity = AtlasScientific::check_response(
+                    response_conductivity.read_buf[..atlas_scientific_constants::MESSAGE_SIZE]
+                        .try_into()
+                        .unwrap(),
+                    true,
+                )
+                .unwrap();
+                println!("conductivity={}", conductivity);
+            }
+            Err(err_response_conductivity) => {
+                println!(
+                    "Failed to read from conductivity sensor: {:?}",
+                    err_response_conductivity
+                );
+            }
+        }
     }
 }

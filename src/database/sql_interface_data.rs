@@ -329,22 +329,16 @@ pub mod tests {
         );
         let data_frame_1_array: Vec<SqlDataFrame1> = match conn.query_map(
             sql_query_string_1.clone(),
-            |(
-                timestamp,
-                water_temp,
-                water_temp_filt,
-                ph,
-                ph_filt,
-                conduc,
-                conduc_filt,
-            )| SqlDataFrame1 {
-                timestamp,
-                water_temperature: water_temp,
-                water_temperature_filtered: water_temp_filt,
-                ph,
-                ph_filtered: ph_filt,
-                conductivity: conduc,
-                conductivity_filtered: conduc_filt,
+            |(timestamp, water_temp, water_temp_filt, ph, ph_filt, conduc, conduc_filt)| {
+                SqlDataFrame1 {
+                    timestamp,
+                    water_temperature: water_temp,
+                    water_temperature_filtered: water_temp_filt,
+                    ph,
+                    ph_filtered: ph_filt,
+                    conductivity: conduc,
+                    conductivity_filtered: conduc_filt,
+                }
             },
         ) {
             Ok(c) => c,

@@ -984,7 +984,8 @@ pub mod tests {
         };
 
         // empty the heating stats table
-        match SqlInterface::truncate_table(&mut sql_interface, SQL_TABLE_HEATING_STATS.to_string()) {
+        match SqlInterface::truncate_table(&mut sql_interface, SQL_TABLE_HEATING_STATS.to_string())
+        {
             Ok(_) => {}
             Err(e) => {
                 panic!("Could not prepare test case: {e:?}")

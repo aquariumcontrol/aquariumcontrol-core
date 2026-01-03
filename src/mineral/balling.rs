@@ -791,7 +791,9 @@ pub mod tests {
     use crate::database::sql_interface::SqlInterface;
     use crate::database::sql_interface_balling::{BallingSetVal, SqlInterfaceBalling};
     use crate::database::sql_interface_error::SqlInterfaceError;
-    use crate::database::sql_query_strings::{SQL_TABLE_BALLING_DOSING_LOG, SQL_TABLE_BALLING_SET_VALS};
+    use crate::database::sql_query_strings::{
+        SQL_TABLE_BALLING_DOSING_LOG, SQL_TABLE_BALLING_SET_VALS,
+    };
     use crate::launch::channels::Channels;
     use crate::mineral::balling::{Balling, BallingError};
     use crate::mocks::mock_mineral_injection::tests::MockMineralInjection;

@@ -658,7 +658,8 @@ pub mod tests {
         // Reference calculation uses the database clock to avoid timezone and DST issues
         let db_now = SqlInterface::get_current_timestamp(&mut sql_interface_balling.conn)
             .expect("Failed to get current timestamp from DB for reference calculation.");
-        let reference_duration_since_last_balling_dosing = (db_now - balling_timestamp).num_seconds();
+        let reference_duration_since_last_balling_dosing =
+            (db_now - balling_timestamp).num_seconds();
 
         let duration_delta_seconds = duration_since_last_balling_dosing
             .as_secs()

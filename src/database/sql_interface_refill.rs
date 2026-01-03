@@ -600,7 +600,8 @@ pub mod tests {
             .expect("Failed to get current timestamp from DB for reference calculation.");
         let reference_duration_since_last_refill = (db_now - refill_timestamp).num_seconds();
 
-        let duration_delta_seconds = duration_since_last_refill.abs_diff(reference_duration_since_last_refill as u64);
+        let duration_delta_seconds =
+            duration_since_last_refill.abs_diff(reference_duration_since_last_refill as u64);
         assert_le!(duration_delta_seconds, 1);
 
         println!("* checking duration since last refill succeeded.");
