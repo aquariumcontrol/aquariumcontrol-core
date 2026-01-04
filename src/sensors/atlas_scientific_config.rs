@@ -79,4 +79,13 @@ pub struct AtlasScientificConfig {
 
     /// measurement interval in milliseconds
     pub measurement_interval_millis: u64,
+
+    /// sensor type (oem or ezo) for temperature
+    pub sensor_type_temperature: String,
+
+    /// sensor type (oem or ezo) for pH
+    pub sensor_type_ph: String,
+
+    /// sensor type (oem or ezo) for conductivity
+    pub sensor_type_conductivity: String,
 }

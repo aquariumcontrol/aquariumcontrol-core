@@ -75,23 +75,17 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 
 #[cfg(all(not(test), target_os = "linux"))]
 use log::info;
+use std::collections::HashMap;
 use std::fmt;
 
-#[cfg(not(test))]
-use log::warn;
-
-use crate::launch::channels::AquaChannelError;
 use crate::sensors::atlas_scientific_channels::AtlasScientificChannels;
 use crate::sensors::atlas_scientific_config::AtlasScientificConfig;
+use crate::sensors::atlas_scientific_driver::AtlasScientificDriver;
 use crate::sensors::atlas_scientific_error::AtlasScientificError;
-use crate::sensors::atlas_scientific_error::AtlasScientificError::{
-    InvalidSignal, SignalRequestCreationFailure,
-};
-use crate::sensors::i2c_interface::I2cRequest;
+pub(crate) use crate::sensors::atlas_scientific_ezo::AtlasScientificEzo;
 use crate::simulator::get_resp_sim::GetResponseFromSimulatorTrait;
 use crate::utilities::acknowledge_signal_handler::AcknowledgeSignalHandlerTrait;
 use crate::utilities::channel_content::AquariumSignal;
-use crate::utilities::check_mutex_access_duration::CheckMutexAccessDurationTrait;
 use crate::utilities::logger::log_error_chain;
 use crate::utilities::proc_ext_req::ProcessExternalRequestTrait;
 use crate::utilities::wait_for_termination::WaitForTerminationTrait;
@@ -139,45 +133,8 @@ impl fmt::Display for AtlasScientificResultData {
 #[allow(unused)] // used in conditionally compiled code
 pub type AtlasScientificResult = Result<AtlasScientificResultData, AtlasScientificError>;
 
-#[allow(dead_code)]
-/// numeric values used in communication with Atlas Scientific sensor units
-mod atlas_scientific_constants {
-    /// command sent to sensor unit for initiating response
-    pub const COMMAND_READ: u8 = b'R';
-
-    /// length of the message received from the sensor (number of bytes)
-    pub const MESSAGE_SIZE: usize = 8;
-
-    /// location of the first character to be checked inside the message from the sensor
-    pub const INDEX_FIRST_CHARACTER: usize = 0;
-
-    /// start of data inside the message from the sensor
-    pub const INDEX_CONTENT_START: usize = 1;
-
-    /// finish of data inside the message from the sensor
-    pub const INDEX_PENULTIMATE_CHARACTER: usize = 6;
-
-    /// location of the last character to be checked inside the message from the sensor
-    pub const INDEX_LAST_CHARACTER: usize = 7;
-
-    /// ASCII value for representation of figure zero
-    pub const ASCII_VAL_ZERO: u8 = 48;
-
-    /// ASCII value for representation of figure nine
-    pub const ASCII_VAL_NINE: u8 = 57;
-
-    /// decimal point
-    pub const DECIMAL_POINT: u8 = b'.';
-
-    /// negative sign (note: positive sign does not occur in the message from the sensor)
-    pub const NEGATIVE_SIGN: u8 = b'-';
-
-    /// magic number at front position inside the message which identifies valid response from sensor unit
-    pub const MESSAGE_START_MAGIC: u8 = 1;
-
-    /// magic number at finish position inside the message which identifies valid response from sensor unit
-    pub const MESSAGE_FINISH_MAGIC: u8 = 0;
-
+/// Device-type-independent constants for AtlasScientific
+pub mod atlas_scientific_constants {
     /// allow max. 10 milliseconds for mutex to be blocked by any other thread
     pub const MAX_MUTEX_ACCESS_DURATION_MILLIS: u64 = 10;
 }
@@ -212,23 +169,6 @@ pub struct AtlasScientific {
     /// inhibition flag to avoid flooding the log file with repeated messages about to send request via the channel to I2cInterface thread
     lock_error_channel_send_i2c_interface: bool,
 
-    /// inhibition flag to avoid flooding the log file with repeated messages about excessive access time to mutex for water temperature
-    pub lock_warn_max_mutex_access_duration_temperature: bool,
-
-    /// inhibition flag to avoid flooding the log file with repeated messages about excessive access time to mutex for pH
-    pub lock_warn_max_mutex_access_duration_ph: bool,
-
-    /// inhibition flag to avoid flooding the log file with repeated messages about excessive access time to mutex for conductivity
-    pub lock_warn_max_mutex_access_duration_conductivity: bool,
-
-    // for testing purposes: record when mutex access time is exceeded without resetting it
-    #[cfg(test)]
-    pub mutex_temperature_access_duration_exceeded: bool,
-    #[cfg(test)]
-    pub mutex_ph_access_duration_exceeded: bool,
-    #[cfg(test)]
-    pub mutex_conductivity_access_duration_exceeded: bool,
-
     /// instant when the last measurement took place
     #[allow(unused)] // used in conditionally compiled code
     pub last_measurement_instant: Instant,
@@ -237,8 +177,10 @@ pub struct AtlasScientific {
     #[allow(unused)] // used in conditionally compiled code
     pub measurement_interval: Duration,
 
-    /// maximum allowed duration for access to mutex
-    pub max_mutex_access_duration_millis: Duration,
+    /// Drivers for each connected sensor, keyed by the signal type.
+    drivers: HashMap<AquariumSignal, Box<dyn AtlasScientificDriver>>,
+
+    lock_error_driver_not_found: HashMap<AquariumSignal, bool>,
 }
 
 impl ProcessExternalRequestTrait for AtlasScientific {}
@@ -263,14 +205,37 @@ impl AtlasScientific {
     pub fn new(config: AtlasScientificConfig) -> AtlasScientific {
         let measurement_interval = Duration::from_millis(config.measurement_interval_millis);
 
+        let mut drivers: HashMap<AquariumSignal, Box<dyn AtlasScientificDriver>> = HashMap::new();
+        drivers.insert(
+            AquariumSignal::WaterTemperature,
+            Box::new(AtlasScientificEzo::new(
+                config.address_atlas_scientific_temperature,
+                config.sleep_time_millis_temperature,
+                atlas_scientific_constants::MAX_MUTEX_ACCESS_DURATION_MILLIS,
+            )),
+        );
+        drivers.insert(
+            AquariumSignal::WaterTemperature,
+            Box::new(AtlasScientificEzo::new(
+                config.address_atlas_scientific_ph,
+                config.sleep_time_millis_ph,
+                atlas_scientific_constants::MAX_MUTEX_ACCESS_DURATION_MILLIS,
+            )),
+        );
+        drivers.insert(
+            AquariumSignal::WaterTemperature,
+            Box::new(AtlasScientificEzo::new(
+                config.address_atlas_scientific_conductivity,
+                config.sleep_time_millis_conductivity,
+                atlas_scientific_constants::MAX_MUTEX_ACCESS_DURATION_MILLIS,
+            )),
+        );
+
         AtlasScientific {
             config,
             lock_error_channel_receive_termination: false,
             lock_warn_inapplicable_command_signal_handler: false,
             lock_error_channel_send_i2c_interface: false,
-            lock_warn_max_mutex_access_duration_temperature: false,
-            lock_warn_max_mutex_access_duration_ph: false,
-            lock_warn_max_mutex_access_duration_conductivity: false,
 
             #[cfg(test)]
             mutex_temperature_access_duration_exceeded: false,
@@ -283,190 +248,10 @@ impl AtlasScientific {
 
             last_measurement_instant: Instant::now(),
             measurement_interval,
-            max_mutex_access_duration_millis: Duration::from_millis(
-                atlas_scientific_constants::MAX_MUTEX_ACCESS_DURATION_MILLIS,
-            ),
-        }
-    }
 
-    /// Checks if a given character is a valid part of a numeric string, considering optional negative signs.
-    ///
-    /// This private helper function is used during the parsing of sensor responses to validate
-    /// that each character in the data section is either a digit (`0`-`9`), a decimal point (`.`),
-    /// or, if `negative_allowed` is `true`, a negative sign (`-`).
-    ///
-    /// # Arguments
-    /// * `character` - The `u8` byte value of the character to be checked (typically an ASCII representation).
-    /// * `negative_allowed` - A `bool` flag. If `true`, a negative sign character (`-`) will be considered
-    ///   valid; otherwise, it will be considered invalid.
-    ///
-    /// # Returns
-    /// `true` if the character is a valid numeric component based on the rules; `false` otherwise.
-    #[allow(unused)] // used in conditionally compiled code
-    fn is_numeric(character: u8, negative_allowed: bool) -> bool {
-        match character {
-            atlas_scientific_constants::ASCII_VAL_ZERO
-                ..=atlas_scientific_constants::ASCII_VAL_NINE => true,
-            atlas_scientific_constants::DECIMAL_POINT => true,
-            atlas_scientific_constants::NEGATIVE_SIGN => negative_allowed,
-            _ => false,
-        }
-    }
+            drivers,
 
-    /// Evaluates a raw byte array response from an Atlas Scientific sensor unit, validating its format and converting it to `f32`.
-    ///
-    /// This private helper function performs several critical steps to parse sensor data:
-    /// 1.  **Magic Number Check**: Verifies the protocol's start and end "magic" bytes.
-    /// 2.  **Numeric Content Validation**: Ensures all characters within the data section are valid numeric components.
-    /// 3.  **UTF-8 Conversion & Float Parsing**: Converts the validated byte sequence into a string and parses it into an `f32` value.
-    ///
-    /// The `is_ph` flag specifically controls whether a negative sign is allowed, as pH values are non-negative by definition.
-    ///
-    /// # Arguments
-    /// * `buffer` - A fixed-size array of `u8` bytes representing the complete message received from the sensor.
-    /// * `is_ph` - A `bool` flag indicating if the response is from a pH sensor (`true`) or another type (`false`).
-    ///
-    /// # Returns
-    /// A `Result` containing the successfully parsed `f32` sensor reading.
-    ///
-    /// # Errors
-    /// Returns an `AtlasScientificError` variant if any validation or parsing step fails:
-    /// - `FirstCharacterNotMagic`: If the message's first byte is incorrect.
-    /// - `LastCharacterNotMagic`: If the message's last byte is incorrect.
-    /// - `ContainsInvalidCharacter`: If the data section contains non-numeric characters.
-    /// - `InvalidUtf8Sequence`: If the numeric byte sequence is not valid UTF-8.
-    /// - `ConversionFailure`: If the valid numeric string cannot be parsed into an `f32`.
-    #[allow(unused)] // used in conditionally compiled code
-    fn check_response(
-        buffer: [u8; atlas_scientific_constants::MESSAGE_SIZE],
-        is_ph: bool,
-    ) -> Result<f32, AtlasScientificError> {
-        println!("check_response buffer: {:?}", buffer);
-
-        // first check: first character not magic
-        let first_character = buffer[atlas_scientific_constants::INDEX_FIRST_CHARACTER];
-        if first_character != atlas_scientific_constants::MESSAGE_START_MAGIC {
-            return Err(AtlasScientificError::FirstCharacterNotMagic(
-                module_path!().to_string(),
-                atlas_scientific_constants::MESSAGE_START_MAGIC,
-                first_character,
-            ));
-        }
-        // second check: last character not magic
-        let last_character = buffer[atlas_scientific_constants::INDEX_LAST_CHARACTER];
-        if last_character != atlas_scientific_constants::MESSAGE_FINISH_MAGIC {
-            return Err(AtlasScientificError::LastCharacterNotMagic(
-                module_path!().to_string(),
-                atlas_scientific_constants::MESSAGE_FINISH_MAGIC,
-                last_character,
-            ));
-        }
-
-        // get a slice of the array
-        let numeric_content = &buffer[atlas_scientific_constants::INDEX_CONTENT_START
-            ..atlas_scientific_constants::INDEX_PENULTIMATE_CHARACTER];
-
-        // third check: all characters in between belong to a number
-        for character in numeric_content {
-            if !Self::is_numeric(*character, !is_ph) {
-                return Err(AtlasScientificError::ContainsInvalidCharacter(
-                    module_path!().to_string(),
-                    *character,
-                ));
-            }
-        }
-
-        // conversion to String
-        let numeric_string = str::from_utf8(numeric_content).map_err(|e| {
-            AtlasScientificError::InvalidUtf8Sequence {
-                location: module_path!().to_string(),
-                source: e,
-            }
-        })?;
-
-        // conversion to f32
-        numeric_string
-            .parse::<f32>()
-            .map_err(|e| AtlasScientificError::ConversionFailure {
-                location: module_path!().to_string(),
-                source: e.clone(),
-            })
-    }
-
-    /// Constructs and sends a measurement request to the I2C interface thread.
-    ///
-    /// This function creates an `I2cRequest` based on the specified `signal`. It
-    /// retrieves the correct I2C address and sleep time from the configuration
-    /// for the given sensor. The request is then sent over the provided channel
-    /// to the I2C thread for execution.
-    ///
-    /// # Arguments
-    /// * `signal` - The `AquariumSignal` identifying which sensor to request a reading from.
-    /// * `atlas_scientific_channels` - A mutable reference to the struct containing the channels.
-    ///
-    /// # Returns
-    /// An empty `Result` (`Ok(())`) if the measurement request was successfully created and sent.
-    ///
-    /// # Errors
-    /// Returns an `AtlasScientificError` if any step fails:
-    /// - `InvalidSignal`: If an unsupported `AquariumSignal` is provided.
-    /// - `SignalRequestCreationFailure`: If the underlying `I2cRequest::new` call fails (e.g., command too long).
-    /// - `SendingRequestToI2cInterfaceFailed`: If sending the request over the channel fails, which
-    ///   typically means the receiver (the I2C thread) has been dropped.
-    #[allow(unused)] // used in conditionally compiled code
-    fn send_request_to_i2c_interface(
-        &mut self,
-        signal: &AquariumSignal,
-        atlas_scientific_channels: &mut AtlasScientificChannels,
-    ) -> Result<(), AtlasScientificError> {
-        let (i2c_address, sleep_time_millis) = match signal {
-            AquariumSignal::pH => (
-                self.config.address_atlas_scientific_ph,
-                self.config.sleep_time_millis_ph,
-            ),
-            AquariumSignal::Conductivity => (
-                self.config.address_atlas_scientific_conductivity,
-                self.config.sleep_time_millis_conductivity,
-            ),
-            AquariumSignal::WaterTemperature => (
-                self.config.address_atlas_scientific_temperature,
-                self.config.sleep_time_millis_temperature,
-            ),
-            _ => {
-                #[cfg(not(test))]
-                warn!(
-                    target: module_path!(),
-                    "ignoring invalid signal request ({signal})"
-                );
-                return Err(InvalidSignal(module_path!().to_string(), signal.clone()));
-            }
-        };
-
-        let command_buffer = [atlas_scientific_constants::COMMAND_READ];
-
-        let request = I2cRequest::new(
-            i2c_address,
-            &command_buffer,
-            sleep_time_millis,
-            atlas_scientific_constants::MESSAGE_SIZE,
-        )
-        .map_err(|e| SignalRequestCreationFailure {
-            location: module_path!().to_string(),
-            source: e,
-        })?;
-
-        match atlas_scientific_channels
-            .tx_atlas_scientific_to_i2c_interface
-            .send(request)
-        {
-            Ok(()) => {
-                self.lock_error_channel_send_i2c_interface = false;
-                Ok(())
-            }
-            Err(e) => Err(AtlasScientificError::SendingRequestToI2cInterfaceFailed {
-                location: module_path!().to_string(),
-                source: e,
-            }),
+            lock_error_driver_not_found: HashMap::new(),
         }
     }
 
@@ -490,8 +275,7 @@ impl AtlasScientific {
     /// Returns `Err(AtlasScientificError::CouldNotLockMutex)` if the target mutex is
     /// poisoned and cannot be locked.
     #[allow(unused)] // used in conditionally compiled code
-    fn write_result_to_mutex(
-        &self,
+    pub(crate) fn write_result_to_mutex(
         signal: &AquariumSignal,
         result: AtlasScientificResultData,
         mutex_water_temperature: &Arc<Mutex<AtlasScientificResultData>>,
@@ -518,133 +302,18 @@ impl AtlasScientific {
         Ok(Instant::now())
     }
 
-    /// Receives and processes a measurement response from the I2C interface thread.
-    ///
-    /// This function orchestrates the full cycle of handling a sensor reading. It performs a
-    /// non-blocking receive on the I2C channel. If a message is available, it processes
-    /// the result, which can be either a successful data payload or an I2C-level error.
-    ///
-    /// For a successful payload, the function:
-    /// 1. Parses the raw byte buffer using `check_response`.
-    /// 2. Converts the valid data into an `AtlasScientificResultData` struct.
-    /// 3. Atomically writes this result to the correct shared `Mutex` using `write_result_to_mutex`.
-    /// 4. Monitors the duration of the mutex lock, issuing a warning if it exceeds the threshold.
-    ///
-    /// # Arguments
-    /// * `signal` - The `AquariumSignal` indicating which sensor's data is expected.
-    /// * `atlas_scientific_channels` - A mutable reference to the struct containing the channels.
-    /// * `mutex_water_temperature` - The shared `Mutex` for the water temperature result.
-    /// * `mutex_ph` - The shared `Mutex` for the pH result.
-    /// * `mutex_conductivity` - The shared `Mutex` for the conductivity result.
-    ///
-    /// # Returns
-    /// An `AtlasScientificResult` containing the `AtlasScientificResultData` if a valid sensor
-    /// reading was successfully received, parsed, and stored.
-    ///
-    /// # Errors
-    /// Returns an `AtlasScientificError` variant if any error occurred:
-    ///   - `ChannelIsEmpty`: A recoverable error indicating no message was available.
-    ///   - `ChannelIsDisconnected`: A critical error indicating the I2C thread has terminated.
-    ///   - `I2cCommunicationFailure`: The I2C thread reported a hardware-level communication error.
-    ///   - `ResponseCheckFailed` / `IncorrectBufferLength`: The received data payload was malformed.
-    ///   - `CouldNotLockMutex`: The target mutex was poisoned and could not be updated.
-    #[allow(unused)] // used in conditionally compiled code
-    fn receive_response_from_i2c_interface(
+    /// Helper function for retrieving the driver from the hash map
+    fn get_driver(
         &mut self,
         signal: &AquariumSignal,
-        atlas_scientific_channels: &mut AtlasScientificChannels,
-        mutex_water_temperature: &Arc<Mutex<AtlasScientificResultData>>,
-        mutex_ph: &Arc<Mutex<AtlasScientificResultData>>,
-        mutex_conductivity: &Arc<Mutex<AtlasScientificResultData>>,
-    ) -> AtlasScientificResult {
-        let is_ph = matches!(signal, AquariumSignal::pH);
-        let result: AtlasScientificResult;
-
-        match atlas_scientific_channels.receive_from_i2c_interface() {
-            Ok(i2c_result) => match i2c_result {
-                // Result from channel is available
-                Ok(i2c_response) => {
-                    // First, check if the response has the expected length for an Atlas sensor.
-                    if i2c_response.length != atlas_scientific_constants::MESSAGE_SIZE {
-                        result = Err(AtlasScientificError::IncorrectBufferLength(
-                            module_path!().to_string(),
-                            signal.clone(),
-                            i2c_response.length,
-                        ));
-                    } else {
-                        // The length is correct. Convert the relevant part of the buffer
-                        // into the [u8; 8] array that `check_response` expects.
-                        let response_buffer: [u8; atlas_scientific_constants::MESSAGE_SIZE] =
-                            i2c_response.read_buf[..atlas_scientific_constants::MESSAGE_SIZE]
-                                .try_into()
-                                .unwrap(); // This unwrap is safe due to the length check above.
-
-                        // Now, parse the validated buffer.
-                        let parsed_result = match Self::check_response(response_buffer, is_ph) {
-                            Ok(value) => Ok(AtlasScientificResultData::new(value)),
-                            Err(e) => Err(AtlasScientificError::ResponseCheckFailed {
-                                location: module_path!().to_string(),
-                                signal: signal.clone(),
-                                source: Box::new(e),
-                            }),
-                        };
-
-                        // If parsing was successful, write the result to the shared mutex.
-                        if let Ok(result_data) = parsed_result {
-                            let instant_before_locking_mutex = Instant::now();
-                            let result_data_clone = result_data.clone();
-                            let instant_after_locking_mutex = self.write_result_to_mutex(
-                                signal,
-                                result_data,
-                                mutex_water_temperature,
-                                mutex_ph,
-                                mutex_conductivity,
-                            )?; // The '?' will propagate a mutex lock error.
-
-                            // Check if access to mutex took too long.
-                            self.check_mutex_access_duration(
-                                Some(signal),
-                                instant_after_locking_mutex,
-                                instant_before_locking_mutex,
-                            );
-
-                            // The final result of this arm is the successfully parsed data.
-                            result = Ok(result_data_clone);
-                        } else {
-                            // If parsing failed, propagate the specific parsing error.
-                            result = parsed_result;
-                        }
-                    }
-                }
-                Err(e) => {
-                    result = Err(AtlasScientificError::I2cCommunicationFailure {
-                        location: module_path!().to_string(),
-                        signal: signal.clone(),
-                        source: e,
-                    })
-                }
-            },
-            Err(e) => match e {
-                #[cfg(feature = "debug_channels")]
-                AquaChannelError::Full => {
-                    result = Err(AtlasScientificError::UnknownError(
-                        module_path!().to_string(),
-                    ));
-                }
-                AquaChannelError::Empty => {
-                    result = Err(AtlasScientificError::ChannelIsEmpty(
-                        module_path!().to_string(),
-                    ));
-                }
-                AquaChannelError::Disconnected => {
-                    result = Err(AtlasScientificError::ChannelIsDisconnected {
-                        location: module_path!().to_string(),
-                        source: e,
-                    });
-                }
-            },
+    ) -> Result<&mut Box<dyn AtlasScientificDriver>, AtlasScientificError> {
+        match self.drivers.get_mut(signal) {
+            Some(driver) => Ok(driver),
+            None => Err(AtlasScientificError::DriverNotFound {
+                location: module_path!().to_string(),
+                signal: signal.clone(),
+            }),
         }
-        result
     }
 
     /// Executes the main control loop for the Atlas Scientific sensor module.
@@ -710,14 +379,6 @@ impl AtlasScientific {
             if self.config.active && !channel_is_disconnected {
                 let duration_since_last_measurement =
                     Instant::now().duration_since(self.last_measurement_instant);
-                //#[cfg(test)]
-                //println!(
-                //    "{}: state_send_receive={}, duration since last measurement={}, measurement_interval={}",
-                //    module_path!(),
-                //    state_send_receive,
-                //    duration_since_last_measurement.as_millis(),
-                //    self.measurement_interval.as_millis(),
-                //);
                 if !state_send_receive
                     && duration_since_last_measurement > self.measurement_interval
                 {
@@ -727,23 +388,46 @@ impl AtlasScientific {
                         module_path!(),
                         signal
                     );
-                    let send_result =
-                        self.send_request_to_i2c_interface(&signal, atlas_scientific_channels);
-                    state_send_receive = match send_result {
-                        Ok(()) => true,
+
+                    match self.get_driver(&signal) {
+                        Ok(driver) => {
+                            let send_result =
+                                driver.send_request_to_i2c_interface(atlas_scientific_channels);
+                            state_send_receive = match send_result {
+                                Ok(()) => {
+                                    self.lock_error_channel_send_i2c_interface = false;
+                                    true
+                                }
+                                Err(e) => {
+                                    if !matches!(
+                                        e,
+                                        AtlasScientificError::SendingRequestToI2cInterfaceFailed { .. }
+                                    ) || !self.lock_error_channel_send_i2c_interface
+                                    {
+                                        log_error_chain(
+                                            module_path!(),
+                                            "Error in communication with I2C thread.",
+                                            e,
+                                        );
+                                    }
+                                    false
+                                }
+                            };
+                        }
                         Err(e) => {
-                            if !matches!(
-                                e,
-                                AtlasScientificError::SendingRequestToI2cInterfaceFailed { .. }
-                            ) || !self.lock_error_channel_send_i2c_interface
+                            if !self
+                                .lock_error_driver_not_found
+                                .get(&signal)
+                                .unwrap_or(&false)
                             {
                                 log_error_chain(
                                     module_path!(),
-                                    "Error in communication with I2C thread.",
+                                    "Internal error when trying to send signal request: ",
                                     e,
                                 );
+                                self.lock_error_driver_not_found
+                                    .insert(signal.clone(), true);
                             }
-                            false
                         }
                     };
 
@@ -755,46 +439,67 @@ impl AtlasScientific {
                     );
                 } else if state_send_receive {
                     // read from the channel if the measurement result is available from I2cInterface thread
-                    match self.receive_response_from_i2c_interface(
-                        &signal,
-                        atlas_scientific_channels,
-                        &mutex_atlas_scientific_water_temperature,
-                        &mutex_atlas_scientific_ph,
-                        &mutex_atlas_scientific_conductivity,
-                    ) {
-                        Ok(_) => {
-                            state_send_receive = false; // allow sending again
-                        }
-                        Err(e) => {
-                            if matches!(e, AtlasScientificError::ChannelIsEmpty(_)) {
-                                state_send_receive = true; // receive again
-                            } else if matches!(
-                                e,
-                                AtlasScientificError::ChannelIsDisconnected {
-                                    location: _,
-                                    source: _
-                                }
+                    match self.get_driver(&signal) {
+                        Ok(driver) => {
+                            let send_result =
+                                driver.send_request_to_i2c_interface(atlas_scientific_channels);
+                            match driver.receive_response_from_i2c_interface(
+                                &signal,
+                                atlas_scientific_channels,
+                                &mutex_atlas_scientific_water_temperature,
+                                &mutex_atlas_scientific_ph,
+                                &mutex_atlas_scientific_conductivity,
                             ) {
-                                channel_is_disconnected = true;
+                                Ok(_) => {
+                                    state_send_receive = false; // allow sending again
+                                }
+                                Err(e) => {
+                                    if matches!(e, AtlasScientificError::ChannelIsEmpty(_)) {
+                                        state_send_receive = true; // receive again
+                                    } else if matches!(
+                                        e,
+                                        AtlasScientificError::ChannelIsDisconnected {
+                                            location: _,
+                                            source: _
+                                        }
+                                    ) {
+                                        channel_is_disconnected = true;
+                                    } else {
+                                        log_error_chain(
+                                            module_path!(),
+                                            "Encountered error trying to receive from I2C",
+                                            e,
+                                        );
+                                        state_send_receive = false; // allow sending again
+                                    }
+                                }
+                            }
+
+                            if !state_send_receive {
+                                // data could be received successfully
+                                receive_counter = 0;
+                                self.last_measurement_instant = Instant::now();
+                                signal = signal.get_next_atlas_scientific_signal();
                             } else {
-                                log_error_chain(
-                                    module_path!(),
-                                    "Encountered error trying to receive from I2C",
-                                    e,
-                                );
-                                state_send_receive = false; // allow sending again
+                                receive_counter = receive_counter.saturating_add(1);
                             }
                         }
-                    }
-
-                    if !state_send_receive {
-                        // data could be received successfully
-                        receive_counter = 0;
-                        self.last_measurement_instant = Instant::now();
-                        signal = signal.get_next_atlas_scientific_signal();
-                    } else {
-                        receive_counter = receive_counter.saturating_add(1);
-                    }
+                        Err(e) => {
+                            if !self
+                                .lock_error_driver_not_found
+                                .get(&signal)
+                                .unwrap_or(&false)
+                            {
+                                log_error_chain(
+                                    module_path!(),
+                                    "Internal error when trying to send signal request: ",
+                                    e,
+                                );
+                                self.lock_error_driver_not_found
+                                    .insert(signal.clone(), true);
+                            }
+                        }
+                    };
                 }
             }
 
@@ -822,6 +527,7 @@ pub mod tests {
         atlas_scientific_constants, AtlasScientific, AtlasScientificChannels, AtlasScientificError,
         AtlasScientificResultData,
     };
+    use crate::sensors::atlas_scientific_ezo::atlas_scientific_ezo_constants;
     use crate::sensors::i2c_error::I2cError;
     use crate::sensors::i2c_interface::{I2cRequest, I2cResponse, I2cResult};
     use crate::utilities::channel_content::{AquariumSignal, InternalCommand};
@@ -839,15 +545,15 @@ pub mod tests {
     #[test]
     // happy case for evaluating response from pH sensor unit
     pub fn test_atlas_scientific_check_response_valid_ph() {
-        let stimuli: [u8; atlas_scientific_constants::MESSAGE_SIZE] = [
-            atlas_scientific_constants::MESSAGE_START_MAGIC,
+        let stimuli: [u8; atlas_scientific_ezo_constants::MESSAGE_SIZE] = [
+            atlas_scientific_ezo_constants::MESSAGE_START_MAGIC,
             '8' as u8,
-            atlas_scientific_constants::DECIMAL_POINT,
+            atlas_scientific_ezo_constants::DECIMAL_POINT,
             '0' as u8,
             '0' as u8,
             '0' as u8,
             '0' as u8,
-            atlas_scientific_constants::MESSAGE_FINISH_MAGIC,
+            atlas_scientific_ezo_constants::MESSAGE_FINISH_MAGIC,
         ];
         let result = AtlasScientific::check_response(stimuli, true);
         match result {
@@ -865,15 +571,15 @@ pub mod tests {
     pub fn test_atlas_scientific_check_response_invalid_ph_negative() {
         let sign = '-' as u8;
 
-        let stimuli: [u8; atlas_scientific_constants::MESSAGE_SIZE] = [
-            atlas_scientific_constants::MESSAGE_START_MAGIC,
+        let stimuli: [u8; atlas_scientific_ezo_constants::MESSAGE_SIZE] = [
+            atlas_scientific_ezo_constants::MESSAGE_START_MAGIC,
             sign,
             '8' as u8,
-            atlas_scientific_constants::DECIMAL_POINT,
+            atlas_scientific_ezo_constants::DECIMAL_POINT,
             '0' as u8,
             '0' as u8,
             '0' as u8,
-            atlas_scientific_constants::MESSAGE_FINISH_MAGIC,
+            atlas_scientific_ezo_constants::MESSAGE_FINISH_MAGIC,
         ];
 
         let result = AtlasScientific::check_response(stimuli, true);
@@ -889,15 +595,15 @@ pub mod tests {
     #[test]
     // happy case for evaluating response from conductivity sensor
     pub fn test_i2c_interface_check_response_valid_conductivity() {
-        let stimuli: [u8; atlas_scientific_constants::MESSAGE_SIZE] = [
-            atlas_scientific_constants::MESSAGE_START_MAGIC,
+        let stimuli: [u8; atlas_scientific_ezo_constants::MESSAGE_SIZE] = [
+            atlas_scientific_ezo_constants::MESSAGE_START_MAGIC,
             '5' as u8,
             '0' as u8,
             '0' as u8,
             '0' as u8,
             '0' as u8,
             '0' as u8,
-            atlas_scientific_constants::MESSAGE_FINISH_MAGIC,
+            atlas_scientific_ezo_constants::MESSAGE_FINISH_MAGIC,
         ];
         let result = AtlasScientific::check_response(stimuli, false);
         match result {
@@ -913,15 +619,15 @@ pub mod tests {
     // happy case for evaluating the response from the temperature sensor unit
     #[test]
     pub fn test_atlas_scientific_check_response_valid_temperature() {
-        let stimuli: [u8; atlas_scientific_constants::MESSAGE_SIZE] = [
-            atlas_scientific_constants::MESSAGE_START_MAGIC,
+        let stimuli: [u8; atlas_scientific_ezo_constants::MESSAGE_SIZE] = [
+            atlas_scientific_ezo_constants::MESSAGE_START_MAGIC,
             '2' as u8,
             '5' as u8,
-            atlas_scientific_constants::DECIMAL_POINT,
+            atlas_scientific_ezo_constants::DECIMAL_POINT,
             '0' as u8,
             '0' as u8,
             '0' as u8,
-            atlas_scientific_constants::MESSAGE_FINISH_MAGIC,
+            atlas_scientific_ezo_constants::MESSAGE_FINISH_MAGIC,
         ];
         let result = AtlasScientific::check_response(stimuli, false);
         match result {
@@ -939,17 +645,17 @@ pub mod tests {
     #[test]
     // checking if an incorrect magic number in the front of the message is identified correctly
     pub fn test_atlas_scientific_check_response_invalid_magic_front() {
-        let incorrect_magic_front = atlas_scientific_constants::MESSAGE_START_MAGIC - 1;
+        let incorrect_magic_front = atlas_scientific_ezo_constants::MESSAGE_START_MAGIC - 1;
 
-        let stimuli: [u8; atlas_scientific_constants::MESSAGE_SIZE] = [
+        let stimuli: [u8; atlas_scientific_ezo_constants::MESSAGE_SIZE] = [
             incorrect_magic_front,
             '2' as u8,
             '5' as u8,
-            atlas_scientific_constants::DECIMAL_POINT,
+            atlas_scientific_ezo_constants::DECIMAL_POINT,
             '0' as u8,
             '0' as u8,
             '0' as u8,
-            atlas_scientific_constants::MESSAGE_FINISH_MAGIC,
+            atlas_scientific_ezo_constants::MESSAGE_FINISH_MAGIC,
         ];
 
         let result = AtlasScientific::check_response(stimuli, false);
@@ -960,7 +666,7 @@ pub mod tests {
             error_result,
             AtlasScientificError::FirstCharacterNotMagic(
                 _,
-                atlas_scientific_constants::MESSAGE_START_MAGIC,
+                atlas_scientific_ezo_constants::MESSAGE_START_MAGIC,
                 _incorrect_magic_front
             )
         ));
@@ -969,13 +675,13 @@ pub mod tests {
     #[test]
     // checking if an incorrect magic number in the rear part of the message is identified correctly
     pub fn test_atlas_scientific_check_response_invalid_magic_rear() {
-        let incorrect_magic_rear = atlas_scientific_constants::MESSAGE_FINISH_MAGIC + 1;
+        let incorrect_magic_rear = atlas_scientific_ezo_constants::MESSAGE_FINISH_MAGIC + 1;
 
-        let stimuli: [u8; atlas_scientific_constants::MESSAGE_SIZE] = [
-            atlas_scientific_constants::MESSAGE_START_MAGIC,
+        let stimuli: [u8; atlas_scientific_ezo_constants::MESSAGE_SIZE] = [
+            atlas_scientific_ezo_constants::MESSAGE_START_MAGIC,
             '2' as u8,
             '5' as u8,
-            atlas_scientific_constants::DECIMAL_POINT,
+            atlas_scientific_ezo_constants::DECIMAL_POINT,
             '0' as u8,
             '0' as u8,
             '0' as u8,
@@ -990,7 +696,7 @@ pub mod tests {
             error_result,
             AtlasScientificError::LastCharacterNotMagic(
                 _,
-                atlas_scientific_constants::MESSAGE_FINISH_MAGIC,
+                atlas_scientific_ezo_constants::MESSAGE_FINISH_MAGIC,
                 _incorrect_magic_rear
             )
         ));
@@ -999,15 +705,15 @@ pub mod tests {
     #[test]
     // checking if an incorrect sequence of numeric characters is identified correctly
     pub fn test_atlas_scientific_check_response_invalid_conversion() {
-        let stimuli: [u8; atlas_scientific_constants::MESSAGE_SIZE] = [
-            atlas_scientific_constants::MESSAGE_START_MAGIC,
+        let stimuli: [u8; atlas_scientific_ezo_constants::MESSAGE_SIZE] = [
+            atlas_scientific_ezo_constants::MESSAGE_START_MAGIC,
             '2' as u8,
             '5' as u8,
-            atlas_scientific_constants::NEGATIVE_SIGN,
+            atlas_scientific_ezo_constants::NEGATIVE_SIGN,
             '0' as u8,
             '0' as u8,
             '0' as u8,
-            atlas_scientific_constants::MESSAGE_FINISH_MAGIC,
+            atlas_scientific_ezo_constants::MESSAGE_FINISH_MAGIC,
         ];
         assert!(matches!(
             AtlasScientific::check_response(stimuli, false),
@@ -1022,15 +728,15 @@ pub mod tests {
     // Test case checks if the check_response function correctly identifies an
     // invalid non-numeric character (like an alphabet letter) in the data payload.
     fn test_atlas_scientific_check_response_invalid_character_in_payload() {
-        let stimuli: [u8; atlas_scientific_constants::MESSAGE_SIZE] = [
-            atlas_scientific_constants::MESSAGE_START_MAGIC,
+        let stimuli: [u8; atlas_scientific_ezo_constants::MESSAGE_SIZE] = [
+            atlas_scientific_ezo_constants::MESSAGE_START_MAGIC,
             b'2',
             b'5',
-            atlas_scientific_constants::DECIMAL_POINT,
+            atlas_scientific_ezo_constants::DECIMAL_POINT,
             b'A', // Invalid character
             b'0',
             b'0',
-            atlas_scientific_constants::MESSAGE_FINISH_MAGIC,
+            atlas_scientific_ezo_constants::MESSAGE_FINISH_MAGIC,
         ];
         let result = AtlasScientific::check_response(stimuli, false);
 
@@ -1067,33 +773,33 @@ pub mod tests {
     pub fn test_receive_response_from_i2c_interface() {
         let mut stimuli_array_temperature = [0u8; 64];
 
-        let message_temperature: [u8; atlas_scientific_constants::MESSAGE_SIZE] = [
-            atlas_scientific_constants::MESSAGE_START_MAGIC,
+        let message_temperature: [u8; atlas_scientific_ezo_constants::MESSAGE_SIZE] = [
+            atlas_scientific_ezo_constants::MESSAGE_START_MAGIC,
             '2' as u8,
             '3' as u8,
-            atlas_scientific_constants::DECIMAL_POINT,
+            atlas_scientific_ezo_constants::DECIMAL_POINT,
             '1' as u8,
             '0' as u8,
             '0' as u8,
-            atlas_scientific_constants::MESSAGE_FINISH_MAGIC,
+            atlas_scientific_ezo_constants::MESSAGE_FINISH_MAGIC,
         ];
         stimuli_array_temperature[..message_temperature.len()]
             .copy_from_slice(&message_temperature);
         let stimuli_i2c_response_temperature = I2cResponse {
             read_buf: stimuli_array_temperature,
-            length: atlas_scientific_constants::MESSAGE_SIZE,
+            length: atlas_scientific_ezo_constants::MESSAGE_SIZE,
         };
 
         let mut stimuli_array_conductivity = [0u8; 64];
-        let message_conductivity: [u8; atlas_scientific_constants::MESSAGE_SIZE] = [
-            atlas_scientific_constants::MESSAGE_START_MAGIC,
+        let message_conductivity: [u8; atlas_scientific_ezo_constants::MESSAGE_SIZE] = [
+            atlas_scientific_ezo_constants::MESSAGE_START_MAGIC,
             b'4',
             b'8',
             b'0',
             b'0',
             b'0',
             b'0',
-            atlas_scientific_constants::MESSAGE_FINISH_MAGIC,
+            atlas_scientific_ezo_constants::MESSAGE_FINISH_MAGIC,
         ];
         // Copy the 8-byte message into the beginning of the 64-byte buffer.
         // The rest of the buffer will remain filled with zeros.
@@ -1101,24 +807,24 @@ pub mod tests {
             .copy_from_slice(&message_conductivity);
         let stimuli_i2c_response_conductivity = I2cResponse {
             read_buf: stimuli_array_conductivity,
-            length: atlas_scientific_constants::MESSAGE_SIZE,
+            length: atlas_scientific_ezo_constants::MESSAGE_SIZE,
         };
 
         let mut stimuli_array_ph = [0u8; 64];
-        let message_ph: [u8; atlas_scientific_constants::MESSAGE_SIZE] = [
-            atlas_scientific_constants::MESSAGE_START_MAGIC,
+        let message_ph: [u8; atlas_scientific_ezo_constants::MESSAGE_SIZE] = [
+            atlas_scientific_ezo_constants::MESSAGE_START_MAGIC,
             '7' as u8,
-            atlas_scientific_constants::DECIMAL_POINT,
+            atlas_scientific_ezo_constants::DECIMAL_POINT,
             '2' as u8,
             '0' as u8,
             '0' as u8,
             '0' as u8,
-            atlas_scientific_constants::MESSAGE_FINISH_MAGIC,
+            atlas_scientific_ezo_constants::MESSAGE_FINISH_MAGIC,
         ];
         stimuli_array_ph[..message_ph.len()].copy_from_slice(&message_ph);
         let stimuli_i2c_response_ph = I2cResponse {
             read_buf: stimuli_array_ph,
-            length: atlas_scientific_constants::MESSAGE_SIZE,
+            length: atlas_scientific_ezo_constants::MESSAGE_SIZE,
         };
 
         let config: ConfigData =
@@ -1219,56 +925,56 @@ pub mod tests {
     // Test function receive_response_from_i2c_interface
     pub fn test_atlas_scientific_interfaces_without_blocking_mutexes() {
         let mut stimuli_array_temperature = [0u8; 64];
-        let message_temperature: [u8; atlas_scientific_constants::MESSAGE_SIZE] = [
-            atlas_scientific_constants::MESSAGE_START_MAGIC,
+        let message_temperature: [u8; atlas_scientific_ezo_constants::MESSAGE_SIZE] = [
+            atlas_scientific_ezo_constants::MESSAGE_START_MAGIC,
             '2' as u8,
             '3' as u8,
-            atlas_scientific_constants::DECIMAL_POINT,
+            atlas_scientific_ezo_constants::DECIMAL_POINT,
             '1' as u8,
             '0' as u8,
             '0' as u8,
-            atlas_scientific_constants::MESSAGE_FINISH_MAGIC,
+            atlas_scientific_ezo_constants::MESSAGE_FINISH_MAGIC,
         ];
         stimuli_array_temperature[..message_temperature.len()]
             .copy_from_slice(&message_temperature);
         let stimuli_i2c_response_temperature = I2cResponse {
             read_buf: stimuli_array_temperature,
-            length: atlas_scientific_constants::MESSAGE_SIZE,
+            length: atlas_scientific_ezo_constants::MESSAGE_SIZE,
         };
 
         let mut stimuli_array_conductivity = [0u8; 64];
-        let message_conductivity: [u8; atlas_scientific_constants::MESSAGE_SIZE] = [
-            atlas_scientific_constants::MESSAGE_START_MAGIC,
+        let message_conductivity: [u8; atlas_scientific_ezo_constants::MESSAGE_SIZE] = [
+            atlas_scientific_ezo_constants::MESSAGE_START_MAGIC,
             '4' as u8,
             '8' as u8,
             '0' as u8,
             '0' as u8,
             '0' as u8,
             '0' as u8,
-            atlas_scientific_constants::MESSAGE_FINISH_MAGIC,
+            atlas_scientific_ezo_constants::MESSAGE_FINISH_MAGIC,
         ];
         stimuli_array_conductivity[..message_conductivity.len()]
             .copy_from_slice(&message_conductivity);
         let stimuli_i2c_response_conductivity = I2cResponse {
             read_buf: stimuli_array_conductivity,
-            length: atlas_scientific_constants::MESSAGE_SIZE,
+            length: atlas_scientific_ezo_constants::MESSAGE_SIZE,
         };
 
         let mut stimuli_array_ph = [0u8; 64];
-        let message_ph: [u8; atlas_scientific_constants::MESSAGE_SIZE] = [
-            atlas_scientific_constants::MESSAGE_START_MAGIC,
+        let message_ph: [u8; atlas_scientific_ezo_constants::MESSAGE_SIZE] = [
+            atlas_scientific_ezo_constants::MESSAGE_START_MAGIC,
             '7' as u8,
-            atlas_scientific_constants::DECIMAL_POINT,
+            atlas_scientific_ezo_constants::DECIMAL_POINT,
             '2' as u8,
             '0' as u8,
             '0' as u8,
             '0' as u8,
-            atlas_scientific_constants::MESSAGE_FINISH_MAGIC,
+            atlas_scientific_ezo_constants::MESSAGE_FINISH_MAGIC,
         ];
         stimuli_array_ph[..message_ph.len()].copy_from_slice(&message_ph);
         let stimuli_i2c_response_ph = I2cResponse {
             read_buf: stimuli_array_ph,
-            length: atlas_scientific_constants::MESSAGE_SIZE,
+            length: atlas_scientific_ezo_constants::MESSAGE_SIZE,
         };
 
         let config: ConfigData =
@@ -1401,56 +1107,56 @@ pub mod tests {
     // Test function receive_response_from_i2c_interface
     pub fn test_atlas_scientific_interfaces_with_blocking_mutexes() {
         let mut stimuli_array_temperature = [0u8; 64];
-        let message_temperature: [u8; atlas_scientific_constants::MESSAGE_SIZE] = [
-            atlas_scientific_constants::MESSAGE_START_MAGIC,
+        let message_temperature: [u8; atlas_scientific_ezo_constants::MESSAGE_SIZE] = [
+            atlas_scientific_ezo_constants::MESSAGE_START_MAGIC,
             '2' as u8,
             '3' as u8,
-            atlas_scientific_constants::DECIMAL_POINT,
+            atlas_scientific_ezo_constants::DECIMAL_POINT,
             '1' as u8,
             '0' as u8,
             '0' as u8,
-            atlas_scientific_constants::MESSAGE_FINISH_MAGIC,
+            atlas_scientific_ezo_constants::MESSAGE_FINISH_MAGIC,
         ];
         stimuli_array_temperature[..message_temperature.len()]
             .copy_from_slice(&message_temperature);
         let stimuli_i2c_response_temperature = I2cResponse {
             read_buf: stimuli_array_temperature,
-            length: atlas_scientific_constants::MESSAGE_SIZE,
+            length: atlas_scientific_ezo_constants::MESSAGE_SIZE,
         };
 
         let mut stimuli_array_conductivity = [0u8; 64];
-        let message_conductivity: [u8; atlas_scientific_constants::MESSAGE_SIZE] = [
-            atlas_scientific_constants::MESSAGE_START_MAGIC,
+        let message_conductivity: [u8; atlas_scientific_ezo_constants::MESSAGE_SIZE] = [
+            atlas_scientific_ezo_constants::MESSAGE_START_MAGIC,
             '4' as u8,
             '8' as u8,
             '0' as u8,
             '0' as u8,
             '0' as u8,
             '0' as u8,
-            atlas_scientific_constants::MESSAGE_FINISH_MAGIC,
+            atlas_scientific_ezo_constants::MESSAGE_FINISH_MAGIC,
         ];
         stimuli_array_conductivity[..message_conductivity.len()]
             .copy_from_slice(&message_conductivity);
         let stimuli_i2c_response_conductivity = I2cResponse {
             read_buf: stimuli_array_conductivity,
-            length: atlas_scientific_constants::MESSAGE_SIZE,
+            length: atlas_scientific_ezo_constants::MESSAGE_SIZE,
         };
 
         let mut stimuli_array_ph = [0u8; 64];
-        let message_ph: [u8; atlas_scientific_constants::MESSAGE_SIZE] = [
-            atlas_scientific_constants::MESSAGE_START_MAGIC,
+        let message_ph: [u8; atlas_scientific_ezo_constants::MESSAGE_SIZE] = [
+            atlas_scientific_ezo_constants::MESSAGE_START_MAGIC,
             '7' as u8,
-            atlas_scientific_constants::DECIMAL_POINT,
+            atlas_scientific_ezo_constants::DECIMAL_POINT,
             '2' as u8,
             '0' as u8,
             '0' as u8,
             '0' as u8,
-            atlas_scientific_constants::MESSAGE_FINISH_MAGIC,
+            atlas_scientific_ezo_constants::MESSAGE_FINISH_MAGIC,
         ];
         stimuli_array_ph[..message_ph.len()].copy_from_slice(&message_ph);
         let stimuli_i2c_response_ph = I2cResponse {
             read_buf: stimuli_array_ph,
-            length: atlas_scientific_constants::MESSAGE_SIZE,
+            length: atlas_scientific_ezo_constants::MESSAGE_SIZE,
         };
 
         let config: ConfigData =
@@ -1732,12 +1438,12 @@ pub mod tests {
         assert_eq!(received_request.sleep_time_millis, sleep_time_millis_ph);
         assert_eq!(
             received_request.send_buf[0],
-            [atlas_scientific_constants::COMMAND_READ][0]
+            [atlas_scientific_ezo_constants::COMMAND_READ][0]
         );
         assert_eq!(received_request.send_len, 1);
         assert_eq!(
             received_request.expected_response_length,
-            atlas_scientific_constants::MESSAGE_SIZE
+            atlas_scientific_ezo_constants::MESSAGE_SIZE
         );
     }
 
@@ -1778,11 +1484,11 @@ pub mod tests {
         );
         assert_eq!(
             received_request.send_buf[0],
-            [atlas_scientific_constants::COMMAND_READ][0]
+            [atlas_scientific_ezo_constants::COMMAND_READ][0]
         );
         assert_eq!(
             received_request.expected_response_length,
-            atlas_scientific_constants::MESSAGE_SIZE
+            atlas_scientific_ezo_constants::MESSAGE_SIZE
         );
     }
 
@@ -1822,11 +1528,11 @@ pub mod tests {
         );
         assert_eq!(
             received_request.send_buf[0],
-            [atlas_scientific_constants::COMMAND_READ][0]
+            [atlas_scientific_ezo_constants::COMMAND_READ][0]
         );
         assert_eq!(
             received_request.expected_response_length,
-            atlas_scientific_constants::MESSAGE_SIZE
+            atlas_scientific_ezo_constants::MESSAGE_SIZE
         );
     }
 
@@ -2134,9 +1840,9 @@ pub mod tests {
         }
 
         let mut buffer = [0u8; 8];
-        buffer[0] = atlas_scientific_constants::MESSAGE_START_MAGIC;
+        buffer[0] = atlas_scientific_ezo_constants::MESSAGE_START_MAGIC;
         buffer[1..7].copy_from_slice(value_str.as_bytes());
-        buffer[7] = atlas_scientific_constants::MESSAGE_FINISH_MAGIC;
+        buffer[7] = atlas_scientific_ezo_constants::MESSAGE_FINISH_MAGIC;
 
         let i2c_response = I2cResponse::new(&buffer);
 
@@ -2418,19 +2124,19 @@ pub mod tests {
             read_config_file("/config/aquarium_control_test_generic.toml".to_string()).unwrap();
         let mut i2c_interface = I2cInterface::new(config.i2c_interface).unwrap();
 
-        let send_buf = [atlas_scientific_constants::COMMAND_READ];
+        let send_buf = [atlas_scientific_ezo_constants::COMMAND_READ];
         let request_ph = I2cRequest::new(
             config.atlas_scientific.address_atlas_scientific_ph,
             &send_buf,
             config.atlas_scientific.sleep_time_millis_ph,
-            atlas_scientific_constants::MESSAGE_SIZE,
+            atlas_scientific_ezo_constants::MESSAGE_SIZE,
         )
         .unwrap();
         let request_temperature = I2cRequest::new(
             config.atlas_scientific.address_atlas_scientific_temperature,
             &send_buf,
             config.atlas_scientific.sleep_time_millis_temperature,
-            atlas_scientific_constants::MESSAGE_SIZE,
+            atlas_scientific_ezo_constants::MESSAGE_SIZE,
         )
         .unwrap();
         let request_conductivity = I2cRequest::new(
@@ -2439,7 +2145,7 @@ pub mod tests {
                 .address_atlas_scientific_conductivity,
             &send_buf,
             config.atlas_scientific.sleep_time_millis_conductivity,
-            atlas_scientific_constants::MESSAGE_SIZE,
+            atlas_scientific_ezo_constants::MESSAGE_SIZE,
         )
         .unwrap();
 
@@ -2447,7 +2153,7 @@ pub mod tests {
             Ok(response_ph) => {
                 println!("Atlas Scientific response for pH: {:?}", response_ph);
                 let ph = AtlasScientific::check_response(
-                    response_ph.read_buf[..atlas_scientific_constants::MESSAGE_SIZE]
+                    response_ph.read_buf[..atlas_scientific_ezo_constants::MESSAGE_SIZE]
                         .try_into()
                         .unwrap(),
                     true,
@@ -2467,7 +2173,7 @@ pub mod tests {
                     response_temperature
                 );
                 let temperature = AtlasScientific::check_response(
-                    response_temperature.read_buf[..atlas_scientific_constants::MESSAGE_SIZE]
+                    response_temperature.read_buf[..atlas_scientific_ezo_constants::MESSAGE_SIZE]
                         .try_into()
                         .unwrap(),
                     true,
@@ -2490,7 +2196,7 @@ pub mod tests {
                     response_conductivity
                 );
                 let conductivity = AtlasScientific::check_response(
-                    response_conductivity.read_buf[..atlas_scientific_constants::MESSAGE_SIZE]
+                    response_conductivity.read_buf[..atlas_scientific_ezo_constants::MESSAGE_SIZE]
                         .try_into()
                         .unwrap(),
                     true,

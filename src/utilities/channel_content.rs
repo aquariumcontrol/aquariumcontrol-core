@@ -100,7 +100,7 @@ pub enum AquariumDevice {
 
 /// Enum is used for internal thread messaging between various threads
 /// The values indicate which information the thread shall return.
-#[derive(Clone, Debug, PartialEq, Display)]
+#[derive(Clone, Debug, Eq, PartialEq, Display, Hash)]
 pub enum AquariumSignal {
     /// water temperature in °C
     WaterTemperature,

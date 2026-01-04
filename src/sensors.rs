@@ -78,3 +78,9 @@ pub mod tank_level_switch_config;
 
 /// Configuration of GpioHandler
 pub mod gpio_handler_config;
+
+/// Trait for communication with Atlas Scientific sensor
+pub mod atlas_scientific_driver;
+
+/// Trait implementation for EZO type sensor
+mod atlas_scientific_ezo;

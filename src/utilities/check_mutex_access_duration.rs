@@ -46,7 +46,7 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 //!   - **`get_location()`**: A required method that provides a string identifier for
 //!     the implementing module, used for contextual logging.
 
-use crate::sensors::atlas_scientific::AtlasScientific;
+use crate::sensors::atlas_scientific::AtlasScientificEzo;
 use crate::sensors::dht::Dht;
 use crate::sensors::ds18b20::Ds18b20;
 use crate::sensors::sensor_manager::SensorManager;
@@ -341,7 +341,7 @@ impl CheckMutexAccessDurationTrait for Ds18b20 {
         "ds18b20"
     }
 }
-impl CheckMutexAccessDurationTrait for AtlasScientific {
+impl CheckMutexAccessDurationTrait for AtlasScientificEzo {
     fn get_warn_lock(&self, key_opt: &Option<&AquariumSignal>) -> bool {
         if let Some(key) = key_opt {
             match key {
@@ -397,7 +397,7 @@ impl CheckMutexAccessDurationTrait for AtlasScientific {
     /// Method connects the default trait implementation with the specific implementation
     /// for getting maximum permissible access duration
     fn get_max_mutex_access_duration(&self) -> Duration {
-        self.max_mutex_access_duration_millis
+        self.max_mutex_access_duration
     }
 
     /// inform the location of the warning for logging purposes

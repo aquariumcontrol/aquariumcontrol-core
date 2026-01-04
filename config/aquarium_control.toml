@@ -176,6 +176,9 @@ min_val_atlas_scientific_temperature = 10.0             # minimum allowed value 
 max_val_atlas_scientific_conductivity = 1000000.0       # maximum allowed value for conducitivity used to assess if the conductivity sensor reading is valid
 min_val_atlas_scientific_conductivity = -1.0            # minimum allowed value for conducitivity used to assess if the conductivity sensor reading is valid
 measurement_interval_millis = 5000                      # measurement interval in milliseconds
+sensor_type_temperature = "oem"                         # use "oem" or "ezo" for Atlas Scientific sensors
+sensor_type_ph = "oem"                                  # use "oem" or "ezo" for Atlas Scientific sensors
+sensor_type_conductivity = "oem"                        # use "oem" or "ezo" for Atlas Scientific sensors
 
 [gpio_handler]
 use_simulator = false                                   # if true, then do not use real HW

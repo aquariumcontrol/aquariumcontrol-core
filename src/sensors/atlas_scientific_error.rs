@@ -145,4 +145,10 @@ pub enum AtlasScientificError {
     /// Enum value covering unreachable branch in match
     #[error("Internal error - this should never happen.")]
     UnknownError(String),
+
+    #[error("[{location}] Could not find driver for {signal}")]
+    DriverNotFound {
+        location: String,
+        signal: AquariumSignal,
+    },
 }
