@@ -20,4 +20,7 @@ pub trait AtlasScientificDriver: Send + Sync {
         mutex_ph: &Arc<Mutex<AtlasScientificResultData>>,
         mutex_conductivity: &Arc<Mutex<AtlasScientificResultData>>,
     ) -> AtlasScientificResult;
+
+    #[cfg(test)]
+    fn get_mutex_access_duration_exceeded(&self, signal: &AquariumSignal) -> bool;
 }

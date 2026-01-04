@@ -84,3 +84,6 @@ pub mod atlas_scientific_driver;
 
 /// Trait implementation for EZO type sensor
 mod atlas_scientific_ezo;
+
+/// Trait implementation for OEM type sensor
+mod atlas_scientific_oem;

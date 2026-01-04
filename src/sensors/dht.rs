@@ -1086,12 +1086,19 @@ pub mod tests {
         let config = DhtConfig {
             active: false,
             measurement_interval_millis: 2000,
+            #[cfg(feature = "target_hw")]
             execute: true,
+            #[cfg(all(target_os = "linux", feature = "target_hw"))]
             sensor_init_pin_down_duration_micros: 1000,
+            #[cfg(all(target_os = "linux", feature = "target_hw"))]
             sensor_init_pin_up_duration_micros: 1000,
+            #[cfg(all(target_os = "linux", feature = "target_hw"))]
             sensor_pause_duration_millis: 50,
+            #[cfg(all(target_os = "linux", feature = "target_hw"))]
             sensor_reset_duration_millis: 50,
+            #[cfg(all(target_os = "linux", feature = "target_hw"))]
             sensor_startup_duration_millis: 50,
+            #[cfg(all(target_os = "linux", feature = "target_hw"))]
             timeout_duration_micros: 5000,
         };
         let dht = Dht::new(config, None, 0, 0);
