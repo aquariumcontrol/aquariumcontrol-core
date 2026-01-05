@@ -587,9 +587,6 @@ pub mod tests {
     use std::thread;
     use std::time::{Duration, Instant};
 
-    #[cfg(all(target_os = "linux", feature = "target_hw"))]
-    use crate::sensors::i2c_interface::I2cInterface;
-
     #[test]
     // Test function receive_response_from_i2c_interface
     pub fn test_atlas_scientific_interfaces_with_blocking_mutexes() {

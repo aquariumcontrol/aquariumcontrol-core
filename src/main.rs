@@ -838,7 +838,7 @@ fn run() -> Result<(), StartupError> {
 
     #[cfg(all(target_os = "linux", feature = "target_hw"))]
     let mut atlas_scientific = AtlasScientific::new(config.atlas_scientific)
-        .map_err(|e| StartupError::AtlasScientificSetupFailure { source: e });
+        .map_err(|e| StartupError::AtlasScientificSetupFailure { source: e })?;
 
     let mut sensor_manager = SensorManager::new(config.sensor_manager)
         .map_err(|e| StartupError::SensorManagerSetupFailure { source: e })?;

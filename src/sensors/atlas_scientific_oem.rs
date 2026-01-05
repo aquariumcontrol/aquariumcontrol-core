@@ -316,7 +316,9 @@ mod tests {
     use crate::sensors::i2c_interface::{I2cResponse, I2cResult};
     use crate::utilities::config::{read_config_file, ConfigData};
     use std::collections::HashMap;
-
+    #[cfg(all(target_os = "linux", feature = "target_hw"))]
+    use crate::sensors::i2c_interface::I2cInterface;
+    
     /// Helper function to set up a standard test environment for receive tests.
     fn setup_receive_test() -> (
         HashMap<AquariumSignal, AtlasScientificOem>,
