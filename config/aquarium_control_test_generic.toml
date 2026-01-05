@@ -163,9 +163,9 @@ source_ambient_temperature = "dht"                      # valid values are "dht"
 [atlas_scientific]
 active = true                                           # allows deactivation of data acquisition
 execute = true                                          # used for testing purposes
-address_atlas_scientific_ph = 99                        # I2C address for Atlas Scientific sensor unit for reading ph
+address_atlas_scientific_ph = 101                        # I2C address for Atlas Scientific sensor unit for reading ph
 address_atlas_scientific_conductivity = 100             # I2C address for Atlas Scientific sensor unit for reading conductivity
-address_atlas_scientific_temperature = 102              # I2C address for Atlas Scientific sensor unit for reading temperature
+address_atlas_scientific_temperature = 104              # I2C address for Atlas Scientific sensor unit for reading temperature
 sleep_time_millis_ph = 900                              # sleep time in milliseconds before after writing before reading from the pH sensor unit
 sleep_time_millis_conductivity = 900                    # sleep time in milliseconds before after writing before reading from the conductivity sensor unit
 sleep_time_millis_temperature = 600                     # sleep time in milliseconds before after writing before reading from the temperature sensor unit

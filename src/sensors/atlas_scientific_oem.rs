@@ -14,7 +14,7 @@ use std::time::{Duration, Instant};
 /// numeric values used in communication with Atlas Scientific sensor units
 pub(crate) mod atlas_scientific_oem_constants {
     /// Register for the temperature Data (MSB)
-    pub const REG_DATA_MSB_TEMPERATURE: u8 = 0x18;
+    pub const REG_DATA_MSB_TEMPERATURE: u8 = 0x0E;
 
     /// Register for the pH Data (MSB)
     pub const REG_DATA_MSB_PH: u8 = 0x16;
