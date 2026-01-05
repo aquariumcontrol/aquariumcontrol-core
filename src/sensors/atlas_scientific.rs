@@ -220,6 +220,7 @@ impl AtlasScientific {
             match config.sensor_type_temperature.as_str() {
                 atlas_scientific_constants::SENSOR_TYPE_OEM => Box::new(AtlasScientificOem::new(
                     config.address_atlas_scientific_temperature,
+                    atlas_scientific_oem_constants::REG_TYPE_TEMPERATURE,
                     config.sleep_time_millis_temperature,
                     atlas_scientific_constants::MAX_MUTEX_ACCESS_DURATION_MILLIS,
                     atlas_scientific_oem_constants::REG_DATA_MSB_TEMPERATURE,
@@ -244,6 +245,7 @@ impl AtlasScientific {
         let driver_ph: Box<dyn AtlasScientificDriver> = match config.sensor_type_ph.as_str() {
             atlas_scientific_constants::SENSOR_TYPE_OEM => Box::new(AtlasScientificOem::new(
                 config.address_atlas_scientific_ph,
+                atlas_scientific_oem_constants::REG_TYPE_PH,
                 config.sleep_time_millis_ph,
                 atlas_scientific_constants::MAX_MUTEX_ACCESS_DURATION_MILLIS,
                 atlas_scientific_oem_constants::REG_DATA_MSB_PH,
@@ -269,6 +271,7 @@ impl AtlasScientific {
             match config.sensor_type_conductivity.as_str() {
                 atlas_scientific_constants::SENSOR_TYPE_OEM => Box::new(AtlasScientificOem::new(
                     config.address_atlas_scientific_conductivity,
+                    atlas_scientific_oem_constants::REG_TYPE_CONDUCTIVITY,
                     config.sleep_time_millis_conductivity,
                     atlas_scientific_constants::MAX_MUTEX_ACCESS_DURATION_MILLIS,
                     atlas_scientific_oem_constants::REG_DATA_MSB_CONDUCTIVITY,

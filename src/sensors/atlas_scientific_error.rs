@@ -166,4 +166,19 @@ pub enum AtlasScientificError {
         signal: AquariumSignal,
         sensor_type: String,
     },
+
+    #[error("[{location}] Sensor response for {signal} too long. Expected {expected_length} byte, got {actual_length} byte.")]
+    ResponseTooLong {
+        location: String,
+        expected_length: usize,
+        actual_length: usize,
+        signal: AquariumSignal,
+    },
+
+    #[error("[{location}] Sensor response indicates incorrect device type. Expected a value of {expected_value}, got {actual_value}.")]
+    InvalidDeviceType {
+        location: String,
+        expected_value: u8,
+        actual_value: u8,
+    },
 }
