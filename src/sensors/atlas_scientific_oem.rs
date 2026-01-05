@@ -13,6 +13,21 @@ use std::time::{Duration, Instant};
 #[allow(dead_code)]
 /// numeric values used in communication with Atlas Scientific sensor units
 pub(crate) mod atlas_scientific_oem_constants {
+    /// Register for the device type (identical across all types)
+    pub const REG_TYPE: u8 = 0x00;
+
+    /// Temperature device type code
+    pub const REG_TYPE_TEMPERATURE: u8 = 0x05;
+
+    /// pH device type code
+    pub const REG_TYPE_PH: u8 = 0x01;
+
+    /// Conductivity device type code
+    pub const REG_TYPE_CONDUCTIVITY: u8 = 0x04;
+
+    /// Register for the firmware version (identical across all types)
+    pub const REG_FIRMWARE_VERSION: u8 = 0x01;
+
     /// Register for the temperature Data (MSB)
     pub const REG_DATA_MSB_TEMPERATURE: u8 = 0x18;
 
@@ -45,6 +60,8 @@ pub(crate) mod atlas_scientific_oem_constants {
 pub struct AtlasScientificOem {
     pub i2c_address: u16,
 
+    pub device_type: u8,
+
     pub sleep_time_millis: u64,
 
     pub register_data_msb: u8,
@@ -76,6 +93,7 @@ pub struct AtlasScientificOem {
 impl AtlasScientificOem {
     pub fn new(
         i2c_address: u16,
+        device_type: u8,
         sleep_time_millis: u64,
         max_mutex_access_duration_millis: u64,
         register_data_msb: u8,
@@ -84,6 +102,7 @@ impl AtlasScientificOem {
     ) -> Self {
         AtlasScientificOem {
             i2c_address,
+            device_type,
             sleep_time_millis,
             register_data_msb,
             scale_factor,
@@ -123,6 +142,66 @@ impl AtlasScientificOem {
         let value_f32 = value_u32 as f32 / self.scale_factor;
 
         Ok(AtlasScientificResultData::new(value_f32))
+    }
+
+    pub fn check_oem_device_type(
+        &self,
+        atlas_scientific_channels: &mut AtlasScientificChannels,
+        signal: AquariumSignal,
+    ) -> Result<(), AtlasScientificError> {
+        let command = vec![atlas_scientific_oem_constants::REG_TYPE];
+        let request = I2cRequest::new(self.i2c_address, &command, self.sleep_time_millis, 1)
+            .map_err(|e| AtlasScientificError::SignalRequestCreationFailure {
+                location: module_path!().to_string(),
+                source: e,
+            })?;
+
+        atlas_scientific_channels
+            .tx_atlas_scientific_to_i2c_interface
+            .send(request)
+            .map_err(
+                |e| AtlasScientificError::SendingRequestToI2cInterfaceFailed {
+                    location: module_path!().to_string(),
+                    source: e,
+                },
+            )?;
+
+        let response = atlas_scientific_channels
+            .rx_atlas_scientific_from_i2c_interface
+            .recv()
+            .map_err(|_| AtlasScientificError::ChannelIsDisconnected {
+                location: "AtlasScientificOem::receive_response".to_string(),
+                source: AquaChannelError::Disconnected,
+            })?;
+
+        match response {
+            Ok(i2c_response) => {
+                if i2c_response.length != 1 {
+                    return Err(AtlasScientificError::ResponseTooLong {
+                        location: module_path!().to_string(),
+                        signal: AquariumSignal::Conductivity,
+                        expected_length: 1,
+                        actual_length: i2c_response.length,
+                    });
+                }
+                if i2c_response.read_buf[0] != self.device_type {
+                    return Err(AtlasScientificError::InvalidDeviceType {
+                        location: module_path!().to_string(),
+                        expected_value: self.device_type,
+                        actual_value: i2c_response.read_buf[0],
+                    });
+                }
+                #[cfg(test)]
+                println!("Atlas Scientific OEM sensor typ {} recognize.", signal);
+
+                Ok(())
+            }
+            Err(i2c_error) => Err(AtlasScientificError::I2cCommunicationFailure {
+                location: module_path!().to_string(),
+                signal,
+                source: i2c_error,
+            }),
+        }
     }
 }
 
@@ -254,6 +333,7 @@ mod tests {
             AquariumSignal::WaterTemperature,
             AtlasScientificOem::new(
                 config.atlas_scientific.address_atlas_scientific_temperature,
+                atlas_scientific_oem_constants::REG_TYPE_TEMPERATURE,
                 config.atlas_scientific.sleep_time_millis_temperature,
                 atlas_scientific_constants::MAX_MUTEX_ACCESS_DURATION_MILLIS,
                 atlas_scientific_oem_constants::REG_DATA_MSB_TEMPERATURE,
@@ -265,6 +345,7 @@ mod tests {
             AquariumSignal::pH,
             AtlasScientificOem::new(
                 config.atlas_scientific.address_atlas_scientific_ph,
+                atlas_scientific_oem_constants::REG_TYPE_PH,
                 config.atlas_scientific.sleep_time_millis_ph,
                 atlas_scientific_constants::MAX_MUTEX_ACCESS_DURATION_MILLIS,
                 atlas_scientific_oem_constants::REG_DATA_MSB_PH,
@@ -278,6 +359,7 @@ mod tests {
                 config
                     .atlas_scientific
                     .address_atlas_scientific_conductivity,
+                atlas_scientific_oem_constants::REG_TYPE_CONDUCTIVITY,
                 config.atlas_scientific.sleep_time_millis_conductivity,
                 atlas_scientific_constants::MAX_MUTEX_ACCESS_DURATION_MILLIS,
                 atlas_scientific_oem_constants::REG_DATA_MSB_CONDUCTIVITY,
@@ -584,5 +666,97 @@ mod tests {
                 println!("Failed to read from Conductivity sensor: {:?}", e);
             }
         }
+    }
+
+    #[test]
+    #[cfg(all(target_os = "linux", feature = "target_hw"))]
+    #[ignore]
+    pub fn test_atlas_scientific_oem_check_device_types() {
+        use crate::sensors::i2c_interface::I2cInterface;
+        use crate::utilities::channel_content::InternalCommand;
+        use std::thread;
+
+        let config: ConfigData =
+            read_config_file("/config/aquarium_control_test_generic.toml".to_string()).unwrap();
+
+        // Create channels for communication
+        let mut channels = Channels::new_for_test();
+
+        // Clone config and channels for the I2C thread
+        let i2c_config = config.i2c_interface.clone();
+        let mut i2c_interface_channels = channels.i2c_interface;
+        // Keep a sender to stop the thread later
+        let tx_to_i2c = channels
+            .signal_handler
+            .tx_signal_handler_to_i2c_interface
+            .clone();
+
+        // Spawn the I2C Interface thread
+        let i2c_thread = thread::spawn(move || {
+            let mut i2c_interface = I2cInterface::new(i2c_config).unwrap();
+            i2c_interface.execute(&mut i2c_interface_channels);
+        });
+
+        // --- Temperature Sensor ---
+        let driver_temp = AtlasScientificOem::new(
+            config.atlas_scientific.address_atlas_scientific_temperature,
+            atlas_scientific_oem_constants::REG_TYPE_TEMPERATURE,
+            config.atlas_scientific.sleep_time_millis_temperature,
+            atlas_scientific_constants::MAX_MUTEX_ACCESS_DURATION_MILLIS,
+            atlas_scientific_oem_constants::REG_DATA_MSB_TEMPERATURE,
+            atlas_scientific_oem_constants::SCALE_FACTOR_TEMPERATURE,
+            atlas_scientific_oem_constants::RESPONSE_LENGTH_TEMPERATURE,
+        );
+
+        println!("Checking Temperature Sensor Device Type...");
+        match driver_temp.check_oem_device_type(
+            &mut channels.atlas_scientific,
+            AquariumSignal::WaterTemperature,
+        ) {
+            Ok(_) => println!("Temperature Sensor: OK"),
+            Err(e) => println!("Temperature Sensor: FAILED - {:?}", e),
+        }
+
+        // --- pH Sensor ---
+        let driver_ph = AtlasScientificOem::new(
+            config.atlas_scientific.address_atlas_scientific_ph,
+            atlas_scientific_oem_constants::REG_TYPE_PH,
+            config.atlas_scientific.sleep_time_millis_ph,
+            atlas_scientific_constants::MAX_MUTEX_ACCESS_DURATION_MILLIS,
+            atlas_scientific_oem_constants::REG_DATA_MSB_PH,
+            atlas_scientific_oem_constants::SCALE_FACTOR_PH,
+            atlas_scientific_oem_constants::RESPONSE_LENGTH_PH,
+        );
+
+        println!("Checking pH Sensor Device Type...");
+        match driver_ph.check_oem_device_type(&mut channels.atlas_scientific, AquariumSignal::pH) {
+            Ok(_) => println!("pH Sensor: OK"),
+            Err(e) => println!("pH Sensor: FAILED - {:?}", e),
+        }
+
+        // --- Conductivity Sensor ---
+        let driver_cond = AtlasScientificOem::new(
+            config
+                .atlas_scientific
+                .address_atlas_scientific_conductivity,
+            atlas_scientific_oem_constants::REG_TYPE_CONDUCTIVITY,
+            config.atlas_scientific.sleep_time_millis_conductivity,
+            atlas_scientific_constants::MAX_MUTEX_ACCESS_DURATION_MILLIS,
+            atlas_scientific_oem_constants::REG_DATA_MSB_CONDUCTIVITY,
+            atlas_scientific_oem_constants::SCALE_FACTOR_CONDUCTIVITY,
+            atlas_scientific_oem_constants::RESPONSE_LENGTH_CONDUCTIVITY,
+        );
+
+        println!("Checking Conductivity Sensor Device Type...");
+        match driver_cond
+            .check_oem_device_type(&mut channels.atlas_scientific, AquariumSignal::Conductivity)
+        {
+            Ok(_) => println!("Conductivity Sensor: OK"),
+            Err(e) => println!("Conductivity Sensor: FAILED - {:?}", e),
+        }
+
+        // Cleanup: Stop the I2C thread
+        tx_to_i2c.send(InternalCommand::Quit).unwrap();
+        i2c_thread.join().unwrap();
     }
 }
