@@ -82,7 +82,9 @@ use crate::sensors::atlas_scientific_channels::AtlasScientificChannels;
 use crate::sensors::atlas_scientific_config::AtlasScientificConfig;
 use crate::sensors::atlas_scientific_driver::AtlasScientificDriver;
 use crate::sensors::atlas_scientific_error::AtlasScientificError;
-pub(crate) use crate::sensors::atlas_scientific_ezo::AtlasScientificEzo;
+use crate::sensors::atlas_scientific_ezo::AtlasScientificEzo;
+use crate::sensors::atlas_scientific_oem::atlas_scientific_oem_constants;
+use crate::sensors::atlas_scientific_oem::AtlasScientificOem;
 use crate::simulator::get_resp_sim::GetResponseFromSimulatorTrait;
 use crate::utilities::acknowledge_signal_handler::AcknowledgeSignalHandlerTrait;
 use crate::utilities::channel_content::AquariumSignal;
@@ -137,6 +139,10 @@ pub type AtlasScientificResult = Result<AtlasScientificResultData, AtlasScientif
 pub mod atlas_scientific_constants {
     /// allow max. 10 milliseconds for mutex to be blocked by any other thread
     pub const MAX_MUTEX_ACCESS_DURATION_MILLIS: u64 = 10;
+
+    pub const SENSOR_TYPE_OEM: &str = "oem";
+
+    pub const SENSOR_TYPE_EZO: &str = "ezo";
 }
 
 /// Contains the communication Atlas Scientific sensors via I2C.
@@ -200,38 +206,90 @@ impl AtlasScientific {
     ///   addresses, sleep times, and the measurement interval.
     ///
     /// # Returns
-    /// A new `AtlasScientific` struct, ready to manage sensor data acquisition.
+    /// If the configuration is valid, it returns a new `AtlasScientific` struct wrapped in Result,
+    /// ready to manage sensor data acquisition wrapped.
+    /// Otherwise, an error of type AtlasScientificError is returned.
     #[allow(unused)] // used in conditionally compiled code
-    pub fn new(config: AtlasScientificConfig) -> AtlasScientific {
+    pub fn new(config: AtlasScientificConfig) -> Result<AtlasScientific, AtlasScientificError> {
         let measurement_interval = Duration::from_millis(config.measurement_interval_millis);
 
         let mut drivers: HashMap<AquariumSignal, Box<dyn AtlasScientificDriver>> = HashMap::new();
-        drivers.insert(
-            AquariumSignal::WaterTemperature,
-            Box::new(AtlasScientificEzo::new(
-                config.address_atlas_scientific_temperature,
-                config.sleep_time_millis_temperature,
+
+        let driver_temperature: Box<dyn AtlasScientificDriver> =
+            match config.sensor_type_temperature.as_str() {
+                atlas_scientific_constants::SENSOR_TYPE_OEM => Box::new(AtlasScientificOem::new(
+                    config.address_atlas_scientific_temperature,
+                    config.sleep_time_millis_temperature,
+                    atlas_scientific_constants::MAX_MUTEX_ACCESS_DURATION_MILLIS,
+                    atlas_scientific_oem_constants::REG_DATA_MSB_TEMPERATURE,
+                    atlas_scientific_oem_constants::SCALE_FACTOR_TEMPERATURE,
+                    atlas_scientific_oem_constants::RESPONSE_LENGTH_TEMPERATURE,
+                )),
+                atlas_scientific_constants::SENSOR_TYPE_EZO => Box::new(AtlasScientificEzo::new(
+                    config.address_atlas_scientific_temperature,
+                    config.sleep_time_millis_temperature,
+                    atlas_scientific_constants::MAX_MUTEX_ACCESS_DURATION_MILLIS,
+                )),
+                _ => {
+                    return Err(AtlasScientificError::InvalidSensorType {
+                        location: module_path!().to_string(),
+                        signal: AquariumSignal::WaterTemperature,
+                        sensor_type: config.sensor_type_temperature.clone(),
+                    })
+                }
+            };
+        drivers.insert(AquariumSignal::WaterTemperature, driver_temperature);
+
+        let driver_ph: Box<dyn AtlasScientificDriver> = match config.sensor_type_ph.as_str() {
+            atlas_scientific_constants::SENSOR_TYPE_OEM => Box::new(AtlasScientificOem::new(
+                config.address_atlas_scientific_ph,
+                config.sleep_time_millis_ph,
                 atlas_scientific_constants::MAX_MUTEX_ACCESS_DURATION_MILLIS,
+                atlas_scientific_oem_constants::REG_DATA_MSB_PH,
+                atlas_scientific_oem_constants::SCALE_FACTOR_PH,
+                atlas_scientific_oem_constants::RESPONSE_LENGTH_PH,
             )),
-        );
-        drivers.insert(
-            AquariumSignal::pH,
-            Box::new(AtlasScientificEzo::new(
+            atlas_scientific_constants::SENSOR_TYPE_EZO => Box::new(AtlasScientificEzo::new(
                 config.address_atlas_scientific_ph,
                 config.sleep_time_millis_ph,
                 atlas_scientific_constants::MAX_MUTEX_ACCESS_DURATION_MILLIS,
             )),
-        );
-        drivers.insert(
-            AquariumSignal::Conductivity,
-            Box::new(AtlasScientificEzo::new(
-                config.address_atlas_scientific_conductivity,
-                config.sleep_time_millis_conductivity,
-                atlas_scientific_constants::MAX_MUTEX_ACCESS_DURATION_MILLIS,
-            )),
-        );
+            _ => {
+                return Err(AtlasScientificError::InvalidSensorType {
+                    location: module_path!().to_string(),
+                    signal: AquariumSignal::pH,
+                    sensor_type: config.sensor_type_temperature.clone(),
+                })
+            }
+        };
+        drivers.insert(AquariumSignal::pH, driver_ph);
 
-        AtlasScientific {
+        let driver_conductivity: Box<dyn AtlasScientificDriver> =
+            match config.sensor_type_conductivity.as_str() {
+                atlas_scientific_constants::SENSOR_TYPE_OEM => Box::new(AtlasScientificOem::new(
+                    config.address_atlas_scientific_conductivity,
+                    config.sleep_time_millis_conductivity,
+                    atlas_scientific_constants::MAX_MUTEX_ACCESS_DURATION_MILLIS,
+                    atlas_scientific_oem_constants::REG_DATA_MSB_CONDUCTIVITY,
+                    atlas_scientific_oem_constants::SCALE_FACTOR_CONDUCTIVITY,
+                    atlas_scientific_oem_constants::RESPONSE_LENGTH_CONDUCTIVITY,
+                )),
+                atlas_scientific_constants::SENSOR_TYPE_EZO => Box::new(AtlasScientificEzo::new(
+                    config.address_atlas_scientific_conductivity,
+                    config.sleep_time_millis_conductivity,
+                    atlas_scientific_constants::MAX_MUTEX_ACCESS_DURATION_MILLIS,
+                )),
+                _ => {
+                    return Err(AtlasScientificError::InvalidSensorType {
+                        location: module_path!().to_string(),
+                        signal: AquariumSignal::Conductivity,
+                        sensor_type: config.sensor_type_temperature.clone(),
+                    })
+                }
+            };
+        drivers.insert(AquariumSignal::Conductivity, driver_conductivity);
+
+        Ok(AtlasScientific {
             config,
             lock_error_channel_receive_termination: false,
             lock_warn_inapplicable_command_signal_handler: false,
@@ -243,7 +301,7 @@ impl AtlasScientific {
             drivers,
 
             lock_error_driver_not_found: HashMap::new(),
-        }
+        })
     }
 
     /// Atomically writes a sensor measurement result to the appropriate shared mutex.
@@ -596,7 +654,7 @@ pub mod tests {
             stimuli_i2c_response_conductivity.clone(),
         );
 
-        let mut atlas_scientific = AtlasScientific::new(config.atlas_scientific);
+        let mut atlas_scientific = AtlasScientific::new(config.atlas_scientific).unwrap();
 
         let mut channels = Channels::new_for_test();
 

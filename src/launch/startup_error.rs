@@ -60,6 +60,8 @@ use crate::recorder::data_logger_error::DataLoggerError;
 use crate::relays::actuate_controllino::ActuateControllinoError;
 #[cfg(all(feature = "target_hw", target_os = "linux"))]
 use crate::relays::relay_error::RelayError;
+#[cfg(all(feature = "target_hw", target_os = "linux"))]
+use crate::sensors::atlas_scientific_error::AtlasScientificError;
 use crate::sensors::ds18b20_error::Ds18b20Error;
 #[cfg(all(feature = "target_hw", target_os = "linux"))]
 use crate::sensors::gpio_handler::GpioHandlerError;
@@ -225,10 +227,18 @@ pub enum StartupError {
         source: PublishPidError,
     },
 
-    /// Could not set up watchdog.
+    /// Could not set up the watchdog.
     #[error("Could not setup watchdog.")]
     WatchdogSetupFailure {
         #[source]
         source: WatchdogError,
+    },
+
+    /// Configuration of AtlasScientific is invalid
+    #[cfg(all(feature = "target_hw", target_os = "linux"))]
+    #[error("Configuration of AtlasScientific is invalid.")]
+    AtlasScientificSetupFailure {
+        #[source]
+        source: AtlasScientificError,
     },
 }

@@ -151,4 +151,19 @@ pub enum AtlasScientificError {
         location: String,
         signal: AquariumSignal,
     },
+
+    #[error("[{location}] Sensor response for {signal} too short. Expected {expected_length} byte, got {actual_length} byte.")]
+    ResponseTooShort {
+        location: String,
+        expected_length: usize,
+        actual_length: usize,
+        signal: AquariumSignal,
+    },
+
+    #[error("[{location}] Invalid sensor type for {signal} found in configuration: {sensor_type}")]
+    InvalidSensorType {
+        location: String,
+        signal: AquariumSignal,
+        sensor_type: String,
+    },
 }

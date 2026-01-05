@@ -46,7 +46,8 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 //!   - **`get_location()`**: A required method that provides a string identifier for
 //!     the implementing module, used for contextual logging.
 
-use crate::sensors::atlas_scientific::AtlasScientificEzo;
+use crate::sensors::atlas_scientific_ezo::AtlasScientificEzo;
+use crate::sensors::atlas_scientific_oem::AtlasScientificOem;
 use crate::sensors::dht::Dht;
 use crate::sensors::ds18b20::Ds18b20;
 use crate::sensors::sensor_manager::SensorManager;
@@ -403,6 +404,71 @@ impl CheckMutexAccessDurationTrait for AtlasScientificEzo {
     /// inform the location of the warning for logging purposes
     #[cfg(not(test))]
     fn get_location(&self) -> &str {
-        "atlas_scientific"
+        "atlas_scientific_ezo"
+    }
+}
+
+impl CheckMutexAccessDurationTrait for AtlasScientificOem {
+    fn get_warn_lock(&self, key_opt: &Option<&AquariumSignal>) -> bool {
+        if let Some(key) = key_opt {
+            match key {
+                AquariumSignal::WaterTemperature => {
+                    self.lock_warn_max_mutex_access_duration_temperature
+                }
+                AquariumSignal::pH => self.lock_warn_max_mutex_access_duration_ph,
+                AquariumSignal::Conductivity => {
+                    self.lock_warn_max_mutex_access_duration_conductivity
+                }
+                _ => false, // Default for unhandled signals
+            }
+        } else {
+            // defensive programming: this case should not occur
+            true
+        }
+    }
+
+    fn set_warn_lock(&mut self, key_opt: &Option<&AquariumSignal>, value: bool) {
+        if let Some(key) = key_opt {
+            match key {
+                AquariumSignal::WaterTemperature => {
+                    self.lock_warn_max_mutex_access_duration_temperature = value
+                }
+                AquariumSignal::pH => self.lock_warn_max_mutex_access_duration_ph = value,
+                AquariumSignal::Conductivity => {
+                    self.lock_warn_max_mutex_access_duration_conductivity = value
+                }
+                _ => {} // Do nothing for unhandled signals
+            }
+        }
+    }
+
+    /// Method connects the default trait implementation with the specific implementation
+    /// for recording access duration violation
+    #[cfg(test)]
+    fn record_access_duration_violation(&mut self, key_opt: &Option<&AquariumSignal>) {
+        if let Some(key) = key_opt {
+            match key {
+                AquariumSignal::WaterTemperature => {
+                    self.mutex_temperature_access_duration_exceeded = true
+                }
+                AquariumSignal::pH => self.mutex_ph_access_duration_exceeded = true,
+                AquariumSignal::Conductivity => {
+                    self.mutex_conductivity_access_duration_exceeded = true
+                }
+                _ => { /* do nothing for unrecognized signal */ }
+            }
+        }
+    }
+
+    /// Method connects the default trait implementation with the specific implementation
+    /// for getting maximum permissible access duration
+    fn get_max_mutex_access_duration(&self) -> Duration {
+        self.max_mutex_access_duration
+    }
+
+    /// inform the location of the warning for logging purposes
+    #[cfg(not(test))]
+    fn get_location(&self) -> &str {
+        "atlas_scientific_oem"
     }
 }
