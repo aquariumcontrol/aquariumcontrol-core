@@ -7,13 +7,13 @@ The above copyright notice and this permission notice shall be included in all c
 THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
-/// Schedule checker centralizes all communication to the database in regard to permission to run.
-/// The implementation polls the database and answers requests from the threads with the
-/// information retrieved from the database.
+// Schedule checker centralizes all communication to the database in regard to permission to run.
+// The implementation polls the database and answers requests from the threads with the
+// information retrieved from the database.
 pub mod schedule_check;
 
-/// Container for channels
+// Container for channels
 pub mod schedule_check_channels;
 
-/// Configuration data for the schedule checker
+// Configuration data for the schedule checker
 pub mod schedule_check_config;

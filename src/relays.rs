@@ -7,35 +7,35 @@ The above copyright notice and this permission notice shall be included in all c
 THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
-/// Contains the main functionality for the actuator control
+// Contains the main functionality for the actuator control
 pub mod relay_manager;
 
-/// Contains the trait implementation for the communication with real hardware
+// Contains the trait implementation for the communication with real hardware
 pub mod actuate_controllino;
 
-/// Contains the trait implementation for the communication with the test server
+// Contains the trait implementation for the communication with the test server
 pub mod actuate_simulator;
 
-/// Contains the functionality to translate an actuator command into the relay actuation command
+// Contains the functionality to translate an actuator command into the relay actuation command
 pub mod device_relay_logic;
 
-/// Contains the trait implementation for the relay actuation via GPIO
+// Contains the trait implementation for the relay actuation via GPIO
 pub mod actuate_gpio;
 
-/// Container for message content sent to Controllino
+// Container for message content sent to Controllino
 pub mod controllino_message;
 
-/// Enum codifies the errors which the program may encounter in preparation or execution of communication with the relay manager
+// Enum codifies the errors which the program may encounter in preparation or execution of communication with the relay manager
 pub mod relay_error;
 
-/// Container for channels used by relay manager
+// Container for channels used by relay manager
 pub mod relay_manager_channels;
 
-/// Container for the channel used by ActuateSimulator
+// Container for the channel used by ActuateSimulator
 pub mod actuate_simulator_channels;
 
-/// Configuration data for RelayManager
+// Configuration data for RelayManager
 pub mod relay_manager_config;
 
-/// Configuration of ActuateControllino
+// Configuration of ActuateControllino
 pub mod actuate_controllino_config;

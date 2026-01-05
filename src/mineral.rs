@@ -7,17 +7,17 @@ The above copyright notice and this permission notice shall be included in all c
 THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
-/// Contains the main functionality for the Balling mineral dosing
+// Contains the main functionality for the Balling mineral dosing
 pub mod balling;
 
-/// Contains error definitions for Balling
+// Contains error definitions for Balling
 pub mod balling_error;
 
-/// Contains the trait implementation for the execution of the dosing
+// Contains the trait implementation for the execution of the dosing
 pub mod mineral_injection;
 
-/// Container for the channels of the Balling module
+// Container for the channels of the Balling module
 pub mod balling_channels;
 
-/// Configuration data for the Balling module
+// Configuration data for the Balling module
 pub mod balling_config;

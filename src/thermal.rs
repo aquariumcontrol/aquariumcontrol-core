@@ -7,26 +7,26 @@ The above copyright notice and this permission notice shall be included in all c
 THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
-/// Contains functionality to control the heater
+// Contains functionality to control the heater
 pub mod heating;
 
-/// Contains one function to check the validity of heating and ventilation configuration
+// Contains one function to check the validity of heating and ventilation configuration
 pub mod distinct_interval_check;
 
-/// Contains functionality to control the ventilation
+// Contains functionality to control the ventilation
 pub mod ventilation;
 
-/// Container for the channels of heating control used to communicate with other threads
+// Container for the channels of heating control used to communicate with other threads
 pub mod heating_channels;
 
-/// Container for the channels of ventilation control used to communicate with other threads
+// Container for the channels of ventilation control used to communicate with other threads
 pub mod ventilation_channels;
 
-/// Configuration of Heating
+// Configuration of Heating
 pub mod heating_config;
 
-/// Configuration of Ventilation
+// Configuration of Ventilation
 pub mod ventilation_config;
 
-/// Macro for managing cycle time
+// Macro for managing cycle time
 pub mod manage_cycle_time_thermal;

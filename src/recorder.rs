@@ -7,20 +7,20 @@ The above copyright notice and this permission notice shall be included in all c
 THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
-/// Contains the main functionality for the time-based data recording
+// Contains the main functionality for the time-based data recording
 pub mod data_logger;
 
-/// Contains the trait implementation for the execution of the data write operation
+// Contains the trait implementation for the execution of the data write operation
 pub mod data_injection;
 
-/// Contains data definition for the data to be written
+// Contains data definition for the data to be written
 pub mod recorder_data_frame;
 
-/// Container for channels used by data logger module
+// Container for channels used by data logger module
 pub mod data_logger_channels;
 
-/// Configuration data for DataLogger
+// Configuration data for DataLogger
 pub mod data_logger_config;
 
-/// Container for errors produced by DataLogger
+// Container for errors produced by DataLogger
 pub mod data_logger_error;

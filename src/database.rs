@@ -7,53 +7,53 @@ The above copyright notice and this permission notice shall be included in all c
 THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
-/// Contains functions for execution of basic queries used by the other modules
+// Contains functions for execution of basic queries used by the other modules
 pub mod sql_interface;
 
-/// Contains functions for execution of all queries relevant for Balling mineral dosing
+// Contains functions for execution of all queries relevant for Balling mineral dosing
 pub mod sql_interface_balling;
 
-/// Contains functions for execution of all queries relevant for time-data recording (recorder)
+// Contains functions for execution of all queries relevant for time-data recording (recorder)
 pub mod sql_interface_data;
 
-/// Contains functions for execution of all queries relevant for feed (food)
+// Contains functions for execution of all queries relevant for feed (food)
 pub mod sql_interface_feed;
 
-/// Contains functions for execution of all queries relevant for heating statistics (thermal)
+// Contains functions for execution of all queries relevant for heating statistics (thermal)
 pub mod sql_interface_heating_stats;
 
-/// Contains functions for execution of all queries relevant for refill (water)
+// Contains functions for execution of all queries relevant for refill (water)
 pub mod sql_interface_refill;
 
-/// Contains functions for execution of all queries relevant for schedule (permission)
+// Contains functions for execution of all queries relevant for schedule (permission)
 pub mod sql_interface_schedule;
 
-/// Contains enum with error definitions
+// Contains enum with error definitions
 pub mod sql_interface_error;
 
-/// Contains functions for execution of all queries relevant for calculating the time until midnight
+// Contains functions for execution of all queries relevant for calculating the time until midnight
 pub mod sql_interface_midnight;
 
-/// Contains all SQL queries as constants with placeholders
+// Contains all SQL queries as constants with placeholders
 pub mod sql_query_strings;
 
-/// Contains functions for execution of all queries relevant for heating set values (thermal)
+// Contains functions for execution of all queries relevant for heating set values (thermal)
 pub mod sql_interface_heating_set_vals;
 
-/// Contains functions for execution of all queries relevant for ventilation set values (thermal)
+// Contains functions for execution of all queries relevant for ventilation set values (thermal)
 pub mod sql_interface_ventilation_set_vals;
 
-/// Contains data structure for transfer of heating statistics to the database
+// Contains data structure for transfer of heating statistics to the database
 pub mod sql_interface_heating_stats_data_transfer;
 
-/// Configuration of SqlInterface
+// Configuration of SqlInterface
 pub mod sql_interface_config;
 
-/// Represents a component that can be "pinged" to keep a connection alive.
+// Represents a component that can be "pinged" to keep a connection alive.
 pub mod pingable;
 
-/// Trait and implementation for database interface of Feed allowing mocking
+// Trait and implementation for database interface of Feed allowing mocking
 pub mod database_interface_feed_trait;
 
-/// Trait for updating of set values for either heating or ventilation control
+// Trait for updating of set values for either heating or ventilation control
 pub mod thermal_set_value_updater_trait;

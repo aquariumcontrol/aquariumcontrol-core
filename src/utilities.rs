@@ -7,65 +7,65 @@ The above copyright notice and this permission notice shall be included in all c
 THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
-/// Defines enums and structs for inter-thread communication via channels.
+// Defines enums and structs for inter-thread communication via channels.
 pub mod channel_content;
 
-/// Handles the loading and parsing of the main application configuration from a TOML file.
+// Handles the loading and parsing of the main application configuration from a TOML file.
 pub mod config;
 
-/// Defines error types related to reading and parsing the configuration file.
+// Defines error types related to reading and parsing the configuration file.
 pub mod config_error;
 
-/// Defines error types for structural or semantic issues within the configuration file.
+// Defines error types for structural or semantic issues within the configuration file.
 pub mod config_file_definition_error;
 
-/// Implements a simple Infinite Impulse Response (IIR) filter for smoothing sensor data.
+// Implements a simple Infinite Impulse Response (IIR) filter for smoothing sensor data.
 pub mod iir_filter;
 
-/// Contains setup and configuration for the application-wide logging framework.
+// Contains setup and configuration for the application-wide logging framework.
 pub mod logger;
 
-/// Defines a trait for processing external requests, such as commands from the signal handler.
+// Defines a trait for processing external requests, such as commands from the signal handler.
 pub mod proc_ext_req;
 
-/// Manages the creation of a PID file to make the process ID available to external scripts.
+// Manages the creation of a PID file to make the process ID available to external scripts.
 pub mod publish_pid;
 
-/// Implements a sawtooth wave generator for creating low-frequency PWM-like signals.
+// Implements a sawtooth wave generator for creating low-frequency PWM-like signals.
 pub mod sawtooth_profile;
 
-/// Manages system signals (e.g., SIGINT, SIGTERM) to ensure graceful application shutdown.
+// Manages system signals (e.g., SIGINT, SIGTERM) to ensure graceful application shutdown.
 pub mod signal_handler;
 
-/// Provides access to the application's version information from the build environment.
+// Provides access to the application's version information from the build environment.
 pub mod version_information;
 
-/// Container for channels used by signal handler
+// Container for channels used by signal handler
 pub mod signal_handler_channels;
 
-/// Trait for multiple threads which have to wait for termination signal
+// Trait for multiple threads which have to wait for termination signal
 pub mod wait_for_termination;
 
-/// Configuration of Logger
+// Configuration of Logger
 pub mod logger_config;
 
-/// Configuration of PublishPid
+// Configuration of PublishPid
 pub mod publish_pid_config;
 
-/// Trait incl. implementation for checking maximum permissible access duration
+// Trait incl. implementation for checking maximum permissible access duration
 pub mod check_mutex_access_duration;
 
-/// Trait incl. implementation for acknowledging to signal handler
+// Trait incl. implementation for acknowledging to signal handler
 pub mod acknowledge_signal_handler;
 
-/// A trait for components that need to periodically ping a `Pingable` resource.
+// A trait for components that need to periodically ping a `Pingable` resource.
 pub mod database_ping_trait;
 
-/// Macro for performing schedule check
+// Macro for performing schedule check
 mod perform_schedule_check;
 
-/// Macro for updating set values for heating and ventilation
+// Macro for updating set values for heating and ventilation
 mod update_thermal_set_values;
 
-/// Macro to handle common end-of-loop tasks for Balling and Feed
+// Macro to handle common end-of-loop tasks for Balling and Feed
 mod check_quit_increment_counter_ping_database;
