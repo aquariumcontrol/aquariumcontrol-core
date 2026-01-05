@@ -2,11 +2,12 @@ use crate::sensors::atlas_scientific::{AtlasScientificResult, AtlasScientificRes
 use crate::sensors::atlas_scientific_channels::AtlasScientificChannels;
 use crate::sensors::atlas_scientific_error::AtlasScientificError;
 use crate::utilities::channel_content::AquariumSignal;
+use std::fmt::Debug;
 use std::sync::{Arc, Mutex};
 
 /// Abstract strategy for interacting with an Atlas Scientific sensor.
 /// Allows for different sensor types ("oem", "ezo") to be integrated.
-pub trait AtlasScientificDriver: Send + Sync {
+pub trait AtlasScientificDriver: Send + Sync + Debug {
     fn send_request_to_i2c_interface(
         &self,
         atlas_scientific_channels: &mut AtlasScientificChannels,

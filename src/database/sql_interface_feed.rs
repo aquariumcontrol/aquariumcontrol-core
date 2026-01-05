@@ -24,7 +24,7 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 //!   - The presence of `NULL` values in the `feed_profiles` and `feed_schedule` tables.
 //!   - Whether the number of rows in the `feed_profiles`, `feed_schedule`, and `feed_log`
 //!     tables exceeds the limits defined in the application configuration.
-//!   This ensures the system doesn't start in an invalid or inconsistent state.
+//!     This ensures the system doesn't start in an invalid or inconsistent state.
 //!
 //! - **Data-Fetching Methods**: Functions like `get_feed_profile_header_from_database`
 //!   and `get_feed_phase_from_database` provide a structured way to retrieve

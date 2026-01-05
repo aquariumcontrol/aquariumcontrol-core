@@ -159,6 +159,7 @@ pub mod atlas_scientific_constants {
 ///     signal_handler --> atlas_scientific
 ///     atlas_scientific -.-> data_logger[DataLogger]
 /// ```
+#[derive(Debug)]
 pub struct AtlasScientific {
     /// configuration data for AtlasScientific
     #[allow(unused)] // used in conditionally compiled code
@@ -258,7 +259,7 @@ impl AtlasScientific {
                 return Err(AtlasScientificError::InvalidSensorType {
                     location: module_path!().to_string(),
                     signal: AquariumSignal::pH,
-                    sensor_type: config.sensor_type_temperature.clone(),
+                    sensor_type: config.sensor_type_ph.clone(),
                 })
             }
         };
@@ -283,7 +284,7 @@ impl AtlasScientific {
                     return Err(AtlasScientificError::InvalidSensorType {
                         location: module_path!().to_string(),
                         signal: AquariumSignal::Conductivity,
-                        sensor_type: config.sensor_type_temperature.clone(),
+                        sensor_type: config.sensor_type_conductivity.clone(),
                     })
                 }
             };
@@ -571,7 +572,8 @@ pub mod tests {
     use crate::launch::channels::Channels;
     use crate::mocks::mock_i2c_interface::tests::MockI2cInterface;
     use crate::sensors::atlas_scientific::{
-        AtlasScientific, AtlasScientificError, AtlasScientificResultData,
+        atlas_scientific_constants, AtlasScientific, AtlasScientificError,
+        AtlasScientificResultData,
     };
     use crate::sensors::atlas_scientific_ezo::atlas_scientific_ezo_constants;
     use crate::sensors::i2c_interface::I2cResponse;
@@ -641,8 +643,14 @@ pub mod tests {
             length: atlas_scientific_ezo_constants::MESSAGE_SIZE,
         };
 
-        let config: ConfigData =
+        let mut config: ConfigData =
             read_config_file("/config/aquarium_control_test_generic.toml".to_string()).unwrap();
+        config.atlas_scientific.sensor_type_temperature =
+            atlas_scientific_constants::SENSOR_TYPE_EZO.to_string();
+        config.atlas_scientific.sensor_type_ph =
+            atlas_scientific_constants::SENSOR_TYPE_EZO.to_string();
+        config.atlas_scientific.sensor_type_conductivity =
+            atlas_scientific_constants::SENSOR_TYPE_EZO.to_string();
 
         let measurement_interval_millis_for_test_environment =
             config.atlas_scientific.measurement_interval_millis;
@@ -693,7 +701,8 @@ pub mod tests {
 
                 // lock the mutexes and wait for triggering the detection
                 match mutex_atlas_scientific_temperature_clone_for_test_environment.lock() {
-                    Ok(_) => {
+                    Ok(_guard) => {
+                        // binding is necessary to avoid drop
                         spin_sleeper.sleep(sleep_time);
                     }
                     Err(e) => {
@@ -701,7 +710,8 @@ pub mod tests {
                     }
                 };
                 match mutex_atlas_scientific_ph_clone_for_test_environment.lock() {
-                    Ok(_) => {
+                    Ok(_guard) => {
+                        // binding is necessary to avoid drop
                         spin_sleeper.sleep(sleep_time);
                     }
                     Err(e) => {
@@ -709,7 +719,8 @@ pub mod tests {
                     }
                 };
                 match mutex_atlas_scientific_conductivity_clone_for_test_environment.lock() {
-                    Ok(_) => {
+                    Ok(_guard) => {
+                        // binding is necessary to avoid drop
                         spin_sleeper.sleep(sleep_time);
                     }
                     Err(e) => {
@@ -1000,6 +1011,85 @@ pub mod tests {
         }) = result
         {
             assert_eq!(signal, AquariumSignal::pH);
+        }
+    }
+
+    #[test]
+    // Test case checks if AtlasScientific::new returns an error if the configuration contains invalid data.
+    fn test_new_with_invalid_configuration() {
+        let mut config: ConfigData =
+            read_config_file("/config/aquarium_control_test_generic.toml".to_string()).unwrap();
+
+        // Set an invalid sensor type for temperature
+        config.atlas_scientific.sensor_type_temperature = "invalid_type".to_string();
+        config.atlas_scientific.sensor_type_ph =
+            atlas_scientific_constants::SENSOR_TYPE_OEM.to_string();
+        config.atlas_scientific.sensor_type_conductivity =
+            atlas_scientific_constants::SENSOR_TYPE_OEM.to_string();
+
+        let result = AtlasScientific::new(config.atlas_scientific);
+
+        assert!(result.is_err());
+        if let Err(AtlasScientificError::InvalidSensorType {
+            location: _,
+            signal,
+            sensor_type,
+        }) = result
+        {
+            assert_eq!(signal, AquariumSignal::WaterTemperature);
+            assert_eq!(sensor_type, "invalid_type");
+        } else {
+            panic!("Expected InvalidSensorType error, got {:?}", result);
+        }
+
+        let mut config: ConfigData =
+            read_config_file("/config/aquarium_control_test_generic.toml".to_string()).unwrap();
+
+        // Set an invalid sensor type for pH
+        config.atlas_scientific.sensor_type_temperature =
+            atlas_scientific_constants::SENSOR_TYPE_OEM.to_string();
+        config.atlas_scientific.sensor_type_ph = "invalid_type".to_string();
+        config.atlas_scientific.sensor_type_conductivity =
+            atlas_scientific_constants::SENSOR_TYPE_OEM.to_string();
+
+        let result = AtlasScientific::new(config.atlas_scientific);
+
+        assert!(result.is_err());
+        if let Err(AtlasScientificError::InvalidSensorType {
+            location: _,
+            signal,
+            sensor_type,
+        }) = result
+        {
+            assert_eq!(signal, AquariumSignal::pH);
+            assert_eq!(sensor_type, "invalid_type");
+        } else {
+            panic!("Expected InvalidSensorType error, got {:?}", result);
+        }
+
+        let mut config: ConfigData =
+            read_config_file("/config/aquarium_control_test_generic.toml".to_string()).unwrap();
+
+        // Set an invalid sensor type for conductivity
+        config.atlas_scientific.sensor_type_temperature =
+            atlas_scientific_constants::SENSOR_TYPE_OEM.to_string();
+        config.atlas_scientific.sensor_type_ph =
+            atlas_scientific_constants::SENSOR_TYPE_OEM.to_string();
+        config.atlas_scientific.sensor_type_conductivity = "invalid_type".to_string();
+
+        let result = AtlasScientific::new(config.atlas_scientific);
+
+        assert!(result.is_err());
+        if let Err(AtlasScientificError::InvalidSensorType {
+            location: _,
+            signal,
+            sensor_type,
+        }) = result
+        {
+            assert_eq!(signal, AquariumSignal::Conductivity);
+            assert_eq!(sensor_type, "invalid_type");
+        } else {
+            panic!("Expected InvalidSensorType error, got {:?}", result);
         }
     }
 }

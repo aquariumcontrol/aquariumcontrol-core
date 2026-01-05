@@ -31,7 +31,7 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 //! ## Enum Variants
 //!
 //! - **`OutputFilenameEmpty`**: Occurs during initialization if `output_to_disk` is
-//!    enabled, but one of the required output filenames is an empty string.
+//!   enabled, but one of the required output filenames is an empty string.
 //! - **`FileResetFailure`**: Occurs when an I/O error is encountered while trying to
 //!   create or truncate an output file.
 //! - **`InvalidFilterCoefficient`**: Occurs during initialization if a configured

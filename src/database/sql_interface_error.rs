@@ -24,8 +24,8 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 //!   - `location`: The module path where the error occurred, provided by `module_path!()`.
 //!   - `query`: The specific SQL query string that failed.
 //!   - Other relevant parameters (e.g., `pump_id`, version numbers).
-//!   This makes debugging significantly easier by pinpointing the exact location and
-//!   cause of a failure.
+//!     This makes debugging significantly easier by pinpointing the exact location and
+//!     cause of a failure.
 //!
 //! - **Error Chaining**: The `#[source]` attribute is used to wrap the underlying
 //!   error (e.g., a `mysql::Error` or `chrono::ParseError`), preserving the original

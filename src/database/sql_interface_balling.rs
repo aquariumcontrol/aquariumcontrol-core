@@ -28,7 +28,7 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 //!   - The presence of `NULL` values in the configuration table.
 //!   - Whether the number of rows in the `balling_set_vals` and `balling_log`
 //!     tables exceeds the limits defined in the application configuration.
-//!   This ensures the system doesn't start in an invalid or inconsistent state.
+//!     This ensures the system doesn't start in an invalid or inconsistent state.
 //!
 //! ## Design and Purpose
 //!

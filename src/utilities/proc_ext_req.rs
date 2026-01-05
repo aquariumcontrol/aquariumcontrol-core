@@ -45,7 +45,7 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 //!   - **`Feed` / `Balling`**: Override the default to handle `InternalCommand::Execute(id)`.
 //!   - **Simpler Modules** (`DataLogger`, `RelayManager`, etc.): Use a helper function
 //!     (`process_external_request_without_messaging`) that only listens for the `Quit`
-//!      command, as they do not need runtime start/stop control.
+//!     command, as they do not need runtime start/stop control.
 //!
 //! This pattern of a default implementation with targeted overrides is a powerful way
 //! to share common code while still allowing for necessary specialization.

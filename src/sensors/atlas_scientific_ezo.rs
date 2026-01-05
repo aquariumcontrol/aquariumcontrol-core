@@ -51,6 +51,7 @@ pub(crate) mod atlas_scientific_ezo_constants {
     pub const MESSAGE_FINISH_MAGIC: u8 = 0;
 }
 
+#[derive(Debug)]
 pub struct AtlasScientificEzo {
     pub i2c_address: u16,
 
@@ -1354,11 +1355,11 @@ pub mod tests {
     #[test]
     #[cfg(all(target_os = "linux", feature = "target_hw"))]
     #[ignore]
-    // read from real Atlas Scientific hardware combined in one test case to avoid race conditions:
+    // read from real Atlas Scientific hardware (EZO) combined in one test case to avoid race conditions:
     // - pH sensor
     // - conductivity sensor
     // - temperature
-    pub fn test_atlas_scientific_interface_read_sensors() {
+    pub fn test_atlas_scientific_ezo_read_sensors() {
         let config: ConfigData =
             read_config_file("/config/aquarium_control_test_generic.toml".to_string()).unwrap();
         let mut i2c_interface = I2cInterface::new(config.i2c_interface).unwrap();
@@ -1391,7 +1392,7 @@ pub mod tests {
         match i2c_interface.get_response_from_i2c(request_ph) {
             Ok(response_ph) => {
                 println!("Atlas Scientific response for pH: {:?}", response_ph);
-                let ph = AtlasScientific::check_response(
+                let ph = AtlasScientificEzo::check_response(
                     response_ph.read_buf[..atlas_scientific_ezo_constants::MESSAGE_SIZE]
                         .try_into()
                         .unwrap(),
@@ -1411,7 +1412,7 @@ pub mod tests {
                     "Atlas Scientific response for temperature: {:?}",
                     response_temperature
                 );
-                let temperature = AtlasScientific::check_response(
+                let temperature = AtlasScientificEzo::check_response(
                     response_temperature.read_buf[..atlas_scientific_ezo_constants::MESSAGE_SIZE]
                         .try_into()
                         .unwrap(),
@@ -1434,7 +1435,7 @@ pub mod tests {
                     "Atlas Scientific response for conductivity: {:?}",
                     response_conductivity
                 );
-                let conductivity = AtlasScientific::check_response(
+                let conductivity = AtlasScientificEzo::check_response(
                     response_conductivity.read_buf[..atlas_scientific_ezo_constants::MESSAGE_SIZE]
                         .try_into()
                         .unwrap(),

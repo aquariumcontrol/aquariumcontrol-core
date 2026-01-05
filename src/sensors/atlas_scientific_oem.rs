@@ -17,26 +17,31 @@ pub(crate) mod atlas_scientific_oem_constants {
     pub const REG_DATA_MSB_TEMPERATURE: u8 = 0x18;
 
     /// Register for the pH Data (MSB)
-    pub const REG_DATA_MSB_PH: u8 = 0x18;
+    pub const REG_DATA_MSB_PH: u8 = 0x16;
 
     /// Register for the conductivity Data (MSB)
     pub const REG_DATA_MSB_CONDUCTIVITY: u8 = 0x18;
 
-    /// The OEM conductivity sensor returns 4 bytes (MSB, High, Low, LSB)
+    /// The OEM temperature sensor returns 4 bytes (MSB, High, Low, LSB)
     pub const RESPONSE_LENGTH_TEMPERATURE: usize = 4;
+
+    /// The OEM pH sensor returns 4 bytes (MSB, High, Low, LSB)
     pub const RESPONSE_LENGTH_PH: usize = 4;
+
+    /// The OEM conductivity sensor returns 4 bytes (MSB, High, Low, LSB)
     pub const RESPONSE_LENGTH_CONDUCTIVITY: usize = 4;
 
     /// Scaling factor for temperature (Value / 100.0)
     pub const SCALE_FACTOR_TEMPERATURE: f32 = 100.0;
 
     /// Scaling factor for pH (Value / 100.0)
-    pub const SCALE_FACTOR_PH: f32 = 100.0;
+    pub const SCALE_FACTOR_PH: f32 = 1000.0;
 
     /// Scaling factor for conductivity (Value / 100.0)
-    pub const SCALE_FACTOR_CONDUCTIVITY: f32 = 100.0;
+    pub const SCALE_FACTOR_CONDUCTIVITY: f32 = 1000.0;
 }
 
+#[derive(Debug)]
 pub struct AtlasScientificOem {
     pub i2c_address: u16,
 
@@ -172,8 +177,11 @@ impl AtlasScientificDriver for AtlasScientificOem {
             Ok(i2c_response) => {
                 // 2. Parse the binary data
                 match signal {
-                    AquariumSignal::Conductivity => {
-                        let result_data = self.parse_oem_response(&i2c_response.read_buf)?;
+                    AquariumSignal::Conductivity
+                    | AquariumSignal::WaterTemperature
+                    | AquariumSignal::pH => {
+                        let result_data =
+                            self.parse_oem_response(&i2c_response.read_buf[..i2c_response.length])?;
                         let instant_before_locking_mutex = Instant::now();
                         let result_data_clone = result_data.clone();
 
@@ -217,6 +225,364 @@ impl AtlasScientificDriver for AtlasScientificOem {
             AquariumSignal::pH => self.mutex_ph_access_duration_exceeded,
             AquariumSignal::Conductivity => self.mutex_conductivity_access_duration_exceeded,
             _ => panic!("Signal type not supported."),
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::launch::channels::{AquaSender, Channels};
+    use crate::sensors::atlas_scientific::atlas_scientific_constants;
+    use crate::sensors::i2c_interface::{I2cResponse, I2cResult};
+    use crate::utilities::config::{read_config_file, ConfigData};
+    use std::collections::HashMap;
+
+    /// Helper function to set up a standard test environment for receive tests.
+    fn setup_receive_test() -> (
+        HashMap<AquariumSignal, AtlasScientificOem>,
+        AtlasScientificChannels,
+        AquaSender<I2cResult>,
+        Arc<Mutex<AtlasScientificResultData>>,
+        Arc<Mutex<AtlasScientificResultData>>,
+        Arc<Mutex<AtlasScientificResultData>>,
+    ) {
+        let config: ConfigData =
+            read_config_file("/config/aquarium_control_test_generic.toml".to_string()).unwrap();
+        let mut drivers = HashMap::new();
+        drivers.insert(
+            AquariumSignal::WaterTemperature,
+            AtlasScientificOem::new(
+                config.atlas_scientific.address_atlas_scientific_temperature,
+                config.atlas_scientific.sleep_time_millis_temperature,
+                atlas_scientific_constants::MAX_MUTEX_ACCESS_DURATION_MILLIS,
+                atlas_scientific_oem_constants::REG_DATA_MSB_TEMPERATURE,
+                atlas_scientific_oem_constants::SCALE_FACTOR_TEMPERATURE,
+                atlas_scientific_oem_constants::RESPONSE_LENGTH_TEMPERATURE,
+            ),
+        );
+        drivers.insert(
+            AquariumSignal::pH,
+            AtlasScientificOem::new(
+                config.atlas_scientific.address_atlas_scientific_ph,
+                config.atlas_scientific.sleep_time_millis_ph,
+                atlas_scientific_constants::MAX_MUTEX_ACCESS_DURATION_MILLIS,
+                atlas_scientific_oem_constants::REG_DATA_MSB_PH,
+                atlas_scientific_oem_constants::SCALE_FACTOR_PH,
+                atlas_scientific_oem_constants::RESPONSE_LENGTH_PH,
+            ),
+        );
+        drivers.insert(
+            AquariumSignal::Conductivity,
+            AtlasScientificOem::new(
+                config
+                    .atlas_scientific
+                    .address_atlas_scientific_conductivity,
+                config.atlas_scientific.sleep_time_millis_conductivity,
+                atlas_scientific_constants::MAX_MUTEX_ACCESS_DURATION_MILLIS,
+                atlas_scientific_oem_constants::REG_DATA_MSB_CONDUCTIVITY,
+                atlas_scientific_oem_constants::SCALE_FACTOR_CONDUCTIVITY,
+                atlas_scientific_oem_constants::RESPONSE_LENGTH_CONDUCTIVITY,
+            ),
+        );
+
+        let channels = Channels::new_for_test();
+
+        // Initialize mutexes with a known default value (0.0)
+        let mutex_temp = Arc::new(Mutex::new(AtlasScientificResultData::new(0.0)));
+        let mutex_ph = Arc::new(Mutex::new(AtlasScientificResultData::new(0.0)));
+        let mutex_cond = Arc::new(Mutex::new(AtlasScientificResultData::new(0.0)));
+
+        (
+            drivers,
+            channels.atlas_scientific,
+            channels.i2c_interface.tx_i2c_interface_to_atlas_scientific,
+            mutex_temp,
+            mutex_ph,
+            mutex_cond,
+        )
+    }
+
+    #[test]
+    fn test_conductivity_reading() {
+        let (
+            mut drivers,
+            mut atlas_scientific_channels,
+            mut tx_i2c_interface_to_atlas_scientific,
+            mutex_temp,
+            mutex_ph,
+            mutex_cond,
+        ) = setup_receive_test();
+
+        let driver = drivers.get_mut(&AquariumSignal::Conductivity).unwrap();
+
+        // Mock Data: 1413 uS/cm. 1413 * 100 = 141.300.
+        // 1413000 in Hex is 0x00158EA8
+        // Big Endian bytes: [0x00, 0x15, 0x8E, 0xA8]4]
+        let mut mock_data = [0u8; 4];
+        mock_data[0] = 0x00;
+        mock_data[1] = 0x15;
+        mock_data[2] = 0x8F;
+        mock_data[3] = 0x88;
+        let i2c_response = I2cResponse::new(&mock_data);
+        tx_i2c_interface_to_atlas_scientific
+            .send(Ok(i2c_response))
+            .unwrap();
+
+        // Process Response
+        driver
+            .receive_response_from_i2c_interface(
+                &AquariumSignal::Conductivity,
+                &mut atlas_scientific_channels,
+                &mutex_temp,
+                &mutex_ph,
+                &mutex_cond,
+            )
+            .expect("Failed to process response");
+
+        // --- Step 3: Check Result ---
+        let result = mutex_cond.lock().unwrap();
+        // 141300 / 100.0 = 1413.0
+        println!(
+            "test_conductivity_reading: Result has value {}",
+            result.value
+        );
+        assert!((result.value - 1413.0).abs() < f32::EPSILON);
+    }
+
+    #[test]
+    fn test_ph_reading() {
+        let (
+            mut drivers,
+            mut atlas_scientific_channels,
+            mut tx_i2c_interface_to_atlas_scientific,
+            mutex_temp,
+            mutex_ph,
+            mutex_cond,
+        ) = setup_receive_test();
+
+        let driver = drivers.get_mut(&AquariumSignal::pH).unwrap();
+
+        let mut mock_data = [0u8; 4];
+        mock_data[0] = 0x00;
+        mock_data[1] = 0x00;
+        mock_data[2] = 0x1B;
+        mock_data[3] = 0x58;
+        let i2c_response = I2cResponse::new(&mock_data);
+        tx_i2c_interface_to_atlas_scientific
+            .send(Ok(i2c_response))
+            .unwrap();
+
+        // Process Response
+        driver
+            .receive_response_from_i2c_interface(
+                &AquariumSignal::pH,
+                &mut atlas_scientific_channels,
+                &mutex_temp,
+                &mutex_ph,
+                &mutex_cond,
+            )
+            .expect("Failed to process response");
+
+        // --- Step 3: Check Result ---
+        let result = mutex_ph.lock().unwrap();
+        println!("test_ph_reading: Result has value {}", result.value);
+        // 7000 / 1000.0 = 7.0
+        assert!((result.value - 7.0).abs() < f32::EPSILON);
+    }
+
+    #[test]
+    fn test_temperature_reading() {
+        let (
+            mut drivers,
+            mut atlas_scientific_channels,
+            mut tx_i2c_interface_to_atlas_scientific,
+            mutex_temp,
+            mutex_ph,
+            mutex_cond,
+        ) = setup_receive_test();
+
+        let driver = drivers.get_mut(&AquariumSignal::WaterTemperature).unwrap();
+
+        // Mock Data: 25.432 C. 25.432 * 100 = 2543.2 -> 2543 (integer)
+        // 2543 in Hex is 0x09EF
+        // Big Endian bytes: [0x00, 0x00, 0x09, 0xEF]
+        let mut mock_data = [0u8; 4];
+        mock_data[0] = 0x00;
+        mock_data[1] = 0x00;
+        mock_data[2] = 0x09;
+        mock_data[3] = 0xEF;
+        let i2c_response = I2cResponse::new(&mock_data);
+        tx_i2c_interface_to_atlas_scientific
+            .send(Ok(i2c_response))
+            .unwrap();
+
+        // Process Response
+        driver
+            .receive_response_from_i2c_interface(
+                &AquariumSignal::WaterTemperature,
+                &mut atlas_scientific_channels,
+                &mutex_temp,
+                &mutex_ph,
+                &mutex_cond,
+            )
+            .expect("Failed to process response");
+
+        // --- Step 3: Check Result ---
+        let result = mutex_temp.lock().unwrap();
+        println!(
+            "test_temperature_reading: Result has value {}",
+            result.value
+        );
+        // 2543 / 100.0 = 25.43
+        assert!((result.value - 25.43).abs() < 0.0001);
+    }
+
+    #[test]
+    fn test_short_response_error() {
+        let (
+            mut drivers,
+            mut atlas_scientific_channels,
+            mut tx_i2c_interface_to_atlas_scientific,
+            mutex_temp,
+            mutex_ph,
+            mutex_cond,
+        ) = setup_receive_test();
+
+        // Simulate sending a response that is too short (e.g., 3 byte instead of 4)
+        let mock_data = [0u8; 3];
+        let i2c_response = I2cResponse::new(&mock_data);
+        tx_i2c_interface_to_atlas_scientific
+            .send(Ok(i2c_response))
+            .unwrap();
+
+        let driver = drivers.get_mut(&AquariumSignal::WaterTemperature).unwrap();
+
+        let result = driver.receive_response_from_i2c_interface(
+            &AquariumSignal::WaterTemperature,
+            &mut atlas_scientific_channels,
+            &mutex_temp,
+            &mutex_ph,
+            &mutex_cond,
+        );
+
+        match result {
+            Ok(_c) => {
+                panic!("Test case is expecting error.");
+            }
+            Err(e) => {
+                matches!(
+                    e,
+                    AtlasScientificError::ResponseTooShort {
+                        location: _,
+                        expected_length:
+                            atlas_scientific_oem_constants::RESPONSE_LENGTH_TEMPERATURE,
+                        actual_length: 3,
+                        signal: AquariumSignal::WaterTemperature
+                    }
+                );
+            }
+        }
+    }
+
+    #[test]
+    #[cfg(all(target_os = "linux", feature = "target_hw"))]
+    #[ignore]
+    // read from real Atlas Scientific hardware (OEM) combined in one test case to avoid race conditions:
+    // - pH sensor
+    // - conductivity sensor
+    // - temperature
+    pub fn test_atlas_scientific_oem_read_sensors() {
+        let config: ConfigData =
+            read_config_file("/config/aquarium_control_test_generic.toml".to_string()).unwrap();
+        let mut i2c_interface = I2cInterface::new(config.i2c_interface).unwrap();
+
+        // --- pH Sensor ---
+        let cmd_ph = [atlas_scientific_oem_constants::REG_DATA_MSB_PH];
+        let request_ph = I2cRequest::new(
+            config.atlas_scientific.address_atlas_scientific_ph,
+            &cmd_ph,
+            config.atlas_scientific.sleep_time_millis_ph,
+            atlas_scientific_oem_constants::RESPONSE_LENGTH_PH,
+        )
+        .unwrap();
+
+        match i2c_interface.get_response_from_i2c(request_ph) {
+            Ok(response) => {
+                if response.length == atlas_scientific_oem_constants::RESPONSE_LENGTH_PH {
+                    let data = &response.read_buf[..response.length];
+                    let value_u32 = u32::from_be_bytes([data[0], data[1], data[2], data[3]]);
+                    let value = value_u32 as f32 / atlas_scientific_oem_constants::SCALE_FACTOR_PH;
+                    println!("Measured pH: {:.2}", value);
+                } else {
+                    println!("Invalid response length for pH: {}", response.length);
+                }
+            }
+            Err(e) => {
+                println!("Failed to read from pH sensor: {:?}", e);
+            }
+        }
+
+        // --- Temperature Sensor ---
+        let cmd_temp = [atlas_scientific_oem_constants::REG_DATA_MSB_TEMPERATURE];
+        let request_temperature = I2cRequest::new(
+            config.atlas_scientific.address_atlas_scientific_temperature,
+            &cmd_temp,
+            config.atlas_scientific.sleep_time_millis_temperature,
+            atlas_scientific_oem_constants::RESPONSE_LENGTH_TEMPERATURE,
+        )
+        .unwrap();
+
+        match i2c_interface.get_response_from_i2c(request_temperature) {
+            Ok(response) => {
+                if response.length == atlas_scientific_oem_constants::RESPONSE_LENGTH_TEMPERATURE {
+                    let data = &response.read_buf[..response.length];
+                    let value_u32 = u32::from_be_bytes([data[0], data[1], data[2], data[3]]);
+                    let value =
+                        value_u32 as f32 / atlas_scientific_oem_constants::SCALE_FACTOR_TEMPERATURE;
+                    println!("Measured Temperature: {:.2}", value);
+                } else {
+                    println!(
+                        "Invalid response length for Temperature: {}",
+                        response.length
+                    );
+                }
+            }
+            Err(e) => {
+                println!("Failed to read from Temperature sensor: {:?}", e);
+            }
+        }
+
+        // --- Conductivity Sensor ---
+        let cmd_cond = [atlas_scientific_oem_constants::REG_DATA_MSB_CONDUCTIVITY];
+        let request_conductivity = I2cRequest::new(
+            config
+                .atlas_scientific
+                .address_atlas_scientific_conductivity,
+            &cmd_cond,
+            config.atlas_scientific.sleep_time_millis_conductivity,
+            atlas_scientific_oem_constants::RESPONSE_LENGTH_CONDUCTIVITY,
+        )
+        .unwrap();
+
+        match i2c_interface.get_response_from_i2c(request_conductivity) {
+            Ok(response) => {
+                if response.length == atlas_scientific_oem_constants::RESPONSE_LENGTH_CONDUCTIVITY {
+                    let data = &response.read_buf[..response.length];
+                    let value_u32 = u32::from_be_bytes([data[0], data[1], data[2], data[3]]);
+                    let value = value_u32 as f32
+                        / atlas_scientific_oem_constants::SCALE_FACTOR_CONDUCTIVITY;
+                    println!("Measured Conductivity: {:.2}", value);
+                } else {
+                    println!(
+                        "Invalid response length for Conductivity: {}",
+                        response.length
+                    );
+                }
+            }
+            Err(e) => {
+                println!("Failed to read from Conductivity sensor: {:?}", e);
+            }
         }
     }
 }
