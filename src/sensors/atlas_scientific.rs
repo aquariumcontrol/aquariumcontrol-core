@@ -82,8 +82,11 @@ use crate::sensors::atlas_scientific_channels::AtlasScientificChannels;
 use crate::sensors::atlas_scientific_config::AtlasScientificConfig;
 use crate::sensors::atlas_scientific_driver::AtlasScientificDriver;
 use crate::sensors::atlas_scientific_error::AtlasScientificError;
+#[cfg(any(all(feature = "target_hw", target_os = "linux"), test))]
 use crate::sensors::atlas_scientific_ezo::AtlasScientificEzo;
+#[cfg(any(all(feature = "target_hw", target_os = "linux"), test))]
 use crate::sensors::atlas_scientific_oem::atlas_scientific_oem_constants;
+#[cfg(any(all(feature = "target_hw", target_os = "linux"), test))]
 use crate::sensors::atlas_scientific_oem::AtlasScientificOem;
 use crate::simulator::get_resp_sim::GetResponseFromSimulatorTrait;
 use crate::utilities::acknowledge_signal_handler::AcknowledgeSignalHandlerTrait;
@@ -137,11 +140,15 @@ pub type AtlasScientificResult = Result<AtlasScientificResultData, AtlasScientif
 
 /// Device-type-independent constants for AtlasScientific
 pub mod atlas_scientific_constants {
+
+    #[cfg(any(all(feature = "target_hw", target_os = "linux"), test))]
     /// allow max. 10 milliseconds for mutex to be blocked by any other thread
     pub const MAX_MUTEX_ACCESS_DURATION_MILLIS: u64 = 10;
 
+    #[cfg(any(all(feature = "target_hw", target_os = "linux"), test))]
     pub const SENSOR_TYPE_OEM: &str = "oem";
 
+    #[cfg(any(all(feature = "target_hw", target_os = "linux"), test))]
     pub const SENSOR_TYPE_EZO: &str = "ezo";
 }
 
@@ -195,25 +202,10 @@ impl ProcessExternalRequestTrait for AtlasScientific {}
 impl GetResponseFromSimulatorTrait for AtlasScientific {}
 
 impl AtlasScientific {
-    /// Creates a new `AtlasScientific` control instance.
-    ///
-    /// This constructor initializes the Atlas Scientific sensor module. It takes the
-    /// configuration, calculates the measurement interval, and sets up internal
-    /// state, including lock flags used to prevent log flooding from recurring
-    /// errors or warnings.
-    ///
-    /// # Arguments
-    /// * `config` - Configuration data for the Atlas Scientific module, specifying I2C
-    ///   addresses, sleep times, and the measurement interval.
-    ///
-    /// # Returns
-    /// If the configuration is valid, it returns a new `AtlasScientific` struct wrapped in Result,
-    /// ready to manage sensor data acquisition wrapped.
-    /// Otherwise, an error of type AtlasScientificError is returned.
-    #[allow(unused)] // used in conditionally compiled code
-    pub fn new(config: AtlasScientificConfig) -> Result<AtlasScientific, AtlasScientificError> {
-        let measurement_interval = Duration::from_millis(config.measurement_interval_millis);
-
+    #[cfg(any(all(feature = "target_hw", target_os = "linux"), test))]
+    pub fn create_drivers(
+        config: &AtlasScientificConfig,
+    ) -> Result<HashMap<AquariumSignal, Box<dyn AtlasScientificDriver>>, AtlasScientificError> {
         let mut drivers: HashMap<AquariumSignal, Box<dyn AtlasScientificDriver>> = HashMap::new();
 
         let driver_temperature: Box<dyn AtlasScientificDriver> =
@@ -292,20 +284,40 @@ impl AtlasScientific {
                 }
             };
         drivers.insert(AquariumSignal::Conductivity, driver_conductivity);
+        Ok(drivers)
+    }
 
-        Ok(AtlasScientific {
+    /// Creates a new `AtlasScientific` control instance.
+    ///
+    /// This constructor initializes the Atlas Scientific sensor module. It takes the
+    /// configuration, instantiates the measurement interval, and sets up internal
+    /// state, including lock flags used to prevent log flooding from recurring
+    /// errors or warnings.
+    ///
+    /// # Arguments
+    /// * `config` - Configuration data for the Atlas Scientific module, specifying I2C
+    ///   addresses, sleep times, and the measurement interval.
+    /// * `drivers` - a hashmap containing the driver for each signal
+    ///
+    /// # Returns
+    /// It returns a new `AtlasScientific` struct, which is ready to manage sensor data acquisition.
+    #[allow(unused)] // used in conditionally compiled code
+    pub fn new(
+        config: AtlasScientificConfig,
+        drivers: HashMap<AquariumSignal, Box<dyn AtlasScientificDriver>>,
+    ) -> AtlasScientific {
+        let measurement_interval = Duration::from_millis(config.measurement_interval_millis);
+
+        AtlasScientific {
             config,
             lock_error_channel_receive_termination: false,
             lock_warn_inapplicable_command_signal_handler: false,
             lock_error_channel_send_i2c_interface: false,
-
             last_measurement_instant: Instant::now(),
             measurement_interval,
-
             drivers,
-
             lock_error_driver_not_found: HashMap::new(),
-        })
+        }
     }
 
     /// Atomically writes a sensor measurement result to the appropriate shared mutex.
@@ -662,7 +674,8 @@ pub mod tests {
             stimuli_i2c_response_conductivity.clone(),
         );
 
-        let mut atlas_scientific = AtlasScientific::new(config.atlas_scientific).unwrap();
+        let drivers = AtlasScientific::create_drivers(&config.atlas_scientific).unwrap();
+        let mut atlas_scientific = AtlasScientific::new(config.atlas_scientific, drivers);
 
         let mut channels = Channels::new_for_test();
 
@@ -1015,7 +1028,7 @@ pub mod tests {
     }
 
     #[test]
-    // Test case checks if AtlasScientific::new returns an error if the configuration contains invalid data.
+    // Test case checks if AtlasScientific::create_drivers returns an error if the configuration contains invalid data.
     fn test_new_with_invalid_configuration() {
         let mut config: ConfigData =
             read_config_file("/config/aquarium_control_test_generic.toml".to_string()).unwrap();
@@ -1027,7 +1040,7 @@ pub mod tests {
         config.atlas_scientific.sensor_type_conductivity =
             atlas_scientific_constants::SENSOR_TYPE_OEM.to_string();
 
-        let result = AtlasScientific::new(config.atlas_scientific);
+        let result = AtlasScientific::create_drivers(&config.atlas_scientific);
 
         assert!(result.is_err());
         if let Err(AtlasScientificError::InvalidSensorType {
@@ -1052,7 +1065,7 @@ pub mod tests {
         config.atlas_scientific.sensor_type_conductivity =
             atlas_scientific_constants::SENSOR_TYPE_OEM.to_string();
 
-        let result = AtlasScientific::new(config.atlas_scientific);
+        let result = AtlasScientific::create_drivers(&config.atlas_scientific);
 
         assert!(result.is_err());
         if let Err(AtlasScientificError::InvalidSensorType {
@@ -1077,7 +1090,7 @@ pub mod tests {
             atlas_scientific_constants::SENSOR_TYPE_OEM.to_string();
         config.atlas_scientific.sensor_type_conductivity = "invalid_type".to_string();
 
-        let result = AtlasScientific::new(config.atlas_scientific);
+        let result = AtlasScientific::create_drivers(&config.atlas_scientific);
 
         assert!(result.is_err());
         if let Err(AtlasScientificError::InvalidSensorType {

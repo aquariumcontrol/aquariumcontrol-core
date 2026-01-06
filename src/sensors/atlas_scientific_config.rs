@@ -81,11 +81,14 @@ pub struct AtlasScientificConfig {
     pub measurement_interval_millis: u64,
 
     /// sensor type (oem or ezo) for temperature
+    #[cfg(any(all(feature = "target_hw", target_os = "linux"), test))]
     pub sensor_type_temperature: String,
 
     /// sensor type (oem or ezo) for pH
+    #[cfg(any(all(feature = "target_hw", target_os = "linux"), test))]
     pub sensor_type_ph: String,
 
     /// sensor type (oem or ezo) for conductivity
+    #[cfg(any(all(feature = "target_hw", target_os = "linux"), test))]
     pub sensor_type_conductivity: String,
 }

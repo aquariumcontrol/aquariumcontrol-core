@@ -1,14 +1,36 @@
+/* Copyright 2024 Uwe Martin
+
+Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the “Software”), to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+*/
+
+#[cfg(any(all(feature = "target_hw", target_os = "linux"), test))]
 use crate::launch::channels::AquaChannelError;
+#[cfg(any(all(feature = "target_hw", target_os = "linux"), test))]
 use crate::sensors::atlas_scientific::AtlasScientific;
+#[cfg(any(all(feature = "target_hw", target_os = "linux"), test))]
 use crate::sensors::atlas_scientific::{AtlasScientificResult, AtlasScientificResultData};
+#[cfg(any(all(feature = "target_hw", target_os = "linux"), test))]
 use crate::sensors::atlas_scientific_channels::AtlasScientificChannels;
+#[cfg(any(all(feature = "target_hw", target_os = "linux"), test))]
 use crate::sensors::atlas_scientific_driver::AtlasScientificDriver;
+#[cfg(any(all(feature = "target_hw", target_os = "linux"), test))]
 use crate::sensors::atlas_scientific_error::AtlasScientificError;
+#[cfg(any(all(feature = "target_hw", target_os = "linux"), test))]
 use crate::sensors::i2c_interface::I2cRequest;
+#[cfg(any(all(feature = "target_hw", target_os = "linux"), test))]
 use crate::utilities::channel_content::AquariumSignal;
+#[cfg(any(all(feature = "target_hw", target_os = "linux"), test))]
 use crate::utilities::check_mutex_access_duration::CheckMutexAccessDurationTrait;
+#[cfg(any(all(feature = "target_hw", target_os = "linux"), test))]
 use std::sync::{Arc, Mutex};
-use std::time::{Duration, Instant};
+#[cfg(any(all(feature = "target_hw", target_os = "linux"), test))]
+use std::time::Duration;
+#[cfg(any(all(feature = "target_hw", target_os = "linux"), test))]
+use std::time::Instant;
 
 #[allow(dead_code)]
 /// numeric values used in communication with Atlas Scientific sensor units
@@ -56,6 +78,7 @@ pub(crate) mod atlas_scientific_oem_constants {
     pub const SCALE_FACTOR_CONDUCTIVITY: f32 = 1000.0;
 }
 
+#[cfg(any(all(feature = "target_hw", target_os = "linux"), test))]
 #[derive(Debug)]
 pub struct AtlasScientificOem {
     pub i2c_address: u16,
@@ -90,6 +113,7 @@ pub struct AtlasScientificOem {
     pub max_mutex_access_duration: Duration,
 }
 
+#[cfg(any(all(feature = "target_hw", target_os = "linux"), test))]
 impl AtlasScientificOem {
     pub fn new(
         i2c_address: u16,
@@ -143,68 +167,9 @@ impl AtlasScientificOem {
 
         Ok(AtlasScientificResultData::new(value_f32))
     }
-
-    pub fn check_oem_device_type(
-        &self,
-        atlas_scientific_channels: &mut AtlasScientificChannels,
-        signal: AquariumSignal,
-    ) -> Result<(), AtlasScientificError> {
-        let command = vec![atlas_scientific_oem_constants::REG_TYPE];
-        let request = I2cRequest::new(self.i2c_address, &command, self.sleep_time_millis, 1)
-            .map_err(|e| AtlasScientificError::SignalRequestCreationFailure {
-                location: module_path!().to_string(),
-                source: e,
-            })?;
-
-        atlas_scientific_channels
-            .tx_atlas_scientific_to_i2c_interface
-            .send(request)
-            .map_err(
-                |e| AtlasScientificError::SendingRequestToI2cInterfaceFailed {
-                    location: module_path!().to_string(),
-                    source: e,
-                },
-            )?;
-
-        let response = atlas_scientific_channels
-            .rx_atlas_scientific_from_i2c_interface
-            .recv()
-            .map_err(|_| AtlasScientificError::ChannelIsDisconnected {
-                location: "AtlasScientificOem::receive_response".to_string(),
-                source: AquaChannelError::Disconnected,
-            })?;
-
-        match response {
-            Ok(i2c_response) => {
-                if i2c_response.length != 1 {
-                    return Err(AtlasScientificError::ResponseTooLong {
-                        location: module_path!().to_string(),
-                        signal: AquariumSignal::Conductivity,
-                        expected_length: 1,
-                        actual_length: i2c_response.length,
-                    });
-                }
-                if i2c_response.read_buf[0] != self.device_type {
-                    return Err(AtlasScientificError::InvalidDeviceType {
-                        location: module_path!().to_string(),
-                        expected_value: self.device_type,
-                        actual_value: i2c_response.read_buf[0],
-                    });
-                }
-                #[cfg(test)]
-                println!("Atlas Scientific OEM sensor type {} recognized.", signal);
-
-                Ok(())
-            }
-            Err(i2c_error) => Err(AtlasScientificError::I2cCommunicationFailure {
-                location: module_path!().to_string(),
-                signal,
-                source: i2c_error,
-            }),
-        }
-    }
 }
 
+#[cfg(any(all(feature = "target_hw", target_os = "linux"), test))]
 impl AtlasScientificDriver for AtlasScientificOem {
     fn send_request_to_i2c_interface(
         &self,
@@ -297,6 +262,67 @@ impl AtlasScientificDriver for AtlasScientificOem {
         }
     }
 
+    #[cfg(any(all(target_os = "linux", feature = "target_hw"), test))]
+    fn check_device_type(
+        &self,
+        atlas_scientific_channels: &mut AtlasScientificChannels,
+        signal: AquariumSignal,
+    ) -> Result<(), AtlasScientificError> {
+        let command = vec![atlas_scientific_oem_constants::REG_TYPE];
+        let request = I2cRequest::new(self.i2c_address, &command, self.sleep_time_millis, 1)
+            .map_err(|e| AtlasScientificError::SignalRequestCreationFailure {
+                location: module_path!().to_string(),
+                source: e,
+            })?;
+
+        atlas_scientific_channels
+            .tx_atlas_scientific_to_i2c_interface
+            .send(request)
+            .map_err(
+                |e| AtlasScientificError::SendingRequestToI2cInterfaceFailed {
+                    location: module_path!().to_string(),
+                    source: e,
+                },
+            )?;
+
+        let response = atlas_scientific_channels
+            .rx_atlas_scientific_from_i2c_interface
+            .recv()
+            .map_err(|_| AtlasScientificError::ChannelIsDisconnected {
+                location: "AtlasScientificOem::receive_response".to_string(),
+                source: AquaChannelError::Disconnected,
+            })?;
+
+        match response {
+            Ok(i2c_response) => {
+                if i2c_response.length != 1 {
+                    return Err(AtlasScientificError::ResponseTooLong {
+                        location: module_path!().to_string(),
+                        signal: AquariumSignal::Conductivity,
+                        expected_length: 1,
+                        actual_length: i2c_response.length,
+                    });
+                }
+                if i2c_response.read_buf[0] != self.device_type {
+                    return Err(AtlasScientificError::InvalidDeviceType {
+                        location: module_path!().to_string(),
+                        expected_value: self.device_type,
+                        actual_value: i2c_response.read_buf[0],
+                    });
+                }
+                #[cfg(test)]
+                println!("Atlas Scientific OEM sensor type {} recognized.", signal);
+
+                Ok(())
+            }
+            Err(i2c_error) => Err(AtlasScientificError::I2cCommunicationFailure {
+                location: module_path!().to_string(),
+                signal,
+                source: i2c_error,
+            }),
+        }
+    }
+
     #[cfg(test)]
     fn get_mutex_access_duration_exceeded(&self, signal: &AquariumSignal) -> bool {
         match signal {
@@ -313,12 +339,12 @@ mod tests {
     use super::*;
     use crate::launch::channels::{AquaSender, Channels};
     use crate::sensors::atlas_scientific::atlas_scientific_constants;
+    #[cfg(all(target_os = "linux", feature = "target_hw"))]
+    use crate::sensors::i2c_interface::I2cInterface;
     use crate::sensors::i2c_interface::{I2cResponse, I2cResult};
     use crate::utilities::config::{read_config_file, ConfigData};
     use std::collections::HashMap;
-    #[cfg(all(target_os = "linux", feature = "target_hw"))]
-    use crate::sensors::i2c_interface::I2cInterface;
-    
+
     /// Helper function to set up a standard test environment for receive tests.
     fn setup_receive_test() -> (
         HashMap<AquariumSignal, AtlasScientificOem>,
@@ -680,8 +706,9 @@ mod tests {
 
         let config: ConfigData =
             read_config_file("/config/aquarium_control_test_generic.toml".to_string()).unwrap();
-        let i2c_config = 
-            read_config_file("/config/aquarium_control_test_generic.toml".to_string()).unwrap().i2c_interface;
+        let i2c_config = read_config_file("/config/aquarium_control_test_generic.toml".to_string())
+            .unwrap()
+            .i2c_interface;
 
         // Create channels for communication
         let mut channels = Channels::new_for_test();
@@ -712,7 +739,7 @@ mod tests {
 
         println!("------------------------------------------");
         println!("Checking temperature sensor device type...");
-        match driver_temp.check_oem_device_type(
+        match driver_temp.check_device_type(
             &mut channels.atlas_scientific,
             AquariumSignal::WaterTemperature,
         ) {
@@ -733,7 +760,7 @@ mod tests {
 
         println!("------------------------------------------");
         println!("Checking pH sensor device type...");
-        match driver_ph.check_oem_device_type(&mut channels.atlas_scientific, AquariumSignal::pH) {
+        match driver_ph.check_device_type(&mut channels.atlas_scientific, AquariumSignal::pH) {
             Ok(_) => println!("pH sensor: OK"),
             Err(e) => println!("pH sensor: FAILED - {:?}", e),
         }
@@ -754,7 +781,7 @@ mod tests {
         println!("------------------------------------------");
         println!("Checking conductivity sensor device type...");
         match driver_cond
-            .check_oem_device_type(&mut channels.atlas_scientific, AquariumSignal::Conductivity)
+            .check_device_type(&mut channels.atlas_scientific, AquariumSignal::Conductivity)
         {
             Ok(_) => println!("Conductivity sensor: OK"),
             Err(e) => println!("Conductivity sensor: FAILED - {:?}", e),

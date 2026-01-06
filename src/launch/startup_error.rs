@@ -241,4 +241,12 @@ pub enum StartupError {
         #[source]
         source: AtlasScientificError,
     },
+
+    /// AtlasScientific sensor type missmatch
+    #[cfg(all(feature = "target_hw", target_os = "linux"))]
+    #[error("AtlasScientific sensors not recognized.")]
+    AtlasScientificSensorTypeMismatch {
+        #[source]
+        source: AtlasScientificError,
+    },
 }

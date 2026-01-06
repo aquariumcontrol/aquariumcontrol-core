@@ -78,6 +78,7 @@ pub struct AtlasScientificEzo {
 }
 
 impl AtlasScientificEzo {
+    #[cfg(any(all(feature = "target_hw", target_os = "linux"), test))]
     pub fn new(
         i2c_address: u16,
         sleep_time_millis: u64,
@@ -385,6 +386,16 @@ impl AtlasScientificDriver for AtlasScientificEzo {
         result
     }
 
+    #[cfg(any(all(target_os = "linux", feature = "target_hw"), test))]
+    fn check_device_type(
+        &self,
+        _atlas_scientific_channels: &mut AtlasScientificChannels,
+        _signal: AquariumSignal,
+    ) -> Result<(), AtlasScientificError> {
+        // do nothing - implementation is only required for EZO type sensor
+        Ok(())
+    }
+
     #[cfg(test)]
     fn get_mutex_access_duration_exceeded(&self, signal: &AquariumSignal) -> bool {
         match signal {
@@ -415,10 +426,13 @@ pub mod tests {
     use assert_float_eq::*;
     use spin_sleep::SpinSleeper;
     use std::collections::HashMap;
+
+    #[cfg(all(target_os = "linux", feature = "target_hw"))]
+    use std::io;
+
     use std::sync::{Arc, Mutex};
     use std::thread;
     use std::time::Duration;
-    use std::io;
 
     #[test]
     // happy case for evaluating response from pH sensor unit

@@ -47,6 +47,7 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 //!     the implementing module, used for contextual logging.
 
 use crate::sensors::atlas_scientific_ezo::AtlasScientificEzo;
+#[cfg(any(all(feature = "target_hw", target_os = "linux"), test))]
 use crate::sensors::atlas_scientific_oem::AtlasScientificOem;
 use crate::sensors::dht::Dht;
 use crate::sensors::ds18b20::Ds18b20;
@@ -408,6 +409,7 @@ impl CheckMutexAccessDurationTrait for AtlasScientificEzo {
     }
 }
 
+#[cfg(any(all(feature = "target_hw", target_os = "linux"), test))]
 impl CheckMutexAccessDurationTrait for AtlasScientificOem {
     fn get_warn_lock(&self, key_opt: &Option<&AquariumSignal>) -> bool {
         if let Some(key) = key_opt {

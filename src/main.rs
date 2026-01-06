@@ -128,6 +128,10 @@ use crate::utilities::config_file_definition_error::ConfigFileDefinitionError;
 use crate::utilities::logger::{log_error_chain, setup_logger};
 use crate::utilities::logger_config::LoggerConfig;
 use crate::utilities::publish_pid::PublishPid;
+
+#[cfg(all(feature = "target_hw", target_os = "linux"))]
+use crate::utilities::signal_handler;
+
 use crate::utilities::signal_handler::handle_signals;
 use crate::utilities::version_information::{VersionInformation, VersionInformationError};
 use crate::watchmen::monitors::Monitors;
@@ -138,6 +142,9 @@ use crate::water::water_injection::WaterInjection;
 use spin_sleep::SpinSleeper;
 pub use std::sync::{atomic::AtomicBool, Arc, Mutex};
 use std::{env, panic, path::Path, thread::scope, time::Duration};
+
+#[cfg(all(feature = "target_hw", target_os = "linux"))]
+use crate::utilities::channel_content::InternalCommand;
 
 cfg_if::cfg_if! {
     if #[cfg(all(target_os = "linux", feature = "target_hw"))] {
@@ -837,8 +844,12 @@ fn run() -> Result<(), StartupError> {
     //**********************************************************************************************
 
     #[cfg(all(target_os = "linux", feature = "target_hw"))]
-    let mut atlas_scientific = AtlasScientific::new(config.atlas_scientific)
-        .map_err(|e| StartupError::AtlasScientificSetupFailure { source: e })?;
+    {
+        let atlas_scientific_drivers = AtlasScientific::create_drivers(&config.atlas_scientific)
+            .map_err(|e| StartupError::AtlasScientificSetupFailure { source: e })?;
+        let mut atlas_scientific =
+            AtlasScientific::new(config.atlas_scientific, atlas_scientific_drivers);
+    }
 
     let mut sensor_manager = SensorManager::new(config.sensor_manager)
         .map_err(|e| StartupError::SensorManagerSetupFailure { source: e })?;
@@ -912,6 +923,35 @@ fn run() -> Result<(), StartupError> {
     let tcp_communication_thread_started = execution_config.tcp_communication;
     let relay_manager_thread_started = execution_config.relay_manager;
     scope(|scope| {
+        // spawn thread for sensor communication first to allow checks
+        #[cfg(all(target_os = "linux", feature = "target_hw"))]
+        if !use_simulator && execution_config.i2c_interface {
+            scope.spawn(move || {
+                i2c_interface.execute(&mut channels.i2c_interface);
+                #[cfg(all(target_os = "linux", feature = "target_hw", feature = "debug_channels"))]
+                debug!(target: module_path!(), "{0}", channels.i2c_interface);
+                #[cfg(feature = "debug_main")]
+                debug!(target: module_path!(), "i2c_interface terminated.");
+            });
+        }
+
+        #[cfg(all(target_os = "linux", feature = "target_hw"))]
+        if !use_simulator && config.atlas_scientific.active {
+            for (signal, driver) in atlas_scientific_drivers {
+                let result = driver.check_driver_type(channels.atlas_scientific, &signal);
+                if let e = Err(result) {
+                    // terminate i2c thread
+                    signal_handler::send_command(
+                        InternalCommand::Quit,
+                        Some(&mut signal_handler_channels.tx_signal_handler_to_atlas_scientific),
+                        Some(&mut signal_handler_channels.rx_signal_handler_from_atlas_scientific),
+                        "atlas_scientific",
+                    );
+                    return Err(StartupError::AtlasScientificSensorTypeMismatch(e));
+                }
+            }
+        }
+
         // open tcp connection only if configuration requires use of simulator instead of HW
         if use_simulator && tcp_communication_thread_started {
             scope.spawn(move || {
@@ -980,17 +1020,6 @@ fn run() -> Result<(), StartupError> {
                 debug!(target: module_path!(), "{0}", channels.schedule_check);
                 #[cfg(feature = "debug_main")]
                 debug!(target: module_path!(), "Schedule checker terminated.");
-            });
-        }
-
-        #[cfg(all(target_os = "linux", feature = "target_hw"))]
-        if !use_simulator && execution_config.i2c_interface {
-            scope.spawn(move || {
-                i2c_interface.execute(&mut channels.i2c_interface);
-                #[cfg(all(target_os = "linux", feature = "target_hw", feature = "debug_channels"))]
-                debug!(target: module_path!(), "{0}", channels.i2c_interface);
-                #[cfg(feature = "debug_main")]
-                debug!(target: module_path!(), "i2c_interface terminated.");
             });
         }
 
