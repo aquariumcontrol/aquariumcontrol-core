@@ -387,7 +387,7 @@ impl AtlasScientificDriver for AtlasScientificEzo {
     }
 
     #[cfg(any(all(target_os = "linux", feature = "target_hw"), test))]
-    fn check_device_type(
+    fn device_init(
         &self,
         _atlas_scientific_channels: &mut AtlasScientificChannels,
         _signal: &AquariumSignal,

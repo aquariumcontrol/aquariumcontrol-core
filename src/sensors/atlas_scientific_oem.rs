@@ -47,6 +47,9 @@ pub(crate) mod atlas_scientific_oem_constants {
     /// Conductivity device type code
     pub const REG_TYPE_CONDUCTIVITY: u8 = 0x04;
 
+    /// Register for waking up the sensor
+    pub const REG_WAKEUP: u8 = 0x06;
+
     /// Register for the firmware version (identical across all types)
     pub const REG_FIRMWARE_VERSION: u8 = 0x01;
 
@@ -263,13 +266,36 @@ impl AtlasScientificDriver for AtlasScientificOem {
     }
 
     #[cfg(any(all(target_os = "linux", feature = "target_hw"), test))]
-    fn check_device_type(
+    fn device_init(
         &self,
         atlas_scientific_channels: &mut AtlasScientificChannels,
         signal: &AquariumSignal,
     ) -> Result<(), AtlasScientificError> {
-        let command = vec![atlas_scientific_oem_constants::REG_TYPE];
-        let request = I2cRequest::new(self.i2c_address, &command, self.sleep_time_millis, 1)
+        // Step 1: Wake up the sensor - write 0x01 to the register
+        let wake_command = vec![atlas_scientific_oem_constants::REG_WAKEUP, 0x01];
+
+        // We use a longer sleep here (e.g. 1000ms) to ensure it wakes up,
+        let wake_request = I2cRequest::new(
+            self.i2c_address,
+            &wake_command,
+            1000, // 1-second delay for wakeup
+            0 // We don't expect a response for the write
+        ).map_err(|e| AtlasScientificError::SignalRequestCreationFailure {
+            location: module_path!().to_string(),
+            source: e,
+        })?;
+
+        atlas_scientific_channels
+            .tx_atlas_scientific_to_i2c_interface
+            .send(wake_request)
+            .map_err(|e| AtlasScientificError::SendingRequestToI2cInterfaceFailed {
+                location: module_path!().to_string(),
+                source: e,
+            })?;
+
+        // Step 2: Check the sensor type
+        let command_inform_type = vec![atlas_scientific_oem_constants::REG_TYPE];
+        let request = I2cRequest::new(self.i2c_address, &command_inform_type, self.sleep_time_millis, 1)
             .map_err(|e| AtlasScientificError::SignalRequestCreationFailure {
                 location: module_path!().to_string(),
                 source: e,
@@ -739,7 +765,7 @@ mod tests {
 
         println!("------------------------------------------");
         println!("Checking temperature sensor device type...");
-        match driver_temp.check_device_type(
+        match driver_temp.device_init(
             &mut channels.atlas_scientific,
             AquariumSignal::WaterTemperature,
         ) {
@@ -760,7 +786,7 @@ mod tests {
 
         println!("------------------------------------------");
         println!("Checking pH sensor device type...");
-        match driver_ph.check_device_type(&mut channels.atlas_scientific, AquariumSignal::pH) {
+        match driver_ph.device_init(&mut channels.atlas_scientific, AquariumSignal::pH) {
             Ok(_) => println!("pH sensor: OK"),
             Err(e) => println!("pH sensor: FAILED - {:?}", e),
         }
@@ -781,7 +807,7 @@ mod tests {
         println!("------------------------------------------");
         println!("Checking conductivity sensor device type...");
         match driver_cond
-            .check_device_type(&mut channels.atlas_scientific, AquariumSignal::Conductivity)
+            .device_init(&mut channels.atlas_scientific, AquariumSignal::Conductivity)
         {
             Ok(_) => println!("Conductivity sensor: OK"),
             Err(e) => println!("Conductivity sensor: FAILED - {:?}", e),

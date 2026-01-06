@@ -391,7 +391,7 @@ impl AtlasScientific {
         for (signal, driver) in &self.drivers {
             // We verify the driver.
             // Note: check_device_type is defined in the Trait and takes &self
-            driver.check_device_type(channels, signal)?;
+            driver.device_init(channels, signal)?;
         }
         Ok(())
     }

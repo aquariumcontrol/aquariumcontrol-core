@@ -32,7 +32,7 @@ pub trait AtlasScientificDriver: Send + Sync + Debug {
     ) -> AtlasScientificResult;
 
     #[cfg(any(all(target_os = "linux", feature = "target_hw"), test))]
-    fn check_device_type(
+    fn device_init(
         &self,
         atlas_scientific_channels: &mut AtlasScientificChannels,
         signal: &AquariumSignal,
