@@ -741,7 +741,7 @@ mod tests {
         println!("Checking temperature sensor device type...");
         match driver_temp.check_device_type(
             &mut channels.atlas_scientific,
-            AquariumSignal::WaterTemperature,
+            &AquariumSignal::WaterTemperature,
         ) {
             Ok(_) => println!("Temperature sensor: OK"),
             Err(e) => println!("Temperature sensor: FAILED - {:?}", e),
@@ -760,7 +760,7 @@ mod tests {
 
         println!("------------------------------------------");
         println!("Checking pH sensor device type...");
-        match driver_ph.check_device_type(&mut channels.atlas_scientific, AquariumSignal::pH) {
+        match driver_ph.check_device_type(&mut channels.atlas_scientific, &AquariumSignal::pH) {
             Ok(_) => println!("pH sensor: OK"),
             Err(e) => println!("pH sensor: FAILED - {:?}", e),
         }
@@ -780,9 +780,10 @@ mod tests {
 
         println!("------------------------------------------");
         println!("Checking conductivity sensor device type...");
-        match driver_cond
-            .check_device_type(&mut channels.atlas_scientific, AquariumSignal::Conductivity)
-        {
+        match driver_cond.check_device_type(
+            &mut channels.atlas_scientific,
+            &AquariumSignal::Conductivity,
+        ) {
             Ok(_) => println!("Conductivity sensor: OK"),
             Err(e) => println!("Conductivity sensor: FAILED - {:?}", e),
         }
