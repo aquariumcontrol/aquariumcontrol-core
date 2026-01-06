@@ -192,7 +192,7 @@ impl AtlasScientificOem {
                     });
                 }
                 #[cfg(test)]
-                println!("Atlas Scientific OEM sensor typ {} recognize.", signal);
+                println!("Atlas Scientific OEM sensor type {} recognized.", signal);
 
                 Ok(())
             }
@@ -680,15 +680,15 @@ mod tests {
 
         let config: ConfigData =
             read_config_file("/config/aquarium_control_test_generic.toml".to_string()).unwrap();
+        let i2c_config = 
+            read_config_file("/config/aquarium_control_test_generic.toml".to_string()).unwrap().i2c_interface;
 
         // Create channels for communication
         let mut channels = Channels::new_for_test();
 
-        // Clone config and channels for the I2C thread
-        let i2c_config = config.i2c_interface.clone();
         let mut i2c_interface_channels = channels.i2c_interface;
         // Keep a sender to stop the thread later
-        let tx_to_i2c = channels
+        let mut tx_to_i2c = channels
             .signal_handler
             .tx_signal_handler_to_i2c_interface
             .clone();
@@ -710,13 +710,14 @@ mod tests {
             atlas_scientific_oem_constants::RESPONSE_LENGTH_TEMPERATURE,
         );
 
-        println!("Checking Temperature Sensor Device Type...");
+        println!("------------------------------------------");
+        println!("Checking temperature sensor device type...");
         match driver_temp.check_oem_device_type(
             &mut channels.atlas_scientific,
             AquariumSignal::WaterTemperature,
         ) {
-            Ok(_) => println!("Temperature Sensor: OK"),
-            Err(e) => println!("Temperature Sensor: FAILED - {:?}", e),
+            Ok(_) => println!("Temperature sensor: OK"),
+            Err(e) => println!("Temperature sensor: FAILED - {:?}", e),
         }
 
         // --- pH Sensor ---
@@ -730,10 +731,11 @@ mod tests {
             atlas_scientific_oem_constants::RESPONSE_LENGTH_PH,
         );
 
-        println!("Checking pH Sensor Device Type...");
+        println!("------------------------------------------");
+        println!("Checking pH sensor device type...");
         match driver_ph.check_oem_device_type(&mut channels.atlas_scientific, AquariumSignal::pH) {
-            Ok(_) => println!("pH Sensor: OK"),
-            Err(e) => println!("pH Sensor: FAILED - {:?}", e),
+            Ok(_) => println!("pH sensor: OK"),
+            Err(e) => println!("pH sensor: FAILED - {:?}", e),
         }
 
         // --- Conductivity Sensor ---
@@ -749,16 +751,18 @@ mod tests {
             atlas_scientific_oem_constants::RESPONSE_LENGTH_CONDUCTIVITY,
         );
 
-        println!("Checking Conductivity Sensor Device Type...");
+        println!("------------------------------------------");
+        println!("Checking conductivity sensor device type...");
         match driver_cond
             .check_oem_device_type(&mut channels.atlas_scientific, AquariumSignal::Conductivity)
         {
-            Ok(_) => println!("Conductivity Sensor: OK"),
-            Err(e) => println!("Conductivity Sensor: FAILED - {:?}", e),
+            Ok(_) => println!("Conductivity sensor: OK"),
+            Err(e) => println!("Conductivity sensor: FAILED - {:?}", e),
         }
 
         // Cleanup: Stop the I2C thread
         tx_to_i2c.send(InternalCommand::Quit).unwrap();
         i2c_thread.join().unwrap();
+        println!("------------------------------------------");
     }
 }
