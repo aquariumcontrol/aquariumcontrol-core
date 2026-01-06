@@ -512,8 +512,10 @@ fn run() -> Result<(), StartupError> {
     let max_rows_refill = config.sql_interface.max_rows_refill;
     let max_rows_balling_dosing_log = config.sql_interface.max_rows_balling_dosing_log;
     let max_rows_feed_log = config.sql_interface.max_rows_feed_log;
+
+    #[cfg(all(target_os = "linux", feature = "target_hw"))]
     let atlas_scientific_active = config.atlas_scientific.active;
-    
+
     // instantiate driver for RGB LED
     #[cfg(all(target_os = "linux", feature = "target_hw"))]
     if config.ws2812b.active {
@@ -937,26 +939,23 @@ fn run() -> Result<(), StartupError> {
 
         #[cfg(all(target_os = "linux", feature = "target_hw"))]
         if !use_simulator && atlas_scientific_active {
-            for (signal, driver) in atlas_scientific_drivers {
-                let result = driver.check_device_type(&mut channels.atlas_scientific, signal);
-                if let Err(e) = result {
-                    // terminate i2c thread
-                    signal_handler::send_command(
-                        InternalCommand::Quit,
-                        Some(
-                            &mut channels
-                                .signal_handler
-                                .tx_signal_handler_to_atlas_scientific,
-                        ),
-                        Some(
-                            &mut channels
-                                .signal_handler
-                                .rx_signal_handler_from_atlas_scientific,
-                        ),
-                        "atlas_scientific",
-                    );
-                    return Err(StartupError::AtlasScientificSensorTypeMismatch { source: e });
-                }
+            let result = atlas_scientific.verify_hardware(&mut channels.atlas_scientific);
+            if let Err(e) = result {
+                signal_handler::send_command(
+                    InternalCommand::Quit,
+                    Some(
+                        &mut channels
+                            .signal_handler
+                            .tx_signal_handler_to_atlas_scientific,
+                    ),
+                    Some(
+                        &mut channels
+                            .signal_handler
+                            .rx_signal_handler_from_atlas_scientific,
+                    ),
+                    "atlas_scientific",
+                );
+                return Err(StartupError::AtlasScientificSensorTypeMismatch { source: e });
             }
         }
 
@@ -1303,11 +1302,8 @@ fn run() -> Result<(), StartupError> {
                 debug!(target: module_path!(), "Ds18b20 terminated");
             });
         }
-
         Ok(())
-    });
-
-    Ok(())
+    })
 }
 
 /// The main function is a simple error handler.

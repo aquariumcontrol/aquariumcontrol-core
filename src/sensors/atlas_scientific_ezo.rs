@@ -390,7 +390,7 @@ impl AtlasScientificDriver for AtlasScientificEzo {
     fn check_device_type(
         &self,
         _atlas_scientific_channels: &mut AtlasScientificChannels,
-        _signal: AquariumSignal,
+        _signal: &AquariumSignal,
     ) -> Result<(), AtlasScientificError> {
         // do nothing - implementation is only required for EZO type sensor
         Ok(())

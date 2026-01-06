@@ -381,6 +381,21 @@ impl AtlasScientific {
         }
     }
 
+    /// Iterates over all registered drivers and verifies their device type.
+    /// This requires the I2cInterface thread to be running.
+    #[cfg(any(all(target_os = "linux", feature = "target_hw"), test))]
+    pub fn verify_hardware(
+        &self,
+        channels: &mut AtlasScientificChannels,
+    ) -> Result<(), AtlasScientificError> {
+        for (signal, driver) in &self.drivers {
+            // We verify the driver.
+            // Note: check_device_type is defined in the Trait and takes &self
+            driver.check_device_type(channels, signal)?;
+        }
+        Ok(())
+    }
+
     /// Executes the main control loop for the Atlas Scientific sensor module.
     ///
     /// This function runs continuously, managing the periodic and sequential measurement of

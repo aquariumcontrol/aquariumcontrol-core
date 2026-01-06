@@ -35,7 +35,7 @@ pub trait AtlasScientificDriver: Send + Sync + Debug {
     fn check_device_type(
         &self,
         atlas_scientific_channels: &mut AtlasScientificChannels,
-        signal: AquariumSignal,
+        signal: &AquariumSignal,
     ) -> Result<(), AtlasScientificError>;
 
     #[cfg(test)]

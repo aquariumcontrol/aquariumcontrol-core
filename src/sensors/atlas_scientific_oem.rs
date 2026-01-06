@@ -266,7 +266,7 @@ impl AtlasScientificDriver for AtlasScientificOem {
     fn check_device_type(
         &self,
         atlas_scientific_channels: &mut AtlasScientificChannels,
-        signal: AquariumSignal,
+        signal: &AquariumSignal,
     ) -> Result<(), AtlasScientificError> {
         let command = vec![atlas_scientific_oem_constants::REG_TYPE];
         let request = I2cRequest::new(self.i2c_address, &command, self.sleep_time_millis, 1)
@@ -317,7 +317,7 @@ impl AtlasScientificDriver for AtlasScientificOem {
             }
             Err(i2c_error) => Err(AtlasScientificError::I2cCommunicationFailure {
                 location: module_path!().to_string(),
-                signal,
+                signal: signal.clone(),
                 source: i2c_error,
             }),
         }

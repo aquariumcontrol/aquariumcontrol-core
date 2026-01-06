@@ -71,7 +71,7 @@ use crate::launch::channels::AquaChannelError;
 use crate::sensors::i2c_error::I2cError;
 use crate::sensors::i2c_interface_config::I2cInterfaceConfig;
 
-#[cfg(not(test))]
+#[cfg(all(target_os = "linux", feature = "target_hw", not(test)))]
 use nix::unistd::gettid;
 
 cfg_if::cfg_if! {
