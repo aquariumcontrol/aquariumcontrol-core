@@ -95,7 +95,7 @@ use std::{sync::Arc, time::Duration};
 ///   for communication *from* the target thread, used to receive an acknowledgment.
 ///   If `None`, no acknowledgment is expected or waited for.
 /// * `thread_name` - The name of the target thread (for logging and debugging purposes).
-fn send_command(
+pub fn send_command(
     command: InternalCommand,
     tx_to_thread_opt: Option<&mut AquaSender<InternalCommand>>,
     rx_from_thread_opt: Option<&mut AquaReceiver<bool>>,
