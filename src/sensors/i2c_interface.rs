@@ -243,6 +243,14 @@ impl I2cResponse {
             length: len,
         }
     }
+    
+    pub fn empty() -> I2cResponse {
+        let read_buf = [0u8; MAX_I2C_RESPONSE_LENGTH];
+        I2cResponse {
+            read_buf,
+            length: 0
+        }
+    }
 }
 
 pub type I2cResult = Result<I2cResponse, I2cError>;
@@ -371,24 +379,29 @@ impl I2cInterface {
         // give the I2C bus participant time to process the request
         self.spin_sleeper.sleep(sleep_duration);
 
-        // Use a sub-slice of the provided buffer for the read operation.
-        let read_slice = &mut self.read_buffer[..i2c_request.expected_response_length];
+        if i2c_request.expected_response_length > 0 {
+            // Use a sub-slice of the provided buffer for the read operation.
+            let read_slice = &mut self.read_buffer[..i2c_request.expected_response_length];
 
-        let received_message_length =
-            self.i2c
-                .read(read_slice)
-                .map_err(|e| I2cError::InsufficientRead {
-                    location: module_path!().to_string(),
-                    source: e,
-                })?;
-        if received_message_length != i2c_request.expected_response_length {
-            Err(I2cError::IncorrectResponseLength(
-                module_path!().to_string(),
-                i2c_request.expected_response_length,
-                received_message_length,
-            ))
-        } else {
-            Ok(I2cResponse::new(read_slice))
+            let received_message_length =
+                self.i2c
+                    .read(read_slice)
+                    .map_err(|e| I2cError::InsufficientRead {
+                        location: module_path!().to_string(),
+                        source: e,
+                    })?;
+            if received_message_length != i2c_request.expected_response_length {
+                Err(I2cError::IncorrectResponseLength(
+                    module_path!().to_string(),
+                    i2c_request.expected_response_length,
+                    received_message_length,
+                ))
+            } else {
+                Ok(I2cResponse::new(read_slice))
+            }
+        }
+        else {
+            Ok(I2cResponse::empty())
         }
     }
 

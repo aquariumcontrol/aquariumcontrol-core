@@ -47,6 +47,9 @@ pub(crate) mod atlas_scientific_oem_constants {
     /// Conductivity device type code
     pub const DEVICE_TYPE_CONDUCTIVITY: u8 = 0x04;
 
+    // The OEM devices return 2 byte for this request
+    pub const DEVICE_TYPE_RESPONSE_LENGTH: usize = 2;
+    
     /// Register for waking up the sensor
     pub const REG_WAKEUP: u8 = 0x06;
 
@@ -71,10 +74,10 @@ pub(crate) mod atlas_scientific_oem_constants {
     /// The OEM conductivity sensor returns 4 bytes (MSB, High, Low, LSB)
     pub const RESPONSE_LENGTH_CONDUCTIVITY: usize = 4;
 
-    /// Scaling factor for temperature (Value / 100.0)
-    pub const SCALE_FACTOR_TEMPERATURE: f32 = 100.0;
+    /// Scaling factor for temperature (Value / 1000.0)
+    pub const SCALE_FACTOR_TEMPERATURE: f32 = 1000.0;
 
-    /// Scaling factor for pH (Value / 100.0)
+    /// Scaling factor for pH (Value / 1000.0)
     pub const SCALE_FACTOR_PH: f32 = 1000.0;
 
     /// Scaling factor for conductivity (Value / 100.0)
@@ -150,12 +153,13 @@ impl AtlasScientificOem {
     /// Helper to parse the binary response from the OEM sensor
     fn parse_oem_response(
         &self,
+        signal: &AquariumSignal,
         data: &[u8],
     ) -> Result<AtlasScientificResultData, AtlasScientificError> {
         if data.len() < self.response_length {
             return Err(AtlasScientificError::ResponseTooShort {
                 location: module_path!().to_string(),
-                signal: AquariumSignal::Conductivity,
+                signal: signal.clone(),
                 expected_length: self.response_length,
                 actual_length: data.len(),
             });
@@ -228,7 +232,7 @@ impl AtlasScientificDriver for AtlasScientificOem {
                     | AquariumSignal::WaterTemperature
                     | AquariumSignal::pH => {
                         let result_data =
-                            self.parse_oem_response(&i2c_response.read_buf[..i2c_response.length])?;
+                            self.parse_oem_response(signal, &i2c_response.read_buf[..i2c_response.length])?;
                         let instant_before_locking_mutex = Instant::now();
                         let result_data_clone = result_data.clone();
 
@@ -271,16 +275,17 @@ impl AtlasScientificDriver for AtlasScientificOem {
         atlas_scientific_channels: &mut AtlasScientificChannels,
         signal: &AquariumSignal,
     ) -> Result<(), AtlasScientificError> {
+        
         // Step 1: Wake up the sensor - write 0x01 to the register
         let wake_command = vec![atlas_scientific_oem_constants::REG_WAKEUP, 0x01];
 
-        // We use a longer sleep here (e.g. 1000ms) to ensure it wakes up,
         let wake_request = I2cRequest::new(
             self.i2c_address,
             &wake_command,
-            1000, // 1-second delay for wakeup
-            0 // We don't expect a response for the write
-        ).map_err(|e| AtlasScientificError::SignalRequestCreationFailure {
+            0,	  // no sleep time
+            0,    // We don't expect a response for the write
+        )
+        .map_err(|e| AtlasScientificError::SignalRequestCreationFailure {
             location: module_path!().to_string(),
             source: e,
         })?;
@@ -288,18 +293,34 @@ impl AtlasScientificDriver for AtlasScientificOem {
         atlas_scientific_channels
             .tx_atlas_scientific_to_i2c_interface
             .send(wake_request)
-            .map_err(|e| AtlasScientificError::SendingRequestToI2cInterfaceFailed {
-                location: module_path!().to_string(),
-                source: e,
-            })?;
+            .map_err(
+                |e| AtlasScientificError::SendingRequestToI2cInterfaceFailed {
+                    location: module_path!().to_string(),
+                    source: e,
+                },
+            )?;
 
+        let _response = atlas_scientific_channels
+            .rx_atlas_scientific_from_i2c_interface
+            .recv()
+            .map_err(|_| AtlasScientificError::ChannelIsDisconnected {
+                location: "AtlasScientificOem::receive_response".to_string(),
+                source: AquaChannelError::Disconnected,
+            })?;
+        // no evaluation of response content required for step 1
+        
         // Step 2: Check the sensor type
         let command_inform_type = vec![atlas_scientific_oem_constants::REG_DEVICE_TYPE];
-        let request = I2cRequest::new(self.i2c_address, &command_inform_type, self.sleep_time_millis, 1)
-            .map_err(|e| AtlasScientificError::SignalRequestCreationFailure {
-                location: module_path!().to_string(),
-                source: e,
-            })?;
+        let request = I2cRequest::new(
+            self.i2c_address,
+            &command_inform_type,
+            self.sleep_time_millis,
+            atlas_scientific_oem_constants::DEVICE_TYPE_RESPONSE_LENGTH,
+        )
+        .map_err(|e| AtlasScientificError::SignalRequestCreationFailure {
+            location: module_path!().to_string(),
+            source: e,
+        })?;
 
         atlas_scientific_channels
             .tx_atlas_scientific_to_i2c_interface
@@ -321,14 +342,28 @@ impl AtlasScientificDriver for AtlasScientificOem {
 
         match response {
             Ok(i2c_response) => {
-                if i2c_response.length != 1 {
+                if i2c_response.length > atlas_scientific_oem_constants::DEVICE_TYPE_RESPONSE_LENGTH {
+                    #[cfg(test)]
+                    println!("Firmware version = {}", i2c_response.read_buf[1]);
                     return Err(AtlasScientificError::ResponseTooLong {
                         location: module_path!().to_string(),
-                        signal: AquariumSignal::Conductivity,
+                        signal: signal.clone(),
                         expected_length: 1,
                         actual_length: i2c_response.length,
                     });
                 }
+                if i2c_response.length < atlas_scientific_oem_constants::DEVICE_TYPE_RESPONSE_LENGTH {
+                    return Err(AtlasScientificError::ResponseTooShort {
+                        location: module_path!().to_string(),
+                        signal: signal.clone(),
+                        expected_length: 1,
+                        actual_length: i2c_response.length,
+                    });
+                }
+                
+                #[cfg(test)]
+                println!("Firmware version = {}", i2c_response.read_buf[1]);
+                
                 if i2c_response.read_buf[0] != self.device_type {
                     return Err(AtlasScientificError::InvalidDeviceType {
                         location: module_path!().to_string(),
@@ -336,6 +371,7 @@ impl AtlasScientificDriver for AtlasScientificOem {
                         actual_value: i2c_response.read_buf[0],
                     });
                 }
+                
                 #[cfg(test)]
                 println!("Atlas Scientific OEM sensor type {} recognized.", signal);
 
@@ -363,19 +399,23 @@ impl AtlasScientificDriver for AtlasScientificOem {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::launch::channels::{AquaSender, Channels};
+    use crate::launch::channels::Channels;
     use crate::sensors::atlas_scientific::atlas_scientific_constants;
     #[cfg(all(target_os = "linux", feature = "target_hw"))]
-    use crate::sensors::i2c_interface::I2cInterface;
-    use crate::sensors::i2c_interface::{I2cResponse, I2cResult};
+    use crate::sensors::i2c_interface::I2cResponse;
+    #[cfg(all(target_os = "linux", feature = "target_hw"))]
+    use crate::sensors::i2c_interface_channels::I2cInterfaceChannels;
     use crate::utilities::config::{read_config_file, ConfigData};
+    #[cfg(all(target_os = "linux", feature = "target_hw"))]
+    use crate::utilities::signal_handler_channels::SignalHandlerChannels;
     use std::collections::HashMap;
 
     /// Helper function to set up a standard test environment for receive tests.
     fn setup_receive_test() -> (
         HashMap<AquariumSignal, AtlasScientificOem>,
         AtlasScientificChannels,
-        AquaSender<I2cResult>,
+        I2cInterfaceChannels,
+        SignalHandlerChannels,
         Arc<Mutex<AtlasScientificResultData>>,
         Arc<Mutex<AtlasScientificResultData>>,
         Arc<Mutex<AtlasScientificResultData>>,
@@ -432,7 +472,8 @@ mod tests {
         (
             drivers,
             channels.atlas_scientific,
-            channels.i2c_interface.tx_i2c_interface_to_atlas_scientific,
+            channels.i2c_interface,
+            channels.signal_handler,
             mutex_temp,
             mutex_ph,
             mutex_cond,
@@ -444,12 +485,15 @@ mod tests {
         let (
             mut drivers,
             mut atlas_scientific_channels,
-            mut tx_i2c_interface_to_atlas_scientific,
+            i2c_interface_channels,
+            _,
             mutex_temp,
             mutex_ph,
             mutex_cond,
         ) = setup_receive_test();
 
+        let mut tx_i2c_interface_to_atlas_scientific =
+            i2c_interface_channels.tx_i2c_interface_to_atlas_scientific;
         let driver = drivers.get_mut(&AquariumSignal::Conductivity).unwrap();
 
         // Mock Data: 1413 uS/cm. 1413 * 100 = 141.300.
@@ -491,12 +535,15 @@ mod tests {
         let (
             mut drivers,
             mut atlas_scientific_channels,
-            mut tx_i2c_interface_to_atlas_scientific,
+            i2c_interface_channels,
+            _,
             mutex_temp,
             mutex_ph,
             mutex_cond,
         ) = setup_receive_test();
 
+        let mut tx_i2c_interface_to_atlas_scientific =
+            i2c_interface_channels.tx_i2c_interface_to_atlas_scientific;
         let driver = drivers.get_mut(&AquariumSignal::pH).unwrap();
 
         let mut mock_data = [0u8; 4];
@@ -532,12 +579,15 @@ mod tests {
         let (
             mut drivers,
             mut atlas_scientific_channels,
-            mut tx_i2c_interface_to_atlas_scientific,
+            i2c_interface_channels,
+            _,
             mutex_temp,
             mutex_ph,
             mutex_cond,
         ) = setup_receive_test();
 
+        let mut tx_i2c_interface_to_atlas_scientific =
+            i2c_interface_channels.tx_i2c_interface_to_atlas_scientific;
         let driver = drivers.get_mut(&AquariumSignal::WaterTemperature).unwrap();
 
         // Mock Data: 25.432 C. 25.432 * 100 = 2543.2 -> 2543 (integer)
@@ -579,7 +629,8 @@ mod tests {
         let (
             mut drivers,
             mut atlas_scientific_channels,
-            mut tx_i2c_interface_to_atlas_scientific,
+            mut i2c_interface_channels,
+            _,
             mutex_temp,
             mutex_ph,
             mutex_cond,
@@ -588,7 +639,8 @@ mod tests {
         // Simulate sending a response that is too short (e.g., 3 byte instead of 4)
         let mock_data = [0u8; 3];
         let i2c_response = I2cResponse::new(&mock_data);
-        tx_i2c_interface_to_atlas_scientific
+        i2c_interface_channels
+            .tx_i2c_interface_to_atlas_scientific
             .send(Ok(i2c_response))
             .unwrap();
 
@@ -621,108 +673,108 @@ mod tests {
         }
     }
 
-/*
-    #[test]
-    #[cfg(all(target_os = "linux", feature = "target_hw"))]
-    #[ignore]
-    // read from real Atlas Scientific hardware (OEM) combined in one test case to avoid race conditions:
-    // - pH sensor
-    // - conductivity sensor
-    // - temperature
-    pub fn test_atlas_scientific_oem_read_sensors() {
-        let config: ConfigData =
-            read_config_file("/config/aquarium_control_test_generic.toml".to_string()).unwrap();
-        let mut i2c_interface = I2cInterface::new(config.i2c_interface).unwrap();
+    /*
+       #[test]
+       #[cfg(all(target_os = "linux", feature = "target_hw"))]
+       #[ignore]
+       // read from real Atlas Scientific hardware (OEM) combined in one test case to avoid race conditions:
+       // - pH sensor
+       // - conductivity sensor
+       // - temperature
+       pub fn test_atlas_scientific_oem_read_sensors() {
+           let config: ConfigData =
+               read_config_file("/config/aquarium_control_test_generic.toml".to_string()).unwrap();
+           let mut i2c_interface = I2cInterface::new(config.i2c_interface).unwrap();
 
-        // --- pH Sensor ---
-        let cmd_ph = [atlas_scientific_oem_constants::REG_DATA_MSB_PH];
-        let request_ph = I2cRequest::new(
-            config.atlas_scientific.address_atlas_scientific_ph,
-            &cmd_ph,
-            config.atlas_scientific.sleep_time_millis_ph,
-            atlas_scientific_oem_constants::RESPONSE_LENGTH_PH,
-        )
-        .unwrap();
+           // --- pH Sensor ---
+           let cmd_ph = [atlas_scientific_oem_constants::REG_DATA_MSB_PH];
+           let request_ph = I2cRequest::new(
+               config.atlas_scientific.address_atlas_scientific_ph,
+               &cmd_ph,
+               config.atlas_scientific.sleep_time_millis_ph,
+               atlas_scientific_oem_constants::RESPONSE_LENGTH_PH,
+           )
+           .unwrap();
 
-        match i2c_interface.get_response_from_i2c(request_ph) {
-            Ok(response) => {
-                if response.length == atlas_scientific_oem_constants::RESPONSE_LENGTH_PH {
-                    let data = &response.read_buf[..response.length];
-                    let value_u32 = u32::from_be_bytes([data[0], data[1], data[2], data[3]]);
-                    let value = value_u32 as f32 / atlas_scientific_oem_constants::SCALE_FACTOR_PH;
-                    println!("Measured pH: {:.2}", value);
-                } else {
-                    println!("Invalid response length for pH: {}", response.length);
-                }
-            }
-            Err(e) => {
-                println!("Failed to read from pH sensor: {:?}", e);
-            }
-        }
+           match i2c_interface.get_response_from_i2c(request_ph) {
+               Ok(response) => {
+                   if response.length == atlas_scientific_oem_constants::RESPONSE_LENGTH_PH {
+                       let data = &response.read_buf[..response.length];
+                       let value_u32 = u32::from_be_bytes([data[0], data[1], data[2], data[3]]);
+                       let value = value_u32 as f32 / atlas_scientific_oem_constants::SCALE_FACTOR_PH;
+                       println!("Measured pH: {:.2}", value);
+                   } else {
+                       println!("Invalid response length for pH: {}", response.length);
+                   }
+               }
+               Err(e) => {
+                   println!("Failed to read from pH sensor: {:?}", e);
+               }
+           }
 
-        // --- Temperature Sensor ---
-        let cmd_temp = [atlas_scientific_oem_constants::REG_DATA_MSB_TEMPERATURE];
-        let request_temperature = I2cRequest::new(
-            config.atlas_scientific.address_atlas_scientific_temperature,
-            &cmd_temp,
-            config.atlas_scientific.sleep_time_millis_temperature,
-            atlas_scientific_oem_constants::RESPONSE_LENGTH_TEMPERATURE,
-        )
-        .unwrap();
+           // --- Temperature Sensor ---
+           let cmd_temp = [atlas_scientific_oem_constants::REG_DATA_MSB_TEMPERATURE];
+           let request_temperature = I2cRequest::new(
+               config.atlas_scientific.address_atlas_scientific_temperature,
+               &cmd_temp,
+               config.atlas_scientific.sleep_time_millis_temperature,
+               atlas_scientific_oem_constants::RESPONSE_LENGTH_TEMPERATURE,
+           )
+           .unwrap();
 
-        match i2c_interface.get_response_from_i2c(request_temperature) {
-            Ok(response) => {
-                if response.length == atlas_scientific_oem_constants::RESPONSE_LENGTH_TEMPERATURE {
-                    let data = &response.read_buf[..response.length];
-                    let value_u32 = u32::from_be_bytes([data[0], data[1], data[2], data[3]]);
-                    let value =
-                        value_u32 as f32 / atlas_scientific_oem_constants::SCALE_FACTOR_TEMPERATURE;
-                    println!("Measured Temperature: {:.2}", value);
-                } else {
-                    println!(
-                        "Invalid response length for Temperature: {}",
-                        response.length
-                    );
-                }
-            }
-            Err(e) => {
-                println!("Failed to read from Temperature sensor: {:?}", e);
-            }
-        }
+           match i2c_interface.get_response_from_i2c(request_temperature) {
+               Ok(response) => {
+                   if response.length == atlas_scientific_oem_constants::RESPONSE_LENGTH_TEMPERATURE {
+                       let data = &response.read_buf[..response.length];
+                       let value_u32 = u32::from_be_bytes([data[0], data[1], data[2], data[3]]);
+                       let value =
+                           value_u32 as f32 / atlas_scientific_oem_constants::SCALE_FACTOR_TEMPERATURE;
+                       println!("Measured Temperature: {:.2}", value);
+                   } else {
+                       println!(
+                           "Invalid response length for Temperature: {}",
+                           response.length
+                       );
+                   }
+               }
+               Err(e) => {
+                   println!("Failed to read from Temperature sensor: {:?}", e);
+               }
+           }
 
-        // --- Conductivity Sensor ---
-        let cmd_cond = [atlas_scientific_oem_constants::REG_DATA_MSB_CONDUCTIVITY];
-        let request_conductivity = I2cRequest::new(
-            config
-                .atlas_scientific
-                .address_atlas_scientific_conductivity,
-            &cmd_cond,
-            config.atlas_scientific.sleep_time_millis_conductivity,
-            atlas_scientific_oem_constants::RESPONSE_LENGTH_CONDUCTIVITY,
-        )
-        .unwrap();
+           // --- Conductivity Sensor ---
+           let cmd_cond = [atlas_scientific_oem_constants::REG_DATA_MSB_CONDUCTIVITY];
+           let request_conductivity = I2cRequest::new(
+               config
+                   .atlas_scientific
+                   .address_atlas_scientific_conductivity,
+               &cmd_cond,
+               config.atlas_scientific.sleep_time_millis_conductivity,
+               atlas_scientific_oem_constants::RESPONSE_LENGTH_CONDUCTIVITY,
+           )
+           .unwrap();
 
-        match i2c_interface.get_response_from_i2c(request_conductivity) {
-            Ok(response) => {
-                if response.length == atlas_scientific_oem_constants::RESPONSE_LENGTH_CONDUCTIVITY {
-                    let data = &response.read_buf[..response.length];
-                    let value_u32 = u32::from_be_bytes([data[0], data[1], data[2], data[3]]);
-                    let value = value_u32 as f32
-                        / atlas_scientific_oem_constants::SCALE_FACTOR_CONDUCTIVITY;
-                    println!("Measured Conductivity: {:.2}", value);
-                } else {
-                    println!(
-                        "Invalid response length for Conductivity: {}",
-                        response.length
-                    );
-                }
-            }
-            Err(e) => {
-                println!("Failed to read from Conductivity sensor: {:?}", e);
-            }
-        }
-    }
- */
+           match i2c_interface.get_response_from_i2c(request_conductivity) {
+               Ok(response) => {
+                   if response.length == atlas_scientific_oem_constants::RESPONSE_LENGTH_CONDUCTIVITY {
+                       let data = &response.read_buf[..response.length];
+                       let value_u32 = u32::from_be_bytes([data[0], data[1], data[2], data[3]]);
+                       let value = value_u32 as f32
+                           / atlas_scientific_oem_constants::SCALE_FACTOR_CONDUCTIVITY;
+                       println!("Measured Conductivity: {:.2}", value);
+                   } else {
+                       println!(
+                           "Invalid response length for Conductivity: {}",
+                           response.length
+                       );
+                   }
+               }
+               Err(e) => {
+                   println!("Failed to read from Conductivity sensor: {:?}", e);
+               }
+           }
+       }
+    */
 
     #[test]
     #[cfg(all(target_os = "linux", feature = "target_hw"))]
@@ -742,11 +794,6 @@ mod tests {
         let mut channels = Channels::new_for_test();
 
         let mut i2c_interface_channels = channels.i2c_interface;
-        // Keep a sender to stop the thread later
-        let mut tx_to_i2c = channels
-            .signal_handler
-            .tx_signal_handler_to_i2c_interface
-            .clone();
 
         // Spawn the I2C Interface thread
         let i2c_thread = thread::spawn(move || {
@@ -794,7 +841,7 @@ mod tests {
         }
 
         // --- Conductivity Sensor ---
-        let driver_cond = AtlasScientificOem::new(
+        let driver_conductivity = AtlasScientificOem::new(
             config
                 .atlas_scientific
                 .address_atlas_scientific_conductivity,
@@ -808,15 +855,20 @@ mod tests {
 
         println!("------------------------------------------");
         println!("Initializing conductivity device...");
-        match driver_cond
-            .device_init(&mut channels.atlas_scientific, &AquariumSignal::Conductivity)
-        {
+        match driver_conductivity.device_init(
+            &mut channels.atlas_scientific,
+            &AquariumSignal::Conductivity,
+        ) {
             Ok(_) => println!("Conductivity sensor: OK"),
             Err(e) => println!("Conductivity sensor: FAILED - {:?}", e),
         }
 
         // Cleanup: Stop the I2C thread
-        tx_to_i2c.send(InternalCommand::Quit).unwrap();
+        channels
+            .signal_handler
+            .tx_signal_handler_to_i2c_interface
+            .send(InternalCommand::Quit)
+            .unwrap();
         i2c_thread.join().unwrap();
         println!("------------------------------------------");
     }
@@ -829,8 +881,6 @@ mod tests {
         use crate::utilities::channel_content::InternalCommand;
         use std::thread;
 
-        let config: ConfigData =
-            read_config_file("/config/aquarium_control_test_generic.toml".to_string()).unwrap();
         let i2c_config = read_config_file("/config/aquarium_control_test_generic.toml".to_string())
             .unwrap()
             .i2c_interface;
@@ -839,16 +889,11 @@ mod tests {
             mut drivers,
             mut atlas_scientific_channels,
             mut i2c_interface_channels,
+            mut signal_handler_channels,
             mutex_temp,
             mutex_ph,
             mutex_cond,
         ) = setup_receive_test();
-
-        // Keep a sender to stop the thread later
-        let mut tx_to_i2c = channels
-            .signal_handler
-            .tx_signal_handler_to_i2c_interface
-            .clone();
 
         // Spawn the I2C Interface thread
         let i2c_thread = thread::spawn(move || {
@@ -857,107 +902,101 @@ mod tests {
         });
 
         // --- Temperature Sensor ---
-        let driver_temp = AtlasScientificOem::new(
-            config.atlas_scientific.address_atlas_scientific_temperature,
-            atlas_scientific_oem_constants::DEVICE_TYPE_TEMPERATURE,
-            config.atlas_scientific.sleep_time_millis_temperature,
-            atlas_scientific_constants::MAX_MUTEX_ACCESS_DURATION_MILLIS,
-            atlas_scientific_oem_constants::REG_DATA_MSB_TEMPERATURE,
-            atlas_scientific_oem_constants::SCALE_FACTOR_TEMPERATURE,
-            atlas_scientific_oem_constants::RESPONSE_LENGTH_TEMPERATURE,
-        );
+        let driver_temp = drivers.get_mut(&AquariumSignal::WaterTemperature).unwrap();
 
         println!("------------------------------------------");
         println!("Initializing temperature device...");
         match driver_temp.device_init(
-            &mut channels.atlas_scientific,
+            &mut atlas_scientific_channels,
             &AquariumSignal::WaterTemperature,
         ) {
             Ok(_) => {
                 println!("Temperature sensor: INITIALIZED");
                 // Continue with reading measurement value from the temperature device
-                driver_temp.send_request_to_i2c_interface(atlas_scientific_channels);
-                driver_temp.receive_response_from_i2c_interface(
-                    AquariumSignal::WaterTemperature,
+                let _ = driver_temp.send_request_to_i2c_interface(&mut atlas_scientific_channels);
+                let result = driver_temp.receive_response_from_i2c_interface(
+                    &AquariumSignal::WaterTemperature,
                     &mut atlas_scientific_channels,
                     &mutex_temp,
                     &mutex_ph,
                     &mutex_cond,
                 );
+                if let Err(e) = result {
+                    println!(
+                        "Error occurred when trying to read from temperature sensor: {:?}",
+                        e
+                    );
+                }
                 let temperature = mutex_temp.lock().unwrap().value;
                 println!("Measured Temperature: {:.2}", temperature);
-            },
+            }
             Err(e) => println!("Temperature sensor: FAILED - {:?}", e),
         }
 
         // --- pH Sensor ---
-        let driver_ph = AtlasScientificOem::new(
-            config.atlas_scientific.address_atlas_scientific_ph,
-            atlas_scientific_oem_constants::DEVICE_TYPE_PH,
-            config.atlas_scientific.sleep_time_millis_ph,
-            atlas_scientific_constants::MAX_MUTEX_ACCESS_DURATION_MILLIS,
-            atlas_scientific_oem_constants::REG_DATA_MSB_PH,
-            atlas_scientific_oem_constants::SCALE_FACTOR_PH,
-            atlas_scientific_oem_constants::RESPONSE_LENGTH_PH,
-        );
+        let driver_ph = drivers.get_mut(&AquariumSignal::pH).unwrap();
 
         println!("------------------------------------------");
         println!("Initializing ph device...");
-        match driver_ph.device_init(&mut channels.atlas_scientific, &AquariumSignal::pH) {
+        match driver_ph.device_init(&mut atlas_scientific_channels, &AquariumSignal::pH) {
             Ok(_) => {
                 println!("pH sensor: INITIALIZED");
                 // Continue with reading measurement value from the pH device
-                driver_ph.send_request_to_i2c_interface(atlas_scientific_channels);
-                driver_ph.receive_response_from_i2c_interface(
-                    AquariumSignal::pH,
+                let _ = driver_ph.send_request_to_i2c_interface(&mut atlas_scientific_channels);
+                let result = driver_ph.receive_response_from_i2c_interface(
+                    &AquariumSignal::pH,
                     &mut atlas_scientific_channels,
                     &mutex_temp,
                     &mutex_ph,
                     &mutex_cond,
                 );
+                if let Err(e) = result {
+                    println!("Error occurred when trying to read from pH sensor: {:?}", e);
+                }
                 let ph_value = mutex_ph.lock().unwrap().value;
                 println!("Measured pH value: {:.2}", ph_value);
-            },
+            }
             Err(e) => println!("pH sensor: FAILED - {:?}", e),
         }
 
         // --- Conductivity Sensor ---
-        let driver_cond = AtlasScientificOem::new(
-            config
-                .atlas_scientific
-                .address_atlas_scientific_conductivity,
-            atlas_scientific_oem_constants::DEVICE_TYPE_CONDUCTIVITY,
-            config.atlas_scientific.sleep_time_millis_conductivity,
-            atlas_scientific_constants::MAX_MUTEX_ACCESS_DURATION_MILLIS,
-            atlas_scientific_oem_constants::REG_DATA_MSB_CONDUCTIVITY,
-            atlas_scientific_oem_constants::SCALE_FACTOR_CONDUCTIVITY,
-            atlas_scientific_oem_constants::RESPONSE_LENGTH_CONDUCTIVITY,
-        );
+        let driver_conductivity = drivers.get_mut(&AquariumSignal::Conductivity).unwrap();
 
         println!("------------------------------------------");
         println!("Initializing conductivity device...");
-        match driver_cond
-            .device_init(&mut channels.atlas_scientific, &AquariumSignal::Conductivity)
-        {
+        match driver_conductivity.device_init(
+            &mut atlas_scientific_channels,
+            &AquariumSignal::Conductivity,
+        ) {
             Ok(_) => {
                 println!("Conductivity sensor: INITIALIZED");
                 // Continue with reading measurement value from the conductivity device
-                driver_conductivity.send_request_to_i2c_interface(atlas_scientific_channels);
-                driver_conductivity.receive_response_from_i2c_interface(
-                    AquariumSignal::Conductivity,
+                let _ = driver_conductivity
+                    .send_request_to_i2c_interface(&mut atlas_scientific_channels);
+                let result = driver_conductivity.receive_response_from_i2c_interface(
+                    &AquariumSignal::Conductivity,
                     &mut atlas_scientific_channels,
                     &mutex_temp,
                     &mutex_ph,
                     &mutex_cond,
                 );
+                if let Err(e) = result {
+                    println!(
+                        "Error occurred when trying to read from conductivity sensor: {:?}",
+                        e
+                    );
+                }
                 let conductivity = mutex_cond.lock().unwrap().value;
                 println!("Measured conductivity value: {}", conductivity);
-            },
+            }
             Err(e) => println!("Conductivity sensor: FAILED - {:?}", e),
         }
 
         // Cleanup: Stop the I2C thread
-        tx_to_i2c.send(InternalCommand::Quit).unwrap();
+        signal_handler_channels
+            .tx_signal_handler_to_i2c_interface
+            .send(InternalCommand::Quit)
+            .unwrap();
         i2c_thread.join().unwrap();
         println!("------------------------------------------");
     }
