@@ -19,30 +19,34 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 //! ## Key Components
 //!
 //! - **`AtlasScientific` Struct**: The core state machine for the thread. It holds the
-//!   configuration, a number of stateful boolean "lock" flags for log
-//!   suppression, and the current state of the measurement cycle.
+//!   configuration, the collection of sensor drivers (implementing `AtlasScientificDriver`),
+//!   and the current state of the measurement cycle.
+//!
+//! - **`AtlasScientificDriver` Trait**: An abstraction layer (defined in `atlas_scientific_driver.rs`)
+//!   that allows the `AtlasScientific` thread to interact with different sensor types (e.g.,
+//!   EZO vs. OEM) uniformly. Specific implementations handle the protocol details.
 //!
 //! - **`execute()` Method**: The main thread loop. It implements a sequential measurement
 //!   state machine:
 //!   1.  **Wait**: Waits for the configured `measurement_interval` to elapse.
-//!   2.  **Send**: Sends a request for the *next* sensor in the sequence (Temperature -> pH -> Conductivity)
-//!       to the `I2cInterface` thread.
+//!   2.  **Send**: Delegates to the appropriate driver to send a request for the *next*
+//!       sensor in the sequence (Temperature -> pH -> Conductivity) to the `I2cInterface` thread.
 //!   3.  **Receive**: Polls the response channel from the `I2cInterface`.
-//!   4.  **Process**: If a response is received, it is parsed and validated. The result is
-//!       written to the appropriate shared `Mutex`.
+//!   4.  **Process**: Delegates to the driver to parse and validate the response. If successful,
+//!       the result is written to the appropriate shared `Mutex`.
 //!   5.  **Cycle**: The state machine advances to the next sensor and returns to the **Wait** step.
-//!
-//! - **`check_response()` Method**: A critical private helper that parses and validates the
-//!   proprietary 8-byte response from an Atlas Scientific sensor, checking magic numbers
-//!   and ensuring the payload is a valid number.
 //!
 //! ## Design and Architecture
 //!
 //! This module is designed for robust, decoupled, and sequential sensor reading.
 //!
+//! - **Driver Abstraction**: The module uses the Strategy pattern via the `AtlasScientificDriver`
+//!   trait. This allows the system to support different hardware revisions or types (like
+//!   Atlas Scientific EZO circuits vs. OEM modules) without changing the core scheduling logic.
+//!
 //! - **Sequential Measurement**: The module does not attempt to read all sensors at once.
 //!   This serialized approach simplifies the logic and avoids potential conflicts on the
-//!   I2C bus if it were shared.
+//!   I2C bus.
 //!
 //! - **Decoupling via I2C Interface**: The `AtlasScientific` thread does not perform
 //!   hardware I/O directly. It is a client of the `I2cInterface` thread. This decouples
@@ -60,16 +64,6 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 //!     acquire a lock on a shared mutex. If the wait time exceeds a threshold, it logs a
 //!     warning, which can help diagnose performance bottlenecks or deadlocks elsewhere
 //!     in the application.
-//!
-//! ### Atlas Scientific 8-Byte Protocol
-//!
-//! The `check_response` function implements the parsing of a fixed-size 8-byte packet:
-//!
-//! | Byte   | Name        | Description                                        |
-//! | -------| :---------- | -------------------------------------------------- |
-//! | `[0]`  | `MagicStart`| A status byte, expected to be `1` for success.     |
-//! | `[1-6]`| `Payload`   | A 6-byte ASCII string representing the float value.|
-//! | `[7]`  | `MagicEnd`  | A null terminator, expected to be `0`.             |
 
 #![allow(non_snake_case)]
 
@@ -212,6 +206,7 @@ impl AtlasScientific {
             match config.sensor_type_temperature.as_str() {
                 atlas_scientific_constants::SENSOR_TYPE_OEM => Box::new(AtlasScientificOem::new(
                     config.address_atlas_scientific_temperature,
+                    #[cfg(all(feature = "target_hw", target_os = "linux"))]
                     atlas_scientific_oem_constants::DEVICE_TYPE_TEMPERATURE,
                     config.sleep_time_millis_temperature,
                     atlas_scientific_constants::MAX_MUTEX_ACCESS_DURATION_MILLIS,
@@ -237,6 +232,7 @@ impl AtlasScientific {
         let driver_ph: Box<dyn AtlasScientificDriver> = match config.sensor_type_ph.as_str() {
             atlas_scientific_constants::SENSOR_TYPE_OEM => Box::new(AtlasScientificOem::new(
                 config.address_atlas_scientific_ph,
+                #[cfg(all(feature = "target_hw", target_os = "linux"))]
                 atlas_scientific_oem_constants::DEVICE_TYPE_PH,
                 config.sleep_time_millis_ph,
                 atlas_scientific_constants::MAX_MUTEX_ACCESS_DURATION_MILLIS,
@@ -263,6 +259,7 @@ impl AtlasScientific {
             match config.sensor_type_conductivity.as_str() {
                 atlas_scientific_constants::SENSOR_TYPE_OEM => Box::new(AtlasScientificOem::new(
                     config.address_atlas_scientific_conductivity,
+                    #[cfg(all(feature = "target_hw", target_os = "linux"))]
                     atlas_scientific_oem_constants::DEVICE_TYPE_CONDUCTIVITY,
                     config.sleep_time_millis_conductivity,
                     atlas_scientific_constants::MAX_MUTEX_ACCESS_DURATION_MILLIS,
@@ -383,7 +380,7 @@ impl AtlasScientific {
 
     /// Iterates over all registered drivers and verifies their device type.
     /// This requires the I2cInterface thread to be running.
-    #[cfg(any(all(target_os = "linux", feature = "target_hw"), test))]
+    #[cfg(all(target_os = "linux", feature = "target_hw"))]
     pub fn init_devices(
         &self,
         channels: &mut AtlasScientificChannels,
@@ -730,7 +727,7 @@ pub mod tests {
                 // lock the mutexes and wait for triggering the detection
                 match mutex_atlas_scientific_temperature_clone_for_test_environment.lock() {
                     Ok(_guard) => {
-                        // binding is necessary to avoid drop
+                        // binding is necessary to avoid the drop by the compiler
                         spin_sleeper.sleep(sleep_time);
                     }
                     Err(e) => {
@@ -739,7 +736,7 @@ pub mod tests {
                 };
                 match mutex_atlas_scientific_ph_clone_for_test_environment.lock() {
                     Ok(_guard) => {
-                        // binding is necessary to avoid drop
+                        // binding is necessary to avoid the drop by the compiler
                         spin_sleeper.sleep(sleep_time);
                     }
                     Err(e) => {
@@ -748,7 +745,7 @@ pub mod tests {
                 };
                 match mutex_atlas_scientific_conductivity_clone_for_test_environment.lock() {
                     Ok(_guard) => {
-                        // binding is necessary to avoid drop
+                        // binding is necessary to avoid the drop by the compiler
                         spin_sleeper.sleep(sleep_time);
                     }
                     Err(e) => {

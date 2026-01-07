@@ -34,5 +34,6 @@ pub struct TankLevelSwitchConfig {
     pub tank_level_switch_position_low_stabilization_count: u32,
 
     /// false: GPIO high is interpreted as level high. true: GPIO low is interpreted as level high
+    #[cfg(feature = "target_hw")]
     pub reverse_gpio_logic: bool
 }

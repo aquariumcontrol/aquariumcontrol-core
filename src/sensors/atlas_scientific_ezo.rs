@@ -1,3 +1,35 @@
+/* Copyright 2026 Uwe Martin
+
+Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the “Software”), to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+*/
+
+//! Implements the driver for Atlas Scientific EZO sensors.
+//!
+//! This module provides the `AtlasScientificEzo` struct, which implements the
+//! `AtlasScientificDriver` trait. It handles the specific communication protocol
+//! required by the consumer-grade "EZO" circuits from Atlas Scientific.
+//!
+//! ## Protocol Details
+//!
+//! This driver implements a specific I2C interaction model for EZO sensors:
+//! 1.  **Trigger**: Sends the ASCII command `'R'` (Read).
+//! 2.  **Wait**: Sleeps for a configured duration (processing time).
+//! 3.  **Read**: Reads a fixed-size 8-byte response.
+//!
+//! ### Response Format
+//!
+//! The parsing logic (implemented in `check_response`) expects the following 8-byte packet:
+//!
+//! | Byte   | Name        | Description                                        |
+//! | -------| :---------- | -------------------------------------------------- |
+//! | `[0]`  | `MagicStart`| A status byte, expected to be `1` for success.     |
+//! | `[1-6]`| `Payload`   | A 6-byte ASCII string representing the float value.|
+//! | `[7]`  | `MagicEnd`  | A null terminator, expected to be `0`.             |
+
 use crate::launch::channels::AquaChannelError;
 use crate::sensors::atlas_scientific::AtlasScientific;
 use crate::sensors::atlas_scientific::{AtlasScientificResult, AtlasScientificResultData};
@@ -51,10 +83,17 @@ pub(crate) mod atlas_scientific_ezo_constants {
     pub const MESSAGE_FINISH_MAGIC: u8 = 0;
 }
 
+/// Driver implementation for Atlas Scientific EZO sensors.
+///
+/// This struct holds the configuration (I2C address, sleep times) and state
+/// required to interact with an EZO circuit. It implements the `AtlasScientificDriver`
+/// trait to integrate with the main `AtlasScientific` sensor loop.
 #[derive(Debug)]
 pub struct AtlasScientificEzo {
+    /// I2C address of the device
     pub i2c_address: u16,
 
+    /// sleep time in milliseconds applied between writing and reading from the device
     pub sleep_time_millis: u64,
 
     /// inhibition flag to avoid flooding the log file with repeated messages about excessive access time to mutex for water temperature
@@ -78,6 +117,12 @@ pub struct AtlasScientificEzo {
 }
 
 impl AtlasScientificEzo {
+    /// Creates a new instance of the EZO driver.
+    ///
+    /// # Arguments
+    /// * `i2c_address` - The I2C address of the EZO circuit.
+    /// * `sleep_time_millis` - The time to wait between sending the read command and reading the response.
+    /// * `max_mutex_access_duration_millis` - Threshold for logging mutex contention warnings.
     #[cfg(any(all(feature = "target_hw", target_os = "linux"), test))]
     pub fn new(
         i2c_address: u16,
@@ -386,7 +431,7 @@ impl AtlasScientificDriver for AtlasScientificEzo {
         result
     }
 
-    #[cfg(any(all(target_os = "linux", feature = "target_hw"), test))]
+    #[cfg(all(target_os = "linux", feature = "target_hw"))]
     fn device_init(
         &self,
         _atlas_scientific_channels: &mut AtlasScientificChannels,

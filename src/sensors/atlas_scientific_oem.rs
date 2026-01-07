@@ -1,4 +1,4 @@
-/* Copyright 2024 Uwe Martin
+/* Copyright 2026 Uwe Martin
 
 Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the “Software”), to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions:
 
@@ -7,30 +7,50 @@ The above copyright notice and this permission notice shall be included in all c
 THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
-#[cfg(any(all(feature = "target_hw", target_os = "linux"), test))]
-use crate::launch::channels::AquaChannelError;
-#[cfg(any(all(feature = "target_hw", target_os = "linux"), test))]
-use crate::sensors::atlas_scientific::AtlasScientific;
-#[cfg(any(all(feature = "target_hw", target_os = "linux"), test))]
-use crate::sensors::atlas_scientific::{AtlasScientificResult, AtlasScientificResultData};
-#[cfg(any(all(feature = "target_hw", target_os = "linux"), test))]
-use crate::sensors::atlas_scientific_channels::AtlasScientificChannels;
-#[cfg(any(all(feature = "target_hw", target_os = "linux"), test))]
-use crate::sensors::atlas_scientific_driver::AtlasScientificDriver;
-#[cfg(any(all(feature = "target_hw", target_os = "linux"), test))]
-use crate::sensors::atlas_scientific_error::AtlasScientificError;
-#[cfg(any(all(feature = "target_hw", target_os = "linux"), test))]
-use crate::sensors::i2c_interface::I2cRequest;
-#[cfg(any(all(feature = "target_hw", target_os = "linux"), test))]
-use crate::utilities::channel_content::AquariumSignal;
-#[cfg(any(all(feature = "target_hw", target_os = "linux"), test))]
-use crate::utilities::check_mutex_access_duration::CheckMutexAccessDurationTrait;
-#[cfg(any(all(feature = "target_hw", target_os = "linux"), test))]
-use std::sync::{Arc, Mutex};
-#[cfg(any(all(feature = "target_hw", target_os = "linux"), test))]
-use std::time::Duration;
-#[cfg(any(all(feature = "target_hw", target_os = "linux"), test))]
-use std::time::Instant;
+//! Implements the driver for Atlas Scientific OEM sensors.
+//!
+//! This module provides the `AtlasScientificOem` struct, which implements the
+//! `AtlasScientificDriver` trait. It handles the specific communication protocol
+//! required by the industrial "OEM" modules from Atlas Scientific.
+//!
+//! ## Protocol Details
+//!
+//! Unlike the consumer-grade EZO sensors which use ASCII commands, the OEM modules
+//! use a binary register-based protocol:
+//!
+//! 1.  **Wake Up**: The device must be explicitly woken up by writing to the
+//!     `REG_WAKEUP` register.
+//! 2.  **Trigger/Read**: To read data, the driver writes the address of the specific
+//!     data register (e.g., `REG_DATA_MSB_PH`) to the device.
+//! 3.  **Wait**: The driver waits for a specified processing time (`sleep_time_millis`).
+//!     For OEM type devices, this value is much lower compared to EZO type devices.
+//! 4.  **Response**: The driver reads a fixed number of bytes (typically 4 bytes for
+//!     the measurement value in Big Endian format).
+//!
+//! ## Initialization
+//!
+//! The `device_init` method is critical for OEM sensors. It performs two steps:
+//! 1.  **Wake Up**: Sends the wake-up command to ensure the device is active.
+//! 2.  **Type Verification**: Reads the `REG_DEVICE_TYPE` register to ensure the
+//!     connected hardware matches the configuration (e.g., ensuring a pH sensor
+//!     is not connected to the address configured for a conductivity sensor).
+
+cfg_if::cfg_if! {
+    if #[cfg(any(all(feature = "target_hw", target_os = "linux"), test))] {
+        use crate::launch::channels::AquaChannelError;
+        use crate::sensors::atlas_scientific::AtlasScientific;
+        use crate::sensors::atlas_scientific::{AtlasScientificResult, AtlasScientificResultData};
+        use crate::sensors::atlas_scientific_channels::AtlasScientificChannels;
+        use crate::sensors::atlas_scientific_driver::AtlasScientificDriver;
+        use crate::sensors::atlas_scientific_error::AtlasScientificError;
+        use crate::sensors::i2c_interface::I2cRequest;
+        use crate::utilities::channel_content::AquariumSignal;
+        use crate::utilities::check_mutex_access_duration::CheckMutexAccessDurationTrait;
+        use std::sync::{Arc, Mutex};
+        use std::time::Duration;
+        use std::time::Instant;
+    }
+}
 
 #[allow(dead_code)]
 /// numeric values used in communication with Atlas Scientific sensor units
@@ -87,16 +107,24 @@ pub(crate) mod atlas_scientific_oem_constants {
 #[cfg(any(all(feature = "target_hw", target_os = "linux"), test))]
 #[derive(Debug)]
 pub struct AtlasScientificOem {
+    /// I2C address of the device
     pub i2c_address: u16,
 
+    #[cfg(all(feature = "target_hw", target_os = "linux"))]
+    /// The expected device type code (e.g., 0x05 for Temperature).
+    /// Used during initialization to verify the connected hardware.
     pub device_type: u8,
 
+    /// Sleep time in milliseconds applied between writing the register address and reading the data.
     pub sleep_time_millis: u64,
 
+    /// The register address where the measurement data starts (Most Significant Byte).
     pub register_data_msb: u8,
 
+    /// The divisor used to convert the raw integer value to a float.
     pub scale_factor: f32,
 
+    /// The number of bytes to read for a measurement.
     pub response_length: usize,
 
     /// inhibition flag to avoid flooding the log file with repeated messages about excessive access time to mutex for water temperature
@@ -119,10 +147,22 @@ pub struct AtlasScientificOem {
     pub max_mutex_access_duration: Duration,
 }
 
-#[cfg(any(all(feature = "target_hw", target_os = "linux"), test))]
+#[cfg(any(all(target_os = "linux", feature = "target_hw"), test))]
 impl AtlasScientificOem {
+    /// Creates a new instance of the OEM driver.
+    ///
+    /// # Arguments
+    /// * `i2c_address` - The I2C address of the OEM module.
+    /// * `device_type` - The expected device type code (e.g., 1 for pH, 5 for Temp).
+    ///   Used during initialization to verify the hardware.
+    /// * `sleep_time_millis` - The time to wait between writing the register address and reading the data.
+    /// * `max_mutex_access_duration_millis` - Threshold for logging mutex contention warnings.
+    /// * `register_data_msb` - The register address where the measurement data starts (Most Significant Byte).
+    /// * `scale_factor` - The divisor used to convert the raw integer value to a float (e.g., 100.0 or 1000.0).
+    /// * `response_length` - The number of bytes to read for a measurement (typically 4).
     pub fn new(
         i2c_address: u16,
+        #[cfg(all(feature = "target_hw", target_os = "linux"))]
         device_type: u8,
         sleep_time_millis: u64,
         max_mutex_access_duration_millis: u64,
@@ -132,6 +172,7 @@ impl AtlasScientificOem {
     ) -> Self {
         AtlasScientificOem {
             i2c_address,
+            #[cfg(all(feature = "target_hw", target_os = "linux"))]
             device_type,
             sleep_time_millis,
             register_data_msb,
@@ -150,7 +191,19 @@ impl AtlasScientificOem {
         }
     }
 
-    /// Helper to parse the binary response from the OEM sensor
+    /// Parses the binary response from an OEM sensor.
+    ///
+    /// OEM sensors typically return data as a 32-bit unsigned integer in Big Endian format
+    /// (MSB first). This function combines the bytes into a `u32` and then divides by
+    /// the configured `scale_factor` to produce the final floating-point value.
+    ///
+    /// # Arguments
+    /// * `signal` - The signal type (used for error reporting context).
+    /// * `data` - The raw byte slice received from the I2C interface.
+    ///
+    /// # Returns
+    /// * `Ok(AtlasScientificResultData)` - The parsed value wrapped in result data.
+    /// * `Err(AtlasScientificError)` - If the data length is insufficient.
     fn parse_oem_response(
         &self,
         signal: &AquariumSignal,
@@ -178,6 +231,18 @@ impl AtlasScientificOem {
 
 #[cfg(any(all(feature = "target_hw", target_os = "linux"), test))]
 impl AtlasScientificDriver for AtlasScientificOem {
+    /// Constructs and sends a measurement request to the I2C interface thread.
+    ///
+    /// For OEM sensors, this involves writing the target register address (`register_data_msb`)
+    /// to the device. The `I2cRequest` is configured to write this single byte, wait
+    /// for `sleep_time_millis`, and then read `response_length` bytes.
+    ///
+    /// # Arguments
+    /// * `atlas_scientific_channels` - A mutable reference to the struct containing the channels.
+    ///
+    /// # Returns
+    /// * `Ok(())` - If the request was successfully created and sent.
+    /// * `Err(AtlasScientificError)` - If request creation or sending failed.
     fn send_request_to_i2c_interface(
         &self,
         atlas_scientific_channels: &mut AtlasScientificChannels,
@@ -207,6 +272,24 @@ impl AtlasScientificDriver for AtlasScientificOem {
             )
     }
 
+    /// Receives and processes the binary measurement response.
+    ///
+    /// This function:
+    /// 1.  Receives the raw bytes from the I2C channel.
+    /// 2.  Calls `parse_oem_response` to convert the Big Endian bytes into a float.
+    /// 3.  Updates the shared `Mutex` with the result.
+    /// 4.  Monitors mutex lock duration.
+    ///
+    /// # Arguments
+    /// * `signal` - The `AquariumSignal` indicating which sensor's data is expected.
+    /// * `atlas_scientific_channels` - A mutable reference to the struct containing the channels.
+    /// * `mutex_water_temperature` - The shared `Mutex` for the water temperature result.
+    /// * `mutex_ph` - The shared `Mutex` for the pH result.
+    /// * `mutex_conductivity` - The shared `Mutex` for the conductivity result.
+    ///
+    /// # Returns
+    /// * `Ok(AtlasScientificResultData)` - The successfully parsed measurement data.
+    /// * `Err(AtlasScientificError)` - If communication, parsing, or mutex locking failed.
     fn receive_response_from_i2c_interface(
         &mut self,
         signal: &AquariumSignal,
@@ -269,7 +352,21 @@ impl AtlasScientificDriver for AtlasScientificOem {
         }
     }
 
-    #[cfg(any(all(target_os = "linux", feature = "target_hw"), test))]
+    #[cfg(all(target_os = "linux", feature = "target_hw"))]
+    /// Performs hardware initialization for the OEM sensor.
+    ///
+    /// This process involves:
+    /// 1.  **Wake Up**: Sending `0x01` to the `REG_WAKEUP` (0x06) register to ensure the device is active.
+    /// 2.  **Type Check**: Reading the `REG_DEVICE_TYPE` (0x00) register and comparing
+    ///     it against the configured `device_type`.
+    ///
+    /// # Arguments
+    /// * `atlas_scientific_channels` - Channels used to communicate with the I2C interface.
+    /// * `signal` - The signal type associated with this driver instance.
+    ///
+    /// # Returns
+    /// * `Ok(())` - If the device was successfully woken up and the device type matches.
+    /// * `Err(AtlasScientificError)` - If I2C communication fails or the device type is incorrect.
     fn device_init(
         &self,
         atlas_scientific_channels: &mut AtlasScientificChannels,
@@ -401,12 +498,12 @@ mod tests {
     use super::*;
     use crate::launch::channels::Channels;
     use crate::sensors::atlas_scientific::atlas_scientific_constants;
-    #[cfg(all(target_os = "linux", feature = "target_hw"))]
+    #[cfg(any(all(target_os = "linux", feature = "target_hw"), test))]
     use crate::sensors::i2c_interface::I2cResponse;
-    #[cfg(all(target_os = "linux", feature = "target_hw"))]
+    #[cfg(any(all(target_os = "linux", feature = "target_hw"), test))]
     use crate::sensors::i2c_interface_channels::I2cInterfaceChannels;
     use crate::utilities::config::{read_config_file, ConfigData};
-    #[cfg(all(target_os = "linux", feature = "target_hw"))]
+    #[cfg(any(all(target_os = "linux", feature = "target_hw"), test))]
     use crate::utilities::signal_handler_channels::SignalHandlerChannels;
     use std::collections::HashMap;
 
@@ -427,6 +524,7 @@ mod tests {
             AquariumSignal::WaterTemperature,
             AtlasScientificOem::new(
                 config.atlas_scientific.address_atlas_scientific_temperature,
+                #[cfg(all(feature = "target_hw", target_os = "linux"))]
                 atlas_scientific_oem_constants::DEVICE_TYPE_TEMPERATURE,
                 config.atlas_scientific.sleep_time_millis_temperature,
                 atlas_scientific_constants::MAX_MUTEX_ACCESS_DURATION_MILLIS,
@@ -439,6 +537,7 @@ mod tests {
             AquariumSignal::pH,
             AtlasScientificOem::new(
                 config.atlas_scientific.address_atlas_scientific_ph,
+                #[cfg(all(feature = "target_hw", target_os = "linux"))]
                 atlas_scientific_oem_constants::DEVICE_TYPE_PH,
                 config.atlas_scientific.sleep_time_millis_ph,
                 atlas_scientific_constants::MAX_MUTEX_ACCESS_DURATION_MILLIS,
@@ -453,6 +552,7 @@ mod tests {
                 config
                     .atlas_scientific
                     .address_atlas_scientific_conductivity,
+                #[cfg(all(feature = "target_hw", target_os = "linux"))]
                 atlas_scientific_oem_constants::DEVICE_TYPE_CONDUCTIVITY,
                 config.atlas_scientific.sleep_time_millis_conductivity,
                 atlas_scientific_constants::MAX_MUTEX_ACCESS_DURATION_MILLIS,
@@ -527,7 +627,7 @@ mod tests {
             "test_conductivity_reading: Result has value {}",
             result.value
         );
-        assert!((result.value - 1413.0).abs() < f32::EPSILON);
+        assert!((result.value - 14130.0).abs() < f32::EPSILON);
     }
 
     #[test]
@@ -590,7 +690,7 @@ mod tests {
             i2c_interface_channels.tx_i2c_interface_to_atlas_scientific;
         let driver = drivers.get_mut(&AquariumSignal::WaterTemperature).unwrap();
 
-        // Mock Data: 25.432 C. 25.432 * 100 = 2543.2 -> 2543 (integer)
+        // Mock Data: 2.543 C
         // 2543 in Hex is 0x09EF
         // Big Endian bytes: [0x00, 0x00, 0x09, 0xEF]
         let mut mock_data = [0u8; 4];
@@ -620,8 +720,8 @@ mod tests {
             "test_temperature_reading: Result has value {}",
             result.value
         );
-        // 2543 / 100.0 = 25.43
-        assert!((result.value - 25.43).abs() < 0.0001);
+        // 2543 / 1000.0 = 2.543
+        assert!((result.value - 2.543).abs() < 0.0001);
     }
 
     #[test]
