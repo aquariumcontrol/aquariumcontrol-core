@@ -97,6 +97,7 @@ active = true                                           # used for testing purpo
 execute = true                                          # used for testing purposes
 use_simulator = false                                   # if true, then do not use real HW
 tank_level_switch_position_low_stabilization_count = 5 # number of seconds before stabilized tank level switch turns low
+reverse_gpio_logic = true                               # false: GPIO high is interpreted as level high. true: GPIO low is interpreted as level high
 
 [feed]
 active = true

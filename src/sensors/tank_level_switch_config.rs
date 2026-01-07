@@ -32,4 +32,7 @@ pub struct TankLevelSwitchConfig {
 
     /// the number of seconds which need to indicate a low level before the refill control assumes that the water level is low
     pub tank_level_switch_position_low_stabilization_count: u32,
+
+    /// false: GPIO high is interpreted as level high. true: GPIO low is interpreted as level high
+    pub reverse_gpio_logic: bool
 }
