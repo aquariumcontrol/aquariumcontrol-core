@@ -939,8 +939,9 @@ fn run() -> Result<(), StartupError> {
 
         #[cfg(all(target_os = "linux", feature = "target_hw"))]
         if !use_simulator && atlas_scientific_active {
-            let result = atlas_scientific.verify_hardware(&mut channels.atlas_scientific);
+            let result = atlas_scientific.init_devices(&mut channels.atlas_scientific);
             if let Err(e) = result {
+                // terminate the I2cInterface thread before exiting the application
                 signal_handler::send_command(
                     InternalCommand::Quit,
                     Some(
