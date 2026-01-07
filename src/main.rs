@@ -947,14 +947,10 @@ fn run() -> Result<(), StartupError> {
                     Some(
                         &mut channels
                             .signal_handler
-                            .tx_signal_handler_to_atlas_scientific,
+                            .tx_signal_handler_to_i2c_interface,
                     ),
-                    Some(
-                        &mut channels
-                            .signal_handler
-                            .rx_signal_handler_from_atlas_scientific,
-                    ),
-                    "atlas_scientific",
+                    None,
+                    "i2c_interface",
                 );
                 return Err(StartupError::AtlasScientificSensorTypeMismatch { source: e });
             }
