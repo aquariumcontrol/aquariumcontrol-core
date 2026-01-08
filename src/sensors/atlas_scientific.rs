@@ -78,6 +78,7 @@ use crate::sensors::atlas_scientific_driver::AtlasScientificDriver;
 use crate::sensors::atlas_scientific_error::AtlasScientificError;
 #[cfg(any(all(feature = "target_hw", target_os = "linux"), test))]
 use crate::sensors::atlas_scientific_ezo::AtlasScientificEzo;
+use crate::sensors::atlas_scientific_monitor_view::AtlasScientificMonitorView;
 #[cfg(any(all(feature = "target_hw", target_os = "linux"), test))]
 use crate::sensors::atlas_scientific_oem::atlas_scientific_oem_constants;
 #[cfg(any(all(feature = "target_hw", target_os = "linux"), test))]
@@ -189,6 +190,12 @@ pub struct AtlasScientific {
     drivers: HashMap<AquariumSignal, Box<dyn AtlasScientificDriver>>,
 
     lock_error_driver_not_found: HashMap<AquariumSignal, bool>,
+
+    /// Last sent monitor view for deduplication
+    last_sent_monitor_view: Option<AtlasScientificMonitorView>,
+
+    /// inhibition flag to avoid flooding the log file with repeated messages about failure to send to monitors
+    lock_error_channel_send_monitors: bool,
 }
 
 impl ProcessExternalRequestTrait for AtlasScientific {}
@@ -314,6 +321,8 @@ impl AtlasScientific {
             measurement_interval,
             drivers,
             lock_error_driver_not_found: HashMap::new(),
+            last_sent_monitor_view: None,
+            lock_error_channel_send_monitors: false,
         }
     }
 
@@ -353,8 +362,14 @@ impl AtlasScientific {
         };
 
         match target_mutex.lock() {
-            Ok(mut guard) => *guard = result,
+            Ok(mut guard) => {
+                *guard = result;
+                #[cfg(test)]
+                println!("write_result_to_mutex: Could lock mutex for {}", signal);
+            }
             Err(_) => {
+                #[cfg(test)]
+                println!("write_result_to_mutex: Could not lock mutex for {}", signal);
                 return Err(AtlasScientificError::CouldNotLockMutex {
                     location: module_path!().to_string(),
                     signal: signal.clone(),
@@ -375,6 +390,99 @@ impl AtlasScientific {
                 location: module_path!().to_string(),
                 signal: signal.clone(),
             }),
+        }
+    }
+
+    /// Checks sensor values against configured thresholds and sends monitor view if needed.
+    ///
+    /// This method reads the current values from all three sensor mutexes, compares them
+    /// against the configured min/max thresholds, and creates an `AtlasScientificMonitorView`
+    /// indicating which sensors are out of range. The view is only sent if:
+    /// - At least one sensor has valid data
+    /// - The view has changed since the last transmission (deduplication)
+    ///
+    /// Sensors with invalid data are skipped and their flags are set to false (no issue).
+    ///
+    /// # Arguments
+    /// * `atlas_scientific_channels` - Channels for communicating with other threads
+    /// * `mutex_water_temperature` - Shared mutex containing temperature sensor data
+    /// * `mutex_ph` - Shared mutex containing pH sensor data
+    /// * `mutex_conductivity` - Shared mutex containing conductivity sensor data
+    fn check_and_send_monitor_view(
+        &mut self,
+        atlas_scientific_channels: &mut AtlasScientificChannels,
+        mutex_water_temperature: &Arc<Mutex<AtlasScientificResultData>>,
+        mutex_ph: &Arc<Mutex<AtlasScientificResultData>>,
+        mutex_conductivity: &Arc<Mutex<AtlasScientificResultData>>,
+    ) {
+        // Read current values from mutexes
+        let temp_result = mutex_water_temperature.lock();
+        let ph_result = mutex_ph.lock();
+        let cond_result = mutex_conductivity.lock();
+
+        // Check if all locks succeeded
+        if temp_result.is_err() || ph_result.is_err() || cond_result.is_err() {
+            return; // Skip monitoring if we can't read values
+        }
+
+        let temp = temp_result.unwrap();
+        let ph = ph_result.unwrap();
+        let cond = cond_result.unwrap();
+
+        // Check each sensor individually - only check thresholds for valid sensors
+        let temp_out_of_range = if temp.invalid {
+            false // Skip invalid sensors - report no issue
+        } else {
+            temp.value < self.config.min_val_atlas_scientific_temperature
+                || temp.value > self.config.max_val_atlas_scientific_temperature
+        };
+
+        let ph_out_of_range = if ph.invalid {
+            false // Skip invalid sensors - report no issue
+        } else {
+            ph.value < self.config.min_val_atlas_scientific_ph
+                || ph.value > self.config.max_val_atlas_scientific_ph
+        };
+
+        let cond_out_of_range = if cond.invalid {
+            false // Skip invalid sensors - report no issue
+        } else {
+            cond.value < self.config.min_val_atlas_scientific_conductivity
+                || cond.value > self.config.max_val_atlas_scientific_conductivity
+        };
+
+        // Skip sending if all sensors are invalid
+        if temp.invalid && ph.invalid && cond.invalid {
+            return;
+        }
+
+        let monitor_view = AtlasScientificMonitorView {
+            temperature_out_of_range: temp_out_of_range,
+            ph_out_of_range: ph_out_of_range,
+            conductivity_out_of_range: cond_out_of_range,
+        };
+
+        // Deduplicate: only send if different from last sent
+        let mut should_send = true;
+        if let Some(ref last_view) = self.last_sent_monitor_view {
+            if &monitor_view == last_view {
+                should_send = false;
+            }
+        }
+
+        if should_send {
+            match atlas_scientific_channels.send_to_monitor(monitor_view.clone()) {
+                Ok(_) => {
+                    self.lock_error_channel_send_monitors = false;
+                    self.last_sent_monitor_view = Some(monitor_view);
+                }
+                Err(e) => {
+                    if !self.lock_error_channel_send_monitors {
+                        log_error_chain(module_path!(), "sending view to monitor failed", e);
+                        self.lock_error_channel_send_monitors = true;
+                    }
+                }
+            }
         }
     }
 
@@ -427,6 +535,7 @@ impl AtlasScientific {
         let spin_sleeper = SpinSleeper::default();
 
         let mut state_send_receive: bool = false;
+        let mut measurement_set_complete: bool = false;
         let mut channel_is_disconnected: bool = false;
         let mut receive_counter: u32 = 0;
 
@@ -553,8 +662,20 @@ impl AtlasScientific {
                             if !state_send_receive {
                                 // data could be received successfully
                                 receive_counter = 0;
-                                self.last_measurement_instant = Instant::now();
-                                signal = signal.get_next_atlas_scientific_signal();
+
+                                (signal, measurement_set_complete) =
+                                    signal.get_next_atlas_scientific_signal();
+
+                                if measurement_set_complete {
+                                    self.last_measurement_instant = Instant::now();
+                                    // Check thresholds and send monitoring view
+                                    self.check_and_send_monitor_view(
+                                        atlas_scientific_channels,
+                                        &mutex_atlas_scientific_water_temperature,
+                                        &mutex_atlas_scientific_ph,
+                                        &mutex_atlas_scientific_conductivity,
+                                    );
+                                }
                             } else {
                                 receive_counter = receive_counter.saturating_add(1);
                             }
@@ -598,6 +719,7 @@ impl AtlasScientific {
 pub mod tests {
     use crate::launch::channels::Channels;
     use crate::mocks::mock_i2c_interface::tests::MockI2cInterface;
+    use crate::mocks::mock_monitors::tests::MockMonitors;
     use crate::sensors::atlas_scientific::{
         atlas_scientific_constants, AtlasScientific, AtlasScientificError,
         AtlasScientificResultData,
@@ -686,6 +808,8 @@ pub mod tests {
             stimuli_i2c_response_conductivity.clone(),
         );
 
+        let mut mock_monitors = MockMonitors::new();
+
         let drivers = AtlasScientific::create_drivers(&config.atlas_scientific).unwrap();
         let mut atlas_scientific = AtlasScientific::new(config.atlas_scientific, drivers);
 
@@ -721,37 +845,46 @@ pub mod tests {
             .name("test_environment".to_string())
             .spawn(move || {
                 let sleep_time =
-                    Duration::from_millis(measurement_interval_millis_for_test_environment + 1000);
+                    Duration::from_millis(measurement_interval_millis_for_test_environment + 5000);
                 let spin_sleeper = SpinSleeper::default();
 
-                // lock the mutexes and wait for triggering the detection
-                match mutex_atlas_scientific_temperature_clone_for_test_environment.lock() {
-                    Ok(_guard) => {
-                        // binding is necessary to avoid the drop by the compiler
-                        spin_sleeper.sleep(sleep_time);
-                    }
-                    Err(e) => {
-                        panic!("mutex_atlas_scientific_temperature lock poisoned: {:?}", e);
-                    }
-                };
-                match mutex_atlas_scientific_ph_clone_for_test_environment.lock() {
-                    Ok(_guard) => {
-                        // binding is necessary to avoid the drop by the compiler
-                        spin_sleeper.sleep(sleep_time);
-                    }
-                    Err(e) => {
-                        panic!("mutex_atlas_scientific_ph lock poisoned: {:?}", e);
-                    }
-                };
-                match mutex_atlas_scientific_conductivity_clone_for_test_environment.lock() {
-                    Ok(_guard) => {
-                        // binding is necessary to avoid the drop by the compiler
-                        spin_sleeper.sleep(sleep_time);
-                    }
-                    Err(e) => {
-                        panic!("mutex_atlas_scientific_conductivity lock poisoned: {:?}", e);
-                    }
-                };
+                {
+                    // lock the mutexes one by one and wait for triggering the detection
+                    let _guard_temp = mutex_atlas_scientific_temperature_clone_for_test_environment
+                        .lock()
+                        .unwrap_or_else(|e| {
+                            panic!("mutex_atlas_scientific_temperature lock poisoned: {:?}", e)
+                        });
+                    // give the test object some time to try to claim the lock
+                    println!("Test environment acquired lock for temperature");
+                    spin_sleeper.sleep(sleep_time);
+                    println!("Test environment released lock for temperature");
+                }
+
+                {
+                    let _guard_ph = mutex_atlas_scientific_ph_clone_for_test_environment
+                        .lock()
+                        .unwrap_or_else(|e| {
+                            panic!("mutex_atlas_scientific_ph lock poisoned: {:?}", e)
+                        });
+                    // give the test object some time to try to claim the lock
+                    println!("Test environment acquired lock for pH");
+                    spin_sleeper.sleep(sleep_time);
+                    println!("Test environment released lock for pH");
+                }
+
+                {
+                    let _guard_cond =
+                        mutex_atlas_scientific_conductivity_clone_for_test_environment
+                            .lock()
+                            .unwrap_or_else(|e| {
+                                panic!("mutex_atlas_scientific_conductivity lock poisoned: {:?}", e)
+                            });
+                    // give the test object some time to try to claim the lock
+                    println!("Test environment acquired lock for conductivity");
+                    spin_sleeper.sleep(sleep_time);
+                    println!("Test environment released lock for conductivity");
+                }
 
                 channels
                     .signal_handler
@@ -761,6 +894,11 @@ pub mod tests {
                 channels
                     .signal_handler
                     .tx_signal_handler_to_i2c_interface
+                    .send(InternalCommand::Quit)
+                    .unwrap();
+                channels
+                    .signal_handler
+                    .tx_signal_handler_to_monitors
                     .send(InternalCommand::Quit)
                     .unwrap();
                 channels
@@ -779,10 +917,26 @@ pub mod tests {
             })
             .unwrap();
 
+        // thread for mock Monitors
+        let join_handle_mock_monitors = thread::Builder::new()
+            .name("mock_monitors".to_string())
+            .spawn(move || {
+                mock_monitors.execute(
+                    None,
+                    Some(channels.monitors.rx_monitors_from_atlas_scientific),
+                    channels.monitors.rx_monitors_from_signal_handler,
+                );
+            })
+            .unwrap();
+
         // thread for the test object
         let join_handle_test_object = thread::Builder::new()
             .name("test_object".to_string())
             .spawn(move || {
+                // avoid race condition - let test environment lock the mutexes first
+                let sleep_time = Duration::from_millis(1000);
+                let spin_sleeper = SpinSleeper::default();
+                spin_sleeper.sleep(sleep_time);
                 atlas_scientific.execute(
                     &mut channels.atlas_scientific,
                     mutex_atlas_scientific_temperature,
@@ -821,6 +975,9 @@ pub mod tests {
         join_handle_mock_i2c_interface
             .join()
             .expect("Mock i2c interface did not finish.");
+        join_handle_mock_monitors
+            .join()
+            .expect("Mock Monitors did not finish.");
         join_handle_test_environment
             .join()
             .expect("Test environment did not finish.");

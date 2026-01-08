@@ -450,9 +450,8 @@ impl TankLevelSwitch {
                 // Use `if let` for more idiomatic Option handling.
                 if let Some(pin) = self.input_pin_opt.as_mut() {
                     if self.config.reverse_gpio_logic {
-                        self.tank_level_switch_position = pin.is_low();  
-                    }
-                    else {
+                        self.tank_level_switch_position = pin.is_low();
+                    } else {
                         self.tank_level_switch_position = pin.is_high();
                     }
                     self.lock_error_input_pin_none = false;

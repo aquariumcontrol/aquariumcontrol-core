@@ -64,7 +64,6 @@ pub trait AtlasScientificDriver: Send + Sync + Debug {
         atlas_scientific_channels: &mut AtlasScientificChannels,
     ) -> Result<(), AtlasScientificError>;
 
-
     /// Receives the raw response from the I2C interface, parses it, and updates the shared state.
     ///
     /// This function performs the second half of the measurement cycle. It waits for (or checks)

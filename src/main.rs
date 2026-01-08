@@ -944,11 +944,7 @@ fn run() -> Result<(), StartupError> {
                 // terminate the I2cInterface thread before exiting the application
                 signal_handler::send_command(
                     InternalCommand::Quit,
-                    Some(
-                        &mut channels
-                            .signal_handler
-                            .tx_signal_handler_to_i2c_interface,
-                    ),
+                    Some(&mut channels.signal_handler.tx_signal_handler_to_i2c_interface),
                     None,
                     "i2c_interface",
                 );

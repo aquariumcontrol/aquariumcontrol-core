@@ -243,12 +243,12 @@ impl I2cResponse {
             length: len,
         }
     }
-    
+
     pub fn empty() -> I2cResponse {
         let read_buf = [0u8; MAX_I2C_RESPONSE_LENGTH];
         I2cResponse {
             read_buf,
-            length: 0
+            length: 0,
         }
     }
 }
@@ -399,8 +399,7 @@ impl I2cInterface {
             } else {
                 Ok(I2cResponse::new(read_slice))
             }
-        }
-        else {
+        } else {
             Ok(I2cResponse::empty())
         }
     }

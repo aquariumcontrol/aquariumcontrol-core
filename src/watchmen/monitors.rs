@@ -62,6 +62,7 @@ use log::debug;
 use nix::unistd::gettid;
 
 use crate::launch::channels::AquaChannelError;
+use crate::sensors::atlas_scientific_monitor_view::AtlasScientificMonitorView;
 use crate::utilities::acknowledge_signal_handler::AcknowledgeSignalHandlerTrait;
 use crate::utilities::proc_ext_req::ProcessExternalRequestTrait;
 use crate::watchmen::monitors_channels::MonitorsChannels;
@@ -94,6 +95,12 @@ pub struct Monitors {
 
     /// storage of refill monitor views
     refill_monitor_views: Vec<RefillMonitorView>,
+
+    /// storage of atlas scientific monitor views
+    atlas_scientific_monitor_views: Vec<AtlasScientificMonitorView>,
+
+    /// inhibition flag to avoid flooding the log file with repeated messages about failure to receive from atlas scientific
+    lock_error_receive_atlas_scientific: bool,
 }
 
 impl ProcessExternalRequestTrait for Monitors {}
@@ -118,6 +125,8 @@ impl Monitors {
             lock_info_monitors_inhibited: false,
             lock_error_receive_refill: false,
             refill_monitor_views: vec![],
+            atlas_scientific_monitor_views: vec![],
+            lock_error_receive_atlas_scientific: false,
         }
     }
     /// Manages a vector of `RefillMonitorView` structs, ensuring it does not exceed
@@ -141,6 +150,35 @@ impl Monitors {
         }
         // Append the new RefillMonitorView struct to the end of the vector.
         self.refill_monitor_views.push(refill_monitor_view);
+    }
+
+    /// Manages a vector of `AtlasScientificMonitorView` structs, ensuring it does not exceed
+    /// a specified maximum length.
+    ///
+    /// If the vector has reached its maximum capacity, the oldest element (at index 0)
+    /// is removed before the new `atlas_scientific_monitor_view` is appended.
+    /// Otherwise, the new `atlas_scientific_monitor_view` is simply appended.
+    ///
+    /// # Arguments
+    /// * `atlas_scientific_monitor_view` - The new `AtlasScientificMonitorView` struct to be added to the vector.
+    pub fn append_atlas_scientific_monitor_view(
+        &mut self,
+        atlas_scientific_monitor_view: AtlasScientificMonitorView,
+    ) {
+        // Check if the vector has reached or exceeded its maximum allowed length.
+        if self.atlas_scientific_monitor_views.len()
+            >= self.config.max_length_atlas_scientific_monitor_views
+        {
+            #[cfg(feature = "debug_channels")]
+            debug!(target: module_path!(), "CAUTION: Reached size limit for Atlas Scientific monitor views.");
+
+            // If it has, remove the oldest element (at index 0).
+            // This shifts all further elements to the left.
+            self.atlas_scientific_monitor_views.remove(0);
+        }
+        // Append the new AtlasScientificMonitorView struct to the end of the vector.
+        self.atlas_scientific_monitor_views
+            .push(atlas_scientific_monitor_view);
     }
 
     /// Executes the main control loop for the monitor module.
@@ -217,6 +255,35 @@ impl Monitors {
                         }
                     }
                 };
+
+                match monitors_channels
+                    .rx_monitors_from_atlas_scientific
+                    .try_recv()
+                {
+                    Ok(new_view) => {
+                        // Deduplicate against last stored view
+                        if let Some(last_view) = self.atlas_scientific_monitor_views.last() {
+                            if &new_view != last_view {
+                                self.append_atlas_scientific_monitor_view(new_view);
+                            }
+                        } else {
+                            self.append_atlas_scientific_monitor_view(new_view);
+                        }
+                    }
+                    Err(e) => {
+                        match e {
+                            #[cfg(feature = "debug_channels")]
+                            AquaChannelError::Full => { /* only applicable to send */ }
+                            AquaChannelError::Empty => { /* empty buffer - no action required */ }
+                            AquaChannelError::Disconnected => {
+                                if !self.lock_error_receive_atlas_scientific {
+                                    error!(target: module_path!(), "Error when trying to receive from atlas_scientific: {e}");
+                                    self.lock_error_receive_atlas_scientific = true;
+                                }
+                            }
+                        }
+                    }
+                }
             }
             spin_sleeper.sleep(sleep_duration_hundred_millis);
 

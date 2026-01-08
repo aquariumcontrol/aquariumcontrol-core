@@ -63,6 +63,7 @@ use crate::relays::actuate_simulator_channels::ActuateSimulatorChannels;
 use crate::relays::relay_manager_channels::RelayManagerChannels;
 #[allow(unused)] // used in conditionally compiled code
 use crate::sensors::atlas_scientific_channels::AtlasScientificChannels;
+use crate::sensors::atlas_scientific_monitor_view::AtlasScientificMonitorView;
 use crate::sensors::dht_channels::DhtChannels;
 use crate::sensors::ds18b20_channels::Ds18b20Channels;
 use crate::sensors::i2c_interface::{I2cRequest, I2cResult};
@@ -405,6 +406,11 @@ impl Channels {
             create_unidirectional_channel!(RefillMonitorView);
         //********************************
 
+        // *** atlas_scientific => monitors ***
+        let (tx_atlas_scientific_to_monitors, rx_monitors_from_atlas_scientific) =
+            create_unidirectional_channel!(AtlasScientificMonitorView);
+        //********************************
+
         // *** signal handler <=> refill ***
         let (
             (tx_signal_handler_to_refill, rx_refill_from_signal_handler),
@@ -593,6 +599,7 @@ impl Channels {
             rx_atlas_scientific_from_i2c_interface,
             tx_atlas_scientific_to_signal_handler,
             rx_atlas_scientific_from_signal_handler,
+            tx_atlas_scientific_to_monitors,
         };
 
         let refill = RefillChannels {
@@ -714,6 +721,7 @@ impl Channels {
 
         let monitors = MonitorsChannels {
             rx_monitors_from_refill,
+            rx_monitors_from_atlas_scientific,
             tx_monitors_to_signal_handler,
             rx_monitors_from_signal_handler,
             rx_monitors_from_messaging_opt,

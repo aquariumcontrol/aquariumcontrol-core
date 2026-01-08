@@ -100,9 +100,15 @@ pub trait CheckMutexAccessDurationTrait {
                         self.get_max_mutex_access_duration().as_millis(),
                         measured_mutex_access_duration.as_millis(),
                 );
+
                 // record for testing purposes only
                 cfg_if::cfg_if! {
                     if #[cfg(test)] {
+                        println!(
+                            "*** Access to mutex took too long. Allowed={}ms, Measured={}ms ***",
+                            self.get_max_mutex_access_duration().as_millis(),
+                            measured_mutex_access_duration.as_millis(),
+                        );
                         self.record_access_duration_violation(&key_opt);
                     }
                 }
@@ -380,7 +386,6 @@ impl CheckMutexAccessDurationTrait for AtlasScientificEzo {
     #[cfg(test)]
     /// Method connects the default trait implementation with the specific implementation
     /// for recording access duration violation
-    #[cfg(test)]
     fn record_access_duration_violation(&mut self, key_opt: &Option<&AquariumSignal>) {
         if let Some(key) = key_opt {
             match key {

@@ -171,14 +171,15 @@ impl AquariumSignal {
         }
     }
 
-    /// Defines the sequence of measurement used by AtlasScientific
+    /// Defines the sequence of measurement used by AtlasScientific and also indicates
+    /// completion of one measurement set
     #[allow(unused)] // used in conditionally compiled code
-    pub fn get_next_atlas_scientific_signal(&self) -> AquariumSignal {
+    pub fn get_next_atlas_scientific_signal(&self) -> (AquariumSignal, bool) {
         match self {
-            AquariumSignal::WaterTemperature => AquariumSignal::pH,
-            AquariumSignal::pH => AquariumSignal::Conductivity,
-            AquariumSignal::Conductivity => AquariumSignal::WaterTemperature,
-            _ => AquariumSignal::WaterTemperature, // default value
+            AquariumSignal::WaterTemperature => (AquariumSignal::pH, false),
+            AquariumSignal::pH => (AquariumSignal::Conductivity, false),
+            AquariumSignal::Conductivity => (AquariumSignal::WaterTemperature, true),
+            _ =>(AquariumSignal::WaterTemperature, false), // default value
         }
     }
 }

@@ -29,4 +29,7 @@ pub struct MonitorsConfig {
 
     /// Maximum number of monitoring entries for refill
     pub max_length_refill_monitor_views: usize,
+
+    /// Maximum number of monitoring entries for Atlas Scientific sensors
+    pub max_length_atlas_scientific_monitor_views: usize,
 }

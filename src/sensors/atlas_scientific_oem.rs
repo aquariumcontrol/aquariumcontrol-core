@@ -69,7 +69,7 @@ pub(crate) mod atlas_scientific_oem_constants {
 
     // The OEM devices return 2 byte for this request
     pub const DEVICE_TYPE_RESPONSE_LENGTH: usize = 2;
-    
+
     /// Register for waking up the sensor
     pub const REG_WAKEUP: u8 = 0x06;
 
@@ -162,8 +162,7 @@ impl AtlasScientificOem {
     /// * `response_length` - The number of bytes to read for a measurement (typically 4).
     pub fn new(
         i2c_address: u16,
-        #[cfg(all(feature = "target_hw", target_os = "linux"))]
-        device_type: u8,
+        #[cfg(all(feature = "target_hw", target_os = "linux"))] device_type: u8,
         sleep_time_millis: u64,
         max_mutex_access_duration_millis: u64,
         register_data_msb: u8,
@@ -314,8 +313,10 @@ impl AtlasScientificDriver for AtlasScientificOem {
                     AquariumSignal::Conductivity
                     | AquariumSignal::WaterTemperature
                     | AquariumSignal::pH => {
-                        let result_data =
-                            self.parse_oem_response(signal, &i2c_response.read_buf[..i2c_response.length])?;
+                        let result_data = self.parse_oem_response(
+                            signal,
+                            &i2c_response.read_buf[..i2c_response.length],
+                        )?;
                         let instant_before_locking_mutex = Instant::now();
                         let result_data_clone = result_data.clone();
 
@@ -372,15 +373,14 @@ impl AtlasScientificDriver for AtlasScientificOem {
         atlas_scientific_channels: &mut AtlasScientificChannels,
         signal: &AquariumSignal,
     ) -> Result<(), AtlasScientificError> {
-        
         // Step 1: Wake up the sensor - write 0x01 to the register
         let wake_command = vec![atlas_scientific_oem_constants::REG_WAKEUP, 0x01];
 
         let wake_request = I2cRequest::new(
             self.i2c_address,
             &wake_command,
-            0,	  // no sleep time
-            0,    // We don't expect a response for the write
+            0, // no sleep time
+            0, // We don't expect a response for the write
         )
         .map_err(|e| AtlasScientificError::SignalRequestCreationFailure {
             location: module_path!().to_string(),
@@ -405,7 +405,7 @@ impl AtlasScientificDriver for AtlasScientificOem {
                 source: AquaChannelError::Disconnected,
             })?;
         // no evaluation of response content required for step 1
-        
+
         // Step 2: Check the sensor type
         let command_inform_type = vec![atlas_scientific_oem_constants::REG_DEVICE_TYPE];
         let request = I2cRequest::new(
@@ -439,7 +439,8 @@ impl AtlasScientificDriver for AtlasScientificOem {
 
         match response {
             Ok(i2c_response) => {
-                if i2c_response.length > atlas_scientific_oem_constants::DEVICE_TYPE_RESPONSE_LENGTH {
+                if i2c_response.length > atlas_scientific_oem_constants::DEVICE_TYPE_RESPONSE_LENGTH
+                {
                     #[cfg(test)]
                     println!("Firmware version = {}", i2c_response.read_buf[1]);
                     return Err(AtlasScientificError::ResponseTooLong {
@@ -449,7 +450,8 @@ impl AtlasScientificDriver for AtlasScientificOem {
                         actual_length: i2c_response.length,
                     });
                 }
-                if i2c_response.length < atlas_scientific_oem_constants::DEVICE_TYPE_RESPONSE_LENGTH {
+                if i2c_response.length < atlas_scientific_oem_constants::DEVICE_TYPE_RESPONSE_LENGTH
+                {
                     return Err(AtlasScientificError::ResponseTooShort {
                         location: module_path!().to_string(),
                         signal: signal.clone(),
@@ -457,10 +459,10 @@ impl AtlasScientificDriver for AtlasScientificOem {
                         actual_length: i2c_response.length,
                     });
                 }
-                
+
                 #[cfg(test)]
                 println!("Firmware version = {}", i2c_response.read_buf[1]);
-                
+
                 if i2c_response.read_buf[0] != self.device_type {
                     return Err(AtlasScientificError::InvalidDeviceType {
                         location: module_path!().to_string(),
@@ -468,7 +470,7 @@ impl AtlasScientificDriver for AtlasScientificOem {
                         actual_value: i2c_response.read_buf[0],
                     });
                 }
-                
+
                 #[cfg(test)]
                 println!("Atlas Scientific OEM sensor type {} recognized.", signal);
 

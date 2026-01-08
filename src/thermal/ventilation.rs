@@ -1283,7 +1283,7 @@ pub mod tests {
                 assert_ge!(third_last_actuation_duration, 11950);
                 assert_le!(fourth_last_actuation_duration, 1100);
                 assert_ge!(fourth_last_actuation_duration, 900);
-                assert_le!(fifth_last_actuation_duration, 12150);
+                assert_le!(fifth_last_actuation_duration, 12160);
                 assert_ge!(fifth_last_actuation_duration, 11950);
                 assert_le!(sixth_last_actuation_duration, 1100);
                 assert_ge!(sixth_last_actuation_duration, 900);

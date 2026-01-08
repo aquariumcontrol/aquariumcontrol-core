@@ -1286,7 +1286,8 @@ pub mod tests {
             .name("mock_monitor".to_string())
             .spawn(move || {
                 mock_monitors.execute(
-                    channels.monitors.rx_monitors_from_refill,
+                    Some(channels.monitors.rx_monitors_from_refill),
+                    None,
                     rx_monitors_from_test_environment,
                 );
             })
@@ -1452,7 +1453,8 @@ pub mod tests {
             .name("mock_monitor".to_string())
             .spawn(move || {
                 mock_monitors.execute(
-                    channels.monitors.rx_monitors_from_refill,
+                    Some(channels.monitors.rx_monitors_from_refill),
+                    None,
                     rx_monitors_from_test_environment,
                 );
             })
@@ -1613,7 +1615,8 @@ pub mod tests {
             .name("mock_monitor".to_string())
             .spawn(move || {
                 mock_monitors.execute(
-                    channels.monitors.rx_monitors_from_refill,
+                    Some(channels.monitors.rx_monitors_from_refill),
+                    None,
                     rx_monitors_from_test_environment,
                 );
             })
@@ -1783,7 +1786,8 @@ pub mod tests {
             .name("mock_monitor".to_string())
             .spawn(move || {
                 mock_monitors.execute(
-                    channels.monitors.rx_monitors_from_refill,
+                    Some(channels.monitors.rx_monitors_from_refill),
+                    None,
                     rx_monitors_from_test_environment,
                 );
             })
@@ -1979,7 +1983,8 @@ pub mod tests {
             .name("mock_monitor".to_string())
             .spawn(move || {
                 mock_monitors.execute(
-                    channels.monitors.rx_monitors_from_refill,
+                    Some(channels.monitors.rx_monitors_from_refill),
+                    None,
                     rx_monitors_from_test_environment,
                 );
             })
@@ -2151,7 +2156,8 @@ pub mod tests {
             .name("mock_monitor".to_string())
             .spawn(move || {
                 mock_monitors.execute(
-                    channels.monitors.rx_monitors_from_refill,
+                    Some(channels.monitors.rx_monitors_from_refill),
+                    None,
                     rx_monitors_from_test_environment,
                 );
             })
@@ -2312,7 +2318,8 @@ pub mod tests {
             .name("mock_monitor".to_string())
             .spawn(move || {
                 mock_monitors.execute(
-                    channels.monitors.rx_monitors_from_refill,
+                    Some(channels.monitors.rx_monitors_from_refill),
+                    None,
                     rx_monitors_from_test_environment,
                 );
             })
@@ -2475,7 +2482,8 @@ pub mod tests {
             .name("mock_monitor".to_string())
             .spawn(move || {
                 mock_monitors.execute(
-                    channels.monitors.rx_monitors_from_refill,
+                    Some(channels.monitors.rx_monitors_from_refill),
+                    None,
                     rx_monitors_from_test_environment,
                 );
             })
@@ -2679,7 +2687,8 @@ pub mod tests {
             .name("mock_monitor".to_string())
             .spawn(move || {
                 mock_monitors.execute(
-                    channels.monitors.rx_monitors_from_refill,
+                    Some(channels.monitors.rx_monitors_from_refill),
+                    None,
                     rx_monitors_from_test_environment,
                 );
             })
@@ -2804,7 +2813,8 @@ pub mod tests {
             .name("mock_monitor".to_string())
             .spawn(move || {
                 mock_monitors.execute(
-                    channels.monitors.rx_monitors_from_refill,
+                    Some(channels.monitors.rx_monitors_from_refill),
+                    None,
                     rx_monitors_from_test_environment,
                 );
                 println!("{}", mock_monitors);

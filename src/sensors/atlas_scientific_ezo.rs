@@ -475,6 +475,7 @@ pub mod tests {
     #[cfg(all(target_os = "linux", feature = "target_hw"))]
     use std::io;
 
+    use crate::sensors::atlas_scientific_monitor_view::AtlasScientificMonitorView;
     use std::sync::{Arc, Mutex};
     use std::thread;
     use std::time::Duration;
@@ -943,7 +944,10 @@ pub mod tests {
             AquaSender<InternalCommand>,
             AquaReceiver<InternalCommand>,
         ) = channel(1);
-
+        let (tx_atlas_scientific_to_monitors, _rx_monitors_from_atlas_scientific): (
+            AquaSender<AtlasScientificMonitorView>,
+            AquaReceiver<AtlasScientificMonitorView>,
+        ) = channel(1);
         let mut atlas_scientific_channels = AtlasScientificChannels {
             tx_atlas_scientific_to_i2c_interface,
             #[cfg(feature = "debug_channels")]
@@ -960,6 +964,8 @@ pub mod tests {
             rx_atlas_scientific_from_signal_handler,
             #[cfg(feature = "debug_channels")]
             cnt_rx_atlas_scientific_from_signal_handler: 0,
+
+            tx_atlas_scientific_to_monitors,
         };
 
         let result =

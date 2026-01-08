@@ -11,6 +11,7 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 pub mod tests {
     use crate::launch::channels::{AquaChannelError, AquaReceiver};
     use crate::mocks::mock_common::mock_common_receive_from_signal_handler;
+    use crate::sensors::atlas_scientific_monitor_view::AtlasScientificMonitorView;
     use crate::utilities::channel_content::InternalCommand;
     use crate::water::refill_monitor_view::RefillMonitorView;
     use spin_sleep::SpinSleeper;
@@ -23,25 +24,43 @@ pub mod tests {
     pub struct MockMonitors {
         // storage of refill monitor views
         pub refill_monitor_views: Vec<(Instant, RefillMonitorView)>,
+        // storage of refill monitor views
+        pub atlas_scientific_monitor_views: Vec<(Instant, AtlasScientificMonitorView)>,
     }
 
     // Implement the Display trait for MockMonitors.
     impl fmt::Display for MockMonitors {
         fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
             if self.refill_monitor_views.is_empty() {
-                write!(f, "MockMonitors contains no refill monitor views.")
+                writeln!(f, "MockMonitors contains no refill monitor views.")?;
             } else {
                 writeln!(
                     f,
-                    "MockMonitors contains {} views:",
+                    "MockMonitors contains {} refill monitor views:",
                     self.refill_monitor_views.len()
                 )?;
                 for (i, (instant, view)) in self.refill_monitor_views.iter().enumerate() {
                     // Instant does not implement Display, so we use the Debug format {:?}
                     writeln!(f, "- View {}: (at Instant {:?}) {}", i + 1, instant, view)?;
                 }
-                Ok(())
             }
+            if self.atlas_scientific_monitor_views.is_empty() {
+                writeln!(
+                    f,
+                    "MockMonitors contains no Atlas Scientific monitor views."
+                )?;
+            } else {
+                writeln!(
+                    f,
+                    "MockMonitors contains {} AtlasScientific monitor views:",
+                    self.atlas_scientific_monitor_views.len()
+                )?;
+                for (i, (instant, view)) in self.refill_monitor_views.iter().enumerate() {
+                    // Instant does not implement Display, so we use the Debug format {:?}
+                    writeln!(f, "- View {}: (at Instant {:?}) {}", i + 1, instant, view)?;
+                }
+            }
+            Ok(())
         }
     }
 
@@ -49,6 +68,7 @@ pub mod tests {
         pub fn new() -> MockMonitors {
             MockMonitors {
                 refill_monitor_views: vec![],
+                atlas_scientific_monitor_views: vec![],
             }
         }
 
@@ -64,9 +84,25 @@ pub mod tests {
                 .push((Instant::now(), refill_monitor_view));
         }
 
+        pub fn append_atlas_scientific_monitor_view(
+            &mut self,
+            atlas_scientific_monitor_view: AtlasScientificMonitorView,
+        ) {
+            // Check if the vector has reached or exceeded its maximum allowed length.
+            if self.atlas_scientific_monitor_views.len() >= MOCK_MONITORS_MAX_VEC_LEN {
+                // If it has, remove the oldest element (at index 0).
+                // This shifts all further elements to the left.
+                self.atlas_scientific_monitor_views.remove(0);
+            }
+            // Append the new RefillMonitorView struct to the end of the vector.
+            self.atlas_scientific_monitor_views
+                .push((Instant::now(), atlas_scientific_monitor_view));
+        }
+
         pub fn execute(
             &mut self,
-            mut rx_from_refill: AquaReceiver<RefillMonitorView>,
+            mut rx_from_refill_opt: Option<AquaReceiver<RefillMonitorView>>,
+            mut rx_from_atlas_scientific_opt: Option<AquaReceiver<AtlasScientificMonitorView>>,
             mut rx_from_signal_handler: AquaReceiver<InternalCommand>,
         ) {
             let sleep_duration_hundred_millis = Duration::from_millis(100);
@@ -80,17 +116,45 @@ pub mod tests {
                     break;
                 }
 
-                match rx_from_refill.try_recv() {
-                    Ok(refill_monitor_view) => {
-                        self.append_refill_monitor_view(refill_monitor_view);
-                    }
-                    Err(e) => {
-                        match e {
-                            AquaChannelError::Empty => { /* do nothing */ }
-                            AquaChannelError::Disconnected => {
-                                panic!("{}: channel disconnected", module_path!());
+                match rx_from_refill_opt {
+                    Some(ref mut rx_from_refill) => match rx_from_refill.try_recv() {
+                        Ok(refill_monitor_view) => {
+                            self.append_refill_monitor_view(refill_monitor_view);
+                        }
+                        Err(e) => {
+                            match e {
+                                AquaChannelError::Empty => { /* do nothing */ }
+                                AquaChannelError::Disconnected => {
+                                    panic!("{}: channel disconnected", module_path!());
+                                }
                             }
                         }
+                    },
+                    None => {
+                        // Do nothing
+                    }
+                }
+
+                match rx_from_atlas_scientific_opt {
+                    Some(ref mut rx_from_atlas_scientific) => {
+                        match rx_from_atlas_scientific.try_recv() {
+                            Ok(atlas_scientific_monitor_view) => {
+                                self.append_atlas_scientific_monitor_view(
+                                    atlas_scientific_monitor_view,
+                                );
+                            }
+                            Err(e) => {
+                                match e {
+                                    AquaChannelError::Empty => { /* do nothing */ }
+                                    AquaChannelError::Disconnected => {
+                                        panic!("{}: channel disconnected", module_path!());
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    None => {
+                        // Do nothing
                     }
                 }
 

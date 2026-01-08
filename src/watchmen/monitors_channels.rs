@@ -33,6 +33,7 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 //!   messaging feature.
 
 use crate::launch::channels::{AquaReceiver, AquaSender};
+use crate::sensors::atlas_scientific_monitor_view::AtlasScientificMonitorView;
 use crate::utilities::channel_content::InternalCommand;
 use crate::water::refill_monitor_view::RefillMonitorView;
 use std::fmt;
@@ -41,6 +42,9 @@ use std::fmt;
 pub struct MonitorsChannels {
     /// Receiver part of the channel for communication from Refill
     pub rx_monitors_from_refill: AquaReceiver<RefillMonitorView>,
+
+    /// Receiver part of the channel for communication from AtlasScientific
+    pub rx_monitors_from_atlas_scientific: AquaReceiver<AtlasScientificMonitorView>,
 
     /// Sender part of the channel for communication to the signal handler
     pub tx_monitors_to_signal_handler: AquaSender<bool>,
@@ -60,6 +64,11 @@ impl fmt::Display for MonitorsChannels {
             f,
             "rx_monitors_from_refill: {}",
             self.rx_monitors_from_refill.count
+        )?;
+        writeln!(
+            f,
+            "rx_monitors_from_atlas_scientific: {}",
+            self.rx_monitors_from_atlas_scientific.count
         )?;
         writeln!(
             f,

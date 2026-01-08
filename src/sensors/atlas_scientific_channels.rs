@@ -43,6 +43,7 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 //!   logic without needing to run the entire application.
 
 use crate::launch::channels::{AquaChannelError, AquaReceiver, AquaSender};
+use crate::sensors::atlas_scientific_monitor_view::AtlasScientificMonitorView;
 use crate::sensors::i2c_interface::{I2cRequest, I2cResult};
 use crate::utilities::channel_content::InternalCommand;
 use std::fmt;
@@ -64,6 +65,9 @@ pub struct AtlasScientificChannels {
     /// Receiver part of the channel for communication from the signal handler
     #[allow(unused)] // used in conditionally compiled code
     pub rx_atlas_scientific_from_signal_handler: AquaReceiver<InternalCommand>,
+
+    /// Sender part of the channel for communication to monitors
+    pub tx_atlas_scientific_to_monitors: AquaSender<AtlasScientificMonitorView>,
 }
 
 impl AtlasScientificChannels {
@@ -77,6 +81,14 @@ impl AtlasScientificChannels {
     #[allow(unused)] // used in conditionally compiled code
     pub fn receive_from_i2c_interface(&mut self) -> Result<I2cResult, AquaChannelError> {
         self.rx_atlas_scientific_from_i2c_interface.try_recv()
+    }
+
+    /// Sends a monitor view to the monitors thread.
+    pub fn send_to_monitor(
+        &mut self,
+        view: AtlasScientificMonitorView,
+    ) -> Result<(), AquaChannelError> {
+        self.tx_atlas_scientific_to_monitors.send(view)
     }
 }
 
@@ -99,10 +111,15 @@ impl fmt::Display for AtlasScientificChannels {
             "tx_atlas_scientific_to_signal_handler: {}",
             self.tx_atlas_scientific_to_signal_handler.count
         )?;
-        write!(
+        writeln!(
             f,
             "rx_atlas_scientific_from_signal_handler: {}",
             self.rx_atlas_scientific_from_signal_handler.count
+        )?;
+        write!(
+            f,
+            "tx_atlas_scientific_to_monitors: {}",
+            self.tx_atlas_scientific_to_monitors.count
         )
     }
 }

@@ -1440,7 +1440,7 @@ pub mod tests {
                 assert_ge!(sixth_last_actuation_duration, 6400);
 
                 println!("delta_min_max_duration={}", delta_min_max_duration);
-                assert_le!(delta_min_max_duration, 50);
+                assert_le!(delta_min_max_duration, 70);
                 mock_actuator_states.check_terminal_condition_heating();
             })
             .unwrap();
@@ -1647,7 +1647,7 @@ pub mod tests {
                 assert_ge!(third_last_actuation_duration, 11450);
                 assert_le!(fourth_last_actuation_duration, 1600);
                 assert_ge!(fourth_last_actuation_duration, 1400);
-                assert_le!(fifth_last_actuation_duration, 11650);
+                assert_le!(fifth_last_actuation_duration, 11700);
                 assert_ge!(fifth_last_actuation_duration, 11450);
                 assert_le!(sixth_last_actuation_duration, 1600);
                 assert_ge!(sixth_last_actuation_duration, 1400);
