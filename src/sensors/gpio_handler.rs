@@ -25,8 +25,6 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 //! (like actuators and sensors) that are responsible for the actual reading and
 //! writing of pin states.
 
-#[cfg(not(test))]
-use log::error;
 use std::collections::HashSet;
 
 use crate::sensors::gpio_handler_config::GpioHandlerConfig;

@@ -62,7 +62,6 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 use crate::utilities::proc_ext_req::ProcessExternalRequestTrait;
 use crate::watchmen::petting::PettingTrait;
 use crate::watchmen::watchdog_channels::WatchDogChannels;
-use log::error;
 use spin_sleep::SpinSleeper;
 use std::time::Duration;
 

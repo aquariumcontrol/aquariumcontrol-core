@@ -213,7 +213,7 @@ impl AtlasScientific {
             match config.sensor_type_temperature.as_str() {
                 atlas_scientific_constants::SENSOR_TYPE_OEM => Box::new(AtlasScientificOem::new(
                     config.address_atlas_scientific_temperature,
-                    #[cfg(all(feature = "target_hw", target_os = "linux"))]
+                    #[cfg(any(all(feature = "target_hw", target_os = "linux"), test))]
                     atlas_scientific_oem_constants::DEVICE_TYPE_TEMPERATURE,
                     config.sleep_time_millis_temperature,
                     atlas_scientific_constants::MAX_MUTEX_ACCESS_DURATION_MILLIS,
@@ -239,7 +239,7 @@ impl AtlasScientific {
         let driver_ph: Box<dyn AtlasScientificDriver> = match config.sensor_type_ph.as_str() {
             atlas_scientific_constants::SENSOR_TYPE_OEM => Box::new(AtlasScientificOem::new(
                 config.address_atlas_scientific_ph,
-                #[cfg(all(feature = "target_hw", target_os = "linux"))]
+                #[cfg(any(all(feature = "target_hw", target_os = "linux"), test))]
                 atlas_scientific_oem_constants::DEVICE_TYPE_PH,
                 config.sleep_time_millis_ph,
                 atlas_scientific_constants::MAX_MUTEX_ACCESS_DURATION_MILLIS,
@@ -266,7 +266,7 @@ impl AtlasScientific {
             match config.sensor_type_conductivity.as_str() {
                 atlas_scientific_constants::SENSOR_TYPE_OEM => Box::new(AtlasScientificOem::new(
                     config.address_atlas_scientific_conductivity,
-                    #[cfg(all(feature = "target_hw", target_os = "linux"))]
+                    #[cfg(any(all(feature = "target_hw", target_os = "linux"), test))]
                     atlas_scientific_oem_constants::DEVICE_TYPE_CONDUCTIVITY,
                     config.sleep_time_millis_conductivity,
                     atlas_scientific_constants::MAX_MUTEX_ACCESS_DURATION_MILLIS,

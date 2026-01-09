@@ -179,7 +179,7 @@ impl AquariumSignal {
             AquariumSignal::WaterTemperature => (AquariumSignal::pH, false),
             AquariumSignal::pH => (AquariumSignal::Conductivity, false),
             AquariumSignal::Conductivity => (AquariumSignal::WaterTemperature, true),
-            _ =>(AquariumSignal::WaterTemperature, false), // default value
+            _ => (AquariumSignal::WaterTemperature, false), // default value
         }
     }
 }

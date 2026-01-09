@@ -97,7 +97,7 @@ pub trait AtlasScientificDriver: Send + Sync + Debug {
         mutex_conductivity: &Arc<Mutex<AtlasScientificResultData>>,
     ) -> AtlasScientificResult;
 
-    #[cfg(all(target_os = "linux", feature = "target_hw"))]
+    #[cfg(any(all(target_os = "linux", feature = "target_hw"), test))]
     /// Performs hardware-specific initialization for the sensor.
     ///
     /// This function is called once during the startup phase. It allows the driver to
