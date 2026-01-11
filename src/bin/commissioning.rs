@@ -32,7 +32,8 @@ use aquarium_control::sensors::atlas_scientific::AtlasScientific;
 #[cfg(all(target_os = "linux", feature = "target_hw"))]
 use aquarium_control::sensors::i2c_interface::I2cInterface;
 #[cfg(all(target_os = "linux", feature = "target_hw"))]
-use aquarium_control::sensors::tank_level_switch::{TankLevelSwitch, TankLevelSwitchSignals};
+use aquarium_control::sensors::tank_level_switch::TankLevelSwitch;
+use aquarium_control::sensors::tank_level_switch::TankLevelSwitchSignals;
 
 use crossterm::{
     event::{self, DisableMouseCapture, EnableMouseCapture, Event, KeyCode},
@@ -69,12 +70,13 @@ const DEVICES: [AquariumDevice; 13] = [
     AquariumDevice::PeristalticPump4,
 ];
 
-const SIGNALS: [AquariumSignal; 5] = [
+const SIGNALS: [AquariumSignal; 6] = [
     AquariumSignal::WaterTemperature,
     AquariumSignal::AmbientTemperature,
     AquariumSignal::AmbientHumidity,
     AquariumSignal::pH,
     AquariumSignal::Conductivity,
+    AquariumSignal::TankLevelSwitchPosition,
 ];
 
 struct App {
@@ -84,15 +86,22 @@ struct App {
     signals: HashMap<AquariumSignal, f32>,
     mutexes: Option<SensorManagerMutexes>,
     sensor_manager_active: bool,
+    tank_level_switch_mutex: Option<Arc<Mutex<TankLevelSwitchSignals>>>,
+    tank_level_switch_active: bool,
 }
 
 impl App {
-    fn new(mutexes: SensorManagerMutexes, sensor_manager_active: bool) -> App {
+    fn new(
+        mutexes: SensorManagerMutexes,
+        sensor_manager_active: bool,
+        tls_mutex: Arc<Mutex<TankLevelSwitchSignals>>,
+        tls_active: bool,
+    ) -> App {
         let mut device_states = HashMap::new();
         for d in &DEVICES {
             device_states.insert(d.to_string(), false);
         }
-        
+
         let mut list_state = ListState::default();
         list_state.select(Some(0));
 
@@ -103,6 +112,8 @@ impl App {
             signals: HashMap::new(),
             mutexes: Some(mutexes),
             sensor_manager_active,
+            tank_level_switch_mutex: Some(tls_mutex),
+            tank_level_switch_active: tls_active,
         }
     }
 
@@ -135,13 +146,27 @@ impl App {
     }
 
     fn update_signals(&mut self) {
-        if let Some(mutexes) = &self.mutexes {
-            if let Ok(signals) = mutexes.mutex_sensor_manager_signals.lock() {
-                self.signals.insert(AquariumSignal::WaterTemperature, signals.water_temperature);
-                self.signals.insert(AquariumSignal::AmbientTemperature, signals.ambient_temperature);
-                self.signals.insert(AquariumSignal::AmbientHumidity, signals.ambient_humidity);
-                self.signals.insert(AquariumSignal::pH, signals.ph);
-                self.signals.insert(AquariumSignal::Conductivity, signals.conductivity);
+        if self.sensor_manager_active {
+            if let Some(mutexes) = &self.mutexes {
+                if let Ok(signals) = mutexes.mutex_sensor_manager_signals.lock() {
+                    self.signals.insert(AquariumSignal::WaterTemperature, signals.water_temperature);
+                    self.signals.insert(AquariumSignal::AmbientTemperature, signals.ambient_temperature);
+                    self.signals.insert(AquariumSignal::AmbientHumidity, signals.ambient_humidity);
+                    self.signals.insert(AquariumSignal::pH, signals.ph);
+                    self.signals.insert(AquariumSignal::Conductivity, signals.conductivity);
+                }
+            }
+        }
+        if self.tank_level_switch_active {
+            if let Some(tls_mutex) = &self.tank_level_switch_mutex {
+                if let Ok(tls_signals) = tls_mutex.lock() {
+                    let val = if tls_signals.tank_level_switch_position {
+                        1.0
+                    } else {
+                        0.0
+                    };
+                    self.signals.insert(AquariumSignal::TankLevelSwitchPosition, val);
+                }
             }
         }
     }
@@ -200,7 +225,6 @@ fn main() -> Result<(), Box<dyn Error>> {
     let mutex_sensor_manager_signals: Arc<Mutex<SensorManagerSignals>> = Arc::new(Mutex::new(
         SensorManagerSignals::new(&config.sensor_manager),
     ));
-    #[cfg(all(target_os = "linux", feature = "target_hw"))]
     let mutex_tank_level_switch_signals =
         Arc::new(Mutex::new(TankLevelSwitchSignals::new(true, true, false)));
 
@@ -335,7 +359,12 @@ fn main() -> Result<(), Box<dyn Error>> {
     let backend = CrosstermBackend::new(stdout);
     let mut terminal = Terminal::new(backend)?;
 
-    let app = App::new(sensor_mutexes, execution_config.sensor_manager);
+    let app = App::new(
+        sensor_mutexes,
+        execution_config.sensor_manager,
+        mutex_tank_level_switch_signals,
+        execution_config.tank_level_switch,
+    );
     let res = run_app(&mut terminal, app, &mut *actuator);
 
     // Restore terminal
@@ -376,7 +405,7 @@ fn run_app(
             .checked_sub(last_tick.elapsed())
             .unwrap_or_else(|| Duration::from_secs(0));
 
-        if crossterm::event::poll(timeout)? {
+        if event::poll(timeout)? {
             if let Event::Key(key) = event::read()? {
                 match key.code {
                     KeyCode::Char('q') => return Ok(()),
@@ -459,24 +488,34 @@ fn ui(f: &mut Frame, app: &mut App) {
     f.render_stateful_widget(items, chunks[0], &mut app.list_state);
 
     // Right: Sensors
-    if app.sensor_manager_active {
-        let sensor_text: Vec<ListItem> = SIGNALS.iter().map(|sig| {
-            let val = app.signals.get(sig).unwrap_or(&0.0);
-            let content = format!("{}: {}", sig, sig.output_file_string(*val));
+    let sensor_text: Vec<ListItem> = SIGNALS
+        .iter()
+        .map(|sig| {
+            let is_tls = *sig == AquariumSignal::TankLevelSwitchPosition;
+            let is_active = if is_tls {
+                app.tank_level_switch_active
+            } else {
+                app.sensor_manager_active
+            };
+
+            let content = if is_active {
+                let val = app.signals.get(sig).unwrap_or(&0.0);
+                if is_tls {
+                    let status_text = if *val > 0.5 { "High" } else { "Low" };
+                    format!("{}: {}", sig, status_text)
+                } else {
+                    format!("{}: {}", sig, sig.output_file_string(*val))
+                }
+            } else {
+                format!("{}: Disabled", sig)
+            };
+
             ListItem::new(content)
-        }).collect();
-        
-        let sensors_list = List::new(sensor_text)
-            .block(Block::default().borders(Borders::ALL).title("Sensors"));
-            
-        f.render_widget(sensors_list, chunks[1]);
-    } else {
-        let text = vec![
-            ListItem::new("Sensor Manager is disabled."),
-            ListItem::new("Enable it in the configuration to see sensor data."),
-        ];
-        let sensors_list = List::new(text)
-            .block(Block::default().borders(Borders::ALL).title("Sensors"));
-        f.render_widget(sensors_list, chunks[1]);
-    }
+        })
+        .collect();
+
+    let sensors_list = List::new(sensor_text)
+        .block(Block::default().borders(Borders::ALL).title("Sensors"));
+
+    f.render_widget(sensors_list, chunks[1]);
 }
