@@ -18,6 +18,7 @@ use aquarium_control::sensors::sensor_manager::{
 };
 use aquarium_control::utilities::channel_content::{AquariumDevice, AquariumSignal, InternalCommand};
 use aquarium_control::utilities::config::read_config_file;
+use aquarium_control::utilities::publish_pid::PublishPid;
 use aquarium_control::sensors::ds18b20::{Ds18b20, Ds18b20ResultData};
 use aquarium_control::sensors::dht::DhtResult;
 use aquarium_control::sensors::atlas_scientific::AtlasScientificResultData;
@@ -35,7 +36,7 @@ use ratatui::{
 };
 use std::collections::HashMap;
 use std::error::Error;
-use std::io;
+use std::{io, panic};
 use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::{Duration, Instant};
@@ -133,12 +134,27 @@ impl App {
 }
 
 fn main() -> Result<(), Box<dyn Error>> {
+    // 0. Environment check
+    if !cfg!(feature = "target_hw") || !cfg!(target_os = "linux") {
+        eprintln!("Error: The commissioning tool requires the 'target_hw' feature to be enabled and must be executed on a Linux system.");
+        return Ok(());
+    }
+
     // 1. Config
     let config_file = "/etc/aquarium_control/aquarium_control.toml".to_string();
     let config = read_config_file(config_file).or_else(|_| {
         // Fallback for dev environment or local test
          read_config_file("config/aquarium_control.toml".to_string())
     })?;
+
+    // Check if another instance is running
+    let publish_pid = PublishPid::new(config.publish_pid.clone())?;
+    let publish_pid_clone = publish_pid.clone();
+
+    panic::set_hook(Box::new(move |panic_info| {
+        let _ = publish_pid_clone.erase_pid();
+        eprintln!("Panic occurred: {panic_info}");
+    }));
 
     // 2. Channels
     // We construct all channels.
@@ -262,6 +278,8 @@ fn main() -> Result<(), Box<dyn Error>> {
     if let Err(err) = res {
         println!("{:?}", err)
     }
+
+    let _ = publish_pid.erase_pid();
 
     Ok(())
 }
