@@ -320,8 +320,35 @@ fn main() -> Result<(), Box<dyn Error>> {
         });
     }
 
+    // 5. Setup Actuator
+    let mut actuator: Box<dyn RelayActuationTrait> = if config.relay_manager.use_simulator {
+        Box::new(ActuateSimulator::new(
+             &mut channels.actuate_simulator,
+             config.controllino_relay
+        ))
+    } else if config.relay_manager.use_gpio {
+        #[cfg(all(target_os = "linux", feature = "target_hw"))]
+        {
+             let gpio = rppal::gpio::Gpio::new().map_err(|e| format!("GPIO error: {}", e))?;
+             let gpio_config = ActuateGpioConfig::new(&config.gpio_handler);
+             Box::new(ActuateGpio::new(gpio, gpio_config).map_err(|e| format!("ActuateGpio error: {:?}", e))?)
+        }
+        #[cfg(not(all(target_os = "linux", feature = "target_hw")))]
+        {
+            return Err("GPIO not supported on this platform.".into());
+        }
+    } else {
+        Box::new(ActuateControllino::new(config.controllino_relay).map_err(|e| format!("Controllino error: {:?}", e))?)
+    };
+
+    // 6. Setup GpioHandler and sensor communication
     #[cfg(all(target_os = "linux", feature = "target_hw"))]
     {
+        // extract values from config before moving it
+        let gpio_tank_level_switch = config.gpio_handler.tank_level_switch;
+        let gpio_dht22_io = config.gpio_handler.dht22_io;
+        let gpio_dht22_vcc = config.gpio_handler.dht22_vcc;
+
         // Initialize GpioHandler
         let gpio_handler = GpioHandler::new(config.gpio_handler)
              .map_err(|e| format!("GpioHandler error: {:?}", e))?
@@ -332,8 +359,6 @@ fn main() -> Result<(), Box<dyn Error>> {
         let gpio_lib_handle_for_tls = gpio_lib_handle.clone();
 
         if execution_config.dht {
-            let gpio_dht22_io = config.gpio_handler.dht22_io;
-            let gpio_dht22_vcc = config.gpio_handler.dht22_vcc;
             let mut dht = Dht::new(config.dht, Some(gpio_lib_handle_for_dht), gpio_dht22_io, gpio_dht22_vcc);
             let mut dht_channels = channels.dht;
             let mutex_dht_clone = mutex_dht.clone();
@@ -344,7 +369,6 @@ fn main() -> Result<(), Box<dyn Error>> {
         }
         
         if execution_config.tank_level_switch {
-            let gpio_tank_level_switch = config.gpio_handler.tank_level_switch;
             let mut tank_level_switch = TankLevelSwitch::new(
                  config.tank_level_switch,
                  true,
@@ -396,29 +420,8 @@ fn main() -> Result<(), Box<dyn Error>> {
         });
     }
 
-    // 5. Setup Actuator
-    let mut actuator: Box<dyn RelayActuationTrait> = if config.relay_manager.use_simulator {
-        Box::new(ActuateSimulator::new(
-             &mut channels.actuate_simulator,
-             config.controllino_relay
-        ))
-    } else if config.relay_manager.use_gpio {
-        #[cfg(all(target_os = "linux", feature = "target_hw"))]
-        {
-             let gpio = rppal::gpio::Gpio::new().map_err(|e| format!("GPIO error: {}", e))?;
-             let gpio_config = ActuateGpioConfig::new(&config.gpio_handler);
-             Box::new(ActuateGpio::new(gpio, gpio_config).map_err(|e| format!("ActuateGpio error: {:?}", e))?)
-        }
-        #[cfg(not(all(target_os = "linux", feature = "target_hw")))]
-        {
-            return Err("GPIO not supported on this platform.".into());
-        }
-    } else {
-        Box::new(ActuateControllino::new(config.controllino_relay).map_err(|e| format!("Controllino error: {:?}", e))?)
-    };
 
-
-    // 6. Setup TUI
+    // 7. Setup TUI
     enable_raw_mode()?;
     let mut stdout = io::stdout();
     execute!(stdout, EnterAlternateScreen, EnableMouseCapture)?;
