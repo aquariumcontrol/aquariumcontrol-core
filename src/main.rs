@@ -22,9 +22,6 @@ use log::{error, info, warn};
 #[cfg(any(feature = "debug_main", feature = "debug_channels"))]
 use log::debug;
 
-#[cfg(any(target_os = "linux", target_os = "macos"))]
-use nix::unistd;
-
 use aquarium_control::database::database_interface_feed_trait::DatabaseInterfaceFeedTrait;
 use aquarium_control::database::sql_interface::SqlInterface;
 use aquarium_control::database::sql_interface_balling::SqlInterfaceBalling;
@@ -44,6 +41,7 @@ use aquarium_control::dispatch::messaging::Messaging;
 use aquarium_control::food::feed::Feed;
 use aquarium_control::food::food_injection::FoodInjection;
 use aquarium_control::launch::channels::Channels;
+use aquarium_control::launch::privilege_check::is_running_as_root;
 use aquarium_control::launch::startup_error::StartupError;
 use aquarium_control::mineral::balling::Balling;
 use aquarium_control::mineral::mineral_injection::MineralInjection;
@@ -159,23 +157,6 @@ fn check_is_command(command: &str) -> Result<bool, VersionInformationError> {
         }
         _ => Ok(false), // All other strings do not match
     }
-}
-
-/// Checks if the current process is running with root (UID 0) privileges.
-///
-/// This function inspects the Effective User ID (EUID) of the process.
-/// On Unix-like systems, if the EUID is 0, the process has root privileges.
-///
-/// # Returns
-/// `true` if the process has root privileges, `false` otherwise.
-///
-/// # Panics
-/// This function may panic if the underlying system call `geteuid` fails,
-/// which is highly unlikely in normal operation.
-#[cfg(any(target_os = "linux", target_os = "macos"))]
-fn is_running_as_root() -> bool {
-    let euid = unistd::geteuid();
-    euid.is_root()
 }
 
 #[cfg_attr(doc, aquamarine::aquamarine)]

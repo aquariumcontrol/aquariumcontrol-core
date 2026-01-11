@@ -36,6 +36,7 @@ use aquarium_control::utilities::channel_content::{AquariumDevice, AquariumSigna
 use aquarium_control::utilities::config::read_config_file;
 use aquarium_control::utilities::publish_pid::PublishPid;
 
+use aquarium_control::launch::privilege_check::is_running_as_root;
 use crossterm::{
     event::{self, DisableMouseCapture, EnableMouseCapture, Event, KeyCode},
     execute,
@@ -209,6 +210,13 @@ fn main() -> Result<(), Box<dyn Error>> {
     // 0. Environment check
     if !cfg!(feature = "target_hw") || !cfg!(target_os = "linux") {
         eprintln!("Error: The commissioning tool requires the 'target_hw' feature to be enabled and must be executed on a Linux system.");
+        return Ok(());
+    }
+
+    // check if the user has root privileges
+    #[cfg(any(target_os = "linux", target_os = "macos"))]
+    if !is_running_as_root() {
+        eprintln!("Error: The application must be run with root privileges.");
         return Ok(());
     }
 

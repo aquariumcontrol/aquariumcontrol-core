@@ -17,3 +17,6 @@ pub mod execution_config;
 
 // Checks the command line parameters if one of them contains a configuration file name
 pub mod argument_parser;
+
+// Checks if the application is started with root privileges
+pub mod privilege_check;
