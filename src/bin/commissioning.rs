@@ -240,7 +240,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     let execution_config = ExecutionConfig::new(&config);
 
     // Check if another instance is running
-    let publish_pid = PublishPid::new(config.publish_pid.clone())?;
+    let publish_pid = PublishPid::new(config.publish_pid)?;
     let publish_pid_clone = publish_pid.clone();
 
     panic::set_hook(Box::new(move |panic_info| {
@@ -291,7 +291,7 @@ fn main() -> Result<(), Box<dyn Error>> {
 
     // 4. Start SensorManager Thread
     if execution_config.sensor_manager {
-        let mut sensor_manager = SensorManager::new(config.sensor_manager.clone())?;
+        let mut sensor_manager = SensorManager::new(config.sensor_manager)?;
         // We clone mutexes for the thread, but we need to pass a fresh copy of mutexes struct
         let sensor_mutexes_for_thread = sensor_mutexes.clone();
 
@@ -308,7 +308,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     #[cfg(all(target_os = "linux", feature = "target_hw"))]
     {
         // Initialize GpioHandler
-        let gpio_handler = GpioHandler::new(config.gpio_handler.clone())
+        let gpio_handler = GpioHandler::new(config.gpio_handler)
              .map_err(|e| format!("GpioHandler error: {:?}", e))?
              .ok_or("GpioHandler failed to initialize")?;
 
@@ -319,7 +319,7 @@ fn main() -> Result<(), Box<dyn Error>> {
         if execution_config.dht {
             let gpio_dht22_io = config.gpio_handler.dht22_io;
             let gpio_dht22_vcc = config.gpio_handler.dht22_vcc;
-            let mut dht = Dht::new(config.dht.clone(), Some(gpio_lib_handle_for_dht), gpio_dht22_io, gpio_dht22_vcc);
+            let mut dht = Dht::new(config.dht, Some(gpio_lib_handle_for_dht), gpio_dht22_io, gpio_dht22_vcc);
             let mut dht_channels = channels.dht;
             let mutex_dht_clone = mutex_dht.clone();
             
@@ -331,7 +331,7 @@ fn main() -> Result<(), Box<dyn Error>> {
         if execution_config.tank_level_switch {
             let gpio_tank_level_switch = config.gpio_handler.tank_level_switch;
             let mut tank_level_switch = TankLevelSwitch::new(
-                 config.tank_level_switch.clone(),
+                 config.tank_level_switch,
                  true,
                  Some(gpio_lib_handle_for_tls),
                  gpio_tank_level_switch
@@ -348,7 +348,7 @@ fn main() -> Result<(), Box<dyn Error>> {
         if execution_config.atlas_scientific {
              let atlas_drivers = AtlasScientific::create_drivers(&config.atlas_scientific)
                  .map_err(|e| format!("Atlas driver error: {:?}", e))?;
-             let mut atlas = AtlasScientific::new(config.atlas_scientific.clone(), atlas_drivers);
+             let mut atlas = AtlasScientific::new(config.atlas_scientific, atlas_drivers);
              
              let mut atlas_channels = channels.atlas_scientific;
              let m_temp = mutex_atlas_scientific_temperature.clone();
@@ -356,7 +356,7 @@ fn main() -> Result<(), Box<dyn Error>> {
              let m_cond = mutex_atlas_scientific_conductivity.clone();
              
              if execution_config.i2c_interface {
-                 let mut i2c = I2cInterface::new(config.i2c_interface.clone())
+                 let mut i2c = I2cInterface::new(config.i2c_interface)
                      .map_err(|e| format!("I2C error: {:?}", e))?;
                  let mut i2c_channels = channels.i2c_interface;
                  thread::spawn(move || {
@@ -372,7 +372,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     }
 
     if execution_config.ds18b20 {
-        let mut ds18b20 = Ds18b20::new(config.ds18b20.clone())?;
+        let mut ds18b20 = Ds18b20::new(config.ds18b20)?;
         let mut ds18b20_channels = channels.ds18b20;
         let m_water = mutex_ds18b20_water_temperature.clone();
         let m_amb = mutex_ds18b20_ambient_temperature.clone();
@@ -385,7 +385,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     let mut actuator: Box<dyn RelayActuationTrait> = if config.relay_manager.use_simulator {
         Box::new(ActuateSimulator::new(
              &mut channels.actuate_simulator,
-             config.controllino_relay.clone()
+             config.controllino_relay
         ))
     } else if config.relay_manager.use_gpio {
         #[cfg(all(target_os = "linux", feature = "target_hw"))]
@@ -399,7 +399,7 @@ fn main() -> Result<(), Box<dyn Error>> {
             return Err("GPIO not supported on this platform.".into());
         }
     } else {
-        Box::new(ActuateControllino::new(config.controllino_relay.clone()).map_err(|e| format!("Controllino error: {:?}", e))?)
+        Box::new(ActuateControllino::new(config.controllino_relay).map_err(|e| format!("Controllino error: {:?}", e))?)
     };
 
 
