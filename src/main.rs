@@ -74,7 +74,6 @@ use aquarium_control::thermal::distinct_interval_check::distinct_thermal_control
 use aquarium_control::thermal::heating::{Heating, HeatingMutexes};
 use aquarium_control::thermal::ventilation::Ventilation;
 use aquarium_control::utilities::config::read_config_file;
-use aquarium_control::utilities::config_file_definition_error::ConfigFileDefinitionError;
 use aquarium_control::utilities::logger::{log_error_chain, setup_logger};
 use aquarium_control::utilities::logger_config::LoggerConfig;
 use aquarium_control::utilities::publish_pid::PublishPid;
@@ -91,8 +90,8 @@ use aquarium_control::water::refill::{Refill, RefillStatus};
 use aquarium_control::water::water_injection::WaterInjection;
 use spin_sleep::SpinSleeper;
 pub use std::sync::{atomic::AtomicBool, Arc, Mutex};
-use std::{env, panic, path::Path, thread::scope, time::Duration};
-
+use std::{env, panic, thread::scope, time::Duration};
+use aquarium_control::launch::argument_parser::check_argument_for_valid_config_file_name;
 #[cfg(all(feature = "target_hw", target_os = "linux"))]
 use aquarium_control::utilities::channel_content::InternalCommand;
 
@@ -159,61 +158,6 @@ fn check_is_command(command: &str) -> Result<bool, VersionInformationError> {
             }
         }
         _ => Ok(false), // All other strings do not match
-    }
-}
-
-/// Checks if the provided string is a valid path to a `.toml` configuration file.
-///
-/// This function validates a user-selected configuration file path by ensuring that:
-/// - The path exists on the file system.
-/// - It points to a regular file (not a directory).
-/// - The file has an extension.
-/// - The file's extension is `.toml`.
-///
-/// # Arguments
-/// * `user_selected_config_file_name` - A string slice representing the potential path to the configuration file.
-///
-/// # Returns
-/// A `Result` containing the validated and owned file path as a `String` on success.
-///
-/// # Errors
-/// Returns a `ConfigFileDefinitionError` if any validation check fails:
-/// - `ConfigFileDefinitionError::PathDoesNotExist`: If no file or directory exists at the given path.
-/// - `ConfigFileDefinitionError::IsNotAFile`: If the path points to a directory, not a regular file.
-/// - `ConfigFileDefinitionError::FileNameHasNoSuffix`: If the path does not have a file extension.
-/// - `ConfigFileDefinitionError::SuffixIsNotToml`: If the file's extension is not `.toml`.
-fn check_argument_for_valid_config_file_name(
-    user_selected_config_file_name: &str,
-) -> Result<String, ConfigFileDefinitionError> {
-    let path = Path::new(&user_selected_config_file_name);
-
-    let desired_config_file_name = user_selected_config_file_name.to_string();
-
-    if !path.exists() {
-        return Err(ConfigFileDefinitionError::PathDoesNotExist(
-            desired_config_file_name,
-        ));
-    }
-
-    if !path.is_file() {
-        return Err(ConfigFileDefinitionError::IsNotAFile(
-            desired_config_file_name,
-        ));
-    }
-
-    match path.extension() {
-        Some(extension) => {
-            if extension == "toml" {
-                Ok(String::from(user_selected_config_file_name))
-            } else {
-                Err(ConfigFileDefinitionError::SuffixIsNotToml(
-                    desired_config_file_name,
-                ))
-            }
-        }
-        None => Err(ConfigFileDefinitionError::FileNameHasNoSuffix(
-            desired_config_file_name,
-        )),
     }
 }
 

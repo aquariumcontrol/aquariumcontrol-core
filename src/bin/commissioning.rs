@@ -7,33 +7,34 @@ The above copyright notice and this permission notice shall be included in all c
 THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
+use aquarium_control::launch::argument_parser::check_argument_for_valid_config_file_name;
 use aquarium_control::launch::channels::Channels;
 use aquarium_control::launch::execution_config::ExecutionConfig;
 use aquarium_control::relays::actuate_controllino::ActuateControllino;
-use aquarium_control::relays::actuate_simulator::ActuateSimulator;
 #[cfg(all(target_os = "linux", feature = "target_hw"))]
 use aquarium_control::relays::actuate_gpio::{ActuateGpio, ActuateGpioConfig};
+use aquarium_control::relays::actuate_simulator::ActuateSimulator;
 use aquarium_control::relays::relay_manager::RelayActuationTrait;
-use aquarium_control::sensors::sensor_manager::{
-    SensorManager, SensorManagerMutexes, SensorManagerSignals,
-};
-use aquarium_control::utilities::channel_content::{AquariumDevice, AquariumSignal, InternalCommand};
-use aquarium_control::utilities::config::read_config_file;
-use aquarium_control::utilities::publish_pid::PublishPid;
-use aquarium_control::sensors::ds18b20::{Ds18b20, Ds18b20ResultData};
-use aquarium_control::sensors::dht::DhtResult;
+#[cfg(all(target_os = "linux", feature = "target_hw"))]
+use aquarium_control::sensors::atlas_scientific::AtlasScientific;
 use aquarium_control::sensors::atlas_scientific::AtlasScientificResultData;
+#[cfg(all(target_os = "linux", feature = "target_hw"))]
+use aquarium_control::sensors::dht::Dht;
+use aquarium_control::sensors::dht::DhtResult;
+use aquarium_control::sensors::ds18b20::{Ds18b20, Ds18b20ResultData};
 #[cfg(all(target_os = "linux", feature = "target_hw"))]
 use aquarium_control::sensors::gpio_handler::GpioHandler;
 #[cfg(all(target_os = "linux", feature = "target_hw"))]
-use aquarium_control::sensors::dht::Dht;
-#[cfg(all(target_os = "linux", feature = "target_hw"))]
-use aquarium_control::sensors::atlas_scientific::AtlasScientific;
-#[cfg(all(target_os = "linux", feature = "target_hw"))]
 use aquarium_control::sensors::i2c_interface::I2cInterface;
+use aquarium_control::sensors::sensor_manager::{
+    SensorManager, SensorManagerMutexes, SensorManagerSignals,
+};
 #[cfg(all(target_os = "linux", feature = "target_hw"))]
 use aquarium_control::sensors::tank_level_switch::TankLevelSwitch;
 use aquarium_control::sensors::tank_level_switch::TankLevelSwitchSignals;
+use aquarium_control::utilities::channel_content::{AquariumDevice, AquariumSignal, InternalCommand};
+use aquarium_control::utilities::config::read_config_file;
+use aquarium_control::utilities::publish_pid::PublishPid;
 
 use crossterm::{
     event::{self, DisableMouseCapture, EnableMouseCapture, Event, KeyCode},
@@ -49,10 +50,10 @@ use ratatui::{
 };
 use std::collections::HashMap;
 use std::error::Error;
-use std::{io, panic};
 use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::{Duration, Instant};
+use std::{env, io, panic};
 
 const DEVICES: [AquariumDevice; 13] = [
     AquariumDevice::Skimmer,
@@ -172,6 +173,25 @@ impl App {
     }
 }
 
+/// Displays the valid command line parameter combinations
+fn display_usage(default_config_file: &str) {
+    println!("This is the aquarium_control commissioning tool.");
+    println!("Default configuration file is {}", default_config_file);
+    println!("As command line parameter, you may provide an alternative configuration file.");
+    println!("-h, --help: Output this page.");
+}
+
+/// Checks if a command-line argument is a recognized command and executes it.
+fn check_is_command(command: &str, default_config_file: &str) -> bool {
+    match command {
+        "-h" | "--help" => {
+            display_usage(default_config_file);
+            true
+        }
+        _ => false, // All other strings do not match
+    }
+}
+
 fn main() -> Result<(), Box<dyn Error>> {
     // 0. Environment check
     if !cfg!(feature = "target_hw") || !cfg!(target_os = "linux") {
@@ -180,7 +200,38 @@ fn main() -> Result<(), Box<dyn Error>> {
     }
 
     // 1. Config
-    let config_file = "/etc/aquarium_control/aquarium_control.toml".to_string();
+    // get command line parameters from OS
+    let args: Vec<String> = env::args().collect();
+
+    // initialize with a default configuration file name
+    let mut config_file = "/etc/aquarium_control/aquarium_control.toml".to_string();
+
+    // Check command line parameters
+    if args.len() > 1 {
+        // If the first argument contains a path and file name, then let's use that.
+        config_file = match check_argument_for_valid_config_file_name(&args[1]) {
+            Ok(valid_file_name) => valid_file_name, // The file is valid. Start operation.
+            Err(config_file_definition_error) => {
+                let mut user_arg_identified = false;
+                // Iterate through the command line parameters and check if they are valid.
+                for user_arg in args[1..].iter() {
+                    user_arg_identified = check_is_command(user_arg, &config_file);
+                    if user_arg_identified {
+                        break;
+                    }
+                }
+                return if !user_arg_identified {
+                    // If the user provided an invalid filename and no valid command, output error message and abort.
+                    eprintln!("Configuration Error: {}", config_file_definition_error);
+                    Ok(())
+                } else {
+                    // At least one valid user command was provided. Graceful exit.
+                    Ok(())
+                };
+            }
+        }
+    }
+
     let config = read_config_file(config_file).or_else(|_| {
         // Fallback for dev environment or local test
          read_config_file("config/aquarium_control.toml".to_string())

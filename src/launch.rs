@@ -14,3 +14,6 @@ pub mod channels;
 
 // Configuration of execution: determines which threads shall be started
 pub mod execution_config;
+
+// Checks the command line parameters if one of them contains a configuration file name
+pub mod argument_parser;
