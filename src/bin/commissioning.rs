@@ -8,6 +8,7 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 */
 
 use aquarium_control::launch::channels::Channels;
+use aquarium_control::launch::execution_config::ExecutionConfig;
 use aquarium_control::relays::actuate_controllino::ActuateControllino;
 use aquarium_control::relays::actuate_simulator::ActuateSimulator;
 #[cfg(all(target_os = "linux", feature = "target_hw"))]
@@ -71,10 +72,11 @@ struct App {
     list_state: ListState,
     signals: HashMap<AquariumSignal, f32>,
     mutexes: Option<SensorManagerMutexes>,
+    sensor_manager_active: bool,
 }
 
 impl App {
-    fn new(mutexes: SensorManagerMutexes) -> App {
+    fn new(mutexes: SensorManagerMutexes, sensor_manager_active: bool) -> App {
         let mut device_states = HashMap::new();
         for d in &DEVICES {
             device_states.insert(d.to_string(), false);
@@ -89,6 +91,7 @@ impl App {
             list_state,
             signals: HashMap::new(),
             mutexes: Some(mutexes),
+            sensor_manager_active,
         }
     }
 
@@ -147,6 +150,8 @@ fn main() -> Result<(), Box<dyn Error>> {
          read_config_file("config/aquarium_control.toml".to_string())
     })?;
 
+    let execution_config = ExecutionConfig::new(&config);
+
     // Check if another instance is running
     let publish_pid = PublishPid::new(config.publish_pid.clone())?;
     let publish_pid_clone = publish_pid.clone();
@@ -196,18 +201,20 @@ fn main() -> Result<(), Box<dyn Error>> {
     };
 
     // 4. Start SensorManager Thread
-    let mut sensor_manager = SensorManager::new(config.sensor_manager.clone())?;
-    // We clone mutexes for the thread, but we need to pass a fresh copy of mutexes struct
-    let sensor_mutexes_for_thread = sensor_mutexes.clone();
-    
-    // We need to move the channels for sensor manager into the thread.
-    // Channels struct has `sensor_manager: SensorManagerChannels`.
-    // We can extract it.
-    let mut sensor_manager_channels = channels.sensor_manager; // Move out
+    if execution_config.sensor_manager {
+        let mut sensor_manager = SensorManager::new(config.sensor_manager.clone())?;
+        // We clone mutexes for the thread, but we need to pass a fresh copy of mutexes struct
+        let sensor_mutexes_for_thread = sensor_mutexes.clone();
 
-    thread::spawn(move || {
-        sensor_manager.execute(&mut sensor_manager_channels, sensor_mutexes_for_thread);
-    });
+        // We need to move the channels for sensor manager into the thread.
+        // Channels struct has `sensor_manager: SensorManagerChannels`.
+        // We can extract it.
+        let mut sensor_manager_channels = channels.sensor_manager; // Move out
+
+        thread::spawn(move || {
+            sensor_manager.execute(&mut sensor_manager_channels, sensor_mutexes_for_thread);
+        });
+    }
 
     // NOTE: In a real scenario, we also need to start the individual sensor threads (Ds18b20, Dht, Atlas)
     // to populate the input mutexes.
@@ -263,7 +270,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     let backend = CrosstermBackend::new(stdout);
     let mut terminal = Terminal::new(backend)?;
 
-    let app = App::new(sensor_mutexes);
+    let app = App::new(sensor_mutexes, execution_config.sensor_manager);
     let res = run_app(&mut terminal, app, &mut *actuator);
 
     // Restore terminal
@@ -387,14 +394,24 @@ fn ui(f: &mut Frame, app: &mut App) {
     f.render_stateful_widget(items, chunks[0], &mut app.list_state);
 
     // Right: Sensors
-    let sensor_text: Vec<ListItem> = SIGNALS.iter().map(|sig| {
-        let val = app.signals.get(sig).unwrap_or(&0.0);
-        let content = format!("{}: {}", sig, sig.output_file_string(*val));
-        ListItem::new(content)
-    }).collect();
-    
-    let sensors_list = List::new(sensor_text)
-        .block(Block::default().borders(Borders::ALL).title("Sensors"));
+    if app.sensor_manager_active {
+        let sensor_text: Vec<ListItem> = SIGNALS.iter().map(|sig| {
+            let val = app.signals.get(sig).unwrap_or(&0.0);
+            let content = format!("{}: {}", sig, sig.output_file_string(*val));
+            ListItem::new(content)
+        }).collect();
         
-    f.render_widget(sensors_list, chunks[1]);
+        let sensors_list = List::new(sensor_text)
+            .block(Block::default().borders(Borders::ALL).title("Sensors"));
+            
+        f.render_widget(sensors_list, chunks[1]);
+    } else {
+        let text = vec![
+            ListItem::new("Sensor Manager is disabled."),
+            ListItem::new("Enable it in the configuration to see sensor data."),
+        ];
+        let sensors_list = List::new(text)
+            .block(Block::default().borders(Borders::ALL).title("Sensors"));
+        f.render_widget(sensors_list, chunks[1]);
+    }
 }
