@@ -80,6 +80,18 @@ const SIGNALS: [AquariumSignal; 6] = [
     AquariumSignal::TankLevelSwitchPosition,
 ];
 
+fn get_initial_state(device: &AquariumDevice, use_gpio: bool) -> bool {
+    match device {
+        AquariumDevice::Skimmer
+        | AquariumDevice::MainPump1
+        | AquariumDevice::MainPump2
+        | AquariumDevice::AuxPump1
+        | AquariumDevice::AuxPump2 => true,
+        AquariumDevice::Ventilation => use_gpio, // On if gpio, Off if controllino
+        _ => false,
+    }
+}
+
 struct App {
     devices: Vec<AquariumDevice>,
     device_states: HashMap<String, bool>, // Device name -> On/Off
@@ -97,10 +109,11 @@ impl App {
         sensor_manager_active: bool,
         tls_mutex: Arc<Mutex<TankLevelSwitchSignals>>,
         tls_active: bool,
+        use_gpio: bool,
     ) -> App {
         let mut device_states = HashMap::new();
         for d in &DEVICES {
-            device_states.insert(d.to_string(), false);
+            device_states.insert(d.to_string(), get_initial_state(d, use_gpio));
         }
 
         let mut list_state = ListState::default();
@@ -236,6 +249,8 @@ fn main() -> Result<(), Box<dyn Error>> {
         // Fallback for dev environment or local test
          read_config_file("config/aquarium_control.toml".to_string())
     })?;
+    // extract before moving
+    let relay_manager_use_gpio = config.relay_manager.use_gpio;
 
     let execution_config = ExecutionConfig::new(&config);
 
@@ -415,6 +430,7 @@ fn main() -> Result<(), Box<dyn Error>> {
         execution_config.sensor_manager,
         mutex_tank_level_switch_signals,
         execution_config.tank_level_switch,
+        relay_manager_use_gpio
     );
     let res = run_app(&mut terminal, app, &mut *actuator);
 
