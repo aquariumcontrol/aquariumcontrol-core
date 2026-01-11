@@ -17,56 +17,6 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 //! - Automatic feeding
 //! - Balling mineral dosing
 
-/// This is the container module for the database communication.
-/// Communicating with the SQL database includes preparing SQL queries, executing the queries and processing of query results.
-mod database;
-
-/// Communication with the user via client application or webserver using POSIX message queues.
-mod dispatch;
-
-/// This container module features all the functionality to execute the automatic feeding.
-mod food;
-
-/// This container module features all the functionality to execute the Balling mineral dosing.
-mod mineral;
-
-/// The container module contains the schedule checker.
-mod permission;
-
-/// This container module contains all functionality to periodically store signals either in one table of the SQL database or in specific text files stored in the RAM disk
-mod recorder;
-
-/// This container module features all functionality to actuate the relays which control the actuators.
-mod relays;
-
-/// This container module features all functionality to read and postprocess sensor data.
-mod sensors;
-
-/// This container module features all functionality to communicate with the test server via TCP.
-mod simulator;
-
-#[cfg(test)]
-/// This container module features a set of mock functionality used by test cases.
-mod mocks;
-
-/// This container module features all functionality to either cool the water using ventilation heat the water using a heater.
-mod thermal;
-
-/// This container module features all functionality that could not be assigned to any other container module.
-mod utilities;
-
-/// This container module features all functionality to monitor the control system.
-mod watchmen;
-
-/// This container module features all functionality related to RGB LED.
-mod beacon;
-
-/// This container module features all functionality to replace the evaporated water with fresh water.
-mod water;
-
-/// This container module features all supporting functionality for the main module.
-mod launch;
-
 use log::{error, info, warn};
 
 #[cfg(any(feature = "debug_main", feature = "debug_channels"))]
@@ -75,90 +25,90 @@ use log::debug;
 #[cfg(any(target_os = "linux", target_os = "macos"))]
 use nix::unistd;
 
-use crate::database::database_interface_feed_trait::DatabaseInterfaceFeedTrait;
-use crate::database::sql_interface::SqlInterface;
-use crate::database::sql_interface_balling::SqlInterfaceBalling;
-use crate::database::sql_interface_data::SqlInterfaceData;
-use crate::database::sql_interface_error::SqlInterfaceError;
-use crate::database::sql_interface_feed::SqlInterfaceFeed;
-use crate::database::sql_interface_heating_set_vals::SqlInterfaceHeatingSetVals;
-use crate::database::sql_interface_heating_stats::SqlInterfaceHeatingStats;
-use crate::database::sql_interface_heating_stats_data_transfer::HeatingStatsDataTransfer;
-use crate::database::sql_interface_midnight::SqlInterfaceMidnightCalculator;
-use crate::database::sql_interface_refill::{DatabaseInterfaceRefillTrait, SqlInterfaceRefill};
-use crate::database::sql_interface_schedule::SqlInterfaceSchedule;
-use crate::database::sql_interface_ventilation_set_vals::SqlInterfaceVentilationSetVals;
+use aquarium_control::database::database_interface_feed_trait::DatabaseInterfaceFeedTrait;
+use aquarium_control::database::sql_interface::SqlInterface;
+use aquarium_control::database::sql_interface_balling::SqlInterfaceBalling;
+use aquarium_control::database::sql_interface_data::SqlInterfaceData;
+use aquarium_control::database::sql_interface_error::SqlInterfaceError;
+use aquarium_control::database::sql_interface_feed::SqlInterfaceFeed;
+use aquarium_control::database::sql_interface_heating_set_vals::SqlInterfaceHeatingSetVals;
+use aquarium_control::database::sql_interface_heating_stats::SqlInterfaceHeatingStats;
+use aquarium_control::database::sql_interface_heating_stats_data_transfer::HeatingStatsDataTransfer;
+use aquarium_control::database::sql_interface_midnight::SqlInterfaceMidnightCalculator;
+use aquarium_control::database::sql_interface_refill::{DatabaseInterfaceRefillTrait, SqlInterfaceRefill};
+use aquarium_control::database::sql_interface_schedule::SqlInterfaceSchedule;
+use aquarium_control::database::sql_interface_ventilation_set_vals::SqlInterfaceVentilationSetVals;
 #[cfg(target_os = "linux")]
-use crate::dispatch::messaging::Messaging;
+use aquarium_control::dispatch::messaging::Messaging;
 
-use crate::food::feed::Feed;
-use crate::food::food_injection::FoodInjection;
-use crate::launch::channels::Channels;
-use crate::launch::startup_error::StartupError;
-use crate::mineral::balling::Balling;
-use crate::mineral::mineral_injection::MineralInjection;
-use crate::permission::schedule_check::ScheduleCheck;
-use crate::recorder::data_injection::DataInjection;
-use crate::recorder::data_logger::{DataLogger, DataLoggerMutexes};
-use crate::relays::actuate_controllino::ActuateControllino;
+use aquarium_control::food::feed::Feed;
+use aquarium_control::food::food_injection::FoodInjection;
+use aquarium_control::launch::channels::Channels;
+use aquarium_control::launch::startup_error::StartupError;
+use aquarium_control::mineral::balling::Balling;
+use aquarium_control::mineral::mineral_injection::MineralInjection;
+use aquarium_control::permission::schedule_check::ScheduleCheck;
+use aquarium_control::recorder::data_injection::DataInjection;
+use aquarium_control::recorder::data_logger::{DataLogger, DataLoggerMutexes};
+use aquarium_control::relays::actuate_controllino::ActuateControllino;
 #[cfg(all(target_os = "linux", feature = "target_hw"))]
-use crate::relays::actuate_gpio::{ActuateGpio, ActuateGpioConfig};
-use crate::relays::actuate_simulator::ActuateSimulator;
-use crate::relays::relay_manager::RelayManager;
+use aquarium_control::relays::actuate_gpio::{ActuateGpio, ActuateGpioConfig};
+use aquarium_control::relays::actuate_simulator::ActuateSimulator;
+use aquarium_control::relays::relay_manager::RelayManager;
 
 #[cfg(all(feature = "target_hw", target_os = "linux"))]
-use crate::sensors::atlas_scientific::AtlasScientific;
+use aquarium_control::sensors::atlas_scientific::AtlasScientific;
 
-use crate::sensors::atlas_scientific::AtlasScientificResultData;
-
-#[cfg(all(feature = "target_hw", target_os = "linux"))]
-use crate::sensors::dht::Dht;
-
-use crate::launch::execution_config::ExecutionConfig;
-use crate::sensors::dht::DhtResult;
-use crate::sensors::ds18b20::{Ds18b20, Ds18b20ResultData};
-use crate::sensors::sensor_manager::{SensorManager, SensorManagerMutexes, SensorManagerSignals};
-use crate::sensors::tank_level_switch::{TankLevelSwitch, TankLevelSwitchSignals};
-use crate::simulator::tcp_communication::TcpCommunication;
-use crate::thermal::distinct_interval_check::distinct_thermal_control_interval_check;
-use crate::thermal::heating::{Heating, HeatingMutexes};
-use crate::thermal::ventilation::Ventilation;
-use crate::utilities::config::read_config_file;
-use crate::utilities::config_file_definition_error::ConfigFileDefinitionError;
-use crate::utilities::logger::{log_error_chain, setup_logger};
-use crate::utilities::logger_config::LoggerConfig;
-use crate::utilities::publish_pid::PublishPid;
+use aquarium_control::sensors::atlas_scientific::AtlasScientificResultData;
 
 #[cfg(all(feature = "target_hw", target_os = "linux"))]
-use crate::utilities::signal_handler;
+use aquarium_control::sensors::dht::Dht;
 
-use crate::utilities::signal_handler::handle_signals;
-use crate::utilities::version_information::{VersionInformation, VersionInformationError};
-use crate::watchmen::monitors::Monitors;
-use crate::watchmen::petting::Petting;
-use crate::watchmen::watchdog::Watchdog;
-use crate::water::refill::{Refill, RefillStatus};
-use crate::water::water_injection::WaterInjection;
+use aquarium_control::launch::execution_config::ExecutionConfig;
+use aquarium_control::sensors::dht::DhtResult;
+use aquarium_control::sensors::ds18b20::{Ds18b20, Ds18b20ResultData};
+use aquarium_control::sensors::sensor_manager::{SensorManager, SensorManagerMutexes, SensorManagerSignals};
+use aquarium_control::sensors::tank_level_switch::{TankLevelSwitch, TankLevelSwitchSignals};
+use aquarium_control::simulator::tcp_communication::TcpCommunication;
+use aquarium_control::thermal::distinct_interval_check::distinct_thermal_control_interval_check;
+use aquarium_control::thermal::heating::{Heating, HeatingMutexes};
+use aquarium_control::thermal::ventilation::Ventilation;
+use aquarium_control::utilities::config::read_config_file;
+use aquarium_control::utilities::config_file_definition_error::ConfigFileDefinitionError;
+use aquarium_control::utilities::logger::{log_error_chain, setup_logger};
+use aquarium_control::utilities::logger_config::LoggerConfig;
+use aquarium_control::utilities::publish_pid::PublishPid;
+
+#[cfg(all(feature = "target_hw", target_os = "linux"))]
+use aquarium_control::utilities::signal_handler;
+
+use aquarium_control::utilities::signal_handler::handle_signals;
+use aquarium_control::utilities::version_information::{VersionInformation, VersionInformationError};
+use aquarium_control::watchmen::monitors::Monitors;
+use aquarium_control::watchmen::petting::Petting;
+use aquarium_control::watchmen::watchdog::Watchdog;
+use aquarium_control::water::refill::{Refill, RefillStatus};
+use aquarium_control::water::water_injection::WaterInjection;
 use spin_sleep::SpinSleeper;
 pub use std::sync::{atomic::AtomicBool, Arc, Mutex};
 use std::{env, panic, path::Path, thread::scope, time::Duration};
 
 #[cfg(all(feature = "target_hw", target_os = "linux"))]
-use crate::utilities::channel_content::InternalCommand;
+use aquarium_control::utilities::channel_content::InternalCommand;
 
 cfg_if::cfg_if! {
     if #[cfg(all(target_os = "linux", feature = "target_hw"))] {
-        use crate::sensors::gpio_handler::GpioHandler;
-        use crate::beacon::ws2812b::RgbLedColor;
-        use crate::beacon::ws2812b::Ws2812B;
+        use aquarium_control::sensors::gpio_handler::GpioHandler;
+        use aquarium_control::beacon::ws2812b::RgbLedColor;
+        use aquarium_control::beacon::ws2812b::Ws2812B;
     }
 }
 cfg_if::cfg_if! {
     if #[cfg(all(feature = "target_hw", target_os = "linux"))] {
-        use crate::sensors::i2c_interface::I2cInterface;
+        use aquarium_control::sensors::i2c_interface::I2cInterface;
     }
 }
-use crate::watchmen::memory::Memory;
+use aquarium_control::watchmen::memory::Memory;
 
 cfg_if::cfg_if! {
     if #[cfg(feature = "jemalloc")] {

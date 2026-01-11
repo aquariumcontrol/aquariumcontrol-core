@@ -30,8 +30,8 @@ pub struct LoggerConfig {
     pub logfile: String,
 }
 
-impl LoggerConfig {
-    pub fn default() -> Self {
+impl Default for LoggerConfig {
+    fn default() -> Self {
         Self {
             logfile: "/var/log/aquarium.log".to_string(),
         }

@@ -458,7 +458,7 @@ impl AtlasScientific {
 
         let monitor_view = AtlasScientificMonitorView {
             temperature_out_of_range: temp_out_of_range,
-            ph_out_of_range: ph_out_of_range,
+            ph_out_of_range,
             conductivity_out_of_range: cond_out_of_range,
         };
 

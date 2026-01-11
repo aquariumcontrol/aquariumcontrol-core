@@ -144,6 +144,12 @@ impl Message {
     }
 }
 
+impl Default for Message {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 #[cfg_attr(doc, aquamarine::aquamarine)]
 /// Struct provides data structure and implementation for IPC message queue communication.
 /// Thread communication of this component is as follows:

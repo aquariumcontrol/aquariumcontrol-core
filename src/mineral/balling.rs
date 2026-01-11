@@ -81,7 +81,7 @@ use crate::mineral::balling_config::BallingConfig;
 use crate::mineral::balling_error::BallingError;
 use crate::mineral::mineral_injection::MineralInjectionTrait;
 use crate::utilities::acknowledge_signal_handler::AcknowledgeSignalHandlerTrait;
-use crate::utilities::channel_content::{AquariumDevice, InternalCommand};
+use crate::utilities::channel_content::AquariumDevice;
 use crate::utilities::database_ping_trait::DatabasePingTrait;
 use crate::utilities::proc_ext_req::ProcessExternalRequestTrait;
 use crate::utilities::wait_for_termination::WaitForTerminationTrait;

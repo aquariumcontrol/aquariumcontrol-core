@@ -66,7 +66,6 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 //!   pre-configured parameters from a TOML file, and dynamic setpoints fetched from
 //!   a database.
 
-use log::error;
 #[cfg(not(test))]
 use log::warn;
 

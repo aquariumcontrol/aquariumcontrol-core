@@ -67,7 +67,6 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 #[cfg(feature = "debug_refill")]
 use log::debug;
 
-use crate::error;
 use log::warn;
 
 #[cfg(not(test))]
@@ -84,17 +83,17 @@ use crate::database::sql_interface_error::SqlInterfaceError;
 use crate::database::sql_interface_refill::DatabaseInterfaceRefillTrait;
 use crate::sensors::tank_level_switch::TankLevelSwitchSignals;
 use crate::utilities::acknowledge_signal_handler::AcknowledgeSignalHandlerTrait;
-use crate::utilities::channel_content::InternalCommand;
 use crate::utilities::database_ping_trait::DatabasePingTrait;
 use crate::utilities::proc_ext_req::ProcessExternalRequestTrait;
 use crate::utilities::wait_for_termination::WaitForTerminationTrait;
+use crate::utilities::logger::log_error_chain;
+use crate::perform_schedule_check;
 use crate::water::refill_channels::RefillChannels;
 use crate::water::refill_config::RefillConfig;
 use crate::water::refill_error_states::RefillErrorStates;
 use crate::water::refill_monitor_view::RefillMonitorView;
 use crate::water::refill_stats_data::RefillStatsData;
 use crate::water::water_injection::WaterInjectionTrait;
-use crate::{log_error_chain, perform_schedule_check};
 
 const MILLIS_PER_SEC: u64 = 1000;
 

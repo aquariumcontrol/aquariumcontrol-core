@@ -23,7 +23,7 @@ macro_rules! perform_schedule_check {
         $receive_lock:expr,
         $location:expr
     ) => {
-        match $channels.send_to_schedule_check(InternalCommand::ScheduleCheck) {
+        match $channels.send_to_schedule_check($crate::utilities::channel_content::InternalCommand::ScheduleCheck) {
             Ok(_) => {
                 $send_lock = false;
                 // Now listen for the response
@@ -34,7 +34,7 @@ macro_rules! perform_schedule_check {
                     }
                     Err(e) => {
                         if !$receive_lock {
-                            error!(
+                            log::error!(
                                 target: $location,
                                 "Receiving from schedule check failed ({e:?})"
                             );
@@ -47,7 +47,7 @@ macro_rules! perform_schedule_check {
             }
             Err(e) => {
                 if !$send_lock {
-                    error!(
+                    log::error!(
                         target: $location,
                         "Channel communication to schedule check failed ({e:?})"
                     );
