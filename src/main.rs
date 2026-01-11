@@ -32,7 +32,9 @@ use aquarium_control::database::sql_interface_heating_set_vals::SqlInterfaceHeat
 use aquarium_control::database::sql_interface_heating_stats::SqlInterfaceHeatingStats;
 use aquarium_control::database::sql_interface_heating_stats_data_transfer::HeatingStatsDataTransfer;
 use aquarium_control::database::sql_interface_midnight::SqlInterfaceMidnightCalculator;
-use aquarium_control::database::sql_interface_refill::{DatabaseInterfaceRefillTrait, SqlInterfaceRefill};
+use aquarium_control::database::sql_interface_refill::{
+    DatabaseInterfaceRefillTrait, SqlInterfaceRefill,
+};
 use aquarium_control::database::sql_interface_schedule::SqlInterfaceSchedule;
 use aquarium_control::database::sql_interface_ventilation_set_vals::SqlInterfaceVentilationSetVals;
 #[cfg(target_os = "linux")]
@@ -65,7 +67,9 @@ use aquarium_control::sensors::dht::Dht;
 use aquarium_control::launch::execution_config::ExecutionConfig;
 use aquarium_control::sensors::dht::DhtResult;
 use aquarium_control::sensors::ds18b20::{Ds18b20, Ds18b20ResultData};
-use aquarium_control::sensors::sensor_manager::{SensorManager, SensorManagerMutexes, SensorManagerSignals};
+use aquarium_control::sensors::sensor_manager::{
+    SensorManager, SensorManagerMutexes, SensorManagerSignals,
+};
 use aquarium_control::sensors::tank_level_switch::{TankLevelSwitch, TankLevelSwitchSignals};
 use aquarium_control::simulator::tcp_communication::TcpCommunication;
 use aquarium_control::thermal::distinct_interval_check::distinct_thermal_control_interval_check;
@@ -79,8 +83,13 @@ use aquarium_control::utilities::publish_pid::PublishPid;
 #[cfg(all(feature = "target_hw", target_os = "linux"))]
 use aquarium_control::utilities::signal_handler;
 
+use aquarium_control::launch::argument_parser::check_argument_for_valid_config_file_name;
+#[cfg(all(feature = "target_hw", target_os = "linux"))]
+use aquarium_control::utilities::channel_content::InternalCommand;
 use aquarium_control::utilities::signal_handler::handle_signals;
-use aquarium_control::utilities::version_information::{VersionInformation, VersionInformationError};
+use aquarium_control::utilities::version_information::{
+    VersionInformation, VersionInformationError,
+};
 use aquarium_control::watchmen::monitors::Monitors;
 use aquarium_control::watchmen::petting::Petting;
 use aquarium_control::watchmen::watchdog::Watchdog;
@@ -89,9 +98,6 @@ use aquarium_control::water::water_injection::WaterInjection;
 use spin_sleep::SpinSleeper;
 pub use std::sync::{atomic::AtomicBool, Arc, Mutex};
 use std::{env, panic, thread::scope, time::Duration};
-use aquarium_control::launch::argument_parser::check_argument_for_valid_config_file_name;
-#[cfg(all(feature = "target_hw", target_os = "linux"))]
-use aquarium_control::utilities::channel_content::InternalCommand;
 
 cfg_if::cfg_if! {
     if #[cfg(all(target_os = "linux", feature = "target_hw"))] {

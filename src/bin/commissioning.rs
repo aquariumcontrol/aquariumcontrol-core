@@ -32,7 +32,9 @@ use aquarium_control::sensors::sensor_manager::{
 #[cfg(all(target_os = "linux", feature = "target_hw"))]
 use aquarium_control::sensors::tank_level_switch::TankLevelSwitch;
 use aquarium_control::sensors::tank_level_switch::TankLevelSwitchSignals;
-use aquarium_control::utilities::channel_content::{AquariumDevice, AquariumSignal, InternalCommand};
+use aquarium_control::utilities::channel_content::{
+    AquariumDevice, AquariumSignal, InternalCommand,
+};
 use aquarium_control::utilities::config::read_config_file;
 use aquarium_control::utilities::publish_pid::PublishPid;
 
@@ -164,11 +166,17 @@ impl App {
         if self.sensor_manager_active {
             if let Some(mutexes) = &self.mutexes {
                 if let Ok(signals) = mutexes.mutex_sensor_manager_signals.lock() {
-                    self.signals.insert(AquariumSignal::WaterTemperature, signals.water_temperature);
-                    self.signals.insert(AquariumSignal::AmbientTemperature, signals.ambient_temperature);
-                    self.signals.insert(AquariumSignal::AmbientHumidity, signals.ambient_humidity);
+                    self.signals
+                        .insert(AquariumSignal::WaterTemperature, signals.water_temperature);
+                    self.signals.insert(
+                        AquariumSignal::AmbientTemperature,
+                        signals.ambient_temperature,
+                    );
+                    self.signals
+                        .insert(AquariumSignal::AmbientHumidity, signals.ambient_humidity);
                     self.signals.insert(AquariumSignal::pH, signals.ph);
-                    self.signals.insert(AquariumSignal::Conductivity, signals.conductivity);
+                    self.signals
+                        .insert(AquariumSignal::Conductivity, signals.conductivity);
                 }
             }
         }
@@ -180,7 +188,8 @@ impl App {
                     } else {
                         0.0
                     };
-                    self.signals.insert(AquariumSignal::TankLevelSwitchPosition, val);
+                    self.signals
+                        .insert(AquariumSignal::TankLevelSwitchPosition, val);
                 }
             }
         }
@@ -253,10 +262,14 @@ fn main() -> Result<(), Box<dyn Error>> {
         }
     }
 
-    let config = read_config_file(config_file).or_else(|_| {
-        // Fallback for dev environment or local test
-         read_config_file("config/aquarium_control.toml".to_string())
-    })?;
+    let config = match read_config_file(config_file.clone()) {
+        Ok(c) => c,
+        Err(_e) => {
+            let err_msg = "Failed to read/parse configuration file ".to_string() + &config_file;
+            return Err(err_msg.into());
+        }
+    };
+
     // extract before moving
     let relay_manager_use_gpio = config.relay_manager.use_gpio;
 
@@ -331,22 +344,28 @@ fn main() -> Result<(), Box<dyn Error>> {
     // 5. Setup Actuator
     let mut actuator: Box<dyn RelayActuationTrait> = if config.relay_manager.use_simulator {
         Box::new(ActuateSimulator::new(
-             &mut channels.actuate_simulator,
-             config.controllino_relay
+            &mut channels.actuate_simulator,
+            config.controllino_relay,
         ))
     } else if config.relay_manager.use_gpio {
         #[cfg(all(target_os = "linux", feature = "target_hw"))]
         {
-             let gpio = rppal::gpio::Gpio::new().map_err(|e| format!("GPIO error: {}", e))?;
-             let gpio_config = ActuateGpioConfig::new(&config.gpio_handler);
-             Box::new(ActuateGpio::new(gpio, gpio_config).map_err(|e| format!("ActuateGpio error: {:?}", e))?)
+            let gpio = rppal::gpio::Gpio::new().map_err(|e| format!("GPIO error: {}", e))?;
+            let gpio_config = ActuateGpioConfig::new(&config.gpio_handler);
+            Box::new(
+                ActuateGpio::new(gpio, gpio_config)
+                    .map_err(|e| format!("ActuateGpio error: {:?}", e))?,
+            )
         }
         #[cfg(not(all(target_os = "linux", feature = "target_hw")))]
         {
             return Err("GPIO not supported on this platform.".into());
         }
     } else {
-        Box::new(ActuateControllino::new(config.controllino_relay).map_err(|e| format!("Controllino error: {:?}", e))?)
+        Box::new(
+            ActuateControllino::new(config.controllino_relay)
+                .map_err(|e| format!("Controllino error: {:?}", e))?,
+        )
     };
 
     // 6. Setup GpioHandler and sensor communication
@@ -359,62 +378,70 @@ fn main() -> Result<(), Box<dyn Error>> {
 
         // Initialize GpioHandler
         let gpio_handler = GpioHandler::new(config.gpio_handler)
-             .map_err(|e| format!("GpioHandler error: {:?}", e))?
-             .ok_or("GpioHandler failed to initialize")?;
+            .map_err(|e| format!("GpioHandler error: {:?}", e))?
+            .ok_or("GpioHandler failed to initialize")?;
 
         let gpio_lib_handle = gpio_handler.gpio_lib_handle_opt.as_ref().unwrap().clone();
         let gpio_lib_handle_for_dht = gpio_lib_handle.clone();
         let gpio_lib_handle_for_tls = gpio_lib_handle.clone();
 
         if execution_config.dht {
-            let mut dht = Dht::new(config.dht, Some(gpio_lib_handle_for_dht), gpio_dht22_io, gpio_dht22_vcc);
+            let mut dht = Dht::new(
+                config.dht,
+                Some(gpio_lib_handle_for_dht),
+                gpio_dht22_io,
+                gpio_dht22_vcc,
+            );
             let mut dht_channels = channels.dht;
             let mutex_dht_clone = mutex_dht.clone();
-            
+
             thread::spawn(move || {
                 dht.execute(mutex_dht_clone, &mut dht_channels);
             });
         }
-        
+
         if execution_config.tank_level_switch {
             let mut tank_level_switch = TankLevelSwitch::new(
-                 config.tank_level_switch,
-                 true,
-                 Some(gpio_lib_handle_for_tls),
-                 gpio_tank_level_switch
-            ).map_err(|e| format!("TankLevelSwitch error: {:?}", e))?;
-            
+                config.tank_level_switch,
+                true,
+                Some(gpio_lib_handle_for_tls),
+                gpio_tank_level_switch,
+            )
+            .map_err(|e| format!("TankLevelSwitch error: {:?}", e))?;
+
             let mut tls_channels = channels.tank_level_switch;
             let mutex_tls_clone = mutex_tank_level_switch_signals.clone();
-            
+
             thread::spawn(move || {
                 let _ = tank_level_switch.execute(&mut tls_channels, mutex_tls_clone);
             });
         }
-        
+
         if execution_config.atlas_scientific {
-             let atlas_drivers = AtlasScientific::create_drivers(&config.atlas_scientific)
-                 .map_err(|e| format!("Atlas driver error: {:?}", e))?;
-             let mut atlas = AtlasScientific::new(config.atlas_scientific, atlas_drivers);
-             
-             let mut atlas_channels = channels.atlas_scientific;
-             let m_temp = mutex_atlas_scientific_temperature.clone();
-             let m_ph = mutex_atlas_scientific_ph.clone();
-             let m_cond = mutex_atlas_scientific_conductivity.clone();
-             
-             if execution_config.i2c_interface {
-                 let mut i2c = I2cInterface::new(config.i2c_interface)
-                     .map_err(|e| format!("I2C error: {:?}", e))?;
-                 let mut i2c_channels = channels.i2c_interface;
-                 thread::spawn(move || {
-                     i2c.execute(&mut i2c_channels);
-                 });
-             }
-             
-             thread::spawn(move || {
-                 atlas.init_devices(&mut atlas_channels).expect("Atlas init failed");
-                 atlas.execute(&mut atlas_channels, m_temp, m_ph, m_cond);
-             });
+            let atlas_drivers = AtlasScientific::create_drivers(&config.atlas_scientific)
+                .map_err(|e| format!("Atlas driver error: {:?}", e))?;
+            let mut atlas = AtlasScientific::new(config.atlas_scientific, atlas_drivers);
+
+            let mut atlas_channels = channels.atlas_scientific;
+            let m_temp = mutex_atlas_scientific_temperature.clone();
+            let m_ph = mutex_atlas_scientific_ph.clone();
+            let m_cond = mutex_atlas_scientific_conductivity.clone();
+
+            if execution_config.i2c_interface {
+                let mut i2c = I2cInterface::new(config.i2c_interface)
+                    .map_err(|e| format!("I2C error: {:?}", e))?;
+                let mut i2c_channels = channels.i2c_interface;
+                thread::spawn(move || {
+                    i2c.execute(&mut i2c_channels);
+                });
+            }
+
+            atlas
+                .init_devices(&mut atlas_channels)
+                .expect("Atlas init failed");
+            thread::spawn(move || {
+                atlas.execute(&mut atlas_channels, m_temp, m_ph, m_cond);
+            });
         }
     }
 
@@ -424,10 +451,9 @@ fn main() -> Result<(), Box<dyn Error>> {
         let m_water = mutex_ds18b20_water_temperature.clone();
         let m_amb = mutex_ds18b20_ambient_temperature.clone();
         thread::spawn(move || {
-           ds18b20.execute(&mut ds18b20_channels, m_water, m_amb);
+            ds18b20.execute(&mut ds18b20_channels, m_water, m_amb);
         });
     }
-
 
     // 7. Setup TUI
     enable_raw_mode()?;
@@ -441,7 +467,7 @@ fn main() -> Result<(), Box<dyn Error>> {
         execution_config.sensor_manager,
         mutex_tank_level_switch_signals,
         execution_config.tank_level_switch,
-        relay_manager_use_gpio
+        relay_manager_use_gpio,
     );
     let res = run_app(&mut terminal, app, &mut *actuator);
 
@@ -470,9 +496,10 @@ fn run_app(
 ) -> Result<(), Box<dyn Error>> {
     let mut last_tick = Instant::now();
     let tick_rate = Duration::from_millis(250);
-    
+
     let mut last_heartbeat = Instant::now();
-    let heartbeat_interval = actuator.get_heartbeat_interval_seconds()
+    let heartbeat_interval = actuator
+        .get_heartbeat_interval_seconds()
         .map(Duration::from_secs)
         .unwrap_or(Duration::from_secs(3600)); // Default long if none
 
@@ -496,27 +523,27 @@ fn run_app(
                             let name = device.to_string();
                             let current_state = *app.device_states.get(&name).unwrap_or(&false);
                             let new_state = !current_state;
-                            
+
                             let cmd = if new_state {
                                 InternalCommand::SwitchOn(device.clone())
                             } else {
                                 InternalCommand::SwitchOff(device.clone())
                             };
-                            
+
                             if let Err(_e) = actuator.actuate(&cmd) {
                                 // In a real app we might show an error popup
                                 // For now, we assume success or log to stderr (which messes up TUI)
-                                // We'll just not update state if failed? 
+                                // We'll just not update state if failed?
                                 // Or better, just update state optimistically.
                             }
-                             app.device_states.insert(name, new_state);
+                            app.device_states.insert(name, new_state);
                         }
                     }
                     _ => {}
                 }
             }
         }
-        
+
         if last_tick.elapsed() >= tick_rate {
             app.update_signals();
             last_tick = Instant::now();
@@ -524,8 +551,8 @@ fn run_app(
 
         // Heartbeat
         if last_heartbeat.elapsed() >= heartbeat_interval {
-             let _ = actuator.heartbeat();
-             last_heartbeat = Instant::now();
+            let _ = actuator.heartbeat();
+            last_heartbeat = Instant::now();
         }
     }
 }
@@ -555,7 +582,11 @@ fn ui(f: &mut Frame, app: &mut App) {
         .collect();
 
     let items = List::new(items)
-        .block(Block::default().borders(Borders::ALL).title("Actuators (Space to Toggle)"))
+        .block(
+            Block::default()
+                .borders(Borders::ALL)
+                .title("Actuators (Space to Toggle)"),
+        )
         .highlight_style(
             Style::default()
                 .add_modifier(Modifier::BOLD)
@@ -592,8 +623,8 @@ fn ui(f: &mut Frame, app: &mut App) {
         })
         .collect();
 
-    let sensors_list = List::new(sensor_text)
-        .block(Block::default().borders(Borders::ALL).title("Sensors"));
+    let sensors_list =
+        List::new(sensor_text).block(Block::default().borders(Borders::ALL).title("Sensors"));
 
     f.render_widget(sensors_list, chunks[1]);
 }
