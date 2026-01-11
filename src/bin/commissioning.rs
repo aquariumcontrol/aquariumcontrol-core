@@ -23,6 +23,17 @@ use aquarium_control::utilities::publish_pid::PublishPid;
 use aquarium_control::sensors::ds18b20::{Ds18b20, Ds18b20ResultData};
 use aquarium_control::sensors::dht::DhtResult;
 use aquarium_control::sensors::atlas_scientific::AtlasScientificResultData;
+#[cfg(all(target_os = "linux", feature = "target_hw"))]
+use aquarium_control::sensors::gpio_handler::GpioHandler;
+#[cfg(all(target_os = "linux", feature = "target_hw"))]
+use aquarium_control::sensors::dht::Dht;
+#[cfg(all(target_os = "linux", feature = "target_hw"))]
+use aquarium_control::sensors::atlas_scientific::AtlasScientific;
+#[cfg(all(target_os = "linux", feature = "target_hw"))]
+use aquarium_control::sensors::i2c_interface::I2cInterface;
+#[cfg(all(target_os = "linux", feature = "target_hw"))]
+use aquarium_control::sensors::tank_level_switch::{TankLevelSwitch, TankLevelSwitchSignals};
+
 use crossterm::{
     event::{self, DisableMouseCapture, EnableMouseCapture, Event, KeyCode},
     execute,
@@ -189,6 +200,9 @@ fn main() -> Result<(), Box<dyn Error>> {
     let mutex_sensor_manager_signals: Arc<Mutex<SensorManagerSignals>> = Arc::new(Mutex::new(
         SensorManagerSignals::new(&config.sensor_manager),
     ));
+    #[cfg(all(target_os = "linux", feature = "target_hw"))]
+    let mutex_tank_level_switch_signals =
+        Arc::new(Mutex::new(TankLevelSwitchSignals::new(true, true, false)));
 
     let sensor_mutexes = SensorManagerMutexes {
         mutex_ds18b20_ambient_temperature: mutex_ds18b20_ambient_temperature.clone(),
@@ -216,22 +230,73 @@ fn main() -> Result<(), Box<dyn Error>> {
         });
     }
 
-    // NOTE: In a real scenario, we also need to start the individual sensor threads (Ds18b20, Dht, Atlas)
-    // to populate the input mutexes.
-    // For brevity, and since `main.rs` does this, we should probably do it too if we want real data.
-    // However, the `SensorManager` alone just aggregates.
-    // Let's assume for commissioning we primarily want to test OUTPUTS, but inputs are nice.
-    // If inputs are required, we'd need to spawn those threads too.
-    // I will spawn them if config says so, reusing logic from main.rs structure is complex here due to scope.
-    // For now, I'll proceed with just SensorManager (which might read zeros if producers aren't running).
-    // The user requirement says "display the measurement results from all sensors".
-    // So I SHOULD start them.
-    
-    // ... (Spawning other sensor threads would go here, simplified for this tool) ...
-    // Since I cannot easily copy-paste the entire startup logic, I will assume SensorManager is enough 
-    // for the "structure" of the task, or I'd need to instantiate `Ds18b20`, `AtlasScientific` etc.
-    // Let's instantiate at least one if easy.
-    if config.ds18b20.active {
+    #[cfg(all(target_os = "linux", feature = "target_hw"))]
+    {
+        // Initialize GpioHandler
+        let gpio_handler = GpioHandler::new(config.gpio_handler.clone())
+             .map_err(|e| format!("GpioHandler error: {:?}", e))?
+             .ok_or("GpioHandler failed to initialize")?;
+
+        let gpio_lib_handle = gpio_handler.gpio_lib_handle_opt.as_ref().unwrap().clone();
+        let gpio_lib_handle_for_dht = gpio_lib_handle.clone();
+        let gpio_lib_handle_for_tls = gpio_lib_handle.clone();
+
+        if execution_config.dht {
+            let gpio_dht22_io = config.gpio_handler.dht22_io;
+            let gpio_dht22_vcc = config.gpio_handler.dht22_vcc;
+            let mut dht = Dht::new(config.dht.clone(), Some(gpio_lib_handle_for_dht), gpio_dht22_io, gpio_dht22_vcc);
+            let mut dht_channels = channels.dht;
+            let mutex_dht_clone = mutex_dht.clone();
+            
+            thread::spawn(move || {
+                dht.execute(mutex_dht_clone, &mut dht_channels);
+            });
+        }
+        
+        if execution_config.tank_level_switch {
+            let gpio_tank_level_switch = config.gpio_handler.tank_level_switch;
+            let mut tank_level_switch = TankLevelSwitch::new(
+                 config.tank_level_switch.clone(),
+                 true,
+                 Some(gpio_lib_handle_for_tls),
+                 gpio_tank_level_switch
+            ).map_err(|e| format!("TankLevelSwitch error: {:?}", e))?;
+            
+            let mut tls_channels = channels.tank_level_switch;
+            let mutex_tls_clone = mutex_tank_level_switch_signals.clone();
+            
+            thread::spawn(move || {
+                let _ = tank_level_switch.execute(&mut tls_channels, mutex_tls_clone);
+            });
+        }
+        
+        if execution_config.atlas_scientific {
+             let atlas_drivers = AtlasScientific::create_drivers(&config.atlas_scientific)
+                 .map_err(|e| format!("Atlas driver error: {:?}", e))?;
+             let mut atlas = AtlasScientific::new(config.atlas_scientific.clone(), atlas_drivers);
+             
+             let mut atlas_channels = channels.atlas_scientific;
+             let m_temp = mutex_atlas_scientific_temperature.clone();
+             let m_ph = mutex_atlas_scientific_ph.clone();
+             let m_cond = mutex_atlas_scientific_conductivity.clone();
+             
+             if execution_config.i2c_interface {
+                 let mut i2c = I2cInterface::new(config.i2c_interface.clone())
+                     .map_err(|e| format!("I2C error: {:?}", e))?;
+                 let mut i2c_channels = channels.i2c_interface;
+                 thread::spawn(move || {
+                     i2c.execute(&mut i2c_channels);
+                 });
+             }
+             
+             thread::spawn(move || {
+                 atlas.init_devices(&mut atlas_channels).expect("Atlas init failed");
+                 atlas.execute(&mut atlas_channels, m_temp, m_ph, m_cond);
+             });
+        }
+    }
+
+    if execution_config.ds18b20 {
         let mut ds18b20 = Ds18b20::new(config.ds18b20.clone())?;
         let mut ds18b20_channels = channels.ds18b20;
         let m_water = mutex_ds18b20_water_temperature.clone();
