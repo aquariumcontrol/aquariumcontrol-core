@@ -93,6 +93,9 @@ pub struct DataLoggerConfig {
     /// output file name (in ramdisk) for the current refill pump status
     pub output_file_name_refill_in_progress: String,
 
+    /// output file name (in ramdisk) for the refill controller state
+    pub output_file_name_refill_controller_state: String,
+
     /// sleep time in milliseconds before starting the data recording
     pub initial_sleep_time_millis: u64,
 }

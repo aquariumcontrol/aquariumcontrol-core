@@ -27,3 +27,6 @@ pub mod refill_channels;
 
 // Configuration of Refill
 pub mod refill_config;
+
+/// Communication of refill state information to data logger
+pub mod refill_status;

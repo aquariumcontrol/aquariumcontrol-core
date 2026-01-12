@@ -137,7 +137,8 @@ use crate::utilities::version_information::{VersionInformation, VersionInformati
 use crate::watchmen::monitors::Monitors;
 use crate::watchmen::petting::Petting;
 use crate::watchmen::watchdog::Watchdog;
-use crate::water::refill::{Refill, RefillStatus};
+use crate::water::refill::Refill;
+use crate::water::refill_status::RefillStatus;
 use crate::water::water_injection::WaterInjection;
 use spin_sleep::SpinSleeper;
 pub use std::sync::{atomic::AtomicBool, Arc, Mutex};
@@ -829,6 +830,8 @@ fn run() -> Result<(), StartupError> {
     let refill_status = RefillStatus {
         refill_in_progress_live: false,
         refill_in_progress_for_database: false,
+        critical_error_present: false,
+        external_inhibition_request: false,
     };
     let mutex_refill_status = Arc::new(Mutex::new(refill_status));
     let mutex_refill_status_clone_for_data_logger = mutex_refill_status.clone();

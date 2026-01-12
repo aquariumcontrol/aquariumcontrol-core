@@ -93,21 +93,11 @@ use crate::water::refill_config::RefillConfig;
 use crate::water::refill_error_states::RefillErrorStates;
 use crate::water::refill_monitor_view::RefillMonitorView;
 use crate::water::refill_stats_data::RefillStatsData;
+use crate::water::refill_status::RefillStatus;
 use crate::water::water_injection::WaterInjectionTrait;
 use crate::{log_error_chain, perform_schedule_check};
 
 const MILLIS_PER_SEC: u64 = 1000;
-
-/// Struct contains the status of the refill control for communication to the data logger.
-pub struct RefillStatus {
-    /// Status bit of refill control: It follows the actuation of the refill pump.
-    pub refill_in_progress_live: bool,
-
-    /// Status bit of refill control for data logger:
-    /// - It is set with the start when the refill pump is actuated.
-    /// - It is unset by the data logger to make sure the data logger has captured the refill.
-    pub refill_in_progress_for_database: bool,
-}
 
 #[derive(Default)]
 pub struct RefillLocks {
@@ -821,6 +811,22 @@ impl Refill {
                     refill_stats_data.duration_since_last_refill,
                 );
 
+                {
+                    // internal scope to limit lifetime of mutex lock
+                    match mutex_refill_status.lock() {
+                        Ok(mut refill_status) => {
+                            refill_status.external_inhibition_request = refill_inhibited;
+                        }
+                        Err(e) => {
+                            log_error_chain(
+                                module_path!(),
+                                "error locking mutex for refill status",
+                                e,
+                            );
+                        }
+                    };
+                }
+
                 if !quit_command_received && !refill_inhibited {
                     // access mutex for reading tank level switch signals
                     {
@@ -838,12 +844,30 @@ impl Refill {
 
                     self.get_refill_stats_data(&mut refill_stats_data, &mut *sql_interface_refill);
 
-                    // execute checks before initiating refill
-                    if !self.check_volume_count_time_limits(&refill_stats_data, refill_channels)
-                        && !self.refill_errors.error_switch_stuck_low
-                        && !self.refill_errors.error_sql_update_failed
-                        && !self.refill_errors.error_sql_get_historic_data_failed
+                    let critical_error_present = self
+                        .check_volume_count_time_limits(&refill_stats_data, refill_channels)
+                        || self.refill_errors.error_switch_stuck_low
+                        || self.refill_errors.error_sql_update_failed
+                        || self.refill_errors.error_sql_get_historic_data_failed;
+
                     {
+                        // internal scope to limit lifetime of mutex lock
+                        match mutex_refill_status.lock() {
+                            Ok(mut refill_status) => {
+                                refill_status.critical_error_present = critical_error_present;
+                            }
+                            Err(e) => {
+                                log_error_chain(
+                                    module_path!(),
+                                    "error locking mutex for refill status",
+                                    e,
+                                );
+                            }
+                        };
+                    }
+
+                    // execute checks before initiating refill
+                    if !critical_error_present {
                         perform_schedule_check!(
                             refill_channels,
                             schedule_check_result,
@@ -1056,7 +1080,7 @@ pub mod tests {
     use crate::utilities::proc_ext_req::ProcessExternalRequestTrait;
     use crate::water::refill::Refill;
     use crate::water::refill::RefillErrorStates;
-    use crate::water::refill::RefillStatus;
+    use crate::water::refill_status::RefillStatus;
     use all_asserts::{assert_ge, assert_le};
     use spin_sleep::SpinSleeper;
     use std::sync::{Arc, Mutex};
@@ -1252,10 +1276,7 @@ pub mod tests {
         let mutex_tank_level_switch_signals =
             Arc::new(Mutex::new(TankLevelSwitchSignals::new(false, false, false)));
         let mutex_tank_level_switch_signals_for_refill = mutex_tank_level_switch_signals.clone();
-        let refill_status = RefillStatus {
-            refill_in_progress_live: false,
-            refill_in_progress_for_database: false,
-        };
+        let refill_status = RefillStatus::default();
         let mutex_refill_status = Arc::new(Mutex::new(refill_status));
 
         let mut mock_monitors = MockMonitors::new();
@@ -1429,10 +1450,7 @@ pub mod tests {
         let mutex_device_scheduler = Arc::new(Mutex::new(0));
         let mutex_tank_level_switch_signals =
             Arc::new(Mutex::new(TankLevelSwitchSignals::new(false, false, false)));
-        let refill_status = RefillStatus {
-            refill_in_progress_live: false,
-            refill_in_progress_for_database: false,
-        };
+        let refill_status = RefillStatus::default();
         let mutex_refill_status = Arc::new(Mutex::new(refill_status));
 
         let mut mock_monitors = MockMonitors::new();
@@ -1591,10 +1609,7 @@ pub mod tests {
         let mutex_device_scheduler = Arc::new(Mutex::new(0));
         let mutex_tank_level_switch_signals =
             Arc::new(Mutex::new(TankLevelSwitchSignals::new(false, false, false)));
-        let refill_status = RefillStatus {
-            refill_in_progress_live: false,
-            refill_in_progress_for_database: false,
-        };
+        let refill_status = RefillStatus::default();
         let mutex_refill_status = Arc::new(Mutex::new(refill_status));
 
         let mut mock_monitors = MockMonitors::new();
@@ -1748,10 +1763,7 @@ pub mod tests {
         let (mut tx_test_environment_to_monitors, rx_monitors_from_test_environment) =
             channel::<InternalCommand>(1);
 
-        let refill_status = RefillStatus {
-            refill_in_progress_live: false,
-            refill_in_progress_for_database: false,
-        };
+        let refill_status = RefillStatus::default();
         let mutex_refill_status = Arc::new(Mutex::new(refill_status));
 
         // empty the refill table
@@ -1959,10 +1971,7 @@ pub mod tests {
         let mutex_device_scheduler = Arc::new(Mutex::new(0));
         let mutex_tank_level_switch_signals =
             Arc::new(Mutex::new(TankLevelSwitchSignals::new(false, false, false)));
-        let refill_status = RefillStatus {
-            refill_in_progress_live: false,
-            refill_in_progress_for_database: false,
-        };
+        let refill_status = RefillStatus::default();
         let mutex_refill_status = Arc::new(Mutex::new(refill_status));
 
         let mut mock_monitors = MockMonitors::new();
@@ -2134,10 +2143,7 @@ pub mod tests {
         let mutex_device_scheduler = Arc::new(Mutex::new(0));
         let mutex_tank_level_switch_signals =
             Arc::new(Mutex::new(TankLevelSwitchSignals::new(false, false, false)));
-        let refill_status = RefillStatus {
-            refill_in_progress_live: false,
-            refill_in_progress_for_database: false,
-        };
+        let refill_status = RefillStatus::default();
         let mutex_refill_status = Arc::new(Mutex::new(refill_status));
 
         let mut mock_water_injection = MockWaterInjection::new(
@@ -2294,10 +2300,7 @@ pub mod tests {
         let mutex_device_scheduler = Arc::new(Mutex::new(0));
         let mutex_tank_level_switch_signals =
             Arc::new(Mutex::new(TankLevelSwitchSignals::new(false, false, false)));
-        let refill_status = RefillStatus {
-            refill_in_progress_live: false,
-            refill_in_progress_for_database: false,
-        };
+        let refill_status = RefillStatus::default();
         let mutex_refill_status = Arc::new(Mutex::new(refill_status));
 
         let mut mock_monitors = MockMonitors::new();
@@ -2460,10 +2463,7 @@ pub mod tests {
             Arc::new(Mutex::new(TankLevelSwitchSignals::new(false, false, false)));
         let mutex_tank_level_switch_signals_clone_for_test_environment =
             mutex_tank_level_switch_signals.clone();
-        let refill_status = RefillStatus {
-            refill_in_progress_live: false,
-            refill_in_progress_for_database: false,
-        };
+        let refill_status = RefillStatus::default();
         let mutex_refill_status = Arc::new(Mutex::new(refill_status));
 
         let mut mock_water_injection = MockWaterInjection::new(
@@ -2663,10 +2663,7 @@ pub mod tests {
         let mutex_device_scheduler = Arc::new(Mutex::new(0));
         let mutex_tank_level_switch_signals =
             Arc::new(Mutex::new(TankLevelSwitchSignals::new(false, false, false)));
-        let refill_status = RefillStatus {
-            refill_in_progress_live: false,
-            refill_in_progress_for_database: false,
-        };
+        let refill_status = RefillStatus::default();
         let mutex_refill_status = Arc::new(Mutex::new(refill_status));
 
         let mut mock_monitors = MockMonitors::new();

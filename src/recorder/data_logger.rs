@@ -100,7 +100,7 @@ use crate::utilities::database_ping_trait::DatabasePingTrait;
 use crate::utilities::iir_filter::IIRFilter;
 use crate::utilities::proc_ext_req::ProcessExternalRequestTrait;
 use crate::utilities::wait_for_termination::WaitForTerminationTrait;
-use crate::water::refill::RefillStatus;
+use crate::water::refill_status::RefillStatus;
 
 const MILLIS_PER_SEC: u64 = 1000;
 
@@ -202,7 +202,12 @@ pub struct DataLogger {
 
     /// database ping interval
     pub database_ping_interval: Duration,
+
+    /// an inhibition flag to avoid flooding the log file with repeated messages about failure to lock mutex
     lock_error_mutex_signal_manager: bool,
+
+    /// an inhibition flag to avoid flooding the log file with repeated messages about failure to write the refill controller state to disk
+    lock_error_output_state_refill_controller_state: bool,
 }
 
 impl DataLogger {
@@ -232,7 +237,7 @@ impl DataLogger {
     ) -> Result<DataLogger, DataLoggerError> {
         if config.output_to_disk {
             // By defining the files in a collection, we can use iterators to check and
-            // initialize them, making the code concise, readable, and easy to maintain.
+            // initialize them
             let files_to_initialize = [
                 (&config.output_file_name_timestamp, "timestamp"),
                 (
@@ -272,9 +277,14 @@ impl DataLogger {
                     "ambient temperature",
                 ),
                 (&config.output_file_name_humidity, "humidity"),
+                (&config.output_file_name_humidity, "humidity"),
                 (
                     &config.output_file_name_refill_in_progress,
                     "refill in progress",
+                ),
+                (
+                    &config.output_file_name_refill_controller_state,
+                    "refill controller state",
                 ),
             ];
 
@@ -361,6 +371,7 @@ impl DataLogger {
             last_ping_instant: Instant::now(),
             database_ping_interval,
             lock_error_mutex_signal_manager: false,
+            lock_error_output_state_refill_controller_state: false,
         })
     }
 
@@ -470,6 +481,51 @@ impl DataLogger {
         }
     }
 
+    /// Outputs a string to a specified file, typically located on a RAM disk.
+    ///
+    /// This private helper function outputs a descriptive string (e.g., "ACTIVE", "ERROR")
+    /// to the given `output_file_name`. This operation only occurs if `output_to_disk`
+    /// is enabled in the data logger's configuration.
+    ///
+    /// Error logging for writing failures is controlled by the `inhibit_error_log` flag,
+    /// preventing a flood of repetitive error messages.
+    ///
+    /// # Arguments
+    /// * `description` - The text to be written to the output file.
+    /// * `output_file_name` - A reference to the `String` containing the full path to the output file.
+    /// * `inhibit_error_log` - A boolean flag that, if `true`, will prevent this specific
+    ///   error from being logged to the console/main log if a write operation fails.
+    ///
+    /// # Returns
+    /// - `true`: If an error occurred during the file write operation.
+    /// - `false`: If the write-operation was successful or if `output_to_disk` is disabled.
+    fn output_description(
+        &self,
+        description: &str,
+        output_file_name: &String,
+        inhibit_error_log: bool,
+    ) -> bool {
+        if self.config.output_to_disk {
+            match fs::write(output_file_name, description) {
+                Ok(_) => {
+                    /* do nothing */
+                    false // indicate no error
+                }
+                Err(e) => {
+                    if !inhibit_error_log {
+                        error!(
+                            target: module_path!(),
+                            "output of value {description} to {output_file_name} failed: {e:?}"
+                        );
+                    }
+                    true // indicate error
+                }
+            }
+        } else {
+            false // no output = no error
+        }
+    }
+
     /// Outputs a `NaiveDateTime` timestamp to a specified file, typically located on a RAM disk.
     ///
     /// This private helper function converts a `NaiveDateTime` into its string representation
@@ -545,6 +601,11 @@ impl DataLogger {
                         "OFF",
                         &self.config.output_file_name_refill_in_progress,
                         self.lock_error_output_state_refill_in_progress,
+                    );
+                    self.lock_error_output_state_refill_controller_state = self.output_description(
+                        refill_status.description(), // specific description
+                        &self.config.output_file_name_refill_controller_state,
+                        self.lock_error_output_state_refill_controller_state,
                     );
                     *refill_status_live = refill_status.refill_in_progress_live;
                     *refill_status_for_database = refill_status.refill_in_progress_for_database;
@@ -1227,6 +1288,8 @@ pub mod tests {
             mutex_refill_status: Arc::new(Mutex::new(RefillStatus {
                 refill_in_progress_live: false,
                 refill_in_progress_for_database: false,
+                critical_error_present: false,
+                external_inhibition_request: false,
             })),
         };
 
@@ -1304,6 +1367,7 @@ pub mod tests {
             output_file_name_ambient_temperature: "".to_string(),
             output_file_name_humidity: "".to_string(),
             output_file_name_refill_in_progress: "".to_string(),
+            output_file_name_refill_controller_state: "".to_string(),
             initial_sleep_time_millis: 0,
         };
 
@@ -1416,6 +1480,7 @@ pub mod tests {
         config.output_file_name_ambient_temperature += unique_suffix;
         config.output_file_name_humidity += unique_suffix;
         config.output_file_name_refill_in_progress += unique_suffix;
+        config.output_file_name_refill_controller_state += unique_suffix;
 
         let output_file_name_water_temperature = config.output_file_name_water_temperature.clone();
         let output_file_name_heating_is_on = config.output_file_name_heating_is_on.clone();
