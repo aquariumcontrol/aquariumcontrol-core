@@ -189,6 +189,9 @@ pub mod tests {
             AquariumDevice::RefillPump => {
                 mock_actuator_states.refill_pump_actuation_state = new_state;
             }
+            AquariumDevice::Beacon => {
+                // Do nothing
+            }
         }
     }
 

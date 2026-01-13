@@ -96,6 +96,9 @@ pub enum AquariumDevice {
 
     // Balling dosing pump #4
     PeristalticPump4,
+
+    // RGB LED
+    Beacon,
 }
 
 /// Enum is used for internal thread messaging between various threads

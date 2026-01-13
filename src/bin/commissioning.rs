@@ -6,7 +6,8 @@ The above copyright notice and this permission notice shall be included in all c
 
 THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
-
+#[cfg(all(target_os = "linux", feature = "target_hw"))]
+use aquarium_control::beacon::ws2812b::{RgbLedColor, Ws2812B, Ws2812BConfig};
 use aquarium_control::launch::argument_parser::check_argument_for_valid_config_file_name;
 use aquarium_control::launch::channels::Channels;
 use aquarium_control::launch::execution_config::ExecutionConfig;
@@ -106,6 +107,9 @@ struct App {
     tank_level_switch_mutex: Option<Arc<Mutex<TankLevelSwitchSignals>>>,
     tank_level_switch_active: bool,
     show_popup: bool,
+    #[cfg(all(target_os = "linux", feature = "target_hw"))]
+    beacon_active: bool,
+    beacon_state: u8, // 0: Off, 1: Red, 2: Green, 3: Blue
 }
 
 impl App {
@@ -115,17 +119,25 @@ impl App {
         tls_mutex: Arc<Mutex<TankLevelSwitchSignals>>,
         tls_active: bool,
         use_gpio: bool,
+        beacon_active: bool,
     ) -> App {
+        let mut devices = DEVICES.to_vec();
+        if beacon_active {
+            devices.push(AquariumDevice::Beacon);
+        }
+
         let mut device_states = HashMap::new();
-        for d in &DEVICES {
-            device_states.insert(d.to_string(), get_initial_state(d, use_gpio));
+        for d in &devices {
+            if *d != AquariumDevice::Beacon {
+                device_states.insert(d.to_string(), get_initial_state(d, use_gpio));
+            }
         }
 
         let mut list_state = ListState::default();
         list_state.select(Some(0));
 
         App {
-            devices: DEVICES.to_vec(),
+            devices,
             device_states,
             list_state,
             signals: HashMap::new(),
@@ -134,6 +146,9 @@ impl App {
             tank_level_switch_mutex: Some(tls_mutex),
             tank_level_switch_active: tls_active,
             show_popup: true,
+            #[cfg(all(target_os = "linux", feature = "target_hw"))]
+            beacon_active,
+            beacon_state: 0,
         }
     }
 
@@ -458,7 +473,21 @@ fn main() -> Result<(), Box<dyn Error>> {
         });
     }
 
-    // 7. Setup TUI
+    // 7. Setup Ws2812B
+    #[cfg(all(target_os = "linux", feature = "target_hw"))]
+    {
+        let mut ws2812b_opt: Option<Ws2812B> = None;
+        if config.ws2812b.active {
+            ws2812b_opt = Some(Ws2812B::new(config.ws2812b)?);
+        }
+    }
+
+    #[cfg(all(target_os = "linux", feature = "target_hw"))]
+    let beacon_active = ws2812b_opt.is_some();
+    #[cfg(not(all(target_os = "linux", feature = "target_hw")))]
+    let beacon_active = false;
+
+    // 8. Setup TUI
     enable_raw_mode()?;
     let mut stdout = io::stdout();
     execute!(stdout, EnterAlternateScreen, EnableMouseCapture)?;
@@ -471,8 +500,15 @@ fn main() -> Result<(), Box<dyn Error>> {
         mutex_tank_level_switch_signals,
         execution_config.tank_level_switch,
         relay_manager_use_gpio,
+        beacon_active,
     );
-    let res = run_app(&mut terminal, app, &mut *actuator);
+    let res = run_app(
+        &mut terminal,
+        app,
+        &mut *actuator,
+        #[cfg(all(target_os = "linux", feature = "target_hw"))]
+        &mut ws2812b_opt,
+    );
 
     // Restore terminal
     disable_raw_mode()?;
@@ -496,6 +532,7 @@ fn run_app(
     terminal: &mut Terminal<CrosstermBackend<io::Stdout>>,
     mut app: App,
     actuator: &mut dyn RelayActuationTrait,
+    #[cfg(all(target_os = "linux", feature = "target_hw"))] ws2812b: &mut Option<Ws2812B>,
 ) -> Result<(), Box<dyn Error>> {
     let mut last_tick = Instant::now();
     let tick_rate = Duration::from_millis(250);
@@ -526,23 +563,39 @@ fn run_app(
                             // Toggle
                             if let Some(idx) = app.list_state.selected() {
                                 let device = app.devices[idx].clone();
-                                let name = device.to_string();
-                                let current_state = *app.device_states.get(&name).unwrap_or(&false);
-                                let new_state = !current_state;
-
-                                let cmd = if new_state {
-                                    InternalCommand::SwitchOn(device.clone())
+                                if device == AquariumDevice::Beacon {
+                                    app.beacon_state = (app.beacon_state + 1) % 4;
+                                    #[cfg(all(target_os = "linux", feature = "target_hw"))]
+                                    if let Some(led) = ws2812b {
+                                        let color = match app.beacon_state {
+                                            0 => RgbLedColor::Off,
+                                            1 => RgbLedColor::Red,
+                                            2 => RgbLedColor::Green,
+                                            3 => RgbLedColor::Blue,
+                                            _ => RgbLedColor::Off,
+                                        };
+                                        let _ = led.set_color(color);
+                                    }
                                 } else {
-                                    InternalCommand::SwitchOff(device.clone())
-                                };
+                                    let name = device.to_string();
+                                    let current_state =
+                                        *app.device_states.get(&name).unwrap_or(&false);
+                                    let new_state = !current_state;
 
-                                if let Err(_e) = actuator.actuate(&cmd) {
-                                    // In a real app we might show an error popup
-                                    // For now, we assume success or log to stderr (which messes up TUI)
-                                    // We'll just not update state if failed?
-                                    // Or better, just update state optimistically.
+                                    let cmd = if new_state {
+                                        InternalCommand::SwitchOn(device.clone())
+                                    } else {
+                                        InternalCommand::SwitchOff(device.clone())
+                                    };
+
+                                    if let Err(_e) = actuator.actuate(&cmd) {
+                                        // In a real app we might show an error popup
+                                        // For now, we assume success or log to stderr (which messes up TUI)
+                                        // We'll just not update state if failed?
+                                        // Or better, just update state optimistically.
+                                    }
+                                    app.device_states.insert(name, new_state);
                                 }
-                                app.device_states.insert(name, new_state);
                             }
                         }
                         _ => {}
@@ -575,16 +628,34 @@ fn ui(f: &mut Frame, app: &mut App) {
         .devices
         .iter()
         .map(|device| {
-            let name = device.to_string();
-            let state = *app.device_states.get(&name).unwrap_or(&false);
-            let status = if state { "[ON] " } else { "[OFF]" };
-            let content = format!("{} {}", status, name);
-            let style = if state {
-                Style::default().fg(Color::Green)
+            if *device == AquariumDevice::Beacon {
+                let status = match app.beacon_state {
+                    0 => "[OFF]",
+                    1 => "[RED]",
+                    2 => "[GREEN]",
+                    3 => "[BLUE]",
+                    _ => "[OFF]",
+                };
+                let style = match app.beacon_state {
+                    0 => Style::default().fg(Color::Red),
+                    1 => Style::default().fg(Color::Red),
+                    2 => Style::default().fg(Color::Green),
+                    3 => Style::default().fg(Color::Blue),
+                    _ => Style::default().fg(Color::Red),
+                };
+                ListItem::new(format!("{} Beacon", status)).style(style)
             } else {
-                Style::default().fg(Color::Red)
-            };
-            ListItem::new(content).style(style)
+                let name = device.to_string();
+                let state = *app.device_states.get(&name).unwrap_or(&false);
+                let status = if state { "[ON] " } else { "[OFF]" };
+                let content = format!("{} {}", status, name);
+                let style = if state {
+                    Style::default().fg(Color::Green)
+                } else {
+                    Style::default().fg(Color::Red)
+                };
+                ListItem::new(content).style(style)
+            }
         })
         .collect();
 
@@ -648,7 +719,7 @@ fn ui(f: &mut Frame, app: &mut App) {
             Line::from(""),
             Line::from("Controls:"),
             Line::from("  UP / DOWN : Select Actuator"),
-            Line::from("  SPACE     : Toggle Actuator On/Off"),
+            Line::from("  SPACE     : Toggle Actuator On/Off / Red/Green/Blue/Off"),
             Line::from("  q         : Quit"),
             Line::from(""),
             Line::from("Press any key to close this popup"),
