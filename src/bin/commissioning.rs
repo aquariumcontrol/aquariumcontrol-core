@@ -46,9 +46,10 @@ use crossterm::{
 };
 use ratatui::{
     backend::CrosstermBackend,
-    layout::{Constraint, Direction, Layout},
+    layout::{Alignment, Constraint, Direction, Layout, Rect},
     style::{Color, Modifier, Style},
-    widgets::{Block, Borders, List, ListItem, ListState},
+    text::Line,
+    widgets::{Block, Borders, Clear, List, ListItem, ListState, Paragraph, Wrap},
     Frame, Terminal,
 };
 use std::collections::HashMap;
@@ -104,6 +105,7 @@ struct App {
     sensor_manager_active: bool,
     tank_level_switch_mutex: Option<Arc<Mutex<TankLevelSwitchSignals>>>,
     tank_level_switch_active: bool,
+    show_popup: bool,
 }
 
 impl App {
@@ -131,6 +133,7 @@ impl App {
             sensor_manager_active,
             tank_level_switch_mutex: Some(tls_mutex),
             tank_level_switch_active: tls_active,
+            show_popup: true,
         }
     }
 
@@ -512,34 +515,38 @@ fn run_app(
 
         if event::poll(timeout)? {
             if let Event::Key(key) = event::read()? {
-                match key.code {
-                    KeyCode::Char('q') => return Ok(()),
-                    KeyCode::Down => app.next(),
-                    KeyCode::Up => app.previous(),
-                    KeyCode::Char(' ') => {
-                        // Toggle
-                        if let Some(idx) = app.list_state.selected() {
-                            let device = app.devices[idx].clone();
-                            let name = device.to_string();
-                            let current_state = *app.device_states.get(&name).unwrap_or(&false);
-                            let new_state = !current_state;
+                if app.show_popup {
+                    app.show_popup = false;
+                } else {
+                    match key.code {
+                        KeyCode::Char('q') => return Ok(()),
+                        KeyCode::Down => app.next(),
+                        KeyCode::Up => app.previous(),
+                        KeyCode::Char(' ') => {
+                            // Toggle
+                            if let Some(idx) = app.list_state.selected() {
+                                let device = app.devices[idx].clone();
+                                let name = device.to_string();
+                                let current_state = *app.device_states.get(&name).unwrap_or(&false);
+                                let new_state = !current_state;
 
-                            let cmd = if new_state {
-                                InternalCommand::SwitchOn(device.clone())
-                            } else {
-                                InternalCommand::SwitchOff(device.clone())
-                            };
+                                let cmd = if new_state {
+                                    InternalCommand::SwitchOn(device.clone())
+                                } else {
+                                    InternalCommand::SwitchOff(device.clone())
+                                };
 
-                            if let Err(_e) = actuator.actuate(&cmd) {
-                                // In a real app we might show an error popup
-                                // For now, we assume success or log to stderr (which messes up TUI)
-                                // We'll just not update state if failed?
-                                // Or better, just update state optimistically.
+                                if let Err(_e) = actuator.actuate(&cmd) {
+                                    // In a real app we might show an error popup
+                                    // For now, we assume success or log to stderr (which messes up TUI)
+                                    // We'll just not update state if failed?
+                                    // Or better, just update state optimistically.
+                                }
+                                app.device_states.insert(name, new_state);
                             }
-                            app.device_states.insert(name, new_state);
                         }
+                        _ => {}
                     }
-                    _ => {}
                 }
             }
         }
@@ -627,4 +634,61 @@ fn ui(f: &mut Frame, app: &mut App) {
         List::new(sensor_text).block(Block::default().borders(Borders::ALL).title("Sensors"));
 
     f.render_widget(sensors_list, chunks[1]);
+
+    if app.show_popup {
+        let block = Block::default()
+            .title("Aquarium Control Commissioning")
+            .borders(Borders::ALL);
+        let area = centered_rect(60, 40, f.area());
+        f.render_widget(Clear, area); // this clears out the background
+        f.render_widget(block, area);
+
+        let text = vec![
+            Line::from("Welcome to the Commissioning Tool"),
+            Line::from(""),
+            Line::from("Controls:"),
+            Line::from("  UP / DOWN : Select Actuator"),
+            Line::from("  SPACE     : Toggle Actuator On/Off"),
+            Line::from("  q         : Quit"),
+            Line::from(""),
+            Line::from("Press any key to close this popup"),
+        ];
+        let paragraph = Paragraph::new(text)
+            .block(
+                Block::default()
+                    .borders(Borders::ALL)
+                    .title("Usage Instructions"),
+            )
+            .alignment(Alignment::Center)
+            .wrap(Wrap { trim: true });
+
+        f.render_widget(paragraph, area);
+    }
+}
+
+/// helper function to create a centered rect using up certain percentage of the available rect `r`
+fn centered_rect(percent_x: u16, percent_y: u16, r: Rect) -> Rect {
+    let popup_layout = Layout::default()
+        .direction(Direction::Vertical)
+        .constraints(
+            [
+                Constraint::Percentage((100 - percent_y) / 2),
+                Constraint::Percentage(percent_y),
+                Constraint::Percentage((100 - percent_y) / 2),
+            ]
+            .as_ref(),
+        )
+        .split(r);
+
+    Layout::default()
+        .direction(Direction::Horizontal)
+        .constraints(
+            [
+                Constraint::Percentage((100 - percent_x) / 2),
+                Constraint::Percentage(percent_x),
+                Constraint::Percentage((100 - percent_x) / 2),
+            ]
+            .as_ref(),
+        )
+        .split(popup_layout[1])[1]
 }
