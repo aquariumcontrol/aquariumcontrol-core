@@ -6,6 +6,18 @@ The above copyright notice and this permission notice shall be included in all c
 
 THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
+
+//! Commissioning tool for the Aquarium Control system.
+//!
+//! This binary provides a Terminal User Interface (TUI) to manually test and verify
+//! the hardware components of the aquarium control system. It allows the user to:
+//! - Toggle actuators (relays, pumps, lights) on and off.
+//! - View real-time sensor readings (temperature, pH, etc.).
+//! - Verify configuration settings.
+//!
+//! It supports both real hardware (via GPIO/I2C) and simulation mode, depending on the
+//! configuration provided.
+
 #[cfg(all(target_os = "linux", feature = "target_hw"))]
 use aquarium_control::beacon::ws2812b::{RgbLedColor, Ws2812B};
 use aquarium_control::launch::argument_parser::check_argument_for_valid_config_file_name;
@@ -85,6 +97,9 @@ const SIGNALS: [AquariumSignal; 6] = [
     AquariumSignal::TankLevelSwitchPosition,
 ];
 
+/// Determines the initial state (On/Off) for a given device.
+///
+/// Some devices might default to ON or depend on the GPIO configuration.
 fn get_initial_state(device: &AquariumDevice, use_gpio: bool) -> bool {
     match device {
         AquariumDevice::Skimmer
@@ -97,6 +112,9 @@ fn get_initial_state(device: &AquariumDevice, use_gpio: bool) -> bool {
     }
 }
 
+/// Application state for the TUI.
+///
+/// Holds the list of devices, their current states, sensor readings, and UI state.
 struct App {
     devices: Vec<AquariumDevice>,
     device_states: HashMap<String, bool>, // Device name -> On/Off
@@ -111,6 +129,7 @@ struct App {
 }
 
 impl App {
+    /// Creates a new instance of the application state.
     fn new(
         mutexes: SensorManagerMutexes,
         sensor_manager_active: bool,
@@ -148,6 +167,7 @@ impl App {
         }
     }
 
+    /// Selects the next item in the device list.
     fn next(&mut self) {
         let i = match self.list_state.selected() {
             Some(i) => {
@@ -162,6 +182,7 @@ impl App {
         self.list_state.select(Some(i));
     }
 
+    /// Selects the previous item in the device list.
     fn previous(&mut self) {
         let i = match self.list_state.selected() {
             Some(i) => {
@@ -176,6 +197,7 @@ impl App {
         self.list_state.select(Some(i));
     }
 
+    /// Updates the sensor signal values from the shared mutexes.
     fn update_signals(&mut self) {
         if self.sensor_manager_active {
             if let Some(mutexes) = &self.mutexes {
@@ -229,6 +251,15 @@ fn check_is_command(command: &str, default_config_file: &str) -> bool {
     }
 }
 
+/// The main entry point for the commissioning tool.
+///
+/// It performs the following steps:
+/// 1. Checks environment and privileges.
+/// 2. Loads configuration.
+/// 3. Initializes channels and shared mutexes.
+/// 4. Starts sensor threads (SensorManager, DHT, Atlas Scientific, etc.).
+/// 5. Initializes the actuator (Simulator, GPIO, or Controllino).
+/// 6. Sets up the TUI and runs the main event loop.
 fn main() -> Result<(), Box<dyn Error>> {
     // 0. Environment check
     if !cfg!(feature = "target_hw") || !cfg!(target_os = "linux") {
@@ -520,6 +551,9 @@ fn main() -> Result<(), Box<dyn Error>> {
     Ok(())
 }
 
+/// Runs the main application loop.
+///
+/// Handles terminal drawing, input events, and periodic updates (sensor polling, heartbeats).
 fn run_app(
     terminal: &mut Terminal<CrosstermBackend<io::Stdout>>,
     mut app: App,
@@ -609,6 +643,9 @@ fn run_app(
     }
 }
 
+/// Renders the user interface.
+///
+/// Draws the list of actuators, the list of sensors, and any active popups.
 fn ui(f: &mut Frame, app: &mut App) {
     let chunks = Layout::default()
         .direction(Direction::Horizontal)
@@ -729,7 +766,7 @@ fn ui(f: &mut Frame, app: &mut App) {
     }
 }
 
-/// helper function to create a centered rect using up certain percentage of the available rect `r`
+/// Helper function to create a centered rect using up certain percentage of the available rect `r`.
 fn centered_rect(percent_x: u16, percent_y: u16, r: Rect) -> Rect {
     let popup_layout = Layout::default()
         .direction(Direction::Vertical)
