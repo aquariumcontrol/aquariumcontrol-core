@@ -93,7 +93,8 @@ use aquarium_control::utilities::version_information::{
 use aquarium_control::watchmen::monitors::Monitors;
 use aquarium_control::watchmen::petting::Petting;
 use aquarium_control::watchmen::watchdog::Watchdog;
-use aquarium_control::water::refill::{Refill, RefillStatus};
+use aquarium_control::water::refill::Refill;
+use aquarium_control::water::refill_status::RefillStatus;
 use aquarium_control::water::water_injection::WaterInjection;
 use spin_sleep::SpinSleeper;
 pub use std::sync::{atomic::AtomicBool, Arc, Mutex};

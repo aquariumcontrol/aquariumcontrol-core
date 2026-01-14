@@ -501,6 +501,9 @@ fn main() -> Result<(), Box<dyn Error>> {
     }
 
     // 7. Setup Ws2812B
+    #[cfg(not(all(target_os = "linux", feature = "target_hw")))]
+    let beacon_active = false;
+    #[cfg(all(target_os = "linux", feature = "target_hw"))]
     let mut beacon_active = false;
     #[cfg(all(target_os = "linux", feature = "target_hw"))]
     let mut ws2812b_opt: Option<Ws2812B> = None;
