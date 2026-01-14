@@ -62,7 +62,7 @@ pub mod acknowledge_signal_handler;
 pub mod database_ping_trait;
 
 // Macro for performing schedule check
-mod perform_schedule_check;
+pub(crate) mod perform_schedule_check;
 
 // Macro for updating set values for heating and ventilation
 mod update_thermal_set_values;

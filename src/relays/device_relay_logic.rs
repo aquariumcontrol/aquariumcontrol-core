@@ -139,6 +139,13 @@ pub fn get_relay_command_gpio(
         | AquariumDevice::PeristalticPump2
         | AquariumDevice::PeristalticPump3
         | AquariumDevice::PeristalticPump4 => RelayLogic::NormallyOpen,
+
+        AquariumDevice::Beacon => {
+            return Err(RelayError::DeviceNotConnected(
+                module_path!().to_string(),
+                AquariumDevice::Beacon,
+            ));
+        }
     };
 
     // Then, get the GPIO state based on that single, unified logic function.

@@ -123,6 +123,12 @@ impl MineralInjection {
     }
 }
 
+impl Default for MineralInjection {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl MineralInjectionTrait for MineralInjection {
     /// Switches on one of the peristaltic pumps for a defined period, or until a `Quit` command is received.
     ///

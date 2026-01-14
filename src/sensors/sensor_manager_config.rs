@@ -17,7 +17,7 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 
 use serde_derive::Deserialize;
 
-#[derive(Deserialize, Debug)]
+#[derive(Deserialize, Debug, Clone)]
 /// Holds the configuration data for the measurement of ambient signals from DHT sensor
 /// The configuration is loaded from the .toml configuration file.
 /// This struct does not contain any implementation.

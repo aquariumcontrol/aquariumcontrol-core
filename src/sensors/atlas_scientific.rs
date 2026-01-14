@@ -211,16 +211,19 @@ impl AtlasScientific {
 
         let driver_temperature: Box<dyn AtlasScientificDriver> =
             match config.sensor_type_temperature.as_str() {
-                atlas_scientific_constants::SENSOR_TYPE_OEM => Box::new(AtlasScientificOem::new(
-                    config.address_atlas_scientific_temperature,
-                    #[cfg(any(all(feature = "target_hw", target_os = "linux"), test))]
-                    atlas_scientific_oem_constants::DEVICE_TYPE_TEMPERATURE,
-                    config.sleep_time_millis_temperature,
-                    atlas_scientific_constants::MAX_MUTEX_ACCESS_DURATION_MILLIS,
-                    atlas_scientific_oem_constants::REG_DATA_MSB_TEMPERATURE,
-                    atlas_scientific_oem_constants::SCALE_FACTOR_TEMPERATURE,
-                    atlas_scientific_oem_constants::RESPONSE_LENGTH_TEMPERATURE,
-                )),
+                atlas_scientific_constants::SENSOR_TYPE_OEM => {
+                    println!("Using Atlas Scientific OEM driver for temperature");
+                    Box::new(AtlasScientificOem::new(
+                        config.address_atlas_scientific_temperature,
+                        #[cfg(any(all(feature = "target_hw", target_os = "linux"), test))]
+                        atlas_scientific_oem_constants::DEVICE_TYPE_TEMPERATURE,
+                        config.sleep_time_millis_temperature,
+                        atlas_scientific_constants::MAX_MUTEX_ACCESS_DURATION_MILLIS,
+                        atlas_scientific_oem_constants::REG_DATA_MSB_TEMPERATURE,
+                        atlas_scientific_oem_constants::SCALE_FACTOR_TEMPERATURE,
+                        atlas_scientific_oem_constants::RESPONSE_LENGTH_TEMPERATURE,
+                    ))
+                }
                 atlas_scientific_constants::SENSOR_TYPE_EZO => Box::new(AtlasScientificEzo::new(
                     config.address_atlas_scientific_temperature,
                     config.sleep_time_millis_temperature,
@@ -237,16 +240,19 @@ impl AtlasScientific {
         drivers.insert(AquariumSignal::WaterTemperature, driver_temperature);
 
         let driver_ph: Box<dyn AtlasScientificDriver> = match config.sensor_type_ph.as_str() {
-            atlas_scientific_constants::SENSOR_TYPE_OEM => Box::new(AtlasScientificOem::new(
-                config.address_atlas_scientific_ph,
-                #[cfg(any(all(feature = "target_hw", target_os = "linux"), test))]
-                atlas_scientific_oem_constants::DEVICE_TYPE_PH,
-                config.sleep_time_millis_ph,
-                atlas_scientific_constants::MAX_MUTEX_ACCESS_DURATION_MILLIS,
-                atlas_scientific_oem_constants::REG_DATA_MSB_PH,
-                atlas_scientific_oem_constants::SCALE_FACTOR_PH,
-                atlas_scientific_oem_constants::RESPONSE_LENGTH_PH,
-            )),
+            atlas_scientific_constants::SENSOR_TYPE_OEM => {
+                println!("Using Atlas Scientific OEM driver for pH");
+                Box::new(AtlasScientificOem::new(
+                    config.address_atlas_scientific_ph,
+                    #[cfg(any(all(feature = "target_hw", target_os = "linux"), test))]
+                    atlas_scientific_oem_constants::DEVICE_TYPE_PH,
+                    config.sleep_time_millis_ph,
+                    atlas_scientific_constants::MAX_MUTEX_ACCESS_DURATION_MILLIS,
+                    atlas_scientific_oem_constants::REG_DATA_MSB_PH,
+                    atlas_scientific_oem_constants::SCALE_FACTOR_PH,
+                    atlas_scientific_oem_constants::RESPONSE_LENGTH_PH,
+                ))
+            }
             atlas_scientific_constants::SENSOR_TYPE_EZO => Box::new(AtlasScientificEzo::new(
                 config.address_atlas_scientific_ph,
                 config.sleep_time_millis_ph,
@@ -264,16 +270,19 @@ impl AtlasScientific {
 
         let driver_conductivity: Box<dyn AtlasScientificDriver> =
             match config.sensor_type_conductivity.as_str() {
-                atlas_scientific_constants::SENSOR_TYPE_OEM => Box::new(AtlasScientificOem::new(
-                    config.address_atlas_scientific_conductivity,
-                    #[cfg(any(all(feature = "target_hw", target_os = "linux"), test))]
-                    atlas_scientific_oem_constants::DEVICE_TYPE_CONDUCTIVITY,
-                    config.sleep_time_millis_conductivity,
-                    atlas_scientific_constants::MAX_MUTEX_ACCESS_DURATION_MILLIS,
-                    atlas_scientific_oem_constants::REG_DATA_MSB_CONDUCTIVITY,
-                    atlas_scientific_oem_constants::SCALE_FACTOR_CONDUCTIVITY,
-                    atlas_scientific_oem_constants::RESPONSE_LENGTH_CONDUCTIVITY,
-                )),
+                atlas_scientific_constants::SENSOR_TYPE_OEM => {
+                    println!("Using Atlas Scientific OEM driver for conductivity");
+                    Box::new(AtlasScientificOem::new(
+                        config.address_atlas_scientific_conductivity,
+                        #[cfg(any(all(feature = "target_hw", target_os = "linux"), test))]
+                        atlas_scientific_oem_constants::DEVICE_TYPE_CONDUCTIVITY,
+                        config.sleep_time_millis_conductivity,
+                        atlas_scientific_constants::MAX_MUTEX_ACCESS_DURATION_MILLIS,
+                        atlas_scientific_oem_constants::REG_DATA_MSB_CONDUCTIVITY,
+                        atlas_scientific_oem_constants::SCALE_FACTOR_CONDUCTIVITY,
+                        atlas_scientific_oem_constants::RESPONSE_LENGTH_CONDUCTIVITY,
+                    ))
+                }
                 atlas_scientific_constants::SENSOR_TYPE_EZO => Box::new(AtlasScientificEzo::new(
                     config.address_atlas_scientific_conductivity,
                     config.sleep_time_millis_conductivity,

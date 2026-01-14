@@ -334,6 +334,12 @@ impl RelayActuationTrait for ActuateGpio {
                                 AquariumDevice::PeristalticPump4 => {
                                     self.output_pin_peristaltic_pump4.set_low();
                                 }
+                                AquariumDevice::Beacon => {
+                                    return Err(RelayError::DeviceNotConnected(
+                                        module_path!().to_string(),
+                                        AquariumDevice::Beacon,
+                                    ));
+                                }
                             }
                             Ok(())
                         }
@@ -378,6 +384,12 @@ impl RelayActuationTrait for ActuateGpio {
                                 }
                                 AquariumDevice::PeristalticPump4 => {
                                     self.output_pin_peristaltic_pump4.set_high();
+                                }
+                                AquariumDevice::Beacon => {
+                                    return Err(RelayError::DeviceNotConnected(
+                                        module_path!().to_string(),
+                                        AquariumDevice::Beacon,
+                                    ));
                                 }
                             }
                             Ok(())

@@ -122,4 +122,7 @@ pub enum RelayError {
 
     #[error("[{0}] Simulator send failed.")]
     SimulatorSendFailed(String),
+
+    #[error("[{0}] Device {1} is not connected to any relay.")]
+    DeviceNotConnected(String, AquariumDevice),
 }

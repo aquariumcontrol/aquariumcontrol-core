@@ -337,6 +337,12 @@ pub fn get_relay_command(
         AquariumDevice::PeristalticPump2 => (config.peristaltic_pump2_id, false, true),
         AquariumDevice::PeristalticPump3 => (config.peristaltic_pump3_id, false, true),
         AquariumDevice::PeristalticPump4 => (config.peristaltic_pump4_id, false, true),
+        AquariumDevice::Beacon => {
+            return Err(RelayError::DeviceNotConnected(
+                module_path!().to_string(),
+                device,
+            ))
+        }
     };
 
     match internal_command {

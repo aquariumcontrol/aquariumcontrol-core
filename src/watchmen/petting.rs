@@ -10,6 +10,7 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 //!
 //! This struct doesn't hold any state; its purpose is to implement the `PettingTrait`
 //! for writing heartbeat messages to a watchdog file.
+
 pub struct Petting {}
 
 impl Petting {
@@ -22,6 +23,12 @@ impl Petting {
     /// A new `Petting` struct.
     pub fn new() -> Petting {
         Petting {}
+    }
+}
+
+impl Default for Petting {
+    fn default() -> Self {
+        Self::new()
     }
 }
 

@@ -38,6 +38,8 @@ cfg_if::cfg_if! {
 #[cfg(all(target_os = "linux", feature = "target_hw"))]
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub enum RgbLedColor {
+    /// The LEDs are turned off.
+    Off,
     /// The color Red.
     Red,
     /// The color Green.
@@ -59,6 +61,7 @@ impl RgbLedColor {
         match self {
             // WS2812B is commonly GRB: Green, Red, Blue
             // [G, R, B]
+            RgbLedColor::Off => &[0, 0, 0],
             RgbLedColor::Red => &[0, 255, 0], // Green=0, Red=255, Blue=0
             RgbLedColor::Green => &[255, 0, 0], // Green=255, Red=0, Blue=0
             RgbLedColor::Blue => &[0, 0, 255], // Green=0, Red=0, Blue=255
@@ -70,6 +73,7 @@ impl RgbLedColor {
 impl fmt::Display for RgbLedColor {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
+            RgbLedColor::Off => write!(f, "Off"),
             RgbLedColor::Red => write!(f, "Red"),
             RgbLedColor::Green => write!(f, "Green"),
             RgbLedColor::Blue => write!(f, "Blue"),

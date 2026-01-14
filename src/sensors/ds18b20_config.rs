@@ -20,7 +20,7 @@ use serde_derive::Deserialize;
 /// Holds the configuration data for DS18B20 sensor communication.
 /// The configuration is loaded from the .toml configuration file.
 /// This struct does not contain any implementation.
-#[derive(Deserialize, Debug)]
+#[derive(Deserialize, Debug, Clone)]
 pub struct Ds18b20Config {
     /// used primarily for testing purposes
     pub active: bool,
