@@ -7,7 +7,7 @@ The above copyright notice and this permission notice shall be included in all c
 THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 #[cfg(all(target_os = "linux", feature = "target_hw"))]
-use aquarium_control::beacon::ws2812b::{RgbLedColor, Ws2812B, Ws2812BConfig};
+use aquarium_control::beacon::ws2812b::{RgbLedColor, Ws2812B};
 use aquarium_control::launch::argument_parser::check_argument_for_valid_config_file_name;
 use aquarium_control::launch::channels::Channels;
 use aquarium_control::launch::execution_config::ExecutionConfig;
@@ -107,8 +107,6 @@ struct App {
     tank_level_switch_mutex: Option<Arc<Mutex<TankLevelSwitchSignals>>>,
     tank_level_switch_active: bool,
     show_popup: bool,
-    #[cfg(all(target_os = "linux", feature = "target_hw"))]
-    beacon_active: bool,
     beacon_state: u8, // 0: Off, 1: Red, 2: Green, 3: Blue
 }
 
@@ -146,8 +144,6 @@ impl App {
             tank_level_switch_mutex: Some(tls_mutex),
             tank_level_switch_active: tls_active,
             show_popup: true,
-            #[cfg(all(target_os = "linux", feature = "target_hw"))]
-            beacon_active,
             beacon_state: 0,
         }
     }
@@ -474,18 +470,14 @@ fn main() -> Result<(), Box<dyn Error>> {
     }
 
     // 7. Setup Ws2812B
+    let mut beacon_active = false;
     #[cfg(all(target_os = "linux", feature = "target_hw"))]
-    {
-        let mut ws2812b_opt: Option<Ws2812B> = None;
-        if config.ws2812b.active {
-            ws2812b_opt = Some(Ws2812B::new(config.ws2812b)?);
-        }
+    let mut ws2812b_opt: Option<Ws2812B> = None;
+    #[cfg(all(target_os = "linux", feature = "target_hw"))]
+    if config.ws2812b.active {
+        ws2812b_opt = Some(Ws2812B::new(config.ws2812b)?);
+        beacon_active = true;
     }
-
-    #[cfg(all(target_os = "linux", feature = "target_hw"))]
-    let beacon_active = ws2812b_opt.is_some();
-    #[cfg(not(all(target_os = "linux", feature = "target_hw")))]
-    let beacon_active = false;
 
     // 8. Setup TUI
     enable_raw_mode()?;
