@@ -62,7 +62,6 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 //!   to temporarily pause all scheduled dosing without stopping the thread or losing the
 //!   current countdown states.
 
-use chrono::Local;
 #[cfg(feature = "debug_balling")]
 use log::debug;
 use log::{error, info};
@@ -75,6 +74,7 @@ use spin_sleep::SpinSleeper;
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
+use crate::database::sql_interface::SqlInterface;
 use crate::database::sql_interface_balling::{BallingSetVal, SqlInterfaceBalling};
 use crate::mineral::balling_channels::BallingChannels;
 use crate::mineral::balling_config::BallingConfig;
@@ -538,16 +538,26 @@ impl Balling {
                         &balling_setval,
                         actual_dosing_duration_millis,
                     );
-                    if let Err(e) = sql_interface_balling.insert_balling_event(
-                        Local::now().naive_local(),
-                        pump_id.into(),
-                        actual_dosing_volume.into(),
-                    ) {
-                        error!(
-                            target: module_path!(),
-                            "Error occurred in database communication: {e:?}"
-                        );
-                    }
+                    match SqlInterface::get_current_timestamp(&mut sql_interface_balling.conn) {
+                        Ok(timestamp) => {
+                            if let Err(e) = sql_interface_balling.insert_balling_event(
+                                timestamp,
+                                pump_id.into(),
+                                actual_dosing_volume.into(),
+                            ) {
+                                error!(
+                                    target: module_path!(),
+                                    "Error occurred in database communication: {e:?}"
+                                );
+                            }
+                        }
+                        Err(e) => {
+                            error!(
+                                target: module_path!(),
+                                "Error occurred in database communication: {e:?}"
+                            );
+                        }
+                    };
                 }
             }
             Err(e) => {
