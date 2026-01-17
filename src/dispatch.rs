@@ -12,19 +12,10 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 // The communication is always initiated externally.
 // The module processes the input and forwards it to the respective thread via the channel.
 // The control application does not respond to any request sent to the message queue.
+pub mod ipc_message;
 pub mod messaging;
-
-// Enum codifies the errors which the program may encounter in communication with the Linux messaging system.
-pub mod messaging_error;
-
-// Container for channels
 pub mod messaging_channels;
-
-// Definition of messaging domains including related functionality
-pub mod messaging_domain;
-
-// Configuration of Messaging
-pub mod messaging_config;
-
-// Values for commands in message
 pub mod messaging_commands;
+pub mod messaging_config;
+pub mod messaging_domain;
+pub mod messaging_error;

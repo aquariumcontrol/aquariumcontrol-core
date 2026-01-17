@@ -81,72 +81,8 @@ cfg_if::cfg_if! {
         use crate::dispatch::messaging_domain::MessagingDomain;
         use crate::dispatch::messaging_config::MessagingConfig;
         use crate::launch::execution_config::ExecutionConfig;
+        use crate::dispatch::ipc_message::Message;
         use std::io::ErrorKind;
-    }
-}
-
-/// Stores the content of the message and provides functionality for testing.
-#[allow(unused)]
-pub struct Message {
-    domain: i32,
-    pub command: i32,
-    pub command_param1: i32,
-    command_param2: i32,
-}
-
-#[allow(unused)]
-impl Message {
-    /// Creates a new `Message` instance with all its fields initialized to zero.
-    ///
-    /// This constructor provides a default, empty message state, which can then be
-    /// populated with specific domain, command, and parameter values.
-    ///
-    /// # Returns
-    /// A new `Message` struct with `domain`, `command`, `command_param1`,
-    /// and `command_param2` all set to `0`.
-    pub fn new() -> Message {
-        Message {
-            domain: 0,
-            command: 0,
-            command_param1: 0,
-            command_param2: 0,
-        }
-    }
-
-    #[cfg(test)]
-    /// create a message represented as a raw byte array for testing
-    pub fn create_message_buf(&self) -> Vec<u8> {
-        let mut buf = vec![0; 20];
-        let domain_buf = self.domain.to_le_bytes();
-        let command_buf = self.command.to_le_bytes();
-        let command_param1_buf = self.command_param1.to_le_bytes();
-        let command_param2_buf = self.command_param2.to_le_bytes();
-
-        // transfer partial arrays to array for a complete message
-        buf[4] = domain_buf[0];
-        buf[5] = domain_buf[1];
-        buf[6] = domain_buf[2];
-        buf[7] = domain_buf[3];
-        buf[8] = command_buf[0];
-        buf[9] = command_buf[1];
-        buf[10] = command_buf[2];
-        buf[11] = command_buf[3];
-        buf[12] = command_param1_buf[0];
-        buf[13] = command_param1_buf[1];
-        buf[14] = command_param1_buf[2];
-        buf[15] = command_param1_buf[3];
-        buf[16] = command_param2_buf[0];
-        buf[17] = command_param2_buf[1];
-        buf[18] = command_param2_buf[2];
-        buf[19] = command_param2_buf[3];
-
-        buf
-    }
-}
-
-impl Default for Message {
-    fn default() -> Self {
-        Self::new()
     }
 }
 
@@ -267,7 +203,6 @@ impl Messaging {
         let duration_timeout = Duration::from_millis(self.config.timeout_millis);
 
         let mut msgbuf = vec![0; self.mq_max_msg_len];
-        let mut msg = Message::new();
 
         let sleep_duration = Duration::from_millis(10);
         let spin_sleeper = SpinSleeper::default();
@@ -276,87 +211,68 @@ impl Messaging {
             match self.mq.recv_timeout(&mut msgbuf, duration_timeout) {
                 Ok((_r1, _r2)) => {
                     if !msgbuf.is_empty() {
-                        let mut domain_buf: [u8; 4] = [0; 4];
-                        domain_buf[0] = msgbuf[4];
-                        domain_buf[1] = msgbuf[5];
-                        domain_buf[2] = msgbuf[6];
-                        domain_buf[3] = msgbuf[7];
-                        msg.domain = i32::from_le_bytes(domain_buf);
-
-                        let mut command_buf: [u8; 4] = [0; 4];
-                        command_buf[0] = msgbuf[8];
-                        command_buf[1] = msgbuf[9];
-                        command_buf[2] = msgbuf[10];
-                        command_buf[3] = msgbuf[11];
-                        msg.command = i32::from_le_bytes(command_buf);
-
-                        let mut command_param1_buf: [u8; 4] = [0; 4];
-                        command_param1_buf[0] = msgbuf[12];
-                        command_param1_buf[1] = msgbuf[13];
-                        command_param1_buf[2] = msgbuf[14];
-                        command_param1_buf[3] = msgbuf[15];
-                        msg.command_param1 = i32::from_le_bytes(command_param1_buf);
-
-                        let mut command_param2_buf: [u8; 4] = [0; 4];
-                        command_param2_buf[0] = msgbuf[16];
-                        command_param2_buf[1] = msgbuf[17];
-                        command_param2_buf[2] = msgbuf[18];
-                        command_param2_buf[3] = msgbuf[19];
-                        msg.command_param2 = i32::from_le_bytes(command_param2_buf);
-
-                        #[cfg(not(test))]
-                        info!(
-                            target: module_path!(),
-                            "received message: domain={}, cmd={}, param1={}, param2={}",
-                            msg.domain,
-                            msg.command,
-                            msg.command_param1,
-                            msg.command_param2
-                        );
-
-                        // interpret the domain in a message
-                        let domain = MessagingDomain::from(msg.domain);
-                        if domain == MessagingDomain::Unknown {
-                            warn!(
-                                target: module_path!(),
-                                "ignoring message for unknown domain {}",
-                                msg.domain
-                            );
-                        }
-
-                        // interpret command in a message
-                        let command = InternalCommand::from_msg(&msg);
-                        if command == InternalCommand::Unknown {
-                            warn!(
-                                target: module_path!(),
-                                "Messaging: ignoring message with unknown command {}",
-                                msg.command
-                            );
-                        }
-
-                        // prepare and execute communication to domain
-                        if (domain != MessagingDomain::Unknown)
-                            && (command != InternalCommand::Unknown)
-                            && (domain.is_domain_thread_executed(&self.execution_config))
-                        {
+                        if let Ok(msg) = Message::from_bytes(&msgbuf) {
                             #[cfg(not(test))]
                             info!(
                                 target: module_path!(),
-                                "forwarding message to domain {}",
-                                domain
+                                "received message: domain={}, cmd={}, param1={}, param2={}",
+                                msg.domain,
+                                msg.command,
+                                msg.command_param1,
+                                msg.command_param2
                             );
 
-                            match messaging_channels.send_command_to_domain(command, domain.clone())
+                            // interpret the domain in a message
+                            let domain = MessagingDomain::from(msg.domain);
+                            if domain == MessagingDomain::Unknown {
+                                warn!(
+                                    target: module_path!(),
+                                    "ignoring message for unknown domain {}",
+                                    msg.domain
+                                );
+                            }
+
+                            // interpret command in a message
+                            let command = InternalCommand::from_msg(&msg);
+                            if command == InternalCommand::Unknown {
+                                warn!(
+                                    target: module_path!(),
+                                    "Messaging: ignoring message with unknown command {}",
+                                    msg.command
+                                );
+                            }
+
+                            // prepare and execute communication to domain
+                            if (domain != MessagingDomain::Unknown)
+                                && (command != InternalCommand::Unknown)
+                                && (domain.is_domain_thread_executed(&self.execution_config))
                             {
-                                Ok(_) => { /* do nothing */ }
-                                Err(e) => {
-                                    error!(
-                                        target: module_path!(),
-                                        "channel communication to domain {} failed ({e:?})",
-                                        domain
-                                    );
+                                #[cfg(not(test))]
+                                info!(
+                                    target: module_path!(),
+                                    "forwarding message to domain {}",
+                                    domain
+                                );
+
+                                match messaging_channels
+                                    .send_command_to_domain(command, domain.clone())
+                                {
+                                    Ok(_) => { /* do nothing */ }
+                                    Err(e) => {
+                                        error!(
+                                            target: module_path!(),
+                                            "channel communication to domain {} failed ({e:?})",
+                                            domain
+                                        );
+                                    }
                                 }
                             }
+                        } else {
+                            error!(
+                                target: module_path!(),
+                                "message has incorrect length ({}). ignoring it.",
+                                msgbuf.len()
+                            );
                         }
                     } else {
                         error!(
@@ -415,7 +331,8 @@ pub mod tests {
     use spin_sleep::SpinSleeper;
     use std::{thread, time::Duration};
 
-    use crate::dispatch::messaging::{Message, Messaging};
+    use crate::dispatch::ipc_message::Message;
+    use crate::dispatch::messaging::Messaging;
     use crate::dispatch::messaging_channels::MessagingChannels;
     use crate::dispatch::messaging_domain::MessagingDomain;
     use crate::launch::channels::AquaSender;
@@ -520,7 +437,7 @@ pub mod tests {
 
                 for msg_command in msg_commands {
                     // sending an IPC message requesting the command to the (sub-)test object
-                    let _ = mq_stimuli.send(0, &msg_command.create_message_buf());
+                    let _ = mq_stimuli.send(0, &msg_command.to_bytes());
 
                     spin_sleeper.sleep(sleep_duration_100_millis);
                 }

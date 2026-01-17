@@ -51,7 +51,7 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 //! logic.
 
 #[cfg(target_os = "linux")]
-use crate::dispatch::messaging::Message;
+use crate::dispatch::ipc_message::Message;
 use strum_macros::Display;
 
 /// Enum is used for internal thread messaging from control circuits to Controllino.

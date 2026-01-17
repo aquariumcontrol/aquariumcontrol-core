@@ -9,6 +9,7 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 #[cfg(target_os = "linux")]
 use posixmq::PosixMq;
 
+use aquarium_control::dispatch::ipc_message::Message;
 use aquarium_control::dispatch::messaging_commands::command_values;
 use aquarium_control::dispatch::messaging_domain::MessagingDomain;
 use aquarium_control::utilities::config::ConfigData;
@@ -34,46 +35,6 @@ mod command_strings {
     pub const STOP: &str = "stop";
     pub const START: &str = "start";
     pub const EXEC: &str = "execute";
-}
-
-/// Stores the content of the message and provides functionality for testing.
-#[derive(Debug)]
-pub struct Message {
-    domain: i32,
-    command: i32,
-    command_param1: i32,
-    command_param2: i32,
-}
-
-impl Message {
-    /// create a message represented as a raw byte array for testing
-    pub fn create_message_buf(&self) -> Vec<u8> {
-        let mut buf = vec![0; 20];
-        let domain_buf = self.domain.to_le_bytes();
-        let command_buf = self.command.to_le_bytes();
-        let command_param1_buf = self.command_param1.to_le_bytes();
-        let command_param2_buf = self.command_param2.to_le_bytes();
-
-        // transfer partial arrays to array for a complete message
-        buf[4] = domain_buf[0];
-        buf[5] = domain_buf[1];
-        buf[6] = domain_buf[2];
-        buf[7] = domain_buf[3];
-        buf[8] = command_buf[0];
-        buf[9] = command_buf[1];
-        buf[10] = command_buf[2];
-        buf[11] = command_buf[3];
-        buf[12] = command_param1_buf[0];
-        buf[13] = command_param1_buf[1];
-        buf[14] = command_param1_buf[2];
-        buf[15] = command_param1_buf[3];
-        buf[16] = command_param2_buf[0];
-        buf[17] = command_param2_buf[1];
-        buf[18] = command_param2_buf[2];
-        buf[19] = command_param2_buf[3];
-
-        buf
-    }
 }
 
 /// Enumeration containing the representation of the specific errors for this program that may occur.
@@ -122,25 +83,25 @@ fn get_domain(dmn: &str) -> Result<i32, AquariumClientError> {
 /// display the usage information for this program.
 fn display_usage() {
     println!("aquarium_client requires [CONFIG FILE (OPTIONAL)] [DOMAIN] [COMMAND] [PARAMETER (OPTIONAL)]:");
-    println!(" - Domain \'refill\' processes following commands:");
-    println!("   \'reset\': reset errors of refill control");
-    println!("   \'stop\': stop refill control");
-    println!("   \'start\': start refill control");
-    println!(" - Domain \'ventilation\' processes following commands:");
-    println!("   \'stop\': stop ventilation control");
-    println!("   \'start\': start ventilation control");
-    println!(" - Domain \'heating\' processes following commands:");
-    println!("   \'stop\': stop ventilation control");
-    println!("   \'start\': start ventilation control");
-    println!(" - Domain \'feeder\' processes following commands:");
-    println!("   \'reset\': reset errors of feed control");
-    println!("   \'execute [feed schedule entry ID]\': execute a feed profile");
-    println!("   \'stop\': stop feed control");
-    println!("   \'start\': start feed control");
-    println!(" - Domain \'balling\' processes following commands:");
-    println!("   \'execute [dosing profile ID]\': execute a dosing profile");
-    println!("   \'stop\': stop dosing control");
-    println!("   \'start\': start dosing control");
+    println!(" - Domain 'refill' processes following commands:");
+    println!("   'reset': reset errors of refill control");
+    println!("   'stop': stop refill control");
+    println!("   'start': start refill control");
+    println!(" - Domain 'ventilation' processes following commands:");
+    println!("   'stop': stop ventilation control");
+    println!("   'start': start ventilation control");
+    println!(" - Domain 'heating' processes following commands:");
+    println!("   'stop': stop ventilation control");
+    println!("   'start': start ventilation control");
+    println!(" - Domain 'feeder' processes following commands:");
+    println!("   'reset': reset errors of feed control");
+    println!("   'execute [feed schedule entry ID]': execute a feed profile");
+    println!("   'stop': stop feed control");
+    println!("   'start': start feed control");
+    println!(" - Domain 'balling' processes following commands:");
+    println!("   'execute [dosing profile ID]': execute a dosing profile");
+    println!("   'stop': stop dosing control");
+    println!("   'start': start dosing control");
 }
 
 /// Loads the configuration data described in a struct of type ConfigData from the .toml file.
@@ -273,12 +234,7 @@ fn main() {
     };
 
     // Preparing the message object
-    let mut msg = Message {
-        domain: 0,
-        command: 0,
-        command_param1: 0,
-        command_param2: 0,
-    };
+    let mut msg = Message::new();
 
     // parse the domain from the command line parameter
     msg.domain = match get_domain(&args[arg_index]) {
@@ -314,7 +270,7 @@ fn main() {
 
     // sending an IPC message containing user command
     #[cfg(target_os = "linux")]
-    match mq.send(0, &msg.create_message_buf()) {
+    match mq.send(0, &msg.to_bytes()) {
         Ok(()) => {
             println!("message sent to Aquarium control application.");
         }
