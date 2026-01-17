@@ -52,6 +52,8 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 
 #[cfg(target_os = "linux")]
 use crate::dispatch::ipc_message::Message;
+#[cfg(target_os = "linux")]
+use crate::dispatch::messaging_commands::command_values;
 use strum_macros::Display;
 
 /// Enum is used for internal thread messaging from control circuits to Controllino.
@@ -249,11 +251,11 @@ impl InternalCommand {
     /// Converts contents of a `Message` into an `InternalCommand`.
     pub fn from_msg(msg: &Message) -> Self {
         match msg.command {
-            command_values::CMD_RESET => InternalCommand::ResetAllErrors,
-            command_values::CMD_STOP => InternalCommand::Stop,
-            command_values::CMD_START => InternalCommand::Start,
+            command_values::RESET => InternalCommand::ResetAllErrors,
+            command_values::STOP => InternalCommand::Stop,
+            command_values::START => InternalCommand::Start,
             // The `Execute` variant carries data, so it's handled distinctly.
-            command_values::CMD_EXECUTE => InternalCommand::Execute(msg.command_param1),
+            command_values::EXEC => InternalCommand::Execute(msg.command_param1),
             _ => InternalCommand::Unknown,
         }
     }
@@ -261,10 +263,10 @@ impl InternalCommand {
     #[cfg(test)]
     pub fn to_numeric(&self) -> i32 {
         match self {
-            InternalCommand::ResetAllErrors => Self::CMD_RESET_ALL_ERRORS,
-            InternalCommand::Stop => Self::CMD_STOP,
-            InternalCommand::Start => Self::CMD_START,
-            InternalCommand::Execute(_id) => Self::CMD_EXECUTE,
+            InternalCommand::ResetAllErrors => command_values::RESET,
+            InternalCommand::Stop => command_values::STOP,
+            InternalCommand::Start => command_values::START,
+            InternalCommand::Execute(_id) => command_values::EXEC,
             _ => -1,
         }
     }
