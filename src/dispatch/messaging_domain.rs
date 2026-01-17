@@ -59,7 +59,6 @@ use std::fmt;
 
 #[derive(PartialEq, Debug, Clone)]
 /// Identifies the addressee of the message
-#[cfg(target_os = "linux")]
 #[repr(i32)]
 pub enum MessagingDomain {
     /// refill control

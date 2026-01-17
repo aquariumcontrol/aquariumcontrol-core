@@ -246,19 +246,14 @@ pub enum InternalCommand {
 
 #[cfg(target_os = "linux")]
 impl InternalCommand {
-    pub const CMD_RESET_ALL_ERRORS: i32 = 1;
-    pub const CMD_STOP: i32 = 3;
-    pub const CMD_START: i32 = 4;
-    pub const CMD_EXECUTE: i32 = 10;
-
     /// Converts contents of a `Message` into an `InternalCommand`.
     pub fn from_msg(msg: &Message) -> Self {
         match msg.command {
-            Self::CMD_RESET_ALL_ERRORS => InternalCommand::ResetAllErrors,
-            Self::CMD_STOP => InternalCommand::Stop,
-            Self::CMD_START => InternalCommand::Start,
+            command_values::CMD_RESET => InternalCommand::ResetAllErrors,
+            command_values::CMD_STOP => InternalCommand::Stop,
+            command_values::CMD_START => InternalCommand::Start,
             // The `Execute` variant carries data, so it's handled distinctly.
-            Self::CMD_EXECUTE => InternalCommand::Execute(msg.command_param1),
+            command_values::CMD_EXECUTE => InternalCommand::Execute(msg.command_param1),
             _ => InternalCommand::Unknown,
         }
     }

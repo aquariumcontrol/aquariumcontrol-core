@@ -25,3 +25,6 @@ pub mod messaging_domain;
 
 // Configuration of Messaging
 pub mod messaging_config;
+
+// Values for commands in message
+pub mod messaging_commands;
