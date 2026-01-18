@@ -15,21 +15,23 @@ use crate::test_server::evaporation::EvaporationConfig;
 use crate::test_server::heat_flow::HeatFlowConfig;
 use crate::test_server::light_intensity_time_profile::LightIntensityTimeProfileConfig;
 use crate::test_server::logger::SenderLogger;
+use crate::test_server::pH_time_profile::pHTimeProfile;
 use crate::test_server::pH_time_profile::pHTimeProfileConfig;
 use crate::test_server::sump::SumpConfig;
 use crate::test_server::sump::{PumpStatus, Sump};
-use crate::test_server::tank_geometry::TankGeometryConfig;
-use crate::test_server::thermal_model::TankTemperatureModelConfig;
-use crate::test_server::pH_time_profile::pHTimeProfile;
 use crate::test_server::tank_geometry::TankGeometry;
+use crate::test_server::tank_geometry::TankGeometryConfig;
+use crate::test_server::tank_level_position::{TankLevelPosition, TankLevelPositionConfig};
+use crate::test_server::test_server_channel_content::{
+    BallingFluidInjection, TestServerInternalCommand,
+};
 use crate::test_server::thermal_model::TankTemperatureModel;
+use crate::test_server::thermal_model::TankTemperatureModelConfig;
+use crate::utilities::channel_content::{AquariumDevice, AquariumSignal};
 use chrono::{NaiveTime, Utc};
 use spin_sleep::SpinSleeper;
 use std::sync::mpsc::Receiver;
 use std::time::Duration;
-use crate::test_server::tank_level_position::{TankLevelPosition, TankLevelPositionConfig};
-use crate::test_server::test_server_channel_content::{BallingFluidInjection, TestServerInternalCommand};
-use crate::utilities::channel_content::{AquariumDevice, AquariumSignal};
 
 /// This struct contains the configuration data for the high-level models and the implementation of the high-level model execution.
 pub struct ModelEnvironment {
@@ -143,7 +145,7 @@ impl ModelEnvironment {
         let sleep_duration = Duration::from_millis(1);
         let spin_sleeper = SpinSleeper::default();
 
-        let mut i:u64 = 0;
+        let mut i: u64 = 0;
 
         // initialize time of day with value requested (not limited to local time)
         let mut time_of_day: NaiveTime = time_of_day_initial;
@@ -160,16 +162,16 @@ impl ModelEnvironment {
                     time_of_day,
                     self.time_step,
                 );
-    
+
                 self.tank_level_switch
                     .sump
                     .calc_refill(&mut self.tank_geometry, self.time_step);
             }
-            
+
             spin_sleeper.sleep(sleep_duration);
 
             i += 1; // counter for reducing frequency of calculation and frequency of logging
-            
+
             // execute logging every 10000 milliseconds == once every 10 seconds
             if i.is_multiple_of(1000) {
                 println!(
@@ -428,7 +430,7 @@ impl ModelEnvironment {
                         } else {
                             println!("ModelEnvironment: Communicating tank level switch LOW");
                             Some(0.0)
-                        }
+                        };
                     }
                     AquariumSignal::TankLevelSwitchInvalid => {
                         //println!("Received request for tank level switch invalid.");
@@ -436,7 +438,7 @@ impl ModelEnvironment {
                             Some(1.0)
                         } else {
                             Some(0.0)
-                        }
+                        };
                     }
                     _ => {}
                 };
@@ -449,12 +451,12 @@ impl ModelEnvironment {
 
 #[cfg(test)]
 pub mod tests {
-    use assert_float_eq::*;
-    use chrono::NaiveTime;
-    use std::sync::mpsc;
     use crate::test_server::command_parser::tests::SenderLoggerTuple;
     use crate::test_server::model_environment::ModelEnvironment;
     use crate::test_server::test_server_config::read_test_server_config_file;
+    use assert_float_eq::*;
+    use chrono::NaiveTime;
+    use std::sync::mpsc;
 
     #[test]
     fn test_model_environment_execution() {

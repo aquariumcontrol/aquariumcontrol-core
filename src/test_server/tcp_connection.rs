@@ -10,12 +10,12 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 use crate::test_server::command_parser::{parse_sequence, ParseErr};
 use crate::test_server::controllino_emulator::ControllinoEmulator;
 use crate::test_server::logger::SenderLogger;
+use crate::test_server::tcp_connection_config::TcpConnectionConfig;
 use crate::test_server::test_server_channel_content::TestServerInternalCommand;
 use std::io::{self, BufRead, BufReader, Write};
 use std::net::{AddrParseError, Ipv4Addr, SocketAddrV4, TcpListener, TcpStream};
 use std::str::FromStr;
 use std::sync::mpsc::Receiver;
-use crate::test_server::tcp_connection_config::TcpConnectionConfig;
 
 pub const QUIT_COMMAND: &str = "QUIT";
 
@@ -132,7 +132,7 @@ pub fn tcp_connection(
                             if should_quit { "" } else { "not " }
                         );
                         if should_quit {
-                            return Ok(())
+                            return Ok(());
                         }
                     }
                     Err(e) => {

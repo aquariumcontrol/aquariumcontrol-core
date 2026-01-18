@@ -159,12 +159,9 @@ pub fn parse_sequence(
                     if words.len() == 4 {
                         match word_signal.parse::<u16>() {
                             Ok(relay_id) => match word_optional.parse::<u32>() {
-                                Ok(pulsetime_ms) => pulse_relay(
-                                    relay_id,
-                                    pulsetime_ms,
-                                    tx_to_model,
-                                    controllino,
-                                ),
+                                Ok(pulsetime_ms) => {
+                                    pulse_relay(relay_id, pulsetime_ms, tx_to_model, controllino)
+                                }
                                 Err(_) => Err(ParseErr::ParseIntErr(word_optional.to_string())),
                             },
                             Err(_) => Err(ParseErr::ParseIntErr(word_signal.to_string())),
@@ -207,7 +204,8 @@ pub fn parse_sequence(
                                     ))
                                     .unwrap();
                                 let ambientHumidityResponse = rx_from_model.recv().unwrap();
-                                let response = sequence + " " + &ambientHumidityResponse.to_string();
+                                let response =
+                                    sequence + " " + &ambientHumidityResponse.to_string();
                                 // todo: send response to client
                                 Ok(Some(response))
                             }
@@ -310,12 +308,12 @@ pub fn parse_sequence(
 
 #[cfg(test)]
 pub mod tests {
+    use crate::generate_sender_logger_group;
     use crate::test_server::command_parser::{parse_sequence, ParseErr};
     use crate::test_server::controllino_emulator::ControllinoEmulator;
     use crate::test_server::model_environment::ModelEnvironment;
     use crate::test_server::test_server_channel_content::TestServerInternalCommand;
     use crate::test_server::test_server_config::read_test_server_config_file;
-    use crate::generate_sender_logger_group;
     use assert_float_eq::*;
     use chrono::NaiveTime;
     use std::sync::mpsc;
@@ -436,7 +434,8 @@ pub mod tests {
                         &rx_by_parser,
                         &mut controllino,
                     ));
-                let _ = tx_logger_to_model_environment.send_and_log(TestServerInternalCommand::Quit);
+                let _ =
+                    tx_logger_to_model_environment.send_and_log(TestServerInternalCommand::Quit);
                 assert_float_absolute_eq!(model_response_ambient_temperature, 23.0, 0.001);
                 assert_float_absolute_eq!(model_response_ambient_humidity, 60.0, 0.001);
                 assert_float_absolute_eq!(model_response_conductivity, 50000.0, 0.2);
