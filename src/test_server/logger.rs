@@ -46,43 +46,45 @@ impl<'a, T: Debug> SenderLogger<'a, T> {
 /// Generate a struct that groups multiple SenderLoggers to one file. The first parameter is the name of the generated struct, and all remaining parameters are generics, which can be named arbitrarily.
 /// # Examples
 /// ```
-/// Makes a logger for two Senders
-/// generate_sender_logger_group!(SenderLoggerTuple, A, B);
-///
-/// Makes a logger for three Senders
-/// generate_sender_logger_group!(SenderLoggerTriple, A, B, C);
-/// And so on; you can make a logger for as many Senders as you could possibly need
-///
-/// You can also use just one sender, if desired
-/// generate_sender_logger_group!(SenderLoggerSingle, A);
-///
-/// Let us use these loggers:
+/// use aquarium_control::generate_sender_logger_group;
 /// use std::sync::mpsc;
 ///
-/// Generate a tuple
+/// // Generates logger of two Senders
+/// generate_sender_logger_group!(SenderLoggerTuple, A, B);
+///
+/// // Makes a logger for three Senders
+/// generate_sender_logger_group!(SenderLoggerTriple, A, B, C);
+/// // And so on; you can make a logger for as many Senders as you could possibly need
+///
+/// // You can also use just one sender, if desired
+/// generate_sender_logger_group!(SenderLoggerSingle, A);
+///
+/// // Let us use these loggers:
+///
+/// // Generate a tuple
 /// let (tx0, _rx) = mpsc::channel();
 /// let (tx1, _rx) = mpsc::channel();
 ///
-/// let tuple = SenderLoggerTuple::SenderLoggerTuple::new("/tmp/aquarium_test_server__doctest__generate_sender_logger_group__tuple.log", tx0, tx1);
+/// let tuple = SenderLoggerTuple::new("/tmp/aquarium_test_server__doctest__generate_sender_logger_group__tuple.log", tx0, tx1).unwrap();
 /// let (sender0, sender1) = tuple.sender_loggers();
 ///
-/// Logs the supplied string to the log file, as well as sending it across the corresponding channel
-/// sender0.send("This string will be logged to a file").unwrap();
-/// Logs "56" to the log file, as well as sending the value across the corresponding channel
-/// sender1.send(56).unwrap();
+/// // Logs the supplied string to the log file, as well as sending it across the corresponding channel
+/// sender0.send_and_log("This string will be logged to a file").unwrap();
+/// // Logs "56" to the log file, as well as sending the value across the corresponding channel
+/// sender1.send_and_log(56).unwrap();
 ///
-/// Makes a triple
-/// let (tx0, _rx) = mpsc::channel();
-/// let (tx1, _rx) = mpsc::channel();
-/// let (tx2, _rx) = mpsc::channel();
+/// // Makes a triple
+/// let (tx0, _rx) = mpsc::channel::<i32>();
+/// let (tx1, _rx) = mpsc::channel::<i32>();
+/// let (tx2, _rx) = mpsc::channel::<i32>();
 ///
-/// let triple = SenderLoggerTriple::SenderLoggerTriple::new("/tmp/aquarium_test_server__doctest__generate_sender_logger_group__triple.log", tx0, tx1, tx2);
+/// let triple = SenderLoggerTriple::new("/tmp/aquarium_test_server__doctest__generate_sender_logger_group__triple.log", tx0, tx1, tx2).unwrap();
 /// let (_sender0, _sender1, _sender2) = triple.sender_loggers();
-/// ... and so forth
+/// // ... and so forth
 ///
-/// Makes a single SenderLogger.
-/// let (tx0, _rx) = mpsc::channel();
-/// let single = SenderLoggerSingle::new("/tmp/aquarium_test_server__doctest__generate_sender_logger_group__single.log", tx0);
+/// // Makes a single SenderLogger.
+/// let (tx0, _rx) = mpsc::channel::<i32>();
+/// let single = SenderLoggerSingle::new("/tmp/aquarium_test_server__doctest__generate_sender_logger_group__single.log", tx0).unwrap();
 /// let _sender0 = single.sender_loggers();
 ///
 /// ```

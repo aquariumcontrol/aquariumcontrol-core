@@ -20,7 +20,7 @@ use crate::test_server::pH_time_profile::pHTimeProfileConfig;
 use crate::test_server::sump::SumpConfig;
 use crate::test_server::tank_geometry::TankGeometryConfig;
 use crate::test_server::tank_level_position::TankLevelPositionConfig;
-use crate::test_server::tcp_connection::TcpConnectionConfig;
+use crate::test_server::tcp_connection_config::TcpConnectionConfig;
 use crate::test_server::thermal_model::TankTemperatureModelConfig;
 
 /// This is the top level struct to hold the configuration data read from .toml file.

@@ -41,3 +41,4 @@ pub mod test_server_config;
 pub mod thermal_model;
 
 pub mod test_server_channel_content;
+pub mod tcp_connection_config;

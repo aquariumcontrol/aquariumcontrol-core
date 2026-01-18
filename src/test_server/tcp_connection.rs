@@ -10,25 +10,14 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 use crate::test_server::command_parser::{parse_sequence, ParseErr};
 use crate::test_server::controllino_emulator::ControllinoEmulator;
 use crate::test_server::logger::SenderLogger;
-
 use crate::test_server::test_server_channel_content::TestServerInternalCommand;
-use serde_derive::Deserialize;
-use std::io;
-use std::net::{AddrParseError, Ipv4Addr, SocketAddrV4};
+use std::io::{self, BufRead, BufReader, Write};
+use std::net::{AddrParseError, Ipv4Addr, SocketAddrV4, TcpListener, TcpStream};
 use std::str::FromStr;
-use std::{
-    io::{prelude::*, BufReader},
-    net::{TcpListener, TcpStream},
-    sync::mpsc::Receiver,
-};
+use std::sync::mpsc::Receiver;
+use crate::test_server::tcp_connection_config::TcpConnectionConfig;
 
 pub const QUIT_COMMAND: &str = "QUIT";
-
-#[derive(Deserialize)]
-pub struct TcpConnectionConfig {
-    pub ip_address: String,
-    pub port: u16,
-}
 
 #[derive(Debug)]
 pub enum TcpErr {
@@ -36,6 +25,7 @@ pub enum TcpErr {
     Parse(ParseErr),
     ConnectionFailed(io::Error),
     ReadMessageFailed(io::Error),
+    WriteMessageFailed(io::Error),
 }
 
 /// Function reads content of stream and forwards String data to parser. It also sends back String data to the stream if parser returns it.
@@ -55,42 +45,48 @@ fn handle_client(
     rx: &Receiver<f32>,
     controllino: &mut ControllinoEmulator,
 ) -> Result<bool, TcpErr> {
-    let mut buf_reader = BufReader::new(&stream);
+    // Clone the stream for writing.
+    let mut write_stream = stream.try_clone().map_err(TcpErr::ConnectionFailed)?;
+    // Use the original stream for reading via BufReader.
+    let mut buf_reader = BufReader::new(stream);
     let mut next_line = String::new();
+
     loop {
         next_line.clear();
         match buf_reader.read_line(&mut next_line) {
+            Ok(0) => return Ok(false), // EOF
             Ok(_) => {}
             Err(e) => return Err(TcpErr::ReadMessageFailed(e)),
         }
-        if next_line.is_empty() {
-            return Ok(false);
+
+        // Clean up string
+        let request_string = next_line
+            .trim()
+            .trim_start_matches(char::from_u32(0).unwrap_or_default())
+            .to_string();
+
+        if request_string.is_empty() {
+            // Just an empty line or whitespace
+            continue;
         }
-        if next_line.trim() == QUIT_COMMAND {
+
+        if request_string == QUIT_COMMAND {
             return Ok(true);
         }
 
-        let request_string = next_line
-            .trim()
-            .trim_start_matches(char::from_u32(0).unwrap())
-            .to_string();
-        let response_string_with_newline: String;
+        println!("Received request: {}", request_string);
 
-        println!("Received request: {}", request_string.clone());
         match parse_sequence(request_string.clone(), tx, rx, controllino) {
             Ok(response) => {
-                // response is of type Option<String>
-                match response {
-                    None => {
-                        response_string_with_newline = request_string.clone() + "\n";
-                    }
-                    Some(response_string) => {
-                        response_string_with_newline = response_string + "\n";
-                    }
-                }
-                let mut write_stream = stream.try_clone().unwrap();
-                let _ = write_stream.write(response_string_with_newline.as_bytes());
-                let _ = write_stream.flush();
+                let response_string = match response {
+                    Some(resp) => resp + "\n",
+                    None => request_string + "\n",
+                };
+
+                write_stream
+                    .write_all(response_string.as_bytes())
+                    .map_err(TcpErr::WriteMessageFailed)?;
+                write_stream.flush().map_err(TcpErr::WriteMessageFailed)?;
             }
             Err(e) => {
                 return Err(TcpErr::Parse(e));
@@ -114,18 +110,12 @@ pub fn tcp_connection(
     rx: Receiver<f32>,
     controllino: &mut ControllinoEmulator,
 ) -> Result<(), TcpErr> {
-    let ipv4 = match Ipv4Addr::from_str(&config_tcp_connection.ip_address) {
-        Ok(v) => v,
-        Err(e) => return Err(TcpErr::BadAddr(e)),
-    };
+    let ipv4 = Ipv4Addr::from_str(&config_tcp_connection.ip_address).map_err(TcpErr::BadAddr)?;
     let address = SocketAddrV4::new(ipv4, config_tcp_connection.port);
 
-    let listener = match TcpListener::bind(address) {
-        Ok(l) => l,
-        Err(_) => {
-            panic!("TCP binding failed. address={}", address);
-        }
-    };
+    let listener = TcpListener::bind(address).map_err(TcpErr::ConnectionFailed)?;
+
+    println!("Server listening on {}", address);
 
     // accept connections and process them serially
     let mut connection_count = 0;
@@ -135,16 +125,20 @@ pub fn tcp_connection(
                 connection_count += 1;
                 println!("*** Accepting incoming connection #{}", connection_count);
                 let res = handle_client(stream, &tx, &rx, controllino);
-                if let Err(e) = res {
-                    return Err(e);
-                }
-                let should_quit = res?;
-                println!(
-                    "connection closed gracefully; {}quitting",
-                    if should_quit { "" } else { "not " }
-                );
-                if should_quit {
-                    return Ok(());
+                match res {
+                    Ok(should_quit) => {
+                        println!(
+                            "connection closed gracefully; {}quitting",
+                            if should_quit { "" } else { "not " }
+                        );
+                        if should_quit {
+                            return Ok(())
+                        }
+                    }
+                    Err(e) => {
+                        println!("Connection error: {:?}", e);
+                        return Err(e);
+                    }
                 }
             }
             Err(e) => {

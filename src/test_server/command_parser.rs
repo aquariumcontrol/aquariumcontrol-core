@@ -8,43 +8,12 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 */
 
 #![allow(non_snake_case)]
+use crate::simulator::tcp_data::{category, command, signal};
 use crate::test_server::controllino_emulator::ControllinoEmulator;
 use crate::test_server::logger::SenderLogger;
 use crate::test_server::test_server_channel_content::TestServerInternalCommand;
 use crate::utilities::channel_content::AquariumSignal;
 use std::sync::mpsc::Receiver;
-
-/// This module contains constants representing commands received from control application.
-mod command {
-    pub const SETSINGLE: &str = "SETSINGLE";
-    pub const UNSETSINGLE: &str = "UNSETSINGLE";
-    pub const GETSTATUS: &str = "GETSTATUS";
-    pub const PULSE: &str = "PULSE";
-    pub const HEARTBEAT: &str = "HEARTBEAT";
-    pub const READ: &str = "READ";
-    pub const INITIALIZED: &str = "INITIALIZED";
-}
-
-/// This module contains constants representing the category received from control application.
-/// The category describes the device to which the command shall be applied.
-mod category {
-    pub const CONTROLLINO: &str = "CONTROLLINO";
-    pub const DHT22: &str = "DHT22";
-    pub const ATLASSCIENTIFIC: &str = "ATLSSCNTFC";
-    pub const TANKLEVELSWITCH: &str = "TNKLVLSWTCH";
-    pub const REFILLCONTROL: &str = "REFILLCTRL";
-}
-
-/// This module contains constants representing the signal request received from control application.
-mod signal {
-    pub const AMBIENTTEMPERATURE: &str = "AmbTemp";
-    pub const AMBIENTHUMIDITY: &str = "AmbHum";
-    pub const TANKLEVELSWITCHPOSITION: &str = "TnkLvlSwtch";
-    pub const TANKLEVELSWITCHINVALID: &str = "TnkLvlSwtchInvld";
-    pub const ATLASSCIENTIFICTEMPERATURE: &str = "temperature";
-    pub const ATLASSCIENTIFICPH: &str = "pH";
-    pub const ATLASSCIENTIFICCONDUCTIVITY: &str = "conductivity";
-}
 
 #[derive(Debug)]
 /// Enum codifies the errors which the program may encounter during evaluation of the command string.
