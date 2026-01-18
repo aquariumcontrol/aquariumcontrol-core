@@ -56,10 +56,10 @@ impl<'a, T: Debug> SenderLogger<'a, T> {
 /// You can also use just one sender, if desired
 /// generate_sender_logger_group!(SenderLoggerSingle, A);
 ///
-/// Let's use these loggers:
+/// Let us use these loggers:
 /// use std::sync::mpsc;
 ///
-/// Makes a tuple
+/// Generate a tuple
 /// let (tx0, _rx) = mpsc::channel();
 /// let (tx1, _rx) = mpsc::channel();
 ///
