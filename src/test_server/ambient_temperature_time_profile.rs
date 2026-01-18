@@ -94,7 +94,7 @@ pub mod tests {
     use crate::test_server::test_server_config::read_test_server_config_file;
 
     fn create_profile() -> AmbientTemperatureTimeProfile {
-        let config = read_test_server_config_file("/config-test/aquarium_control_test_server.toml".to_string());
+        let config = read_test_server_config_file(None);
 
         AmbientTemperatureTimeProfile {
             config: config.ambient_temperature_time_profile,

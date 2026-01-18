@@ -261,7 +261,7 @@ pub mod tests {
 
     #[test]
     fn test_set_unset_relay() {
-        let config = read_test_server_config_file("/config-test/aquarium_control_test_server.toml".to_string());
+        let config = read_test_server_config_file(None);
 
         let mut controllino = ControllinoEmulator {
             relays: vec![

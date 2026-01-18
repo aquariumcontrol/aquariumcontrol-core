@@ -7,6 +7,7 @@ The above copyright notice and this permission notice shall be included in all c
 THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
+use std::env;
 use std::sync::mpsc;
 use std::sync::mpsc::{Receiver, Sender};
 use std::thread::scope;
@@ -23,7 +24,14 @@ generate_sender_logger_group!(SenderLoggerTuple, A, B);
 
 /// The main function reads the configuration file, initializes the model environment and the Controllino device, opens the TCP port.
 fn main() {
-    let config = read_test_server_config_file("/config-test/aquarium_control_test_server.toml".to_string());
+    let args: Vec<String> = env::args().collect();
+    let config_path = if args.len() > 1 {
+        Some(args[1].clone())
+    } else {
+        None
+    };
+
+    let config = read_test_server_config_file(config_path);
 
     let mut model_environment = ModelEnvironment::new(
         config.tank_geometry,

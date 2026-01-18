@@ -167,7 +167,7 @@ pub mod tests {
 
     fn create_heat_flow_model() -> HeatFlow {
         let config_heat_flow =
-            read_test_server_config_file("/config-test/aquarium_control_test_server.toml".to_string())
+            read_test_server_config_file(None)
                 .heat_flow;
 
         HeatFlow::new(config_heat_flow, 1.0)

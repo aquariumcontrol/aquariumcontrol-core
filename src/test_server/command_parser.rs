@@ -350,7 +350,7 @@ pub mod tests {
         let input_sequence_tank_level_switch_position = "TNKLVLSWTCH READ TnkLvlSwtch".to_string();
         let input_sequence_tank_level_switch_qualifier =
             "TNKLVLSWTCH READ TnkLvlSwtchInvld".to_string();
-        let config = read_test_server_config_file("/config-test/aquarium_control_test_server.toml".to_string());
+        let config = read_test_server_config_file(None);
 
         let (tx_to_model_environment, rx_by_model_environment): (
             Sender<TestServerInternalCommand>,

@@ -47,12 +47,18 @@ pub struct TestServerConfigData {
 /// In success case, the function returns a variable of type TestServerConfigData.
 /// # Arguments:
 ///
-/// * `relative_path` - configuration file shall be stored in a subfolder of the cargo base folder. The variable contains the name of the subfolder.
-pub fn read_test_server_config_file(relative_path: String) -> TestServerConfigData {
+/// * `user_specified_file` - Optional path to the configuration file. If None, a default path is used based on CARGO_MANIFEST_DIR.
+pub fn read_test_server_config_file(user_specified_file: Option<String>) -> TestServerConfigData {
     use std::env;
-    let out_dir = env::var("CARGO_MANIFEST_DIR").unwrap();
 
-    let filename = out_dir + &relative_path;
+    let filename = if let Some(f) = user_specified_file {
+        f
+    } else {
+        match env::var("CARGO_MANIFEST_DIR") {
+            Ok(dir) => dir + "/config-test/aquarium_control_test_server.toml",
+            Err(_) => "/etc/aquarium_control/aquarium_control_test_server.toml".to_string(),
+        }
+    };
 
     println!("Reading config in {}", filename);
     // inspired by https://codingpackets.com/blog/rust-load-a-toml-file/

@@ -82,7 +82,7 @@ pub mod tests {
     use crate::test_server::test_server_config::read_test_server_config_file;
 
     fn create_light_intensity_profile() -> LightIntensityTimeProfile {
-        let config = read_test_server_config_file("/config-test/aquarium_control_test_server.toml".to_string());
+        let config = read_test_server_config_file(None);
 
         LightIntensityTimeProfile {
             config: config.light_intensity_time_profile,

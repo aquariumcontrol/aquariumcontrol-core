@@ -458,7 +458,7 @@ pub mod tests {
 
     #[test]
     fn test_model_environment_execution() {
-        let config = read_test_server_config_file("/config-test/aquarium_control_test_server.toml".to_string());
+        let config = read_test_server_config_file(None);
         let time_of_day = NaiveTime::from_hms_opt(9, 0, 0).unwrap();
 
         let mut model_environment = ModelEnvironment::new(

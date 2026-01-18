@@ -166,7 +166,7 @@ pub mod tests {
 
     #[test]
     fn test_temperature_stabilization_with_heater_switched_on() {
-        let config = read_test_server_config_file("/config-test/aquarium_control_test_server.toml".to_string());
+        let config = read_test_server_config_file(None);
 
         let light_intensity = LightIntensityTimeProfile {
             config: config.light_intensity_time_profile,
@@ -233,7 +233,7 @@ pub mod tests {
 
     #[test]
     fn test_temperature_stabilization_with_ventilation_switched_on() {
-        let config = read_test_server_config_file("/config-test/aquarium_control_test_server.toml".to_string());
+        let config = read_test_server_config_file(None);
 
         let light_intensity = LightIntensityTimeProfile {
             config: config.light_intensity_time_profile,

@@ -94,7 +94,7 @@ pub mod tests {
 
     #[test]
     fn test_change_low_to_high_to_low() {
-        let config = read_test_server_config_file("/config-test/aquarium_control_test_server.toml".to_string());
+        let config = read_test_server_config_file(None);
 
         let tank_geometry_config = TankGeometryConfig {
             width: 1.0,

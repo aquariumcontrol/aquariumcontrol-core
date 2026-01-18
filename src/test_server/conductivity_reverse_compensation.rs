@@ -65,7 +65,7 @@ pub mod tests {
 
     #[test]
     fn test_no_compensation() {
-        let config = read_test_server_config_file("/config-test/aquarium_control_test_server.toml".to_string());
+        let config = read_test_server_config_file(None);
         let conductivity_compensation = ConductivityReverseCompensation {
             config: config.conductivity_reverse_compensation,
         };
@@ -77,7 +77,7 @@ pub mod tests {
 
     #[test]
     fn test_high_temperature() {
-        let config = read_test_server_config_file("/config-test/aquarium_control_test_server.toml".to_string());
+        let config = read_test_server_config_file(None);
         let conductivity_compensation = ConductivityReverseCompensation {
             config: config.conductivity_reverse_compensation,
         };
@@ -89,7 +89,7 @@ pub mod tests {
 
     #[test]
     fn test_low_temperature() {
-        let config = read_test_server_config_file("/config-test/aquarium_control_test_server.toml".to_string());
+        let config = read_test_server_config_file(None);
         let conductivity_compensation = ConductivityReverseCompensation {
             config: config.conductivity_reverse_compensation,
         };
