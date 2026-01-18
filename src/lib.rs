@@ -33,3 +33,6 @@ pub mod water;
 
 /// This container module features all supporting functionality for the main module.
 pub mod launch;
+
+/// Functionality for test server
+pub mod test_server;

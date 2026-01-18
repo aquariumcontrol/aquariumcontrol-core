@@ -1,0 +1,87 @@
+[controllino]
+skimmer_id = 3
+main_pump1_id = 4
+main_pump2_id = 5
+aux_pump1_id = 6
+aux_pump2_id = 7
+feeder_id = 8
+refill_pump_id = 11
+heater_id = 2
+ventilation_id = 10
+peristaltic_pump1_id = 12
+peristaltic_pump2_id = 13
+peristaltic_pump3_id = 14
+peristaltic_pump4_id = 15
+
+[conductivity_reverse_compensation]
+conductivity_base = 50000
+conductivity_reverse_compensation_coefficient = 2.1
+conductivity_reverse_compensation_reference_temperature = 25.0
+
+[evaporation]
+constant1 = 3.0							# base evaporation in L/d
+constant2 = 5.0							# starting temperature for evaporation in °C
+constant3 = 0.15						# temperature-proportional value in L/day/°C
+constant4 = 1.0							# additional base evaporation in L/d when surface ventilation is switched on in L/day
+constant5 = 25.0						# additional base evaporation in L/d when surface ventilation is switched on in L/day
+constant6 = 2.0							# additional temperature-difference dependend evaporation in L/d/°C when surface ventilation is switched on
+
+[pH_time_profile]
+time_low = "5:00:00"
+time_high = "14:00:00"
+time_start_of_day = "0:00:00"
+time_end_of_day = "23:59:59"
+pH_low = 8.3
+pH_high = 8.65
+filter = { filter_coefficient = 0.5, fallback_initial_value = 0.0 }
+
+[sump]
+rho_sea_water = 1030.0                                           # density of sea water in kg/m^3
+gravitation = 9.81                                               # unit is m/s^2
+main_pump_delta_pressure = 0.001                                 # unit is bar
+refill_pump_flow_rate = 0.02175                                  # unit is L/s
+level_filter = { fallback_initial_value = 0.1, filter_coefficient = 0.5} # filter configuration for main pump pressure change
+main_pump_1_initial_state = "On"                                 # initial state of main pump #1
+main_pump_2_initial_state = "On"                                 # initial state of main pump #2
+refill_pump_initial_state = "Off"                                # initial state of refill pump
+
+[tank_geometry]
+width = 0.9
+length = 0.6
+water_volume_min = 240.0
+water_volume_max = 280.0
+initial_water_volume = 252.95
+
+[ambient_temperature_time_profile]
+time_ramp_up_start = "6:00:00"
+time_ramp_up_finish = "12:00:00"
+time_ramp_down_start = "13:00:00"
+time_ramp_down_finish = "18:00:00"
+ambient_temperature_low = 22.0
+ambient_temperature_high = 24.0
+
+[tank_level_switch]
+water_level_high = 0.449
+water_level_low = 0.4485
+
+[light_intensity_time_profile]
+time_sunrise = "6:00:00"                              # represents the time of day when the lights are starting to ramp up linearly
+time_full_start = "12:00:00"                          # time_full_start represents the time of day when the lights are fully ramped up
+time_full_finish = "13:00:00"
+time_sunset = "18:00:00"
+
+[heat_flow]
+coefficient_lights = 1.8                              # 2 x 90W LED lights
+coefficient_environment = 50.0                        # radiation heat flow between water in main tank and the environment 
+coefficient_evaporation = 1.0                         # parameter allows test of stabilization of thermal model when heat is on and ventilation is off
+heater_power = 220.0                                  # power of the electrical heater in Watt 
+heater_filter = { filter_coefficient = 0.5, fallback_initial_value = 0.0 }          # configuration of the filter used for the electrical heater heat flow
+
+[tank_temperature_model]
+density = 1.025                                       # density of sea water in kg/l
+heat_capacity = 4184.0                                # heat capacity of sea water in J/(kg °K)     
+initial_temperature = 25.0                            # initial water temperature in tank in °C at start of simulation
+
+[tcp_connection]
+ip_address = "127.0.0.1"                              # ipv4 address for communication with control application
+port = 35000                                          # port number for communication with control application
