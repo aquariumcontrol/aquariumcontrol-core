@@ -192,3 +192,74 @@ fn calculate_least_squares_gradient(samples: &VecDeque<(f64, f64)>) -> f64 {
 
     numerator / denominator
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::thermal::temperature_gradient_config::TemperatureGradientConfig;
+
+    fn create_default_config() -> TemperatureGradientConfig {
+        TemperatureGradientConfig {
+            active: true,
+            execute: true,
+            sampling_interval: 10,
+            sample_size: 5,
+        }
+    }
+
+    #[test]
+    fn test_new_invalid_sampling_interval() {
+        let mut config = create_default_config();
+        config.sampling_interval = 0;
+
+        let result = TemperatureGradient::new(config);
+        assert!(result.is_err());
+        match result.unwrap_err() {
+            TemperatureGradientError::InvalidSamplingInterval(module, interval) => {
+                assert_eq!(module, "aquarium_control::thermal::temperature_gradient".to_string());
+                assert_eq!(interval, 0);
+            }
+            _ => panic!("Expected InvalidSamplingInterval error"),
+        }
+    }
+
+    #[test]
+    fn test_new_invalid_sample_size_too_small() {
+        let mut config = create_default_config();
+        config.sample_size = 1;
+
+        let result = TemperatureGradient::new(config);
+        assert!(result.is_err());
+        match result.unwrap_err() {
+            TemperatureGradientError::InvalidSampleSize(module, size) => {
+                assert_eq!(module, "aquarium_control::thermal::temperature_gradient".to_string());
+                assert_eq!(size, 1);
+            }
+            _ => panic!("Expected InvalidSampleSize error"),
+        }
+    }
+
+    #[test]
+    fn test_new_invalid_sample_size_too_large() {
+        let mut config = create_default_config();
+        config.sample_size = 101;
+
+        let result = TemperatureGradient::new(config);
+        assert!(result.is_err());
+        match result.unwrap_err() {
+            TemperatureGradientError::InvalidSampleSize(module, size) => {
+                assert_eq!(module, "aquarium_control::thermal::temperature_gradient".to_string());
+                assert_eq!(size, 101);
+            }
+            _ => panic!("Expected InvalidSampleSize error"),
+        }
+    }
+
+    #[test]
+    fn test_new_valid_config() {
+        let config = create_default_config();
+        let result = TemperatureGradient::new(config);
+        assert!(result.is_ok());
+    }
+}
+
