@@ -59,6 +59,7 @@ pub struct ExecutionConfig {
     #[cfg(feature = "target_hw")]
     pub i2c_interface: bool,
     pub ventilation: bool,
+    pub temperature_gradient: bool,
     pub schedule_check: bool,
     pub ds18b20: bool,
     pub watchdog: bool,
@@ -91,6 +92,7 @@ impl ExecutionConfig {
             #[cfg(feature = "target_hw")]
             i2c_interface: config.i2c_interface.execute,
             ventilation: config.ventilation.execute,
+            temperature_gradient: config.temperature_gradient.execute,
             schedule_check: config.schedule_check.execute,
             ds18b20: config.ds18b20.execute,
             watchdog: config.watchdog.execute,
@@ -124,6 +126,7 @@ impl Default for ExecutionConfig {
             #[cfg(feature = "target_hw")]
             i2c_interface: true,
             ventilation: true,
+            temperature_gradient: true,
             schedule_check: true,
             ds18b20: true,
             watchdog: true,

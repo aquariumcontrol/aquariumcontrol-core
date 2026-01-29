@@ -60,6 +60,7 @@ use log::error;
 #[cfg(target_os = "linux")]
 use crate::dispatch::messaging_channels::MessagingChannels;
 use crate::launch::channels::AquaChannelError;
+use crate::thermal::temperature_gradient_channels::TemperatureGradientChannels;
 
 /// A trait for objects that can send a shutdown acknowledgment to the `SignalHandler`.
 ///
@@ -111,6 +112,12 @@ macro_rules! impl_acknowledge_signal_handler {
     };
 }
 
+// Generate the implementations using the macro
+impl_acknowledge_signal_handler!(
+    TemperatureGradientChannels,
+    "temperature_gradient",
+    tx_temperature_gradient_to_signal_handler
+);
 // Generate the implementations using the macro
 impl_acknowledge_signal_handler!(
     AtlasScientificChannels,

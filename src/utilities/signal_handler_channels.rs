@@ -96,6 +96,12 @@ pub struct SignalHandlerChannels {
     /// Receiver from the `SensorManager` thread for shutdown acknowledgements.
     pub rx_signal_handler_from_sensor_manager: AquaReceiver<bool>,
 
+    /// Sender to the `TemperatureGradient` thread for `Quit`/`Terminate` commands.
+    pub tx_signal_handler_to_temperature_gradient: AquaSender<InternalCommand>,
+
+    /// Receiver from the `TemperatureGradient` thread for shutdown acknowledgements.
+    pub rx_signal_handler_from_temperature_gradient: AquaReceiver<bool>,
+
     /// Sender to the `DataLogger` thread for `Quit`/`Terminate` commands.
     pub tx_signal_handler_to_data_logger: AquaSender<InternalCommand>,
 
@@ -236,6 +242,16 @@ impl fmt::Display for SignalHandlerChannels {
             f,
             "rx_signal_handler_from_sensor_manager: {}",
             self.rx_signal_handler_from_sensor_manager.count
+        )?;
+        writeln!(
+            f,
+            "tx_signal_handler_to_temperature_gradient: {}",
+            self.tx_signal_handler_to_temperature_gradient.count
+        )?;
+        writeln!(
+            f,
+            "rx_signal_handler_from_temperature_gradient: {}",
+            self.rx_signal_handler_from_temperature_gradient.count
         )?;
         writeln!(
             f,

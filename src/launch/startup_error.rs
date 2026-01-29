@@ -70,6 +70,7 @@ use crate::sensors::i2c_error::I2cError;
 use crate::sensors::sensor_manager::SensorManagerError;
 use crate::sensors::tank_level_switch::TankLevelSwitchError;
 use crate::simulator::tcp_communication_error::TcpCommunicationError;
+use crate::thermal::temperature_gradient_error::TemperatureGradientError;
 use crate::utilities::config_error::ConfigError;
 use crate::utilities::config_file_definition_error::ConfigFileDefinitionError;
 use crate::utilities::logger::LoggerSetupError;
@@ -248,5 +249,12 @@ pub enum StartupError {
     AtlasScientificSensorTypeMismatch {
         #[source]
         source: AtlasScientificError,
+    },
+
+    /// Configuration of the temperature gradient calculation is invalid.
+    #[error("Configuration of the temperature gradient calculation is invalid.")]
+    TemperatureGradientConfigFailure {
+        #[source]
+        source: TemperatureGradientError,
     },
 }

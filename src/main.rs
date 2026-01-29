@@ -74,6 +74,7 @@ use aquarium_control::sensors::tank_level_switch::{TankLevelSwitch, TankLevelSwi
 use aquarium_control::simulator::tcp_communication::TcpCommunication;
 use aquarium_control::thermal::distinct_interval_check::distinct_thermal_control_interval_check;
 use aquarium_control::thermal::heating::{Heating, HeatingMutexes};
+use aquarium_control::thermal::temperature_gradient::TemperatureGradient;
 use aquarium_control::thermal::ventilation::Ventilation;
 use aquarium_control::utilities::config::read_config_file;
 use aquarium_control::utilities::logger::{log_error_chain, setup_logger};
@@ -380,6 +381,9 @@ fn run() -> Result<(), StartupError> {
     if !distinct_thermal_control_interval_check(&config.heating, &config.ventilation) {
         return Err(StartupError::InvalidThermalConfig);
     }
+
+    let mut temperature_gradient = TemperatureGradient::new(config.temperature_gradient)
+        .map_err(|e| StartupError::TemperatureGradientConfigFailure { source: e })?;
 
     // instantiate the duration for the database ping
     let database_ping_duration = Duration::from_secs(config.sql_interface.db_ping_interval);
@@ -728,6 +732,10 @@ fn run() -> Result<(), StartupError> {
     let mutex_sensor_manager_signals_clone_for_data_logger = mutex_sensor_manager_signals.clone();
     let mutex_sensor_manager_signals_clone_for_heating = mutex_sensor_manager_signals.clone();
     let mutex_sensor_manager_signals_clone_for_ventilation = mutex_sensor_manager_signals.clone();
+    let mutex_sensor_manager_signals_clone_for_temp_gradient = mutex_sensor_manager_signals.clone();
+
+    // Mutex for temperature gradient
+    let mutex_temperature_gradient = Arc::new(Mutex::new(0.0));
     //**********************************************************************************************
 
     #[cfg(all(target_os = "linux", feature = "target_hw"))]
@@ -1177,6 +1185,18 @@ fn run() -> Result<(), StartupError> {
                 debug!(target: module_path!(), "{0}", channels.ds18b20);
                 #[cfg(feature = "debug_main")]
                 debug!(target: module_path!(), "Ds18b20 terminated");
+            });
+        }
+
+        if execution_config.temperature_gradient {
+            scope.spawn(move || {
+                temperature_gradient.execute(
+                    mutex_sensor_manager_signals_clone_for_temp_gradient,
+                    &mut channels.temperature_gradient,
+                    mutex_temperature_gradient,
+                );
+                #[cfg(feature = "debug_main")]
+                debug!(target: module_path!(), "Temperature gradient calculation terminated.");
             });
         }
         Ok(())

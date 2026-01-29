@@ -28,5 +28,17 @@ pub mod heating_config;
 // Configuration of Ventilation
 pub mod ventilation_config;
 
+// Configuration of temperature gradient
+pub mod temperature_gradient_config;
+
+// Calculation of temperature gradient
+pub mod temperature_gradient;
+
 // Macro for managing cycle time
 pub mod manage_cycle_time_thermal;
+
+// Error definition for temperature gradient calculation
+pub mod temperature_gradient_error;
+
+// Container for the channels of the temperature gradient calculation used to communicate with other threads
+pub mod temperature_gradient_channels;

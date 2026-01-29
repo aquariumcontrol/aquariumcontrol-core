@@ -197,6 +197,9 @@ pub fn send_command(
 ///     signal_handler --> i2c_interface[I2C interface]
 ///     signal_handler --> watchdog[Watchdog]
 ///     watchdog --> signal_handler
+///     signal_handler --> memory[Memory]
+///     signal_handler --> temperature_gradient[TemperatureGradient]
+///     temperature_gradient --> signal_handler
 /// ```
 pub fn handle_signals(
     term: Arc<AtomicBool>,
@@ -348,7 +351,15 @@ pub fn handle_signals(
             InternalCommand::Quit,
             Some(&mut signal_handler_channels.tx_signal_handler_to_sensor_manager),
             Some(&mut signal_handler_channels.rx_signal_handler_from_sensor_manager),
-            "ambient",
+            "sensor_manager",
+        );
+    }
+    if execution_config.temperature_gradient {
+        send_command(
+            InternalCommand::Quit,
+            Some(&mut signal_handler_channels.tx_signal_handler_to_temperature_gradient),
+            Some(&mut signal_handler_channels.rx_signal_handler_from_temperature_gradient),
+            "temperature_gradient",
         );
     }
     if execution_config.schedule_check {
@@ -710,6 +721,18 @@ pub mod tests {
         _ = channels
             .sensor_manager
             .tx_sensor_manager_to_signal_handler
+            .send(true);
+        assert_eq!(
+            channels
+                .temperature_gradient
+                .rx_temperature_gradient_from_signal_handler
+                .recv()
+                .unwrap(),
+            InternalCommand::Quit
+        );
+        _ = channels
+            .temperature_gradient
+            .tx_temperature_gradient_to_signal_handler
             .send(true);
         assert_eq!(
             channels

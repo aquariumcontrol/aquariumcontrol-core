@@ -23,7 +23,7 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 //! ## Key Components
 //!
 //! - **`AquaSender` / `AquaReceiver`**: These wrappers provide a consistent channel interface.
-//!   When the `debug_channels` feature is enabled, they use bounded `sync_channel`s and
+//!   When the `debug_channels` feature is enabled, they use bounded `sync_channel` and
 //!   count the number of messages sent and received. In release builds,
 //!   they compile down to lightweight wrappers around standard, unbounded channels.
 //!
@@ -73,6 +73,7 @@ use crate::sensors::tank_level_switch_channels::TankLevelSwitchChannels;
 use crate::simulator::tcp_communication::TcpCommunicationError;
 use crate::simulator::tcp_communication_channels::TcpCommunicationChannels;
 use crate::thermal::heating_channels::HeatingChannels;
+use crate::thermal::temperature_gradient_channels::TemperatureGradientChannels;
 use crate::thermal::ventilation_channels::VentilationChannels;
 use crate::utilities::channel_content::InternalCommand;
 use crate::utilities::signal_handler::SignalHandlerChannels;
@@ -237,6 +238,7 @@ pub struct Channels {
     pub memory: MemoryChannels,
     pub refill: RefillChannels,
     pub sensor_manager: SensorManagerChannels,
+    pub temperature_gradient: TemperatureGradientChannels,
 
     // used in conditionally compiled implementation and platform-independent testing
     #[cfg(any(test, target_os = "linux"))]
@@ -506,6 +508,19 @@ impl Channels {
         ) = create_bidirectional_channel!(InternalCommand, bool);
         // **************************************
 
+        // *** signal handler <=> temperature_gradient ***
+        let (
+            (
+                tx_signal_handler_to_temperature_gradient,
+                rx_temperature_gradient_from_signal_handler,
+            ),
+            (
+                tx_temperature_gradient_to_signal_handler,
+                rx_signal_handler_from_temperature_gradient,
+            ),
+        ) = create_bidirectional_channel!(InternalCommand, bool);
+        // **************************************
+
         // *** signal handler <=> tcp ***
         let (
             (tx_signal_handler_to_tcp, rx_tcp_communication_from_signal_handler),
@@ -695,6 +710,8 @@ impl Channels {
             rx_signal_handler_from_atlas_scientific,
             tx_signal_handler_to_sensor_manager,
             rx_signal_handler_from_sensor_manager,
+            tx_signal_handler_to_temperature_gradient,
+            rx_signal_handler_from_temperature_gradient,
             tx_signal_handler_to_data_logger,
             rx_signal_handler_from_data_logger,
             tx_signal_handler_to_balling,
@@ -776,6 +793,11 @@ impl Channels {
             rx_sensor_manager_from_signal_handler,
         };
 
+        let temperature_gradient = TemperatureGradientChannels {
+            tx_temperature_gradient_to_signal_handler,
+            rx_temperature_gradient_from_signal_handler,
+        };
+
         let data_logger = DataLoggerChannels {
             tx_data_logger_to_signal_handler,
             rx_data_logger_from_signal_handler,
@@ -802,6 +824,7 @@ impl Channels {
             memory,
             refill,
             sensor_manager,
+            temperature_gradient,
 
             #[cfg(any(test, target_os = "linux"))]
             messaging,

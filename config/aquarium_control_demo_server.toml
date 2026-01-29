@@ -269,4 +269,10 @@ max_allocated = 100000                                  # maximum allowed alloca
 check_interval = 900                                    # check-interval in seconds
 
 [logger]
-logfile = "/var/log/aquarium.log"                       # path and filename of the log file 
+logfile = "/var/log/aquarium.log"                       # path and filename of the log file
+
+[temperature_gradient]
+active = true                                           # used for testing purposes
+execute = true                                          # used for testing purposes
+sampling_interval = 10                                  # time in seconds between two samplings
+sample_size = 20                                        # number of necessary samples to calculate the gradient
