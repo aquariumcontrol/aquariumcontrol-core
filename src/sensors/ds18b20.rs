@@ -81,7 +81,17 @@ impl Ds18b20ResultData {
             measurement_instant: Instant::now(),
         }
     }
+
+    #[cfg(test)]
+    pub fn default() -> Self {
+        Ds18b20ResultData {
+            value: 0.0,
+            invalid: false,
+            measurement_instant: Instant::now(),
+        }
+    }
 }
+
 pub type Ds18b20Result = Result<Ds18b20ResultData, Ds18b20Error>;
 
 /// Represents a Ds18b20 sensor module responsible for reading temperature signals.

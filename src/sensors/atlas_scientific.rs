@@ -121,6 +121,15 @@ impl AtlasScientificResultData {
             measurement_instant: Instant::now(),
         }
     }
+
+    #[cfg(test)]
+    pub fn default() -> Self {
+        AtlasScientificResultData {
+            value: 0.0,
+            invalid: false,
+            measurement_instant: Instant::now(),
+        }
+    }
 }
 
 impl fmt::Display for AtlasScientificResultData {

@@ -104,12 +104,12 @@ impl TemperatureGradient {
                     instant_last_sampling = Instant::now();
 
                     // Acquire temperature data
-                    match mutex_sensor_manager_signals.lock() {
+                    let data_retrieval_result = match mutex_sensor_manager_signals.lock() {
                         Ok(sensor_manager_signals) => {
                             // initiate gradient calculation
                             let current_temperature =
                                 sensor_manager_signals.water_temperature as f64;
-                            let current_timestamp = current_timestamp_as_f64(); // Helper function needed
+                            let current_timestamp = current_timestamp_as_f64();
 
                             temperature_samples.push_back((current_timestamp, current_temperature));
 
@@ -117,29 +117,32 @@ impl TemperatureGradient {
                             while temperature_samples.len() > sample_size {
                                 temperature_samples.pop_front();
                             }
-
-                            // Perform calculation if enough samples are available
-                            if temperature_samples.len() == sample_size {
-                                let gradient =
-                                    calculate_least_squares_gradient(&temperature_samples);
-
-                                match mutex_temperature_gradient.lock() {
-                                    Ok(mut calculated_gradient_guard) => {
-                                        *calculated_gradient_guard = gradient;
-                                    }
-                                    Err(e) => {
-                                        if !self.lock_error_temperature_gradient_mutex {
-                                            self.lock_error_temperature_gradient_mutex = true;
-                                            error!(target: module_path!(), "error when trying to lock temperature gradient mutex: {e}");
-                                        }
-                                    }
-                                }
-                            }
+                            Ok(())
                         }
                         Err(e) => {
                             if !self.lock_error_sensor_manager_mutex {
                                 self.lock_error_sensor_manager_mutex = true;
                                 error!(target: module_path!(), "error when trying to lock sensor manager mutex: {e}");
+                            }
+                            Err(e)
+                        }
+                    };
+
+                    // Check if data retrieval was successful
+                    if data_retrieval_result.is_ok() {
+                        // Perform calculation if enough samples are available
+                        if temperature_samples.len() == sample_size {
+                            let gradient = calculate_least_squares_gradient(&temperature_samples);
+                            match mutex_temperature_gradient.lock() {
+                                Ok(mut calculated_gradient_guard) => {
+                                    *calculated_gradient_guard = gradient;
+                                }
+                                Err(e) => {
+                                    if !self.lock_error_temperature_gradient_mutex {
+                                        self.lock_error_temperature_gradient_mutex = true;
+                                        error!(target: module_path!(), "error when trying to lock temperature gradient mutex: {e}");
+                                    }
+                                }
                             }
                         }
                     }
@@ -168,6 +171,8 @@ fn calculate_least_squares_gradient(samples: &VecDeque<(f64, f64)>) -> f64 {
         return 0.0; // Cannot calculate gradient with less than 2 points
     }
 
+    let x_offset = samples[0].0;
+
     // Simple linear regression (y = mx + b)
     // m = (N * sum(xy) - sum(x) * sum(y)) / (N * sum(x^2) - (sum(x))^2)
     let n = samples.len() as f64;
@@ -176,7 +181,8 @@ fn calculate_least_squares_gradient(samples: &VecDeque<(f64, f64)>) -> f64 {
     let mut sum_xy = 0.0;
     let mut sum_x2 = 0.0;
 
-    for &(x, y) in samples.iter() {
+    for &(x_raw, y) in samples.iter() {
+        let x = x_raw - x_offset;
         sum_x += x;
         sum_y += y;
         sum_xy += x * y;
@@ -196,7 +202,12 @@ fn calculate_least_squares_gradient(samples: &VecDeque<(f64, f64)>) -> f64 {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::launch::channels::Channels;
+    use crate::sensors::sensor_manager::SensorManagerMutexes;
     use crate::thermal::temperature_gradient_config::TemperatureGradientConfig;
+    use crate::utilities::channel_content::InternalCommand;
+    use assert_float_eq::assert_float_absolute_eq;
+    use std::thread;
 
     fn create_default_config() -> TemperatureGradientConfig {
         TemperatureGradientConfig {
@@ -216,7 +227,10 @@ mod tests {
         assert!(result.is_err());
         match result.unwrap_err() {
             TemperatureGradientError::InvalidSamplingInterval(module, interval) => {
-                assert_eq!(module, "aquarium_control::thermal::temperature_gradient".to_string());
+                assert_eq!(
+                    module,
+                    "aquarium_control::thermal::temperature_gradient".to_string()
+                );
                 assert_eq!(interval, 0);
             }
             _ => panic!("Expected InvalidSamplingInterval error"),
@@ -232,7 +246,10 @@ mod tests {
         assert!(result.is_err());
         match result.unwrap_err() {
             TemperatureGradientError::InvalidSampleSize(module, size) => {
-                assert_eq!(module, "aquarium_control::thermal::temperature_gradient".to_string());
+                assert_eq!(
+                    module,
+                    "aquarium_control::thermal::temperature_gradient".to_string()
+                );
                 assert_eq!(size, 1);
             }
             _ => panic!("Expected InvalidSampleSize error"),
@@ -248,7 +265,10 @@ mod tests {
         assert!(result.is_err());
         match result.unwrap_err() {
             TemperatureGradientError::InvalidSampleSize(module, size) => {
-                assert_eq!(module, "aquarium_control::thermal::temperature_gradient".to_string());
+                assert_eq!(
+                    module,
+                    "aquarium_control::thermal::temperature_gradient".to_string()
+                );
                 assert_eq!(size, 101);
             }
             _ => panic!("Expected InvalidSampleSize error"),
@@ -273,9 +293,10 @@ mod tests {
     #[test]
     fn test_calculate_least_squares_gradient_zero_gradient() {
         let mut samples = VecDeque::new();
-        samples.push_back((1.0, 10.0));
-        samples.push_back((2.0, 10.0));
-        samples.push_back((3.0, 10.0));
+        let now = current_timestamp_as_f64();
+        samples.push_back((now, 10.0));
+        samples.push_back((now + 1.0, 10.0));
+        samples.push_back((now + 2.0, 10.0));
         let gradient = calculate_least_squares_gradient(&samples);
         assert_eq!(gradient, 0.0);
     }
@@ -283,9 +304,10 @@ mod tests {
     #[test]
     fn test_calculate_least_squares_gradient_positive_gradient_one() {
         let mut samples = VecDeque::new();
-        samples.push_back((1.0, 1.0));
-        samples.push_back((2.0, 2.0));
-        samples.push_back((3.0, 3.0));
+        let now = current_timestamp_as_f64();
+        samples.push_back((now, 1.0));
+        samples.push_back((now + 1.0, 2.0));
+        samples.push_back((now + 2.0, 3.0));
         let gradient = calculate_least_squares_gradient(&samples);
         assert_eq!(gradient, 1.0);
     }
@@ -293,9 +315,10 @@ mod tests {
     #[test]
     fn test_calculate_least_squares_gradient_negative_gradient_one() {
         let mut samples = VecDeque::new();
-        samples.push_back((1.0, 3.0));
-        samples.push_back((2.0, 2.0));
-        samples.push_back((3.0, 1.0));
+        let now = current_timestamp_as_f64();
+        samples.push_back((now, 3.0));
+        samples.push_back((now + 1.0, 2.0));
+        samples.push_back((now + 2.0, 1.0));
         let gradient = calculate_least_squares_gradient(&samples);
         assert_eq!(gradient, -1.0);
     }
@@ -329,5 +352,127 @@ mod tests {
         let gradient = calculate_least_squares_gradient(&samples);
         assert_eq!(gradient, 0.0);
     }
-}
 
+    // Check if the temperature gradient calculation works.
+    // Also, implicitly test if the execute function terminates after receiving Quit command.
+    #[test]
+    pub fn test_temperature_gradient_calculation() {
+        let spin_sleeper = SpinSleeper::default();
+
+        let sampling_interval = 1;
+        let sample_size = 3;
+
+        let temperature_gradient_config = TemperatureGradientConfig {
+            active: true,
+            execute: true,
+            sampling_interval,
+            sample_size,
+        };
+
+        let mut temperature_gradient =
+            TemperatureGradient::new(temperature_gradient_config).unwrap();
+
+        let mut channels = Channels::new_for_test();
+
+        // Mutexes needed for water temperature and temperature gradient
+        let mutexes_sensor_manager = SensorManagerMutexes::default();
+        let mutex_sensor_manager_signals_clone_for_test_environment =
+            mutexes_sensor_manager.mutex_sensor_manager_signals.clone();
+        let mutex_temperature_gradient = Arc::new(Mutex::new(0.0));
+        let mutex_temperature_gradient_clone_for_test_environment =
+            mutex_temperature_gradient.clone();
+
+        {
+            // scope to limit lifetime of lock
+            let temperature_gradient_before_execution = mutex_temperature_gradient.lock().unwrap();
+            assert_eq!(*temperature_gradient_before_execution, 0.0);
+        }
+
+        let mut signal_handler_channel_clone_for_test_environment = channels
+            .signal_handler
+            .tx_signal_handler_to_temperature_gradient
+            .clone();
+
+        // thread for test environment
+        let join_handle_test_environment = thread::Builder::new()
+            .name("test_environment".to_string())
+            .spawn(move || {
+                let sleep_duration_sample_interval = Duration::from_secs(sampling_interval);
+                //spin_sleeper.sleep(sleep_duration_100_millis);
+                // keep increasing value -> positive gradient
+                for i in 1..=10 {
+                    {
+                        // scope to limit lifetime of lock
+                        let mut sensor_manager_signals =
+                            mutex_sensor_manager_signals_clone_for_test_environment
+                                .lock()
+                                .unwrap();
+                        sensor_manager_signals.water_temperature = i as f32;
+                    }
+                    spin_sleeper.sleep(sleep_duration_sample_interval);
+                    {
+                        // scope to limit lifetime of lock
+                        let temperature_gradient_during_execution =
+                            mutex_temperature_gradient_clone_for_test_environment
+                                .lock()
+                                .unwrap();
+                        if i > sample_size {
+                            assert_float_absolute_eq!(
+                                *temperature_gradient_during_execution,
+                                1.0 / sampling_interval as f64,
+                                0.1
+                            );
+                        }
+                    }
+                }
+                // keep value constant -> zero gradient
+                for i in 1..10 {
+                    spin_sleeper.sleep(sleep_duration_sample_interval);
+                    {
+                        // scope to limit lifetime of lock
+                        let temperature_gradient_during_execution =
+                            mutex_temperature_gradient_clone_for_test_environment
+                                .lock()
+                                .unwrap();
+                        if i > sample_size {
+                            assert_float_absolute_eq!(
+                                *temperature_gradient_during_execution,
+                                0.0,
+                                0.1
+                            );
+                        }
+                    }
+                }
+                let _ =
+                    signal_handler_channel_clone_for_test_environment.send(InternalCommand::Quit);
+            })
+            .unwrap();
+
+        // thread for the test object
+        let join_handle_test_object = thread::Builder::new()
+            .name("test_object".to_string())
+            .spawn(move || {
+                temperature_gradient.execute(
+                    mutexes_sensor_manager.mutex_sensor_manager_signals,
+                    &mut channels.temperature_gradient,
+                    mutex_temperature_gradient,
+                );
+            })
+            .unwrap();
+
+        join_handle_test_environment
+            .join()
+            .expect("Test environment thread did not finish.");
+
+        // receive acknowledgement from signal handler
+        channels
+            .signal_handler
+            .rx_signal_handler_from_temperature_gradient
+            .recv()
+            .unwrap();
+
+        join_handle_test_object
+            .join()
+            .expect("Test object thread did not finish.");
+    }
+}
