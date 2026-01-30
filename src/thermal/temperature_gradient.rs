@@ -261,5 +261,73 @@ mod tests {
         let result = TemperatureGradient::new(config);
         assert!(result.is_ok());
     }
+
+    #[test]
+    fn test_calculate_least_squares_gradient_less_than_two_samples() {
+        let mut samples = VecDeque::new();
+        samples.push_back((1.0, 10.0));
+        let gradient = calculate_least_squares_gradient(&samples);
+        assert_eq!(gradient, 0.0);
+    }
+
+    #[test]
+    fn test_calculate_least_squares_gradient_zero_gradient() {
+        let mut samples = VecDeque::new();
+        samples.push_back((1.0, 10.0));
+        samples.push_back((2.0, 10.0));
+        samples.push_back((3.0, 10.0));
+        let gradient = calculate_least_squares_gradient(&samples);
+        assert_eq!(gradient, 0.0);
+    }
+
+    #[test]
+    fn test_calculate_least_squares_gradient_positive_gradient_one() {
+        let mut samples = VecDeque::new();
+        samples.push_back((1.0, 1.0));
+        samples.push_back((2.0, 2.0));
+        samples.push_back((3.0, 3.0));
+        let gradient = calculate_least_squares_gradient(&samples);
+        assert_eq!(gradient, 1.0);
+    }
+
+    #[test]
+    fn test_calculate_least_squares_gradient_negative_gradient_one() {
+        let mut samples = VecDeque::new();
+        samples.push_back((1.0, 3.0));
+        samples.push_back((2.0, 2.0));
+        samples.push_back((3.0, 1.0));
+        let gradient = calculate_least_squares_gradient(&samples);
+        assert_eq!(gradient, -1.0);
+    }
+
+    #[test]
+    fn test_calculate_least_squares_gradient_very_high_positive_gradient() {
+        let mut samples = VecDeque::new();
+        samples.push_back((1.0, 1.0));
+        samples.push_back((1.1, 1000.0));
+        let gradient = calculate_least_squares_gradient(&samples);
+        // Expected gradient is (1000 - 1) / (1.1 - 1.0) = 999 / 0.1 = 9990.0
+        assert!((gradient - 9990.0).abs() < 0.001);
+    }
+
+    #[test]
+    fn test_calculate_least_squares_gradient_very_high_negative_gradient() {
+        let mut samples = VecDeque::new();
+        samples.push_back((1.0, 1000.0));
+        samples.push_back((1.1, 1.0));
+        let gradient = calculate_least_squares_gradient(&samples);
+        // Expected gradient is (1 - 1000) / (1.1 - 1.0) = -999 / 0.1 = -9990.0
+        assert!((gradient - (-9990.0)).abs() < 0.001);
+    }
+
+    #[test]
+    fn test_calculate_least_squares_gradient_x_values_are_the_same() {
+        let mut samples = VecDeque::new();
+        samples.push_back((1.0, 10.0));
+        samples.push_back((1.0, 20.0));
+        samples.push_back((1.0, 30.0));
+        let gradient = calculate_least_squares_gradient(&samples);
+        assert_eq!(gradient, 0.0);
+    }
 }
 
