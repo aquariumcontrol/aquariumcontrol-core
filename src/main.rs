@@ -283,6 +283,8 @@ fn check_is_command(command: &str) -> Result<bool, VersionInformationError> {
 ///     messaging --> feed
 ///     messaging --> monitors
 ///     messaging --> watchdog
+///     temperature_gradient[TemperatureGradient] --> signal_handler
+///     signal_handler --> temperature_gradient
 /// ```
 fn run() -> Result<(), StartupError> {
     let spin_sleeper = SpinSleeper::default();

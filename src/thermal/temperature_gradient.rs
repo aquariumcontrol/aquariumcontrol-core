@@ -7,7 +7,22 @@ The above copyright notice and this permission notice shall be included in all c
 THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
-//! Contains the temperature gradient calculation.
+//! Module for calculating the temperature gradient of the aquarium water.
+//!
+//! This module provides the `TemperatureGradient` struct, which is responsible for
+//! periodically sampling the water temperature and calculating its rate of change (gradient)
+//! over a sliding window of time.
+//!
+//! The gradient is calculated using a least-squares linear regression method to smooth out
+//! noise and provide a reliable trend indicator. This is useful for detecting rapid temperature
+//! changes or verifying the effectiveness of heating/cooling systems.
+//!
+//! # Key Features
+//! - **Periodic Sampling**: Samples temperature at a configurable interval.
+//! - **Sliding Window**: Maintains a fixed-size buffer of samples (`sample_size`).
+//! - **Least Squares Regression**: Calculates the slope of the temperature vs. time curve.
+//! - **Thread Safety**: Uses `Arc<Mutex<...>>` for safe concurrent access to sensor data and results.
+//! - **Graceful Shutdown**: Responds to external quit commands.
 
 use crate::sensors::sensor_manager::SensorManagerSignals;
 use crate::thermal::temperature_gradient_channels::TemperatureGradientChannels;
@@ -24,6 +39,13 @@ use std::time::{Duration, Instant};
 const CYCLE_TIME_TEMPERATURE_GRADIENT_MILLIS: u64 = 100;
 
 /// Manages the calculation of the water temperature gradient.
+#[cfg_attr(doc, aquamarine::aquamarine)]
+/// Thread communication of this component is as follows:
+/// ```mermaid
+/// graph LR
+///     signal_handler[SignalHandler] --> temperature_gradient[TemperatureGradient]
+///     temperature_gradient[TemperatureGradient] --> signal_handler[SignalHandler]
+/// ```
 #[derive(Debug)]
 pub struct TemperatureGradient {
     /// Configuration for the temperature gradient calculation.
@@ -398,7 +420,6 @@ mod tests {
             .name("test_environment".to_string())
             .spawn(move || {
                 let sleep_duration_sample_interval = Duration::from_secs(sampling_interval);
-                //spin_sleeper.sleep(sleep_duration_100_millis);
                 // keep increasing value -> positive gradient
                 for i in 1..=10 {
                     {
