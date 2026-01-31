@@ -252,7 +252,7 @@ pub const SQL_QUERY_WRITE_DATA: &str = concat!(
 );
 
 pub const SQL_QUERY_GET_WATER_TEMPERATURE_LAST_24H: &str = concat!(
-    "SELECT UNIX_TIMESTAMP(timestamp), water_temperature FROM data ",
+    "SELECT UNIX_TIMESTAMP(timestamp), water_temperature, surface_ventilation_status,heater_status FROM data ",
     "WHERE timestamp >= NOW() - INTERVAL 1 DAY AND water_temperature IS NOT NULL ",
     "ORDER BY timestamp ASC"
 );

@@ -532,16 +532,21 @@ mod tests {
         // --- Process Data ---
         let sample_size = 5;
         if temperature_data.len() < sample_size {
-            println!("Not enough data to calculate gradient. Need at least {} samples, but got {}.", sample_size, temperature_data.len());
+            println!(
+                "Not enough data to calculate gradient. Need at least {} samples, but got {}.",
+                sample_size,
+                temperature_data.len()
+            );
             return;
         }
 
         let mut samples: VecDeque<(f64, f64)> = VecDeque::with_capacity(sample_size);
 
-        for (timestamp, temperature) in temperature_data {
+        for (timestamp, temperature, surface_ventilation_status, heater_status) in temperature_data
+        {
             // fill buffer with one sample at a time
             samples.push_back((timestamp, temperature));
-            
+
             // limit the size of the buffer
             if samples.len() > sample_size {
                 samples.pop_front();
@@ -552,8 +557,8 @@ mod tests {
                 let gradient = calculate_least_squares_gradient(&samples);
                 let last_timestamp = samples.back().unwrap().0;
                 println!(
-                    "Timestamp: {}, Gradient: {:.6} °C/s",
-                    last_timestamp, gradient
+                    "Timestamp: {}, Gradient: {:.6} °C/s, Surface Ventilation Status: {}, Heater Status: {}",
+                    last_timestamp, gradient, surface_ventilation_status, heater_status
                 );
             }
         }

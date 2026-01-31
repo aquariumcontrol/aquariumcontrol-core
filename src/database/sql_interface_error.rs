@@ -368,7 +368,9 @@ pub enum SqlInterfaceError {
     },
 
     /// Error occurred when selecting data from the database.
-    #[error("[{location}] Error occurred when selecting data from the database using query: {query}")]
+    #[error(
+        "[{location}] Error occurred when selecting data from the database using query: {query}"
+    )]
     SelectDataFailure {
         location: String,
         query: String,

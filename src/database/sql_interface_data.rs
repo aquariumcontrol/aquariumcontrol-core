@@ -177,17 +177,29 @@ impl SqlInterfaceData {
     /// the water temperature (as `f64`).
     ///
     /// # Returns
-    /// A `Result` containing a `Vec<(f64, f64)>` of timestamp-temperature
-    /// pairs on success.
+    /// A `Result` containing a `Vec<(f64, f64, u64, 64)>` on success where the tuple consists of
+    /// timestamp, temperature, ventilation status, heater status.
     ///
     /// # Errors
     /// Returns a `SqlInterfaceError::SelectDataFailure` if the database query fails.
-    pub fn get_water_temperature_last_24h(&mut self) -> Result<Vec<(f64, f64)>, SqlInterfaceError> {
+    pub fn get_water_temperature_last_24h(
+        &mut self,
+    ) -> Result<Vec<(f64, f64, u64, u64)>, SqlInterfaceError> {
         self.conn
             .query_map(
                 sql_query_strings::SQL_QUERY_GET_WATER_TEMPERATURE_LAST_24H,
-                |(timestamp, water_temperature): (i64, f32)| {
-                    (timestamp as f64, water_temperature as f64)
+                |(timestamp, water_temperature, surface_ventilation_status, heater_status): (
+                    i64,
+                    f32,
+                    u64,
+                    u64,
+                )| {
+                    (
+                        timestamp as f64,
+                        water_temperature as f64,
+                        surface_ventilation_status as u64,
+                        heater_status as u64,
+                    )
                 },
             )
             .map_err(|e| SqlInterfaceError::SelectDataFailure {
