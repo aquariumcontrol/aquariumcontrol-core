@@ -167,6 +167,35 @@ impl SqlInterfaceData {
                 source: e,
             })
     }
+
+    #[cfg(test)]
+    /// Retrieves all water temperature readings from the last 24 hours.
+    ///
+    /// This function queries the `data` table for all records within the last
+    /// 24 hours that have a non-NULL `water_temperature`. It returns a vector
+    /// of tuples, where each tuple contains the Unix timestamp (as `f64`) and
+    /// the water temperature (as `f64`).
+    ///
+    /// # Returns
+    /// A `Result` containing a `Vec<(f64, f64)>` of timestamp-temperature
+    /// pairs on success.
+    ///
+    /// # Errors
+    /// Returns a `SqlInterfaceError::SelectDataFailure` if the database query fails.
+    pub fn get_water_temperature_last_24h(&mut self) -> Result<Vec<(f64, f64)>, SqlInterfaceError> {
+        self.conn
+            .query_map(
+                sql_query_strings::SQL_QUERY_GET_WATER_TEMPERATURE_LAST_24H,
+                |(timestamp, water_temperature): (i64, f32)| {
+                    (timestamp as f64, water_temperature as f64)
+                },
+            )
+            .map_err(|e| SqlInterfaceError::SelectDataFailure {
+                location: module_path!().to_string(),
+                query: sql_query_strings::SQL_QUERY_GET_WATER_TEMPERATURE_LAST_24H.to_string(),
+                source: e,
+            })
+    }
 }
 
 #[cfg(test)]

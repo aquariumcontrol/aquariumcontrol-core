@@ -367,6 +367,16 @@ pub enum SqlInterfaceError {
         source: MySqlError,
     },
 
+    /// Error occurred when selecting data from the database.
+    #[error("[{location}] Error occurred when selecting data from the database using query: {query}")]
+    SelectDataFailure {
+        location: String,
+        query: String,
+
+        #[source]
+        source: MySqlError,
+    },
+
     /// The database responded with a timestamp in the future.
     #[error("[{0}] Database responded with a timestamp in the future (delta of {1} seconds).")]
     NegativeTimeDeltaSeconds(String, i64),

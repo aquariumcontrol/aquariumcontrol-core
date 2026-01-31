@@ -251,6 +251,12 @@ pub const SQL_QUERY_WRITE_DATA: &str = concat!(
     "heater_status=VALUES(heater_status);"
 );
 
+pub const SQL_QUERY_GET_WATER_TEMPERATURE_LAST_24H: &str = concat!(
+    "SELECT UNIX_TIMESTAMP(timestamp), water_temperature FROM data ",
+    "WHERE timestamp >= NOW() - INTERVAL 1 DAY AND water_temperature IS NOT NULL ",
+    "ORDER BY timestamp ASC"
+);
+
 /// Checks how many entries there are in the data table.
 pub const SQL_QUERY_CHECK_DATA_COUNT: &str = "SELECT COUNT(*) FROM data LIMIT 1;";
 

@@ -496,4 +496,66 @@ mod tests {
             .join()
             .expect("Test object thread did not finish.");
     }
+
+    #[test]
+    #[ignore]
+    // This test case retrieves data from the last 24 hours from the production database
+    // and calculates the temperature gradient.
+    // The test case does not assert anything.
+    fn test_calculate_gradient_from_production_data() {
+        use crate::database::sql_interface::SqlInterface;
+        use crate::database::sql_interface_data::SqlInterfaceData;
+        use crate::utilities::config::read_config_file;
+        use std::collections::VecDeque;
+
+        // --- Setup ---
+        let config = read_config_file("config/aquarium_control.toml".to_string())
+            .expect("Failed to read production config file.");
+
+        let sql_interface =
+            SqlInterface::new(config.sql_interface).expect("Failed to create SqlInterface.");
+
+        let mut sql_interface_data =
+            SqlInterfaceData::new(sql_interface.get_connection().unwrap(), 0)
+                .expect("Failed to create SqlInterfaceData.");
+
+        // --- Get Data ---
+        let temperature_data = sql_interface_data
+            .get_water_temperature_last_24h()
+            .expect("Failed to get water temperature data.");
+
+        println!(
+            "Retrieved {} data points from the last 24 hours.",
+            temperature_data.len()
+        );
+
+        // --- Process Data ---
+        let sample_size = 5;
+        if temperature_data.len() < sample_size {
+            println!("Not enough data to calculate gradient. Need at least {} samples, but got {}.", sample_size, temperature_data.len());
+            return;
+        }
+
+        let mut samples: VecDeque<(f64, f64)> = VecDeque::with_capacity(sample_size);
+
+        for (timestamp, temperature) in temperature_data {
+            // fill buffer with one sample at a time
+            samples.push_back((timestamp, temperature));
+            
+            // limit the size of the buffer
+            if samples.len() > sample_size {
+                samples.pop_front();
+            }
+
+            // if buffer is filled with enough samples, calculate the gradient
+            if samples.len() == sample_size {
+                let gradient = calculate_least_squares_gradient(&samples);
+                let last_timestamp = samples.back().unwrap().0;
+                println!(
+                    "Timestamp: {}, Gradient: {:.6} °C/s",
+                    last_timestamp, gradient
+                );
+            }
+        }
+    }
 }
