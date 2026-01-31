@@ -557,8 +557,8 @@ mod tests {
                 let gradient = calculate_least_squares_gradient(&samples);
                 let last_timestamp = samples.back().unwrap().0;
                 println!(
-                    "Timestamp: {}, Gradient: {:.6} °C/s, Surface Ventilation Status: {}, Heater Status: {}",
-                    last_timestamp, gradient, surface_ventilation_status, heater_status
+                    "Timestamp: {}, Gradient: {:.6} °C/s = {:.3} °C/h, Surface Ventilation Status: {}, Heater Status: {}",
+                    last_timestamp, gradient, gradient * 3600.0, surface_ventilation_status, heater_status
                 );
             }
         }
