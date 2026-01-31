@@ -226,6 +226,9 @@ pub struct HeatingMutexes {
 
     /// Mutex for the heater status
     pub mutex_heating_status: Arc<Mutex<bool>>,
+
+    /// Mutex for the temperature gradient
+    pub mutex_temperature_gradient: Arc<Mutex<f64>>,
 }
 
 #[cfg_attr(doc, aquamarine::aquamarine)]
@@ -1116,6 +1119,7 @@ pub mod tests {
                     ))),
                     mutex_tank_level_switch_signals,
                     mutex_heating_status: Arc::new(Mutex::new(false)),
+                    mutex_temperature_gradient: Arc::new(Mutex::new(0.0)),
                 };
 
                 heating.execute(
@@ -1258,6 +1262,7 @@ pub mod tests {
                     ))),
                     mutex_tank_level_switch_signals,
                     mutex_heating_status: Arc::new(Mutex::new(false)),
+                    mutex_temperature_gradient: Arc::new(Mutex::new(0.0)),
                 };
 
                 heating.execute(
@@ -1492,6 +1497,7 @@ pub mod tests {
                     ))),
                     mutex_tank_level_switch_signals,
                     mutex_heating_status: Arc::new(Mutex::new(false)),
+                    mutex_temperature_gradient: Arc::new(Mutex::new(0.0)),
                 };
 
                 heating.execute(
@@ -1703,6 +1709,7 @@ pub mod tests {
                     ))),
                     mutex_tank_level_switch_signals,
                     mutex_heating_status: Arc::new(Mutex::new(false)),
+                    mutex_temperature_gradient: Arc::new(Mutex::new(0.0)),
                 };
 
                 heating.execute(
@@ -1916,6 +1923,7 @@ pub mod tests {
                     ))),
                     mutex_tank_level_switch_signals,
                     mutex_heating_status: Arc::new(Mutex::new(false)),
+                    mutex_temperature_gradient: Arc::new(Mutex::new(0.0)),
                 };
 
                 heating.execute(
@@ -2051,6 +2059,7 @@ pub mod tests {
                     mutex_sensor_manager_signals: Arc::new(Mutex::new(SensorManagerSignals::new(&config.sensor_manager))),
                     mutex_tank_level_switch_signals,
                     mutex_heating_status: Arc::new(Mutex::new(false)),
+                    mutex_temperature_gradient: Arc::new(Mutex::new(0.0)),
                 };
 
                 heating.execute(
@@ -2193,6 +2202,7 @@ pub mod tests {
                     mutex_sensor_manager_signals: Arc::new(Mutex::new(SensorManagerSignals::new(&config.sensor_manager))),
                     mutex_tank_level_switch_signals,
                     mutex_heating_status: Arc::new(Mutex::new(false)),
+                    mutex_temperature_gradient: Arc::new(Mutex::new(0.0)),
                 };
 
                 heating.execute(
@@ -2419,6 +2429,7 @@ pub mod tests {
                     mutex_sensor_manager_signals: Arc::new(Mutex::new(SensorManagerSignals::new(&config.sensor_manager))),
                     mutex_tank_level_switch_signals,
                     mutex_heating_status: Arc::new(Mutex::new(false)),
+                    mutex_temperature_gradient: Arc::new(Mutex::new(0.0)),
                 };
 
                 heating.execute(
@@ -2637,6 +2648,7 @@ pub mod tests {
                     ))),
                     mutex_tank_level_switch_signals,
                     mutex_heating_status: Arc::new(Mutex::new(false)),
+                    mutex_temperature_gradient: Arc::new(Mutex::new(0.0)),
                 };
 
                 heating.execute(
@@ -2775,6 +2787,7 @@ pub mod tests {
                     ))),
                     mutex_tank_level_switch_signals,
                     mutex_heating_status: Arc::new(Mutex::new(false)),
+                    mutex_temperature_gradient: Arc::new(Mutex::new(0.0)),
                 };
 
                 heating.execute(
@@ -3004,6 +3017,7 @@ pub mod tests {
                     ))),
                     mutex_tank_level_switch_signals,
                     mutex_heating_status: Arc::new(Mutex::new(false)),
+                    mutex_temperature_gradient: Arc::new(Mutex::new(0.0)),
                 };
 
                 heating.execute(
@@ -3157,6 +3171,7 @@ pub mod tests {
                     ))),
                     mutex_tank_level_switch_signals,
                     mutex_heating_status: Arc::new(Mutex::new(false)),
+                    mutex_temperature_gradient: Arc::new(Mutex::new(0.0)),
                 };
 
                 heating.execute(
@@ -3317,7 +3332,8 @@ pub mod tests {
                         &config.sensor_manager,
                     ))),
                     mutex_tank_level_switch_signals,
-                    mutex_heating_status
+                    mutex_heating_status,
+                    mutex_temperature_gradient: Arc::new(Mutex::new(0.0)),
                 };
 
                 heating.execute(

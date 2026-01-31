@@ -75,7 +75,7 @@ use aquarium_control::simulator::tcp_communication::TcpCommunication;
 use aquarium_control::thermal::distinct_interval_check::distinct_thermal_control_interval_check;
 use aquarium_control::thermal::heating::{Heating, HeatingMutexes};
 use aquarium_control::thermal::temperature_gradient::TemperatureGradient;
-use aquarium_control::thermal::ventilation::Ventilation;
+use aquarium_control::thermal::ventilation::{Ventilation, VentilationMutexes};
 use aquarium_control::utilities::config::read_config_file;
 use aquarium_control::utilities::logger::{log_error_chain, setup_logger};
 use aquarium_control::utilities::logger_config::LoggerConfig;
@@ -737,7 +737,9 @@ fn run() -> Result<(), StartupError> {
     let mutex_sensor_manager_signals_clone_for_temp_gradient = mutex_sensor_manager_signals.clone();
 
     // Mutex for temperature gradient
-    let mutex_temperature_gradient = Arc::new(Mutex::new(0.0));
+    let mutex_temperature_gradient: Arc<Mutex<f64>> = Arc::new(Mutex::new(0.0));
+    let mutex_temperature_gradient_clone_for_heating = mutex_temperature_gradient.clone();
+    let mutex_temperature_gradient_clone_for_ventilation = mutex_temperature_gradient.clone();
     //**********************************************************************************************
 
     #[cfg(all(target_os = "linux", feature = "target_hw"))]
@@ -1046,6 +1048,7 @@ fn run() -> Result<(), StartupError> {
                 mutex_sensor_manager_signals: mutex_sensor_manager_signals_clone_for_heating,
                 mutex_tank_level_switch_signals: mutex_tank_level_switch_signals_clone_for_heating,
                 mutex_heating_status,
+                mutex_temperature_gradient: mutex_temperature_gradient_clone_for_heating,
             };
 
             scope.spawn(move || {
@@ -1069,12 +1072,18 @@ fn run() -> Result<(), StartupError> {
             let mutex_device_scheduler_ventilation = Arc::clone(&mutex_device_scheduler);
 
             scope.spawn(move || {
+                let ventilation_mutexes = VentilationMutexes {
+                    mutex_sensor_manager_signals:
+                        mutex_sensor_manager_signals_clone_for_ventilation,
+                    mutex_ventilation_status,
+                    mutex_temperature_gradient: mutex_temperature_gradient_clone_for_ventilation,
+                };
+
                 ventilation.execute(
                     mutex_device_scheduler_ventilation,
                     &mut channels.ventilation,
                     &mut ventilation_set_value_updater,
-                    mutex_sensor_manager_signals_clone_for_ventilation,
-                    mutex_ventilation_status,
+                    ventilation_mutexes,
                 );
                 #[cfg(feature = "debug_channels")]
                 debug!(target: module_path!(), "{0}", channels.ventilation);

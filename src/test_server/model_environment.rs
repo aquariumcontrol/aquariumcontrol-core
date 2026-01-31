@@ -8,13 +8,10 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 */
 #![allow(non_snake_case)]
 
-use crate::test_server::thermal_model::{TankTemperatureModel, TankTemperatureModelConfig};
-use chrono::{NaiveTime, Utc};
-use spin_sleep::SpinSleeper;
-use std::sync::mpsc::Receiver;
-use std::time::Duration;
 use crate::test_server::ambient_temperature_time_profile::AmbientTemperatureTimeProfileConfig;
-use crate::test_server::conductivity_reverse_compensation::{ConductivityReverseCompensation, ConductivityReverseCompensationConfig};
+use crate::test_server::conductivity_reverse_compensation::{
+    ConductivityReverseCompensation, ConductivityReverseCompensationConfig,
+};
 use crate::test_server::evaporation::EvaporationConfig;
 use crate::test_server::heat_flow::HeatFlowConfig;
 use crate::test_server::light_intensity_time_profile::LightIntensityTimeProfileConfig;
@@ -23,8 +20,15 @@ use crate::test_server::pH_time_profile::{pHTimeProfile, pHTimeProfileConfig};
 use crate::test_server::sump::{PumpStatus, Sump, SumpConfig};
 use crate::test_server::tank_geometry::{TankGeometry, TankGeometryConfig};
 use crate::test_server::tank_level_position::{TankLevelPosition, TankLevelPositionConfig};
-use crate::test_server::test_server_channel_content::{BallingFluidInjection, TestServerInternalCommand};
+use crate::test_server::test_server_channel_content::{
+    BallingFluidInjection, TestServerInternalCommand,
+};
+use crate::test_server::thermal_model::{TankTemperatureModel, TankTemperatureModelConfig};
 use crate::utilities::channel_content::{AquariumDevice, AquariumSignal};
+use chrono::{NaiveTime, Utc};
+use spin_sleep::SpinSleeper;
+use std::sync::mpsc::Receiver;
+use std::time::Duration;
 
 pub struct ModelEnvironmentConfig {
     pub tank_geometry: TankGeometryConfig,
@@ -80,8 +84,11 @@ impl ModelEnvironment {
 
         let tank_level_switch = TankLevelPosition::new(config.tank_level_switch, sump);
 
-        let pH_time_profile =
-            pHTimeProfile::new(config.ph_time_profile, config.initial_time, config.time_step);
+        let pH_time_profile = pHTimeProfile::new(
+            config.ph_time_profile,
+            config.initial_time,
+            config.time_step,
+        );
 
         let tank_temperature_model = TankTemperatureModel::new(
             config.tank_temperature_model,
