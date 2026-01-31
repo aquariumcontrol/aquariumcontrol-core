@@ -83,6 +83,7 @@ use std::time::{Duration, Instant};
 
 use crate::thermal::ventilation_channels::VentilationChannels;
 use crate::thermal::ventilation_config::VentilationConfig;
+use crate::thermal::temperature_gradient_monitor::TemperatureGradientMonitor;
 use crate::utilities::acknowledge_signal_handler::AcknowledgeSignalHandlerTrait;
 use crate::utilities::check_mutex_access_duration::CheckMutexAccessDurationTrait;
 use crate::utilities::logger::log_error_chain;
@@ -240,9 +241,25 @@ pub struct Ventilation {
 
     /// Maximum permissible access duration for Mutex
     pub max_mutex_access_duration: Duration,
+
+    /// The time the actuator was last turned on continuously.
+    pub last_actuator_on_time: Option<Instant>,
+
+    /// Inhibition flag to prevent log flooding for gradient monitoring.
+    pub log_inhibition_gradient: bool,
 }
 
 impl ProcessExternalRequestTrait for Ventilation {}
+
+impl TemperatureGradientMonitor for Ventilation {
+    fn max_time_actuator_effect_monitor(&self) -> u64 {
+        self.config.max_time_actuator_effect_monitor
+    }
+
+    fn monitor_state(&mut self) -> (&mut Option<Instant>, &mut bool) {
+        (&mut self.last_actuator_on_time, &mut self.log_inhibition_gradient)
+    }
+}
 
 impl Ventilation {
     /// Creates a new `Ventilation` control instance.
@@ -272,6 +289,8 @@ impl Ventilation {
             mutex_access_duration_exceeded: false,
             lock_error_channel_receive_termination: false,
             max_mutex_access_duration: Duration::from_millis(MAX_MUTEX_ACCESS_DURATION_MILLIS),
+            last_actuator_on_time: None,
+            log_inhibition_gradient: false,
         }
     }
 
@@ -556,6 +575,13 @@ impl Ventilation {
                 None,
                 instant_after_locking_mutex,
                 instant_before_locking_mutex,
+            );
+
+            self.temperature_gradient_monitor(
+                &ventilation_mutexes.mutex_temperature_gradient,
+                ventilation_state == ActuatorState::On,
+                false, // ventilation expects a negative gradient
+                "Ventilation",
             );
 
             saw_tooth_profile.execute_with(TIME_INCREMENT_VENTILATION_SECS);

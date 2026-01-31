@@ -113,6 +113,7 @@ saw_tooth_profile_config = { phase1_length = 60, phase2_length = 10, phase3_leng
 switch_on_when_out_of_schedule = false                  # strategy when schedule check does not allow operation: true=heating will be switched on; false=heating will be switched off
 switch_on_when_external_stop = false                    # strategy when external request for stop has been received
 set_value_check_interval = 300                          # interval in seconds for polling the database
+max_time_actuator_effect_monitor = 1800                 # maximum permissible time in seconds until which the actuator must show some effect
 
 [feed]
 active = true
@@ -131,6 +132,7 @@ saw_tooth_profile_config = { phase1_length = 6, phase2_length = 1, phase3_length
 switch_on_when_out_of_schedule = false                  # strategy when schedule check does not allow operation: true=ventilation will be switched on; false=ventilation will be switched off
 switch_on_when_external_stop = false                    # strategy when external request for stop has been received
 set_value_check_interval = 300                          # interval in seconds for polling the database
+max_time_actuator_effect_monitor = 1800                 # maximum permissible time in seconds until which the actuator must show some effect
 
 [balling]
 active = true

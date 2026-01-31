@@ -69,4 +69,7 @@ pub struct HeatingConfig {
 
     /// interval in seconds for polling the database
     pub set_value_check_interval: u64,
+
+    /// Permitted duration in seconds until the gradient must have the expected sign given that the actuator is switched on permanently.
+    pub max_time_actuator_effect_monitor: u64,
 }

@@ -87,6 +87,7 @@ use crate::sensors::sensor_manager::SensorManagerSignals;
 use crate::sensors::tank_level_switch::TankLevelSwitchSignals;
 use crate::thermal::heating_channels::HeatingChannels;
 use crate::thermal::heating_config::HeatingConfig;
+use crate::thermal::temperature_gradient_monitor::TemperatureGradientMonitor;
 use crate::utilities::acknowledge_signal_handler::AcknowledgeSignalHandlerTrait;
 use crate::utilities::channel_content::{ActuatorState, AquariumDevice, InternalCommand};
 use crate::utilities::check_mutex_access_duration::CheckMutexAccessDurationTrait;
@@ -285,9 +286,25 @@ pub struct Heating {
 
     /// Instant at which statistics is updated - used for energy consumption calculation
     pub last_stats_update_instant_opt: Option<Instant>,
+
+    /// The time the actuator was last turned on continuously.
+    pub last_actuator_on_time: Option<Instant>,
+
+    /// Inhibition flag to prevent log flooding for gradient monitoring.
+    pub log_inhibition_gradient: bool,
 }
 
 impl ProcessExternalRequestTrait for Heating {}
+
+impl TemperatureGradientMonitor for Heating {
+    fn max_time_actuator_effect_monitor(&self) -> u64 {
+        self.config.max_time_actuator_effect_monitor
+    }
+
+    fn monitor_state(&mut self) -> (&mut Option<Instant>, &mut bool) {
+        (&mut self.last_actuator_on_time, &mut self.log_inhibition_gradient)
+    }
+}
 
 impl Heating {
     /// Creates a new `Heating` control instance.
@@ -323,6 +340,8 @@ impl Heating {
             lock_error_channel_receive_termination: false,
             max_mutex_access_duration: Duration::from_millis(MAX_MUTEX_ACCESS_DURATION_MILLIS),
             last_stats_update_instant_opt: None,
+            last_actuator_on_time: None,
+            log_inhibition_gradient: false,
         }
     }
 
@@ -802,6 +821,13 @@ impl Heating {
                         }
                     }
                 }
+
+                self.temperature_gradient_monitor(
+                    &heating_mutexes.mutex_temperature_gradient,
+                    heater_state == ActuatorState::On,
+                    true, // heating expects a positive gradient
+                    "Heating",
+                );
 
                 saw_tooth_profile.execute_with(TIME_INCREMENT_HEATING_SECS);
 

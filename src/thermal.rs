@@ -42,3 +42,6 @@ pub mod temperature_gradient_error;
 
 // Container for the channels of the temperature gradient calculation used to communicate with other threads
 pub mod temperature_gradient_channels;
+
+// Monitor for the temperature gradient
+pub mod temperature_gradient_monitor;
