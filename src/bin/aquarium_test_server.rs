@@ -14,7 +14,7 @@ use std::thread::scope;
 
 use aquarium_control::generate_sender_logger_group;
 use aquarium_control::test_server::controllino_emulator::ControllinoEmulator;
-use aquarium_control::test_server::model_environment::ModelEnvironment;
+use aquarium_control::test_server::model_environment::{ModelEnvironment, ModelEnvironmentConfig};
 use aquarium_control::test_server::tcp_connection::tcp_connection;
 use aquarium_control::test_server::test_server_channel_content::TestServerInternalCommand;
 use aquarium_control::test_server::test_server_config::read_test_server_config_file;
@@ -33,20 +33,21 @@ fn main() {
 
     let config = read_test_server_config_file(config_path);
 
-    let mut model_environment = ModelEnvironment::new(
-        config.tank_geometry,
-        config.sump,
-        config.tank_level_switch,
-        config.pH_time_profile,
-        config.tank_temperature_model,
-        config.heat_flow,
-        config.light_intensity_time_profile,
-        config.ambient_temperature_time_profile,
-        config.evaporation,
-        config.conductivity_reverse_compensation,
-        Utc::now().naive_utc().time(),
-        1.0, // time step
-    );
+    let model_config = ModelEnvironmentConfig {
+        tank_geometry: config.tank_geometry,
+        sump: config.sump,
+        tank_level_switch: config.tank_level_switch,
+        ph_time_profile: config.pH_time_profile,
+        tank_temperature_model: config.tank_temperature_model,
+        heat_flow: config.heat_flow,
+        light_intensity_time_profile: config.light_intensity_time_profile,
+        ambient_temperature_time_profile: config.ambient_temperature_time_profile,
+        evaporation: config.evaporation,
+        conductivity_reverse_compensation: config.conductivity_reverse_compensation,
+        initial_time: Utc::now().naive_utc().time(),
+        time_step: 1.0, // time step
+    };
+    let mut model_environment = ModelEnvironment::new(model_config);
 
     let mut controllino = ControllinoEmulator::new(&config.controllino);
 

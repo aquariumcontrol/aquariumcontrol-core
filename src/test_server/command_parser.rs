@@ -311,7 +311,7 @@ pub mod tests {
     use crate::generate_sender_logger_group;
     use crate::test_server::command_parser::{parse_sequence, ParseErr};
     use crate::test_server::controllino_emulator::ControllinoEmulator;
-    use crate::test_server::model_environment::ModelEnvironment;
+    use crate::test_server::model_environment::{ModelEnvironment, ModelEnvironmentConfig};
     use crate::test_server::test_server_channel_content::TestServerInternalCommand;
     use crate::test_server::test_server_config::read_test_server_config_file;
     use assert_float_eq::*;
@@ -356,20 +356,21 @@ pub mod tests {
         ) = mpsc::channel();
         let (tx_to_parser, rx_by_parser): (Sender<f32>, Receiver<f32>) = mpsc::channel();
 
-        let mut model_environment = ModelEnvironment::new(
-            config.tank_geometry,
-            config.sump,
-            config.tank_level_switch,
-            config.pH_time_profile,
-            config.tank_temperature_model,
-            config.heat_flow,
-            config.light_intensity_time_profile,
-            config.ambient_temperature_time_profile,
-            config.evaporation,
-            config.conductivity_reverse_compensation,
-            time_of_day,
-            1.0,
-        );
+        let model_config = ModelEnvironmentConfig {
+            tank_geometry: config.tank_geometry,
+            sump: config.sump,
+            tank_level_switch: config.tank_level_switch,
+            ph_time_profile: config.pH_time_profile,
+            tank_temperature_model: config.tank_temperature_model,
+            heat_flow: config.heat_flow,
+            light_intensity_time_profile: config.light_intensity_time_profile,
+            ambient_temperature_time_profile: config.ambient_temperature_time_profile,
+            evaporation: config.evaporation,
+            conductivity_reverse_compensation: config.conductivity_reverse_compensation,
+            initial_time: time_of_day,
+            time_step: 1.0,
+        };
+        let mut model_environment = ModelEnvironment::new(model_config);
 
         let mut controllino = ControllinoEmulator::new(&config.controllino);
         let sender_loggers = SenderLoggerTuple::new(
