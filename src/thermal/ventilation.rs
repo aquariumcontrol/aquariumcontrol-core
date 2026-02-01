@@ -2371,4 +2371,172 @@ pub mod tests {
             .expect("Test environment failed");
         join_handle_test_object.join().expect("Test object failed");
     }
+
+    #[test]
+    pub fn test_ventilation_reset_errors_enables_actuator() {
+        let sleep_duration_100_millis = Duration::from_millis(100);
+        let spin_sleeper = SpinSleeper::default();
+
+        let (mut config, mut ventilation) = prepare_ventilation_tests(None);
+
+        // Start in disabled state
+        ventilation.actuator_disabled = true;
+
+        // replacement value is used for initializing mutex - needs to start with a high value
+        config.sensor_manager.replacement_value_water_temperature = 30.0;
+        config.ventilation.switch_off_when_no_effect = true;
+        config.ventilation.switch_on_when_terminating = false;
+        ventilation.config = config.ventilation;
+
+        let mut channels = Channels::new_for_test();
+
+        // thread for mock schedule check
+        let join_handle_mock_schedule_check = thread::Builder::new()
+            .name("mock_schedule_check".to_string())
+            .spawn(move || {
+                mock_schedule_check(
+                    &mut channels.schedule_check.tx_schedule_check_to_ventilation,
+                    &mut channels.schedule_check.rx_schedule_check_from_ventilation,
+                    None,
+                    true,
+                );
+            })
+            .unwrap();
+
+        // Mutex needed for water temperature
+        let mutex_sensor_manager_signals = Arc::new(Mutex::new(SensorManagerSignals::new(
+            &config.sensor_manager,
+        )));
+
+        let mutex_device_scheduler_ventilation = Arc::new(Mutex::new(0));
+
+        // Mutex for ventilation status to check assertions
+        let mutex_ventilation_status = Arc::new(Mutex::new(false));
+        let mutex_ventilation_status_clone = mutex_ventilation_status.clone();
+
+        // Mutex for temperature gradient
+        let mutex_temperature_gradient = Arc::new(Mutex::new(0.1)); // Start with positive gradient
+        let mutex_temperature_gradient_clone = mutex_temperature_gradient.clone();
+
+        // thread for mock relay manager
+        let join_handle_mock_relay_manager = thread::Builder::new()
+            .name("mock_relay_manager".to_string())
+            .spawn(move || {
+                let (actuation_events, mock_actuator_states) = mock_relay_manager(
+                    &mut channels.relay_manager.tx_relay_manager_to_ventilation,
+                    &mut channels.relay_manager.rx_relay_manager_from_ventilation,
+                );
+                // Expect SwitchOn (after reset), SwitchOff (at termination)
+                assert_eq!(actuation_events.len(), 2);
+                assert_eq!(
+                    actuation_events[0].command,
+                    InternalCommand::SwitchOn(AquariumDevice::Ventilation)
+                );
+                assert_eq!(
+                    actuation_events[1].command,
+                    InternalCommand::SwitchOff(AquariumDevice::Ventilation)
+                );
+
+                mock_actuator_states.check_terminal_condition_ventilation(ActuatorState::Off);
+            })
+            .unwrap();
+
+        // thread for controlling test phases
+        let join_handle_test_environment = thread::Builder::new()
+            .name("test_environment".to_string())
+            .spawn(move || {
+                let sleep_duration_phase = Duration::from_secs(5);
+                let spin_sleeper = SpinSleeper::default();
+
+                // Phase 1: Disabled state. Wait 5s.
+                spin_sleeper.sleep(sleep_duration_phase);
+                {
+                    let status = *mutex_ventilation_status_clone.lock().unwrap();
+                    assert!(!status, "Phase 1: Ventilation should be OFF (disabled)");
+                }
+
+                // Send ResetAllErrors command
+                channels
+                    .messaging
+                    .tx_messaging_to_ventilation
+                    .send(InternalCommand::ResetAllErrors)
+                    .unwrap();
+
+                // Phase 2: Enabled state. Wait 5s.
+                spin_sleeper.sleep(sleep_duration_phase);
+                {
+                    let status = *mutex_ventilation_status_clone.lock().unwrap();
+                    assert!(status, "Phase 2: Ventilation should be ON (enabled)");
+                }
+
+                // Terminate
+                let _ = channels
+                    .signal_handler
+                    .tx_signal_handler_to_ventilation
+                    .send(InternalCommand::Quit);
+                channels
+                    .signal_handler
+                    .rx_signal_handler_from_ventilation
+                    .recv()
+                    .unwrap();
+                let _ = channels
+                    .signal_handler
+                    .tx_signal_handler_to_ventilation
+                    .send(InternalCommand::Terminate);
+            })
+            .unwrap();
+
+        spin_sleeper.sleep(sleep_duration_100_millis);
+
+        // thread for the test object
+        let join_handle_test_object = thread::Builder::new()
+            .name("test_object".to_string())
+            .spawn(move || {
+                let mut tx_ventilation_to_schedule_check_for_test_case_finish = channels
+                    .ventilation
+                    .tx_ventilation_to_schedule_check
+                    .clone();
+                let mut tx_ventilation_to_relay_manager_for_test_case_finish =
+                    channels.ventilation.tx_ventilation_to_relay_manager.clone();
+
+                let mut ventilation_set_value_updater =
+                    MockSqlInterfaceVentilationSetVals::new(false, None, None, None);
+
+                let ventilation_mutexes = VentilationMutexes {
+                    mutex_sensor_manager_signals,
+                    mutex_ventilation_status,
+                    mutex_temperature_gradient: mutex_temperature_gradient_clone,
+                };
+
+                ventilation.execute(
+                    mutex_device_scheduler_ventilation.clone(),
+                    &mut channels.ventilation,
+                    &mut ventilation_set_value_updater,
+                    ventilation_mutexes,
+                );
+
+                // Add a small delay to allow mock_relay_manager to process the final command
+                let spin_sleeper = SpinSleeper::default();
+                spin_sleeper.sleep(Duration::from_millis(100));
+
+                // send Quit signal to mock threads
+                let _ = tx_ventilation_to_schedule_check_for_test_case_finish
+                    .send(InternalCommand::Quit);
+                let _ = tx_ventilation_to_relay_manager_for_test_case_finish
+                    .send(InternalCommand::Quit);
+                println!("* [Ventilation] checking reset errors enables actuator succeeded.");
+            })
+            .unwrap();
+
+        join_handle_mock_schedule_check
+            .join()
+            .expect("Mock schedule check failed");
+        join_handle_mock_relay_manager
+            .join()
+            .expect("Mock relay manager failed");
+        join_handle_test_environment
+            .join()
+            .expect("Test environment failed");
+        join_handle_test_object.join().expect("Test object failed");
+    }
 }
