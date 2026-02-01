@@ -302,7 +302,10 @@ impl TemperatureGradientMonitor for Heating {
     }
 
     fn monitor_state(&mut self) -> (&mut Option<Instant>, &mut bool) {
-        (&mut self.last_actuator_on_time, &mut self.log_inhibition_gradient)
+        (
+            &mut self.last_actuator_on_time,
+            &mut self.log_inhibition_gradient,
+        )
     }
 }
 
@@ -591,6 +594,8 @@ impl Heating {
         let mut lock_warn_cycle_time_exceeded: bool = false;
         let mut actuation_mutex_was_blocked_during_actuation: bool = false;
         let cycle_time_duration = Duration::from_millis(CYCLE_TIME_HEATING_MILLIS);
+        let mut actuator_ineffective: bool;
+        let mut actuator_disabled: bool = false;
 
         let mut heating_stats_opt = match sql_interface_heating
             .get_single_heating_stats_from_database()
@@ -694,6 +699,25 @@ impl Heating {
                     self.lock_error_heating_set_value_read_failure,
                     module_path!()
                 );
+                actuator_ineffective = self.temperature_gradient_monitor(
+                    &heating_mutexes.mutex_temperature_gradient,
+                    heater_state == ActuatorState::On,
+                    true, // heating expects a positive gradient
+                    "Heating",
+                );
+                if actuator_ineffective && self.config.switch_off_when_no_effect {
+                    if heater_state == ActuatorState::On {
+                        switch_off_heater(
+                            &mutex_device_scheduler_heating,
+                            &mut actuation_mutex_was_blocked_during_actuation,
+                            heating_channels,
+                        );
+                        heater_state = ActuatorState::Off;
+                        actuator_disabled = true;
+                    }
+                } else {
+                    actuator_disabled = false;
+                }
 
                 if self.config.stop_on_refill_error
                     && (tank_level_low_counter > self.config.stop_on_refill_error_delay)
@@ -723,7 +747,7 @@ impl Heating {
                                 && !measurement_error
                             {
                                 // switch on the heater if not already on
-                                if heater_state != ActuatorState::On {
+                                if heater_state != ActuatorState::On && !actuator_disabled {
                                     switch_on_heater(
                                         &mutex_device_scheduler_heating,
                                         &mut actuation_mutex_was_blocked_during_actuation,
@@ -757,7 +781,7 @@ impl Heating {
                             }
                             if measured_water_temperature < self.config.switch_on_temperature {
                                 // switch on the heater if not already on
-                                if heater_state != ActuatorState::On {
+                                if heater_state != ActuatorState::On && !actuator_disabled {
                                     switch_on_heater(
                                         &mutex_device_scheduler_heating,
                                         &mut actuation_mutex_was_blocked_during_actuation,
@@ -821,13 +845,6 @@ impl Heating {
                         }
                     }
                 }
-
-                self.temperature_gradient_monitor(
-                    &heating_mutexes.mutex_temperature_gradient,
-                    heater_state == ActuatorState::On,
-                    true, // heating expects a positive gradient
-                    "Heating",
-                );
 
                 saw_tooth_profile.execute_with(TIME_INCREMENT_HEATING_SECS);
 

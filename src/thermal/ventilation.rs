@@ -81,9 +81,9 @@ use spin_sleep::SpinSleeper;
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
+use crate::thermal::temperature_gradient_monitor::TemperatureGradientMonitor;
 use crate::thermal::ventilation_channels::VentilationChannels;
 use crate::thermal::ventilation_config::VentilationConfig;
-use crate::thermal::temperature_gradient_monitor::TemperatureGradientMonitor;
 use crate::utilities::acknowledge_signal_handler::AcknowledgeSignalHandlerTrait;
 use crate::utilities::check_mutex_access_duration::CheckMutexAccessDurationTrait;
 use crate::utilities::logger::log_error_chain;
@@ -257,7 +257,10 @@ impl TemperatureGradientMonitor for Ventilation {
     }
 
     fn monitor_state(&mut self) -> (&mut Option<Instant>, &mut bool) {
-        (&mut self.last_actuator_on_time, &mut self.log_inhibition_gradient)
+        (
+            &mut self.last_actuator_on_time,
+            &mut self.log_inhibition_gradient,
+        )
     }
 }
 
@@ -413,6 +416,8 @@ impl Ventilation {
         let mut lock_warn_cycle_time_exceeded = false;
         let mut start_time = Instant::now();
         let mut actuation_mutex_was_blocked_during_actuation: bool = false;
+        let mut actuator_ineffective: bool;
+        let mut actuator_disabled: bool = false;
 
         loop {
             let (quit_command_received, start_command_received, stop_command_received) = self
@@ -474,6 +479,27 @@ impl Ventilation {
                     module_path!()
                 );
 
+                // execute gradient monitoring
+                actuator_ineffective = self.temperature_gradient_monitor(
+                    &ventilation_mutexes.mutex_temperature_gradient,
+                    ventilation_state == ActuatorState::On,
+                    false, // ventilation expects a negative gradient
+                    "Ventilation",
+                );
+                if actuator_ineffective && self.config.switch_off_when_no_effect {
+                    if ventilation_state == ActuatorState::On {
+                        switch_off_ventilation(
+                            &mutex_device_scheduler_ventilation,
+                            &mut actuation_mutex_was_blocked_during_actuation,
+                            ventilation_channels,
+                        );
+                        ventilation_state = ActuatorState::Off;
+                        actuator_disabled = true;
+                    }
+                } else {
+                    actuator_disabled = false;
+                }
+
                 if schedule_check_result && !ventilation_inhibited {
                     // actuation is allowed. proceed with control.
                     if (measured_water_temperature >= self.config.switch_off_temperature)
@@ -485,7 +511,7 @@ impl Ventilation {
                             && !measurement_error_water_temperature
                         {
                             // switch on ventilation if not already on
-                            if ventilation_state != ActuatorState::On {
+                            if ventilation_state != ActuatorState::On && !actuator_disabled {
                                 switch_on_ventilation(
                                     &mutex_device_scheduler_ventilation,
                                     &mut actuation_mutex_was_blocked_during_actuation,
@@ -508,7 +534,7 @@ impl Ventilation {
                         // The temperature is above or below (dynamic) control window
                         if measured_water_temperature > self.config.switch_on_temperature {
                             // switch on ventilation if not already on
-                            if ventilation_state != ActuatorState::On {
+                            if ventilation_state != ActuatorState::On && !actuator_disabled {
                                 switch_on_ventilation(
                                     &mutex_device_scheduler_ventilation,
                                     &mut actuation_mutex_was_blocked_during_actuation,
@@ -575,13 +601,6 @@ impl Ventilation {
                 None,
                 instant_after_locking_mutex,
                 instant_before_locking_mutex,
-            );
-
-            self.temperature_gradient_monitor(
-                &ventilation_mutexes.mutex_temperature_gradient,
-                ventilation_state == ActuatorState::On,
-                false, // ventilation expects a negative gradient
-                "Ventilation",
             );
 
             saw_tooth_profile.execute_with(TIME_INCREMENT_VENTILATION_SECS);

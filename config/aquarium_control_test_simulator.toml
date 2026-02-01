@@ -114,6 +114,7 @@ switch_on_when_out_of_schedule = false                  # strategy when schedule
 switch_on_when_external_stop = false                    # strategy when external request for stop has been received
 set_value_check_interval = 300                          # interval in seconds for polling the database
 max_time_actuator_effect_monitor = 1800                 # maximum permissible time in seconds until which the actuator must show some effect
+switch_off_when_no_effect = true                        # if true, then heating is switched off when the gradient monitor indicates that the actuator has no effect
 
 [feed]
 active = true
@@ -133,6 +134,7 @@ switch_on_when_out_of_schedule = false                  # strategy when schedule
 switch_on_when_external_stop = false                    # strategy when external request for stop has been received
 set_value_check_interval = 300                          # interval in seconds for polling the database
 max_time_actuator_effect_monitor = 1800                 # maximum permissible time in seconds until which the actuator must show some effect
+switch_off_when_no_effect = true                        # if true, then ventilation is switched off when the gradient monitor indicates that the actuator has no effect
 
 [balling]
 active = true

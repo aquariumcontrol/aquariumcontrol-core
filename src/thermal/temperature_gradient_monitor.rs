@@ -57,7 +57,8 @@ pub trait TemperatureGradientMonitor {
                 return match mutex_temperature_gradient.lock() {
                     Ok(gradient_guard) => {
                         let gradient = *gradient_guard;
-                        let gradient_sign_correct = (expected_gradient_is_positive && gradient > 0.0)
+                        let gradient_sign_correct = (expected_gradient_is_positive
+                            && gradient > 0.0)
                             || (!expected_gradient_is_positive && gradient < 0.0);
 
                         if !gradient_sign_correct {
@@ -80,7 +81,7 @@ pub trait TemperatureGradientMonitor {
                         error!(target: module_path!(), "Failed to lock temperature gradient mutex: {}", e);
                         false // Treat lock failure as "no error detected" to avoid spamming
                     }
-                }
+                };
             }
         } else {
             // Actuator is off, reset state
@@ -134,7 +135,10 @@ mod tests {
         let result = monitor.temperature_gradient_monitor(&gradient, true, true, "TestComponent");
 
         assert!(!result, "Should return false when max_time is 0");
-        assert!(!monitor.log_inhibition, "Should not inhibit/log when max_time is 0");
+        assert!(
+            !monitor.log_inhibition,
+            "Should not inhibit/log when max_time is 0"
+        );
     }
 
     #[test]
@@ -147,7 +151,10 @@ mod tests {
         let result = monitor.temperature_gradient_monitor(&gradient, false, true, "TestComponent");
 
         assert!(!result, "Should return false when actuator is off");
-        assert!(monitor.last_actuator_on_time.is_none(), "Should reset start time");
+        assert!(
+            monitor.last_actuator_on_time.is_none(),
+            "Should reset start time"
+        );
         assert!(!monitor.log_inhibition, "Should reset inhibition");
     }
 
@@ -162,7 +169,10 @@ mod tests {
         let result = monitor.temperature_gradient_monitor(&gradient, true, true, "TestComponent");
 
         assert!(!result, "Should return false if duration < max_time");
-        assert!(!monitor.log_inhibition, "Should not log if duration < max_time");
+        assert!(
+            !monitor.log_inhibition,
+            "Should not log if duration < max_time"
+        );
     }
 
     #[test]
@@ -176,7 +186,10 @@ mod tests {
         let result = monitor.temperature_gradient_monitor(&gradient, true, true, "TestComponent");
 
         assert!(!result, "Should return false if gradient is correct");
-        assert!(!monitor.log_inhibition, "Should not log if gradient is correct");
+        assert!(
+            !monitor.log_inhibition,
+            "Should not log if gradient is correct"
+        );
     }
 
     #[test]
@@ -190,7 +203,10 @@ mod tests {
         let result = monitor.temperature_gradient_monitor(&gradient, true, false, "TestComponent");
 
         assert!(!result, "Should return false if gradient is correct");
-        assert!(!monitor.log_inhibition, "Should not log if gradient is correct");
+        assert!(
+            !monitor.log_inhibition,
+            "Should not log if gradient is correct"
+        );
     }
 
     #[test]
@@ -204,7 +220,10 @@ mod tests {
         let result = monitor.temperature_gradient_monitor(&gradient, true, true, "TestComponent");
 
         assert!(result, "Should return true when gradient is incorrect");
-        assert!(monitor.log_inhibition, "Should set inhibition (log warning) when gradient incorrect");
+        assert!(
+            monitor.log_inhibition,
+            "Should set inhibition (log warning) when gradient incorrect"
+        );
     }
 
     #[test]
@@ -218,7 +237,10 @@ mod tests {
         let result = monitor.temperature_gradient_monitor(&gradient, true, false, "TestComponent");
 
         assert!(result, "Should return true when gradient is incorrect");
-        assert!(monitor.log_inhibition, "Should set inhibition (log warning) when gradient incorrect");
+        assert!(
+            monitor.log_inhibition,
+            "Should set inhibition (log warning) when gradient incorrect"
+        );
     }
 
     #[test]
@@ -233,7 +255,10 @@ mod tests {
         let result = monitor.temperature_gradient_monitor(&gradient, true, true, "TestComponent");
 
         assert!(!result, "Should return false when gradient becomes correct");
-        assert!(!monitor.log_inhibition, "Should reset inhibition when gradient becomes correct");
+        assert!(
+            !monitor.log_inhibition,
+            "Should reset inhibition when gradient becomes correct"
+        );
     }
 
     #[test]
@@ -246,7 +271,10 @@ mod tests {
         let result = monitor.temperature_gradient_monitor(&gradient, true, true, "TestComponent");
 
         assert!(!result, "Should return false on first call (duration ~0)");
-        assert!(monitor.last_actuator_on_time.is_some(), "Should set start time on first call");
+        assert!(
+            monitor.last_actuator_on_time.is_some(),
+            "Should set start time on first call"
+        );
         assert!(!monitor.log_inhibition);
     }
 }

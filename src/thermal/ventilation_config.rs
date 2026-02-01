@@ -58,4 +58,7 @@ pub struct VentilationConfig {
 
     /// Permitted duration in seconds until the gradient must have the expected sign given that the actuator is switched on permanently.
     pub max_time_actuator_effect_monitor: u64,
+
+    /// If true, then ventilation is switched off when the gradient monitor indicates that the actuator has no effect
+    pub switch_off_when_no_effect: bool,
 }
