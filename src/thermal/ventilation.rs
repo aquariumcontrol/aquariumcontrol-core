@@ -79,7 +79,7 @@ use spin_sleep::SpinSleeper;
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
-use crate::thermal::temperature_gradient_monitor::TemperatureGradientMonitor;
+use crate::thermal::temperature_gradient_monitor::TemperatureGradientMonitorTrait;
 use crate::thermal::ventilation_channels::VentilationChannels;
 use crate::thermal::ventilation_config::VentilationConfig;
 use crate::utilities::acknowledge_signal_handler::AcknowledgeSignalHandlerTrait;
@@ -245,11 +245,12 @@ pub struct Ventilation {
 
     /// Inhibition flag to prevent log flooding for gradient monitoring.
     pub log_inhibition_gradient: bool,
+
+    /// flag indicating that actuator has been disabled due to indication from temperature gradient monitor
+    pub actuator_disabled: bool,
 }
 
-impl ProcessExternalRequestTrait for Ventilation {}
-
-impl TemperatureGradientMonitor for Ventilation {
+impl TemperatureGradientMonitorTrait for Ventilation {
     fn max_time_actuator_effect_monitor(&self) -> u64 {
         self.config.max_time_actuator_effect_monitor
     }
@@ -292,6 +293,7 @@ impl Ventilation {
             max_mutex_access_duration: Duration::from_millis(MAX_MUTEX_ACCESS_DURATION_MILLIS),
             last_actuator_on_time: None,
             log_inhibition_gradient: false,
+            actuator_disabled: false,
         }
     }
 
@@ -415,7 +417,6 @@ impl Ventilation {
         let mut start_time = Instant::now();
         let mut actuation_mutex_was_blocked_during_actuation: bool = false;
         let mut actuator_ineffective: bool;
-        let mut actuator_disabled: bool = false;
 
         loop {
             let (quit_command_received, start_command_received, stop_command_received) = self
@@ -494,7 +495,7 @@ impl Ventilation {
                         ventilation_channels,
                     );
                     ventilation_state = ActuatorState::Off;
-                    actuator_disabled = true;
+                    self.actuator_disabled = true;
                     warn!("[{}]: Disabled ventilation because temperature gradient monitor indicates ineffectiveness.", module_path!());
                 }
 
@@ -509,7 +510,7 @@ impl Ventilation {
                             && !measurement_error_water_temperature
                         {
                             // switch on ventilation if not already on
-                            if ventilation_state != ActuatorState::On && !actuator_disabled {
+                            if ventilation_state != ActuatorState::On && !self.actuator_disabled {
                                 switch_on_ventilation(
                                     &mutex_device_scheduler_ventilation,
                                     &mut actuation_mutex_was_blocked_during_actuation,
@@ -532,7 +533,7 @@ impl Ventilation {
                         // The temperature is above or below (dynamic) control window
                         if measured_water_temperature > self.config.switch_on_temperature {
                             // switch on ventilation if not already on
-                            if ventilation_state != ActuatorState::On && !actuator_disabled {
+                            if ventilation_state != ActuatorState::On && !self.actuator_disabled {
                                 switch_on_ventilation(
                                     &mutex_device_scheduler_ventilation,
                                     &mut actuation_mutex_was_blocked_during_actuation,

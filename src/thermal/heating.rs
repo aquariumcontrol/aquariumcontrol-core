@@ -84,7 +84,7 @@ use crate::sensors::sensor_manager::SensorManagerSignals;
 use crate::sensors::tank_level_switch::TankLevelSwitchSignals;
 use crate::thermal::heating_channels::HeatingChannels;
 use crate::thermal::heating_config::HeatingConfig;
-use crate::thermal::temperature_gradient_monitor::TemperatureGradientMonitor;
+use crate::thermal::temperature_gradient_monitor::TemperatureGradientMonitorTrait;
 use crate::utilities::acknowledge_signal_handler::AcknowledgeSignalHandlerTrait;
 use crate::utilities::channel_content::{ActuatorState, AquariumDevice, InternalCommand};
 use crate::utilities::check_mutex_access_duration::CheckMutexAccessDurationTrait;
@@ -289,11 +289,12 @@ pub struct Heating {
 
     /// Inhibition flag to prevent log flooding for gradient monitoring.
     pub log_inhibition_gradient: bool,
+
+    /// flag indicating that actuator has been disabled due to indication from temperature gradient monitor
+    pub actuator_disabled: bool,
 }
 
-impl ProcessExternalRequestTrait for Heating {}
-
-impl TemperatureGradientMonitor for Heating {
+impl TemperatureGradientMonitorTrait for Heating {
     fn max_time_actuator_effect_monitor(&self) -> u64 {
         self.config.max_time_actuator_effect_monitor
     }
@@ -342,6 +343,7 @@ impl Heating {
             last_stats_update_instant_opt: None,
             last_actuator_on_time: None,
             log_inhibition_gradient: false,
+            actuator_disabled: false,
         }
     }
 
@@ -592,7 +594,6 @@ impl Heating {
         let mut actuation_mutex_was_blocked_during_actuation: bool = false;
         let cycle_time_duration = Duration::from_millis(CYCLE_TIME_HEATING_MILLIS);
         let mut actuator_ineffective: bool;
-        let mut actuator_disabled: bool = false;
 
         let mut heating_stats_opt = match sql_interface_heating
             .get_single_heating_stats_from_database()
@@ -696,6 +697,7 @@ impl Heating {
                     self.lock_error_heating_set_value_read_failure,
                     module_path!()
                 );
+
                 actuator_ineffective = self.temperature_gradient_monitor(
                     &heating_mutexes.mutex_temperature_gradient,
                     heater_state == ActuatorState::On,
@@ -712,7 +714,7 @@ impl Heating {
                         heating_channels,
                     );
                     heater_state = ActuatorState::Off;
-                    actuator_disabled = true;
+                    self.actuator_disabled = true;
                     warn!("[{}]: Disabled heater because temperature gradient monitor indicates ineffectiveness.", module_path!());
                 }
 
@@ -744,7 +746,7 @@ impl Heating {
                                 && !measurement_error
                             {
                                 // switch on the heater if not already on
-                                if heater_state != ActuatorState::On && !actuator_disabled {
+                                if heater_state != ActuatorState::On && !self.actuator_disabled {
                                     switch_on_heater(
                                         &mutex_device_scheduler_heating,
                                         &mut actuation_mutex_was_blocked_during_actuation,
@@ -778,7 +780,7 @@ impl Heating {
                             }
                             if measured_water_temperature < self.config.switch_on_temperature {
                                 // switch on the heater if not already on
-                                if heater_state != ActuatorState::On && !actuator_disabled {
+                                if heater_state != ActuatorState::On && !self.actuator_disabled {
                                     switch_on_heater(
                                         &mutex_device_scheduler_heating,
                                         &mut actuation_mutex_was_blocked_during_actuation,

@@ -14,7 +14,7 @@ use std::sync::{Arc, Mutex};
 use std::time::Instant;
 
 /// A trait to monitor the effect of a thermal actuator on the water temperature gradient.
-pub trait TemperatureGradientMonitor {
+pub trait TemperatureGradientMonitorTrait {
     /// Returns the configured maximum time in seconds for the actuator effect monitor.
     fn max_time_actuator_effect_monitor(&self) -> u64;
 
@@ -114,7 +114,7 @@ mod tests {
         }
     }
 
-    impl TemperatureGradientMonitor for MockMonitor {
+    impl TemperatureGradientMonitorTrait for MockMonitor {
         fn max_time_actuator_effect_monitor(&self) -> u64 {
             self.max_time
         }
