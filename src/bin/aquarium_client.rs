@@ -88,9 +88,11 @@ fn display_usage() {
     println!("   'stop': stop refill control");
     println!("   'start': start refill control");
     println!(" - Domain 'ventilation' processes following commands:");
+    println!("   'reset': reset errors of ventilation control");
     println!("   'stop': stop ventilation control");
     println!("   'start': start ventilation control");
     println!(" - Domain 'heating' processes following commands:");
+    println!("   'reset': reset errors of heating control");
     println!("   'stop': stop ventilation control");
     println!("   'start': start ventilation control");
     println!(" - Domain 'feeder' processes following commands:");
