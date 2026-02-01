@@ -67,9 +67,6 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 //!   a database.
 
 #[cfg(not(test))]
-use log::warn;
-
-#[cfg(not(test))]
 use log::info;
 
 use crate::database::thermal_set_value_updater_trait::ThermalSetValueUpdaterTrait;
@@ -77,6 +74,7 @@ use crate::sensors::sensor_manager::SensorManagerSignals;
 use crate::utilities::channel_content::{ActuatorState, AquariumDevice, InternalCommand};
 use crate::utilities::proc_ext_req::ProcessExternalRequestTrait;
 use crate::utilities::sawtooth_profile::SawToothProfile;
+use log::warn;
 use spin_sleep::SpinSleeper;
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
@@ -486,16 +484,18 @@ impl Ventilation {
                     false, // ventilation expects a negative gradient
                     "Ventilation",
                 );
-                if actuator_ineffective && self.config.switch_off_when_no_effect {
-                    if ventilation_state == ActuatorState::On {
-                        switch_off_ventilation(
-                            &mutex_device_scheduler_ventilation,
-                            &mut actuation_mutex_was_blocked_during_actuation,
-                            ventilation_channels,
-                        );
-                        ventilation_state = ActuatorState::Off;
-                        actuator_disabled = true;
-                    }
+                if actuator_ineffective
+                    && self.config.switch_off_when_no_effect
+                    && ventilation_state == ActuatorState::On
+                {
+                    switch_off_ventilation(
+                        &mutex_device_scheduler_ventilation,
+                        &mut actuation_mutex_was_blocked_during_actuation,
+                        ventilation_channels,
+                    );
+                    ventilation_state = ActuatorState::Off;
+                    actuator_disabled = true;
+                    warn!("[{}]: Disabled ventilation because temperature gradient monitor indicates ineffectiveness.", module_path!());
                 }
 
                 if schedule_check_result && !ventilation_inhibited {

@@ -69,10 +69,7 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 //!   a database.
 
 use log::error;
-
-#[cfg(not(test))]
 use log::warn;
-
 use spin_sleep::SpinSleeper;
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
@@ -705,16 +702,18 @@ impl Heating {
                     true, // heating expects a positive gradient
                     "Heating",
                 );
-                if actuator_ineffective && self.config.switch_off_when_no_effect {
-                    if heater_state == ActuatorState::On {
-                        switch_off_heater(
-                            &mutex_device_scheduler_heating,
-                            &mut actuation_mutex_was_blocked_during_actuation,
-                            heating_channels,
-                        );
-                        heater_state = ActuatorState::Off;
-                        actuator_disabled = true;
-                    }
+                if actuator_ineffective
+                    && self.config.switch_off_when_no_effect
+                    && heater_state == ActuatorState::On
+                {
+                    switch_off_heater(
+                        &mutex_device_scheduler_heating,
+                        &mut actuation_mutex_was_blocked_during_actuation,
+                        heating_channels,
+                    );
+                    heater_state = ActuatorState::Off;
+                    actuator_disabled = true;
+                    warn!("[{}]: Disabled heater because temperature gradient monitor indicates ineffectiveness.", module_path!());
                 }
 
                 if self.config.stop_on_refill_error

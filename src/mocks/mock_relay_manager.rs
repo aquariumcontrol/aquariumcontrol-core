@@ -78,7 +78,10 @@ pub mod tests {
             assert_eq!(self.ventilation_actuation_state, ActuatorState::Undefined);
         }
 
-        pub fn check_terminal_condition_ventilation(&self, final_ventilation_actuation_state: ActuatorState) {
+        pub fn check_terminal_condition_ventilation(
+            &self,
+            final_ventilation_actuation_state: ActuatorState,
+        ) {
             assert_eq!(self.refill_pump_actuation_state, ActuatorState::Undefined);
             assert_eq!(self.skimmer_actuation_state, ActuatorState::Undefined);
             assert_eq!(self.main_pump1_actuation_state, ActuatorState::Undefined);
@@ -103,7 +106,10 @@ pub mod tests {
             );
             assert_eq!(self.feeder_actuation_state, ActuatorState::Undefined);
             assert_eq!(self.heater_actuation_state, ActuatorState::Undefined);
-            assert_eq!(self.ventilation_actuation_state, final_ventilation_actuation_state);
+            assert_eq!(
+                self.ventilation_actuation_state,
+                final_ventilation_actuation_state
+            );
         }
 
         pub fn check_terminal_condition_heating(&self) {
