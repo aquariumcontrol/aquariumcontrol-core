@@ -715,8 +715,6 @@ impl Heating {
                         heater_state = ActuatorState::Off;
                         actuator_disabled = true;
                     }
-                } else {
-                    actuator_disabled = false;
                 }
 
                 if self.config.stop_on_refill_error
@@ -3742,5 +3740,179 @@ pub mod tests {
             heating_stats_opt.is_none(),
             "The stats option should remain None"
         );
+    }
+
+    #[test]
+    pub fn test_heating_gradient_monitoring_disables_actuator() {
+        let sleep_duration_100_millis = Duration::from_millis(100);
+        let spin_sleeper = SpinSleeper::default();
+
+        let (mut config, mut heating, sql_interface, sql_interface_heating_stats) =
+            prepare_heating_tests_mock_midnight_calculator(3600, 28, None);
+        // test case is not writing to database, hence db can be reused.
+
+        // Configure gradient monitoring to be very aggressive
+        config.heating.max_time_actuator_effect_monitor = 2;
+        config.heating.switch_off_when_no_effect = true;
+        heating.config = config.heating;
+
+        // replacement value is used for initializing mutex - needs to start with a low value
+        config.sensor_manager.replacement_value_water_temperature = 20.0;
+
+        let mut channels = Channels::new_for_test();
+
+        // thread for mock schedule check
+        let join_handle_mock_schedule_check = thread::Builder::new()
+            .name("mock_schedule_check".to_string())
+            .spawn(move || {
+                mock_schedule_check(
+                    &mut channels.schedule_check.tx_schedule_check_to_heating,
+                    &mut channels.schedule_check.rx_schedule_check_from_heating,
+                    None,
+                    true,
+                );
+            })
+            .unwrap();
+
+        // Mutex needed for water temperature
+        let mutex_sensor_manager_signals = Arc::new(Mutex::new(SensorManagerSignals::new(
+            &config.sensor_manager,
+        )));
+
+        let mutex_device_scheduler_heating = Arc::new(Mutex::new(0));
+
+        // Mutex for heating status to check assertions
+        let mutex_heating_status = Arc::new(Mutex::new(false));
+        let mutex_heating_status_clone = mutex_heating_status.clone();
+
+        // Mutex for temperature gradient
+        let mutex_temperature_gradient = Arc::new(Mutex::new(0.1)); // Start with heating gradient
+        let mutex_temperature_gradient_clone = mutex_temperature_gradient.clone();
+
+        // thread for mock relay manager
+        let join_handle_mock_relay_manager = thread::Builder::new()
+            .name("mock_relay_manager".to_string())
+            .spawn(move || {
+                let (actuation_events, mock_actuator_states) = mock_relay_manager(
+                    &mut channels.relay_manager.tx_relay_manager_to_heating,
+                    &mut channels.relay_manager.rx_relay_manager_from_heating,
+                );
+                // Expect On, Off
+                assert_eq!(actuation_events.len(), 2);
+                assert_eq!(
+                    actuation_events[0].command,
+                    InternalCommand::SwitchOn(AquariumDevice::Heater)
+                );
+                assert_eq!(
+                    actuation_events[1].command,
+                    InternalCommand::SwitchOff(AquariumDevice::Heater)
+                );
+
+                mock_actuator_states.check_terminal_condition_heating();
+            })
+            .unwrap();
+
+        // thread for controlling test phases
+        let join_handle_test_environment = thread::Builder::new()
+            .name("test_environment".to_string())
+            .spawn(move || {
+                let sleep_duration_phase = Duration::from_secs(5);
+                let spin_sleeper = SpinSleeper::default();
+
+                // Phase 1: High temp, good gradient. Wait 5s.
+                spin_sleeper.sleep(sleep_duration_phase);
+                {
+                    let status = *mutex_heating_status_clone.lock().unwrap();
+                    assert!(status, "Phase 1: Heating should be ON");
+                }
+
+                // Phase 2: Constant temp (gradient indicates that actuator is ineffective).
+                {
+                    let mut gradient = mutex_temperature_gradient_clone.lock().unwrap();
+                    *gradient = 0.0;
+                }
+                // Wait 5s (monitor timeout is 2s)
+                spin_sleeper.sleep(sleep_duration_phase);
+                {
+                    let status = *mutex_heating_status_clone.lock().unwrap();
+                    assert!(
+                        !status,
+                        "Phase 2: Heating should be OFF due to gradient monitor"
+                    );
+                }
+
+                // Terminate
+                let _ = channels
+                    .signal_handler
+                    .tx_signal_handler_to_heating
+                    .send(InternalCommand::Quit);
+                channels
+                    .signal_handler
+                    .rx_signal_handler_from_heating
+                    .recv()
+                    .unwrap();
+                let _ = channels
+                    .signal_handler
+                    .tx_signal_handler_to_heating
+                    .send(InternalCommand::Terminate);
+            })
+            .unwrap();
+
+        spin_sleeper.sleep(sleep_duration_100_millis);
+
+        // thread for the test object
+        let join_handle_test_object = thread::Builder::new()
+            .name("test_object".to_string())
+            .spawn(move || {
+                let mut tx_heating_to_schedule_check_for_test_case_finish =
+                    channels.heating.tx_heating_to_schedule_check.clone();
+                let mut tx_heating_to_relay_manager_for_test_case_finish =
+                    channels.heating.tx_heating_to_relay_manager.clone();
+
+                let mut heating_set_value_updater =
+                    MockSqlInterfaceHeatingSetVals::new(false, None, None, None);
+
+                let mut heating_stats_transfer =
+                    HeatingStatsMockDataTransfer::new(&mut sql_interface.get_connection().unwrap());
+
+                let heating_mutexes = HeatingMutexes {
+                    mutex_sensor_manager_signals,
+                    mutex_tank_level_switch_signals: Arc::new(Mutex::new(TankLevelSwitchSignals {
+                        tank_level_switch_position: true,
+                        tank_level_switch_position_stabilized: true,
+                        tank_level_switch_invalid: false,
+                    })),
+                    mutex_heating_status,
+                    mutex_temperature_gradient,
+                };
+
+                heating.execute(
+                    mutex_device_scheduler_heating.clone(),
+                    &mut channels.heating,
+                    &mut heating_stats_transfer,
+                    &mut heating_set_value_updater,
+                    heating_mutexes,
+                    sql_interface_heating_stats,
+                );
+
+                // send Quit signal to mock threads
+                let _ =
+                    tx_heating_to_schedule_check_for_test_case_finish.send(InternalCommand::Quit);
+                let _ =
+                    tx_heating_to_relay_manager_for_test_case_finish.send(InternalCommand::Quit);
+                println!("* [Heating] checking gradient monitoring succeeded.");
+            })
+            .unwrap();
+
+        join_handle_mock_schedule_check
+            .join()
+            .expect("Mock schedule check failed");
+        join_handle_mock_relay_manager
+            .join()
+            .expect("Mock relay manager failed");
+        join_handle_test_environment
+            .join()
+            .expect("Test environment failed");
+        join_handle_test_object.join().expect("Test object failed");
     }
 }
