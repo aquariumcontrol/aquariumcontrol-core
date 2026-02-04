@@ -156,23 +156,6 @@ execute = true                                          # used for testing purpo
 max_length_refill_monitor_views = 4096                  # maximum number of monitoring entries
 max_length_atlas_scientific_monitor_views = 100        # maximum number of Atlas Scientific monitoring entries
 
-[i2c_interface]
-execute = true                                          # used for testing purposes
-timeout_transaction = 100                               # timeout for transactions in milliseconds
-max_read_attempts = 10                                  # maximum number of read attempts
-
-[dht]
-active = true                                           # allows deactivation of data acquisition
-execute = true                                          # used for testing purposes
-sensor_reset_duration_millis = 500                      # duration to interrupt power supply to sensor in milliseconds
-sensor_startup_duration_millis = 1000                   # duration to wait for sensor after reset in milliseconds
-sensor_pause_duration_millis = 500                      # duration to wait between measurements in milliseconds
-sensor_init_pin_down_duration_micros = 2000             # duration to keep pin down during start signal in microseconds
-sensor_init_pin_up_duration_micros = 30			        # duration to keep pin up during start signal in microseconds 
-sensor_init_input_duration_micros = 0			        # duration for sensor to respond after sending start signal in microseconds
-timeout_duration_micros = 10000				            # maximum permissible duration for the sensor to respond in microseconds
-measurement_interval_millis = 2000                      # interval in milliseconds between two measurements
-
 [sensor_manager]
 use_simulator = true                                    # if true, then do not use real HW
 execute = true                                          # used for testing purposes
@@ -222,6 +205,23 @@ peristaltic_pump1 = 12                                  # GPIO of the peristalti
 peristaltic_pump2 = 13                                  # GPIO of the peristaltic pump #2
 peristaltic_pump3 = 14                                  # GPIO of the peristaltic pump #3
 peristaltic_pump4 = 15                                  # GPIO of the peristaltic pump #4
+
+[dht]
+active = true                                           # allows deactivation of data acquisition
+execute = true                                          # used for testing purposes
+sensor_reset_duration_millis = 500                      # duration to interrupt power supply to sensor in milliseconds
+sensor_startup_duration_millis = 1000                   # duration to wait for sensor after reset in milliseconds
+sensor_pause_duration_millis = 500                      # duration to wait between measurements in milliseconds
+sensor_init_pin_down_duration_micros = 2000             # duration to keep pin down during start signal in microseconds
+sensor_init_pin_up_duration_micros = 30			        # duration to keep pin up during start signal in microseconds 
+sensor_init_input_duration_micros = 0			        # duration for sensor to respond after sending start signal in microseconds
+timeout_duration_micros = 10000				            # maximum permissible duration for the sensor to respond in microseconds
+measurement_interval_millis = 2000                      # interval in milliseconds between two measurements
+
+[i2c_interface]
+execute = true                                          # used for testing purposes
+timeout_transaction = 100                               # timeout for transactions in milliseconds
+max_read_attempts = 10                                  # maximum number of read attempts
 
 [schedule_check]
 active = true                                           # used for testing purposes only

@@ -100,6 +100,22 @@ use_simulator = true                                    # if true, then do not u
 tank_level_switch_position_low_stabilization_count = 5 # number of seconds before stabilized tank level switch turns low
 reverse_gpio_logic = true                               # false: GPIO high is interpreted as level high. true: GPIO low is interpreted as level high
 
+[heating]
+active = true
+execute = true                                          # used for testing purposes
+switch_on_temperature = 24.0                            # temperature, at which the heating shall be switched on 100% of the time
+switch_off_temperature = 25.5                           # temperature, at which the heating shall be switched off 100% of the time
+stop_on_refill_error = true                             # if true, then heating shall be switched off after a configurable time period
+stop_on_refill_error_delay = 6000                       # time in seconds after which the heating shall be switched off in case of refill error
+heater_power = 200                                      # The electrical power consumption of the heater in Watt
+# configuration of saw tooth profile for low-frequency PWM-based control. Calibration of these values is usually not necessary.
+saw_tooth_profile_config = { phase1_length = 60, phase2_length = 10, phase3_length = 60, phase4_length = 10}
+switch_on_when_out_of_schedule = false                  # strategy when schedule check does not allow operation: true=heating will be switched on; false=heating will be switched off
+switch_on_when_external_stop = false                    # strategy when external request for stop has been received
+set_value_check_interval = 300                          # interval in seconds for polling the database
+max_time_actuator_effect_monitor = 1800                 # maximum permissible time in seconds until which the actuator must show some effect
+switch_off_when_no_effect = true                        # if true, then heating is switched off when the gradient monitor indicates that the actuator has no effect
+
 [feed]
 active = true
 execute = true                                          # used for testing purposes
@@ -139,22 +155,6 @@ active = false                                          # allows deactivation of
 execute = true                                          # used for testing purposes
 max_length_refill_monitor_views = 4096                  # maximum number of monitoring entries
 max_length_atlas_scientific_monitor_views = 100        # maximum number of Atlas Scientific monitoring entries
-
-[heating]
-active = true
-execute = true                                          # used for testing purposes
-switch_on_temperature = 24.0                            # temperature, at which the heating shall be switched on 100% of the time
-switch_off_temperature = 25.5                           # temperature, at which the heating shall be switched off 100% of the time
-stop_on_refill_error = true                             # if true, then heating shall be switched off after a configurable time period
-stop_on_refill_error_delay = 6000                       # time in seconds after which the heating shall be switched off in case of refill error
-heater_power = 200                                      # The electrical power consumption of the heater in Watt
-# configuration of saw tooth profile for low-frequency PWM-based control. Calibration of these values is usually not necessary.
-saw_tooth_profile_config = { phase1_length = 60, phase2_length = 10, phase3_length = 60, phase4_length = 10}
-switch_on_when_out_of_schedule = false                  # strategy when schedule check does not allow operation: true=heating will be switched on; false=heating will be switched off
-switch_on_when_external_stop = false                    # strategy when external request for stop has been received
-set_value_check_interval = 300                          # interval in seconds for polling the database
-max_time_actuator_effect_monitor = 1800                 # maximum permissible time in seconds until which the actuator must show some effect
-switch_off_when_no_effect = true                        # if true, then heating is switched off when the gradient monitor indicates that the actuator has no effect
 
 [sensor_manager]
 use_simulator = true                                    # if true, then do not use real HW
