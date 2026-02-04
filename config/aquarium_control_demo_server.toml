@@ -53,7 +53,7 @@ execute = true                                          # used for testing purpo
 
 [data_logger]
 active = true                                                                                   # used for testing purposes
-execute = true                                          # used for testing purposes
+execute = true                                                                                  # used for testing purposes
 use_sql_timestamp = true                                                                        # switch for defining the data source of timestamp
 logging_interval = 60                                                                           # log data every x seconds
 filter_coefficient_water_temperature = { filter_coefficient = 0.5, fallback_initial_value=25.0 }    # filter configuration for the water temperature
@@ -128,7 +128,7 @@ active = true
 execute = true                                          # used for testing purposes
 switch_on_temperature = 27.0                            # temperature, at which the ventilation shall be switched on 100% of the time
 switch_off_temperature = 26.0                           # temperature, at which the ventilation shall be switched off 100% of the time
-switch_on_when_terminating = false           		# behavior when terminating the application
+switch_on_when_terminating = false           		    # behavior when terminating the application
 saw_tooth_profile_config = { phase1_length = 60, phase2_length = 10, phase3_length = 60, phase4_length = 10}
 switch_on_when_out_of_schedule = false                  # strategy when schedule check does not allow operation: true=ventilation will be switched on; false=ventilation will be switched off
 switch_on_when_external_stop = false                    # strategy when external request for stop has been received
@@ -154,7 +154,7 @@ pump_switch_delay_millis = 500                          # waiting period between
 active = false                                          # allows deactivation of monitors
 execute = true                                          # used for testing purposes
 max_length_refill_monitor_views = 4096                  # maximum number of monitoring entries
-max_length_atlas_scientific_monitor_views = 100        # maximum number of Atlas Scientific monitoring entries
+max_length_atlas_scientific_monitor_views = 100         # maximum number of Atlas Scientific monitoring entries
 
 [sensor_manager]
 use_simulator = true                                    # if true, then do not use real HW

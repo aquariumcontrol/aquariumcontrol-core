@@ -53,7 +53,7 @@ port = 35000                                            # port number for commun
 
 [data_logger]
 active = true                                                                                   # used for testing purposes
-execute = true                                          # used for testing purposes
+execute = true                                                                                  # used for testing purposes
 use_sql_timestamp = true                                                                        # switch for defining the data source of timestamp
 logging_interval = 60                                                                           # log data every x seconds
 filter_coefficient_water_temperature = { filter_coefficient = 0.5, fallback_initial_value=25.0 }    # filter configuration for the water temperature
@@ -108,7 +108,7 @@ switch_off_temperature = 25.5                           # temperature, at which 
 stop_on_refill_error = true                             # if true, then heating shall be switched off after a configurable time
 stop_on_refill_error_delay = 6000                       # time in seconds after which the heating shall be switched off in case of refill error
 heater_power = 200                                      # The electrical power consumption of the heater in Watt
-# configuration of saw tooth profile for low-frequency PWM-based control. Calibration of these values is usually not necessary.
+# configuration of saw tooth profile for low-frequency PWM-based control. The calibration of these values is usually not necessary.
 saw_tooth_profile_config = { phase1_length = 60, phase2_length = 10, phase3_length = 60, phase4_length = 10}
 switch_on_when_out_of_schedule = false                  # strategy when schedule check does not allow operation: true=heating will be switched on; false=heating will be switched off
 switch_on_when_external_stop = false                    # strategy when external request for stop has been received
@@ -154,7 +154,7 @@ pump_switch_delay_millis = 500                          # waiting period between
 active = true                                           # allows deactivation of monitors
 execute = true                                          # used for testing purposes
 max_length_refill_monitor_views = 4096                  # maximum number of monitoring entries
-max_length_atlas_scientific_monitor_views = 100        # maximum number of Atlas Scientific monitoring entries
+max_length_atlas_scientific_monitor_views = 100         # maximum number of Atlas Scientific monitoring entries
 
 [sensor_manager]
 use_simulator = true                                    # if true, then do not use real HW
