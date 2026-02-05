@@ -45,3 +45,9 @@ pub mod temperature_gradient_channels;
 
 // Monitor for the temperature gradient
 pub mod temperature_gradient_monitor;
+
+// Container for all mutexes used by heating
+pub mod heating_mutexes;
+
+// Container for all mutexes used by ventilation
+pub mod ventilation_mutexes;

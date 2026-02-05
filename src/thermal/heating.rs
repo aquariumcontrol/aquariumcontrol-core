@@ -80,8 +80,6 @@ use nix::unistd::gettid;
 use crate::database::sql_interface_error::SqlInterfaceError;
 use crate::database::sql_interface_heating_stats::{HeatingStatsEntry, SqlInterfaceHeatingStats};
 use crate::database::thermal_set_value_updater_trait::ThermalSetValueUpdaterTrait;
-use crate::sensors::sensor_manager::SensorManagerSignals;
-use crate::sensors::tank_level_switch::TankLevelSwitchSignals;
 use crate::thermal::heating_channels::HeatingChannels;
 use crate::thermal::heating_config::HeatingConfig;
 use crate::thermal::temperature_gradient_monitor::TemperatureGradientMonitorTrait;
@@ -96,6 +94,7 @@ use crate::utilities::wait_for_termination::WaitForTerminationTrait;
 use crate::{manage_cycle_time_thermal, perform_schedule_check, update_thermal_set_values};
 #[cfg(not(test))]
 use log::info;
+use crate::thermal::heating_mutexes::HeatingMutexes;
 
 const CYCLE_TIME_HEATING_MILLIS: u64 = 500;
 
@@ -209,24 +208,6 @@ fn switch_off_heater(
         mutex_blocked_during_actuation,
         heating_channels,
     );
-}
-
-/// Contains `Arc<Mutex>`-wrapped shared data points accessed by the heating control.
-///
-/// These mutexes provide thread-safe access to various sensor readings and
-/// device states that are used by the heating control.
-pub struct HeatingMutexes {
-    /// Mutex for signals from sensor manager
-    pub mutex_sensor_manager_signals: Arc<Mutex<SensorManagerSignals>>,
-
-    /// Mutex for the tank level switch signals
-    pub mutex_tank_level_switch_signals: Arc<Mutex<TankLevelSwitchSignals>>,
-
-    /// Mutex for the heater status
-    pub mutex_heating_status: Arc<Mutex<bool>>,
-
-    /// Mutex for the temperature gradient
-    pub mutex_temperature_gradient: Arc<Mutex<f64>>,
 }
 
 #[cfg_attr(doc, aquamarine::aquamarine)]
@@ -957,7 +938,8 @@ pub mod tests {
     use crate::mocks::mock_schedule_check::tests::mock_schedule_check;
     use crate::sensors::sensor_manager::SensorManagerSignals;
     use crate::sensors::tank_level_switch::TankLevelSwitchSignals;
-    use crate::thermal::heating::{Heating, HeatingMutexes, CYCLE_TIME_HEATING_MILLIS};
+    use crate::thermal::heating::{Heating, CYCLE_TIME_HEATING_MILLIS};
+    use crate::thermal::heating_mutexes::HeatingMutexes;
     use crate::utilities::channel_content::{ActuatorState, AquariumDevice, InternalCommand};
     use crate::utilities::config::{read_config_file_with_test_database, ConfigData};
     use crate::utilities::sawtooth_profile::SawToothProfileConfig;

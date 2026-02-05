@@ -70,7 +70,6 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 use log::info;
 
 use crate::database::thermal_set_value_updater_trait::ThermalSetValueUpdaterTrait;
-use crate::sensors::sensor_manager::SensorManagerSignals;
 use crate::utilities::channel_content::{ActuatorState, AquariumDevice, InternalCommand};
 use crate::utilities::proc_ext_req::ProcessExternalRequestTrait;
 use crate::utilities::sawtooth_profile::SawToothProfile;
@@ -89,6 +88,7 @@ use crate::utilities::wait_for_termination::WaitForTerminationTrait;
 use crate::{manage_cycle_time_thermal, perform_schedule_check, update_thermal_set_values};
 #[cfg(all(not(test), target_os = "linux"))]
 use nix::unistd::gettid;
+use crate::thermal::ventilation_mutexes::VentilationMutexes;
 
 const CYCLE_TIME_VENTILATION_MILLIS: u64 = 500;
 
@@ -179,21 +179,6 @@ fn switch_off_ventilation(
         mutex_blocked_during_actuation,
         ventilation_channels,
     );
-}
-
-/// Contains `Arc<Mutex>`-wrapped shared data points accessed by the ventilation control.
-///
-/// These mutexes provide thread-safe access to various sensor readings and
-/// device states that are used by the heating control.
-pub struct VentilationMutexes {
-    /// Mutex for signals from sensor manager
-    pub mutex_sensor_manager_signals: Arc<Mutex<SensorManagerSignals>>,
-
-    /// Mutex for the heater status
-    pub mutex_ventilation_status: Arc<Mutex<bool>>,
-
-    /// Mutex for the temperature gradient
-    pub mutex_temperature_gradient: Arc<Mutex<f64>>,
 }
 
 #[cfg_attr(doc, aquamarine::aquamarine)]
@@ -656,7 +641,8 @@ pub mod tests {
     use crate::mocks::mock_schedule_check::tests::mock_schedule_check;
     use crate::mocks::mock_ventilation::tests::MockSqlInterfaceVentilationSetVals;
     use crate::sensors::sensor_manager::SensorManagerSignals;
-    use crate::thermal::ventilation::{Ventilation, VentilationMutexes};
+    use crate::thermal::ventilation::Ventilation;
+    use crate::thermal::ventilation_mutexes::VentilationMutexes;
     use crate::utilities::channel_content::{ActuatorState, AquariumDevice, InternalCommand};
     use crate::utilities::config::{read_config_file, ConfigData};
     use crate::utilities::sawtooth_profile::SawToothProfileConfig;

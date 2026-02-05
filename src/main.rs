@@ -73,9 +73,11 @@ use aquarium_control::sensors::sensor_manager::{
 use aquarium_control::sensors::tank_level_switch::{TankLevelSwitch, TankLevelSwitchSignals};
 use aquarium_control::simulator::tcp_communication::TcpCommunication;
 use aquarium_control::thermal::distinct_interval_check::distinct_thermal_control_interval_check;
-use aquarium_control::thermal::heating::{Heating, HeatingMutexes};
+use aquarium_control::thermal::heating::Heating;
+use aquarium_control::thermal::heating_mutexes::HeatingMutexes;
 use aquarium_control::thermal::temperature_gradient::TemperatureGradient;
-use aquarium_control::thermal::ventilation::{Ventilation, VentilationMutexes};
+use aquarium_control::thermal::ventilation::Ventilation;
+use aquarium_control::thermal::ventilation_mutexes::VentilationMutexes;
 use aquarium_control::utilities::config::read_config_file;
 use aquarium_control::utilities::logger::{log_error_chain, setup_logger};
 use aquarium_control::utilities::logger_config::LoggerConfig;
