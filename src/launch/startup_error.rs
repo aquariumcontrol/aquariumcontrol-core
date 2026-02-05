@@ -57,7 +57,7 @@ use crate::database::sql_interface_error::SqlInterfaceError;
 use crate::dispatch::messaging_error::MessagingError;
 use crate::mineral::balling_error::BallingError;
 use crate::recorder::data_logger_error::DataLoggerError;
-use crate::relays::actuate_controllino::ActuateControllinoError;
+use crate::relays::actuate_controllino_error::ActuateControllinoError;
 #[cfg(all(feature = "target_hw", target_os = "linux"))]
 use crate::relays::relay_error::RelayError;
 #[cfg(all(feature = "target_hw", target_os = "linux"))]

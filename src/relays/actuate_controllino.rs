@@ -72,7 +72,7 @@ use serialport::{ClearBuffer, SerialPort};
 use spin_sleep::SpinSleeper;
 use std::collections::HashSet;
 use std::time::Duration;
-use thiserror::Error;
+use crate::relays::actuate_controllino_error::ActuateControllinoError;
 
 const CONTROLLINO_MAX_RELAY_ID: u8 = 64;
 const CONTROLLINO_MIN_RELAY_ID: u8 = 1;
@@ -148,54 +148,6 @@ fn check_controllino_checksums(data: &[u8]) -> bool {
         );
     }
     ok_result
-}
-
-/// Contains error definitions for ActuateControllino
-#[derive(Error, Debug)]
-pub enum ActuateControllinoError {
-    /// Relay ID is outside the allowed range.
-    #[error("Relay ID for Controllino ({0}) is outside the allowed range ({1} ... {2}).")]
-    RelayIdOutsideRange(u8, u8, u8),
-
-    /// Found a duplicate value in definition of relay IDs.
-    #[error("Found a duplicate value ({0}) in definition of relay IDs.")]
-    RelayIdDuplicate(u8),
-
-    /// Port name for communication with Controllino is empty.
-    #[error("Port name for communication with Controllino is empty.")]
-    EmptyPortName,
-
-    /// Failed to open serial port for Controllino.
-    #[error("Failed to open serial port for Controllino.")]
-    SerialPortOpenFailed {
-        #[source]
-        source: serialport::Error,
-    },
-
-    /// Failed to set timeout for serial port communication.
-    #[error(
-        "Could not set timeout of {timeout_millis} milliseconds for serial port communication."
-    )]
-    SetTimeoutFailed {
-        timeout_millis: u64,
-
-        #[source]
-        source: serialport::Error,
-    },
-
-    /// Failed to clear DTR of serial port communication.
-    #[error("Failed to clear DTR of serial port communication.")]
-    ClearDTRFailed {
-        #[source]
-        source: serialport::Error,
-    },
-
-    /// Failed to clear buffer of serial port communication.
-    #[error("Failed to clear buffer of serial port communication.")]
-    ClearBufferFailed {
-        #[source]
-        source: serialport::Error,
-    },
 }
 
 /// Contains relay configuration and trait implementation for actuation using Controllino hardware

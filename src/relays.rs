@@ -39,3 +39,6 @@ pub mod relay_manager_config;
 
 // Configuration of ActuateControllino
 pub mod actuate_controllino_config;
+
+// Error definitions for ActuateControllino
+pub(crate) mod actuate_controllino_error;
