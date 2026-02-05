@@ -97,7 +97,7 @@ additional_refill_volume = 0.1                          # additional refill volu
 active = true                                           # used for testing purposes
 execute = true                                          # used for testing purposes
 use_simulator = false                                   # if true, then do not use real HW
-tank_level_switch_position_low_stabilization_count = 5 # number of seconds before stabilized tank level switch turns low
+tank_level_switch_position_low_stabilization_count = 5  # number of seconds before stabilized tank level switch turns low
 reverse_gpio_logic = true                               # false: GPIO high is interpreted as level high. true: GPIO low is interpreted as level high
 
 [heating]
@@ -154,7 +154,7 @@ pump_switch_delay_millis = 500                          # waiting period between
 active = false                                          # allows deactivation of monitors
 execute = true                                          # used for testing purposes
 max_length_refill_monitor_views = 4096                  # maximum number of monitoring entries
-max_length_atlas_scientific_monitor_views = 100        # maximum number of Atlas Scientific monitoring entries
+max_length_atlas_scientific_monitor_views = 100         # maximum number of Atlas Scientific monitoring entries
 
 [sensor_manager]
 use_simulator = false                                   # if true, then do not use real HW
