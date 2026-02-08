@@ -50,9 +50,6 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 //! - **`HeatingMutexes` Struct**: A container holding `Arc<Mutex<...>>` handles to all
 //!   the *input* data sources (from `SensorManager` and `TankLevelSwitch`).
 //!
-//! - **`HeatingStatsDataTransferTrait`**: A trait used for dependency injection, allowing
-//!   the database-writing logic to be mocked during testing.
-//!
 //! ## Design and Architecture
 //!
 //! - **Decoupled and Concurrent**: The `Heating` thread runs independently, communicating
@@ -77,14 +74,14 @@ use std::time::{Duration, Instant};
 #[cfg(all(target_os = "linux", not(test)))]
 use nix::unistd::gettid;
 
-use crate::database::sql_interface_error::SqlInterfaceError;
 use crate::database::sql_interface_heating_stats::{HeatingStatsEntry, SqlInterfaceHeatingStats};
 use crate::database::thermal_set_value_updater_trait::ThermalSetValueUpdaterTrait;
 use crate::thermal::heating_channels::HeatingChannels;
 use crate::thermal::heating_config::HeatingConfig;
 use crate::thermal::temperature_gradient_monitor::TemperatureGradientMonitorTrait;
+use crate::thermal::heating_actuation::{switch_off_heater, switch_on_heater};
 use crate::utilities::acknowledge_signal_handler::AcknowledgeSignalHandlerTrait;
-use crate::utilities::channel_content::{ActuatorState, AquariumDevice, InternalCommand};
+use crate::utilities::channel_content::ActuatorState;
 use crate::utilities::check_mutex_access_duration::CheckMutexAccessDurationTrait;
 use crate::utilities::database_ping_trait::DatabasePingTrait;
 use crate::utilities::logger::log_error_chain;
@@ -95,6 +92,7 @@ use crate::{manage_cycle_time_thermal, perform_schedule_check, update_thermal_se
 #[cfg(not(test))]
 use log::info;
 use crate::thermal::heating_mutexes::HeatingMutexes;
+pub(crate) use crate::thermal::heating_stats_data_transfer_trait::HeatingStatsDataTransferTrait;
 
 const CYCLE_TIME_HEATING_MILLIS: u64 = 500;
 
@@ -102,113 +100,6 @@ const TIME_INCREMENT_HEATING_SECS: f32 = CYCLE_TIME_HEATING_MILLIS as f32 / 1000
 
 /// allow max. 10 milliseconds for mutex to be blocked by any other thread
 const MAX_MUTEX_ACCESS_DURATION_MILLIS: u64 = 10;
-
-/// Trait for the execution of data transfer to SQL database after midnight has arrived.
-/// This trait allows running the main control with a mock implementation for testing.
-pub trait HeatingStatsDataTransferTrait {
-    /// Transfers a completed daily heating statistics entry to the database.
-    ///
-    /// This function is called once per day, typically just after midnight, to persist
-    /// the aggregated heating statistics (energy usage, average temperatures) for the
-    /// previous day.
-    ///
-    /// # Arguments
-    /// * `data` - The `HeatingStatsEntry` struct containing the statistics for the day.
-    /// * `sql_interface_heating` - A mutable reference to the `SqlInterfaceHeatingStats` instance,
-    ///   used for database interaction.
-    ///
-    /// # Returns
-    /// An empty `Result` (`Ok(())`) on a successful database transaction.
-    ///
-    /// # Errors
-    /// Returns an `SqlInterfaceError` if the database operation fails (e.g., connection
-    /// issue, SQL error during insertion/update).
-    fn transfer_heating_stats(
-        &mut self,
-        data: HeatingStatsEntry,
-        sql_interface_heating: &mut SqlInterfaceHeatingStats,
-    ) -> Result<(), SqlInterfaceError>;
-}
-
-/// Sends a command to the relay manager to actuate the heater and waits for a response.
-///
-/// This private helper function encapsulates the logic for sending a command
-/// (either `SwitchOn` or `SwitchOff`) to the relay manager. It handles channel
-/// communication, error logging, and updates the shared actuation mutex.
-///
-/// # Arguments
-/// * `command` - The `InternalCommand` to send (`SwitchOn` or `SwitchOff`).
-/// * `mutex_device_scheduler_heating` - A reference to the shared actuation mutex.
-/// * `mutex_blocked_during_actuation` - A mutable flag to track if the actuation mutex was blocked.
-/// * `heating_channels` - A mutable reference to the struct containing the channels.
-fn actuate_heater(
-    command: InternalCommand,
-    mutex_device_scheduler_heating: &Arc<Mutex<i32>>,
-    mutex_blocked_during_actuation: &mut bool,
-    heating_channels: &mut HeatingChannels,
-) {
-    // reduce the probability of wrong warning
-    *mutex_blocked_during_actuation |= mutex_device_scheduler_heating.try_lock().is_err();
-
-    // avoid electrical overloads through parallel device actuation
-    let mut mutex_data = mutex_device_scheduler_heating.lock().unwrap();
-
-    // Use map_err for more concise error handling on the send operation.
-    if let Err(e) = heating_channels.send_to_relay_manager(command.clone()) {
-        let error_message = format!("Channel communication to relay manager for {command} failed.");
-        log_error_chain(module_path!(), &error_message, e);
-    } else {
-        // If send was successful, wait for the response.
-        if let Err(e) = heating_channels.receive_from_relay_manager() {
-            let error_message =
-                format!("Receiving answer from relay manager for {command} failed.");
-            log_error_chain(module_path!(), &error_message, e);
-        }
-    }
-    *mutex_data = mutex_data.saturating_add(1);
-}
-
-/// Commands the relay manager to switch on the heater.
-///
-/// This function is a specific wrapper around `actuate_heater` that sends the `SwitchOn` command.
-///
-/// # Arguments
-/// * `mutex_device_scheduler_heating` - A reference to the shared actuation mutex.
-/// * `mutex_blocked_during_actuation` - A mutable flag to track if the actuation mutex was blocked.
-/// * `heating_channels` - A mutable reference to the struct containing the channels.
-fn switch_on_heater(
-    mutex_device_scheduler_heating: &Arc<Mutex<i32>>,
-    mutex_blocked_during_actuation: &mut bool,
-    heating_channels: &mut HeatingChannels,
-) {
-    actuate_heater(
-        InternalCommand::SwitchOn(AquariumDevice::Heater),
-        mutex_device_scheduler_heating,
-        mutex_blocked_during_actuation,
-        heating_channels,
-    );
-}
-
-/// Commands the relay manager to switch off the heater.
-///
-/// This function is a specific wrapper around `actuate_heater` that sends the `SwitchOff` command.
-///
-/// # Arguments
-/// * `mutex_device_scheduler_heating` - A reference to the shared actuation mutex.
-/// * `mutex_blocked_during_actuation` - A mutable flag to track if the actuation mutex was blocked.
-/// * `heating_channels` - A mutable reference to the struct containing the channels.
-fn switch_off_heater(
-    mutex_device_scheduler_heating: &Arc<Mutex<i32>>,
-    mutex_blocked_during_actuation: &mut bool,
-    heating_channels: &mut HeatingChannels,
-) {
-    actuate_heater(
-        InternalCommand::SwitchOff(AquariumDevice::Heater),
-        mutex_device_scheduler_heating,
-        mutex_blocked_during_actuation,
-        heating_channels,
-    );
-}
 
 #[cfg_attr(doc, aquamarine::aquamarine)]
 /// Contains the configuration and the implementation for the heating control.

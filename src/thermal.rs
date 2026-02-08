@@ -51,3 +51,9 @@ pub mod heating_mutexes;
 
 // Container for all mutexes used by ventilation
 pub mod ventilation_mutexes;
+
+// Trait for update of statistical data in database
+pub mod heating_stats_data_transfer_trait;
+
+// Low-level functionality for actuation of heater
+pub mod heating_actuation;
