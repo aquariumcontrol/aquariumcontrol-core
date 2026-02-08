@@ -78,7 +78,10 @@ pub struct DataLoggerConfig {
     /// output file name (in ramdisk) for the current value of tank level switch position stabilized
     pub output_file_name_tank_level_switch_position_stabilized: String,
 
-    /// output file name (in ramdisk) for the current value of ventilation
+    /// output file name (in ramdisk) for the current value of ventilation controller state
+    pub output_file_name_ventilation_controller_state: String,
+
+    /// output file name (in ramdisk) for the current value of ventilation actuator state
     pub output_file_name_ventilation_is_on: String,
 
     /// output file name (in ramdisk) for the ventilation actuator effectiveness status
@@ -87,7 +90,10 @@ pub struct DataLoggerConfig {
     /// output file name (in ramdisk) for the ventilation actuator disabled status
     pub output_file_name_ventilation_actuator_disabled: String,
 
-    /// output file name (in ramdisk) for the current value of heating
+    /// output file name (in ramdisk) for the current value of heating controller state
+    pub output_file_name_heating_controller_state: String,
+
+    /// output file name (in ramdisk) for the current value of heating actuator state
     pub output_file_name_heating_is_on: String,
 
     /// output file name (in ramdisk) for the heating actuator effectiveness status

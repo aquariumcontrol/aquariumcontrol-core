@@ -81,6 +81,8 @@ output_file_name_humidity = "/var/local/aquarium-ctrl/ambhum"                   
 output_file_name_temperature_gradient = "/var/local/aquarium-ctrl/tempgrad"                     # output file name (in ramdisk) for the temperature gradient value"
 output_file_name_refill_in_progress = "/var/local/aquarium-ctrl/refillpump"                     # output file name (in ramdisk) for the current refill pump status
 output_file_name_refill_controller_state = "/var/local/aquarium-ctrl/refillctrl"                # output file name (in ramdisk) for the refill controller state
+output_file_name_heating_controller_state = "/var/local/aquarium-ctrl/htngctrl"                 # output file name (in ramdisk) for the heating controller state
+output_file_name_ventilation_controller_state = "/var/local/aquarium-ctrl/ventctrl"             # output file name (in ramdisk) for the ventilation controller state
 initial_sleep_time_millis = 2000                                                                # sleep time in milliseconds before starting the data recording
 
 [refill]

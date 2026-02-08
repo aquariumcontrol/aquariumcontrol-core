@@ -203,7 +203,13 @@ pub struct DataLogger {
     lock_error_mutex_signal_manager: bool,
 
     /// an inhibition flag to avoid flooding the log file with repeated messages about failure to write the refill controller state to disk
-    lock_error_output_state_refill_controller_state: bool,
+    lock_error_output_description_refill_controller_state: bool,
+
+    /// an inhibition flag to avoid flooding the log file with repeated messages about failure to write the heating controller state to disk
+    lock_error_output_description_heating_controller_state: bool,
+
+    /// an inhibition flag to avoid flooding the log file with repeated messages about failure to write the ventilation controller state to disk
+    lock_error_output_description_ventilation_controller_state: bool,
 }
 
 impl DataLogger {
@@ -289,7 +295,6 @@ impl DataLogger {
                     "ambient temperature",
                 ),
                 (&config.output_file_name_humidity, "humidity"),
-                (&config.output_file_name_humidity, "humidity"),
                 (
                     &config.output_file_name_temperature_gradient,
                     "temperature gradient",
@@ -301,6 +306,14 @@ impl DataLogger {
                 (
                     &config.output_file_name_refill_controller_state,
                     "refill controller state",
+                ),
+                (
+                    &config.output_file_name_heating_controller_state,
+                    "heating controller state",
+                ),
+                (
+                    &config.output_file_name_ventilation_controller_state,
+                    "ventilation controller state",
                 ),
             ];
 
@@ -393,8 +406,10 @@ impl DataLogger {
             last_ping_instant: Instant::now(),
             database_ping_interval,
             lock_error_mutex_signal_manager: false,
-            lock_error_output_state_refill_controller_state: false,
+            lock_error_output_description_refill_controller_state: false,
+            lock_error_output_description_heating_controller_state: false,
             lock_error_output_state_ventilation_actuator_disabled: false,
+            lock_error_output_description_ventilation_controller_state: false,
         })
     }
 
@@ -625,10 +640,10 @@ impl DataLogger {
                         &self.config.output_file_name_refill_in_progress,
                         self.lock_error_output_state_refill_in_progress,
                     );
-                    self.lock_error_output_state_refill_controller_state = self.output_description(
+                    self.lock_error_output_description_refill_controller_state = self.output_description(
                         refill_status.description(), // specific description
                         &self.config.output_file_name_refill_controller_state,
-                        self.lock_error_output_state_refill_controller_state,
+                        self.lock_error_output_description_refill_controller_state,
                     );
                     *refill_status_live = refill_status.refill_in_progress_live;
                     *refill_status_for_database = refill_status.refill_in_progress_for_database;
@@ -648,6 +663,11 @@ impl DataLogger {
             // internal scope to limit lifetime of mutex lock
             *heater_status = match data_logger_mutexes.mutex_heating_status.lock() {
                 Ok(heating_status) => {
+                    self.lock_error_output_description_heating_controller_state = self.output_description(
+                        heating_status.description(),
+                        &self.config.output_file_name_heating_controller_state,
+                        self.lock_error_output_description_heating_controller_state,
+                    );
                     self.lock_error_output_state_heating_is_on = self.output_state(
                         heating_status.actuator_switched_on,
                         "ON",
@@ -685,6 +705,11 @@ impl DataLogger {
             // internal scope to limit lifetime of mutex lock
             *ventilation_status = match data_logger_mutexes.mutex_ventilation_status.lock() {
                 Ok(ventilation_status) => {
+                    self.lock_error_output_description_ventilation_controller_state = self.output_description(
+                        ventilation_status.description(),
+                        &self.config.output_file_name_ventilation_controller_state,
+                        self.lock_error_output_description_ventilation_controller_state,
+                    );
                     self.lock_error_output_state_ventilation_is_on = self.output_state(
                         ventilation_status.actuator_switched_on,
                         "ON",
@@ -1169,7 +1194,6 @@ impl DataLogger {
         // Initialize reference for cycle time measurement
         let mut start_time = Instant::now();
 
-        println!("Entering loop");
         loop {
             if self.config.active {
                 self.update_signals(
@@ -1464,9 +1488,11 @@ pub mod tests {
             output_file_name_tank_level_switch_position: "".to_string(),
             output_file_name_tank_level_switch_invalid: "".to_string(),
             output_file_name_tank_level_switch_position_stabilized: "".to_string(),
+            output_file_name_ventilation_controller_state: "".to_string(),
             output_file_name_ventilation_is_on: "".to_string(),
             output_file_name_ventilation_actuator_ineffective: "".to_string(),
             output_file_name_ventilation_actuator_disabled: "".to_string(),
+            output_file_name_heating_controller_state: "".to_string(),
             output_file_name_heating_is_on: "".to_string(),
             output_file_name_heating_actuator_ineffective: "".to_string(),
             output_file_name_heating_actuator_disabled: "".to_string(),
@@ -1593,6 +1619,8 @@ pub mod tests {
         config.output_file_name_refill_in_progress += unique_suffix;
         config.output_file_name_refill_controller_state += unique_suffix;
         config.output_file_name_temperature_gradient += unique_suffix;
+        config.output_file_name_heating_controller_state += unique_suffix;
+        config.output_file_name_ventilation_controller_state += unique_suffix;
 
         let output_file_name_water_temperature = config.output_file_name_water_temperature.clone();
         let output_file_name_heating_is_on = config.output_file_name_heating_is_on.clone();
@@ -1606,6 +1634,10 @@ pub mod tests {
             config.output_file_name_ventilation_actuator_disabled.clone();
         let output_file_name_temperature_gradient =
             config.output_file_name_temperature_gradient.clone();
+        let output_file_name_heating_controller_state =
+            config.output_file_name_heating_controller_state.clone();
+        let output_file_name_ventilation_controller_state =
+            config.output_file_name_ventilation_controller_state.clone();
 
         let sql_interface = SqlInterface::new(global_config.sql_interface).unwrap();
         let sql_interface_data = SqlInterfaceData::new(sql_interface.conn, 0).unwrap();
@@ -1676,5 +1708,21 @@ pub mod tests {
 
         let content = fs::read_to_string(output_file_name_temperature_gradient).unwrap();
         assert_eq!(content, "0.123");
+
+        let mut heating_status = ThermalControlStatus::default();
+        heating_status.actuator_switched_on = true;
+        heating_status.actuator_ineffective = false;
+        heating_status.actuator_disabled = false;
+
+        let content = fs::read_to_string(output_file_name_heating_controller_state).unwrap();
+        assert_eq!(content, heating_status.description());
+
+        let mut ventilation_status = ThermalControlStatus::default();
+        ventilation_status.actuator_switched_on = false;
+        ventilation_status.actuator_ineffective = true;
+        ventilation_status.actuator_disabled = true;
+
+        let content = fs::read_to_string(output_file_name_ventilation_controller_state).unwrap();
+        assert_eq!(content, ventilation_status.description());
     }
 }
