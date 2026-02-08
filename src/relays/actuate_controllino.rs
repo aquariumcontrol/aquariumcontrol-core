@@ -63,6 +63,7 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 //!   thread from blocking indefinitely if the hardware becomes unresponsive.
 
 use crate::relays::actuate_controllino_config::ActuateControllinoConfig;
+use crate::relays::actuate_controllino_error::ActuateControllinoError;
 use crate::relays::controllino_message::{ControllinoMessage, ControllinoMessageContent};
 use crate::relays::relay_error::RelayError;
 use crate::relays::relay_manager::RelayActuationTrait;
@@ -72,7 +73,6 @@ use serialport::{ClearBuffer, SerialPort};
 use spin_sleep::SpinSleeper;
 use std::collections::HashSet;
 use std::time::Duration;
-use crate::relays::actuate_controllino_error::ActuateControllinoError;
 
 const CONTROLLINO_MAX_RELAY_ID: u8 = 64;
 const CONTROLLINO_MIN_RELAY_ID: u8 = 1;

@@ -81,6 +81,7 @@ use std::time::{Duration, Instant};
 use crate::thermal::temperature_gradient_monitor::TemperatureGradientMonitorTrait;
 use crate::thermal::ventilation_channels::VentilationChannels;
 use crate::thermal::ventilation_config::VentilationConfig;
+use crate::thermal::ventilation_mutexes::VentilationMutexes;
 use crate::utilities::acknowledge_signal_handler::AcknowledgeSignalHandlerTrait;
 use crate::utilities::check_mutex_access_duration::CheckMutexAccessDurationTrait;
 use crate::utilities::logger::log_error_chain;
@@ -88,7 +89,6 @@ use crate::utilities::wait_for_termination::WaitForTerminationTrait;
 use crate::{manage_cycle_time_thermal, perform_schedule_check, update_thermal_set_values};
 #[cfg(all(not(test), target_os = "linux"))]
 use nix::unistd::gettid;
-use crate::thermal::ventilation_mutexes::VentilationMutexes;
 
 const CYCLE_TIME_VENTILATION_MILLIS: u64 = 500;
 
@@ -566,9 +566,9 @@ impl Ventilation {
             // Write signal to mutex
             {
                 match ventilation_mutexes.mutex_ventilation_status.lock() {
-                    Ok(mut c) => {
+                    Ok(mut ventilation_status) => {
                         instant_after_locking_mutex = Instant::now();
-                        *c = match ventilation_state {
+                        ventilation_status.actuator_switched_on = match ventilation_state {
                             ActuatorState::On => true,
                             ActuatorState::Off => false,
                             _ => false,
@@ -641,6 +641,7 @@ pub mod tests {
     use crate::mocks::mock_schedule_check::tests::mock_schedule_check;
     use crate::mocks::mock_ventilation::tests::MockSqlInterfaceVentilationSetVals;
     use crate::sensors::sensor_manager::SensorManagerSignals;
+    use crate::thermal::thermal_control_status::ThermalControlStatus;
     use crate::thermal::ventilation::Ventilation;
     use crate::thermal::ventilation_mutexes::VentilationMutexes;
     use crate::utilities::channel_content::{ActuatorState, AquariumDevice, InternalCommand};
@@ -702,7 +703,7 @@ pub mod tests {
     fn create_test_environment(
         duration_seconds: u64,
         mut signal_handler_channels: SignalHandlerChannels,
-        mutex_ventilation_status_opt: Option<Arc<Mutex<bool>>>,
+        mutex_ventilation_status_opt: Option<Arc<Mutex<ThermalControlStatus>>>,
     ) -> thread::JoinHandle<()> {
         thread::Builder::new()
             .name("test_environment".to_string())
@@ -814,7 +815,7 @@ pub mod tests {
 
                 let ventilation_mutexes = VentilationMutexes {
                     mutex_sensor_manager_signals,
-                    mutex_ventilation_status: Arc::new(Mutex::new(false)),
+                    mutex_ventilation_status: Arc::new(Mutex::new(ThermalControlStatus::default())),
                     mutex_temperature_gradient: Arc::new(Mutex::new(0.0)),
                 };
 
@@ -965,7 +966,7 @@ pub mod tests {
 
                 let ventilation_mutexes = VentilationMutexes {
                     mutex_sensor_manager_signals,
-                    mutex_ventilation_status: Arc::new(Mutex::new(false)),
+                    mutex_ventilation_status: Arc::new(Mutex::new(ThermalControlStatus::default())),
                     mutex_temperature_gradient: Arc::new(Mutex::new(0.0)),
                 };
 
@@ -1183,7 +1184,7 @@ pub mod tests {
 
                 let ventilation_mutexes = VentilationMutexes {
                     mutex_sensor_manager_signals,
-                    mutex_ventilation_status: Arc::new(Mutex::new(false)),
+                    mutex_ventilation_status: Arc::new(Mutex::new(ThermalControlStatus::default())),
                     mutex_temperature_gradient: Arc::new(Mutex::new(0.0)),
                 };
 
@@ -1374,7 +1375,7 @@ pub mod tests {
 
                 let ventilation_mutexes = VentilationMutexes {
                     mutex_sensor_manager_signals,
-                    mutex_ventilation_status: Arc::new(Mutex::new(false)),
+                    mutex_ventilation_status: Arc::new(Mutex::new(ThermalControlStatus::default())),
                     mutex_temperature_gradient: Arc::new(Mutex::new(0.0)),
                 };
 
@@ -1566,7 +1567,7 @@ pub mod tests {
 
                 let ventilation_mutexes = VentilationMutexes {
                     mutex_sensor_manager_signals,
-                    mutex_ventilation_status: Arc::new(Mutex::new(false)),
+                    mutex_ventilation_status: Arc::new(Mutex::new(ThermalControlStatus::default())),
                     mutex_temperature_gradient: Arc::new(Mutex::new(0.0)),
                 };
 
@@ -1665,7 +1666,7 @@ pub mod tests {
 
                 let ventilation_mutexes = VentilationMutexes {
                     mutex_sensor_manager_signals,
-                    mutex_ventilation_status: Arc::new(Mutex::new(false)),
+                    mutex_ventilation_status: Arc::new(Mutex::new(ThermalControlStatus::default())),
                     mutex_temperature_gradient: Arc::new(Mutex::new(0.0)),
                 };
 
@@ -1901,7 +1902,7 @@ pub mod tests {
 
                 let ventilation_mutexes = VentilationMutexes {
                     mutex_sensor_manager_signals,
-                    mutex_ventilation_status: Arc::new(Mutex::new(false)),
+                    mutex_ventilation_status: Arc::new(Mutex::new(ThermalControlStatus::default())),
                     mutex_temperature_gradient: Arc::new(Mutex::new(0.0)),
                 };
 
@@ -2031,7 +2032,7 @@ pub mod tests {
 
                 let ventilation_mutexes = VentilationMutexes {
                     mutex_sensor_manager_signals,
-                    mutex_ventilation_status: Arc::new(Mutex::new(false)),
+                    mutex_ventilation_status: Arc::new(Mutex::new(ThermalControlStatus::default())),
                     mutex_temperature_gradient: Arc::new(Mutex::new(0.0)),
                 };
 
@@ -2102,7 +2103,7 @@ pub mod tests {
 
         let mut channels = Channels::new_for_test();
 
-        let mutex_ventilation_status = Arc::new(Mutex::new(false));
+        let mutex_ventilation_status = Arc::new(Mutex::new(ThermalControlStatus::default()));
         let mutex_ventilation_status_clone_for_test_environment = mutex_ventilation_status.clone();
 
         // thread for mock schedule check
@@ -2232,7 +2233,7 @@ pub mod tests {
         let mutex_device_scheduler_ventilation = Arc::new(Mutex::new(0));
 
         // Mutex for ventilation status to check assertions
-        let mutex_ventilation_status = Arc::new(Mutex::new(false));
+        let mutex_ventilation_status = Arc::new(Mutex::new(ThermalControlStatus::default()));
         let mutex_ventilation_status_clone = mutex_ventilation_status.clone();
 
         // Mutex for temperature gradient
@@ -2272,8 +2273,11 @@ pub mod tests {
                 // Phase 1: High temp, good gradient. Wait 5s.
                 spin_sleeper.sleep(sleep_duration_phase);
                 {
-                    let status = *mutex_ventilation_status_clone.lock().unwrap();
-                    assert!(status, "Phase 1: Ventilation should be ON");
+                    let status = mutex_ventilation_status_clone.lock().unwrap();
+                    assert!(
+                        status.actuator_switched_on,
+                        "Phase 1: Ventilation should be ON"
+                    );
                 }
 
                 // Phase 2: Constant temp (gradient indicates that actuator is ineffective).
@@ -2284,9 +2288,9 @@ pub mod tests {
                 // Wait 5s (monitor timeout is 2s)
                 spin_sleeper.sleep(sleep_duration_phase);
                 {
-                    let status = *mutex_ventilation_status_clone.lock().unwrap();
+                    let status = mutex_ventilation_status_clone.lock().unwrap();
                     assert!(
-                        !status,
+                        !status.actuator_switched_on,
                         "Phase 2: Ventilation should be OFF due to gradient monitor"
                     );
                 }
@@ -2397,7 +2401,7 @@ pub mod tests {
         let mutex_device_scheduler_ventilation = Arc::new(Mutex::new(0));
 
         // Mutex for ventilation status to check assertions
-        let mutex_ventilation_status = Arc::new(Mutex::new(false));
+        let mutex_ventilation_status = Arc::new(Mutex::new(ThermalControlStatus::default()));
         let mutex_ventilation_status_clone = mutex_ventilation_status.clone();
 
         // Mutex for temperature gradient
@@ -2437,8 +2441,11 @@ pub mod tests {
                 // Phase 1: Disabled state. Wait 5s.
                 spin_sleeper.sleep(sleep_duration_phase);
                 {
-                    let status = *mutex_ventilation_status_clone.lock().unwrap();
-                    assert!(!status, "Phase 1: Ventilation should be OFF (disabled)");
+                    let status = mutex_ventilation_status_clone.lock().unwrap();
+                    assert!(
+                        !status.actuator_switched_on,
+                        "Phase 1: Ventilation should be OFF (disabled)"
+                    );
                 }
 
                 // Send ResetAllErrors command
@@ -2451,8 +2458,11 @@ pub mod tests {
                 // Phase 2: Enabled state. Wait 5s.
                 spin_sleeper.sleep(sleep_duration_phase);
                 {
-                    let status = *mutex_ventilation_status_clone.lock().unwrap();
-                    assert!(status, "Phase 2: Ventilation should be ON (enabled)");
+                    let status = mutex_ventilation_status_clone.lock().unwrap();
+                    assert!(
+                        status.actuator_switched_on,
+                        "Phase 2: Ventilation should be ON (enabled)"
+                    );
                 }
 
                 // Terminate

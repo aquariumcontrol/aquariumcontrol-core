@@ -21,10 +21,6 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 //!   configuration, a large number of stateful boolean "lock" flags for log
 //!   suppression, and the IIR filters for signal smoothing.
 //!
-//! - **`DataLoggerMutexes`**: A container for all the `Arc<Mutex>`-protected data
-//!   points that this thread reads from. This struct represents the "inputs" to the
-//!   data logger.
-//!
 //! - **`execute()` Method**: The main thread loop. In each cycle, it performs a
 //!   sequence of operations:
 //!   1.  **Data Acquisition**: Locks the various mutexes in `DataLoggerMutexes` to
@@ -91,6 +87,7 @@ use crate::recorder::data_injection::DataInjectionTrait;
 use crate::recorder::data_logger_channels::DataLoggerChannels;
 use crate::recorder::data_logger_config::DataLoggerConfig;
 use crate::recorder::data_logger_error::DataLoggerError;
+use crate::recorder::data_logger_mutexes::DataLoggerMutexes;
 use crate::recorder::recorder_data_frame::RecorderDataFrame;
 use crate::sensors::sensor_manager::SensorManagerSignals;
 use crate::sensors::tank_level_switch::TankLevelSwitchSignals;
@@ -100,30 +97,8 @@ use crate::utilities::database_ping_trait::DatabasePingTrait;
 use crate::utilities::iir_filter::IIRFilter;
 use crate::utilities::proc_ext_req::ProcessExternalRequestTrait;
 use crate::utilities::wait_for_termination::WaitForTerminationTrait;
-use crate::water::refill_status::RefillStatus;
 
 const MILLIS_PER_SEC: u64 = 1000;
-
-/// Contains `Arc<Mutex>`-wrapped shared data points accessed by the data logger.
-///
-/// These mutexes provide thread-safe access to various sensor readings and
-/// device states that are collected by the data logger for recording and filtering.
-pub struct DataLoggerMutexes {
-    /// Mutex for sensor manager signals
-    pub mutex_sensor_manager_signals: Arc<Mutex<SensorManagerSignals>>,
-
-    /// Mutex for tank level switch signals
-    pub mutex_tank_level_switch_signals: Arc<Mutex<TankLevelSwitchSignals>>,
-
-    /// Mutex for heater status
-    pub mutex_heating_status: Arc<Mutex<bool>>,
-
-    /// Mutex for ventilation status
-    pub mutex_ventilation_status: Arc<Mutex<bool>>,
-
-    /// Mutex for refill status
-    pub mutex_refill_status: Arc<Mutex<RefillStatus>>,
-}
 
 #[cfg_attr(doc, aquamarine::aquamarine)]
 /// Contains the configuration and the implementation for regular data logging to SQL database
@@ -624,15 +599,15 @@ impl DataLogger {
         {
             // internal scope to limit lifetime of mutex lock
             *heater_status = match data_logger_mutexes.mutex_heating_status.lock() {
-                Ok(c) => {
+                Ok(heating_status) => {
                     self.lock_error_output_state_heating_is_on = self.output_state(
-                        *c,
+                        heating_status.actuator_switched_on,
                         "ON",
                         "OFF",
                         &self.config.output_file_name_heating_is_on,
                         self.lock_error_output_state_heating_is_on,
                     );
-                    *c
+                    heating_status.actuator_switched_on
                 }
                 Err(_) => {
                     self.lock_error_output_state_heating_is_on = true;
@@ -645,15 +620,15 @@ impl DataLogger {
         {
             // internal scope to limit lifetime of mutex lock
             *ventilation_status = match data_logger_mutexes.mutex_ventilation_status.lock() {
-                Ok(c) => {
+                Ok(ventilation_status) => {
                     self.lock_error_output_state_ventilation_is_on = self.output_state(
-                        *c,
+                        ventilation_status.actuator_switched_on,
                         "ON",
                         "OFF",
                         &self.config.output_file_name_ventilation_is_on,
                         self.lock_error_output_state_ventilation_is_on,
                     );
-                    *c
+                    ventilation_status.actuator_switched_on
                 }
                 Err(_) => {
                     self.lock_error_output_state_ventilation_is_on = true;
@@ -1250,10 +1225,12 @@ pub mod tests {
     use crate::database::sql_interface_data::SqlInterfaceData;
     use crate::launch::channels::Channels;
     use crate::mocks::mock_data_injection::tests::MockInjectorWithQuit;
+    use crate::thermal::thermal_control_status::ThermalControlStatus;
     use crate::utilities::channel_content::InternalCommand;
     use crate::utilities::config::read_config_file;
     use crate::utilities::iir_filter::IIRFilterConfig;
     use crate::utilities::signal_handler::SignalHandlerChannels;
+    use crate::water::refill_status::RefillStatus;
     use assert_float_eq::assert_float_absolute_eq;
     use std::io::Read;
 
@@ -1269,6 +1246,9 @@ pub mod tests {
     ) {
         let data_logger = DataLogger::new(config, Duration::from_secs(60)).unwrap();
 
+        let mut heating_status = ThermalControlStatus::default();
+        heating_status.actuator_switched_on = true;
+
         let mutexes = DataLoggerMutexes {
             mutex_sensor_manager_signals: Arc::new(Mutex::new(SensorManagerSignals {
                 water_temperature: 25.5,
@@ -1283,8 +1263,8 @@ pub mod tests {
                 tank_level_switch_position_stabilized: true,
                 tank_level_switch_invalid: false,
             })),
-            mutex_heating_status: Arc::new(Mutex::new(true)),
-            mutex_ventilation_status: Arc::new(Mutex::new(false)),
+            mutex_heating_status: Arc::new(Mutex::new(heating_status)),
+            mutex_ventilation_status: Arc::new(Mutex::new(ThermalControlStatus::default())),
             mutex_refill_status: Arc::new(Mutex::new(RefillStatus {
                 refill_in_progress_live: false,
                 refill_in_progress_for_database: false,

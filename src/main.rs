@@ -49,7 +49,8 @@ use aquarium_control::mineral::balling::Balling;
 use aquarium_control::mineral::mineral_injection::MineralInjection;
 use aquarium_control::permission::schedule_check::ScheduleCheck;
 use aquarium_control::recorder::data_injection::DataInjection;
-use aquarium_control::recorder::data_logger::{DataLogger, DataLoggerMutexes};
+use aquarium_control::recorder::data_logger::DataLogger;
+use aquarium_control::recorder::data_logger_mutexes::DataLoggerMutexes;
 use aquarium_control::relays::actuate_controllino::ActuateControllino;
 #[cfg(all(target_os = "linux", feature = "target_hw"))]
 use aquarium_control::relays::actuate_gpio::{ActuateGpio, ActuateGpioConfig};
@@ -87,6 +88,7 @@ use aquarium_control::utilities::publish_pid::PublishPid;
 use aquarium_control::utilities::signal_handler;
 
 use aquarium_control::launch::argument_parser::check_argument_for_valid_config_file_name;
+use aquarium_control::thermal::thermal_control_status::ThermalControlStatus;
 #[cfg(all(feature = "target_hw", target_os = "linux"))]
 use aquarium_control::utilities::channel_content::InternalCommand;
 use aquarium_control::utilities::signal_handler::handle_signals;
@@ -708,11 +710,11 @@ fn run() -> Result<(), StartupError> {
     let mutex_tank_level_switch_signals_clone_for_refill = mutex_tank_level_switch_signals.clone();
 
     // Mutex for heating
-    let mutex_heating_status = Arc::new(Mutex::new(false));
+    let mutex_heating_status = Arc::new(Mutex::new(ThermalControlStatus::default()));
     let mutex_heating_status_clone_for_data_logger = mutex_heating_status.clone();
 
     // Mutex for ventilation
-    let mutex_ventilation_status = Arc::new(Mutex::new(false));
+    let mutex_ventilation_status = Arc::new(Mutex::new(ThermalControlStatus::default()));
     let mutex_ventilation_status_clone_for_data_logger = mutex_ventilation_status.clone();
 
     // Mutex for refill

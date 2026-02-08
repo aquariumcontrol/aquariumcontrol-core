@@ -57,3 +57,6 @@ pub mod heating_stats_data_transfer_trait;
 
 // Low-level functionality for actuation of heater
 pub mod heating_actuation;
+
+// Container for communication from either Heating or Ventilation to DataLogger
+pub mod thermal_control_status;

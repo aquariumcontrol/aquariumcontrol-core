@@ -24,3 +24,6 @@ pub mod data_logger_config;
 
 // Container for errors produced by DataLogger
 pub mod data_logger_error;
+
+// Container for mutexes
+pub mod data_logger_mutexes;

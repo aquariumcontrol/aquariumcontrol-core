@@ -76,10 +76,12 @@ use nix::unistd::gettid;
 
 use crate::database::sql_interface_heating_stats::{HeatingStatsEntry, SqlInterfaceHeatingStats};
 use crate::database::thermal_set_value_updater_trait::ThermalSetValueUpdaterTrait;
+use crate::thermal::heating_actuation::{switch_off_heater, switch_on_heater};
 use crate::thermal::heating_channels::HeatingChannels;
 use crate::thermal::heating_config::HeatingConfig;
+use crate::thermal::heating_mutexes::HeatingMutexes;
+pub(crate) use crate::thermal::heating_stats_data_transfer_trait::HeatingStatsDataTransferTrait;
 use crate::thermal::temperature_gradient_monitor::TemperatureGradientMonitorTrait;
-use crate::thermal::heating_actuation::{switch_off_heater, switch_on_heater};
 use crate::utilities::acknowledge_signal_handler::AcknowledgeSignalHandlerTrait;
 use crate::utilities::channel_content::ActuatorState;
 use crate::utilities::check_mutex_access_duration::CheckMutexAccessDurationTrait;
@@ -91,8 +93,6 @@ use crate::utilities::wait_for_termination::WaitForTerminationTrait;
 use crate::{manage_cycle_time_thermal, perform_schedule_check, update_thermal_set_values};
 #[cfg(not(test))]
 use log::info;
-use crate::thermal::heating_mutexes::HeatingMutexes;
-pub(crate) use crate::thermal::heating_stats_data_transfer_trait::HeatingStatsDataTransferTrait;
 
 const CYCLE_TIME_HEATING_MILLIS: u64 = 500;
 
@@ -743,9 +743,9 @@ impl Heating {
             // Write signal to mutex
             {
                 match heating_mutexes.mutex_heating_status.lock() {
-                    Ok(mut c) => {
+                    Ok(mut heating_control_status) => {
                         instant_after_locking_mutex = Instant::now();
-                        *c = match heater_state {
+                        heating_control_status.actuator_switched_on = match heater_state {
                             ActuatorState::On => true,
                             ActuatorState::Off => false,
                             _ => false,
@@ -847,6 +847,7 @@ pub mod tests {
     use std::time::{Duration, Instant};
 
     use crate::database::sql_query_strings::SQL_TABLE_HEATING_STATS;
+    use crate::thermal::thermal_control_status::ThermalControlStatus;
 
     // Prepares a `Heating` control instance with a mock midnight calculator and a clean test database.
     //
@@ -1033,7 +1034,7 @@ pub mod tests {
                         &config.sensor_manager,
                     ))),
                     mutex_tank_level_switch_signals,
-                    mutex_heating_status: Arc::new(Mutex::new(false)),
+                    mutex_heating_status: Arc::new(Mutex::new(ThermalControlStatus::default())),
                     mutex_temperature_gradient: Arc::new(Mutex::new(0.0)),
                 };
 
@@ -1176,7 +1177,7 @@ pub mod tests {
                         &config.sensor_manager,
                     ))),
                     mutex_tank_level_switch_signals,
-                    mutex_heating_status: Arc::new(Mutex::new(false)),
+                    mutex_heating_status: Arc::new(Mutex::new(ThermalControlStatus::default())),
                     mutex_temperature_gradient: Arc::new(Mutex::new(0.0)),
                 };
 
@@ -1411,7 +1412,7 @@ pub mod tests {
                         &config.sensor_manager,
                     ))),
                     mutex_tank_level_switch_signals,
-                    mutex_heating_status: Arc::new(Mutex::new(false)),
+                    mutex_heating_status: Arc::new(Mutex::new(ThermalControlStatus::default())),
                     mutex_temperature_gradient: Arc::new(Mutex::new(0.0)),
                 };
 
@@ -1623,7 +1624,7 @@ pub mod tests {
                         &config.sensor_manager,
                     ))),
                     mutex_tank_level_switch_signals,
-                    mutex_heating_status: Arc::new(Mutex::new(false)),
+                    mutex_heating_status: Arc::new(Mutex::new(ThermalControlStatus::default())),
                     mutex_temperature_gradient: Arc::new(Mutex::new(0.0)),
                 };
 
@@ -1837,7 +1838,7 @@ pub mod tests {
                         &config.sensor_manager,
                     ))),
                     mutex_tank_level_switch_signals,
-                    mutex_heating_status: Arc::new(Mutex::new(false)),
+                    mutex_heating_status: Arc::new(Mutex::new(ThermalControlStatus::default())),
                     mutex_temperature_gradient: Arc::new(Mutex::new(0.0)),
                 };
 
@@ -1973,7 +1974,7 @@ pub mod tests {
                 let heating_mutexes = HeatingMutexes {
                     mutex_sensor_manager_signals: Arc::new(Mutex::new(SensorManagerSignals::new(&config.sensor_manager))),
                     mutex_tank_level_switch_signals,
-                    mutex_heating_status: Arc::new(Mutex::new(false)),
+                    mutex_heating_status: Arc::new(Mutex::new(ThermalControlStatus::default())),
                     mutex_temperature_gradient: Arc::new(Mutex::new(0.0)),
                 };
 
@@ -2116,7 +2117,7 @@ pub mod tests {
                 let heating_mutexes = HeatingMutexes {
                     mutex_sensor_manager_signals: Arc::new(Mutex::new(SensorManagerSignals::new(&config.sensor_manager))),
                     mutex_tank_level_switch_signals,
-                    mutex_heating_status: Arc::new(Mutex::new(false)),
+                    mutex_heating_status: Arc::new(Mutex::new(ThermalControlStatus::default())),
                     mutex_temperature_gradient: Arc::new(Mutex::new(0.0)),
                 };
 
@@ -2343,7 +2344,7 @@ pub mod tests {
                 let heating_mutexes = HeatingMutexes {
                     mutex_sensor_manager_signals: Arc::new(Mutex::new(SensorManagerSignals::new(&config.sensor_manager))),
                     mutex_tank_level_switch_signals,
-                    mutex_heating_status: Arc::new(Mutex::new(false)),
+                    mutex_heating_status: Arc::new(Mutex::new(ThermalControlStatus::default())),
                     mutex_temperature_gradient: Arc::new(Mutex::new(0.0)),
                 };
 
@@ -2562,7 +2563,7 @@ pub mod tests {
                         &config.sensor_manager,
                     ))),
                     mutex_tank_level_switch_signals,
-                    mutex_heating_status: Arc::new(Mutex::new(false)),
+                    mutex_heating_status: Arc::new(Mutex::new(ThermalControlStatus::default())),
                     mutex_temperature_gradient: Arc::new(Mutex::new(0.0)),
                 };
 
@@ -2701,7 +2702,7 @@ pub mod tests {
                         &config.sensor_manager,
                     ))),
                     mutex_tank_level_switch_signals,
-                    mutex_heating_status: Arc::new(Mutex::new(false)),
+                    mutex_heating_status: Arc::new(Mutex::new(ThermalControlStatus::default())),
                     mutex_temperature_gradient: Arc::new(Mutex::new(0.0)),
                 };
 
@@ -2931,7 +2932,7 @@ pub mod tests {
                         &config.sensor_manager,
                     ))),
                     mutex_tank_level_switch_signals,
-                    mutex_heating_status: Arc::new(Mutex::new(false)),
+                    mutex_heating_status: Arc::new(Mutex::new(ThermalControlStatus::default())),
                     mutex_temperature_gradient: Arc::new(Mutex::new(0.0)),
                 };
 
@@ -3085,7 +3086,7 @@ pub mod tests {
                         &config.sensor_manager,
                     ))),
                     mutex_tank_level_switch_signals,
-                    mutex_heating_status: Arc::new(Mutex::new(false)),
+                    mutex_heating_status: Arc::new(Mutex::new(ThermalControlStatus::default())),
                     mutex_temperature_gradient: Arc::new(Mutex::new(0.0)),
                 };
 
@@ -3159,7 +3160,7 @@ pub mod tests {
             .unwrap();
 
         let mutex_device_scheduler_heating = Arc::new(Mutex::new(0));
-        let mutex_heating_status = Arc::new(Mutex::new(false));
+        let mutex_heating_status = Arc::new(Mutex::new(ThermalControlStatus::default()));
         let mutex_heating_status_clone_for_test_environment = mutex_heating_status.clone();
 
         // thread for mock relay manager - includes assertions
@@ -3656,7 +3657,7 @@ pub mod tests {
         let mutex_device_scheduler_heating = Arc::new(Mutex::new(0));
 
         // Mutex for heating status to check assertions
-        let mutex_heating_status = Arc::new(Mutex::new(false));
+        let mutex_heating_status = Arc::new(Mutex::new(ThermalControlStatus::default()));
         let mutex_heating_status_clone = mutex_heating_status.clone();
 
         // Mutex for temperature gradient
@@ -3696,8 +3697,8 @@ pub mod tests {
                 // Phase 1: High temp, good gradient. Wait 5s.
                 spin_sleeper.sleep(sleep_duration_phase);
                 {
-                    let status = *mutex_heating_status_clone.lock().unwrap();
-                    assert!(status, "Phase 1: Heating should be ON");
+                    let status = mutex_heating_status_clone.lock().unwrap();
+                    assert!(status.actuator_switched_on, "Phase 1: Heating should be ON");
                 }
 
                 // Phase 2: Constant temp (gradient indicates that actuator is ineffective).
@@ -3708,9 +3709,9 @@ pub mod tests {
                 // Wait 5s (monitor timeout is 2s)
                 spin_sleeper.sleep(sleep_duration_phase);
                 {
-                    let status = *mutex_heating_status_clone.lock().unwrap();
+                    let status = mutex_heating_status_clone.lock().unwrap();
                     assert!(
-                        !status,
+                        !status.actuator_switched_on,
                         "Phase 2: Heating should be OFF due to gradient monitor"
                     );
                 }
@@ -3828,7 +3829,7 @@ pub mod tests {
         let mutex_device_scheduler_heating = Arc::new(Mutex::new(0));
 
         // Mutex for heating status to check assertions
-        let mutex_heating_status = Arc::new(Mutex::new(false));
+        let mutex_heating_status = Arc::new(Mutex::new(ThermalControlStatus::default()));
         let mutex_heating_status_clone = mutex_heating_status.clone();
 
         // Mutex for temperature gradient
@@ -3868,8 +3869,11 @@ pub mod tests {
                 // Phase 1: Disabled state. Wait 5s.
                 spin_sleeper.sleep(sleep_duration_phase);
                 {
-                    let status = *mutex_heating_status_clone.lock().unwrap();
-                    assert!(!status, "Phase 1: Heating should be OFF (disabled)");
+                    let status = mutex_heating_status_clone.lock().unwrap();
+                    assert!(
+                        !status.actuator_switched_on,
+                        "Phase 1: Heating should be OFF (disabled)"
+                    );
                 }
 
                 // Send ResetAllErrors command
@@ -3882,8 +3886,11 @@ pub mod tests {
                 // Phase 2: Enabled state. Wait 5s.
                 spin_sleeper.sleep(sleep_duration_phase);
                 {
-                    let status = *mutex_heating_status_clone.lock().unwrap();
-                    assert!(status, "Phase 2: Heating should be ON (enabled)");
+                    let status = mutex_heating_status_clone.lock().unwrap();
+                    assert!(
+                        status.actuator_switched_on,
+                        "Phase 2: Heating should be ON (enabled)"
+                    );
                 }
 
                 // Terminate
