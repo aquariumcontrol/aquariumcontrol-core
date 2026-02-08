@@ -124,11 +124,29 @@ pub struct DataLogger {
     /// an inhibition flag to avoid flooding the log file with repeated messages about failure to write refill in progress to disk
     lock_error_output_state_refill_in_progress: bool,
 
+    /// an inhibition flag to avoid flooding the log file with repeated messages about failure to lock heating status mutex
+    lock_error_output_state_heating_status: bool,
+
     /// an inhibition flag to avoid flooding the log file with repeated messages about failure to write heating is on to disk
     lock_error_output_state_heating_is_on: bool,
 
+    /// an inhibition flag to avoid flooding the log file with repeated messages about failure to write heating actuator effectiveness status to disk
+    lock_error_output_state_heating_actuator_ineffective: bool,
+
+    /// an inhibition flag to avoid flooding the log file with repeated messages about failure to write heating actuator disabled status to disk
+    lock_error_output_state_heating_actuator_disabled: bool,
+
+    /// an inhibition flag to avoid flooding the log file with repeated messages about failure to lock ventilation status mutex
+    lock_error_output_state_ventilation_status: bool,
+
     /// an inhibition flag to avoid flooding the log file with repeated messages about failure to write ventilation is on to disk
     lock_error_output_state_ventilation_is_on: bool,
+
+    /// an inhibition flag to avoid flooding the log file with repeated messages about failure to write ventilation actuator effectiveness status to disk
+    lock_error_output_state_ventilation_actuator_ineffective: bool,
+
+    /// an inhibition flag to avoid flooding the log file with repeated messages about failure to write ventilation actuator disabled status to disk
+    lock_error_output_state_ventilation_actuator_disabled: bool,
 
     /// an inhibition flag to avoid flooding the log file with repeated messages about failure to write water temperature to disk
     lock_error_output_signal_water_temperature: bool,
@@ -162,6 +180,9 @@ pub struct DataLogger {
 
     /// an inhibition flag to avoid flooding the log file with repeated messages about failure to write conductivity filtered to disk
     lock_error_output_signal_conductivity_filtered: bool,
+
+    /// an inhibition flag to avoid flooding the log file with repeated messages about failure to write temperature gradient to disk
+    lock_error_output_signal_temperature_gradient: bool,
 
     /// an inhibition flag to avoid flooding the log file with repeated messages about failure to write timestamp to disk
     lock_error_output_timestamp: bool,
@@ -246,13 +267,33 @@ impl DataLogger {
                     &config.output_file_name_ventilation_is_on,
                     "ventilation status",
                 ),
+                (
+                    &config.output_file_name_ventilation_actuator_ineffective,
+                    "ventilation actuator ineffective",
+                ),
+                (
+                    &config.output_file_name_ventilation_actuator_disabled,
+                    "ventilation actuator disabled",
+                ),
                 (&config.output_file_name_heating_is_on, "heating status"),
+                (
+                    &config.output_file_name_heating_actuator_ineffective,
+                    "heating actuator ineffective",
+                ),
+                (
+                    &config.output_file_name_heating_actuator_disabled,
+                    "heating actuator disabled",
+                ),
                 (
                     &config.output_file_name_ambient_temperature,
                     "ambient temperature",
                 ),
                 (&config.output_file_name_humidity, "humidity"),
                 (&config.output_file_name_humidity, "humidity"),
+                (
+                    &config.output_file_name_temperature_gradient,
+                    "temperature gradient",
+                ),
                 (
                     &config.output_file_name_refill_in_progress,
                     "refill in progress",
@@ -328,8 +369,13 @@ impl DataLogger {
             lock_error_get_timestamp: false,
             lock_error_output_signal_water_temperature: false,
             lock_error_output_state_refill_in_progress: false,
+            lock_error_output_state_heating_status: false,
             lock_error_output_state_heating_is_on: false,
+            lock_error_output_state_heating_actuator_ineffective: false,
+            lock_error_output_state_heating_actuator_disabled: false,
+            lock_error_output_state_ventilation_status: false,
             lock_error_output_state_ventilation_is_on: false,
+            lock_error_output_state_ventilation_actuator_ineffective: false,
             lock_error_output_signal_pH: false,
             lock_error_output_signal_conductivity: false,
             lock_error_output_signal_ambient_temperature: false,
@@ -340,6 +386,7 @@ impl DataLogger {
             lock_error_output_signal_water_temperature_filtered: false,
             lock_error_output_signal_pH_filtered: false,
             lock_error_output_signal_conductivity_filtered: false,
+            lock_error_output_signal_temperature_gradient: false,
             lock_error_output_timestamp: false,
             lock_warn_inapplicable_command_signal_handler: false,
             lock_error_channel_receive_termination: false,
@@ -347,6 +394,7 @@ impl DataLogger {
             database_ping_interval,
             lock_error_mutex_signal_manager: false,
             lock_error_output_state_refill_controller_state: false,
+            lock_error_output_state_ventilation_actuator_disabled: false,
         })
     }
 
@@ -607,11 +655,27 @@ impl DataLogger {
                         &self.config.output_file_name_heating_is_on,
                         self.lock_error_output_state_heating_is_on,
                     );
+                    self.lock_error_output_state_heating_actuator_ineffective = self.output_state(
+                        heating_status.actuator_ineffective,
+                        "TRUE",
+                        "FALSE",
+                        &self.config.output_file_name_heating_actuator_ineffective,
+                        self.lock_error_output_state_heating_actuator_ineffective,
+                    );
+                    self.lock_error_output_state_heating_actuator_disabled = self.output_state(
+                        heating_status.actuator_disabled,
+                        "TRUE",
+                        "FALSE",
+                        &self.config.output_file_name_heating_actuator_disabled,
+                        self.lock_error_output_state_heating_actuator_disabled,
+                    );
                     heating_status.actuator_switched_on
                 }
                 Err(_) => {
-                    self.lock_error_output_state_heating_is_on = true;
-                    error!(target: module_path!(), "error locking mutex for heating status");
+                    if !self.lock_error_output_state_heating_status {
+                        error!(target: module_path!(), "error locking mutex for heating status");
+                        self.lock_error_output_state_heating_status = true;
+                    }
                     false
                 }
             };
@@ -628,14 +692,65 @@ impl DataLogger {
                         &self.config.output_file_name_ventilation_is_on,
                         self.lock_error_output_state_ventilation_is_on,
                     );
+                    self.lock_error_output_state_ventilation_actuator_ineffective = self
+                        .output_state(
+                            ventilation_status.actuator_ineffective,
+                            "TRUE",
+                            "FALSE",
+                            &self
+                                .config
+                                .output_file_name_ventilation_actuator_ineffective,
+                            self.lock_error_output_state_ventilation_actuator_ineffective,
+                        );
+                    self.lock_error_output_state_ventilation_actuator_disabled = self.output_state(
+                        ventilation_status.actuator_disabled,
+                        "TRUE",
+                        "FALSE",
+                        &self.config.output_file_name_ventilation_actuator_disabled,
+                        self.lock_error_output_state_ventilation_actuator_disabled,
+                    );
                     ventilation_status.actuator_switched_on
                 }
                 Err(_) => {
-                    self.lock_error_output_state_ventilation_is_on = true;
-                    error!(target: module_path!(), "error locking mutex for ventilation status");
+                    if !self.lock_error_output_state_ventilation_status {
+                        self.lock_error_output_state_ventilation_status = true;
+                        error!(target: module_path!(), "error locking mutex for ventilation status");
+                    }
                     false
                 }
             };
+        }
+    }
+
+    /// Retrieves the current temperature gradient from the shared mutex and outputs it to a file.
+    ///
+    /// This private helper function locks the `mutex_temperature_gradient` to get the latest
+    /// calculated gradient value. It then calls `output_signal` to write this value to the
+    /// configured output file on disk.
+    ///
+    /// If the mutex lock fails or the file write fails, an error is logged, and an internal
+    /// flag is set to suppress further error messages.
+    ///
+    /// # Arguments
+    /// * `mutex_temperature_gradient` - An `Arc<Mutex<f64>>` holding the latest temperature gradient value.
+    fn update_temperature_gradient(&mut self, mutex_temperature_gradient: &Arc<Mutex<f64>>) {
+        if !self.lock_error_output_signal_temperature_gradient {
+            match mutex_temperature_gradient.lock() {
+                Ok(temperature_gradient) => {
+                    self.lock_error_output_signal_temperature_gradient = self.output_signal(
+                        *temperature_gradient as f32,
+                        AquariumSignal::TemperatureGradient,
+                        &self.config.output_file_name_temperature_gradient,
+                        false,
+                    );
+                }
+                Err(e) => {
+                    if !self.lock_error_output_signal_temperature_gradient {
+                        self.lock_error_output_signal_temperature_gradient = true;
+                        error!(target: module_path!(), "error locking mutex for temperature gradient: {e:?}");
+                    }
+                }
+            }
         }
     }
 
@@ -1011,6 +1126,8 @@ impl DataLogger {
             &mut ambient_humidity,
         );
 
+        self.update_temperature_gradient(&data_logger_mutexes.mutex_temperature_gradient);
+
         let mut filter_water_temperature = IIRFilter::new(
             &self.config.filter_coefficient_water_temperature,
             water_temperature,
@@ -1063,6 +1180,8 @@ impl DataLogger {
                     &mut ventilation_is_on,
                     &data_logger_mutexes,
                 );
+
+                self.update_temperature_gradient(&data_logger_mutexes.mutex_temperature_gradient);
 
                 // update signals by accessing mutex for Atlas Scientific signals
                 self.update_sensor_manager_signals(
@@ -1265,12 +1384,8 @@ pub mod tests {
             })),
             mutex_heating_status: Arc::new(Mutex::new(heating_status)),
             mutex_ventilation_status: Arc::new(Mutex::new(ThermalControlStatus::default())),
-            mutex_refill_status: Arc::new(Mutex::new(RefillStatus {
-                refill_in_progress_live: false,
-                refill_in_progress_for_database: false,
-                critical_error_present: false,
-                external_inhibition_request: false,
-            })),
+            mutex_refill_status: Arc::new(Mutex::new(RefillStatus::default())),
+            mutex_temperature_gradient: Arc::new(Mutex::new(0.0)),
         };
 
         let channels = Channels::new_for_test();
@@ -1343,9 +1458,14 @@ pub mod tests {
             output_file_name_tank_level_switch_invalid: "".to_string(),
             output_file_name_tank_level_switch_position_stabilized: "".to_string(),
             output_file_name_ventilation_is_on: "".to_string(),
+            output_file_name_ventilation_actuator_ineffective: "".to_string(),
+            output_file_name_ventilation_actuator_disabled: "".to_string(),
             output_file_name_heating_is_on: "".to_string(),
+            output_file_name_heating_actuator_ineffective: "".to_string(),
+            output_file_name_heating_actuator_disabled: "".to_string(),
             output_file_name_ambient_temperature: "".to_string(),
             output_file_name_humidity: "".to_string(),
+            output_file_name_temperature_gradient: "".to_string(),
             output_file_name_refill_in_progress: "".to_string(),
             output_file_name_refill_controller_state: "".to_string(),
             initial_sleep_time_millis: 0,
@@ -1456,11 +1576,16 @@ pub mod tests {
         config.output_file_name_tank_level_switch_invalid += unique_suffix;
         config.output_file_name_tank_level_switch_position_stabilized += unique_suffix;
         config.output_file_name_ventilation_is_on += unique_suffix;
+        config.output_file_name_ventilation_actuator_ineffective += unique_suffix;
+        config.output_file_name_ventilation_actuator_disabled += unique_suffix;
         config.output_file_name_heating_is_on += unique_suffix;
+        config.output_file_name_heating_actuator_ineffective += unique_suffix;
+        config.output_file_name_heating_actuator_disabled += unique_suffix;
         config.output_file_name_ambient_temperature += unique_suffix;
         config.output_file_name_humidity += unique_suffix;
         config.output_file_name_refill_in_progress += unique_suffix;
         config.output_file_name_refill_controller_state += unique_suffix;
+        config.output_file_name_temperature_gradient += unique_suffix;
 
         let output_file_name_water_temperature = config.output_file_name_water_temperature.clone();
         let output_file_name_heating_is_on = config.output_file_name_heating_is_on.clone();

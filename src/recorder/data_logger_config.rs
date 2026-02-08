@@ -81,14 +81,29 @@ pub struct DataLoggerConfig {
     /// output file name (in ramdisk) for the current value of ventilation
     pub output_file_name_ventilation_is_on: String,
 
+    /// output file name (in ramdisk) for the ventilation actuator effectiveness status
+    pub output_file_name_ventilation_actuator_ineffective: String,
+
+    /// output file name (in ramdisk) for the ventilation actuator disabled status
+    pub output_file_name_ventilation_actuator_disabled: String,
+
     /// output file name (in ramdisk) for the current value of heating
     pub output_file_name_heating_is_on: String,
+
+    /// output file name (in ramdisk) for the heating actuator effectiveness status
+    pub output_file_name_heating_actuator_ineffective: String,
+
+    /// output file name (in ramdisk) for the heating actuator disabled status
+    pub output_file_name_heating_actuator_disabled: String,
 
     /// output file name (in ramdisk) for the current value of ambient air temperature
     pub output_file_name_ambient_temperature: String,
 
     /// output file name (in ramdisk) for the current value of air humidity
     pub output_file_name_humidity: String,
+
+    /// output file name (in ramdisk) for the temperature gradient value
+    pub output_file_name_temperature_gradient: String,
 
     /// output file name (in ramdisk) for the current refill pump status
     pub output_file_name_refill_in_progress: String,

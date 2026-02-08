@@ -401,7 +401,7 @@ impl Ventilation {
         let mut lock_warn_cycle_time_exceeded = false;
         let mut start_time = Instant::now();
         let mut actuation_mutex_was_blocked_during_actuation: bool = false;
-        let mut actuator_ineffective: bool;
+        let mut actuator_ineffective: bool = false;
 
         loop {
             let (quit_command_received, start_command_received, stop_command_received) = self
@@ -572,7 +572,9 @@ impl Ventilation {
                             ActuatorState::On => true,
                             ActuatorState::Off => false,
                             _ => false,
-                        }
+                        };
+                        ventilation_status.actuator_disabled = self.actuator_disabled;
+                        ventilation_status.actuator_ineffective = actuator_ineffective;
                     }
                     Err(_) => {
                         // Do nothing

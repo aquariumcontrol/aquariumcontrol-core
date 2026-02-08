@@ -744,6 +744,7 @@ fn run() -> Result<(), StartupError> {
     let mutex_temperature_gradient: Arc<Mutex<f64>> = Arc::new(Mutex::new(0.0));
     let mutex_temperature_gradient_clone_for_heating = mutex_temperature_gradient.clone();
     let mutex_temperature_gradient_clone_for_ventilation = mutex_temperature_gradient.clone();
+    let mutex_temperature_gradient_clone_for_data_logger = mutex_temperature_gradient.clone();
     //**********************************************************************************************
 
     #[cfg(all(target_os = "linux", feature = "target_hw"))]
@@ -994,6 +995,7 @@ fn run() -> Result<(), StartupError> {
                     mutex_heating_status: mutex_heating_status_clone_for_data_logger,
                     mutex_ventilation_status: mutex_ventilation_status_clone_for_data_logger,
                     mutex_refill_status: mutex_refill_status_clone_for_data_logger,
+                    mutex_temperature_gradient: mutex_temperature_gradient_clone_for_data_logger,
                 };
 
                 data_logger.execute(

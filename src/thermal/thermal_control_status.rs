@@ -14,6 +14,9 @@ pub struct ThermalControlStatus {
     pub actuator_switched_on: bool,
 
     /// Status bit indicating that an ineffectiveness of the actuator has been detected
+    pub actuator_ineffective: bool,
+
+    /// Status bit indicating that an actuator has been switched off due to detected ineffectiveness
     pub actuator_disabled: bool,
 
     /// Status bit indicating that controller was stopped by external command

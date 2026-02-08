@@ -465,7 +465,7 @@ impl Heating {
         let mut lock_warn_cycle_time_exceeded: bool = false;
         let mut actuation_mutex_was_blocked_during_actuation: bool = false;
         let cycle_time_duration = Duration::from_millis(CYCLE_TIME_HEATING_MILLIS);
-        let mut actuator_ineffective: bool;
+        let mut actuator_ineffective: bool = false;
 
         let mut heating_stats_opt = match sql_interface_heating
             .get_single_heating_stats_from_database()
@@ -743,13 +743,15 @@ impl Heating {
             // Write signal to mutex
             {
                 match heating_mutexes.mutex_heating_status.lock() {
-                    Ok(mut heating_control_status) => {
+                    Ok(mut heating_status) => {
                         instant_after_locking_mutex = Instant::now();
-                        heating_control_status.actuator_switched_on = match heater_state {
+                        heating_status.actuator_switched_on = match heater_state {
                             ActuatorState::On => true,
                             ActuatorState::Off => false,
                             _ => false,
-                        }
+                        };
+                        heating_status.actuator_disabled = self.actuator_disabled;
+                        heating_status.actuator_ineffective = actuator_ineffective;
                     }
                     Err(_) => {
                         // Do nothing

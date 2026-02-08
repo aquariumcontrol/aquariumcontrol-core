@@ -36,4 +36,7 @@ pub struct DataLoggerMutexes {
 
     /// Mutex for refill status
     pub mutex_refill_status: Arc<Mutex<RefillStatus>>,
+
+    /// Mutex for temperature gradient
+    pub mutex_temperature_gradient: Arc<Mutex<f64>>,
 }
