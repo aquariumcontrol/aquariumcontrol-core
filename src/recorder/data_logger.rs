@@ -1367,6 +1367,13 @@ pub mod tests {
 
         let mut heating_status = ThermalControlStatus::default();
         heating_status.actuator_switched_on = true;
+        heating_status.actuator_ineffective = false;
+        heating_status.actuator_disabled = false;
+
+        let mut ventilation_status = ThermalControlStatus::default();
+        ventilation_status.actuator_switched_on = false;
+        ventilation_status.actuator_ineffective = true;
+        ventilation_status.actuator_disabled = true;
 
         let mutexes = DataLoggerMutexes {
             mutex_sensor_manager_signals: Arc::new(Mutex::new(SensorManagerSignals {
@@ -1383,9 +1390,9 @@ pub mod tests {
                 tank_level_switch_invalid: false,
             })),
             mutex_heating_status: Arc::new(Mutex::new(heating_status)),
-            mutex_ventilation_status: Arc::new(Mutex::new(ThermalControlStatus::default())),
+            mutex_ventilation_status: Arc::new(Mutex::new(ventilation_status)),
             mutex_refill_status: Arc::new(Mutex::new(RefillStatus::default())),
-            mutex_temperature_gradient: Arc::new(Mutex::new(0.0)),
+            mutex_temperature_gradient: Arc::new(Mutex::new(0.123)),
         };
 
         let channels = Channels::new_for_test();
@@ -1589,6 +1596,16 @@ pub mod tests {
 
         let output_file_name_water_temperature = config.output_file_name_water_temperature.clone();
         let output_file_name_heating_is_on = config.output_file_name_heating_is_on.clone();
+        let output_file_name_heating_actuator_ineffective =
+            config.output_file_name_heating_actuator_ineffective.clone();
+        let output_file_name_heating_actuator_disabled =
+            config.output_file_name_heating_actuator_disabled.clone();
+        let output_file_name_ventilation_actuator_ineffective =
+            config.output_file_name_ventilation_actuator_ineffective.clone();
+        let output_file_name_ventilation_actuator_disabled =
+            config.output_file_name_ventilation_actuator_disabled.clone();
+        let output_file_name_temperature_gradient =
+            config.output_file_name_temperature_gradient.clone();
 
         let sql_interface = SqlInterface::new(global_config.sql_interface).unwrap();
         let sql_interface_data = SqlInterfaceData::new(sql_interface.conn, 0).unwrap();
@@ -1643,5 +1660,21 @@ pub mod tests {
 
         let heat_content = fs::read_to_string(output_file_name_heating_is_on).unwrap();
         assert_eq!(heat_content, "ON");
+
+        let content = fs::read_to_string(output_file_name_heating_actuator_ineffective).unwrap();
+        assert_eq!(content, "FALSE");
+
+        let content = fs::read_to_string(output_file_name_heating_actuator_disabled).unwrap();
+        assert_eq!(content, "FALSE");
+
+        let content =
+            fs::read_to_string(output_file_name_ventilation_actuator_ineffective).unwrap();
+        assert_eq!(content, "TRUE");
+
+        let content = fs::read_to_string(output_file_name_ventilation_actuator_disabled).unwrap();
+        assert_eq!(content, "TRUE");
+
+        let content = fs::read_to_string(output_file_name_temperature_gradient).unwrap();
+        assert_eq!(content, "0.123");
     }
 }

@@ -146,6 +146,10 @@ pub enum AquariumSignal {
     /// refill pump status
     RefillPumpStatus,
 
+    #[allow(unused)]
+    /// temperature gradient
+    TemperatureGradient,
+
     #[cfg(test)]
     MockInvalidSignal,
 }
