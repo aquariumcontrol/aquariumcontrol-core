@@ -524,11 +524,6 @@ mod tests {
             .get_water_temperature_last_24h()
             .expect("Failed to get water temperature data.");
 
-        println!(
-            "Retrieved {} data points from the last 24 hours.",
-            temperature_data.len()
-        );
-
         // --- Process Data ---
         let sample_size = 5;
         if temperature_data.len() < sample_size {

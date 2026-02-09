@@ -66,6 +66,7 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 //!   a database.
 
 use log::error;
+#[cfg(not(test))]
 use log::warn;
 use spin_sleep::SpinSleeper;
 use std::sync::{Arc, Mutex};
@@ -574,6 +575,7 @@ impl Heating {
                     &heating_mutexes.mutex_temperature_gradient,
                     heater_state == ActuatorState::On,
                     true, // heating expects a positive gradient
+                    #[cfg(not(test))]
                     "Heating",
                 );
                 if actuator_ineffective
@@ -587,6 +589,7 @@ impl Heating {
                     );
                     heater_state = ActuatorState::Off;
                     self.actuator_disabled = true;
+                    #[cfg(not(test))]
                     warn!("[{}]: Disabled heater because temperature gradient monitor indicates ineffectiveness.", module_path!());
                 }
 
