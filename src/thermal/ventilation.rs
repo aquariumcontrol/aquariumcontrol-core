@@ -73,6 +73,7 @@ use crate::database::thermal_set_value_updater_trait::ThermalSetValueUpdaterTrai
 use crate::utilities::channel_content::{ActuatorState, AquariumDevice, InternalCommand};
 use crate::utilities::proc_ext_req::ProcessExternalRequestTrait;
 use crate::utilities::sawtooth_profile::SawToothProfile;
+#[cfg(not(test))]
 use log::warn;
 use spin_sleep::SpinSleeper;
 use std::sync::{Arc, Mutex};
@@ -482,6 +483,7 @@ impl Ventilation {
                     );
                     ventilation_state = ActuatorState::Off;
                     self.actuator_disabled = true;
+                    #[cfg(not(test))]
                     warn!("[{}]: Disabled ventilation because temperature gradient monitor indicates ineffectiveness.", module_path!());
                 }
 
