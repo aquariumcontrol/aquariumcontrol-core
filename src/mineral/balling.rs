@@ -818,7 +818,7 @@ pub mod tests {
     use spin_sleep::SpinSleeper;
     use std::sync::{Arc, Mutex};
     use std::thread::scope;
-    use std::time::Duration;
+    use std::time::{Duration, Instant};
 
     fn read_balling_config() -> ConfigData {
         read_config_file("/config/aquarium_control_test_generic.toml".to_string()).unwrap()
@@ -1509,7 +1509,6 @@ pub mod tests {
     pub fn test_messaging_stops_starts_balling_dosing() {
         let sleep_duration_100_millis = Duration::from_millis(100);
         let sleep_duration_7_secs = Duration::from_secs(7);
-        let sleep_duration_2_secs = Duration::from_secs(2);
         let spin_sleeper = SpinSleeper::default();
 
         let mut config: ConfigData = read_balling_config_with_database(6);
@@ -1599,14 +1598,20 @@ pub mod tests {
 
             // thread IPC messaging - this scope controls execution of the test case
             scope.spawn(move || {
-                // wait for 2 seconds to make sure the test object can receive the message
-                for _ in 0..20 {
+                // wait for up to 5 seconds to make sure the test object can receive the message and execute first dosing
+                let timeout_initial = Duration::from_secs(5);
+                let start_initial = Instant::now();
+                let mut actuation_count_0: i32;
+                loop {
                     spin_sleeper.sleep(sleep_duration_100_millis);
+                    actuation_count_0 = *mutex_device_scheduler_balling_test_environment
+                        .lock()
+                        .unwrap();
+                    if actuation_count_0 >= 1 || start_initial.elapsed() > timeout_initial {
+                        break;
+                    }
                 }
 
-                let actuation_count_0 = *mutex_device_scheduler_balling_test_environment
-                    .lock()
-                    .unwrap();
                 // check the initial amount of actuation
                 assert_eq!(actuation_count_0, 1);
 
@@ -1650,13 +1655,20 @@ pub mod tests {
                     }
                 }
 
-                // Wait for 2 seconds. If the test object follows the start request,
+                // Wait for up to 10 seconds. If the test object follows the start request,
                 // then dosings will happen in this period.
-                spin_sleeper.sleep(sleep_duration_2_secs);
-
-                let actuation_count_2 = *mutex_device_scheduler_balling_test_environment
-                    .lock()
-                    .unwrap();
+                let timeout_resume = Duration::from_secs(10);
+                let start_resume = Instant::now();
+                let mut actuation_count_2: i32;
+                loop {
+                    spin_sleeper.sleep(sleep_duration_100_millis);
+                    actuation_count_2 = *mutex_device_scheduler_balling_test_environment
+                        .lock()
+                        .unwrap();
+                    if actuation_count_2 >= 3 || start_resume.elapsed() > timeout_resume {
+                        break;
+                    }
+                }
                 // check the amount of actuation (after start request)
                 assert_eq!(actuation_count_2, 3);
 

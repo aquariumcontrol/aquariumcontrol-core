@@ -640,11 +640,12 @@ impl DataLogger {
                         &self.config.output_file_name_refill_in_progress,
                         self.lock_error_output_state_refill_in_progress,
                     );
-                    self.lock_error_output_description_refill_controller_state = self.output_description(
-                        refill_status.description(), // specific description
-                        &self.config.output_file_name_refill_controller_state,
-                        self.lock_error_output_description_refill_controller_state,
-                    );
+                    self.lock_error_output_description_refill_controller_state = self
+                        .output_description(
+                            refill_status.description(), // specific description
+                            &self.config.output_file_name_refill_controller_state,
+                            self.lock_error_output_description_refill_controller_state,
+                        );
                     *refill_status_live = refill_status.refill_in_progress_live;
                     *refill_status_for_database = refill_status.refill_in_progress_for_database;
                     if refill_reset_for_database {
@@ -663,11 +664,12 @@ impl DataLogger {
             // internal scope to limit lifetime of mutex lock
             *heater_status = match data_logger_mutexes.mutex_heating_status.lock() {
                 Ok(heating_status) => {
-                    self.lock_error_output_description_heating_controller_state = self.output_description(
-                        heating_status.description(),
-                        &self.config.output_file_name_heating_controller_state,
-                        self.lock_error_output_description_heating_controller_state,
-                    );
+                    self.lock_error_output_description_heating_controller_state = self
+                        .output_description(
+                            heating_status.description(),
+                            &self.config.output_file_name_heating_controller_state,
+                            self.lock_error_output_description_heating_controller_state,
+                        );
                     self.lock_error_output_state_heating_is_on = self.output_state(
                         heating_status.actuator_switched_on,
                         "ON",
@@ -705,11 +707,12 @@ impl DataLogger {
             // internal scope to limit lifetime of mutex lock
             *ventilation_status = match data_logger_mutexes.mutex_ventilation_status.lock() {
                 Ok(ventilation_status) => {
-                    self.lock_error_output_description_ventilation_controller_state = self.output_description(
-                        ventilation_status.description(),
-                        &self.config.output_file_name_ventilation_controller_state,
-                        self.lock_error_output_description_ventilation_controller_state,
-                    );
+                    self.lock_error_output_description_ventilation_controller_state = self
+                        .output_description(
+                            ventilation_status.description(),
+                            &self.config.output_file_name_ventilation_controller_state,
+                            self.lock_error_output_description_ventilation_controller_state,
+                        );
                     self.lock_error_output_state_ventilation_is_on = self.output_state(
                         ventilation_status.actuator_switched_on,
                         "ON",
@@ -1628,10 +1631,12 @@ pub mod tests {
             config.output_file_name_heating_actuator_ineffective.clone();
         let output_file_name_heating_actuator_disabled =
             config.output_file_name_heating_actuator_disabled.clone();
-        let output_file_name_ventilation_actuator_ineffective =
-            config.output_file_name_ventilation_actuator_ineffective.clone();
-        let output_file_name_ventilation_actuator_disabled =
-            config.output_file_name_ventilation_actuator_disabled.clone();
+        let output_file_name_ventilation_actuator_ineffective = config
+            .output_file_name_ventilation_actuator_ineffective
+            .clone();
+        let output_file_name_ventilation_actuator_disabled = config
+            .output_file_name_ventilation_actuator_disabled
+            .clone();
         let output_file_name_temperature_gradient =
             config.output_file_name_temperature_gradient.clone();
         let output_file_name_heating_controller_state =
