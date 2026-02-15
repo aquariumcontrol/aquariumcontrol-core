@@ -74,7 +74,6 @@ use spin_sleep::SpinSleeper;
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
-use crate::database::sql_interface::SqlInterface;
 use crate::database::sql_interface_balling::{BallingSetVal, SqlInterfaceBalling};
 use crate::mineral::balling_channels::BallingChannels;
 use crate::mineral::balling_config::BallingConfig;
@@ -538,26 +537,15 @@ impl Balling {
                         &balling_setval,
                         actual_dosing_duration_millis,
                     );
-                    match SqlInterface::get_current_timestamp(&mut sql_interface_balling.conn) {
-                        Ok(timestamp) => {
-                            if let Err(e) = sql_interface_balling.insert_balling_event(
-                                timestamp,
-                                pump_id.into(),
-                                actual_dosing_volume.into(),
-                            ) {
-                                error!(
-                                    target: module_path!(),
-                                    "Error occurred in database communication: {e:?}"
-                                );
-                            }
-                        }
-                        Err(e) => {
-                            error!(
-                                target: module_path!(),
-                                "Error occurred in database communication: {e:?}"
-                            );
-                        }
-                    };
+                    if let Err(e) = sql_interface_balling.insert_balling_event(
+                        pump_id.into(),
+                        actual_dosing_volume.into(),
+                    ) {
+                        error!(
+                            target: module_path!(),
+                            "Error occurred in database communication: {e:?}"
+                        );
+                    }
                 }
             }
             Err(e) => {
@@ -966,19 +954,19 @@ pub mod tests {
 
         // insert balling dosing events
         sql_interface_balling
-            .insert_balling_event(naive_datetime_100secs_ago, 1, 0.5)
+            .insert_balling_event_for_test(naive_datetime_100secs_ago, 1, 0.5)
             .expect("Could not insert Balling dosing event for pump #1 into database");
 
         sql_interface_balling
-            .insert_balling_event(naive_datetime_200secs_ago, 2, 0.5)
+            .insert_balling_event_for_test(naive_datetime_200secs_ago, 2, 0.5)
             .expect("Could not insert Balling dosing event for pump #2 into database");
 
         sql_interface_balling
-            .insert_balling_event(naive_datetime_300secs_ago, 3, 0.5)
+            .insert_balling_event_for_test(naive_datetime_300secs_ago, 3, 0.5)
             .expect("Could not insert Balling dosing event for pump #3 into database");
 
         sql_interface_balling
-            .insert_balling_event(naive_datetime_400secs_ago, 4, 0.5)
+            .insert_balling_event_for_test(naive_datetime_400secs_ago, 4, 0.5)
             .expect("Could not insert Balling dosing event for pump #4 into database");
     }
 

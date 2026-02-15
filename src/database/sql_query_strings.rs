@@ -119,10 +119,17 @@ pub const SQL_QUERY_READ_LAST_BALLING_DOSING_TIMESTAMP: &str = concat!(
     "WHERE pump_id=#pump_id ORDER BY timestamp DESC LIMIT 1;"
 );
 
-/// Writes the last Balling dosing event to the database.    
-pub const SQL_QUERY_WRITE_BALLING_EVENT: &str = concat!(
+// Writes a Balling dosing event to the database using given timestamp
+#[cfg(test)]
+pub const SQL_QUERY_WRITE_BALLING_EVENT_WITH_TIMESTAMP: &str = concat!(
     "INSERT into balling_log(timestamp, pump_id, dosing_volume) ",
     "values(:timestamp, :pump_id, :dosing_volume);"
+);
+
+/// Writes a Balling dosing event to the database using current timestamp from database
+pub const SQL_QUERY_WRITE_BALLING_EVENT: &str = concat!(
+    "INSERT into balling_log(timestamp, pump_id, dosing_volume) ",
+    "values(CURRENT_TIMESTAMP(), :pump_id, :dosing_volume);"
 );
 
 #[cfg(test)]

@@ -272,7 +272,48 @@ impl SqlInterfaceBalling {
         }
     }
 
-    /// Inserts a new Balling dosing event record into the SQL database.
+    // Inserts a new Balling dosing event record into the SQL database using a given timestamp.
+    // This function is used for testing purposes only.
+    //
+    // This function logs details of a Balling dosing operation, including the
+    // exact time, the pump used, and the volume of fluid dispensed.
+    //
+    // # Arguments
+    // * `timestamp` - The `NaiveDateTime` when the dosing event occurred.
+    // * `pump_id` - The identifier of the pump that performed the dosing.
+    // * `dosing_volume` - The volume (in milliliters) of fluid dispensed.
+    //
+    // # Returns
+    // An empty `Result` (`Ok(())`) if the event record was successfully inserted.
+    //
+    // # Errors
+    // Returns `SqlInterfaceError::InsertBallingEventFailure` if the `INSERT`
+    // query fails. This can happen due to a lost connection, constraint violation
+    // (e.g., foreign key), or incorrect data types. The original `mysql::Error`
+    // is included as the source.
+    #[cfg(test)]
+    pub fn insert_balling_event_for_test(
+        &mut self,
+        timestamp: NaiveDateTime,
+        pump_id: i64,
+        dosing_volume: f64,
+    ) -> Result<(), SqlInterfaceError> {
+        self.conn
+            .exec_drop(
+                sql_query_strings::SQL_QUERY_WRITE_BALLING_EVENT_WITH_TIMESTAMP.to_owned(),
+                params! {
+                    "timestamp" => timestamp,
+                    "pump_id" => pump_id,
+                    "dosing_volume" => dosing_volume,
+                },
+            )
+            .map_err(|e| SqlInterfaceError::InsertBallingEventFailure {
+                location: module_path!().to_string(),
+                source: e,
+            })
+    }
+
+    /// Inserts a new Balling dosing event record into the SQL database using current timestamp of database.
     ///
     /// This function logs details of a Balling dosing operation, including the
     /// exact time, the pump used, and the volume of fluid dispensed.
@@ -292,7 +333,6 @@ impl SqlInterfaceBalling {
     /// is included as the source.
     pub fn insert_balling_event(
         &mut self,
-        timestamp: NaiveDateTime,
         pump_id: i64,
         dosing_volume: f64,
     ) -> Result<(), SqlInterfaceError> {
@@ -300,7 +340,6 @@ impl SqlInterfaceBalling {
             .exec_drop(
                 sql_query_strings::SQL_QUERY_WRITE_BALLING_EVENT.to_owned(),
                 params! {
-                    "timestamp" => timestamp,
                     "pump_id" => pump_id,
                     "dosing_volume" => dosing_volume,
                 },
@@ -442,6 +481,7 @@ pub mod tests {
     use mysql::{params, prelude::Queryable};
     use spin_sleep::SpinSleeper;
     use std::time::Duration;
+    use assert_float_eq::assert_float_absolute_eq;
 
     pub struct SqlBallingEvent {
         timestamp: String,
@@ -493,7 +533,7 @@ pub mod tests {
             params! { "pump_id" => 1, "dosing_speed" => 1.0, "dosing_volume" => 1.0, "label" => "valid" },
         ).unwrap();
         conn.exec_drop(
-            sql_query_strings::SQL_QUERY_WRITE_BALLING_EVENT,
+            sql_query_strings::SQL_QUERY_WRITE_BALLING_EVENT_WITH_TIMESTAMP,
             params! { "timestamp" => Local::now().naive_local(), "pump_id" => 1, "dosing_volume" => 1.0 },
         ).unwrap();
 
@@ -536,9 +576,9 @@ pub mod tests {
         )
         .unwrap();
         let mut conn = sql_interface.get_connection().unwrap();
-        conn.exec_drop(sql_query_strings::SQL_QUERY_WRITE_BALLING_EVENT, params! { "timestamp" => Local::now().naive_local(), "pump_id" => 1, "dosing_volume" => 1.0 }).unwrap();
+        conn.exec_drop(sql_query_strings::SQL_QUERY_WRITE_BALLING_EVENT_WITH_TIMESTAMP, params! { "timestamp" => Local::now().naive_local(), "pump_id" => 1, "dosing_volume" => 1.0 }).unwrap();
         spin_sleeper.sleep(Duration::from_millis(500));
-        conn.exec_drop(sql_query_strings::SQL_QUERY_WRITE_BALLING_EVENT, params! { "timestamp" => Local::now().naive_local(), "pump_id" => 2, "dosing_volume" => 1.0 }).unwrap();
+        conn.exec_drop(sql_query_strings::SQL_QUERY_WRITE_BALLING_EVENT_WITH_TIMESTAMP, params! { "timestamp" => Local::now().naive_local(), "pump_id" => 2, "dosing_volume" => 1.0 }).unwrap();
 
         let result = SqlInterfaceBalling::new(conn, 10, 1); // Set the limit to 1
         assert!(
@@ -604,7 +644,7 @@ pub mod tests {
         // *** check timestamp of last Balling dosing **********************************************
         let balling_timestamp =
             NaiveDateTime::parse_from_str("2025-04-12 11:00:00", "%Y-%m-%d %H:%M:%S").unwrap();
-        match sql_interface_balling.insert_balling_event(balling_timestamp, pump_id, 0.5) {
+        match sql_interface_balling.insert_balling_event_for_test(balling_timestamp, pump_id, 0.5) {
             Ok(_) => {}
             Err(e) => panic!("Could not insert Balling dosing event into database: {e:?}"),
         };
@@ -765,5 +805,80 @@ pub mod tests {
         ));
 
         // **************************************************************************************
+    }
+
+    #[test]
+    // This test case verifies the `insert_balling_event` function.
+    // It ensures that a Balling dosing event is correctly inserted into the database
+    // with the current database timestamp.
+    // Test case uses test database #66.
+    fn test_insert_balling_event() {
+        let pump_id = 1;
+        let dosing_volume = 1.5;
+        let config: ConfigData = read_config_file_with_test_database(
+            "/config/aquarium_control_test_generic.toml".to_string(),
+            66,
+        );
+        println!("Testing with database {}", config.sql_interface.db_name);
+        let max_rows_balling_set_values = config.sql_interface.max_rows_balling_set_values;
+        let max_rows_balling_dosing_log = config.sql_interface.max_rows_balling_dosing_log;
+        let mut sql_interface: SqlInterface = SqlInterface::new(config.sql_interface)
+            .expect("Initialization of SQL interface for test failed.");
+        let mut sql_interface_balling = SqlInterfaceBalling::new(
+            sql_interface.get_connection().unwrap(),
+            max_rows_balling_set_values,
+            max_rows_balling_dosing_log,
+        )
+        .unwrap();
+
+        // Clear the dosing log table
+        match SqlInterface::truncate_table(
+            &mut sql_interface,
+            sql_query_strings::SQL_TABLE_BALLING_DOSING_LOG.to_string(),
+        ) {
+            Ok(_) => {}
+            Err(e) => panic!("Could not prepare test case: {e:?}"),
+        }
+
+        // Insert a Balling event
+        match sql_interface_balling.insert_balling_event(pump_id, dosing_volume) {
+            Ok(_) => {}
+            Err(e) => panic!("Could not insert Balling dosing event into database: {e:?}"),
+        };
+
+        // Read back the event to verify
+        let single_balling_event_entry_array = match sql_interface_balling.conn.query_map(
+            sql_query_strings::SQL_QUERY_READ_BALLING_EVENT,
+            |(timestamp, pump_id, dosing_volume)| SqlBallingEvent {
+                timestamp,
+                pump_id,
+                dosing_volume,
+            },
+        ) {
+            Ok(c) => c,
+            Err(e) => {
+                panic!("Could not read Balling dosing event from data base: {e:?}");
+            }
+        };
+
+        // Check if SQL response has the right structure
+        assert_eq!(single_balling_event_entry_array.len(), 1);
+        // Check if SQL response contains the correct data
+        let event = &single_balling_event_entry_array[0];
+        assert_eq!(event.pump_id, pump_id as i32);
+        assert_float_absolute_eq!(event.dosing_volume, dosing_volume as f32, 0.001);
+
+        // Verify timestamp is recent (within last few seconds)
+        let event_timestamp = NaiveDateTime::parse_from_str(
+            event.timestamp.as_str(),
+            "%Y-%m-%d %H:%M:%S",
+        )
+        .expect("conversion of timestamp to NaiveDate failed.");
+        let db_now = SqlInterface::get_current_timestamp(&mut sql_interface_balling.conn)
+            .expect("Failed to get current timestamp from DB.");
+        let duration_diff = (db_now - event_timestamp).num_seconds().abs();
+        assert_le!(duration_diff, 5, "Timestamp should be recent");
+
+        println!("* checking insert_balling_event succeeded.");
     }
 }

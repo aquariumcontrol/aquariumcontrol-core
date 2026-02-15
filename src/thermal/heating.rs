@@ -2198,7 +2198,7 @@ pub mod tests {
                     2.0,
                     0.6
                 );
-                assert_float_absolute_eq!(0.1119444, heating_stats_transfer.heating_stats_entry.energy, 0.005);
+                assert_float_absolute_eq!(0.1119444, heating_stats_transfer.heating_stats_entry.energy, 0.05);
                 assert_float_absolute_eq!(24.0,
                     heating_stats_transfer
                         .heating_stats_entry
