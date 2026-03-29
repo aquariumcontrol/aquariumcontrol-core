@@ -537,10 +537,9 @@ impl Balling {
                         &balling_setval,
                         actual_dosing_duration_millis,
                     );
-                    if let Err(e) = sql_interface_balling.insert_balling_event(
-                        pump_id.into(),
-                        actual_dosing_volume.into(),
-                    ) {
+                    if let Err(e) = sql_interface_balling
+                        .insert_balling_event(pump_id.into(), actual_dosing_volume.into())
+                    {
                         error!(
                             target: module_path!(),
                             "Error occurred in database communication: {e:?}"

@@ -64,7 +64,7 @@ pub struct SqlFeedProfileHeader {
 /// The numeric data is post-processed to boolean in a further step.
 pub struct SqlFeedPhase {
     /// duration of the pause before switching on the feeder motor in milliseconds
-    pub pause_duration: i16,
+    pub pause_duration: i32,
 
     /// flag indicating if the protein skimmer shall remain switched on during the pause
     pub pause_skimmer: i16,
@@ -82,7 +82,7 @@ pub struct SqlFeedPhase {
     pub pause_aux_pump_2: i16,
 
     /// duration of the feed after switching on the feeder motor in milliseconds
-    pub feed_duration: i16,
+    pub feed_duration: i32,
 
     /// flag indicating if the protein skimmer shall remain switched on during the feed phase
     pub feed_skimmer: i16,

@@ -476,12 +476,12 @@ pub mod tests {
     };
     use crate::utilities::config::{read_config_file_with_test_database, ConfigData};
     use all_asserts::assert_le;
+    use assert_float_eq::assert_float_absolute_eq;
     use chrono::Local;
     use chrono::NaiveDateTime;
     use mysql::{params, prelude::Queryable};
     use spin_sleep::SpinSleeper;
     use std::time::Duration;
-    use assert_float_eq::assert_float_absolute_eq;
 
     pub struct SqlBallingEvent {
         timestamp: String,
@@ -869,11 +869,9 @@ pub mod tests {
         assert_float_absolute_eq!(event.dosing_volume, dosing_volume as f32, 0.001);
 
         // Verify timestamp is recent (within last few seconds)
-        let event_timestamp = NaiveDateTime::parse_from_str(
-            event.timestamp.as_str(),
-            "%Y-%m-%d %H:%M:%S",
-        )
-        .expect("conversion of timestamp to NaiveDate failed.");
+        let event_timestamp =
+            NaiveDateTime::parse_from_str(event.timestamp.as_str(), "%Y-%m-%d %H:%M:%S")
+                .expect("conversion of timestamp to NaiveDate failed.");
         let db_now = SqlInterface::get_current_timestamp(&mut sql_interface_balling.conn)
             .expect("Failed to get current timestamp from DB.");
         let duration_diff = (db_now - event_timestamp).num_seconds().abs();
