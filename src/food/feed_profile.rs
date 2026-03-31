@@ -46,6 +46,7 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 //! This entire sequence would be contained within a single `FeedProfile` struct as a `Vec<FeedPhase>`.
 
 /// Holds the configuration data of one feed profile.
+#[derive(Clone)]
 pub struct FeedProfile {
     /// Numeric ID of the feed profile
     /// Data is not used in the implementation. Therefore, it is tagged as unused.
