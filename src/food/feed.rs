@@ -333,78 +333,6 @@ impl Feed {
             .cloned()
     }
 
-    /// Executes a specified feed profile and updates the feed schedule in the database.
-    ///
-    /// This function is a core part of the feed control logic. It first calls `execute_feed`
-    /// to perform the actual food injection and log the event. Based on the outcome of
-    /// `execute_feed`, it updates the internal `execution_blocked` flag if an error occurs.
-    /// Finally, it triggers the update or deletion of the corresponding entries in the
-    /// feed schedule database.
-    ///
-    /// # Arguments
-    /// * `feed_profile` - The feed profile to be executed.
-    /// * `food_injection` - A mutable reference to an object implementing `FoodInjectionTrait`,
-    ///   responsible for physical feeder actuation.
-    /// * `feed_channels` - A mutable reference to the struct `FoodInjectionTrait` containing the channels.
-    /// * `rx_feed_from_relay_manager` - The receiver channel for receiving acknowledgments from the relay manager.
-    /// * `rx_feed_from_signal_handler` - The receiver channel for listening to signals (e.g., `Quit`) from the signal handler.
-    /// * `feed_schedule_entries` - A mutable reference to the vector of `FeedScheduleEntry`
-    ///   that includes the entry(ies) just executed, which will be updated/deleted in the database.
-    /// * `sql_interface_feed` - A boxed trait object representing the interface
-    ///   to the SQL database for feed-specific operations. This allows for
-    ///   dependency injection and mock implementations during testing.
-    ///
-    /// # Returns
-    /// A `bool` which is `true` if a `Quit` command was received from the signal handler
-    /// during the feed execution, indicating that the application should shut down; otherwise `false`.
-    fn execute_profile_update_database(
-        &mut self,
-        feed_profile: FeedProfile,
-        food_injection: &mut impl FoodInjectionTrait,
-        feed_channels: &mut FeedChannels,
-        feed_schedule_entries: &mut Vec<FeedScheduleEntry>,
-        sql_interface_feed: &mut Box<dyn DatabaseInterfaceFeedTrait + Sync + Send>,
-    ) -> bool {
-        #[cfg(all(feature = "debug_feed", not(test)))]
-        debug!(
-            target: module_path!(),
-            "executing feed profile id #{}",
-            profile_id
-        );
-
-        let (result, quit_command_received_during_feed) = self.execute_feed(
-            feed_profile,
-            food_injection,
-            feed_channels,
-            sql_interface_feed,
-        );
-
-        match result {
-            Ok(_) => { /* do nothing */ }
-            Err(_) => {
-                // error occurred. Block subsequent executions
-                self.execution_blocked = true;
-            }
-        }
-
-        //*** update schedule ***
-        match sql_interface_feed.update_feed_schedule_entries_in_database(feed_schedule_entries) {
-            Ok(()) => {
-                // do nothing
-            }
-            #[cfg(not(test))]
-            Err(e) => {
-                log_error_chain(module_path!(), "Updating feed schedule entry failed.", e);
-                self.execution_blocked = true;
-            }
-            #[cfg(test)]
-            Err(_) => {
-                self.execution_blocked = true;
-            }
-        }
-        quit_command_received_during_feed
-    }
-
     /// Executes the main control loop for the feed module.
     ///
     /// This function runs continuously, managing the automatic execution of feed profiles
@@ -504,16 +432,31 @@ impl Feed {
                                         let mut mutex_data =
                                             mutex_device_scheduler_feed.lock().unwrap();
 
-                                        quit_command_received = self
-                                            .execute_profile_update_database(
+                                        (_, quit_command_received) = self
+                                            .execute_feed(
                                                 feed_profile,
                                                 food_injection,
                                                 feed_channels,
-                                                &mut feed_schedule_entries,
                                                 &mut sql_interface_feed,
                                             );
 
                                         *mutex_data = mutex_data.saturating_add(1);
+                                    }
+
+                                    //*** update schedule ***
+                                    match sql_interface_feed.update_feed_schedule_entries_in_database(&mut feed_schedule_entries) {
+                                        Ok(()) => {
+                                            // do nothing
+                                        }
+                                        #[cfg(not(test))]
+                                        Err(e) => {
+                                            log_error_chain(module_path!(), "Updating feed schedule entry failed.", e);
+                                            self.execution_blocked = true;
+                                        }
+                                        #[cfg(test)]
+                                        Err(_) => {
+                                            self.execution_blocked = true;
+                                        }
                                     }
 
                                     // update database after dropping mutex
@@ -620,6 +563,7 @@ impl Feed {
                         feed_channels,
                         &mut sql_interface_feed,
                     );
+
                     self.execution_blocked |= result.is_err(); // block next execution if error occurred
 
                     quit_command_received = quit_command_received_during_requested_feed;
