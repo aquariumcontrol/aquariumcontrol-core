@@ -83,6 +83,7 @@ use crate::check_quit_increment_counter_ping_database;
 use crate::database::database_interface_feed_trait::DatabaseInterfaceFeedTrait;
 use crate::food::feed_channels::FeedChannels;
 use crate::food::feed_config::FeedConfig;
+use crate::food::feed_profile::FeedProfile;
 use crate::food::feed_schedule_entry::FeedScheduleEntry;
 use crate::food::food_injection::FoodInjectionTrait;
 use crate::utilities::acknowledge_signal_handler::AcknowledgeSignalHandlerTrait;
@@ -188,7 +189,7 @@ impl Feed {
         output
     }
 
-    /// Loads a specified feed profile from the database, executes it via food injection, and logs the event.
+    /// Executes a previously loaded feed profile via food injection, and logs the event.
     ///
     /// This private helper function orchestrates the process of executing a single feed profile.
     /// It first attempts to retrieve the full `FeedProfile` from the database. If successful,
@@ -199,7 +200,7 @@ impl Feed {
     /// food injection process, indicating an early termination request.
     ///
     /// # Arguments
-    /// * `profile_id` - The unique identifier of the feed profile to be loaded and executed.
+    /// * `feed_profile` - The feed profile to executed.
     /// * `food_injection` - A mutable reference to an object implementing the `FoodInjectionTrait`,
     ///   responsible for the physical actuation of the feeder.
     /// * `feed_channels` - A mutable reference to the struct containing the channels.
@@ -226,25 +227,11 @@ impl Feed {
     /// In all failure cases, a detailed error message is logged to the console.
     fn execute_feed(
         &mut self,
-        profile_id: i32,
+        feed_profile: FeedProfile,
         food_injection: &mut impl FoodInjectionTrait,
         feed_channels: &mut FeedChannels,
         sql_interface_feed: &mut Box<dyn DatabaseInterfaceFeedTrait + Sync + Send>,
     ) -> (Result<(), ()>, bool) {
-        // First, load the feed profile from the database.
-        let feed_profile =
-            match sql_interface_feed.get_single_feed_profile_from_database(profile_id) {
-                Ok(feed_profile) => feed_profile,
-                Err(e) => {
-                    log_error_chain(
-                    module_path!(),
-                    "Error occurred when trying to read feed profile {profile_id} from database.",
-                    e,
-                );
-                    return (Err(()), false); // Return failure, no quit command received yet.
-                }
-            };
-
         // *** Execute the feed profile and destructure the returned tuple ***
         // 1. `quit_during_injection`: A bool indicating if a quit command was received.
         // 2. `injection_result`: A Result indicating if the injection itself succeeded.
@@ -282,7 +269,7 @@ impl Feed {
         let log_result = match sql_interface_feed.insert_feed_event(
             current_timestamp,
             feed_profile.calc_feeder_runtime(),
-            profile_id,
+            feed_profile.profile_id,
         ) {
             Ok(_) => Ok(()),
             Err(e) => {
@@ -355,7 +342,7 @@ impl Feed {
     /// feed schedule database.
     ///
     /// # Arguments
-    /// * `profile_id` - The numeric identifier of the feed profile to be executed.
+    /// * `feed_profile` - The feed profile to be executed.
     /// * `food_injection` - A mutable reference to an object implementing `FoodInjectionTrait`,
     ///   responsible for physical feeder actuation.
     /// * `feed_channels` - A mutable reference to the struct `FoodInjectionTrait` containing the channels.
@@ -372,7 +359,7 @@ impl Feed {
     /// during the feed execution, indicating that the application should shut down; otherwise `false`.
     fn execute_profile_update_database(
         &mut self,
-        profile_id: i32,
+        feed_profile: FeedProfile,
         food_injection: &mut impl FoodInjectionTrait,
         feed_channels: &mut FeedChannels,
         feed_schedule_entries: &mut Vec<FeedScheduleEntry>,
@@ -386,7 +373,7 @@ impl Feed {
         );
 
         let (result, quit_command_received_during_feed) = self.execute_feed(
-            profile_id,
+            feed_profile,
             food_injection,
             feed_channels,
             sql_interface_feed,
@@ -495,14 +482,31 @@ impl Feed {
                                 self.lock_error_get_feed_schedule_entry = false;
 
                                 if !self.execution_blocked {
-                                    {
-                                        // scope to limit the lifetime of unlocked mutex
+                                    // execute database query before locking mutex
+                                    // First, load the feed profile from the database.
+                                    let feed_profile_opt = match sql_interface_feed
+                                        .get_single_feed_profile_from_database(
+                                            feed_schedule_entry.profile_id,
+                                        ) {
+                                        Ok(feed_profile_loaded) => Some(feed_profile_loaded),
+                                        Err(e) => {
+                                            log_error_chain(
+                                                    module_path!(),
+                                                    "Error occurred when trying to read feed profile {profile_id} from database.",
+                                                    e,
+                                                );
+                                            None
+                                        }
+                                    };
+
+                                    if let Some(feed_profile) = feed_profile_opt {
+                                        // this scope limits the lifetime of unlocked mutex
                                         let mut mutex_data =
                                             mutex_device_scheduler_feed.lock().unwrap();
 
                                         quit_command_received = self
                                             .execute_profile_update_database(
-                                                feed_schedule_entry.profile_id,
+                                                feed_profile,
                                                 food_injection,
                                                 feed_channels,
                                                 &mut feed_schedule_entries,
@@ -511,6 +515,8 @@ impl Feed {
 
                                         *mutex_data = mutex_data.saturating_add(1);
                                     }
+
+                                    // update database after dropping mutex
                                 }
                             }
                         }
@@ -589,12 +595,27 @@ impl Feed {
                     "received execution command"
                 );
 
+                // First, load the feed profile from the database.
+                let feed_profile_opt = match sql_interface_feed
+                    .get_single_feed_profile_from_database(self.profile_id_requested)
                 {
-                    // scope to limit the lifetime of unlocked mutex
+                    Ok(feed_profile_loaded) => Some(feed_profile_loaded),
+                    Err(e) => {
+                        log_error_chain(
+                                module_path!(),
+                                "Error occurred when trying to read feed profile {profile_id} from database.",
+                                e,
+                            );
+                        None
+                    }
+                };
+
+                if let Some(feed_profile) = feed_profile_opt {
+                    // this scope limits the lifetime of unlocked mutex
                     let mut mutex_data = mutex_device_scheduler_feed.lock().unwrap();
 
                     let (result, quit_command_received_during_requested_feed) = self.execute_feed(
-                        self.profile_id_requested,
+                        feed_profile,
                         food_injection,
                         feed_channels,
                         &mut sql_interface_feed,
