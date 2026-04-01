@@ -162,7 +162,7 @@ impl Balling {
     /// several pre-flight checks, including validating the `schedule_check_interval`
     /// and dosing intervals from the configuration, ensuring that a database entry
     /// exists for every active pump, and calculating the initial countdowns for
-    /// each pump based on their last recorded dosing times.
+    /// each pump based on the respective last recorded dosing of that pump.
     ///
     /// # Arguments
     /// * `config` - Configuration data for the Balling dosing control, loaded from a TOML file.
@@ -487,9 +487,10 @@ impl Balling {
     /// This function performs the complete cycle of a dosing event:
     /// 1. Retrieve the pump's set values (e.g., flow rate, target volume) from the database.
     /// 2. Calculates the required dosing duration.
-    /// 3. Invokes the `mineral_injection` trait method to physically actuate the pump for the calculated duration.
-    /// 4. Calculate the actual volume dosed based on the actual run time.
-    /// 5. Log the completed Balling dosing event, including the actual volume, back to the database.
+    /// 3. Locks the device scheduler mutex
+    /// 4. Invokes the `mineral_injection` trait method to physically actuate the pump for the calculated duration.
+    /// 5. Calculate the actual volume dosed based on the actual run time.
+    /// 6. Log the completed Balling dosing event, including the actual volume, back to the database.
     ///
     /// The function also monitors for a `Quit` command from the signal handler during the injection process.
     ///
@@ -502,6 +503,9 @@ impl Balling {
     /// * `balling_channels` - A mutable reference to `BallingChannels` struct containing all necessary `mpsc`
     /// * `sql_interface_balling` - A mutable reference to a `SqlInterfaceBalling` instance, providing the
     ///   specific SQL interface for Balling dosing operations. This is moved into the struct.
+    /// * `mutex_device_scheduler_balling` - A reference to `Arc<Mutex<i32>>` used for coordinating
+    ///   access to device scheduling, preventing parallel actuation across different
+    ///   control modules. It holds a counter of the completed actuation.
     ///
     /// # Returns
     /// A `bool` which is `true` if a `Quit` command was received from the signal handler
@@ -513,6 +517,7 @@ impl Balling {
         mineral_injection: &mut impl MineralInjectionTrait,
         balling_channels: &mut BallingChannels,
         sql_interface_balling: &mut SqlInterfaceBalling,
+        mutex_device_scheduler_balling: &Arc<Mutex<i32>>,
     ) -> bool {
         let mut quit_command_received: bool = false;
         let actual_dosing_duration_millis: u32;
@@ -531,8 +536,17 @@ impl Balling {
                 );
 
                 if dosing_duration_millis > 0 {
-                    (quit_command_received, actual_dosing_duration_millis) = mineral_injection
-                        .inject_mineral(balling_channels, pump_device, dosing_duration_millis);
+
+                    // inner scope to limit the lifetime of unlocked mutex
+                    {
+                        let mut mutex_data = mutex_device_scheduler_balling.lock().unwrap();
+
+                        (quit_command_received, actual_dosing_duration_millis) = mineral_injection
+                            .inject_mineral(balling_channels, pump_device, dosing_duration_millis);
+
+                        *mutex_data = mutex_data.saturating_add(1);
+                    }
+
                     let actual_dosing_volume = Self::calc_actual_dosing_volume(
                         &balling_setval,
                         actual_dosing_duration_millis,
@@ -675,18 +689,14 @@ impl Balling {
                             4 => AquariumDevice::PeristalticPump4,
                             _ => unreachable!(),
                         };
-                        // inner scope to limit the lifetime of unlocked mutex
-                        {
-                            let mut mutex_data = mutex_device_scheduler_balling.lock().unwrap();
                             quit_command_received = self.execute_dosing(
                                 pump_id,
                                 pump_device,
                                 mineral_injection,
                                 balling_channels,
                                 &mut sql_interface_balling,
+                                &mutex_device_scheduler_balling
                             );
-                            *mutex_data = mutex_data.saturating_add(1);
-                        }
                         if quit_command_received {
                             break; // Quit command received during dosing
                         }
@@ -718,18 +728,14 @@ impl Balling {
                             "executing external request for actuation of pump #{}",
                             self.pump_id_requested
                         );
-                        // inner scope to limit the lifetime of unlocked mutex
-                        {
-                            let mut mutex_data = mutex_device_scheduler_balling.lock().unwrap();
-                            quit_command_received = self.execute_dosing(
-                                pump_id,
-                                pump_device,
-                                mineral_injection,
-                                balling_channels,
-                                &mut sql_interface_balling,
-                            );
-                            *mutex_data = mutex_data.saturating_add(1);
-                        }
+                        quit_command_received = self.execute_dosing(
+                            pump_id,
+                            pump_device,
+                            mineral_injection,
+                            balling_channels,
+                            &mut sql_interface_balling,
+                            &mutex_device_scheduler_balling
+                        );
                     }
                     None => {
                         info!(
