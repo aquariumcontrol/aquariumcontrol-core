@@ -536,7 +536,6 @@ impl Balling {
                 );
 
                 if dosing_duration_millis > 0 {
-
                     // inner scope to limit the lifetime of unlocked mutex
                     {
                         let mut mutex_data = mutex_device_scheduler_balling.lock().unwrap();
@@ -689,14 +688,14 @@ impl Balling {
                             4 => AquariumDevice::PeristalticPump4,
                             _ => unreachable!(),
                         };
-                            quit_command_received = self.execute_dosing(
-                                pump_id,
-                                pump_device,
-                                mineral_injection,
-                                balling_channels,
-                                &mut sql_interface_balling,
-                                &mutex_device_scheduler_balling
-                            );
+                        quit_command_received = self.execute_dosing(
+                            pump_id,
+                            pump_device,
+                            mineral_injection,
+                            balling_channels,
+                            &mut sql_interface_balling,
+                            &mutex_device_scheduler_balling,
+                        );
                         if quit_command_received {
                             break; // Quit command received during dosing
                         }
@@ -734,7 +733,7 @@ impl Balling {
                             mineral_injection,
                             balling_channels,
                             &mut sql_interface_balling,
-                            &mutex_device_scheduler_balling
+                            &mutex_device_scheduler_balling,
                         );
                     }
                     None => {
