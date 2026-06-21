@@ -65,10 +65,12 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 //!   pre-configured parameters from a TOML file, and dynamic setpoints fetched from
 //!   a database.
 
-use log::error;
+use log::{error, warn};
 #[cfg(not(test))]
-use log::warn;
-use spin_sleep::SpinSleeper;
+use log::info;
+
+use crate::utilities::channel_content::InternalCommand;
+use crate::launch::channels::AquaChannelError;
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
@@ -90,10 +92,8 @@ use crate::utilities::database_ping_trait::DatabasePingTrait;
 use crate::utilities::logger::log_error_chain;
 use crate::utilities::proc_ext_req::ProcessExternalRequestTrait;
 use crate::utilities::sawtooth_profile::SawToothProfile;
-use crate::utilities::wait_for_termination::WaitForTerminationTrait;
-use crate::{manage_cycle_time_thermal, perform_schedule_check, update_thermal_set_values};
-#[cfg(not(test))]
-use log::info;
+use crate::{perform_schedule_check, update_thermal_set_values};
+
 
 const CYCLE_TIME_HEATING_MILLIS: u64 = 500;
 
@@ -434,7 +434,7 @@ impl Heating {
     /// to loop indefinitely. It will only break out of its loop and terminate when a `Quit`
     /// command is received from the signal handler, after which it performs final cleanup
     /// (switching off the heater, logging final stats) and confirms shutdown.
-    pub fn execute(
+    pub async fn execute(
         &mut self,
         mutex_device_scheduler_heating: Arc<Mutex<i32>>,
         heating_channels: &mut HeatingChannels,
@@ -447,7 +447,6 @@ impl Heating {
         info!(target: module_path!(), "Thread started with TID: {}", gettid());
 
         let _refill_error = false;
-        let spin_sleeper = SpinSleeper::default();
         let sleep_duration_hundred_millis = Duration::from_millis(100);
         let mut saw_tooth_profile = SawToothProfile::new(&self.config.saw_tooth_profile_config);
         let mut measured_water_temperature = 0.0;
@@ -777,15 +776,29 @@ impl Heating {
             }
 
             // Manage the loop's cycle time, sleeping or logging a warning as needed.
-            manage_cycle_time_thermal!(
-                start_time,
-                cycle_time_duration,
-                CYCLE_TIME_HEATING_MILLIS,
-                spin_sleeper,
-                lock_warn_cycle_time_exceeded,
-                actuation_mutex_was_blocked_during_actuation,
-                module_path!()
-            );
+            let stop_time = Instant::now();
+            let execution_duration = stop_time.duration_since(start_time);
+
+            if execution_duration > cycle_time_duration {
+                if !lock_warn_cycle_time_exceeded && !actuation_mutex_was_blocked_during_actuation {
+                    #[cfg(not(test))]
+                    warn!(target: module_path!(),
+                        "execution duration of {} milliseconds exceeds cycle time of {}",
+                        execution_duration.as_millis(),
+                        CYCLE_TIME_HEATING_MILLIS);
+                    lock_warn_cycle_time_exceeded = true;
+                }
+            } else {
+                let remaining_sleep_time = cycle_time_duration - execution_duration;
+                tokio::time::sleep(remaining_sleep_time).await;
+                lock_warn_cycle_time_exceeded = false;
+            }
+
+            // Reset the actuation block flag for the next cycle.
+            actuation_mutex_was_blocked_during_actuation = false;
+
+            // Reset the start time for the next cycle.
+            start_time = Instant::now();
 
             self.check_timing_and_ping_database(&mut sql_interface_heating);
         }
@@ -814,16 +827,78 @@ impl Heating {
         // This thread has channel connections to underlying threads.
         // Those threads have to stop receiving commands from this thread.
         // The shutdown sequence is handled by the signal_handler module.
-        self.wait_for_termination(
-            &mut heating_channels.rx_heating_from_signal_handler,
-            sleep_duration_hundred_millis,
-            module_path!(),
-        );
+        let mut termination_command_received = false;
+        while !termination_command_received {
+            termination_command_received = match heating_channels.rx_heating_from_signal_handler.try_recv() {
+                Ok(c) => match c {
+                    InternalCommand::Terminate => {
+                        self.lock_warn_inapplicable_command_signal_handler = false;
+                        true
+                    }
+                    _ => {
+                        if !self.lock_warn_inapplicable_command_signal_handler {
+                            warn!(
+                                target: module_path!(),
+                                "ignoring inapplicable command from signal handler ({c})"
+                            );
+                            self.lock_warn_inapplicable_command_signal_handler = true;
+                        }
+                        false
+                    }
+                },
+                Err(e) => {
+                    match e {
+                        #[cfg(feature = "debug_channels")]
+                        AquaChannelError::Full => { /* Not applicable. Do nothing */ }
+                        AquaChannelError::Empty => { /* do nothing */ }
+                        AquaChannelError::Disconnected => {
+                            if !self.lock_error_channel_receive_termination {
+                                error!(
+                                    target: module_path!(),
+                                    "receiving termination signal from signal handler failed ({e:?})"
+                                );
+                                self.lock_warn_inapplicable_command_signal_handler = true;
+                            }
+                        }
+                    }
+                    false
+                }
+            };
+            if !termination_command_received {
+                tokio::time::sleep(sleep_duration_hundred_millis).await;
+            }
+        }
     }
+
 }
 
 #[cfg(test)]
 pub mod tests {
+    fn execute_blocking(
+        heating: &mut Heating,
+        mutex_device_scheduler_heating: Arc<Mutex<i32>>,
+        heating_channels: &mut super::HeatingChannels,
+        heating_stats_transfer: &mut impl super::HeatingStatsDataTransferTrait,
+        heating_set_val_updater: &mut impl crate::database::thermal_set_value_updater_trait::ThermalSetValueUpdaterTrait,
+        heating_mutexes: HeatingMutexes,
+        sql_interface_heating: SqlInterfaceHeatingStats,
+    ) {
+        tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+            .unwrap()
+            .block_on(async {
+                heating.execute(
+                    mutex_device_scheduler_heating,
+                    heating_channels,
+                    heating_stats_transfer,
+                    heating_set_val_updater,
+                    heating_mutexes,
+                    sql_interface_heating,
+                ).await;
+            });
+    }
+
     use crate::database::sql_interface::SqlInterface;
     use crate::database::sql_interface_heating_stats::{
         HeatingStatsEntry, SqlInterfaceHeatingStats,
@@ -1043,7 +1118,7 @@ pub mod tests {
                     mutex_temperature_gradient: Arc::new(Mutex::new(0.0)),
                 };
 
-                heating.execute(
+                execute_blocking(&mut heating, 
                     mutex_device_scheduler_heating.clone(),
                     &mut channels.heating,
                     &mut heating_stats_transfer,
@@ -1186,7 +1261,7 @@ pub mod tests {
                     mutex_temperature_gradient: Arc::new(Mutex::new(0.0)),
                 };
 
-                heating.execute(
+                execute_blocking(&mut heating, 
                     mutex_device_scheduler_heating.clone(),
                     &mut channels.heating,
                     &mut heating_stats_transfer,
@@ -1421,7 +1496,7 @@ pub mod tests {
                     mutex_temperature_gradient: Arc::new(Mutex::new(0.0)),
                 };
 
-                heating.execute(
+                execute_blocking(&mut heating, 
                     mutex_device_scheduler_heating.clone(),
                     &mut channels.heating,
                     &mut heating_stats_transfer,
@@ -1633,7 +1708,7 @@ pub mod tests {
                     mutex_temperature_gradient: Arc::new(Mutex::new(0.0)),
                 };
 
-                heating.execute(
+                execute_blocking(&mut heating, 
                     mutex_device_scheduler_heating.clone(),
                     &mut channels.heating,
                     &mut heating_stats_transfer,
@@ -1847,7 +1922,7 @@ pub mod tests {
                     mutex_temperature_gradient: Arc::new(Mutex::new(0.0)),
                 };
 
-                heating.execute(
+                execute_blocking(&mut heating, 
                     mutex_device_scheduler_heating.clone(),
                     &mut channels.heating,
                     &mut heating_stats_transfer,
@@ -1983,7 +2058,7 @@ pub mod tests {
                     mutex_temperature_gradient: Arc::new(Mutex::new(0.0)),
                 };
 
-                heating.execute(
+                execute_blocking(&mut heating, 
                     mutex_device_scheduler_heating.clone(),
                     &mut channels.heating,
                     &mut heating_stats_transfer,
@@ -2126,7 +2201,7 @@ pub mod tests {
                     mutex_temperature_gradient: Arc::new(Mutex::new(0.0)),
                 };
 
-                heating.execute(
+                execute_blocking(&mut heating, 
                     mutex_device_scheduler_heating.clone(),
                     &mut channels.heating,
                     &mut heating_stats_transfer,
@@ -2353,7 +2428,7 @@ pub mod tests {
                     mutex_temperature_gradient: Arc::new(Mutex::new(0.0)),
                 };
 
-                heating.execute(
+                execute_blocking(&mut heating, 
                     mutex_device_scheduler_heating.clone(),
                     &mut channels.heating,
                     &mut heating_stats_transfer,
@@ -2572,7 +2647,7 @@ pub mod tests {
                     mutex_temperature_gradient: Arc::new(Mutex::new(0.0)),
                 };
 
-                heating.execute(
+                execute_blocking(&mut heating, 
                     mutex_device_scheduler_heating.clone(),
                     &mut channels.heating,
                     &mut heating_stats_transfer,
@@ -2711,7 +2786,7 @@ pub mod tests {
                     mutex_temperature_gradient: Arc::new(Mutex::new(0.0)),
                 };
 
-                heating.execute(
+                execute_blocking(&mut heating, 
                     mutex_device_scheduler_heating.clone(),
                     &mut channels.heating,
                     &mut heating_stats_transfer,
@@ -2941,7 +3016,7 @@ pub mod tests {
                     mutex_temperature_gradient: Arc::new(Mutex::new(0.0)),
                 };
 
-                heating.execute(
+                execute_blocking(&mut heating, 
                     mutex_device_scheduler_heating.clone(),
                     &mut channels.heating,
                     &mut heating_stats_transfer,
@@ -3095,7 +3170,7 @@ pub mod tests {
                     mutex_temperature_gradient: Arc::new(Mutex::new(0.0)),
                 };
 
-                heating.execute(
+                execute_blocking(&mut heating, 
                     mutex_device_scheduler_heating.clone(),
                     &mut channels.heating,
                     &mut heating_stats_transfer,
@@ -3257,7 +3332,7 @@ pub mod tests {
                     mutex_temperature_gradient: Arc::new(Mutex::new(0.0)),
                 };
 
-                heating.execute(
+                execute_blocking(&mut heating, 
                     mutex_device_scheduler_heating.clone(),
                     &mut channels.heating,
                     &mut heating_stats_transfer,
@@ -3766,7 +3841,7 @@ pub mod tests {
                     mutex_temperature_gradient,
                 };
 
-                heating.execute(
+                execute_blocking(&mut heating, 
                     mutex_device_scheduler_heating.clone(),
                     &mut channels.heating,
                     &mut heating_stats_transfer,
@@ -3943,7 +4018,7 @@ pub mod tests {
                     mutex_temperature_gradient: mutex_temperature_gradient_clone,
                 };
 
-                heating.execute(
+                execute_blocking(&mut heating, 
                     mutex_device_scheduler_heating.clone(),
                     &mut channels.heating,
                     &mut heating_stats_transfer,

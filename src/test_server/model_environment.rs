@@ -180,15 +180,12 @@ impl ModelEnvironment {
             }
 
             // check termination condition for simulation
-            match max_loop_count_opt {
-                None => {} // no limit provided.
-                Some(max_loop_count) => {
-                    // limit provided. Check if loop shall be aborted.
-                    if i > max_loop_count * 1000 {
-                        break;
-                    }
+            if let Some(max_loop_count) = max_loop_count_opt {
+                // limit provided. Check if loop shall be aborted.
+                if i > max_loop_count * 1000 {
+                    break;
                 }
-            };
+            }
 
             // process channel every millisecond, because there can be lots of requests
             if self.process_channel(&rx_from_parser, &tx_to_parser.clone(), time_of_day) {

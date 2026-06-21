@@ -66,16 +66,17 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 //!   pre-configured parameters from a TOML file, and dynamic setpoints fetched from
 //!   a database.
 
+use log::{error, warn};
 #[cfg(not(test))]
 use log::info;
+
+use crate::launch::channels::AquaChannelError;
 
 use crate::database::thermal_set_value_updater_trait::ThermalSetValueUpdaterTrait;
 use crate::utilities::channel_content::{ActuatorState, AquariumDevice, InternalCommand};
 use crate::utilities::proc_ext_req::ProcessExternalRequestTrait;
 use crate::utilities::sawtooth_profile::SawToothProfile;
-#[cfg(not(test))]
-use log::warn;
-use spin_sleep::SpinSleeper;
+
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
@@ -86,8 +87,7 @@ use crate::thermal::ventilation_mutexes::VentilationMutexes;
 use crate::utilities::acknowledge_signal_handler::AcknowledgeSignalHandlerTrait;
 use crate::utilities::check_mutex_access_duration::CheckMutexAccessDurationTrait;
 use crate::utilities::logger::log_error_chain;
-use crate::utilities::wait_for_termination::WaitForTerminationTrait;
-use crate::{manage_cycle_time_thermal, perform_schedule_check, update_thermal_set_values};
+use crate::{perform_schedule_check, update_thermal_set_values};
 #[cfg(all(not(test), target_os = "linux"))]
 use nix::unistd::gettid;
 
@@ -380,7 +380,7 @@ impl Ventilation {
     /// to loop indefinitely. It will only break out of its loop and terminate when a `Quit`
     /// command is received from the signal handler, after which it performs final cleanup
     /// (switching the ventilation to its configured terminal state) and confirms shutdown.
-    pub fn execute(
+        pub async fn execute(
         &mut self,
         mutex_device_scheduler_ventilation: Arc<Mutex<i32>>,
         ventilation_channels: &mut VentilationChannels,
@@ -392,7 +392,6 @@ impl Ventilation {
 
         let cycle_time_duration = Duration::from_millis(CYCLE_TIME_VENTILATION_MILLIS);
         let sleep_duration_hundred_millis = Duration::from_millis(100);
-        let spin_sleeper = SpinSleeper::default();
         let mut saw_tooth_profile = SawToothProfile::new(&self.config.saw_tooth_profile_config);
         let mut measured_water_temperature = 0.0;
         let mut measurement_error_water_temperature: bool;
@@ -595,15 +594,29 @@ impl Ventilation {
             saw_tooth_profile.execute_with(TIME_INCREMENT_VENTILATION_SECS);
 
             // Manage the loop's cycle time, sleeping or logging a warning as needed.
-            manage_cycle_time_thermal!(
-                start_time,
-                cycle_time_duration,
-                CYCLE_TIME_VENTILATION_MILLIS,
-                spin_sleeper,
-                lock_warn_cycle_time_exceeded,
-                actuation_mutex_was_blocked_during_actuation,
-                module_path!()
-            );
+            let stop_time = Instant::now();
+            let execution_duration = stop_time.duration_since(start_time);
+
+            if execution_duration > cycle_time_duration {
+                if !lock_warn_cycle_time_exceeded && !actuation_mutex_was_blocked_during_actuation {
+                    #[cfg(not(test))]
+                    warn!(target: module_path!(),
+                        "execution duration of {} milliseconds exceeds cycle time of {}",
+                        execution_duration.as_millis(),
+                        CYCLE_TIME_VENTILATION_MILLIS);
+                    lock_warn_cycle_time_exceeded = true;
+                }
+            } else {
+                let remaining_sleep_time = cycle_time_duration - execution_duration;
+                tokio::time::sleep(remaining_sleep_time).await;
+                lock_warn_cycle_time_exceeded = false;
+            }
+
+            // Reset the actuation block flag for the next cycle.
+            actuation_mutex_was_blocked_during_actuation = false;
+
+            // Reset the start time for the next cycle.
+            start_time = Instant::now();
         }
 
         if self.config.switch_on_when_terminating {
@@ -631,16 +644,73 @@ impl Ventilation {
         // This thread has channel connections to underlying threads (relay manager, Atlas Scientific).
         // Those threads have to stop receiving commands from this thread.
         // The shutdown sequence is handled by the signal_handler module.
-        self.wait_for_termination(
-            &mut ventilation_channels.rx_ventilation_from_signal_handler,
-            sleep_duration_hundred_millis,
-            module_path!(),
-        );
+        let mut termination_command_received = false;
+        while !termination_command_received {
+            termination_command_received = match ventilation_channels.rx_ventilation_from_signal_handler.try_recv() {
+                Ok(c) => match c {
+                    InternalCommand::Terminate => {
+                        self.lock_warn_inapplicable_command_signal_handler = false;
+                        true
+                    }
+                    _ => {
+                        if !self.lock_warn_inapplicable_command_signal_handler {
+                            warn!(
+                                target: module_path!(),
+                                "ignoring inapplicable command from signal handler ({c})"
+                            );
+                            self.lock_warn_inapplicable_command_signal_handler = true;
+                        }
+                        false
+                    }
+                },
+                Err(e) => {
+                    match e {
+                        #[cfg(feature = "debug_channels")]
+                        AquaChannelError::Full => { /* Not applicable. Do nothing */ }
+                        AquaChannelError::Empty => { /* do nothing */ }
+                        AquaChannelError::Disconnected => {
+                            if !self.lock_error_channel_receive_termination {
+                                error!(
+                                    target: module_path!(),
+                                    "receiving termination signal from signal handler failed ({e:?})"
+                                );
+                                self.lock_warn_inapplicable_command_signal_handler = true;
+                            }
+                        }
+                    }
+                    false
+                }
+            };
+            if !termination_command_received {
+                tokio::time::sleep(sleep_duration_hundred_millis).await;
+            }
+        }
     }
 }
 
 #[cfg(test)]
 pub mod tests {
+    fn execute_blocking(
+        ventilation: &mut Ventilation,
+        mutex_device_scheduler_ventilation: Arc<Mutex<i32>>,
+        ventilation_channels: &mut super::VentilationChannels,
+        ventilation_set_val_updater: &mut impl crate::database::thermal_set_value_updater_trait::ThermalSetValueUpdaterTrait,
+        ventilation_mutexes: VentilationMutexes,
+    ) {
+        tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+            .unwrap()
+            .block_on(async {
+                ventilation.execute(
+                    mutex_device_scheduler_ventilation,
+                    ventilation_channels,
+                    ventilation_set_val_updater,
+                    ventilation_mutexes,
+                ).await;
+            });
+    }
+
     use crate::launch::channels::{AquaReceiver, AquaSender, Channels};
     use crate::mocks::mock_relay_manager::tests::mock_relay_manager;
     use crate::mocks::mock_schedule_check::tests::mock_schedule_check;
@@ -824,7 +894,7 @@ pub mod tests {
                     mutex_temperature_gradient: Arc::new(Mutex::new(0.0)),
                 };
 
-                ventilation.execute(
+                execute_blocking(&mut ventilation, 
                     mutex_device_scheduler_ventilation.clone(),
                     &mut channels.ventilation,
                     &mut ventilation_set_value_updater,
@@ -975,7 +1045,7 @@ pub mod tests {
                     mutex_temperature_gradient: Arc::new(Mutex::new(0.0)),
                 };
 
-                ventilation.execute(
+                execute_blocking(&mut ventilation, 
                     mutex_device_scheduler_ventilation.clone(),
                     &mut channels.ventilation,
                     &mut ventilation_set_value_updater,
@@ -1193,7 +1263,7 @@ pub mod tests {
                     mutex_temperature_gradient: Arc::new(Mutex::new(0.0)),
                 };
 
-                ventilation.execute(
+                execute_blocking(&mut ventilation, 
                     mutex_device_scheduler_ventilation.clone(),
                     &mut channels.ventilation,
                     &mut ventilation_set_value_updater,
@@ -1384,7 +1454,7 @@ pub mod tests {
                     mutex_temperature_gradient: Arc::new(Mutex::new(0.0)),
                 };
 
-                ventilation.execute(
+                execute_blocking(&mut ventilation, 
                     mutex_device_scheduler_ventilation.clone(),
                     &mut channels.ventilation,
                     &mut ventilation_set_value_updater,
@@ -1576,7 +1646,7 @@ pub mod tests {
                     mutex_temperature_gradient: Arc::new(Mutex::new(0.0)),
                 };
 
-                ventilation.execute(
+                execute_blocking(&mut ventilation, 
                     mutex_device_scheduler_ventilation.clone(),
                     &mut channels.ventilation,
                     &mut ventilation_set_value_updater,
@@ -1675,7 +1745,7 @@ pub mod tests {
                     mutex_temperature_gradient: Arc::new(Mutex::new(0.0)),
                 };
 
-                ventilation.execute(
+                execute_blocking(&mut ventilation, 
                     mutex_device_scheduler_ventilation.clone(),
                     &mut channels.ventilation,
                     &mut ventilation_set_value_updater,
@@ -1911,7 +1981,7 @@ pub mod tests {
                     mutex_temperature_gradient: Arc::new(Mutex::new(0.0)),
                 };
 
-                ventilation.execute(
+                execute_blocking(&mut ventilation, 
                     mutex_device_scheduler_ventilation.clone(),
                     &mut channels.ventilation,
                     &mut ventilation_set_value_updater,
@@ -2041,7 +2111,7 @@ pub mod tests {
                     mutex_temperature_gradient: Arc::new(Mutex::new(0.0)),
                 };
 
-                ventilation.execute(
+                execute_blocking(&mut ventilation, 
                     mutex_device_scheduler_ventilation.clone(),
                     &mut channels.ventilation,
                     &mut ventilation_set_value_updater,
@@ -2167,7 +2237,7 @@ pub mod tests {
                     mutex_temperature_gradient: Arc::new(Mutex::new(0.0)),
                 };
 
-                ventilation.execute(
+                execute_blocking(&mut ventilation, 
                     mutex_device_scheduler_ventilation.clone(),
                     &mut channels.ventilation,
                     &mut ventilation_set_value_updater,
@@ -2339,7 +2409,7 @@ pub mod tests {
                     mutex_temperature_gradient,
                 };
 
-                ventilation.execute(
+                execute_blocking(&mut ventilation, 
                     mutex_device_scheduler_ventilation.clone(),
                     &mut channels.ventilation,
                     &mut ventilation_set_value_updater,
@@ -2509,7 +2579,7 @@ pub mod tests {
                     mutex_temperature_gradient: mutex_temperature_gradient_clone,
                 };
 
-                ventilation.execute(
+                execute_blocking(&mut ventilation, 
                     mutex_device_scheduler_ventilation.clone(),
                     &mut channels.ventilation,
                     &mut ventilation_set_value_updater,
