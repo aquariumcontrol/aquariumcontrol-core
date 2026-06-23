@@ -68,7 +68,6 @@ use crate::utilities::proc_ext_req::ProcessExternalRequestTrait;
 use crate::watchmen::monitors_channels::MonitorsChannels;
 use crate::watchmen::monitors_config::MonitorsConfig;
 use crate::water::refill_monitor_view::RefillMonitorView;
-use spin_sleep::SpinSleeper;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
