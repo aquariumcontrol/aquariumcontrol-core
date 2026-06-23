@@ -78,13 +78,10 @@ impl Memory {
                 Ok(_env_var_name_value_tuple_opt) => {
                     #[cfg(debug_assertions)]
                     #[cfg(target_os = "linux")]
-                    match _env_var_name_value_tuple_opt {
-                        Some((env_var_name, value)) => {
-                            if config.active {
+                    if let Some((env_var_name, value)) = _env_var_name_value_tuple_opt {
+                        if config.active {
                                 info!("Memory configuration check: {env_var_name} is configured to {value}");
-                            }
                         }
-                        None => { /* do nothing, configuration check may be disabled */ }
                     }
                 }
                 Err(e) => {
