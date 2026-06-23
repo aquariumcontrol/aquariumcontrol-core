@@ -238,7 +238,7 @@ pub mod tests {
         let mut config: ConfigData =
             read_config_file("/config/aquarium_control_test_generic.toml".to_string()).unwrap();
         config.publish_pid.pid_filename =
-            "/var/local/aquarium-ctrl-invalid-content.pid".to_string();
+            "/var/local/aquarium-ctrl-test-invalid-content.pid".to_string();
         let result = PublishPid::new(config.publish_pid);
         assert!(matches!(
             result,
@@ -250,7 +250,7 @@ pub mod tests {
     pub fn test_publish_pid_file_already_contains_pid() {
         let mut config: ConfigData =
             read_config_file("/config/aquarium_control_test_generic.toml".to_string()).unwrap();
-        config.publish_pid.pid_filename = "/var/local/aquarium-ctrl-test.pid".to_string();
+        config.publish_pid.pid_filename = "/var/local/aquarium-ctrl-test-already-filled.pid".to_string();
         let result = PublishPid::new(config.publish_pid);
         assert!(matches!(
             result,
