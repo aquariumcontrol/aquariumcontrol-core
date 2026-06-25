@@ -314,5 +314,4 @@ impl Monitors {
 
         monitors_channels.acknowledge_signal_handler();
     }
-
 }

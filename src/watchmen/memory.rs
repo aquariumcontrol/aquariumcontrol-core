@@ -35,7 +35,6 @@ cfg_if::cfg_if! {
 use crate::watchmen::memory_config_check::{memory_config_check, MemoryConfigError};
 #[cfg(any(target_os = "linux", feature = "jemalloc"))]
 use log::info;
-use spin_sleep::SpinSleeper;
 use std::time::{Duration, Instant};
 
 #[cfg(all(target_os = "linux", not(test)))]
@@ -80,7 +79,7 @@ impl Memory {
                     #[cfg(target_os = "linux")]
                     if let Some((env_var_name, value)) = _env_var_name_value_tuple_opt {
                         if config.active {
-                                info!("Memory configuration check: {env_var_name} is configured to {value}");
+                            info!("Memory configuration check: {env_var_name} is configured to {value}");
                         }
                     }
                 }
@@ -149,14 +148,13 @@ impl Memory {
     ///
     /// # Arguments
     /// * `memory_channels` - A mutable reference to the channels used for receiving shutdown commands.
-    pub fn execute(&mut self, memory_channels: &mut MemoryChannels) {
+    pub async fn execute(&mut self, memory_channels: &mut MemoryChannels) {
         #[cfg(all(target_os = "linux", not(test)))]
         info!(target: module_path!(), "Thread started with TID: {}", gettid());
 
         let sleep_time = Duration::from_millis(CYCLE_TIME_HEATING_MEMORY);
         let check_interval = Duration::from_secs(self.config.check_interval);
         let mut last_check_instant = Instant::now() - check_interval;
-        let spin_sleeper = SpinSleeper::default();
 
         loop {
             // Check for a quit command before sleeping to ensure a responsive shutdown.
@@ -165,7 +163,7 @@ impl Memory {
             if quit_command_received {
                 break;
             }
-            spin_sleeper.sleep(sleep_time);
+            tokio::time::sleep(sleep_time).await;
 
             if last_check_instant.elapsed() > check_interval {
                 #[cfg(feature = "jemalloc")]
@@ -206,6 +204,7 @@ mod tests {
     use super::*;
     use crate::launch::channels::Channels;
     use crate::utilities::channel_content::InternalCommand;
+    use spin_sleep::SpinSleeper;
     use std::thread;
 
     /// Helper to create a default config for testing.
@@ -238,6 +237,16 @@ mod tests {
         assert!(!memory.lock_warn_resident_memory_exceeded);
     }
 
+    fn execute_blocking(memory: &mut Memory, memory_channels: &mut MemoryChannels) {
+        tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+            .unwrap()
+            .block_on(async {
+                memory.execute(memory_channels).await;
+            });
+    }
+
     #[test]
     fn test_execute_graceful_shutdown() {
         // Arrange
@@ -249,7 +258,7 @@ mod tests {
         let handle = thread::spawn(move || {
             // The `process_external_request` trait is not implemented in this file,
             // so we simulate its behavior for the test.
-            memory.execute(&mut channels.memory);
+            execute_blocking(&mut memory, &mut channels.memory);
         });
 
         let spin_sleeper = SpinSleeper::default();

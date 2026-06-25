@@ -517,16 +517,26 @@ fn run() -> Result<(), StartupError> {
         })?,
     );
 
-    let database_connection_data =
+    let database_connection_data_for_timestamp =
         sql_interface
             .get_connection()
             .map_err(|e| StartupError::Database {
                 source: Box::new(e),
             })?;
-    let sql_interface_data = SqlInterfaceData::new(database_connection_data, max_rows_data)
-        .map_err(|e| StartupError::Database {
-            source: Box::new(e),
-        })?;
+    let database_connection_data_for_data =
+        sql_interface
+            .get_connection()
+            .map_err(|e| StartupError::Database {
+                source: Box::new(e),
+            })?;
+    let sql_interface_data = SqlInterfaceData::new(
+        database_connection_data_for_timestamp,
+        database_connection_data_for_data,
+        max_rows_data,
+    )
+    .map_err(|e| StartupError::Database {
+        source: Box::new(e),
+    })?;
 
     let tables = sql_interface
         .get_tables()
@@ -763,8 +773,8 @@ fn run() -> Result<(), StartupError> {
     );
     let mut schedule_check = ScheduleCheck::new(config.schedule_check, database_ping_duration);
 
-    let mut data_injection = DataInjection;
-    let mut data_logger = DataLogger::new(config.data_logger, database_ping_duration)
+    let data_injection = DataInjection;
+    let mut data_logger = DataLogger::new(config.data_logger)
         .map_err(|e| StartupError::DataLoggerSetupFailure { source: e })?;
 
     let mut refill = Refill::new(config.refill, database_ping_duration);
@@ -896,10 +906,8 @@ fn run() -> Result<(), StartupError> {
 
         if config.relay_manager.use_simulator && relay_manager_thread_started {
             scope.spawn(move || {
-                let mut actuate_simulator = ActuateSimulator::new(
-                    &mut chan_actuate_simulator,
-                    config.controllino_relay,
-                );
+                let mut actuate_simulator =
+                    ActuateSimulator::new(&mut chan_actuate_simulator, config.controllino_relay);
                 relay_manager.execute(&mut chan_relay_manager, &mut actuate_simulator);
                 #[cfg(feature = "debug_channels")]
                 debug!(target: module_path!(), "{0}", chan_actuate_simulator);
@@ -1013,12 +1021,12 @@ fn run() -> Result<(), StartupError> {
 
                 if execution_config.schedule_check {
                     let exec_config = execution_config_clone_for_schedule_check;
-                    let handle = tokio::task::spawn_blocking(move || {
+                    let handle = tokio::spawn(async move {
                         schedule_check.execute(
                             &mut chan_schedule_check,
                             exec_config,
                             sql_interface_schedule,
-                        );
+                        ).await;
                         #[cfg(feature = "debug_channels")]
                         debug!(target: module_path!(), "{0}", chan_schedule_check);
                         #[cfg(feature = "debug_main")]
@@ -1038,13 +1046,13 @@ fn run() -> Result<(), StartupError> {
                         mutex_refill_status: mutex_refill_status_clone_for_data_logger,
                         mutex_temperature_gradient: mutex_temperature_gradient_clone_for_data_logger,
                     };
-                    let handle = tokio::task::spawn_blocking(move || {
+                    let handle = tokio::spawn(async move {
                         data_logger.execute(
-                            &mut data_injection,
+                            data_injection,
                             sql_interface_data,
                             &mut chan_data_logger,
                             data_logger_mutexes,
-                        );
+                        ).await;
                         #[cfg(feature = "debug_channels")]
                         debug!(target: module_path!(), "{0}", chan_data_logger);
                         #[cfg(feature = "debug_main")]
@@ -1054,8 +1062,8 @@ fn run() -> Result<(), StartupError> {
                 }
 
                 if execution_config.memory {
-                    let handle = tokio::task::spawn_blocking(move || {
-                        memory.execute(&mut chan_memory);
+                    let handle = tokio::spawn(async move {
+                        memory.execute(&mut chan_memory).await;
                         #[cfg(all(target_os = "linux", feature = "target_hw", feature = "debug_channels"))]
                         debug!(target: module_path!(), "{0}", chan_memory);
                         #[cfg(feature = "debug_main")]
@@ -1065,12 +1073,12 @@ fn run() -> Result<(), StartupError> {
                 }
 
                 if execution_config.temperature_gradient {
-                    let handle = tokio::task::spawn_blocking(move || {
+                    let handle = tokio::spawn(async move {
                         temperature_gradient.execute(
                             mutex_sensor_manager_signals_clone_for_temp_gradient,
                             &mut chan_temperature_gradient,
                             mutex_temperature_gradient,
-                        );
+                        ).await;
                         #[cfg(feature = "debug_main")]
                         debug!(target: module_path!(), "Temperature gradient calculation terminated.");
                     });
@@ -1138,6 +1146,7 @@ fn run() -> Result<(), StartupError> {
                     tasks.push(handle);
                 }
 
+                // Wait until all tasks are finished
                 for t in tasks {
                     let _ = t.await;
                 }
@@ -1146,10 +1155,8 @@ fn run() -> Result<(), StartupError> {
 
         if execution_config.tank_level_switch {
             scope.spawn(move || {
-                let _ = tank_level_switch.execute(
-                    &mut chan_tank_level_switch,
-                    mutex_tank_level_switch_signals,
-                );
+                let _ = tank_level_switch
+                    .execute(&mut chan_tank_level_switch, mutex_tank_level_switch_signals);
                 #[cfg(feature = "debug_channels")]
                 debug!(target: module_path!(), "{0}", chan_tank_level_switch);
                 #[cfg(feature = "debug_main")]
@@ -1262,7 +1269,6 @@ fn run() -> Result<(), StartupError> {
         Ok(())
     })
 }
-
 
 /// The main function is a simple error handler.
 /// The main entry point for the application is within the run() function.

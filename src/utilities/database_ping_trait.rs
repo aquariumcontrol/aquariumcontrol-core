@@ -45,7 +45,6 @@ use crate::database::pingable::Pingable;
 use crate::food::feed::Feed;
 use crate::mineral::balling::Balling;
 use crate::permission::schedule_check::ScheduleCheck;
-use crate::recorder::data_logger::DataLogger;
 use crate::thermal::heating::Heating;
 use crate::water::refill::Refill;
 use std::time::{Duration, Instant};
@@ -93,7 +92,6 @@ macro_rules! impl_database_ping_trait {
     };
 }
 
-impl_database_ping_trait!(DataLogger);
 impl_database_ping_trait!(Feed);
 impl_database_ping_trait!(Refill);
 impl_database_ping_trait!(Heating);

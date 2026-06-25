@@ -66,9 +66,9 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 //!   pre-configured parameters from a TOML file, and dynamic setpoints fetched from
 //!   a database.
 
-use log::{error, warn};
 #[cfg(not(test))]
 use log::info;
+use log::{error, warn};
 
 use crate::launch::channels::AquaChannelError;
 
@@ -380,7 +380,7 @@ impl Ventilation {
     /// to loop indefinitely. It will only break out of its loop and terminate when a `Quit`
     /// command is received from the signal handler, after which it performs final cleanup
     /// (switching the ventilation to its configured terminal state) and confirms shutdown.
-        pub async fn execute(
+    pub async fn execute(
         &mut self,
         mutex_device_scheduler_ventilation: Arc<Mutex<i32>>,
         ventilation_channels: &mut VentilationChannels,
@@ -646,7 +646,10 @@ impl Ventilation {
         // The shutdown sequence is handled by the signal_handler module.
         let mut termination_command_received = false;
         while !termination_command_received {
-            termination_command_received = match ventilation_channels.rx_ventilation_from_signal_handler.try_recv() {
+            termination_command_received = match ventilation_channels
+                .rx_ventilation_from_signal_handler
+                .try_recv()
+            {
                 Ok(c) => match c {
                     InternalCommand::Terminate => {
                         self.lock_warn_inapplicable_command_signal_handler = false;
@@ -702,12 +705,14 @@ pub mod tests {
             .build()
             .unwrap()
             .block_on(async {
-                ventilation.execute(
-                    mutex_device_scheduler_ventilation,
-                    ventilation_channels,
-                    ventilation_set_val_updater,
-                    ventilation_mutexes,
-                ).await;
+                ventilation
+                    .execute(
+                        mutex_device_scheduler_ventilation,
+                        ventilation_channels,
+                        ventilation_set_val_updater,
+                        ventilation_mutexes,
+                    )
+                    .await;
             });
     }
 
@@ -894,7 +899,8 @@ pub mod tests {
                     mutex_temperature_gradient: Arc::new(Mutex::new(0.0)),
                 };
 
-                execute_blocking(&mut ventilation, 
+                execute_blocking(
+                    &mut ventilation,
                     mutex_device_scheduler_ventilation.clone(),
                     &mut channels.ventilation,
                     &mut ventilation_set_value_updater,
@@ -1045,7 +1051,8 @@ pub mod tests {
                     mutex_temperature_gradient: Arc::new(Mutex::new(0.0)),
                 };
 
-                execute_blocking(&mut ventilation, 
+                execute_blocking(
+                    &mut ventilation,
                     mutex_device_scheduler_ventilation.clone(),
                     &mut channels.ventilation,
                     &mut ventilation_set_value_updater,
@@ -1263,7 +1270,8 @@ pub mod tests {
                     mutex_temperature_gradient: Arc::new(Mutex::new(0.0)),
                 };
 
-                execute_blocking(&mut ventilation, 
+                execute_blocking(
+                    &mut ventilation,
                     mutex_device_scheduler_ventilation.clone(),
                     &mut channels.ventilation,
                     &mut ventilation_set_value_updater,
@@ -1454,7 +1462,8 @@ pub mod tests {
                     mutex_temperature_gradient: Arc::new(Mutex::new(0.0)),
                 };
 
-                execute_blocking(&mut ventilation, 
+                execute_blocking(
+                    &mut ventilation,
                     mutex_device_scheduler_ventilation.clone(),
                     &mut channels.ventilation,
                     &mut ventilation_set_value_updater,
@@ -1646,7 +1655,8 @@ pub mod tests {
                     mutex_temperature_gradient: Arc::new(Mutex::new(0.0)),
                 };
 
-                execute_blocking(&mut ventilation, 
+                execute_blocking(
+                    &mut ventilation,
                     mutex_device_scheduler_ventilation.clone(),
                     &mut channels.ventilation,
                     &mut ventilation_set_value_updater,
@@ -1745,7 +1755,8 @@ pub mod tests {
                     mutex_temperature_gradient: Arc::new(Mutex::new(0.0)),
                 };
 
-                execute_blocking(&mut ventilation, 
+                execute_blocking(
+                    &mut ventilation,
                     mutex_device_scheduler_ventilation.clone(),
                     &mut channels.ventilation,
                     &mut ventilation_set_value_updater,
@@ -1981,7 +1992,8 @@ pub mod tests {
                     mutex_temperature_gradient: Arc::new(Mutex::new(0.0)),
                 };
 
-                execute_blocking(&mut ventilation, 
+                execute_blocking(
+                    &mut ventilation,
                     mutex_device_scheduler_ventilation.clone(),
                     &mut channels.ventilation,
                     &mut ventilation_set_value_updater,
@@ -2111,7 +2123,8 @@ pub mod tests {
                     mutex_temperature_gradient: Arc::new(Mutex::new(0.0)),
                 };
 
-                execute_blocking(&mut ventilation, 
+                execute_blocking(
+                    &mut ventilation,
                     mutex_device_scheduler_ventilation.clone(),
                     &mut channels.ventilation,
                     &mut ventilation_set_value_updater,
@@ -2237,7 +2250,8 @@ pub mod tests {
                     mutex_temperature_gradient: Arc::new(Mutex::new(0.0)),
                 };
 
-                execute_blocking(&mut ventilation, 
+                execute_blocking(
+                    &mut ventilation,
                     mutex_device_scheduler_ventilation.clone(),
                     &mut channels.ventilation,
                     &mut ventilation_set_value_updater,
@@ -2409,7 +2423,8 @@ pub mod tests {
                     mutex_temperature_gradient,
                 };
 
-                execute_blocking(&mut ventilation, 
+                execute_blocking(
+                    &mut ventilation,
                     mutex_device_scheduler_ventilation.clone(),
                     &mut channels.ventilation,
                     &mut ventilation_set_value_updater,
@@ -2579,7 +2594,8 @@ pub mod tests {
                     mutex_temperature_gradient: mutex_temperature_gradient_clone,
                 };
 
-                execute_blocking(&mut ventilation, 
+                execute_blocking(
+                    &mut ventilation,
                     mutex_device_scheduler_ventilation.clone(),
                     &mut channels.ventilation,
                     &mut ventilation_set_value_updater,

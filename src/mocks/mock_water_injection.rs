@@ -48,7 +48,7 @@ pub mod tests {
             refill_errors: &mut RefillErrorStates,
             _sql_interface_refill: &mut Box<dyn DatabaseInterfaceRefillTrait + Sync + Send>,
             _mutex_tank_level_switch: &Arc<Mutex<TankLevelSwitchSignals>>,
-            _mutex_device_scheduler_refill: &Arc<Mutex<i32>>
+            _mutex_device_scheduler_refill: &Arc<Mutex<i32>>,
         ) -> bool {
             if self.tx_water_injection_to_test_environment_opt.is_some() {
                 let mut tx_water_injection_to_test_environment = self

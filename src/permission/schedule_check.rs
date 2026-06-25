@@ -69,6 +69,7 @@ use nix::unistd::gettid;
 #[cfg(not(test))]
 use log::warn;
 
+use crate::database::pingable::Pingable;
 use crate::database::sql_interface_schedule::{ScheduleEntry, ScheduleType, SqlInterfaceSchedule};
 use crate::launch::channels::{AquaChannelError, AquaReceiver, AquaSender};
 use crate::launch::execution_config::ExecutionConfig;
@@ -79,7 +80,6 @@ use crate::utilities::channel_content::InternalCommand;
 use crate::utilities::database_ping_trait::DatabasePingTrait;
 use crate::utilities::logger::log_error_chain;
 use crate::utilities::proc_ext_req::ProcessExternalRequestTrait;
-use spin_sleep::SpinSleeper;
 use std::time::{Duration, Instant};
 
 /// Contains all inhibition flags for a specific schedule communication
@@ -347,7 +347,7 @@ impl ScheduleCheck {
     ///   have been started.
     /// * `sql_interface_schedule` - A `SqlInterfaceSchedule` instance providing
     ///   the interface to the SQL database for retrieving schedule entries.
-    pub fn execute(
+    pub async fn execute(
         &mut self,
         schedule_check_channels: &mut ScheduleCheckChannels,
         execution_config: ExecutionConfig,
@@ -357,7 +357,6 @@ impl ScheduleCheck {
         info!(target: module_path!(), "Thread started with TID: {}", gettid());
 
         let sleep_duration_hundred_millis = Duration::from_millis(100);
-        let spin_sleeper = SpinSleeper::default();
 
         let duration_schedule_check_interval =
             Duration::from_secs(self.config.schedule_check_interval.into());
@@ -371,7 +370,14 @@ impl ScheduleCheck {
             {
                 first_iteration = false;
                 last_check_instant = Instant::now();
-                if let Err(errors) = sql_interface_schedule.read_schedule() {
+                let (res, sql_interface) = tokio::task::spawn_blocking(move || {
+                    let res = sql_interface_schedule.read_schedule();
+                    (res, sql_interface_schedule)
+                })
+                .await
+                .unwrap();
+                sql_interface_schedule = sql_interface;
+                if let Err(errors) = res {
                     if !self.lock_error_database_read {
                         for e in errors {
                             log_error_chain(module_path!(), "Reading schedule failed", e);
@@ -453,9 +459,17 @@ impl ScheduleCheck {
                 ),
             );
 
-            spin_sleeper.sleep(sleep_duration_hundred_millis);
+            tokio::time::sleep(sleep_duration_hundred_millis).await;
 
-            self.check_timing_and_ping_database(&mut sql_interface_schedule);
+            if self.get_last_ping_instant().elapsed() > self.get_ping_interval() {
+                sql_interface_schedule = tokio::task::spawn_blocking(move || {
+                    sql_interface_schedule.ping();
+                    sql_interface_schedule
+                })
+                .await
+                .unwrap();
+                self.update_last_ping_instant();
+            }
         }
 
         schedule_check_channels.acknowledge_signal_handler();
