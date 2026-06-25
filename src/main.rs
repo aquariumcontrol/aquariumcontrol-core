@@ -119,14 +119,6 @@ cfg_if::cfg_if! {
 }
 use aquarium_control::watchmen::memory::Memory;
 
-cfg_if::cfg_if! {
-    if #[cfg(feature = "jemalloc")] {
-        use tikv_jemallocator::Jemalloc;
-        #[global_allocator]
-        static GLOBAL: Jemalloc = Jemalloc;
-    }
-}
-
 /// Displays the valid command line parameter combinations
 fn display_usage() {
     println!("aquarium_control requires a configuration file to be specified to enter operation. Alternatively, the following options are available:");

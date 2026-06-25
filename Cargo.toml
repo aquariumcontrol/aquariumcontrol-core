@@ -43,11 +43,6 @@ aquamarine = "0.6.0"
 posixmq = "1.0.0"
 ds18b20 = "0.1.1"
 
-# Use jemalloc as the global allocator on non-MSVC targets
-[target.'cfg(not(target_env = "msvc"))'.dependencies]
-tikv-jemallocator = { version = "0.7.0", features = ["stats", "profiling"] }
-tikv-jemalloc-ctl = { version = "0.7.0", features = ["stats"] }
-
 [dev-dependencies]
 assert_float_eq = "1.2"
 all_asserts = "2.3.4"
@@ -56,7 +51,6 @@ all_asserts = "2.3.4"
 default = []
 target_hw = []
 controllino_hw = []
-jemalloc = []
 debug_schedule_check = []
 debug_signal_handler = []
 debug_data_logger = []
