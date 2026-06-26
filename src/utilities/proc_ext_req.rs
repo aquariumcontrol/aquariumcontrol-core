@@ -70,7 +70,6 @@ use crate::sensors::i2c_interface::I2cInterface;
 use crate::simulator::tcp_communication::TcpCommunication;
 use crate::thermal::heating::Heating;
 use crate::thermal::ventilation::Ventilation;
-use crate::watchmen::memory::Memory;
 use crate::watchmen::watchdog::Watchdog;
 use crate::water::{refill::Refill, water_injection::WaterInjection};
 
@@ -750,8 +749,7 @@ impl_process_request_no_messaging!(
     I2cInterface,
     ScheduleCheck,
     RelayManager,
-    TcpCommunication,
-    Memory
+    TcpCommunication
 );
 
 impl_process_request_with_reset_errors!(Heating, Ventilation);

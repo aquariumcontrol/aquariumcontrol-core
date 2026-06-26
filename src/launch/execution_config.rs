@@ -63,7 +63,6 @@ pub struct ExecutionConfig {
     pub schedule_check: bool,
     pub ds18b20: bool,
     pub watchdog: bool,
-    pub memory: bool,
     pub tcp_communication: bool,
 }
 
@@ -96,7 +95,6 @@ impl ExecutionConfig {
             schedule_check: config.schedule_check.execute,
             ds18b20: config.ds18b20.execute,
             watchdog: config.watchdog.execute,
-            memory: config.memory.execute,
             tcp_communication: config.tcp_communication.execute,
         }
     }
@@ -130,7 +128,6 @@ impl Default for ExecutionConfig {
             schedule_check: true,
             ds18b20: true,
             watchdog: true,
-            memory: true,
             tcp_communication: true,
         }
     }

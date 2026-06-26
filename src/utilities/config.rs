@@ -80,7 +80,6 @@ use crate::thermal::ventilation_config::VentilationConfig;
 use crate::utilities::config_error::ConfigError;
 use crate::utilities::logger_config::LoggerConfig;
 use crate::utilities::publish_pid_config::PublishPidConfig;
-use crate::watchmen::memory_config::MemoryConfig;
 use crate::watchmen::monitors_config::MonitorsConfig;
 use crate::watchmen::watchdog_config::WatchdogConfig;
 use crate::water::refill_config::RefillConfig;
@@ -165,9 +164,6 @@ pub struct ConfigData {
     /// configuration of WS2812B RGB LED
     #[cfg(all(target_os = "linux", feature = "target_hw"))]
     pub ws2812b: Ws2812BConfig,
-
-    /// check of memory configuration
-    pub memory: MemoryConfig,
 
     /// configuration of the general log file
     pub logger: LoggerConfig,

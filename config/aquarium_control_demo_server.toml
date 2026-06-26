@@ -269,16 +269,6 @@ execute = true                                          # used for testing purpo
 device_name = "/dev/spidev0.0"                          # device name required by low-level SPI driver
 number_leds = 3                                         # number of LEDs
 
-[memory]
-active = true                                           # needs to be deactivated for certain test environments
-env_variable_name = "MALLOC_ARENA_MAX"                  # check the configuration of standard memory allocator
-env_variable_min_val = 2                                # minimum value for environment variable
-env_variable_max_val = 3                                # maximum value for environment variable
-execute = true                                          # used for testing purposes
-max_resident = 500000                                   # maximum allowed resident memory
-max_allocated = 100000                                  # maximum allowed allocated memory
-check_interval = 900                                    # check-interval in seconds
-
 [logger]
 logfile = "/var/log/aquarium.log"                       # path and filename of the log file
 

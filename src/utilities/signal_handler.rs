@@ -550,12 +550,6 @@ pub fn handle_signals(
         None,
         "messaging",
     );
-    send_command(
-        InternalCommand::Quit,
-        Some(&mut signal_handler_channels.tx_signal_handler_to_memory),
-        None,
-        "memory",
-    );
 
     #[cfg(feature = "debug_channels")]
     debug!(target: module_path!(), "{signal_handler_channels}");

@@ -149,10 +149,7 @@ pub struct SignalHandlerChannels {
 
     /// Receiver from the `Watchdog` thread for shutdown acknowledgements.
     pub rx_signal_handler_from_watchdog: AquaReceiver<bool>,
-
-    /// Sender to the `Memory` monitor thread for `Quit` command (one-way).
-    pub tx_signal_handler_to_memory: AquaSender<InternalCommand>,
-
+    
     #[cfg(all(target_os = "linux", feature = "target_hw"))]
     /// Sender to the `Dht` sensor thread for `Quit` command.
     pub tx_signal_handler_to_dht: AquaSender<InternalCommand>,

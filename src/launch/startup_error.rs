@@ -76,7 +76,6 @@ use crate::utilities::config_file_definition_error::ConfigFileDefinitionError;
 use crate::utilities::logger::LoggerSetupError;
 use crate::utilities::publish_pid::PublishPidError;
 use crate::utilities::version_information::VersionInformationError;
-use crate::watchmen::memory_config_check::MemoryConfigError;
 use crate::watchmen::watchdog::WatchdogError;
 use thiserror::Error;
 
@@ -132,13 +131,6 @@ pub enum StartupError {
     #[allow(unused)]
     #[error("Configuration error: GPIO handler not initialized.")]
     GpioHandlerMissing,
-
-    /// Configuration error: Memory configuration of the operating system is invalid.
-    #[error("Configuration error: Memory configuration of operating system is invalid.")]
-    InvalidMemoryConfig {
-        #[source]
-        source: MemoryConfigError,
-    },
 
     /// Could not retrieve version information.
     #[error("Could not retrieve version information.")]

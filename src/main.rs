@@ -117,7 +117,6 @@ cfg_if::cfg_if! {
         use aquarium_control::sensors::i2c_interface::I2cInterface;
     }
 }
-use aquarium_control::watchmen::memory::Memory;
 
 /// Displays the valid command line parameter combinations
 fn display_usage() {
@@ -809,8 +808,6 @@ fn run() -> Result<(), StartupError> {
     let mut monitors = Monitors::new(config.monitors);
     let mut watchdog = Watchdog::new(config.watchdog)
         .map_err(|e| StartupError::WatchdogSetupFailure { source: e })?;
-    let mut memory =
-        Memory::new(config.memory).map_err(|e| StartupError::InvalidMemoryConfig { source: e })?;
 
     let mut ds18b20 = Ds18b20::new(config.ds18b20)
         .map_err(|e| StartupError::Ds18b20SetupFailure { source: e })?;
@@ -847,7 +844,6 @@ fn run() -> Result<(), StartupError> {
         signal_handler: mut chan_signal_handler,
         monitors: mut chan_monitors,
         watchdog: mut chan_watchdog,
-        memory: mut chan_memory,
         refill: mut chan_refill,
         sensor_manager: mut chan_sensor_manager,
         temperature_gradient: mut chan_temperature_gradient,
@@ -1049,17 +1045,6 @@ fn run() -> Result<(), StartupError> {
                         debug!(target: module_path!(), "{0}", chan_data_logger);
                         #[cfg(feature = "debug_main")]
                         debug!(target: module_path!(), "Data logger terminated.");
-                    });
-                    tasks.push(handle);
-                }
-
-                if execution_config.memory {
-                    let handle = tokio::spawn(async move {
-                        memory.execute(&mut chan_memory).await;
-                        #[cfg(all(target_os = "linux", feature = "target_hw", feature = "debug_channels"))]
-                        debug!(target: module_path!(), "{0}", chan_memory);
-                        #[cfg(feature = "debug_main")]
-                        debug!(target: module_path!(), "Memory terminated.");
                     });
                     tasks.push(handle);
                 }
