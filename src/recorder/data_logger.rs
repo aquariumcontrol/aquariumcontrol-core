@@ -90,10 +90,9 @@ use crate::recorder::recorder_data_frame::RecorderDataFrame;
 use crate::sensors::sensor_manager::SensorManagerSignals;
 use crate::sensors::tank_level_switch::TankLevelSwitchSignals;
 use crate::utilities::acknowledge_signal_handler::AcknowledgeSignalHandlerTrait;
-use crate::utilities::channel_content::AquariumSignal;
+use crate::utilities::channel_content::{AquariumSignal, InternalCommand};
 use crate::utilities::iir_filter::IIRFilter;
 use crate::utilities::proc_ext_req::ProcessExternalRequestTrait;
-use crate::utilities::wait_for_termination::WaitForTerminationTrait;
 
 const MILLIS_PER_SEC: u64 = 1000;
 
@@ -1016,7 +1015,7 @@ impl DataLogger {
     /// # Arguments
     ///
     /// * `data_logger_channels` - A mutable reference to the struct that contains the channels.
-    fn confirm_quit_and_wait_for_termination_command(
+    async fn confirm_quit_and_wait_for_termination_command(
         &mut self,
         data_logger_channels: &mut DataLoggerChannels,
     ) {
@@ -1027,11 +1026,50 @@ impl DataLogger {
         // This thread has channel connections to underlying threads.
         // Those threads have to stop receiving commands from this thread.
         // The shutdown sequence is handled by the signal_handler module.
-        self.wait_for_termination(
-            &mut data_logger_channels.rx_data_logger_from_signal_handler,
-            sleep_duration_hundred_millis,
-            module_path!(),
-        );
+        let mut termination_command_received = false;
+        while !termination_command_received {
+            termination_command_received = match data_logger_channels
+                .rx_data_logger_from_signal_handler
+                .try_recv()
+            {
+                Ok(c) => match c {
+                    InternalCommand::Terminate => {
+                        self.lock_warn_inapplicable_command_signal_handler = false;
+                        true
+                    }
+                    _ => {
+                        if !self.lock_warn_inapplicable_command_signal_handler {
+                            warn!(
+                                target: module_path!(),
+                                "ignoring inapplicable command from signal handler ({c})"
+                            );
+                            self.lock_warn_inapplicable_command_signal_handler = true;
+                        }
+                        false
+                    }
+                },
+                Err(e) => {
+                    match e {
+                        #[cfg(feature = "debug_channels")]
+                        crate::launch::channels::AquaChannelError::Full => {}
+                        crate::launch::channels::AquaChannelError::Empty => {}
+                        crate::launch::channels::AquaChannelError::Disconnected => {
+                            if !self.lock_error_channel_receive_termination {
+                                error!(
+                                    target: module_path!(),
+                                    "receiving termination signal from signal handler failed ({e:?})"
+                                );
+                                self.lock_error_channel_receive_termination = true;
+                            }
+                        }
+                    }
+                    false
+                }
+            };
+            if !termination_command_received {
+                tokio::time::sleep(sleep_duration_hundred_millis).await;
+            }
+        }
     }
 
     /// Executes the main control loop for the data logger module.
@@ -1145,7 +1183,7 @@ impl DataLogger {
                 None,
             );
             if quit_command_received {
-                self.confirm_quit_and_wait_for_termination_command(data_logger_channels);
+                self.confirm_quit_and_wait_for_termination_command(data_logger_channels).await;
                 return;
             }
         }
@@ -1401,7 +1439,7 @@ impl DataLogger {
             start_time = Instant::now(); // start time for the next cycle
         }
 
-        self.confirm_quit_and_wait_for_termination_command(data_logger_channels);
+        self.confirm_quit_and_wait_for_termination_command(data_logger_channels).await;
     }
 }
 
