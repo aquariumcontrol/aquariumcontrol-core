@@ -1293,4 +1293,27 @@ pub mod tests {
             panic!("Expected InvalidSensorType error, got {:?}", result);
         }
     }
+
+    #[test]
+    fn test_get_next_atlas_scientific_signal() {
+        // Test WaterTemperature branch
+        let (next, complete) = AquariumSignal::WaterTemperature.get_next_atlas_scientific_signal();
+        assert_eq!(next, AquariumSignal::pH);
+        assert!(!complete);
+
+        // Test pH branch
+        let (next, complete) = AquariumSignal::pH.get_next_atlas_scientific_signal();
+        assert_eq!(next, AquariumSignal::Conductivity);
+        assert!(!complete);
+
+        // Test Conductivity branch
+        let (next, complete) = AquariumSignal::Conductivity.get_next_atlas_scientific_signal();
+        assert_eq!(next, AquariumSignal::WaterTemperature);
+        assert!(complete);
+
+        // Test default branch (_) using AmbientTemperature
+        let (next, complete) = AquariumSignal::AmbientTemperature.get_next_atlas_scientific_signal();
+        assert_eq!(next, AquariumSignal::WaterTemperature);
+        assert!(!complete);
+    }
 }
