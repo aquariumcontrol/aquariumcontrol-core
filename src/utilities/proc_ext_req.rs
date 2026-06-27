@@ -52,7 +52,7 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 
 use log::{error, warn};
 
-#[cfg(not(test))]
+#[cfg(not(test))] // only required in real-life execution
 use log::info;
 
 use crate::food::{feed::Feed, food_injection::FoodInjection};
@@ -114,7 +114,8 @@ pub trait ProcessExternalRequestTrait {
             Ok(c) => match c {
                 InternalCommand::Quit => true,
                 _ => {
-                    #[cfg(any(not(test), not(feature = "debug_signal_handler")))]
+                    #[cfg(any(not(test), not(feature = "debug_signal_handler")))] // only required in real-life execution
+                    #[cfg(not(tarpaulin_include))]
                     warn!(
                         target: module_path!(),
                         "ProcessExternalRequestTrait: ignoring inapplicable command from signal handler."
@@ -128,7 +129,8 @@ pub trait ProcessExternalRequestTrait {
                     AquaChannelError::Full => { /* Not applicable. Do nothing */ }
                     AquaChannelError::Empty => { /* empty buffer - no action required */ }
                     AquaChannelError::Disconnected => {
-                        #[cfg(all(not(test), not(feature = "debug_signal_handler")))]
+                        #[cfg(all(not(test), not(feature = "debug_signal_handler")))] // only required in real-life execution
+                        #[cfg(not(tarpaulin_include))]
                         error!(
                             target: module_path!(),
                             "receiving command from signal handler failed ({e:?})"
@@ -146,7 +148,8 @@ pub trait ProcessExternalRequestTrait {
                         InternalCommand::Start => (true, false),
                         InternalCommand::Stop => (false, true),
                         _ => {
-                            #[cfg(not(test))]
+                            #[cfg(not(test))] // only required in real-life execution
+                            #[cfg(not(tarpaulin_include))]
                             warn!(
                                 target: module_path!(),
                                 "ProcessExternalRequestTrait: ignoring inapplicable command from messaging."
@@ -160,7 +163,8 @@ pub trait ProcessExternalRequestTrait {
                             AquaChannelError::Full => { /* Not applicable. Do nothing */ }
                             AquaChannelError::Empty => { /* empty buffer - no action required */ }
                             AquaChannelError::Disconnected => {
-                                #[cfg(not(test))]
+                                #[cfg(not(test))] // only required in real-life execution
+                                #[cfg(not(tarpaulin_include))]
                                 error!(
                                     target: module_path!(),
                                     "(standard) receiving command from messaging failed ({e:?})"
@@ -210,7 +214,8 @@ impl ProcessExternalRequestTrait for Refill {
             Ok(c) => match c {
                 InternalCommand::Quit => true,
                 _ => {
-                    #[cfg(any(not(test), feature = "debug_signal_handler"))]
+                    #[cfg(any(not(test), feature = "debug_signal_handler"))] // only required in real-life execution
+                    #[cfg(not(tarpaulin_include))]
                     warn!(
                         target: module_path!(),
                         "ignoring inapplicable command from signal handler."
@@ -224,7 +229,8 @@ impl ProcessExternalRequestTrait for Refill {
                     AquaChannelError::Full => { /* Not applicable. Do nothing */ }
                     AquaChannelError::Empty => { /* empty buffer - no action required */ }
                     AquaChannelError::Disconnected => {
-                        #[cfg(not(test))]
+                        #[cfg(not(test))] // only required in real-life execution
+                        #[cfg(not(tarpaulin_include))]
                         error!(
                             target: module_path!(),
                             "receiving command from signal handler failed ({e:?})"
@@ -242,7 +248,8 @@ impl ProcessExternalRequestTrait for Refill {
                         InternalCommand::Start => (true, false),
                         InternalCommand::Stop => (false, true),
                         InternalCommand::ResetAllErrors => {
-                            #[cfg(not(test))]
+                            #[cfg(not(test))] // only required in real-life execution
+                            #[cfg(not(tarpaulin_include))]
                             info!(
                                 target: module_path!(),
                                 "Received reset command for errors of refill control."
@@ -251,7 +258,8 @@ impl ProcessExternalRequestTrait for Refill {
                             (false, false)
                         }
                         _ => {
-                            #[cfg(not(test))]
+                            #[cfg(not(test))] // only required in real-life execution
+                            #[cfg(not(tarpaulin_include))]
                             warn!(
                                 target: module_path!(),
                                 "ignoring inapplicable command from messaging."
@@ -265,7 +273,8 @@ impl ProcessExternalRequestTrait for Refill {
                             AquaChannelError::Full => { /* Not applicable. Do nothing */ }
                             AquaChannelError::Empty => { /* empty buffer - no action required */ }
                             AquaChannelError::Disconnected => {
-                                #[cfg(not(test))]
+                                #[cfg(not(test))] // only required in real-life execution
+                                #[cfg(not(tarpaulin_include))]
                                 error!(
                                     target: module_path!(),
                                     "(refill) receiving command from messaging failed ({e:?})"
@@ -311,7 +320,8 @@ fn process_external_request_without_messaging(
         Ok(c) => match c {
             InternalCommand::Quit => true,
             _ => {
-                #[cfg(any(not(test), feature = "debug_signal_handler"))]
+                #[cfg(any(not(test), feature = "debug_signal_handler"))] // only required in real-life execution
+                #[cfg(not(tarpaulin_include))]
                 warn!(
                     target: module_path!(),
                     "ignoring inapplicable command from signal handler."
@@ -357,7 +367,8 @@ fn process_standard_request(rx_from_signal_handler: &mut AquaReceiver<InternalCo
             InternalCommand::Terminate => true,
             InternalCommand::Quit => true,
             _ => {
-                #[cfg(any(not(test), feature = "debug_signal_handler"))]
+                #[cfg(any(not(test), feature = "debug_signal_handler"))] // only required in real-life execution
+                #[cfg(not(tarpaulin_include))]
                 warn!(
                     target: module_path!(),
                     "ignoring inapplicable command {c} from signal handler."
@@ -371,7 +382,8 @@ fn process_standard_request(rx_from_signal_handler: &mut AquaReceiver<InternalCo
                 AquaChannelError::Full => { /* Not applicable. Do nothing */ }
                 AquaChannelError::Empty => { /* empty buffer - no action required */ }
                 AquaChannelError::Disconnected => {
-                    #[cfg(not(test))]
+                    #[cfg(not(test))] // only required in real-life execution
+                    #[cfg(not(tarpaulin_include))]
                     error!(
                         target: module_path!(),
                         "receiving command from signal handler failed ({e:?})"
@@ -420,7 +432,8 @@ impl ProcessExternalRequestTrait for Feed {
                             InternalCommand::Start => (true, false, false, 0),
                             InternalCommand::Stop => (false, true, false, 0),
                             InternalCommand::ResetAllErrors => {
-                                #[cfg(not(test))]
+                                #[cfg(not(test))] // only required in real-life execution
+                                #[cfg(not(tarpaulin_include))]
                                 info!(
                                     target: module_path!(),
                                     "Received reset command for errors of feed control."
@@ -430,7 +443,8 @@ impl ProcessExternalRequestTrait for Feed {
                             }
                             InternalCommand::Execute(c) => (false, false, true, c),
                             _ => {
-                                #[cfg(not(test))]
+                                #[cfg(not(test))] // only required in real-life execution
+                                #[cfg(not(tarpaulin_include))]
                                 warn!(
                                     target: module_path!(),
                                     "ignoring inapplicable command {c} from messaging."
@@ -445,7 +459,8 @@ impl ProcessExternalRequestTrait for Feed {
                                 AquaChannelError::Empty => { /* empty buffer - no action required */
                                 }
                                 AquaChannelError::Disconnected => {
-                                    #[cfg(not(test))]
+                                    #[cfg(not(test))] // only required in real-life execution
+                                    #[cfg(not(tarpaulin_include))]
                                     error!(
                                         target: module_path!(),
                                         "(feed) - receiving command from messaging failed ({e:?})"
@@ -508,7 +523,8 @@ impl ProcessExternalRequestTrait for Balling {
                             InternalCommand::Stop => (false, true, false, 0),
                             InternalCommand::Execute(c) => (false, false, true, c),
                             _ => {
-                                #[cfg(not(test))]
+                                #[cfg(not(test))] // only required in real-life execution
+                                #[cfg(not(tarpaulin_include))]
                                 warn!(
                                     target: module_path!(),
                                     "ignoring inapplicable command {c} from messaging."
@@ -523,7 +539,8 @@ impl ProcessExternalRequestTrait for Balling {
                                 AquaChannelError::Empty => { /* empty buffer - no action required */
                                 }
                                 AquaChannelError::Disconnected => {
-                                    #[cfg(not(test))]
+                                    #[cfg(not(test))] // only required in real-life execution
+                                    #[cfg(not(tarpaulin_include))]
                                     error!(
                                         target: module_path!(),
                                         "(balling) receiving command from messaging failed ({e:?})"
@@ -581,7 +598,8 @@ impl ProcessExternalRequestTrait for Watchdog {
                         InternalCommand::Start => (true, false),
                         InternalCommand::Stop => (false, true),
                         _ => {
-                            #[cfg(not(test))]
+                            #[cfg(not(test))] // only required in real-life execution
+                            #[cfg(not(tarpaulin_include))]
                             warn!(
                                 target: module_path!(),
                                 "ignoring inapplicable command {c} from messaging."
@@ -595,7 +613,8 @@ impl ProcessExternalRequestTrait for Watchdog {
                             AquaChannelError::Full => { /* Not applicable. Do nothing */ }
                             AquaChannelError::Empty => { /* empty buffer - no action required */ }
                             AquaChannelError::Disconnected => {
-                                #[cfg(not(test))]
+                                #[cfg(not(test))] // only required in real-life execution
+                                #[cfg(not(tarpaulin_include))]
                                 error!(
                                     target: module_path!(),
                                     "(watchdog) receiving command from messaging failed ({e:?})"
@@ -658,7 +677,8 @@ macro_rules! impl_process_request_with_reset_errors {
                         Ok(c) => match c {
                             InternalCommand::Quit => true,
                             _ => {
-                                #[cfg(any(not(test), feature = "debug_signal_handler"))]
+                                #[cfg(any(not(test), feature = "debug_signal_handler"))] // only required in real-life execution
+                                #[cfg(not(tarpaulin_include))]
                                 warn!(
                                     target: module_path!(),
                                     "ignoring inapplicable command from signal handler."
@@ -672,7 +692,8 @@ macro_rules! impl_process_request_with_reset_errors {
                                 AquaChannelError::Full => { /* Not applicable. Do nothing */ }
                                 AquaChannelError::Empty => { /* empty buffer - no action required */ }
                                 AquaChannelError::Disconnected => {
-                                    #[cfg(not(test))]
+                                    #[cfg(not(test))] // only required in real-life execution
+                                    #[cfg(not(tarpaulin_include))]
                                     error!(
                                         target: module_path!(),
                                         "receiving command from signal handler failed ({e:?})"
@@ -690,7 +711,8 @@ macro_rules! impl_process_request_with_reset_errors {
                                     InternalCommand::Start => (true, false),
                                     InternalCommand::Stop => (false, true),
                                     InternalCommand::ResetAllErrors => {
-                                        #[cfg(not(test))]
+                                        #[cfg(not(test))] // only required in real-life execution
+                                        #[cfg(not(tarpaulin_include))]
                                         info!(
                                             target: module_path!(),
                                             "Received reset command for errors of {} control.",
@@ -700,7 +722,8 @@ macro_rules! impl_process_request_with_reset_errors {
                                         (false, false)
                                     }
                                     _ => {
-                                        #[cfg(not(test))]
+                                        #[cfg(not(test))] // only required in real-life execution
+                                        #[cfg(not(tarpaulin_include))]
                                         warn!(
                                             target: module_path!(),
                                             "ignoring inapplicable command from messaging."
@@ -714,7 +737,8 @@ macro_rules! impl_process_request_with_reset_errors {
                                         AquaChannelError::Full => { /* Not applicable. Do nothing */ }
                                         AquaChannelError::Empty => { /* empty buffer - no action required */ }
                                         AquaChannelError::Disconnected => {
-                                            #[cfg(not(test))]
+                                            #[cfg(not(test))] // only required in real-life execution
+                                            #[cfg(not(tarpaulin_include))]
                                             error!(
                                                 target: module_path!(),
                                                 "({}) receiving command from messaging failed ({e:?})",

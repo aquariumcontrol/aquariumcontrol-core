@@ -30,7 +30,8 @@ macro_rules! manage_cycle_time_thermal {
 
         if execution_duration > $cycle_time_duration {
             if !$lock_warn_cycle_time_exceeded && !$actuation_mutex_was_blocked {
-                #[cfg(not(test))]
+                #[cfg(not(test))] // only required in real-life execution
+                #[cfg(not(tarpaulin_include))]
                 warn!(target: $location,
                     "execution duration of {} milliseconds exceeds cycle time of {}",
                     execution_duration.as_millis(),

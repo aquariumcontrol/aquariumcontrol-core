@@ -66,7 +66,7 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 //!   pre-configured parameters from a TOML file, and dynamic setpoints fetched from
 //!   a database.
 
-#[cfg(not(test))]
+#[cfg(not(test))] // only required in real-life execution
 use log::info;
 use log::{error, warn};
 
@@ -88,7 +88,7 @@ use crate::utilities::acknowledge_signal_handler::AcknowledgeSignalHandlerTrait;
 use crate::utilities::check_mutex_access_duration::CheckMutexAccessDurationTrait;
 use crate::utilities::logger::log_error_chain;
 use crate::{perform_schedule_check, update_thermal_set_values};
-#[cfg(all(not(test), target_os = "linux"))]
+#[cfg(all(not(test), target_os = "linux"))] // only required in real-life execution
 use nix::unistd::gettid;
 
 const CYCLE_TIME_VENTILATION_MILLIS: u64 = 500;
@@ -387,7 +387,8 @@ impl Ventilation {
         ventilation_set_val_updater: &mut impl ThermalSetValueUpdaterTrait,
         ventilation_mutexes: VentilationMutexes,
     ) {
-        #[cfg(all(target_os = "linux", not(test)))]
+        #[cfg(all(target_os = "linux", not(test)))] // only required in real-life execution
+        #[cfg(not(tarpaulin_include))]
         info!(target: module_path!(), "Thread started with TID: {}", gettid());
 
         let cycle_time_duration = Duration::from_millis(CYCLE_TIME_VENTILATION_MILLIS);
@@ -415,7 +416,8 @@ impl Ventilation {
                 break;
             }
             if stop_command_received {
-                #[cfg(not(test))]
+                #[cfg(not(test))] // only required in real-life execution
+                #[cfg(not(tarpaulin_include))]
                 info!(
                     target: module_path!(),
                     "received Stop command. Inhibiting ventilation."
@@ -423,7 +425,8 @@ impl Ventilation {
                 ventilation_inhibited = true;
             }
             if start_command_received {
-                #[cfg(not(test))]
+                #[cfg(not(test))] // only required in real-life execution
+                #[cfg(not(tarpaulin_include))]
                 info!(
                     target: module_path!(),
                     "received Start command. Restarting ventilation."
@@ -468,7 +471,7 @@ impl Ventilation {
                     &ventilation_mutexes.mutex_temperature_gradient,
                     ventilation_state == ActuatorState::On,
                     false, // ventilation expects a negative gradient
-                    #[cfg(not(test))]
+                    #[cfg(not(test))] // only required in real-life execution
                     "Ventilation",
                 );
                 if actuator_ineffective
@@ -482,7 +485,8 @@ impl Ventilation {
                     );
                     ventilation_state = ActuatorState::Off;
                     self.actuator_disabled = true;
-                    #[cfg(not(test))]
+                    #[cfg(not(test))] // only required in real-life execution
+                    #[cfg(not(tarpaulin_include))]
                     warn!("[{}]: Disabled ventilation because temperature gradient monitor indicates ineffectiveness.", module_path!());
                 }
 
@@ -599,7 +603,8 @@ impl Ventilation {
 
             if execution_duration > cycle_time_duration {
                 if !lock_warn_cycle_time_exceeded && !actuation_mutex_was_blocked_during_actuation {
-                    #[cfg(not(test))]
+                    #[cfg(not(test))] // only required in real-life execution
+                    #[cfg(not(tarpaulin_include))]
                     warn!(target: module_path!(),
                         "execution duration of {} milliseconds exceeds cycle time of {}",
                         execution_duration.as_millis(),

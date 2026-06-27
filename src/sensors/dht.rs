@@ -82,7 +82,7 @@ use crate::sensors::dht_error::DhtError;
 use std::time::Duration;
 
 cfg_if::cfg_if! {
-    if #[cfg(all(not(test), target_os = "linux", feature = "target_hw"))] {
+    if #[cfg(all(not(test), target_os = "linux", feature = "target_hw"))] { // only required in real-life execution
         use nix::unistd::gettid;
         use log::info;
         use crate::utilities::logger::log_error_chain;
@@ -772,7 +772,8 @@ impl Dht {
     /// * `mutex_dht` - Mutex to store the result of the measurement
     /// * `dht_channels` - Mutable reference to the struct containing the channel
     pub fn execute(&mut self, mutex_dht: Arc<Mutex<DhtResult>>, dht_channels: &mut DhtChannels) {
-        #[cfg(all(target_os = "linux", not(test)))]
+        #[cfg(all(target_os = "linux", not(test)))] // only required in real-life execution
+        #[cfg(not(tarpaulin_include))]
         info!(target: module_path!(), "Thread started with TID: {}", gettid());
 
         #[allow(unused)]
@@ -814,7 +815,8 @@ impl Dht {
                         ) {
                             if !self.lock_error_failed_after_retries {
                                 // avoid log flooding
-                                #[cfg(not(test))]
+                                #[cfg(not(test))] // only required in real-life execution
+                                #[cfg(not(tarpaulin_include))]
                                 log_error_chain(
                                     module_path!(),
                                     "Failure to read from DHT sensor",
@@ -825,7 +827,8 @@ impl Dht {
                         } else {
                             self.lock_error_failed_after_retries = false;
                             // report directly
-                            #[cfg(not(test))]
+                            #[cfg(not(test))] // only required in real-life execution
+                            #[cfg(not(tarpaulin_include))]
                             log_error_chain(
                                 module_path!(),
                                 "Failure to read from DHT sensor",

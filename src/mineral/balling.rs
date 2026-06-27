@@ -67,7 +67,7 @@ use log::debug;
 use log::{error, info};
 use std::fmt;
 
-#[cfg(all(not(test), target_os = "linux"))]
+#[cfg(all(not(test), target_os = "linux"))] // only required in real-life execution
 use nix::unistd::gettid;
 
 use spin_sleep::SpinSleeper;
@@ -623,7 +623,8 @@ impl Balling {
         mineral_injection: &mut impl MineralInjectionTrait,
         mut sql_interface_balling: SqlInterfaceBalling,
     ) {
-        #[cfg(all(target_os = "linux", not(test)))]
+        #[cfg(all(target_os = "linux", not(test)))] // only required in real-life execution
+        #[cfg(not(tarpaulin_include))]
         info!(target: module_path!(), "Thread started with TID: {}", gettid());
 
         let sleep_duration_hundred_millis = Duration::from_millis(100); // used to reduce the frequency of channel polling
@@ -721,7 +722,9 @@ impl Balling {
                 let pump_device_opt = Self::get_pump_from_id(self.pump_id_requested);
                 match pump_device_opt {
                     Some((pump_id, pump_device)) => {
-                        #[cfg(not(test))] // reduce terminal output when testing
+                        // reduce terminal output when testing
+                        #[cfg(not(test))] // only required in real-life execution
+                        #[cfg(not(tarpaulin_include))]
                         info!(
                             target: module_path!(),
                             "executing external request for actuation of pump #{}",

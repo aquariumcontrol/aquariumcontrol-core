@@ -40,7 +40,7 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 //! enabled features (`feature = "target_hw"`). This allows the application to have a single
 //! configuration file format while only compiling the necessary fields for a given build target.
 
-#[cfg(not(test))]
+#[cfg(not(test))] // only required in real-life execution
 use log::info;
 
 use serde_derive::Deserialize;
@@ -169,7 +169,8 @@ pub struct ConfigData {
     pub logger: LoggerConfig,
 }
 
-#[cfg(not(test))]
+#[cfg(not(test))] // only required in real-life execution
+#[cfg(not(tarpaulin_include))]
 /// Loads configuration data from a specified `.toml` file into a `ConfigData` struct.
 ///
 /// This version of the function is intended for production environments. It reads
@@ -191,7 +192,7 @@ pub struct ConfigData {
 /// - `ConfigError::TomlParse`: If the file's content is not valid TOML, or if its
 ///   structure does not match the `ConfigData` struct, preventing deserialization.
 pub fn read_config_file(filename: String) -> Result<ConfigData, ConfigError> {
-    #[cfg(not(test))]
+    #[cfg(not(test))] // only required in real-life execution
     info!(target: module_path!(), "reading configuration from {filename}");
 
     // Read the contents of the file and return error in case of failure.

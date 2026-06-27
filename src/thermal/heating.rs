@@ -65,7 +65,7 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 //!   pre-configured parameters from a TOML file, and dynamic setpoints fetched from
 //!   a database.
 
-#[cfg(not(test))]
+#[cfg(not(test))] // only required in real-life execution
 use log::info;
 use log::{error, warn};
 
@@ -74,7 +74,7 @@ use crate::utilities::channel_content::InternalCommand;
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
-#[cfg(all(target_os = "linux", not(test)))]
+#[cfg(all(target_os = "linux", not(test)))] // only required in real-life execution
 use nix::unistd::gettid;
 
 use crate::database::sql_interface_heating_stats::{HeatingStatsEntry, SqlInterfaceHeatingStats};
@@ -442,7 +442,8 @@ impl Heating {
         heating_mutexes: HeatingMutexes,
         mut sql_interface_heating: SqlInterfaceHeatingStats,
     ) {
-        #[cfg(all(target_os = "linux", not(test)))]
+        #[cfg(all(target_os = "linux", not(test)))] // only required in real-life execution
+        #[cfg(not(tarpaulin_include))]
         info!(target: module_path!(), "Thread started with TID: {}", gettid());
 
         let _refill_error = false;
@@ -495,7 +496,8 @@ impl Heating {
                 break;
             }
             if stop_command_received {
-                #[cfg(not(test))]
+                #[cfg(not(test))] // only required in real-life execution
+                #[cfg(not(tarpaulin_include))]
                 info!(
                     target: module_path!(),
                     "received Stop command. inhibiting heating."
@@ -504,7 +506,8 @@ impl Heating {
                 heating_inhibited = true;
             }
             if start_command_received {
-                #[cfg(not(test))]
+                #[cfg(not(test))] // only required in real-life execution
+                #[cfg(not(tarpaulin_include))]
                 info!(
                     target: module_path!(),
                     "received Start command. restarting heating."
@@ -573,7 +576,7 @@ impl Heating {
                     &heating_mutexes.mutex_temperature_gradient,
                     heater_state == ActuatorState::On,
                     true, // heating expects a positive gradient
-                    #[cfg(not(test))]
+                    #[cfg(not(test))] // only required in real-life execution
                     "Heating",
                 );
                 if actuator_ineffective
@@ -587,7 +590,8 @@ impl Heating {
                     );
                     heater_state = ActuatorState::Off;
                     self.actuator_disabled = true;
-                    #[cfg(not(test))]
+                    #[cfg(not(test))] // only required in real-life execution
+                    #[cfg(not(tarpaulin_include))]
                     warn!("[{}]: Disabled heater because temperature gradient monitor indicates ineffectiveness.", module_path!());
                 }
 
@@ -780,7 +784,8 @@ impl Heating {
 
             if execution_duration > cycle_time_duration {
                 if !lock_warn_cycle_time_exceeded && !actuation_mutex_was_blocked_during_actuation {
-                    #[cfg(not(test))]
+                    #[cfg(not(test))] // only required in real-life execution
+                    #[cfg(not(tarpaulin_include))]
                     warn!(target: module_path!(),
                         "execution duration of {} milliseconds exceeds cycle time of {}",
                         execution_duration.as_millis(),

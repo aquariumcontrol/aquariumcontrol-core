@@ -53,7 +53,7 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 //!   the simulator's communication protocol. If the simulator's protocol changes, only this
 //!   module needs to be updated.
 
-#[cfg(all(not(test), target_os = "linux"))]
+#[cfg(all(not(test), target_os = "linux"))] // only required in real-life execution
 use log::info;
 use log::{debug, error};
 
@@ -74,7 +74,7 @@ use crate::utilities::acknowledge_signal_handler::AcknowledgeSignalHandlerTrait;
 use crate::utilities::channel_content::{AquariumSignal, InternalCommand};
 use crate::utilities::logger::log_error_chain;
 use crate::utilities::proc_ext_req::ProcessExternalRequestTrait;
-#[cfg(all(not(test), target_os = "linux"))]
+#[cfg(all(not(test), target_os = "linux"))] // only required in real-life execution
 use nix::unistd::gettid;
 
 #[cfg_attr(doc, aquamarine::aquamarine)]
@@ -447,10 +447,12 @@ impl TcpCommunication {
     ///   including senders/receivers for SensorManager, Tank Level Switch,
     ///   Relay Manager, and the Signal Handler.
     pub fn execute(&mut self, tcp_communication_channels: &mut TcpCommunicationChannels) {
-        #[cfg(all(target_os = "linux", not(test)))]
+        #[cfg(all(target_os = "linux", not(test)))] // only required in real-life execution
+        #[cfg(not(tarpaulin_include))]
         info!(target: module_path!(), "Thread started with TID: {}", gettid());
 
-        #[cfg(all(not(test), feature = "debug_channels"))]
+        #[cfg(all(not(test), feature = "debug_channels"))] // only required in real-life execution
+        #[cfg(not(tarpaulin_include))]
         tcp_communication_channels.report_status();
 
         let spin_sleeper = SpinSleeper::default();

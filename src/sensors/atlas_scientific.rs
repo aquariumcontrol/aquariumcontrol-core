@@ -67,7 +67,7 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 
 #![allow(non_snake_case)]
 
-#[cfg(all(not(test), target_os = "linux"))]
+#[cfg(all(not(test), target_os = "linux"))] // only required in real-life execution
 use log::info;
 use std::collections::HashMap;
 use std::fmt;
@@ -89,7 +89,7 @@ use crate::utilities::channel_content::AquariumSignal;
 use crate::utilities::logger::log_error_chain;
 use crate::utilities::proc_ext_req::ProcessExternalRequestTrait;
 use crate::utilities::wait_for_termination::WaitForTerminationTrait;
-#[cfg(all(not(test), target_os = "linux"))]
+#[cfg(all(not(test), target_os = "linux"))] // only required in real-life execution
 use nix::unistd::gettid;
 use spin_sleep::SpinSleeper;
 use std::sync::{Arc, Mutex};
@@ -545,7 +545,8 @@ impl AtlasScientific {
         mutex_atlas_scientific_ph: Arc<Mutex<AtlasScientificResultData>>,
         mutex_atlas_scientific_conductivity: Arc<Mutex<AtlasScientificResultData>>,
     ) {
-        #[cfg(all(target_os = "linux", not(test)))]
+        #[cfg(all(target_os = "linux", not(test)))] // only required in real-life execution
+        #[cfg(not(tarpaulin_include))]
         info!(target: module_path!(), "Thread started with TID: {}", gettid());
 
         let sleep_duration_ten_millis = Duration::from_millis(10);

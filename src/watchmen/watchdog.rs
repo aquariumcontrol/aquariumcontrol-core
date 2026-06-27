@@ -65,12 +65,12 @@ use crate::watchmen::watchdog_channels::WatchDogChannels;
 use spin_sleep::SpinSleeper;
 use std::time::Duration;
 
-#[cfg(all(target_os = "linux", not(test)))]
+#[cfg(all(target_os = "linux", not(test)))] // only required in real-life execution
 use log::info;
 
 use crate::utilities::acknowledge_signal_handler::AcknowledgeSignalHandlerTrait;
 use crate::watchmen::watchdog_config::WatchdogConfig;
-#[cfg(all(target_os = "linux", not(test)))]
+#[cfg(all(target_os = "linux", not(test)))] // only required in real-life execution
 use nix::unistd::gettid;
 use thiserror::Error;
 
@@ -201,7 +201,8 @@ impl Watchdog {
         watchdog_channels: &mut WatchDogChannels,
         petting: &mut impl PettingTrait,
     ) {
-        #[cfg(all(target_os = "linux", not(test)))]
+        #[cfg(all(target_os = "linux", not(test)))] // only required in real-life execution
+        #[cfg(not(tarpaulin_include))]
         info!(target: module_path!(), "Thread started with TID: {}", gettid());
 
         let spin_sleeper = SpinSleeper::default();

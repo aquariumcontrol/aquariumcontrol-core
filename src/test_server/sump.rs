@@ -99,7 +99,7 @@ impl Sump {
             level_filter: IIRFilter::new(
                 &sump_config.level_filter,
                 None,
-                #[cfg(not(test))]
+                #[cfg(not(test))] // only required in real-life execution
                 "sump level",
             ),
             config: sump_config,
@@ -214,7 +214,7 @@ pub mod tests {
                     fallback_initial_value: 0.8,
                 },
                 Some(1.0),
-                #[cfg(not(test))]
+                #[cfg(not(test))] // only required in real-life execution
                 "sump level",
             ),
             config: config.sump,
@@ -261,7 +261,7 @@ pub mod tests {
                     fallback_initial_value: 0.8,
                 },
                 Some(0.8),
-                #[cfg(not(test))]
+                #[cfg(not(test))] // only required in real-life execution
                 "sump level",
             ),
             config: config.sump,

@@ -59,18 +59,19 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 //!   (like the Controllino), the `RelayManager` automatically sends a heartbeat at the
 //!   configured interval to maintain the connection.
 
-#[cfg(not(test))]
+#[cfg(not(test))] // only required in real-life execution
 use log::error;
-#[cfg(all(not(test), target_os = "linux"))]
+#[cfg(all(not(test), target_os = "linux"))] // only required in real-life execution
 use log::info;
 
-#[cfg(not(test))]
+#[cfg(not(test))] // only required in real-life execution
 use log::warn;
 
 #[cfg(feature = "debug_relay_manager")]
 use log::debug;
 
-#[cfg(all(not(test), target_os = "linux"))]
+// reduce terminal output when testing
+#[cfg(all(not(test), target_os = "linux"))] // only required in real-life execution
 use nix::unistd::gettid;
 
 use crate::launch::channels::{AquaChannelError, AquaReceiver, AquaSender};
@@ -274,7 +275,8 @@ impl RelayManager {
             match actuator.actuate(command) {
                 Ok(()) => {
                     if attempts > 0 {
-                        #[cfg(not(test))]
+                        #[cfg(not(test))] // only required in real-life execution
+                        #[cfg(not(tarpaulin_include))]
                         warn!(
                             target: module_path!(),
                             "{actuation_name}: actuation succeeded after {attempts} retries."
@@ -341,7 +343,8 @@ impl RelayManager {
         relay_manager_channels: &mut RelayManagerChannels,
         actuator: &mut impl RelayActuationTrait,
     ) {
-        #[cfg(all(target_os = "linux", not(test)))]
+        #[cfg(all(target_os = "linux", not(test)))] // only required in real-life execution
+        #[cfg(not(tarpaulin_include))]
         info!(target: module_path!(), "Thread started with TID: {}", gettid());
 
         let mut last_heartbeat_time = Instant::now();
@@ -494,7 +497,8 @@ impl RelayManager {
             .tx_relay_manager_to_signal_handler
             .send(true)
         {
-            #[cfg(not(test))]
+            #[cfg(not(test))] // only required in real-life execution
+            #[cfg(not(tarpaulin_include))]
             error!(target: module_path!(), "Sending confirmation to signal handler failed. ({_e:?})");
         };
     }
@@ -544,7 +548,8 @@ impl RelayManager {
                         spin_sleeper,
                         sleep_duration_between_retries,
                     ) {
-                        #[cfg(not(test))]
+                        #[cfg(not(test))] // only required in real-life execution
+                        #[cfg(not(tarpaulin_include))]
                         log_error_chain(
                             module_path!(),
                             &format!("Actuation of {actuation_name} failed."),
@@ -554,7 +559,8 @@ impl RelayManager {
                 }
                 if let Err(_e) = tx.send(true) {
                     if !lock_send {
-                        #[cfg(not(test))]
+                        #[cfg(not(test))] // only required in real-life execution
+                        #[cfg(not(tarpaulin_include))]
                         error!(
                             target: module_path!(),
                             "responding to {actuation_name} control ({_e:?})",
@@ -573,7 +579,8 @@ impl RelayManager {
                 }
                 AquaChannelError::Disconnected => {
                     if !lock_receive {
-                        #[cfg(not(test))]
+                        #[cfg(not(test))] // only required in real-life execution
+                        #[cfg(not(tarpaulin_include))]
                         error!(
                             "{}: error when trying to receive command from {actuation_name} control ({e:?})",
                             module_path!(),

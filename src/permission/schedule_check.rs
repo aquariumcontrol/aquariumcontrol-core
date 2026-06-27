@@ -60,13 +60,13 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 #[cfg(feature = "debug_schedule_check")]
 use log::debug;
 
-#[cfg(all(not(test), target_os = "linux"))]
+#[cfg(all(not(test), target_os = "linux"))] // only required in real-life execution
 use log::info;
 
-#[cfg(all(target_os = "linux", not(test)))]
+#[cfg(all(target_os = "linux", not(test)))] // only required in real-life execution
 use nix::unistd::gettid;
 
-#[cfg(not(test))]
+#[cfg(not(test))] // only required in real-life execution
 use log::warn;
 
 use crate::database::pingable::Pingable;
@@ -214,9 +214,9 @@ impl ScheduleCheck {
                     }
                     AquaChannelError::Disconnected => {
                         if !locks.channel_receive {
-                            #[cfg(not(test))]
+                            #[cfg(not(test))] // only required in real-life execution
                             let context = format!("receiving command from {_module_name} failed.");
-                            #[cfg(not(test))]
+                            #[cfg(not(test))] // only required in real-life execution
                             log_error_chain(module_path!(), &context, e);
                             locks.channel_receive = true;
                         }
@@ -237,7 +237,8 @@ impl ScheduleCheck {
             }
             _c => {
                 if !locks.inapplicable_command {
-                    #[cfg(not(test))]
+                    #[cfg(not(test))] // only required in real-life execution
+                    #[cfg(not(tarpaulin_include))]
                     warn!(
                         target: module_path!(),
                         "ignoring inapplicable command ({_c}) from {_module_name}"
@@ -255,7 +256,8 @@ impl ScheduleCheck {
             }
             Err(_e) => {
                 if !locks.channel_send {
-                    #[cfg(not(test))]
+                    #[cfg(not(test))] // only required in real-life execution
+                    #[cfg(not(tarpaulin_include))]
                     {
                         let context = format!("sending back message to {_module_name} failed");
                         log_error_chain(module_path!(), &context, _e);
@@ -353,7 +355,8 @@ impl ScheduleCheck {
         execution_config: ExecutionConfig,
         mut sql_interface_schedule: SqlInterfaceSchedule,
     ) {
-        #[cfg(all(target_os = "linux", not(test)))]
+        #[cfg(all(target_os = "linux", not(test)))] // only required in real-life execution
+        #[cfg(not(tarpaulin_include))]
         info!(target: module_path!(), "Thread started with TID: {}", gettid());
 
         let sleep_duration_hundred_millis = Duration::from_millis(100);

@@ -65,14 +65,14 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 
 #![allow(non_snake_case)]
 use chrono::{Local, NaiveDateTime};
-#[cfg(all(not(test), target_os = "linux"))]
+#[cfg(all(not(test), target_os = "linux"))] // only required in real-life execution
 use log::info;
 use log::{error, warn};
 
 #[cfg(feature = "debug_data_logger")]
 use log::debug;
 
-#[cfg(all(not(test), target_os = "linux"))]
+#[cfg(all(not(test), target_os = "linux"))] // only required in real-life execution
 use nix::unistd::gettid;
 
 use std::fs;
@@ -1069,7 +1069,8 @@ impl DataLogger {
         data_logger_channels: &mut DataLoggerChannels,
         data_logger_mutexes: DataLoggerMutexes,
     ) {
-        #[cfg(all(not(test), target_os = "linux"))]
+        #[cfg(all(not(test), target_os = "linux"))] // only required in real-life execution
+        #[cfg(not(tarpaulin_include))]
         info!(target: module_path!(), "Thread started with TID: {}", gettid());
 
         let cycle_time_duration =
@@ -1114,20 +1115,20 @@ impl DataLogger {
         let mut filter_water_temperature = IIRFilter::new(
             &self.config.filter_coefficient_water_temperature,
             water_temperature,
-            #[cfg(not(test))]
+            #[cfg(not(test))] // only required in real-life execution
             "water temperature",
         );
         let mut filter_pH = IIRFilter::new(
             &self.config.filter_coefficient_pH,
             ph,
-            #[cfg(not(test))]
+            #[cfg(not(test))] // only required in real-life execution
             "pH",
         );
 
         let mut filter_conductivity = IIRFilter::new(
             &self.config.filter_coefficient_conductivity,
             conductivity,
-            #[cfg(not(test))]
+            #[cfg(not(test))] // only required in real-life execution
             "conductivity",
         );
 

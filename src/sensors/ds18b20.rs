@@ -31,7 +31,7 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 //! 6.  **Performance Monitoring**: It includes logic to detect and log warnings if
 //!     access to the shared mutexes is blocked for longer than a predefined threshold.
 
-#[cfg(all(not(test), target_os = "linux"))]
+#[cfg(all(not(test), target_os = "linux"))] // only required in real-life execution
 use nix::unistd::gettid;
 use spin_sleep::SpinSleeper;
 use std::sync::{Arc, Mutex};
@@ -48,7 +48,7 @@ use crate::utilities::check_mutex_access_duration::CheckMutexAccessDurationTrait
 use crate::utilities::proc_ext_req::ProcessExternalRequestTrait;
 #[cfg(feature = "debug_ds18b20")]
 use log::debug;
-#[cfg(all(not(test), target_os = "linux"))]
+#[cfg(all(not(test), target_os = "linux"))] // only required in real-life execution
 use log::info;
 
 mod ds18b20_constants {
@@ -334,7 +334,8 @@ impl Ds18b20 {
         mutex_water_temperature: Arc<Mutex<Ds18b20Result>>,
         mutex_ambient_temperature: Arc<Mutex<Ds18b20Result>>,
     ) {
-        #[cfg(all(target_os = "linux", not(test)))]
+        #[cfg(all(target_os = "linux", not(test)))] // only required in real-life execution
+        #[cfg(not(tarpaulin_include))]
         info!(target: module_path!(), "Thread started with TID: {}", gettid());
 
         let sleep_duration_main_cycle = Duration::from_millis(100);

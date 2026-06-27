@@ -67,7 +67,7 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 use log::debug;
 
 cfg_if::cfg_if! {
-    if #[cfg(all(target_os = "linux", not(test)))] {
+    if #[cfg(all(target_os = "linux", not(test)))] { // only required in real-life execution
         use nix::unistd::gettid;
         use log::info;
     }
@@ -535,7 +535,8 @@ impl SensorManager {
         sensor_manager_channels: &mut SensorManagerChannels,
         mutexes: SensorManagerMutexes,
     ) {
-        #[cfg(all(target_os = "linux", not(test)))]
+        #[cfg(all(target_os = "linux", not(test)))] // only required in real-life execution
+        #[cfg(not(tarpaulin_include))]
         info!(target: module_path!(), "Thread started with TID: {}", gettid());
 
         if (self.config.use_simulator)

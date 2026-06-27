@@ -63,13 +63,13 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 use log::debug;
 use log::error;
 #[cfg(any(
-    all(target_os = "linux", not(test)),
+    all(target_os = "linux", not(test)), // only required in real-life execution
     feature = "debug_signal_handler",
-    not(test)
+    not(test) // only required in real-life execution
 ))]
 use log::info;
 
-#[cfg(all(target_os = "linux", not(test)))]
+#[cfg(all(target_os = "linux", not(test)))] // only required in real-life execution
 use nix::unistd::gettid;
 
 use crate::launch::channels::{AquaReceiver, AquaSender};
@@ -206,7 +206,8 @@ pub fn handle_signals(
     mut signal_handler_channels: SignalHandlerChannels,
     execution_config: ExecutionConfig,
 ) {
-    #[cfg(all(target_os = "linux", not(test)))]
+    #[cfg(all(target_os = "linux", not(test)))] // only required in real-life execution
+    #[cfg(not(tarpaulin_include))]
     info!(target: module_path!(), "Thread started with TID: {}", gettid());
 
     if signal_handler_channels
@@ -248,7 +249,8 @@ pub fn handle_signals(
     while !term.load(Ordering::Relaxed) {
         spin_sleeper.sleep(sleep_duration_hundred_milli_sec);
     }
-    #[cfg(not(test))]
+    #[cfg(not(test))] // only required in real-life execution
+    #[cfg(not(tarpaulin_include))]
     info!(
         target: module_path!(),
         "received termination signal from operating system",

@@ -69,3 +69,6 @@ debug_refill = []
 debug_channels = []
 debug = ["debug_schedule_check", "debug_signal_handler", "debug_data_logger", "debug_sawtooth_profile", "debug_main",  "debug_dht", "debug_i2c_interface", "debug_relay_manager", "debug_sensor_manager", "debug_feed", "debug_messaging", "debug_balling", "debug_tank_level_switch", "debug_refill"]
 commissioning_prep = []
+
+[lints.rust]
+unexpected_cfgs = { level = "warn", check-cfg = ['cfg(tarpaulin_include)'] }

@@ -62,14 +62,14 @@ use log::debug;
 
 cfg_if::cfg_if! {
     if #[cfg(target_os = "linux")] {
-        #[cfg(not(test))]
+        #[cfg(not(test))] // only required in real-life execution
         use log::info;
 
         use log::{error, warn};
         use posixmq::PosixMq;
         use std::time::Duration;
         use spin_sleep::SpinSleeper;
-        #[cfg(not(test))]
+        #[cfg(not(test))] // only required in real-life execution
         use nix::unistd::gettid;
 
         use crate::utilities::channel_content::InternalCommand;
@@ -198,7 +198,8 @@ impl Messaging {
     /// - It encounters a fatal error while receiving from the POSIX message queue (other than a timeout).
     /// - It fails to receive the `Terminate` command from the signal handler during shutdown.
     pub fn execute(&mut self, messaging_channels: &mut MessagingChannels) {
-        #[cfg(not(test))]
+        #[cfg(not(test))] // only required in real-life execution
+        #[cfg(not(tarpaulin_include))]
         info!(target: module_path!(), "Thread started with TID: {}", gettid());
         let duration_timeout = Duration::from_millis(self.config.timeout_millis);
 
@@ -212,7 +213,8 @@ impl Messaging {
                 Ok((_r1, _r2)) => {
                     if !msgbuf.is_empty() {
                         if let Ok(msg) = Message::from_bytes(&msgbuf) {
-                            #[cfg(not(test))]
+                            #[cfg(not(test))] // only required in real-life execution
+                            #[cfg(not(tarpaulin_include))]
                             info!(
                                 target: module_path!(),
                                 "received message: domain={}, cmd={}, param1={}, param2={}",
@@ -247,7 +249,8 @@ impl Messaging {
                                 && (command != InternalCommand::Unknown)
                                 && (domain.is_domain_thread_executed(&self.execution_config))
                             {
-                                #[cfg(not(test))]
+                                #[cfg(not(test))] // only required in real-life execution
+                                #[cfg(not(tarpaulin_include))]
                                 info!(
                                     target: module_path!(),
                                     "forwarding message to domain {}",

@@ -130,7 +130,7 @@ pub mod tests {
                     fallback_initial_value: 0.0,
                 },
                 Some(1.0),
-                #[cfg(not(test))]
+                #[cfg(not(test))] // only required in real-life execution
                 "sump level",
             ),
             config: config.sump,

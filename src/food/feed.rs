@@ -67,16 +67,16 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 //! 7.  Finally, it updates the `feed_schedule` table to mark the entry as completed or to
 //!     reschedule it if it's a repeating event.
 
-#[cfg(not(test))]
+#[cfg(not(test))] // only required in real-life execution
 use log::info;
 
-#[cfg(all(feature = "debug_feed", not(test)))]
+#[cfg(all(feature = "debug_feed", not(test)))] // only required in real-life execution
 use log::debug;
 
-#[cfg(all(feature = "debug_signal_handler", not(test)))]
+#[cfg(all(feature = "debug_signal_handler", not(test)))] // only required in real-life execution
 use log::debug;
 
-#[cfg(all(target_os = "linux", not(test)))]
+#[cfg(all(target_os = "linux", not(test)))] // only required in real-life execution
 use nix::unistd::gettid;
 
 use crate::check_quit_increment_counter_ping_database;
@@ -167,7 +167,8 @@ impl Feed {
         }
     }
 
-    #[cfg(all(feature = "debug_feed", not(test)))]
+    #[cfg(all(feature = "debug_feed", not(test)))] // only required in real-life execution
+    #[cfg(not(tarpaulin_include))]
     // Converts a vector of `FeedScheduleEntry` into a human-readable string for visualization.
     //
     // This helper function is active only in non-test builds when the `debug_feed` feature is enabled.
@@ -361,7 +362,8 @@ impl Feed {
         food_injection: &mut impl FoodInjectionTrait,
         mut sql_interface_feed: Box<dyn DatabaseInterfaceFeedTrait + Sync + Send>,
     ) {
-        #[cfg(all(target_os = "linux", not(test)))]
+        #[cfg(all(target_os = "linux", not(test)))] // only required in real-life execution
+        #[cfg(not(tarpaulin_include))]
         info!(target: module_path!(), "Thread started with TID: {}", gettid());
 
         let sleep_duration_hundred_millis = Duration::from_millis(100);
@@ -377,7 +379,8 @@ impl Feed {
                 && !feed_inhibited
                 && (loop_counter % (self.config.schedule_check_interval * 10) == 0)
             {
-                #[cfg(all(feature = "debug_feed", not(test)))]
+                #[cfg(all(feature = "debug_feed", not(test)))] // only required in real-life execution
+                #[cfg(not(tarpaulin_include))]
                 debug!(
                     target: module_path!(),
                     "Starting feed control cycle"
@@ -386,7 +389,8 @@ impl Feed {
                 match sql_interface_feed.get_past_feed_schedule_entries_from_database() {
                     Ok(feed_schedule_entries_opt) => {
                         if let Some(mut feed_schedule_entries) = feed_schedule_entries_opt {
-                            #[cfg(all(feature = "debug_feed", not(test)))]
+                            #[cfg(all(feature = "debug_feed", not(test)))] // only required in real-life execution
+                            #[cfg(not(tarpaulin_include))]
                             debug!(
                                 target: module_path!(),
                                 "Discovered following feed schedule entries in the past: {}",
@@ -397,7 +401,8 @@ impl Feed {
                                 .select_feed_schedule_entry_for_execution(&feed_schedule_entries);
 
                             if let Some(feed_schedule_entry) = feed_schedule_entry_opt {
-                                #[cfg(all(feature = "debug_feed", not(test)))]
+                                #[cfg(all(feature = "debug_feed", not(test)))] // only required in real-life execution
+                                #[cfg(not(tarpaulin_include))]
                                 debug!(
                                     target: module_path!(),
                                     "Selected following feed schedule entry for execution: {}",
@@ -462,7 +467,8 @@ impl Feed {
                                         Ok(()) => {
                                             // do nothing
                                         }
-                                        #[cfg(not(test))]
+                                        #[cfg(not(test))] // only required in real-life execution
+                                        #[cfg(not(tarpaulin_include))]
                                         Err(e) => {
                                             log_error_chain(
                                                 module_path!(),
@@ -483,7 +489,8 @@ impl Feed {
                         }
                     }
                     Err(e) => {
-                        #[cfg(not(test))]
+                        #[cfg(not(test))] // only required in real-life execution
+                        #[cfg(not(tarpaulin_include))]
                         if !self.lock_error_get_feed_schedule_entry {
                             log_error_chain(
                                 module_path!(),
@@ -517,13 +524,15 @@ impl Feed {
                 break;
             }
             if stop_command_received {
-                #[cfg(not(test))]
+                #[cfg(not(test))] // only required in real-life execution
+                #[cfg(not(tarpaulin_include))]
                 info!(
                     target: module_path!(),
                     "received Stop command. Inhibiting feed."
                 );
 
-                #[cfg(all(feature = "debug_feed", not(test)))]
+                #[cfg(all(feature = "debug_feed", not(test)))] // only required in real-life execution
+                #[cfg(not(tarpaulin_include))]
                 debug!(
                     target: module_path!(),
                     "received Stop command."
@@ -532,13 +541,15 @@ impl Feed {
                 feed_inhibited = true;
             }
             if start_command_received {
-                #[cfg(not(test))]
+                #[cfg(not(test))] // only required in real-life execution
+                #[cfg(not(tarpaulin_include))]
                 info!(
                     target: module_path!(),
                     "received Start command. Restarting feed."
                 );
 
-                #[cfg(all(feature = "debug_feed", not(test)))]
+                #[cfg(all(feature = "debug_feed", not(test)))] // only required in real-life execution
+                #[cfg(not(tarpaulin_include))]
                 debug!(
                     target: module_path!(),
                     "received Start command"
@@ -550,7 +561,8 @@ impl Feed {
                 && self.profile_id_requested >= 0
                 && !self.execution_blocked
             {
-                #[cfg(all(feature = "debug_feed", not(test)))]
+                #[cfg(all(feature = "debug_feed", not(test)))] // only required in real-life execution
+                #[cfg(not(tarpaulin_include))]
                 debug!(
                     target: module_path!(),
                     "received execution command"
@@ -600,7 +612,8 @@ impl Feed {
 
         // The application received request to terminate. That is why the loop was left.
         // Answer to the thread which sent the request for termination, so that shutdown can proceed further.
-        #[cfg(all(feature = "debug_signal_handler", not(test)))]
+        #[cfg(all(feature = "debug_signal_handler", not(test)))] // only required in real-life execution
+        #[cfg(not(tarpaulin_include))]
         debug!(
             target: module_path!(),
             "Sending Quit confirmation to signal handler."

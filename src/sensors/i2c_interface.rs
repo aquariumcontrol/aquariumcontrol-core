@@ -60,7 +60,8 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 //!   once on the stack at startup. This buffer is then reused for every transaction,
 //!   avoiding repeated, potentially costly memory allocations within the main loop.
 
-#[cfg(all(target_os = "linux", feature = "target_hw", not(test)))]
+// reduce terminal output when testing
+#[cfg(all(target_os = "linux", feature = "target_hw", not(test)))] // only required in real-life execution 
 use log::info;
 use spin_sleep::SpinSleeper;
 use std::fmt;
@@ -71,7 +72,7 @@ use crate::launch::channels::AquaChannelError;
 use crate::sensors::i2c_error::I2cError;
 use crate::sensors::i2c_interface_config::I2cInterfaceConfig;
 
-#[cfg(all(target_os = "linux", feature = "target_hw", not(test)))]
+#[cfg(all(target_os = "linux", feature = "target_hw", not(test)))] // only required in real-life execution
 use nix::unistd::gettid;
 
 cfg_if::cfg_if! {
@@ -420,7 +421,8 @@ impl I2cInterface {
     /// # Arguments
     /// * `i2c_interface_channels` - A mutable reference to the struct containing the channels.
     pub fn execute(&mut self, i2c_interface_channels: &mut I2cInterfaceChannels) {
-        #[cfg(not(test))]
+        #[cfg(not(test))] // only required in real-life execution
+        #[cfg(not(tarpaulin_include))]
         info!(target: module_path!(), "Thread started with TID: {}", gettid());
 
         let mut lock_error_receive_atlas_scientific = false;

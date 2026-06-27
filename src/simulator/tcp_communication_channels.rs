@@ -209,7 +209,8 @@ impl fmt::Display for TcpCommunicationChannels {
 }
 
 impl TcpCommunicationChannels {
-    #[cfg(all(not(test), feature = "debug_channels"))]
+    #[cfg(all(not(test), feature = "debug_channels"))] // only required in real-life execution
+    #[cfg(not(tarpaulin_include))]
     pub fn report_status(&self) {
         println!("TcpCommunicationChannels Status:");
 

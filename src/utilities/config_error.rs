@@ -50,11 +50,11 @@ use thiserror::Error;
 
 #[derive(Error, Debug)]
 pub enum ConfigError {
-    #[cfg(not(test))]
+    #[cfg(not(test))] // only required in real-life execution
     #[error("Could not read configuration file '{0}'")]
     FileRead(String, #[source] std::io::Error),
 
-    #[cfg(not(test))]
+    #[cfg(not(test))] // only required in real-life execution
     #[error("Failed to parse TOML in configuration file '{0}'")]
     TomlParse(String, #[source] toml::de::Error),
 

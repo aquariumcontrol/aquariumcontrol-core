@@ -69,10 +69,10 @@ use log::debug;
 
 use log::warn;
 
-#[cfg(not(test))]
+#[cfg(not(test))] // only required in real-life execution
 use log::info;
 
-#[cfg(all(not(test), target_os = "linux"))]
+#[cfg(all(not(test), target_os = "linux"))] // only required in real-life execution
 use nix::unistd::gettid;
 
 use spin_sleep::SpinSleeper;
@@ -316,8 +316,8 @@ impl Refill {
         database_result: Result<T, SqlInterfaceError>,
         stats_value: &mut T,
         lock_flag: &mut bool,
-        #[cfg(not(test))] check_type: &str,
-        #[cfg(not(test))] duration: &str,
+        #[cfg(not(test))] check_type: &str, // only required in real-life execution
+        #[cfg(not(test))] duration: &str, // only required in real-life execution
     ) -> bool {
         match database_result {
             Ok(value) => {
@@ -326,7 +326,8 @@ impl Refill {
                 false
             }
             Err(_e) => {
-                #[cfg(not(test))]
+                #[cfg(not(test))] // only required in real-life execution
+                #[cfg(not(tarpaulin_include))]
                 if !*lock_flag {
                     let context =
                         format!("Could not get refill {} of last {}.", check_type, duration);
@@ -373,7 +374,8 @@ impl Refill {
                     }
                     Err(_e) => {
                         self.refill_errors.error_sql_get_historic_data_failed = true;
-                        #[cfg(not(test))]
+                        #[cfg(not(test))] // only required in real-life execution
+                        #[cfg(not(tarpaulin_include))]
                         if !self.lock_error_read_duration_since_last_refill {
                             log_error_chain(
                                 module_path!(),
@@ -387,7 +389,8 @@ impl Refill {
             }
             Err(_e) => {
                 self.refill_errors.error_sql_get_historic_data_failed = true;
-                #[cfg(not(test))]
+                #[cfg(not(test))] // only required in real-life execution
+                #[cfg(not(tarpaulin_include))]
                 if !self.lock_error_check_empty {
                     log_error_chain(
                         module_path!(),
@@ -403,9 +406,9 @@ impl Refill {
             sql_interface_refill.get_refill_volume_of_last_24h(),
             &mut refill_stats_data.refill_volume_last_24h,
             &mut self.locks_error_read.volume_last_24h,
-            #[cfg(not(test))]
+            #[cfg(not(test))] // only required in real-life execution
             "volume",
-            #[cfg(not(test))]
+            #[cfg(not(test))] // only required in real-life execution
             "24h",
         );
 
@@ -413,9 +416,9 @@ impl Refill {
             sql_interface_refill.get_refill_count_of_last_24h(),
             &mut refill_stats_data.refill_count_last_24h,
             &mut self.locks_error_read.count_last_24h,
-            #[cfg(not(test))]
+            #[cfg(not(test))] // only required in real-life execution
             "count",
-            #[cfg(not(test))]
+            #[cfg(not(test))] // only required in real-life execution
             "24h",
         );
 
@@ -423,9 +426,9 @@ impl Refill {
             sql_interface_refill.get_refill_volume_of_last_hour(),
             &mut refill_stats_data.refill_volume_last_hour,
             &mut self.locks_error_read.volume_last_hour,
-            #[cfg(not(test))]
+            #[cfg(not(test))] // only required in real-life execution
             "volume",
-            #[cfg(not(test))]
+            #[cfg(not(test))] // only required in real-life execution
             "hour",
         );
 
@@ -433,9 +436,9 @@ impl Refill {
             sql_interface_refill.get_refill_count_of_last_hour(),
             &mut refill_stats_data.refill_count_last_hour,
             &mut self.locks_error_read.count_last_hour,
-            #[cfg(not(test))]
+            #[cfg(not(test))] // only required in real-life execution
             "count",
-            #[cfg(not(test))]
+            #[cfg(not(test))] // only required in real-life execution
             "hour",
         );
     }
@@ -479,7 +482,8 @@ impl Refill {
 
         if stop_command_received {
             if !self.lock_info_stop_command_received {
-                #[cfg(not(test))]
+                #[cfg(not(test))] // only required in real-life execution
+                #[cfg(not(tarpaulin_include))]
                 info!(
                     target: module_path!(),
                     "received Stop command. Inhibiting refill control."
@@ -495,7 +499,8 @@ impl Refill {
         // Therefore, it is evaluated after the stop command.
         if start_command_received {
             if !self.lock_info_start_command_received {
-                #[cfg(not(test))]
+                #[cfg(not(test))] // only required in real-life execution
+                #[cfg(not(tarpaulin_include))]
                 info!(
                     target: module_path!(),
                     "received Start command. Restarting refill control."
@@ -540,12 +545,13 @@ impl Refill {
         actual_value: T,
         max_value: T,
         lock_flag: &mut bool,
-        #[cfg(not(test))] check_type: &str,
-        #[cfg(not(test))] duration: &str,
+        #[cfg(not(test))] check_type: &str, // only required in real-life execution
+        #[cfg(not(test))] duration: &str, // only required in real-life execution
     ) -> bool {
         if actual_value > max_value {
             if !*lock_flag {
-                #[cfg(not(test))]
+                #[cfg(not(test))] // only required in real-life execution
+                #[cfg(not(tarpaulin_include))]
                 info!(
                     target: module_path!(),
                     "refill {} of last {} exceeds permissible {} per {} of {} L",
@@ -596,9 +602,9 @@ impl Refill {
             sql_refill_data.refill_volume_last_24h,
             self.config.max_refill_volume_24h,
             &mut self.locks_info_check.volume_last_24h,
-            #[cfg(not(test))]
+            #[cfg(not(test))] // only required in real-life execution
             "volume",
-            #[cfg(not(test))]
+            #[cfg(not(test))] // only required in real-life execution
             "24h",
         );
 
@@ -606,9 +612,9 @@ impl Refill {
             sql_refill_data.refill_count_last_24h,
             self.config.max_refill_count_24h,
             &mut self.locks_info_check.count_last_24h,
-            #[cfg(not(test))]
+            #[cfg(not(test))] // only required in real-life execution
             "count",
-            #[cfg(not(test))]
+            #[cfg(not(test))] // only required in real-life execution
             "24h",
         );
 
@@ -616,9 +622,9 @@ impl Refill {
             sql_refill_data.refill_volume_last_hour,
             self.config.max_refill_volume_hour,
             &mut self.locks_info_check.volume_last_hour,
-            #[cfg(not(test))]
+            #[cfg(not(test))] // only required in real-life execution
             "volume",
-            #[cfg(not(test))]
+            #[cfg(not(test))] // only required in real-life execution
             "hour",
         );
 
@@ -626,9 +632,9 @@ impl Refill {
             sql_refill_data.refill_count_last_hour,
             self.config.max_refill_count_hour,
             &mut self.locks_info_check.count_last_hour,
-            #[cfg(not(test))]
+            #[cfg(not(test))] // only required in real-life execution
             "count",
-            #[cfg(not(test))]
+            #[cfg(not(test))] // only required in real-life execution
             "hour",
         );
 
@@ -636,7 +642,8 @@ impl Refill {
             sql_refill_data.duration_since_last_refill < self.config.min_interval_last_refill;
         if refill_check_interval_last_refill {
             if !self.lock_info_refill_check_interval_last_refill {
-                #[cfg(not(test))]
+                #[cfg(not(test))] // only required in real-life execution
+                #[cfg(not(tarpaulin_include))]
                 info!(
                     target: module_path!(),
                     "time interval since last refill {} is too small (limit={}).",
@@ -721,7 +728,8 @@ impl Refill {
         mutex_refill_status: Arc<Mutex<RefillStatus>>,
         mut sql_interface_refill: Box<dyn DatabaseInterfaceRefillTrait + Sync + Send>,
     ) {
-        #[cfg(all(target_os = "linux", not(test)))]
+        #[cfg(all(target_os = "linux", not(test)))] // only required in real-life execution
+        #[cfg(not(tarpaulin_include))]
         info!(target: module_path!(), "Thread started with TID: {}", gettid());
 
         let cycle_time_duration =
@@ -2913,9 +2921,9 @@ pub mod tests {
             db_result_ok_u64,
             &mut stats_value_u64,
             &mut lock_flag_u64,
-            #[cfg(not(test))]
+            #[cfg(not(test))] // only required in real-life execution
             "dummy_value_type_not_used",
-            #[cfg(not(test))]
+            #[cfg(not(test))] // only required in real-life execution
             "dummy_duration_not_used",
         );
 
@@ -2939,9 +2947,9 @@ pub mod tests {
             db_result_ok_f32,
             &mut stats_value_f32,
             &mut lock_flag_f32,
-            #[cfg(not(test))]
+            #[cfg(not(test))] // only required in real-life execution
             "dummy_value_type_not_used",
-            #[cfg(not(test))]
+            #[cfg(not(test))] // only required in real-life execution
             "dummy_duration_not_used",
         );
 
@@ -2966,9 +2974,9 @@ pub mod tests {
             db_result_err,
             &mut stats_value_fail,
             &mut lock_flag_fail,
-            #[cfg(not(test))]
+            #[cfg(not(test))] // only required in real-life execution
             "dummy_value_type_not_used",
-            #[cfg(not(test))]
+            #[cfg(not(test))] // only required in real-life execution
             "dummy_duration_not_used",
         );
 
@@ -2996,9 +3004,9 @@ pub mod tests {
             50u64,
             100u64,
             &mut lock_flag,
-            #[cfg(not(test))]
+            #[cfg(not(test))] // only required in real-life execution
             "dummy_value_type_not_used",
-            #[cfg(not(test))]
+            #[cfg(not(test))] // only required in real-life execution
             "dummy_duration_not_used",
         );
         assert!(!result, "Should return false when value is below limit");
@@ -3011,9 +3019,9 @@ pub mod tests {
             100u64,
             100u64,
             &mut lock_flag,
-            #[cfg(not(test))]
+            #[cfg(not(test))] // only required in real-life execution
             "dummy_value_type_not_used",
-            #[cfg(not(test))]
+            #[cfg(not(test))] // only required in real-life execution
             "dummy_duration_not_used",
         );
         assert!(!result, "Should return false when value is equal to limit");
@@ -3026,9 +3034,9 @@ pub mod tests {
             101u64,
             100u64,
             &mut lock_flag,
-            #[cfg(not(test))]
+            #[cfg(not(test))] // only required in real-life execution
             "dummy_value_type_not_used",
-            #[cfg(not(test))]
+            #[cfg(not(test))] // only required in real-life execution
             "dummy_duration_not_used",
         );
         assert!(result, "Should return true when value exceeds limit");
@@ -3045,9 +3053,9 @@ pub mod tests {
             102u64,
             100u64,
             &mut lock_flag,
-            #[cfg(not(test))]
+            #[cfg(not(test))] // only required in real-life execution
             "dummy_value_type_not_used",
-            #[cfg(not(test))]
+            #[cfg(not(test))] // only required in real-life execution
             "dummy_duration_not_used",
         );
         assert!(result, "Should return true on subsequent exceedance");
@@ -3061,9 +3069,9 @@ pub mod tests {
             99u64,
             100u64,
             &mut lock_flag,
-            #[cfg(not(test))]
+            #[cfg(not(test))] // only required in real-life execution
             "dummy_value_type_not_used",
-            #[cfg(not(test))]
+            #[cfg(not(test))] // only required in real-life execution
             "dummy_duration_not_used",
         );
         assert!(!result, "Should return false when value is back to normal");
@@ -3079,9 +3087,9 @@ pub mod tests {
             100.1f32,
             100.0f32,
             &mut lock_flag_f32,
-            #[cfg(not(test))]
+            #[cfg(not(test))] // only required in real-life execution
             "dummy_value_type_not_used",
-            #[cfg(not(test))]
+            #[cfg(not(test))] // only required in real-life execution
             "dummy_duration_not_used",
         );
         assert!(
@@ -3095,9 +3103,9 @@ pub mod tests {
             99.9f32,
             100.0f32,
             &mut lock_flag_f32_reset,
-            #[cfg(not(test))]
+            #[cfg(not(test))] // only required in real-life execution
             "dummy_value_type_not_used",
-            #[cfg(not(test))]
+            #[cfg(not(test))] // only required in real-life execution
             "dummy_duration_not_used",
         );
         assert!(

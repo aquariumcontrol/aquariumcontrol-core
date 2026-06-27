@@ -52,7 +52,7 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 //! An instance of `VersionInformation` is created once at application startup and used for
 //! a preflight compatibility check between the application and the database.
 
-#[cfg(not(test))]
+#[cfg(not(test))] // only required in real-life execution
 use log::info;
 use std::env;
 use std::fmt::{Display, Formatter};
@@ -161,7 +161,8 @@ impl VersionInformation {
             VersionInformationError::CurrentExecutablePathRetrievalFailure { source: e }
         })?;
 
-        #[cfg(not(test))]
+        #[cfg(not(test))] // only required in real-life execution
+        #[cfg(not(tarpaulin_include))]
         info!(
             target: module_path!(),
             "path of this executable is: {}",

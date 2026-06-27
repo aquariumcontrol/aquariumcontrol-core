@@ -338,7 +338,8 @@ fn run() -> Result<(), StartupError> {
     // calculate hash of executable
     let version_information = VersionInformation::new()
         .map_err(|e| StartupError::VersionInformationRetrievalFailure { source: e })?;
-    #[cfg(not(test))]
+    #[cfg(not(test))] // only required in real-life execution
+    #[cfg(not(tarpaulin_include))]
     info!(target: module_path!(), "{version_information}");
 
     // check if the user has root privileges - disabled when developing on the Windows platform

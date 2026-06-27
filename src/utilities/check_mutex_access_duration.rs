@@ -57,7 +57,7 @@ use crate::thermal::heating::Heating;
 use crate::thermal::ventilation::Ventilation;
 use crate::utilities::channel_content::AquariumSignal;
 use crate::water::water_injection::WaterInjection;
-#[cfg(not(test))]
+#[cfg(not(test))] // only required in real-life execution
 use log::warn;
 use std::time::{Duration, Instant};
 
@@ -78,7 +78,7 @@ pub trait CheckMutexAccessDurationTrait {
     fn get_max_mutex_access_duration(&self) -> Duration;
 
     /// Inform the originator for logging purposes
-    #[cfg(not(test))]
+    #[cfg(not(test))] // only required in real-life execution
     fn get_location(&self) -> &str;
 
     fn check_mutex_access_duration(
@@ -94,7 +94,8 @@ pub trait CheckMutexAccessDurationTrait {
         if measured_mutex_access_duration > self.get_max_mutex_access_duration() {
             if !warn_lock {
                 self.set_warn_lock(&key_opt, true);
-                #[cfg(not(test))]
+                #[cfg(not(test))] // only required in real-life execution
+                #[cfg(not(tarpaulin_include))]
                 warn!(target: self.get_location(),
                         "Access to mutex took too long. Allowed={}ms, Measured={}ms",
                         self.get_max_mutex_access_duration().as_millis(),
@@ -146,7 +147,7 @@ impl CheckMutexAccessDurationTrait for TankLevelSwitch {
     }
 
     /// inform the location of the warning for logging purposes
-    #[cfg(not(test))]
+    #[cfg(not(test))] // only required in real-life execution
     fn get_location(&self) -> &str {
         "tank level switch"
     }
@@ -179,7 +180,7 @@ impl CheckMutexAccessDurationTrait for Heating {
     }
 
     /// inform the location of the warning for logging purposes
-    #[cfg(not(test))]
+    #[cfg(not(test))] // only required in real-life execution
     fn get_location(&self) -> &str {
         "heating"
     }
@@ -212,7 +213,7 @@ impl CheckMutexAccessDurationTrait for Ventilation {
     }
 
     /// inform the location of the warning for logging purposes
-    #[cfg(not(test))]
+    #[cfg(not(test))] // only required in real-life execution
     fn get_location(&self) -> &str {
         "ventilation"
     }
@@ -245,7 +246,7 @@ impl CheckMutexAccessDurationTrait for Dht {
     }
 
     /// inform the location of the warning for logging purposes
-    #[cfg(not(test))]
+    #[cfg(not(test))] // only required in real-life execution
     fn get_location(&self) -> &str {
         "dht"
     }
@@ -278,7 +279,7 @@ impl CheckMutexAccessDurationTrait for SensorManager {
     }
 
     /// inform the location of the warning for logging purposes
-    #[cfg(not(test))]
+    #[cfg(not(test))] // only required in real-life execution
     fn get_location(&self) -> &str {
         "sensor_manager"
     }
@@ -311,7 +312,7 @@ impl CheckMutexAccessDurationTrait for WaterInjection {
     }
 
     /// inform the location of the warning for logging purposes
-    #[cfg(not(test))]
+    #[cfg(not(test))] // only required in real-life execution
     fn get_location(&self) -> &str {
         "water_injection"
     }
@@ -344,7 +345,7 @@ impl CheckMutexAccessDurationTrait for Ds18b20 {
     }
 
     /// inform the location of the warning for logging purposes
-    #[cfg(not(test))]
+    #[cfg(not(test))] // only required in real-life execution
     fn get_location(&self) -> &str {
         "ds18b20"
     }
@@ -408,7 +409,7 @@ impl CheckMutexAccessDurationTrait for AtlasScientificEzo {
     }
 
     /// inform the location of the warning for logging purposes
-    #[cfg(not(test))]
+    #[cfg(not(test))] // only required in real-life execution
     fn get_location(&self) -> &str {
         "atlas_scientific_ezo"
     }
@@ -474,7 +475,7 @@ impl CheckMutexAccessDurationTrait for AtlasScientificOem {
     }
 
     /// inform the location of the warning for logging purposes
-    #[cfg(not(test))]
+    #[cfg(not(test))] // only required in real-life execution
     fn get_location(&self) -> &str {
         "atlas_scientific_oem"
     }

@@ -58,7 +58,7 @@ use log::{error, info};
 #[cfg(any(feature = "debug_channels", test))]
 use log::debug;
 
-#[cfg(all(not(test), target_os = "linux"))]
+#[cfg(all(not(test), target_os = "linux"))] // only required in real-life execution
 use nix::unistd::gettid;
 
 use crate::launch::channels::AquaChannelError;
@@ -199,7 +199,8 @@ impl Monitors {
         _mutex_device_scheduler_monitors: Arc<Mutex<i32>>,
         monitors_channels: &mut MonitorsChannels,
     ) {
-        #[cfg(all(target_os = "linux", not(test)))]
+        #[cfg(all(target_os = "linux", not(test)))] // only required in real-life execution
+        #[cfg(not(tarpaulin_include))]
         info!(target: module_path!(), "Thread started with TID: {}", gettid());
 
         let sleep_duration_hundred_millis = Duration::from_millis(100);
