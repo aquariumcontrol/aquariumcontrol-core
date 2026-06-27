@@ -540,7 +540,7 @@ impl TankLevelSwitch {
     /// Returns a `TankLevelSwitchError::SimulatorChannelNotProvided` if the module is
     /// configured to use the simulator, but the required TCP communication channels
     /// are not provided at startup.
-    pub fn execute(
+    pub async fn execute(
         &mut self,
         tank_level_switch_channels: &mut TankLevelSwitchChannels,
         mutex_tank_level_switch_signals: Arc<Mutex<TankLevelSwitchSignals>>,
@@ -549,7 +549,6 @@ impl TankLevelSwitch {
         #[cfg(not(tarpaulin_include))]
         info!(target: module_path!(), "Thread started with TID: {}", gettid());
 
-        let spin_sleeper = SpinSleeper::default();
         let mut lock_warn_cycle_time_exceeded: bool = false;
         let cycle_time_duration = Duration::from_millis(CYCLE_TIME_TANK_LEVEL_SWITCH_MILLIS);
 
@@ -583,10 +582,13 @@ impl TankLevelSwitch {
 
             if self.config.active {
                 // either communicate with real HW or with the simulator to get updated signal information
-                if let Err(e) = self.update_tank_level_switch_signals(
-                    &mut tank_level_switch_channels.tx_tank_level_switch_to_tcp_opt,
-                    &mut tank_level_switch_channels.rx_tank_level_switch_from_tcp_opt,
-                ) {
+                let update_result = tokio::task::block_in_place(|| {
+                    self.update_tank_level_switch_signals(
+                        &mut tank_level_switch_channels.tx_tank_level_switch_to_tcp_opt,
+                        &mut tank_level_switch_channels.rx_tank_level_switch_from_tcp_opt,
+                    )
+                });
+                if let Err(e) = update_result {
                     if matches!(e, TankLevelSwitchError::InputPinNotProvided(_)) {
                         if !self.lock_error_input_pin_none {
                             log_error_chain(
@@ -683,7 +685,7 @@ impl TankLevelSwitch {
                 let remaining_sleep_time = cycle_time_duration - execution_duration;
                 lock_warn_cycle_time_exceeded = false;
                 // sleep time does not need to be split up because cycle time is 100 milliseconds only
-                spin_sleeper.sleep(remaining_sleep_time);
+                tokio::time::sleep(remaining_sleep_time).await;
             }
 
             start_time = Instant::now();
@@ -695,11 +697,11 @@ impl TankLevelSwitch {
         // Those threads have to stop receiving commands from this thread.
         // The shutdown sequence is handled by the signal_handler module.
         let sleep_duration_one_millis = Duration::from_millis(1);
-        self.wait_for_termination(
+        self.wait_for_termination_async(
             &mut tank_level_switch_channels.rx_tank_level_switch_from_signal_handler,
             sleep_duration_one_millis,
             module_path!(),
-        );
+        ).await;
         Ok(())
     }
 }
@@ -805,7 +807,8 @@ pub mod tests {
 
                 let mutex_tank_level_switch_signals_for_assert =
                     mutex_tank_level_switch_signals.clone();
-                let _ = tank_level_switch.execute(
+                let _ = execute_blocking(
+                    &mut tank_level_switch,
                     &mut channels.tank_level_switch,
                     mutex_tank_level_switch_signals,
                 );
@@ -837,6 +840,20 @@ pub mod tests {
         println!("* [TankLevelSwitch] testing if stabilized tank level position is high when invalid bit is true succeeded.");
     }
 
+    fn execute_blocking(
+        tank_level_switch: &mut TankLevelSwitch,
+        tank_level_switch_channels: &mut TankLevelSwitchChannels,
+        mutex_tank_level_switch_signals: Arc<Mutex<TankLevelSwitchSignals>>,
+    ) -> Result<(), super::TankLevelSwitchError> {
+        tokio::runtime::Builder::new_multi_thread()
+            .enable_all()
+            .build()
+            .unwrap()
+            .block_on(async {
+                tank_level_switch.execute(tank_level_switch_channels, mutex_tank_level_switch_signals).await
+            })
+    }
+
     // helper function for creating the test object
     fn create_test_object(
         mut tank_level_switch: TankLevelSwitch,
@@ -846,7 +863,8 @@ pub mod tests {
         thread::Builder::new()
             .name("test_object".to_string())
             .spawn(move || {
-                let _ = tank_level_switch.execute(
+                let _ = execute_blocking(
+                    &mut tank_level_switch,
                     &mut tank_level_switch_channels,
                     mutex_tank_level_switch_signals,
                 );
@@ -1312,7 +1330,8 @@ pub mod tests {
         let join_handle_test_object = thread::Builder::new()
             .name("test_object".to_string())
             .spawn(move || {
-                let _ = tank_level_switch.execute(
+                let _ = execute_blocking(
+                    &mut tank_level_switch,
                     &mut channels.tank_level_switch,
                     mutex_tank_level_switch_signals_clone_for_test_object,
                 );
@@ -1431,7 +1450,8 @@ pub mod tests {
         let join_handle_test_object = thread::Builder::new()
             .name("test_object".to_string())
             .spawn(move || {
-                let _ = tank_level_switch.execute(
+                let _ = execute_blocking(
+                    &mut tank_level_switch,
                     &mut channels.tank_level_switch,
                     mutex_tank_level_switch_signals,
                 );

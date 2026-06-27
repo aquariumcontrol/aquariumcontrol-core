@@ -1176,23 +1176,24 @@ fn run() -> Result<(), StartupError> {
                     tasks.push(handle);
                 }
 
+                if execution_config.tank_level_switch {
+                    let handle = tokio::spawn(async move {
+                        let _ = tank_level_switch
+                            .execute(&mut chan_tank_level_switch, mutex_tank_level_switch_signals).await;
+                        #[cfg(feature = "debug_channels")]
+                        debug!(target: module_path!(), "{0}", chan_tank_level_switch);
+                        #[cfg(feature = "debug_main")]
+                        debug!(target: module_path!(), "Tank level switch calculation terminated.");
+                    });
+                    tasks.push(handle);
+                }
+
                 // Wait until all tasks are finished
                 for t in tasks {
                     let _ = t.await;
                 }
             });
         });
-
-        if execution_config.tank_level_switch {
-            scope.spawn(move || {
-                let _ = tank_level_switch
-                    .execute(&mut chan_tank_level_switch, mutex_tank_level_switch_signals);
-                #[cfg(feature = "debug_channels")]
-                debug!(target: module_path!(), "{0}", chan_tank_level_switch);
-                #[cfg(feature = "debug_main")]
-                debug!(target: module_path!(), "Tank level switch calculation terminated.");
-            });
-        }
 
 
 

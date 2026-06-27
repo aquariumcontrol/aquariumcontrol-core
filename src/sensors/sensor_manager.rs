@@ -91,7 +91,6 @@ use crate::utilities::logger::log_error_chain;
 use crate::utilities::proc_ext_req::ProcessExternalRequestTrait;
 use crate::utilities::wait_for_termination::WaitForTerminationTrait;
 use log::error;
-use spin_sleep::SpinSleeper;
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 use thiserror::Error;
@@ -555,7 +554,6 @@ impl SensorManager {
 
         let sleep_duration_hundred_millis = Duration::from_millis(100);
         let sleep_duration_one_millis = Duration::from_millis(1);
-        let spin_sleeper = SpinSleeper::default();
         let mut mutex_poisoned = false;
 
         // initialize signals with replacement values

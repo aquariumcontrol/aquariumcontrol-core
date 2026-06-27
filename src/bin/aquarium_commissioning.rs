@@ -382,7 +382,13 @@ fn main() -> Result<(), Box<dyn Error>> {
         let mut sensor_manager_channels = channels.sensor_manager; // Move out
 
         thread::spawn(move || {
-            sensor_manager.execute(&mut sensor_manager_channels, sensor_mutexes_for_thread);
+            tokio::runtime::Builder::new_current_thread()
+                .enable_all()
+                .build()
+                .unwrap()
+                .block_on(async {
+                    sensor_manager.execute(&mut sensor_manager_channels, sensor_mutexes_for_thread).await;
+                });
         });
     }
 
@@ -458,7 +464,13 @@ fn main() -> Result<(), Box<dyn Error>> {
             let mutex_tls_clone = mutex_tank_level_switch_signals.clone();
 
             thread::spawn(move || {
-                let _ = tank_level_switch.execute(&mut tls_channels, mutex_tls_clone);
+                tokio::runtime::Builder::new_current_thread()
+                    .enable_all()
+                    .build()
+                    .unwrap()
+                    .block_on(async {
+                        let _ = tank_level_switch.execute(&mut tls_channels, mutex_tls_clone).await;
+                    });
             });
         }
 
