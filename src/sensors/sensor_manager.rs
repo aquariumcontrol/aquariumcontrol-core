@@ -530,7 +530,7 @@ impl SensorManager {
     /// # Panics
     /// This function will panic if:
     /// - It's configured to use the simulator but essential TCP communication channels are missing.
-    pub fn execute(
+    pub async fn execute(
         &mut self,
         sensor_manager_channels: &mut SensorManagerChannels,
         mutexes: SensorManagerMutexes,
@@ -583,7 +583,9 @@ impl SensorManager {
             {
                 self.instant_last_measurement = current_instant;
                 if self.config.use_simulator {
-                    let result = self.communicate_with_simulator(sensor_manager_channels);
+                    let result = tokio::task::block_in_place(|| {
+                        self.communicate_with_simulator(sensor_manager_channels)
+                    });
                     if result.is_err() {
                         log_error_chain(
                             module_path!(),
@@ -743,7 +745,7 @@ impl SensorManager {
                     );
                 }
             }
-            spin_sleeper.sleep(sleep_duration_hundred_millis);
+            tokio::time::sleep(sleep_duration_hundred_millis).await;
         }
 
         sensor_manager_channels.acknowledge_signal_handler();
@@ -751,11 +753,11 @@ impl SensorManager {
         // This thread has channel connections to underlying threads.
         // Those threads have to stop receiving commands from this thread.
         // The shutdown sequence is handled by the signal_handler module.
-        self.wait_for_termination(
+        self.wait_for_termination_async(
             &mut sensor_manager_channels.rx_sensor_manager_from_signal_handler,
             sleep_duration_one_millis,
             module_path!(),
-        );
+        ).await;
     }
 }
 
@@ -846,6 +848,20 @@ pub mod tests {
             .send(InternalCommand::Terminate);
     }
 
+    fn execute_blocking(
+        sensor_manager: &mut SensorManager,
+        sensor_manager_channels: &mut SensorManagerChannels,
+        mutexes: SensorManagerMutexes,
+    ) {
+        tokio::runtime::Builder::new_multi_thread()
+            .enable_all()
+            .build()
+            .unwrap()
+            .block_on(async {
+                sensor_manager.execute(sensor_manager_channels, mutexes).await;
+            });
+    }
+
     fn execute_and_assert_sensor_manager(
         mut sensor_manager_channels: SensorManagerChannels,
         mut sensor_manager: SensorManager,
@@ -857,7 +873,7 @@ pub mod tests {
         let mutexes_clone_for_asserts = mutexes.clone();
 
         // test object
-        sensor_manager.execute(&mut sensor_manager_channels, mutexes);
+        execute_blocking(&mut sensor_manager, &mut sensor_manager_channels, mutexes);
 
         match mutexes_clone_for_asserts
             .mutex_sensor_manager_signals

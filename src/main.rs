@@ -962,30 +962,6 @@ fn run() -> Result<(), StartupError> {
             });
         }
 
-        if execution_config.sensor_manager {
-            scope.spawn(move || {
-                let mutexes_sensor_manager = SensorManagerMutexes {
-                    mutex_ds18b20_ambient_temperature:
-                        mutex_ds18b20_ambient_temperature_clone_for_sensor_manager,
-                    mutex_ds18b20_water_temperature:
-                        mutex_ds18b20_water_temperature_clone_for_sensor_manager,
-                    mutex_dht: mutex_dht_clone_for_sensor_manager,
-                    mutex_atlas_scientific_temperature:
-                        mutex_atlas_scientific_temperature_clone_for_sensor_manager,
-                    mutex_atlas_scientific_ph: mutex_atlas_scientific_ph_clone_for_sensor_manager,
-                    mutex_atlas_scientific_conductivity:
-                        mutex_atlas_scientific_conductivity_clone_for_sensor_manager,
-                    mutex_sensor_manager_signals,
-                };
-
-                sensor_manager.execute(&mut chan_sensor_manager, mutexes_sensor_manager);
-                #[cfg(feature = "debug_channels")]
-                debug!(target: module_path!(), "{0}", chan_sensor_manager);
-                #[cfg(feature = "debug_main")]
-                debug!(target: module_path!(), "SensorManager terminated.");
-            });
-        }
-
         // give sensor reading components some time so that they can acquire a first data set
         let duration_one_second = Duration::from_secs(1);
         println!("trying to acquire data before starting control in 3 seconds...");
@@ -1020,6 +996,29 @@ fn run() -> Result<(), StartupError> {
                         debug!(target: module_path!(), "{0}", chan_schedule_check);
                         #[cfg(feature = "debug_main")]
                         debug!(target: module_path!(), "Schedule checker terminated.");
+                    });
+                    tasks.push(handle);
+                }
+                if execution_config.sensor_manager {
+                    let mutexes_sensor_manager = SensorManagerMutexes {
+                        mutex_ds18b20_ambient_temperature:
+                            mutex_ds18b20_ambient_temperature_clone_for_sensor_manager,
+                        mutex_ds18b20_water_temperature:
+                            mutex_ds18b20_water_temperature_clone_for_sensor_manager,
+                        mutex_dht: mutex_dht_clone_for_sensor_manager,
+                        mutex_atlas_scientific_temperature:
+                            mutex_atlas_scientific_temperature_clone_for_sensor_manager,
+                        mutex_atlas_scientific_ph: mutex_atlas_scientific_ph_clone_for_sensor_manager,
+                        mutex_atlas_scientific_conductivity:
+                            mutex_atlas_scientific_conductivity_clone_for_sensor_manager,
+                        mutex_sensor_manager_signals,
+                    };
+                    let handle = tokio::spawn(async move {
+                        sensor_manager.execute(&mut chan_sensor_manager, mutexes_sensor_manager).await;
+                        #[cfg(feature = "debug_channels")]
+                        debug!(target: module_path!(), "{0}", chan_sensor_manager);
+                        #[cfg(feature = "debug_main")]
+                        debug!(target: module_path!(), "SensorManager terminated.");
                     });
                     tasks.push(handle);
                 }
