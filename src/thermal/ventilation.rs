@@ -67,10 +67,7 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 //!   a database.
 
 #[cfg(not(test))] // only required in real-life execution
-use log::info;
-use log::{error, warn};
-
-use crate::launch::channels::AquaChannelError;
+use log::{info, warn};
 
 use crate::database::thermal_set_value_updater_trait::ThermalSetValueUpdaterTrait;
 use crate::utilities::channel_content::{ActuatorState, AquariumDevice, InternalCommand};
@@ -87,6 +84,7 @@ use crate::thermal::ventilation_mutexes::VentilationMutexes;
 use crate::utilities::acknowledge_signal_handler::AcknowledgeSignalHandlerTrait;
 use crate::utilities::check_mutex_access_duration::CheckMutexAccessDurationTrait;
 use crate::utilities::logger::log_error_chain;
+use crate::utilities::wait_for_termination::WaitForTerminationTrait;
 use crate::{perform_schedule_check, update_thermal_set_values};
 #[cfg(all(not(test), target_os = "linux"))] // only required in real-life execution
 use nix::unistd::gettid;
@@ -649,50 +647,11 @@ impl Ventilation {
         // This thread has channel connections to underlying threads (relay manager, Atlas Scientific).
         // Those threads have to stop receiving commands from this thread.
         // The shutdown sequence is handled by the signal_handler module.
-        let mut termination_command_received = false;
-        while !termination_command_received {
-            termination_command_received = match ventilation_channels
-                .rx_ventilation_from_signal_handler
-                .try_recv()
-            {
-                Ok(c) => match c {
-                    InternalCommand::Terminate => {
-                        self.lock_warn_inapplicable_command_signal_handler = false;
-                        true
-                    }
-                    _ => {
-                        if !self.lock_warn_inapplicable_command_signal_handler {
-                            warn!(
-                                target: module_path!(),
-                                "ignoring inapplicable command from signal handler ({c})"
-                            );
-                            self.lock_warn_inapplicable_command_signal_handler = true;
-                        }
-                        false
-                    }
-                },
-                Err(e) => {
-                    match e {
-                        #[cfg(feature = "debug_channels")]
-                        AquaChannelError::Full => { /* Not applicable. Do nothing */ }
-                        AquaChannelError::Empty => { /* do nothing */ }
-                        AquaChannelError::Disconnected => {
-                            if !self.lock_error_channel_receive_termination {
-                                error!(
-                                    target: module_path!(),
-                                    "receiving termination signal from signal handler failed ({e:?})"
-                                );
-                                self.lock_warn_inapplicable_command_signal_handler = true;
-                            }
-                        }
-                    }
-                    false
-                }
-            };
-            if !termination_command_received {
-                tokio::time::sleep(sleep_duration_hundred_millis).await;
-            }
-        }
+        self.wait_for_termination_async(
+            &mut ventilation_channels.rx_ventilation_from_signal_handler,
+            sleep_duration_hundred_millis,
+            module_path!(),
+        ).await;
     }
 }
 
