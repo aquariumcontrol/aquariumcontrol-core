@@ -228,6 +228,7 @@ impl Refill {
                 error_receive_tank_level_switch_position: false,
                 error_sql_update_failed: false,
                 error_sql_get_historic_data_failed: false,
+                error_join_failed: false,
             },
             lock_info_stop_command_received: false,
             lock_info_start_command_received: false,
@@ -719,11 +720,11 @@ impl Refill {
     /// * `mutex_tank_level_switch_signals_clone_for_refill` - The `Arc<Mutex<TankLevelSwitchSignals>>`
     ///   containing the latest tank level switch readings (raw and stabilized).
     /// * `sql_interface_refill` - The **specific SQL interface** for refill-related database operations.
-    pub fn execute(
+    pub async fn execute(
         &mut self,
         mutex_device_scheduler_refill: Arc<Mutex<i32>>,
         refill_channels: &mut RefillChannels,
-        water_injection: &mut impl WaterInjectionTrait,
+        water_injection: &mut (impl WaterInjectionTrait + Send),
         mutex_tank_level_switch_signals_clone_for_refill: Arc<Mutex<TankLevelSwitchSignals>>,
         mutex_refill_status: Arc<Mutex<RefillStatus>>,
         mut sql_interface_refill: Box<dyn DatabaseInterfaceRefillTrait + Sync + Send>,
@@ -736,7 +737,7 @@ impl Refill {
             Duration::from_millis(self.config.check_interval * MILLIS_PER_SEC);
         let sleep_duration_hundred_millis = Duration::from_millis(100);
         let mut i = 0;
-        let spin_sleeper = SpinSleeper::default();
+
 
         let mut schedule_check_result: bool;
         #[cfg(feature = "debug_refill")]
@@ -793,7 +794,7 @@ impl Refill {
                 if quit_command_received {
                     break;
                 }
-                spin_sleeper.sleep(sleep_duration_hundred_millis);
+                tokio::time::sleep(sleep_duration_hundred_millis).await;
             }
         }
 
@@ -855,7 +856,8 @@ impl Refill {
                         .check_volume_count_time_limits(&refill_stats_data, refill_channels)
                         || self.refill_errors.error_switch_stuck_low
                         || self.refill_errors.error_sql_update_failed
-                        || self.refill_errors.error_sql_get_historic_data_failed;
+                        || self.refill_errors.error_sql_get_historic_data_failed
+                        || self.refill_errors.error_join_failed;
 
                     {
                         // internal scope to limit lifetime of mutex lock
@@ -905,13 +907,44 @@ impl Refill {
                             }
 
                             // conditions for allowing the refill operation are given
-                            quit_command_received = water_injection.inject_water(
-                                refill_channels,
-                                &mut self.refill_errors,
-                                &mut sql_interface_refill,
-                                &mutex_tank_level_switch_signals_clone_for_refill,
-                                &mutex_device_scheduler_refill,
-                            );
+                            let (quit_res, join_err_opt) = tokio::task::block_in_place(|| {
+                                std::thread::scope(|scope| {
+                                    let handle = scope.spawn(|| {
+                                        water_injection.inject_water(
+                                            refill_channels,
+                                            &mut self.refill_errors,
+                                            &mut sql_interface_refill,
+                                            &mutex_tank_level_switch_signals_clone_for_refill,
+                                            &mutex_device_scheduler_refill,
+                                        )
+                                    });
+                                    match handle.join() {
+                                        Ok(quit) => (quit, None),
+                                        Err(e) => {
+                                            let panic_msg = if let Some(s) = e.downcast_ref::<&str>() {
+                                                s.to_string()
+                                            } else if let Some(s) = e.downcast_ref::<String>() {
+                                                s.clone()
+                                            } else {
+                                                "Unknown panic payload".to_string()
+                                            };
+                                            (false, Some(ThreadJoinError(panic_msg)))
+                                        }
+                                    }
+                                })
+                            });
+
+                            if let Some(err) = join_err_opt {
+                                self.refill_errors.error_join_failed = true;
+                                log_error_chain(
+                                    module_path!(),
+                                    "could not join thread",
+                                    err,
+                                );
+                                quit_command_received = false;
+                            } else {
+                                quit_command_received = quit_res;
+                            }
 
                             water_injected = true;
 
@@ -1011,7 +1044,7 @@ impl Refill {
                     if quit_command_received {
                         break;
                     }
-                    spin_sleeper.sleep(sleep_duration_hundred_millis);
+                    tokio::time::sleep(sleep_duration_hundred_millis).await;
 
                     self.check_timing_and_ping_database(&mut *sql_interface_refill);
 
@@ -1039,13 +1072,24 @@ impl Refill {
         // This thread has channel connections to underlying threads (relay manager, tank level switch).
         // Those threads have to stop receiving commands from this thread.
         // The shutdown sequence is handled by the signal_handler module.
-        self.wait_for_termination(
+        self.wait_for_termination_async(
             &mut refill_channels.rx_refill_from_signal_handler,
             sleep_duration_hundred_millis,
             module_path!(),
-        );
+        ).await;
     }
 }
+
+#[derive(Debug)]
+struct ThreadJoinError(String);
+
+impl std::fmt::Display for ThreadJoinError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.0)
+    }
+}
+
+impl std::error::Error for ThreadJoinError {}
 
 #[cfg(test)]
 pub mod tests {
@@ -1075,7 +1119,35 @@ pub mod tests {
 
     use crate::utilities::logger::setup_logger;
     use crate::utilities::logger_config::LoggerConfig;
+    use crate::database::sql_interface_refill::DatabaseInterfaceRefillTrait;
+    use crate::water::refill_channels::RefillChannels;
+    use crate::water::water_injection::WaterInjectionTrait;
     use crate::water::refill_stats_data::RefillStatsData;
+
+    fn execute_blocking(
+        refill: &mut Refill,
+        mutex_device_scheduler_refill: Arc<Mutex<i32>>,
+        refill_channels: &mut RefillChannels,
+        water_injection: &mut (impl WaterInjectionTrait + Send),
+        mutex_tank_level_switch_signals_clone_for_refill: Arc<Mutex<TankLevelSwitchSignals>>,
+        mutex_refill_status: Arc<Mutex<RefillStatus>>,
+        sql_interface_refill: Box<dyn DatabaseInterfaceRefillTrait + Sync + Send>,
+    ) {
+        tokio::runtime::Builder::new_multi_thread()
+            .enable_all()
+            .build()
+            .unwrap()
+            .block_on(async {
+                refill.execute(
+                    mutex_device_scheduler_refill,
+                    refill_channels,
+                    water_injection,
+                    mutex_tank_level_switch_signals_clone_for_refill,
+                    mutex_refill_status,
+                    sql_interface_refill,
+                ).await;
+            });
+    }
 
     // Prepares and returns a configured `Refill` control instance along with its associated interfaces for testing.
     //
@@ -1215,6 +1287,7 @@ pub mod tests {
             error_receive_tank_level_switch_position: false,
             error_sql_update_failed: false,
             error_sql_get_historic_data_failed: false,
+            error_join_failed: false,
         };
         let (_, mut refill, _, _) = prepare_refill_tests(Some(refill_errors), 2, 60, Some(46));
 
@@ -1285,6 +1358,7 @@ pub mod tests {
                 error_receive_tank_level_switch_position: false,
                 error_sql_update_failed: false,
                 error_sql_get_historic_data_failed: false,
+                error_join_failed: false,
             },
         );
 
@@ -1373,7 +1447,8 @@ pub mod tests {
                 let mut tx_refill_to_schedule_check_for_test_case_finish =
                     channels.refill.tx_refill_to_schedule_check.clone();
 
-                refill.execute(
+                execute_blocking(
+                    &mut refill,
                     mutex_device_scheduler,
                     &mut channels.refill,
                     &mut mock_water_injection,
@@ -1449,6 +1524,7 @@ pub mod tests {
                 error_receive_tank_level_switch_position: false,
                 error_sql_update_failed: false,
                 error_sql_get_historic_data_failed: false,
+                error_join_failed: false,
             },
         );
 
@@ -1534,7 +1610,8 @@ pub mod tests {
                 let mut tx_refill_to_schedule_check_for_test_case_finish =
                     channels.refill.tx_refill_to_schedule_check.clone();
 
-                refill.execute(
+                execute_blocking(
+                    &mut refill,
                     mutex_device_scheduler,
                     &mut channels.refill,
                     &mut mock_water_injection,
@@ -1608,6 +1685,7 @@ pub mod tests {
                 error_receive_tank_level_switch_position: false,
                 error_sql_update_failed: false,
                 error_sql_get_historic_data_failed: false,
+                error_join_failed: false,
             },
         );
 
@@ -1696,7 +1774,8 @@ pub mod tests {
                 let mut tx_refill_to_schedule_check_for_test_case_finish =
                     channels.refill.tx_refill_to_schedule_check.clone();
 
-                refill.execute(
+                execute_blocking(
+                    &mut refill,
                     mutex_device_scheduler,
                     &mut channels.refill,
                     &mut mock_water_injection,
@@ -1776,6 +1855,7 @@ pub mod tests {
                 error_receive_tank_level_switch_position: false,
                 error_sql_update_failed: false,
                 error_sql_get_historic_data_failed: false,
+                error_join_failed: false,
             },
         );
 
@@ -1891,7 +1971,8 @@ pub mod tests {
                 let mut tx_refill_to_schedule_check_for_test_case_finish =
                     channels.refill.tx_refill_to_schedule_check.clone();
 
-                refill.execute(
+                execute_blocking(
+                    &mut refill,
                     mutex_device_scheduler,
                     &mut channels.refill,
                     &mut mock_water_injection,
@@ -1970,6 +2051,7 @@ pub mod tests {
                 error_receive_tank_level_switch_position: false,
                 error_sql_update_failed: false,
                 error_sql_get_historic_data_failed: false,
+                error_join_failed: false,
             },
         );
 
@@ -2052,7 +2134,8 @@ pub mod tests {
                 let mut tx_refill_to_schedule_check_for_test_case_finish =
                     channels.refill.tx_refill_to_schedule_check.clone();
 
-                refill.execute(
+                execute_blocking(
+                    &mut refill,
                     mutex_device_scheduler,
                     &mut channels.refill,
                     &mut mock_water_injection,
@@ -2099,6 +2182,7 @@ pub mod tests {
             error_receive_tank_level_switch_position: true,
             error_sql_update_failed: true,
             error_sql_get_historic_data_failed: true,
+            error_join_failed: false,
         };
 
         let (_, mut refill, mut sql_interface, sql_interface_refill) =
@@ -2140,6 +2224,7 @@ pub mod tests {
                 error_receive_tank_level_switch_position: false,
                 error_sql_update_failed: false,
                 error_sql_get_historic_data_failed: false,
+                error_join_failed: false,
             },
         );
 
@@ -2220,7 +2305,8 @@ pub mod tests {
                 let mut tx_refill_to_schedule_check_for_test_case_finish =
                     channels.refill.tx_refill_to_schedule_check.clone();
 
-                refill.execute(
+                execute_blocking(
+                    &mut refill,
                     mutex_device_scheduler,
                     &mut channels.refill,
                     &mut mock_water_injection,
@@ -2299,6 +2385,7 @@ pub mod tests {
                 error_receive_tank_level_switch_position: false,
                 error_sql_update_failed: false,
                 error_sql_get_historic_data_failed: false,
+                error_join_failed: false,
             },
         );
 
@@ -2380,7 +2467,8 @@ pub mod tests {
                 let mut tx_refill_to_schedule_check_for_test_case_finish =
                     channels.refill.tx_refill_to_schedule_check.clone();
 
-                refill.execute(
+                execute_blocking(
+                    &mut refill,
                     mutex_device_scheduler,
                     &mut channels.refill,
                     &mut mock_water_injection,
@@ -2460,6 +2548,7 @@ pub mod tests {
                 error_receive_tank_level_switch_position: false,
                 error_sql_update_failed: false,
                 error_sql_get_historic_data_failed: false,
+                error_join_failed: false,
             },
         );
 
@@ -2590,7 +2679,8 @@ pub mod tests {
                 let mut tx_refill_to_schedule_check_for_test_case_finish =
                     channels.refill.tx_refill_to_schedule_check.clone();
 
-                refill.execute(
+                execute_blocking(
+                    &mut refill,
                     mutex_device_scheduler,
                     &mut channels.refill,
                     &mut mock_water_injection,
@@ -2662,6 +2752,7 @@ pub mod tests {
                 error_receive_tank_level_switch_position: false,
                 error_sql_update_failed: false,
                 error_sql_get_historic_data_failed: false,
+                error_join_failed: false,
             },
         );
 
@@ -2744,7 +2835,8 @@ pub mod tests {
                 let mut tx_refill_to_schedule_check_for_test_case_finish =
                     channels.refill.tx_refill_to_schedule_check.clone();
 
-                refill.execute(
+                execute_blocking(
+                    &mut refill,
                     mutex_device_scheduler,
                     &mut channels.refill,
                     &mut mock_water_injection,

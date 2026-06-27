@@ -17,7 +17,6 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 macro_rules! check_quit_increment_counter_ping_database {
     (
         $quit_flag:expr,
-        $sleeper:expr,
         $sleep_duration:expr,
         $loop_counter:expr,
         $self_ref:expr,
@@ -26,7 +25,7 @@ macro_rules! check_quit_increment_counter_ping_database {
         if $quit_flag {
             break;
         }
-        $sleeper.sleep($sleep_duration);
+        tokio::time::sleep($sleep_duration).await;
 
         $loop_counter += 1;
 

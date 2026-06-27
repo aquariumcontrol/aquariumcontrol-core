@@ -355,11 +355,11 @@ impl Feed {
     /// * `sql_interface_feed` - A boxed trait object representing the interface
     ///   to the SQL database for feed-specific operations. This allows for
     ///   dependency injection and mock implementations during testing.
-    pub fn execute(
+    pub async fn execute(
         &mut self,
         mutex_device_scheduler_feed: Arc<Mutex<i32>>,
         feed_channels: &mut FeedChannels,
-        food_injection: &mut impl FoodInjectionTrait,
+        food_injection: &mut (impl FoodInjectionTrait + Send),
         mut sql_interface_feed: Box<dyn DatabaseInterfaceFeedTrait + Sync + Send>,
     ) {
         #[cfg(all(target_os = "linux", not(test)))] // only required in real-life execution
@@ -367,7 +367,7 @@ impl Feed {
         info!(target: module_path!(), "Thread started with TID: {}", gettid());
 
         let sleep_duration_hundred_millis = Duration::from_millis(100);
-        let spin_sleeper = SpinSleeper::default();
+
         let mut loop_counter = 0;
         let mut feed_inhibited: bool = false; // state of feed control determined by if the start/stop command has been received
         let mut quit_command_received: bool = false; // the request to end the application has been received
@@ -584,25 +584,56 @@ impl Feed {
                 };
 
                 if let Some(feed_profile) = feed_profile_opt {
-                    // this scope limits the lifetime of unlocked mutex
-                    let mut mutex_data = mutex_device_scheduler_feed.lock().unwrap();
+                    let feed_profile_clone = feed_profile.clone();
+                    let (res_opt, join_err_opt) = tokio::task::block_in_place(|| {
+                        std::thread::scope(|scope| {
+                            let handle = scope.spawn(|| {
+                                let mut mutex_data = mutex_device_scheduler_feed.lock().unwrap();
 
-                    let (injection_result, quit_command_received_during_requested_feed) =
-                        self.execute_feed(feed_profile.clone(), food_injection, feed_channels);
-                    self.execution_blocked |= injection_result.is_err(); // block next execution if error occurred during injection
+                                let (injection_result, quit_command_received_during_requested_feed) =
+                                    self.execute_feed(feed_profile_clone.clone(), food_injection, feed_channels);
 
-                    let logging_result =
-                        self.log_feed_operation(feed_profile, &mut sql_interface_feed);
-                    self.execution_blocked |= logging_result.is_err(); // block next execution if error occurred during logging
+                                let logging_result =
+                                    self.log_feed_operation(feed_profile_clone, &mut sql_interface_feed);
 
-                    quit_command_received = quit_command_received_during_requested_feed;
-                    *mutex_data = mutex_data.saturating_add(1);
+                                *mutex_data = mutex_data.saturating_add(1);
+
+                                (injection_result, quit_command_received_during_requested_feed, logging_result)
+                            });
+                            match handle.join() {
+                                Ok(res) => (Some(res), None),
+                                Err(e) => {
+                                    let panic_msg = if let Some(s) = e.downcast_ref::<&str>() {
+                                        s.to_string()
+                                    } else if let Some(s) = e.downcast_ref::<String>() {
+                                        s.clone()
+                                    } else {
+                                        "Unknown panic payload".to_string()
+                                    };
+                                    (None, Some(ThreadJoinError(panic_msg)))
+                                }
+                            }
+                        })
+                    });
+
+                    if let Some(err) = join_err_opt {
+                        self.execution_blocked = true;
+                        log_error_chain(
+                            module_path!(),
+                            "could not join thread",
+                            err,
+                        );
+                        quit_command_received = false;
+                    } else if let Some((injection_result, quit_command_received_during_requested_feed, logging_result)) = res_opt {
+                        self.execution_blocked |= injection_result.is_err();
+                        self.execution_blocked |= logging_result.is_err();
+                        quit_command_received = quit_command_received_during_requested_feed;
+                    }
                 }
             }
 
             check_quit_increment_counter_ping_database!(
                 quit_command_received,
-                spin_sleeper,
                 sleep_duration_hundred_millis,
                 loop_counter,
                 self,
@@ -624,13 +655,24 @@ impl Feed {
         // This thread has channel connections to underlying threads.
         // Those threads have to stop receiving commands from this thread.
         // The shutdown sequence is handled by the signal_handler module.
-        self.wait_for_termination(
+        self.wait_for_termination_async(
             &mut feed_channels.rx_feed_from_signal_handler,
             sleep_duration_hundred_millis,
             module_path!(),
-        );
+        ).await;
     }
 }
+
+#[derive(Debug)]
+struct ThreadJoinError(String);
+
+impl std::fmt::Display for ThreadJoinError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.0)
+    }
+}
+
+impl std::error::Error for ThreadJoinError {}
 
 #[cfg(test)]
 pub mod tests {
@@ -657,6 +699,30 @@ pub mod tests {
     use crate::launch::channels::{AquaReceiver, AquaSender, Channels};
     use crate::mocks::mock_food_injection::MockFoodInjection;
     use crate::mocks::mock_sql_interface_feed::tests::MockSqlInterfaceFeed;
+
+    use crate::food::feed_channels::FeedChannels;
+    use crate::food::food_injection::FoodInjectionTrait;
+
+    fn execute_blocking(
+        feed: &mut Feed,
+        mutex_device_scheduler_feed: Arc<Mutex<i32>>,
+        feed_channels: &mut FeedChannels,
+        food_injection: &mut (impl FoodInjectionTrait + Send),
+        sql_interface_feed: Box<dyn DatabaseInterfaceFeedTrait + Sync + Send>,
+    ) {
+        tokio::runtime::Builder::new_multi_thread()
+            .enable_all()
+            .build()
+            .unwrap()
+            .block_on(async {
+                feed.execute(
+                    mutex_device_scheduler_feed,
+                    feed_channels,
+                    food_injection,
+                    sql_interface_feed,
+                ).await;
+            });
+    }
 
     /// Helper function for test cases to simulate the signal handler.
     ///
@@ -781,7 +847,8 @@ pub mod tests {
 
             // thread for the test object
             scope.spawn(move || {
-                feed.execute(
+                execute_blocking(
+                    &mut feed,
                     mutex_device_scheduler_feed.clone(),
                     &mut channels.feed,
                     &mut mock_food_injection,
@@ -978,7 +1045,8 @@ pub mod tests {
         let join_handle_test_object = thread::Builder::new()
             .name("test_object".to_string())
             .spawn(move || {
-                feed.execute(
+                execute_blocking(
+                    &mut feed,
                     mutex_device_scheduler_feed_test_object.clone(),
                     &mut channels.feed,
                     &mut mock_food_injection,
@@ -1066,7 +1134,8 @@ pub mod tests {
         let join_handle_test_object = thread::Builder::new()
             .name("test_object".to_string())
             .spawn(move || {
-                feed.execute(
+                execute_blocking(
+                    &mut feed,
                     mutex_device_scheduler_feed_test_object.clone(),
                     &mut channels.feed,
                     &mut mock_food_injection,
@@ -1301,7 +1370,8 @@ pub mod tests {
 
             // thread for the test object
             scope.spawn(move || {
-                feed.execute(
+                execute_blocking(
+                    &mut feed,
                     mutex_device_scheduler_feed.clone(),
                     &mut channels.feed,
                     &mut mock_food_injection,
@@ -1414,7 +1484,8 @@ pub mod tests {
 
             // thread for the test object
             scope.spawn(move || {
-                feed.execute(
+                execute_blocking(
+                    &mut feed,
                     mutex_device_scheduler_feed.clone(),
                     &mut channels.feed,
                     &mut mock_food_injection,

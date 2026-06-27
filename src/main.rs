@@ -1124,6 +1124,59 @@ fn run() -> Result<(), StartupError> {
                     tasks.push(handle);
                 }
 
+                if execution_config.refill {
+                    let mutex_device_scheduler_refill = Arc::clone(&mutex_device_scheduler_for_tokio);
+                    let handle = tokio::spawn(async move {
+                        refill.execute(
+                            mutex_device_scheduler_refill,
+                            &mut chan_refill,
+                            &mut water_injection,
+                            mutex_tank_level_switch_signals_clone_for_refill,
+                            mutex_refill_status,
+                            sql_interface_refill,
+                        ).await;
+                        #[cfg(feature = "debug_channels")]
+                        debug!(target: module_path!(), "{0}", chan_refill);
+                        #[cfg(feature = "debug_main")]
+                        debug!(target: module_path!(), "Refill terminated.");
+                    });
+                    tasks.push(handle);
+                }
+
+                if execution_config.feed {
+                    let mutex_device_scheduler_feed = Arc::clone(&mutex_device_scheduler_for_tokio);
+                    let handle = tokio::spawn(async move {
+                        feed.execute(
+                            mutex_device_scheduler_feed,
+                            &mut chan_feed,
+                            &mut food_injection,
+                            sql_interface_feed,
+                        ).await;
+                        #[cfg(feature = "debug_channels")]
+                        debug!(target: module_path!(), "{0}", chan_feed);
+                        #[cfg(feature = "debug_main")]
+                        debug!(target: module_path!(), "Feed terminated.");
+                    });
+                    tasks.push(handle);
+                }
+
+                if execution_config.balling {
+                    let mutex_device_scheduler_balling = Arc::clone(&mutex_device_scheduler_for_tokio);
+                    let handle = tokio::spawn(async move {
+                        balling.execute(
+                            mutex_device_scheduler_balling,
+                            &mut chan_balling,
+                            &mut mineral_injection,
+                            sql_interface_balling,
+                        ).await;
+                        #[cfg(feature = "debug_channels")]
+                        debug!(target: module_path!(), "{0}", chan_balling);
+                        #[cfg(feature = "debug_main")]
+                        debug!(target: module_path!(), "Balling terminated.");
+                    });
+                    tasks.push(handle);
+                }
+
                 // Wait until all tasks are finished
                 for t in tasks {
                     let _ = t.await;
@@ -1142,61 +1195,7 @@ fn run() -> Result<(), StartupError> {
             });
         }
 
-        if execution_config.refill {
-            // Refill needs actuation of relay
-            let mutex_device_scheduler_refill = Arc::clone(&mutex_device_scheduler);
 
-            scope.spawn(move || {
-                refill.execute(
-                    mutex_device_scheduler_refill,
-                    &mut chan_refill,
-                    &mut water_injection,
-                    mutex_tank_level_switch_signals_clone_for_refill,
-                    mutex_refill_status,
-                    sql_interface_refill,
-                );
-                #[cfg(feature = "debug_channels")]
-                debug!(target: module_path!(), "{0}", chan_refill);
-                #[cfg(feature = "debug_main")]
-                debug!(target: module_path!(), "Refill terminated.");
-            });
-        }
-
-        if execution_config.feed {
-            // Feed needs actuation of relay
-            let mutex_device_scheduler_feed = Arc::clone(&mutex_device_scheduler);
-
-            scope.spawn(move || {
-                feed.execute(
-                    mutex_device_scheduler_feed,
-                    &mut chan_feed,
-                    &mut food_injection,
-                    sql_interface_feed,
-                );
-                #[cfg(feature = "debug_channels")]
-                debug!(target: module_path!(), "{0}", chan_feed);
-                #[cfg(feature = "debug_main")]
-                debug!(target: module_path!(), "Feed terminated.");
-            });
-        }
-
-        if execution_config.balling {
-            // Balling dosing needs actuation of relays
-            let mutex_device_scheduler_balling = Arc::clone(&mutex_device_scheduler);
-
-            scope.spawn(move || {
-                balling.execute(
-                    mutex_device_scheduler_balling,
-                    &mut chan_balling,
-                    &mut mineral_injection,
-                    sql_interface_balling,
-                );
-                #[cfg(feature = "debug_channels")]
-                debug!(target: module_path!(), "{0}", chan_balling);
-                #[cfg(feature = "debug_main")]
-                debug!(target: module_path!(), "Balling terminated.");
-            });
-        }
 
         // IPC via messages
         scope.spawn(move || {

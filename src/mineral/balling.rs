@@ -70,7 +70,7 @@ use std::fmt;
 #[cfg(all(not(test), target_os = "linux"))] // only required in real-life execution
 use nix::unistd::gettid;
 
-use spin_sleep::SpinSleeper;
+
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
@@ -84,6 +84,7 @@ use crate::utilities::channel_content::AquariumDevice;
 use crate::utilities::database_ping_trait::DatabasePingTrait;
 use crate::utilities::proc_ext_req::ProcessExternalRequestTrait;
 use crate::utilities::wait_for_termination::WaitForTerminationTrait;
+use crate::utilities::logger::log_error_chain;
 use crate::{check_quit_increment_counter_ping_database, perform_schedule_check};
 
 #[cfg_attr(doc, aquamarine::aquamarine)]
@@ -139,6 +140,9 @@ pub struct Balling {
 
     /// inhibition flag to avoid flooding the log file with repeated messages about failure to receive termination signal via the channel
     pub lock_error_channel_receive_termination: bool,
+
+    /// inhibits further execution once a critical error occurs
+    pub execution_blocked: bool,
 }
 
 impl fmt::Display for Balling {
@@ -234,6 +238,7 @@ impl Balling {
             database_ping_interval,
             lock_warn_inapplicable_command_signal_handler: false,
             lock_error_channel_receive_termination: false,
+            execution_blocked: false,
         })
     }
 
@@ -510,11 +515,11 @@ impl Balling {
     /// # Returns
     /// A `bool` which is `true` if a `Quit` command was received from the signal handler
     /// during the dosing process, indicating that the application should shut down; otherwise `false`.
-    fn execute_dosing(
+    async fn execute_dosing(
         &mut self,
         pump_id: u32,
         pump_device: AquariumDevice,
-        mineral_injection: &mut impl MineralInjectionTrait,
+        mineral_injection: &mut (impl MineralInjectionTrait + Send),
         balling_channels: &mut BallingChannels,
         sql_interface_balling: &mut SqlInterfaceBalling,
         mutex_device_scheduler_balling: &Arc<Mutex<i32>>,
@@ -537,13 +542,44 @@ impl Balling {
 
                 if dosing_duration_millis > 0 {
                     // inner scope to limit the lifetime of unlocked mutex
-                    {
-                        let mut mutex_data = mutex_device_scheduler_balling.lock().unwrap();
+                    let (res_opt, join_err_opt) = tokio::task::block_in_place(|| {
+                        std::thread::scope(|scope| {
+                            let handle = scope.spawn(|| {
+                                let mut mutex_data = mutex_device_scheduler_balling.lock().unwrap();
+                                let res = mineral_injection.inject_mineral(balling_channels, pump_device, dosing_duration_millis);
+                                *mutex_data = mutex_data.saturating_add(1);
+                                res
+                            });
+                            match handle.join() {
+                                Ok(res) => (Some(res), None),
+                                Err(e) => {
+                                    let panic_msg = if let Some(s) = e.downcast_ref::<&str>() {
+                                        s.to_string()
+                                    } else if let Some(s) = e.downcast_ref::<String>() {
+                                        s.clone()
+                                    } else {
+                                        "Unknown panic payload".to_string()
+                                    };
+                                    (None, Some(ThreadJoinError(panic_msg)))
+                                }
+                            }
+                        })
+                    });
 
-                        (quit_command_received, actual_dosing_duration_millis) = mineral_injection
-                            .inject_mineral(balling_channels, pump_device, dosing_duration_millis);
-
-                        *mutex_data = mutex_data.saturating_add(1);
+                    if let Some(err) = join_err_opt {
+                        self.execution_blocked = true;
+                        log_error_chain(
+                            module_path!(),
+                            "could not join thread",
+                            err,
+                        );
+                        quit_command_received = false;
+                        actual_dosing_duration_millis = 0;
+                    } else if let Some((q, actual_dur)) = res_opt {
+                        quit_command_received = q;
+                        actual_dosing_duration_millis = actual_dur;
+                    } else {
+                        actual_dosing_duration_millis = 0;
                     }
 
                     let actual_dosing_volume = Self::calc_actual_dosing_volume(
@@ -616,11 +652,11 @@ impl Balling {
     ///   `MineralInjectionTrait`, responsible for the physical control of the dosing pumps.
     /// * `sql_interface_balling` - A `SqlInterfaceBalling` instance, providing the
     ///   specific SQL interface for Balling dosing operations.
-    pub fn execute(
+    pub async fn execute(
         &mut self,
         mutex_device_scheduler_balling: Arc<Mutex<i32>>,
         balling_channels: &mut BallingChannels,
-        mineral_injection: &mut impl MineralInjectionTrait,
+        mineral_injection: &mut (impl MineralInjectionTrait + Send),
         mut sql_interface_balling: SqlInterfaceBalling,
     ) {
         #[cfg(all(target_os = "linux", not(test)))] // only required in real-life execution
@@ -630,7 +666,7 @@ impl Balling {
         let sleep_duration_hundred_millis = Duration::from_millis(100); // used to reduce the frequency of channel polling
         let sleep_duration_pump_switch =
             Duration::from_millis(self.config.pump_switch_delay_millis.into()); // wait between actuation of pumps
-        let spin_sleeper = SpinSleeper::default();
+
         let mut loop_counter = 0; // used to reduce the frequency of DB requests
         let mut quit_command_received: bool; // the request to end the application has been received
         let mut stop_command_received: bool; // the request to (temporarily) stop dosing has been received
@@ -675,35 +711,37 @@ impl Balling {
                     );
                 }
                 #[allow(clippy::needless_range_loop)]
-                for pump_array_index in 0..=3 {
-                    if self.pump_is_active[pump_array_index]
-                        && target_instants_dosing[pump_array_index] <= Instant::now()
-                        && schedule_check_result
-                        && !dosing_inhibited
-                    {
-                        let pump_id = pump_array_index as u32 + 1;
-                        let pump_device = match pump_id {
-                            1 => AquariumDevice::PeristalticPump1,
-                            2 => AquariumDevice::PeristalticPump2,
-                            3 => AquariumDevice::PeristalticPump3,
-                            4 => AquariumDevice::PeristalticPump4,
-                            _ => unreachable!(),
-                        };
-                        quit_command_received = self.execute_dosing(
-                            pump_id,
-                            pump_device,
-                            mineral_injection,
-                            balling_channels,
-                            &mut sql_interface_balling,
-                            &mutex_device_scheduler_balling,
-                        );
-                        if quit_command_received {
-                            break; // Quit command received during dosing
+                if !self.execution_blocked {
+                    for pump_array_index in 0..=3 {
+                        if self.pump_is_active[pump_array_index]
+                            && target_instants_dosing[pump_array_index] <= Instant::now()
+                            && schedule_check_result
+                            && !dosing_inhibited
+                        {
+                            let pump_id = pump_array_index as u32 + 1;
+                            let pump_device = match pump_id {
+                                1 => AquariumDevice::PeristalticPump1,
+                                2 => AquariumDevice::PeristalticPump2,
+                                3 => AquariumDevice::PeristalticPump3,
+                                4 => AquariumDevice::PeristalticPump4,
+                                _ => unreachable!(),
+                            };
+                            quit_command_received = self.execute_dosing(
+                                pump_id,
+                                pump_device,
+                                mineral_injection,
+                                balling_channels,
+                                &mut sql_interface_balling,
+                                &mutex_device_scheduler_balling,
+                            ).await;
+                            if quit_command_received {
+                                break; // Quit command received during dosing
+                            }
+                            // wait a little period between dosings of each pump
+                            tokio::time::sleep(sleep_duration_pump_switch).await;
+                            target_instants_dosing[pump_array_index] +=
+                                self.dosing_intervals[pump_array_index];
                         }
-                        // wait a little period between dosings of each pump
-                        spin_sleeper.sleep(sleep_duration_pump_switch);
-                        target_instants_dosing[pump_array_index] +=
-                            self.dosing_intervals[pump_array_index];
                     }
                 }
             }
@@ -718,7 +756,7 @@ impl Balling {
                 balling_channels.rx_balling_from_messaging_opt.as_mut(),
             );
 
-            if self.execute_command_received && self.config.active {
+            if self.execute_command_received && self.config.active && !self.execution_blocked {
                 let pump_device_opt = Self::get_pump_from_id(self.pump_id_requested);
                 match pump_device_opt {
                     Some((pump_id, pump_device)) => {
@@ -737,7 +775,7 @@ impl Balling {
                             balling_channels,
                             &mut sql_interface_balling,
                             &mutex_device_scheduler_balling,
-                        );
+                        ).await;
                     }
                     None => {
                         info!(
@@ -770,7 +808,6 @@ impl Balling {
 
             check_quit_increment_counter_ping_database!(
                 quit_command_received,
-                spin_sleeper,
                 sleep_duration_hundred_millis,
                 loop_counter,
                 self,
@@ -783,13 +820,24 @@ impl Balling {
         // This thread has channel connections to underlying threads.
         // Those threads have to stop receiving commands from this thread.
         // The shutdown sequence is handled by the signal_handler module.
-        self.wait_for_termination(
+        self.wait_for_termination_async(
             &mut balling_channels.rx_balling_from_signal_handler,
             sleep_duration_hundred_millis,
             module_path!(),
-        );
+        ).await;
     }
 }
+
+#[derive(Debug)]
+struct ThreadJoinError(String);
+
+impl fmt::Display for ThreadJoinError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self.0)
+    }
+}
+
+impl std::error::Error for ThreadJoinError {}
 
 #[cfg(test)]
 pub mod tests {
@@ -814,7 +862,29 @@ pub mod tests {
     use std::sync::{Arc, Mutex};
     use std::thread::scope;
     use std::time::{Duration, Instant};
+    use crate::mineral::mineral_injection::MineralInjectionTrait;
+    use crate::mineral::balling_channels::BallingChannels;
 
+    fn execute_blocking(
+        balling: &mut Balling,
+        mutex_device_scheduler_balling: Arc<Mutex<i32>>,
+        balling_channels: &mut BallingChannels,
+        mineral_injection: &mut (impl MineralInjectionTrait + Send),
+        sql_interface_balling: SqlInterfaceBalling,
+    ) {
+        tokio::runtime::Builder::new_multi_thread()
+            .enable_all()
+            .build()
+            .unwrap()
+            .block_on(async {
+                balling.execute(
+                    mutex_device_scheduler_balling,
+                    balling_channels,
+                    mineral_injection,
+                    sql_interface_balling,
+                ).await;
+            });
+    }
     fn read_balling_config() -> ConfigData {
         read_config_file("/config/aquarium_control_test_generic.toml".to_string()).unwrap()
     }
@@ -1243,7 +1313,8 @@ pub mod tests {
                 let mut tx_balling_to_schedule_check_for_test_case_finish =
                     channels.balling.tx_balling_to_schedule_check.clone();
 
-                balling.execute(
+                execute_blocking(
+                    &mut balling,
                     mutex_device_scheduler,
                     &mut channels.balling,
                     &mut mock_mineral_injection,
@@ -1693,7 +1764,8 @@ pub mod tests {
 
             // thread for the test object and assertions
             scope.spawn(move || {
-                balling.execute(
+                execute_blocking(
+                    &mut balling,
                     mutex_device_scheduler,
                     &mut channels.balling,
                     &mut mock_mineral_injection,
@@ -1942,7 +2014,8 @@ pub mod tests {
                 let mut tx_balling_to_schedule_check_for_test_case_finish =
                     channels.balling.tx_balling_to_schedule_check.clone();
 
-                balling.execute(
+                execute_blocking(
+                    &mut balling,
                     mutex_device_scheduler,
                     &mut channels.balling,
                     &mut mock_mineral_injection,
