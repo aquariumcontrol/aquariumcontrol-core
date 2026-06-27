@@ -81,7 +81,6 @@ use crate::launch::channels::{AquaReceiver, AquaSender};
 use crate::sensors::tank_level_switch_channels::TankLevelSwitchChannels;
 use crate::sensors::tank_level_switch_config::TankLevelSwitchConfig;
 use crate::utilities::check_mutex_access_duration::CheckMutexAccessDurationTrait;
-use spin_sleep::SpinSleeper;
 use std::time::{Duration, Instant};
 use thiserror::Error;
 

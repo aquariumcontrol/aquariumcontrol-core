@@ -1188,6 +1188,16 @@ fn run() -> Result<(), StartupError> {
                     tasks.push(handle);
                 }
 
+                if execution_config.watchdog {
+                    let handle = tokio::spawn(async move {
+                        watchdog.execute(&mut chan_watchdog, &mut petting).await;
+                        #[cfg(all(target_os = "linux", feature = "target_hw", feature = "debug_channels"))]
+                        debug!(target: module_path!(), "{0}", chan_watchdog);
+                        #[cfg(feature = "debug_main")]
+                        debug!(target: module_path!(), "Watchdog terminated.");
+                    });
+                    tasks.push(handle);
+                }
                 // Wait until all tasks are finished
                 for t in tasks {
                     let _ = t.await;
@@ -1218,16 +1228,6 @@ fn run() -> Result<(), StartupError> {
             debug!(target: module_path!(), "Messaging terminated.");
         });
 
-        if execution_config.watchdog {
-            // Watchdog communication
-            scope.spawn(move || {
-                watchdog.execute(&mut chan_watchdog, &mut petting);
-                #[cfg(all(target_os = "linux", feature = "target_hw", feature = "debug_channels"))]
-                debug!(target: module_path!(), "{0}", chan_watchdog);
-                #[cfg(feature = "debug_main")]
-                debug!(target: module_path!(), "Watchdog terminated.");
-            });
-        }
 
         if execution_config.ds18b20 {
             // Ds18b20 communication
