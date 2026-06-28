@@ -82,7 +82,6 @@ use crate::relays::relay_manager_config::RelayManagerConfig;
 use crate::utilities::channel_content::InternalCommand;
 use crate::utilities::logger::log_error_chain;
 use crate::utilities::proc_ext_req::ProcessExternalRequestTrait;
-use spin_sleep::SpinSleeper;
 use std::time::{Duration, Instant};
 
 /// Trait for the execution of relay actuation on either simulator or real hardware.
@@ -259,12 +258,11 @@ impl RelayManager {
     /// - The name of the actuation that failed.
     /// - The total number of attempts made.
     /// - The specific error from the *last* attempt, providing the root cause of the final failure.
-    fn actuate_with_retries(
+    async fn actuate_with_retries(
         &mut self,
         actuator: &mut impl RelayActuationTrait,
         command: &InternalCommand,
         actuation_name: &str, // Name for logging, e.g., "refill pump", "heater"
-        spin_sleeper: &mut SpinSleeper,
         sleep_duration: Duration,
     ) -> Result<(), RelayError> {
         let mut attempts = 0;
@@ -272,7 +270,8 @@ impl RelayManager {
         let mut error_to_be_reported_opt = None;
 
         while attempts < max_attempts {
-            match actuator.actuate(command) {
+            let actuate_result = tokio::task::block_in_place(|| actuator.actuate(command));
+            match actuate_result {
                 Ok(()) => {
                     if attempts > 0 {
                         #[cfg(not(test))] // only required in real-life execution
@@ -290,7 +289,8 @@ impl RelayManager {
                 }
                 Err(e) => {
                     if matches!(e, RelayError::IncorrectChecksum(_)) {
-                        if let Err(f) = actuator.flush_buffer() {
+                        let flush_result = tokio::task::block_in_place(|| actuator.flush_buffer());
+                        if let Err(f) = flush_result {
                             // if we cannot flush the buffer, mission abort
                             error_to_be_reported_opt = Some(f);
                             break;
@@ -303,7 +303,7 @@ impl RelayManager {
                         break;
                     } else {
                         // Wait a little before retrying
-                        spin_sleeper.sleep(sleep_duration);
+                        tokio::time::sleep(sleep_duration).await;
                     }
                     attempts += 1;
                 }
@@ -338,7 +338,7 @@ impl RelayManager {
     ///   communication with other control threads.
     /// * `actuator` - A mutable reference to an object implementing the `RelayActuationTrait`,
     ///   which handles the actual hardware interaction or simulation.
-    pub fn execute(
+    pub async fn execute(
         &mut self,
         relay_manager_channels: &mut RelayManagerChannels,
         actuator: &mut impl RelayActuationTrait,
@@ -348,7 +348,6 @@ impl RelayManager {
         info!(target: module_path!(), "Thread started with TID: {}", gettid());
 
         let mut last_heartbeat_time = Instant::now();
-        let mut spin_sleeper = SpinSleeper::default();
         let sleep_duration_between_retries =
             Duration::from_millis(self.config.pause_between_retries_millis);
         let sleep_duration_main_cycle = Duration::from_millis(10);
@@ -382,9 +381,8 @@ impl RelayManager {
                     ),
                     "refill",
                     actuator,
-                    &mut spin_sleeper,
                     sleep_duration_between_retries,
-                );
+                ).await;
             }
 
             if self.execution_config.heating {
@@ -402,9 +400,8 @@ impl RelayManager {
                     ),
                     "heating",
                     actuator,
-                    &mut spin_sleeper,
                     sleep_duration_between_retries,
-                );
+                ).await;
             }
 
             if self.execution_config.ventilation {
@@ -422,9 +419,8 @@ impl RelayManager {
                     ),
                     "ventilation",
                     actuator,
-                    &mut spin_sleeper,
                     sleep_duration_between_retries,
-                );
+                ).await;
             }
 
             if self.execution_config.balling {
@@ -442,9 +438,8 @@ impl RelayManager {
                     ),
                     "Balling dosing",
                     actuator,
-                    &mut spin_sleeper,
                     sleep_duration_between_retries,
-                );
+                ).await;
             }
 
             if self.execution_config.feed {
@@ -462,15 +457,15 @@ impl RelayManager {
                     ),
                     "feed",
                     actuator,
-                    &mut spin_sleeper,
                     sleep_duration_between_retries,
-                );
+                ).await;
             }
 
             // *** send heartbeat ***
             if let Some(interval_secs) = actuator.get_heartbeat_interval_seconds() {
                 if Instant::now().duration_since(last_heartbeat_time).as_secs() >= interval_secs {
-                    if let Err(e) = actuator.heartbeat() {
+                    let hb_result = tokio::task::block_in_place(|| actuator.heartbeat());
+                    if let Err(e) = hb_result {
                         log_error_chain(
                             module_path!(),
                             "Execution of heartbeat for relay control failed.",
@@ -482,7 +477,7 @@ impl RelayManager {
             }
 
             // have a minimum of sleep time in between checking channels
-            spin_sleeper.sleep(sleep_duration_main_cycle);
+            tokio::time::sleep(sleep_duration_main_cycle).await;
         }
 
         #[cfg(feature = "debug_relay_manager")]
@@ -526,13 +521,12 @@ impl RelayManager {
     /// # Returns
     /// A tuple `(bool, bool)` containing the updated state of the `lock_receive` and
     /// `lock_send` flags, respectively.
-    fn process_actuation_request(
+    async fn process_actuation_request(
         &mut self,
         channels: (&mut AquaReceiver<InternalCommand>, &mut AquaSender<bool>),
         locks: (bool, bool),
         actuation_name: &str,
         actuator: &mut impl RelayActuationTrait,
-        spin_sleeper: &mut SpinSleeper,
         sleep_duration_between_retries: Duration,
     ) -> (bool, bool) {
         let (rx, tx) = channels;
@@ -545,9 +539,8 @@ impl RelayManager {
                         actuator,
                         &_command,
                         actuation_name,
-                        spin_sleeper,
                         sleep_duration_between_retries,
-                    ) {
+                    ).await {
                         #[cfg(not(test))] // only required in real-life execution
                         #[cfg(not(tarpaulin_include))]
                         log_error_chain(
@@ -599,11 +592,26 @@ pub mod tests {
     use crate::launch::channels::Channels;
     use crate::launch::execution_config::ExecutionConfig;
     use crate::relays::relay_manager::{RelayActuationTrait, RelayError, RelayManager};
+    use crate::relays::relay_manager_channels::RelayManagerChannels;
     use crate::utilities::channel_content::{AquariumDevice, InternalCommand};
     use crate::utilities::config::{read_config_file, ConfigData};
     use spin_sleep::SpinSleeper;
     use std::thread::scope;
     use std::time::Duration;
+
+    fn execute_blocking(
+        relay_manager: &mut RelayManager,
+        relay_manager_channels: &mut RelayManagerChannels,
+        actuator: &mut impl RelayActuationTrait,
+    ) {
+        tokio::runtime::Builder::new_multi_thread()
+            .enable_all()
+            .build()
+            .unwrap()
+            .block_on(async {
+                relay_manager.execute(relay_manager_channels, actuator).await;
+            });
+    }
 
     // Contains mock trait implementation for unit testing purposes.
     pub struct ActuateVoid {
@@ -918,7 +926,7 @@ pub mod tests {
                     permanent_error_result: None,
                 };
 
-                relay_manager.execute(&mut channels.relay_manager, &mut mock_actuator);
+                execute_blocking(&mut relay_manager, &mut channels.relay_manager, &mut mock_actuator);
 
                 // Test object thread has ended.
                 assert_eq!(mock_actuator.get_execution_count(), 24); //Assertion checks the number of calls to the actuator.
@@ -975,7 +983,7 @@ pub mod tests {
                     permanent_error_result: None,
                 };
 
-                relay_manager.execute(&mut channels.relay_manager, &mut mock_actuator);
+                execute_blocking(&mut relay_manager, &mut channels.relay_manager, &mut mock_actuator);
 
                 // Test object thread has ended.
                 assert_eq!(mock_actuator.get_execution_count(), 3); //Assertion checks the number of calls to the actuator.
@@ -1026,7 +1034,7 @@ pub mod tests {
                     )),
                 };
 
-                relay_manager.execute(&mut channels.relay_manager, &mut mock_actuator);
+                execute_blocking(&mut relay_manager, &mut channels.relay_manager, &mut mock_actuator);
 
                 // Test object thread has ended.
 

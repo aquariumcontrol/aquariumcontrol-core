@@ -893,35 +893,7 @@ fn run() -> Result<(), StartupError> {
             debug!(target: module_path!(), "TcpCommunication terminated.");
         };
 
-        if config.relay_manager.use_simulator && relay_manager_thread_started {
-            scope.spawn(move || {
-                let mut actuate_simulator =
-                    ActuateSimulator::new(&mut chan_actuate_simulator, config.controllino_relay);
-                relay_manager.execute(&mut chan_relay_manager, &mut actuate_simulator);
-                #[cfg(feature = "debug_channels")]
-                debug!(target: module_path!(), "{0}", chan_actuate_simulator);
-                #[cfg(feature = "debug_channels")]
-                debug!(target: module_path!(), "{0}", chan_relay_manager);
-                #[cfg(feature = "debug_main")]
-                debug!(target: module_path!(), "Controllino (simulator) terminated.");
-            });
-        } else if relay_manager_thread_started {
-            scope.spawn(move || {
-                    if config.relay_manager.use_gpio {
-                        #[cfg(all(feature = "target_hw", target_os = "linux"))]
-                        relay_manager.execute(
-                            &mut chan_relay_manager,
-                            &mut actuate_gpio_opt.expect("Internal error: Illegal configuration (unwrapping of GPIO actuator failed)")
-                        );
-                    } else {
-                        relay_manager.execute(&mut chan_relay_manager, &mut actuate_controllino);
-                    }
-                    #[cfg(feature = "debug_channels")]
-                    debug!(target: module_path!(), "{0}", chan_relay_manager);
-                    #[cfg(feature = "debug_main")]
-                    debug!(target: module_path!(), "Controllino (with hardware) terminated.");
-                });
-        }
+
 
         scope.spawn(move || {
             let term = Arc::new(AtomicBool::new(false));
@@ -1019,6 +991,41 @@ fn run() -> Result<(), StartupError> {
                         debug!(target: module_path!(), "{0}", chan_sensor_manager);
                         #[cfg(feature = "debug_main")]
                         debug!(target: module_path!(), "SensorManager terminated.");
+                    });
+                    tasks.push(handle);
+                }
+
+
+                if relay_manager_thread_started {
+                    let use_simulator = config.relay_manager.use_simulator;
+                    let use_gpio = config.relay_manager.use_gpio;
+                    let controllino_relay_config = config.controllino_relay.clone();
+                    let handle = tokio::spawn(async move {
+                        if use_simulator {
+                            let mut actuate_simulator =
+                                ActuateSimulator::new(&mut chan_actuate_simulator, controllino_relay_config);
+                            relay_manager.execute(&mut chan_relay_manager, &mut actuate_simulator).await;
+                            #[cfg(feature = "debug_channels")]
+                            debug!(target: module_path!(), "{0}", chan_actuate_simulator);
+                            #[cfg(feature = "debug_channels")]
+                            debug!(target: module_path!(), "{0}", chan_relay_manager);
+                            #[cfg(feature = "debug_main")]
+                            debug!(target: module_path!(), "Controllino (simulator) terminated.");
+                        } else {
+                            if use_gpio {
+                                #[cfg(all(feature = "target_hw", target_os = "linux"))]
+                                relay_manager.execute(
+                                    &mut chan_relay_manager,
+                                    &mut actuate_gpio_opt.expect("Internal error: Illegal configuration (unwrapping of GPIO actuator failed)")
+                                ).await;
+                            } else {
+                                relay_manager.execute(&mut chan_relay_manager, &mut actuate_controllino).await;
+                            }
+                            #[cfg(feature = "debug_channels")]
+                            debug!(target: module_path!(), "{0}", chan_relay_manager);
+                            #[cfg(feature = "debug_main")]
+                            debug!(target: module_path!(), "Controllino (with hardware) terminated.");
+                        }
                     });
                     tasks.push(handle);
                 }
