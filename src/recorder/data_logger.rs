@@ -1174,11 +1174,17 @@ impl DataLogger {
             < self.config.initial_sleep_time_millis.into()
         {
             tokio::time::sleep(sleep_duration_hundred_millis).await;
+            #[cfg(feature = "debug_data_logger")]
+            debug!(target: module_path!(), "checking external request");
             (quit_command_received, _, _) = self.process_external_request(
                 &mut data_logger_channels.rx_data_logger_from_signal_handler,
                 None,
             );
+            #[cfg(feature = "debug_data_logger")]
+            debug!(target: module_path!(), "checked external request");
             if quit_command_received {
+                #[cfg(feature = "debug_data_logger")]
+                debug!(target: module_path!(), "confirming quit and waiting for termination command");
                 self.confirm_quit_and_wait_for_termination_command(data_logger_channels).await;
                 return;
             }
