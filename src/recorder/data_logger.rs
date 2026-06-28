@@ -622,7 +622,8 @@ impl DataLogger {
     ) {
         {
             // internal scope to limit lifetime of mutex lock
-            log::info!(target: module_path!(), "data_logger: Attempting to lock mutex_refill_status");
+            #[cfg(feature = "debug_data_logger")]
+            log::debug!(target: module_path!(), "data_logger: Attempting to lock mutex_refill_status");
             match data_logger_mutexes.mutex_refill_status.lock() {
                 Ok(mut refill_status) => {
                     self.lock_error_output_state_refill_in_progress = self.output_state(
@@ -654,7 +655,8 @@ impl DataLogger {
 
         {
             // internal scope to limit lifetime of mutex lock
-            log::info!(target: module_path!(), "data_logger: Attempting to lock mutex_heating_status");
+            #[cfg(feature = "debug_data_logger")]
+            log::debug!(target: module_path!(), "data_logger: Attempting to lock mutex_heating_status");
             *heater_status = match data_logger_mutexes.mutex_heating_status.lock() {
                 Ok(heating_status) => {
                     self.lock_error_output_description_heating_controller_state = self
@@ -698,7 +700,8 @@ impl DataLogger {
 
         {
             // internal scope to limit lifetime of mutex lock
-            log::info!(target: module_path!(), "data_logger: Attempting to lock mutex_ventilation_status");
+            #[cfg(feature = "debug_data_logger")]
+            log::debug!(target: module_path!(), "data_logger: Attempting to lock mutex_ventilation_status");
             *ventilation_status = match data_logger_mutexes.mutex_ventilation_status.lock() {
                 Ok(ventilation_status) => {
                     self.lock_error_output_description_ventilation_controller_state = self
@@ -757,7 +760,8 @@ impl DataLogger {
     /// * `mutex_temperature_gradient` - An `Arc<Mutex<f64>>` holding the latest temperature gradient value.
     fn update_temperature_gradient(&mut self, mutex_temperature_gradient: &Arc<Mutex<f64>>) {
         if !self.lock_error_output_signal_temperature_gradient {
-            log::info!(target: module_path!(), "data_logger: Attempting to lock mutex_temperature_gradient");
+            #[cfg(feature = "debug_data_logger")]
+            log::debug!(target: module_path!(), "data_logger: Attempting to lock mutex_temperature_gradient");
             match mutex_temperature_gradient.lock() {
                 Ok(temperature_gradient) => {
                     self.lock_error_output_signal_temperature_gradient = self.output_signal(
@@ -774,6 +778,8 @@ impl DataLogger {
                     }
                 }
             }
+            #[cfg(feature = "debug_data_logger")]
+            log::debug!(target: module_path!(), "data_logger: Releasing lock on mutex_temperature_gradient");
         }
     }
 
@@ -808,7 +814,8 @@ impl DataLogger {
         let humidity: f32;
         {
             // internal scope to limit lifetime of mutex lock
-            log::info!(target: module_path!(), "data_logger: Attempting to lock mutex_sensor_manager_signals");
+            #[cfg(feature = "debug_data_logger")]
+            log::debug!(target: module_path!(), "data_logger: Attempting to lock mutex_sensor_manager_signals");
             match mutex_sensor_manager_signals.lock() {
                 Ok(c) => {
                     self.lock_error_mutex_signal_manager = false;
@@ -887,7 +894,8 @@ impl DataLogger {
     ) {
         {
             // internal scope to limit lifetime of mutex lock
-            log::info!(target: module_path!(), "data_logger: Attempting to lock mutex_tank_level_switch_signals");
+            #[cfg(feature = "debug_data_logger")]
+            log::debug!(target: module_path!(), "data_logger: Attempting to lock mutex_tank_level_switch_signals");
             match mutex_tank_level_switch_signals.lock() {
                 Ok(tank_level_switch_signals) => {
                     *tank_level_switch_position_opt =
@@ -1211,13 +1219,15 @@ impl DataLogger {
                     if let Some(mut conn_for_timestamp) = conn_for_timestamp_opt.take() {
                         // database request take significant amount of time, so they must
                         // run on a dedicated thread
-                        log::info!(target: module_path!(), "data_logger: Spawning database task to get timestamp");
+                        #[cfg(feature = "debug_data_logger")]
+                        log::debug!(target: module_path!(), "data_logger: Spawning database task to get timestamp");
                         let timestamp_task_result = tokio::task::spawn_blocking(move || {
                             let res = SqlInterface::get_current_timestamp(&mut conn_for_timestamp);
                             (res, conn_for_timestamp)
                         })
                         .await;
-                        log::info!(target: module_path!(), "data_logger: Database task to get timestamp finished");
+                        #[cfg(feature = "debug_data_logger")]
+                        log::debug!(target: module_path!(), "data_logger: Database task to get timestamp finished");
 
                         match timestamp_task_result {
                             Ok((res, conn_back)) => {
@@ -1290,13 +1300,15 @@ impl DataLogger {
                 if !sql_data_injection_failed {
                     if let Some(conn_for_injection) = conn_for_injection_opt.take() {
                         if let Some(mut data_injection) = data_injection_opt.take() {
-                            log::info!(target: module_path!(), "data_logger: Spawning database task to inject data frame");
+                            #[cfg(feature = "debug_data_logger")]
+                            log::debug!(target: module_path!(), "data_logger: Spawning database task to inject data frame");
                             let injection_task_result = tokio::task::spawn_blocking(move || {
                                 let conn_for_injection_back =
                                     data_injection.inject_data(data_frame, conn_for_injection);
                                 (data_injection, conn_for_injection_back)
                             }).await;
-                            log::info!(target: module_path!(), "data_logger: Database task to inject data frame finished");
+                            #[cfg(feature = "debug_data_logger")]
+                            log::debug!(target: module_path!(), "data_logger: Database task to inject data frame finished");
                             match injection_task_result {
                                 Ok((data_injection_back, conn_for_injection_back)) => {
                                     // get back ownership
@@ -1346,9 +1358,9 @@ impl DataLogger {
                 remaining_sleep_time_millis
             );
 
-            println!("Waiting for next cycle...");
             // wait the remaining time period to complete the target cycle time
-            log::info!(target: module_path!(), "data_logger: Entering idle sleep loop for {} ms", remaining_sleep_time_millis);
+            #[cfg(feature = "debug_data_logger")]
+            log::debug!(target: module_path!(), "data_logger: Entering idle sleep loop for {} ms", remaining_sleep_time_millis);
             i = 0;
             while i < remaining_sleep_time_millis || cycle_time_exceeded {
                 i += 100;
@@ -1412,7 +1424,8 @@ impl DataLogger {
             start_time = Instant::now(); // start time for the next cycle
         }
 
-        log::info!(target: module_path!(), "data_logger: Exited main loop, calling confirm_quit_and_wait_for_termination_command");
+        #[cfg(feature = "debug_data_logger")]
+        log::debug!(target: module_path!(), "data_logger: Exited main loop, calling confirm_quit_and_wait_for_termination_command");
         self.confirm_quit_and_wait_for_termination_command(data_logger_channels).await;
     }
 }
