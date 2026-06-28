@@ -489,7 +489,13 @@ fn main() -> Result<(), Box<dyn Error>> {
                     .map_err(|e| format!("I2C error: {:?}", e))?;
                 let mut i2c_channels = channels.i2c_interface;
                 thread::spawn(move || {
-                    i2c.execute(&mut i2c_channels);
+                    tokio::runtime::Builder::new_current_thread()
+                        .enable_all()
+                        .build()
+                        .unwrap()
+                        .block_on(async {
+                            i2c.execute(&mut i2c_channels).await;
+                        });
                 });
             }
 
@@ -508,7 +514,13 @@ fn main() -> Result<(), Box<dyn Error>> {
         let m_water = mutex_ds18b20_water_temperature.clone();
         let m_amb = mutex_ds18b20_ambient_temperature.clone();
         thread::spawn(move || {
-            ds18b20.execute(&mut ds18b20_channels, m_water, m_amb);
+            tokio::runtime::Builder::new_current_thread()
+                .enable_all()
+                .build()
+                .unwrap()
+                .block_on(async {
+                    ds18b20.execute(&mut ds18b20_channels, m_water, m_amb).await;
+                });
         });
     }
 

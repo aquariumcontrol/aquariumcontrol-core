@@ -854,16 +854,7 @@ fn run() -> Result<(), StartupError> {
 
     scope(|scope| {
         // spawn thread for sensor communication first to allow checks
-        #[cfg(all(target_os = "linux", feature = "target_hw"))]
-        if !use_simulator && execution_config.i2c_interface {
-            scope.spawn(move || {
-                i2c_interface.execute(&mut chan_i2c_interface);
-                #[cfg(all(target_os = "linux", feature = "target_hw", feature = "debug_channels"))]
-                debug!(target: module_path!(), "{0}", chan_i2c_interface);
-                #[cfg(feature = "debug_main")]
-                debug!(target: module_path!(), "i2c_interface terminated.");
-            });
-        }
+
 
         #[cfg(all(target_os = "linux", feature = "target_hw"))]
         if !use_simulator && atlas_scientific_active {
@@ -1206,6 +1197,17 @@ fn run() -> Result<(), StartupError> {
                     tasks.push(handle);
                 }
 
+                #[cfg(all(target_os = "linux", feature = "target_hw"))]
+                if !use_simulator && execution_config.i2c_interface {
+                    let handle = tokio::spawn(async move {
+                        i2c_interface.execute(&mut chan_i2c_interface).await;
+                        #[cfg(all(target_os = "linux", feature = "target_hw", feature = "debug_channels"))]
+                        debug!(target: module_path!(), "{0}", chan_i2c_interface);
+                        #[cfg(feature = "debug_main")]
+                        debug!(target: module_path!(), "i2c_interface terminated.");
+                    });
+                    tasks.push(handle);
+                }
                 if execution_config.ds18b20 {
                     let handle = tokio::spawn(async move {
                         ds18b20.execute(

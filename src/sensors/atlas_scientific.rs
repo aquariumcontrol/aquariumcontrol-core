@@ -932,7 +932,13 @@ pub mod tests {
         let join_handle_mock_i2c_interface = thread::Builder::new()
             .name("i2c_interface".to_string())
             .spawn(move || {
-                mock_i2c_interface.execute(channels.i2c_interface);
+                tokio::runtime::Builder::new_current_thread()
+                    .enable_all()
+                    .build()
+                    .unwrap()
+                    .block_on(async {
+                        mock_i2c_interface.execute(channels.i2c_interface).await;
+                    });
             })
             .unwrap();
 

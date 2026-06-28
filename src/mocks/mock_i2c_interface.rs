@@ -14,6 +14,7 @@ pub mod tests {
     use crate::sensors::i2c_interface_channels::I2cInterfaceChannels;
     use crate::utilities::channel_content::InternalCommand;
     use crate::utilities::proc_ext_req::ProcessExternalRequestTrait;
+    use std::time::Duration;
 
     pub struct MockI2cInterface {
         /// I2C address of Atlas Scientific pH sensor unit
@@ -57,7 +58,7 @@ pub mod tests {
             }
         }
 
-        pub fn execute(&mut self, mut i2c_interface_channels: I2cInterfaceChannels) {
+        pub async fn execute(&mut self, mut i2c_interface_channels: I2cInterfaceChannels) {
             loop {
                 let (
                     quit_command_received, // the request to end the application has been received
@@ -113,6 +114,8 @@ pub mod tests {
                     }
                     _ => { /* no message available, do nothing */ }
                 }
+
+                tokio::time::sleep(Duration::from_millis(10)).await;
             }
         }
     }
