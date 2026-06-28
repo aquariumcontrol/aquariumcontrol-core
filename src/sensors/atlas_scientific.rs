@@ -538,7 +538,7 @@ impl AtlasScientific {
     /// * `mutex_atlas_scientific_ph` - The shared `Mutex` for storing the pH result.
     /// * `mutex_atlas_scientific_conductivity` - The shared `Mutex` for storing the conductivity result.
     #[allow(unused)] // used in conditionally compiled code
-    pub fn execute(
+    pub async fn execute(
         &mut self,
         atlas_scientific_channels: &mut AtlasScientificChannels,
         mutex_atlas_scientific_water_temperature: Arc<Mutex<AtlasScientificResultData>>,
@@ -551,7 +551,6 @@ impl AtlasScientific {
 
         let sleep_duration_ten_millis = Duration::from_millis(10);
         let sleep_duration_one_millis = Duration::from_millis(1);
-        let spin_sleeper = SpinSleeper::default();
 
         let mut state_send_receive: bool = false;
         let mut measurement_set_complete: bool = false;
@@ -646,13 +645,16 @@ impl AtlasScientific {
                     // read from the channel if the measurement result is available from I2cInterface thread
                     match self.get_driver(&signal) {
                         Ok(driver) => {
-                            match driver.receive_response_from_i2c_interface(
-                                &signal,
-                                atlas_scientific_channels,
-                                &mutex_atlas_scientific_water_temperature,
-                                &mutex_atlas_scientific_ph,
-                                &mutex_atlas_scientific_conductivity,
-                            ) {
+                            let receive_result = tokio::task::block_in_place(|| {
+                                driver.receive_response_from_i2c_interface(
+                                    &signal,
+                                    atlas_scientific_channels,
+                                    &mutex_atlas_scientific_water_temperature,
+                                    &mutex_atlas_scientific_ph,
+                                    &mutex_atlas_scientific_conductivity,
+                                )
+                            });
+                            match receive_result {
                                 Ok(_) => {
                                     state_send_receive = false; // allow sending again
                                 }
@@ -718,7 +720,7 @@ impl AtlasScientific {
                 }
             }
 
-            spin_sleeper.sleep(sleep_duration_ten_millis);
+            tokio::time::sleep(sleep_duration_ten_millis).await;
         }
 
         atlas_scientific_channels.acknowledge_signal_handler();
@@ -726,11 +728,11 @@ impl AtlasScientific {
         // This thread has channel connections to underlying threads.
         // Those threads have to stop receiving commands from this thread.
         // The shutdown sequence is handled by the signal_handler module.
-        self.wait_for_termination(
+        self.wait_for_termination_async(
             &mut atlas_scientific_channels.rx_atlas_scientific_from_signal_handler,
             sleep_duration_one_millis,
             module_path!(),
-        );
+        ).await;
     }
 }
 
@@ -962,12 +964,18 @@ pub mod tests {
                 let sleep_time = Duration::from_millis(1000);
                 let spin_sleeper = SpinSleeper::default();
                 spin_sleeper.sleep(sleep_time);
-                atlas_scientific.execute(
-                    &mut channels.atlas_scientific,
-                    mutex_atlas_scientific_temperature,
-                    mutex_atlas_scientific_ph,
-                    mutex_atlas_scientific_conductivity,
-                );
+                tokio::runtime::Builder::new_multi_thread()
+                    .enable_all()
+                    .build()
+                    .unwrap()
+                    .block_on(async {
+                        atlas_scientific.execute(
+                            &mut channels.atlas_scientific,
+                            mutex_atlas_scientific_temperature,
+                            mutex_atlas_scientific_ph,
+                            mutex_atlas_scientific_conductivity,
+                        ).await;
+                    });
                 let driver_temperature = atlas_scientific
                     .drivers
                     .get(&AquariumSignal::WaterTemperature)

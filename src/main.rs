@@ -898,21 +898,7 @@ fn run() -> Result<(), StartupError> {
             debug!(target: module_path!(), "Signal handler terminated.");
         });
 
-        #[cfg(all(target_os = "linux", feature = "target_hw"))]
-        if !use_simulator && execution_config.atlas_scientific {
-            scope.spawn(move || {
-                atlas_scientific.execute(
-                    &mut chan_atlas_scientific,
-                    mutex_atlas_scientific_temperature,
-                    mutex_atlas_scientific_ph,
-                    mutex_atlas_scientific_conductivity,
-                );
-                #[cfg(feature = "debug_channels")]
-                debug!(target: module_path!(), "{0}", chan_atlas_scientific);
-                #[cfg(feature = "debug_main")]
-                debug!(target: module_path!(), "Atlas Scientific terminated.");
-            });
-        }
+
 
         #[cfg(all(target_os = "linux", feature = "target_hw"))]
         if execution_config.dht {
@@ -982,6 +968,23 @@ fn run() -> Result<(), StartupError> {
                         debug!(target: module_path!(), "{0}", chan_sensor_manager);
                         #[cfg(feature = "debug_main")]
                         debug!(target: module_path!(), "SensorManager terminated.");
+                    });
+                    tasks.push(handle);
+                }
+
+                #[cfg(all(target_os = "linux", feature = "target_hw"))]
+                if !use_simulator && execution_config.atlas_scientific {
+                    let handle = tokio::spawn(async move {
+                        atlas_scientific.execute(
+                            &mut chan_atlas_scientific,
+                            mutex_atlas_scientific_temperature,
+                            mutex_atlas_scientific_ph,
+                            mutex_atlas_scientific_conductivity,
+                        ).await;
+                        #[cfg(feature = "debug_channels")]
+                        debug!(target: module_path!(), "{0}", chan_atlas_scientific);
+                        #[cfg(feature = "debug_main")]
+                        debug!(target: module_path!(), "Atlas Scientific terminated.");
                     });
                     tasks.push(handle);
                 }
