@@ -33,7 +33,6 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 
 #[cfg(all(not(test), target_os = "linux"))] // only required in real-life execution
 use nix::unistd::gettid;
-use spin_sleep::SpinSleeper;
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
@@ -328,7 +327,7 @@ impl Ds18b20 {
     ///   will be written, ensuring thread-safe access for other modules.
     /// * `mutex_ambient_temperature` - An `Arc<Mutex<Ds18b20Result>>` into which the latest ambient temperature reading
     ///   will be written, ensuring thread-safe access for other modules.
-    pub fn execute(
+    pub async fn execute(
         &mut self,
         ds18b20_channels: &mut Ds18b20Channels,
         mutex_water_temperature: Arc<Mutex<Ds18b20Result>>,
@@ -339,7 +338,6 @@ impl Ds18b20 {
         info!(target: module_path!(), "Thread started with TID: {}", gettid());
 
         let sleep_duration_main_cycle = Duration::from_millis(100);
-        let spin_sleeper = SpinSleeper::default();
         let measurement_interval =
             Duration::from_millis(self.config.measurement_pause_duration_millis);
 
@@ -361,13 +359,17 @@ impl Ds18b20 {
 
             if self.config.active && (last_measurement_instant.elapsed() >= measurement_interval) {
                 let water_temp_result = if !self.config.water_temperature_sensor_id.is_empty() {
-                    Some(self.read(self.config.water_temperature_sensor_id.as_str()))
+                    Some(tokio::task::block_in_place(|| {
+                        self.read(self.config.water_temperature_sensor_id.as_str())
+                    }))
                 } else {
                     None
                 };
 
                 let ambient_temp_result = if !self.config.ambient_temperature_sensor_id.is_empty() {
-                    Some(self.read(self.config.ambient_temperature_sensor_id.as_str()))
+                    Some(tokio::task::block_in_place(|| {
+                        self.read(self.config.ambient_temperature_sensor_id.as_str())
+                    }))
                 } else {
                     None
                 };
@@ -396,7 +398,7 @@ impl Ds18b20 {
             }
 
             // sleep for a defined period
-            spin_sleeper.sleep(sleep_duration_main_cycle);
+            tokio::time::sleep(sleep_duration_main_cycle).await;
         }
     }
 }
@@ -413,6 +415,25 @@ pub mod tests {
     use std::sync::{Arc, Mutex};
     use std::time::Duration;
     use std::{env, thread};
+
+    fn execute_blocking(
+        ds18b20: &mut Ds18b20,
+        ds18b20_channels: &mut Ds18b20Channels,
+        mutex_water_temperature: Arc<Mutex<Ds18b20Result>>,
+        mutex_ambient_temperature: Arc<Mutex<Ds18b20Result>>,
+    ) {
+        tokio::runtime::Builder::new_multi_thread()
+            .enable_all()
+            .build()
+            .unwrap()
+            .block_on(async {
+                ds18b20.execute(
+                    ds18b20_channels,
+                    mutex_water_temperature,
+                    mutex_ambient_temperature,
+                ).await;
+            });
+    }
 
     #[test]
     #[ignore]
@@ -801,7 +822,8 @@ pub mod tests {
         let join_handle_test_object = thread::Builder::new()
             .name("test_object".to_string())
             .spawn(move || {
-                ds18b20.execute(
+                execute_blocking(
+                    &mut ds18b20,
                     &mut channels.ds18b20,
                     mutex_ds18b20_water_temperature,
                     mutex_ds18b20_ambient_temperature,
@@ -909,7 +931,8 @@ pub mod tests {
         let join_handle_test_object = thread::Builder::new()
             .name("test_object".to_string())
             .spawn(move || {
-                ds18b20.execute(
+                execute_blocking(
+                    &mut ds18b20,
                     &mut ds18b20_channels,
                     mutex_ds18b20_water_temperature,
                     mutex_ds18b20_ambient_temperature,

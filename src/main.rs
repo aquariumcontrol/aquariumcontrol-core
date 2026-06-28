@@ -1205,6 +1205,21 @@ fn run() -> Result<(), StartupError> {
                     });
                     tasks.push(handle);
                 }
+
+                if execution_config.ds18b20 {
+                    let handle = tokio::spawn(async move {
+                        ds18b20.execute(
+                            &mut chan_ds18b20,
+                            mutex_ds18b20_water_temperature,
+                            mutex_ds18b20_ambient_temperature,
+                        ).await;
+                        #[cfg(all(target_os = "linux", feature = "target_hw", feature = "debug_channels"))]
+                        debug!(target: module_path!(), "{0}", chan_ds18b20);
+                        #[cfg(feature = "debug_main")]
+                        debug!(target: module_path!(), "Ds18b20 terminated");
+                    });
+                    tasks.push(handle);
+                }
                 // Wait until all tasks are finished
                 for t in tasks {
                     let _ = t.await;
@@ -1235,21 +1250,6 @@ fn run() -> Result<(), StartupError> {
             debug!(target: module_path!(), "Messaging terminated.");
         });
 
-
-        if execution_config.ds18b20 {
-            // Ds18b20 communication
-            scope.spawn(move || {
-                ds18b20.execute(
-                    &mut chan_ds18b20,
-                    mutex_ds18b20_water_temperature,
-                    mutex_ds18b20_ambient_temperature,
-                );
-                #[cfg(all(target_os = "linux", feature = "target_hw", feature = "debug_channels"))]
-                debug!(target: module_path!(), "{0}", chan_ds18b20);
-                #[cfg(feature = "debug_main")]
-                debug!(target: module_path!(), "Ds18b20 terminated");
-            });
-        }
         Ok(())
     })
 }
