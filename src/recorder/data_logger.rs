@@ -651,6 +651,9 @@ impl DataLogger {
                     error!(target: module_path!(), "error locking mutex for refill status");
                 }
             };
+            #[cfg(feature = "debug_data_logger")]
+            debug!(target: module_path!(), "Releasing lock on mutex_refill_status");
+
         }
 
         {
@@ -696,6 +699,9 @@ impl DataLogger {
                     false
                 }
             };
+            #[cfg(feature = "debug_data_logger")]
+            debug!(target: module_path!(), "Releasing lock on heating_status");
+
         }
 
         {
@@ -744,6 +750,8 @@ impl DataLogger {
                     false
                 }
             };
+            #[cfg(feature = "debug_data_logger")]
+            debug!(target: module_path!(), "Releasing lock on ventilation_status");
         }
     }
 
@@ -833,6 +841,8 @@ impl DataLogger {
                     return;
                 }
             };
+            #[cfg(feature = "debug_data_logger")]
+            debug!(target: module_path!(), "output sequence starting");
             self.lock_error_output_signal_water_temperature = self.output_signal(
                 water_temperature,
                 AquariumSignal::WaterTemperature,
@@ -869,6 +879,8 @@ impl DataLogger {
             *conductivity_opt = Some(conductivity);
             *ambient_temperature_opt = Some(ambient_temperature);
             *humidity_opt = Some(humidity);
+            #[cfg(feature = "debug_data_logger")]
+            debug!(target: module_path!(), "output sequence finished");
         }
     }
 
@@ -938,6 +950,8 @@ impl DataLogger {
                     *tank_level_switch_invalid_opt = None;
                 }
             };
+            #[cfg(feature = "debug_data_logger")]
+            log::debug!(target: module_path!(), "data_logger: Releasing lock on mutex_tank_level_switch_signals");
         }
     }
 
@@ -966,6 +980,8 @@ impl DataLogger {
         filter_pH: &mut IIRFilter,
         filter_conductivity: &mut IIRFilter,
     ) -> (Option<f32>, Option<f32>, Option<f32>) {
+        #[cfg(feature = "debug_data_logger")]
+        log::debug!(target: module_path!(), "calculating filtered_signals");
         let water_temperature_filtered = match water_temperature {
             Some(water_temperature_data) => {
                 let filtered_water_temperature =
@@ -1034,6 +1050,8 @@ impl DataLogger {
         &mut self,
         data_logger_channels: &mut DataLoggerChannels,
     ) {
+        #[cfg(feature = "debug_data_logger")]
+        log::debug!(target: module_path!(), "waiting for final termination command");
         let sleep_duration_hundred_millis = Duration::from_millis(100);
 
         data_logger_channels.acknowledge_signal_handler();
@@ -1145,6 +1163,8 @@ impl DataLogger {
             #[cfg(not(test))] // only required in real-life execution
             "conductivity",
         );
+        #[cfg(feature = "debug_data_logger")]
+        debug!(target: module_path!(), "initialized IIR filters");
 
         // wait for a dedicated period of time before starting the main loop
         let initial_sleep_time_start = Instant::now();
@@ -1163,6 +1183,8 @@ impl DataLogger {
                 return;
             }
         }
+        #[cfg(feature = "debug_data_logger")]
+        debug!(target: module_path!(), "initial waiting time passed");
 
         // Initialize reference for cycle time measurement
         let mut start_time = Instant::now();
