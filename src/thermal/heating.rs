@@ -268,8 +268,17 @@ impl Heating {
     ) -> u64 {
         let default_value: u64 = 24 * 3600; // default value for time in seconds until midnight
 
-        let database_seconds_until_midnight = sql_interface_heating
-            .get_duration_until_midnight()
+        let is_multi_thread = tokio::runtime::Handle::try_current()
+            .map(|h| matches!(h.runtime_flavor(), tokio::runtime::RuntimeFlavor::MultiThread))
+            .unwrap_or(false);
+
+        let get_midnight_res = if is_multi_thread {
+            tokio::task::block_in_place(|| sql_interface_heating.get_duration_until_midnight())
+        } else {
+            sql_interface_heating.get_duration_until_midnight()
+        };
+
+        let database_seconds_until_midnight = get_midnight_res
             .unwrap_or_else(|e| {
                 let context = format!(
                     "Could not get duration until midnight from database - using default value ({}).",
@@ -382,16 +391,33 @@ impl Heating {
             println!("***  Transferring heating stats ***");
             // Use take() to move the value out of the Option without cloning.
             if let Some(stats) = heating_stats_opt.take() {
-                if let Err(e) =
+                let is_multi_thread = tokio::runtime::Handle::try_current()
+                    .map(|h| matches!(h.runtime_flavor(), tokio::runtime::RuntimeFlavor::MultiThread))
+                    .unwrap_or(false);
+
+                let transfer_res = if is_multi_thread {
+                    tokio::task::block_in_place(|| {
+                        heating_stats_transfer.transfer_heating_stats(stats, sql_interface_heating)
+                    })
+                } else {
                     heating_stats_transfer.transfer_heating_stats(stats, sql_interface_heating)
-                {
+                };
+
+                if let Err(e) = transfer_res {
                     error!(
                         target: module_path!(),
                         "Error occurred when trying to store heating stats data in database: {e:?}"
                     );
                 }
                 // Reset heating stats
-                *heating_stats_opt = Some(HeatingStatsEntry::new(&mut sql_interface_heating.conn));
+                let new_stats = if is_multi_thread {
+                    tokio::task::block_in_place(|| {
+                        HeatingStatsEntry::new(&mut sql_interface_heating.conn)
+                    })
+                } else {
+                    HeatingStatsEntry::new(&mut sql_interface_heating.conn)
+                };
+                *heating_stats_opt = Some(new_stats);
                 *midnight_instant = Instant::now()
                     + Duration::from_secs(self.get_duration_until_midnight(sql_interface_heating));
             }
@@ -466,9 +492,17 @@ impl Heating {
         let cycle_time_duration = Duration::from_millis(CYCLE_TIME_HEATING_MILLIS);
         let mut actuator_ineffective: bool = false;
 
-        let mut heating_stats_opt = match sql_interface_heating
-            .get_single_heating_stats_from_database()
-        {
+        let is_multi_thread = tokio::runtime::Handle::try_current()
+            .map(|h| matches!(h.runtime_flavor(), tokio::runtime::RuntimeFlavor::MultiThread))
+            .unwrap_or(false);
+
+        let get_heating_stats_res = if is_multi_thread {
+            tokio::task::block_in_place(|| sql_interface_heating.get_single_heating_stats_from_database())
+        } else {
+            sql_interface_heating.get_single_heating_stats_from_database()
+        };
+
+        let mut heating_stats_opt = match get_heating_stats_res {
             Ok(c) => Some(c),
             Err(_) => {
                 #[cfg(test)]
@@ -477,7 +511,12 @@ impl Heating {
                     module_path!()
                 );
 
-                Some(HeatingStatsEntry::new(&mut sql_interface_heating.conn))
+                let entry = if is_multi_thread {
+                    tokio::task::block_in_place(|| HeatingStatsEntry::new(&mut sql_interface_heating.conn))
+                } else {
+                    HeatingStatsEntry::new(&mut sql_interface_heating.conn)
+                };
+                Some(entry)
             }
         };
 
@@ -818,9 +857,19 @@ impl Heating {
         // update the database with the heating stats data recorded
         // so far for this date
         if let Some(stats) = heating_stats_opt.take() {
-            if let Err(e) =
+            let is_multi_thread = tokio::runtime::Handle::try_current()
+                .map(|h| matches!(h.runtime_flavor(), tokio::runtime::RuntimeFlavor::MultiThread))
+                .unwrap_or(false);
+
+            let transfer_res = if is_multi_thread {
+                tokio::task::block_in_place(|| {
+                    heating_stats_transfer.transfer_heating_stats(stats, &mut sql_interface_heating)
+                })
+            } else {
                 heating_stats_transfer.transfer_heating_stats(stats, &mut sql_interface_heating)
-            {
+            };
+
+            if let Err(e) = transfer_res {
                 error!("Error occurred when trying to store heating stats data in database (during termination): {e:?}");
             }
         }

@@ -65,7 +65,15 @@ pub trait DatabasePingTrait {
         database_interface: &mut (impl Pingable + ?Sized),
     ) {
         if self.get_last_ping_instant().elapsed() > self.get_ping_interval() {
-            database_interface.ping();
+            let is_multi_thread = tokio::runtime::Handle::try_current()
+                .map(|h| matches!(h.runtime_flavor(), tokio::runtime::RuntimeFlavor::MultiThread))
+                .unwrap_or(false);
+
+            if is_multi_thread {
+                tokio::task::block_in_place(|| database_interface.ping());
+            } else {
+                database_interface.ping();
+            }
             self.update_last_ping_instant();
         }
     }

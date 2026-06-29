@@ -527,7 +527,19 @@ impl Balling {
         let mut quit_command_received: bool = false;
         let actual_dosing_duration_millis: u32;
 
-        match sql_interface_balling.get_single_balling_setval_from_database(pump_id.into()) {
+        let is_multi_thread = tokio::runtime::Handle::try_current()
+            .map(|h| matches!(h.runtime_flavor(), tokio::runtime::RuntimeFlavor::MultiThread))
+            .unwrap_or(false);
+
+        let get_setval_res = if is_multi_thread {
+            tokio::task::block_in_place(|| {
+                sql_interface_balling.get_single_balling_setval_from_database(pump_id.into())
+            })
+        } else {
+            sql_interface_balling.get_single_balling_setval_from_database(pump_id.into())
+        };
+
+        match get_setval_res {
             Ok(balling_setval) => {
                 let dosing_duration_millis =
                     Self::calc_target_dosing_duration_millis(&balling_setval);
@@ -586,9 +598,18 @@ impl Balling {
                         &balling_setval,
                         actual_dosing_duration_millis,
                     );
-                    if let Err(e) = sql_interface_balling
-                        .insert_balling_event(pump_id.into(), actual_dosing_volume.into())
-                    {
+                    let is_multi_thread = tokio::runtime::Handle::try_current()
+                        .map(|h| matches!(h.runtime_flavor(), tokio::runtime::RuntimeFlavor::MultiThread))
+                        .unwrap_or(false);
+
+                    let insert_res = if is_multi_thread {
+                        tokio::task::block_in_place(|| {
+                            sql_interface_balling.insert_balling_event(pump_id.into(), actual_dosing_volume.into())
+                        })
+                    } else {
+                        sql_interface_balling.insert_balling_event(pump_id.into(), actual_dosing_volume.into())
+                    };
+                    if let Err(e) = insert_res {
                         error!(
                             target: module_path!(),
                             "Error occurred in database communication: {e:?}"

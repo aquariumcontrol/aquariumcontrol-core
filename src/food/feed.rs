@@ -204,34 +204,46 @@ impl Feed {
         feed_profile: FeedProfile,
         sql_interface_feed: &mut Box<dyn DatabaseInterfaceFeedTrait + Sync + Send>,
     ) -> Result<(), ()> {
-        // Get the current timestamp to log the event
-        let current_timestamp = match sql_interface_feed.get_current_timestamp() {
-            Ok(c) => c,
-            Err(e) => {
-                log_error_chain(
-                    module_path!(),
-                    "Could not get current timestamp from database.",
-                    e,
-                );
-                return Err(());
+        let mut action = || {
+            // Get the current timestamp to log the event
+            let current_timestamp = match sql_interface_feed.get_current_timestamp() {
+                Ok(c) => c,
+                Err(e) => {
+                    log_error_chain(
+                        module_path!(),
+                        "Could not get current timestamp from database.",
+                        e,
+                    );
+                    return Err(());
+                }
+            };
+
+            //*** Insert the feed event into the log ***
+            match sql_interface_feed.insert_feed_event(
+                current_timestamp,
+                feed_profile.calc_feeder_runtime(),
+                feed_profile.profile_id,
+            ) {
+                Ok(_) => Ok(()),
+                Err(e) => {
+                    log_error_chain(
+                        module_path!(),
+                        "Could not insert feed event into database.",
+                        e,
+                    );
+                    Err(())
+                }
             }
         };
 
-        //*** Insert the feed event into the log ***
-        match sql_interface_feed.insert_feed_event(
-            current_timestamp,
-            feed_profile.calc_feeder_runtime(),
-            feed_profile.profile_id,
-        ) {
-            Ok(_) => Ok(()),
-            Err(e) => {
-                log_error_chain(
-                    module_path!(),
-                    "Could not insert feed event into database.",
-                    e,
-                );
-                Err(())
-            }
+        let is_multi_thread = tokio::runtime::Handle::try_current()
+            .map(|h| matches!(h.runtime_flavor(), tokio::runtime::RuntimeFlavor::MultiThread))
+            .unwrap_or(false);
+
+        if is_multi_thread {
+            tokio::task::block_in_place(action)
+        } else {
+            action()
         }
     }
 
@@ -385,7 +397,19 @@ impl Feed {
                     "Starting feed control cycle"
                 );
 
-                match sql_interface_feed.get_past_feed_schedule_entries_from_database() {
+                let is_multi_thread = tokio::runtime::Handle::try_current()
+                    .map(|h| matches!(h.runtime_flavor(), tokio::runtime::RuntimeFlavor::MultiThread))
+                    .unwrap_or(false);
+
+                let get_past_res = if is_multi_thread {
+                    tokio::task::block_in_place(|| {
+                        sql_interface_feed.get_past_feed_schedule_entries_from_database()
+                    })
+                } else {
+                    sql_interface_feed.get_past_feed_schedule_entries_from_database()
+                };
+
+                match get_past_res {
                     Ok(feed_schedule_entries_opt) => {
                         if let Some(mut feed_schedule_entries) = feed_schedule_entries_opt {
                             #[cfg(all(feature = "debug_feed", not(test)))] // only required in real-life execution
@@ -413,10 +437,23 @@ impl Feed {
                                 if !self.execution_blocked {
                                     // execute database query before locking mutex
                                     // First, load the feed profile from the database.
-                                    let feed_profile_opt = match sql_interface_feed
-                                        .get_single_feed_profile_from_database(
+                                    let is_multi_thread = tokio::runtime::Handle::try_current()
+                                        .map(|h| matches!(h.runtime_flavor(), tokio::runtime::RuntimeFlavor::MultiThread))
+                                        .unwrap_or(false);
+
+                                    let get_profile_res = if is_multi_thread {
+                                        tokio::task::block_in_place(|| {
+                                            sql_interface_feed.get_single_feed_profile_from_database(
+                                                feed_schedule_entry.profile_id,
+                                            )
+                                        })
+                                    } else {
+                                        sql_interface_feed.get_single_feed_profile_from_database(
                                             feed_schedule_entry.profile_id,
-                                        ) {
+                                        )
+                                    };
+
+                                    let feed_profile_opt = match get_profile_res {
                                         Ok(feed_profile_loaded) => Some(feed_profile_loaded),
                                         Err(e) => {
                                             log_error_chain(
@@ -459,10 +496,23 @@ impl Feed {
                                     }
 
                                     //*** update schedule ***
-                                    match sql_interface_feed
-                                        .update_feed_schedule_entries_in_database(
+                                    let is_multi_thread = tokio::runtime::Handle::try_current()
+                                        .map(|h| matches!(h.runtime_flavor(), tokio::runtime::RuntimeFlavor::MultiThread))
+                                        .unwrap_or(false);
+
+                                    let update_res = if is_multi_thread {
+                                        tokio::task::block_in_place(|| {
+                                            sql_interface_feed.update_feed_schedule_entries_in_database(
+                                                &mut feed_schedule_entries,
+                                            )
+                                        })
+                                    } else {
+                                        sql_interface_feed.update_feed_schedule_entries_in_database(
                                             &mut feed_schedule_entries,
-                                        ) {
+                                        )
+                                    };
+
+                                    match update_res {
                                         Ok(()) => {
                                             // do nothing
                                         }
@@ -568,9 +618,19 @@ impl Feed {
                 );
 
                 // First, load the feed profile from the database.
-                let feed_profile_opt = match sql_interface_feed
-                    .get_single_feed_profile_from_database(self.profile_id_requested)
-                {
+                let is_multi_thread = tokio::runtime::Handle::try_current()
+                    .map(|h| matches!(h.runtime_flavor(), tokio::runtime::RuntimeFlavor::MultiThread))
+                    .unwrap_or(false);
+
+                let get_profile_res = if is_multi_thread {
+                    tokio::task::block_in_place(|| {
+                        sql_interface_feed.get_single_feed_profile_from_database(self.profile_id_requested)
+                    })
+                } else {
+                    sql_interface_feed.get_single_feed_profile_from_database(self.profile_id_requested)
+                };
+
+                let feed_profile_opt = match get_profile_res {
                     Ok(feed_profile_loaded) => Some(feed_profile_loaded),
                     Err(e) => {
                         log_error_chain(

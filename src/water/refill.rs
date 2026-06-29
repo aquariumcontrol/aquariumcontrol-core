@@ -359,88 +359,100 @@ impl Refill {
         refill_stats_data: &mut RefillStatsData,
         sql_interface_refill: &mut dyn DatabaseInterfaceRefillTrait,
     ) {
-        match sql_interface_refill.check_empty() {
-            Ok(0) => {
-                self.lock_error_check_empty = false;
-                refill_stats_data.duration_since_last_refill =
-                    self.config.min_interval_last_refill.saturating_add(1);
-            }
-            Ok(_) => {
-                self.lock_error_check_empty = false;
-                match sql_interface_refill.get_duration_since_last_refill() {
-                    Ok(duration) => {
-                        self.lock_error_read_duration_since_last_refill = false;
-                        refill_stats_data.duration_since_last_refill = duration;
-                    }
-                    Err(_e) => {
-                        self.refill_errors.error_sql_get_historic_data_failed = true;
-                        #[cfg(not(test))] // only required in real-life execution
-                        #[cfg(not(tarpaulin_include))]
-                        if !self.lock_error_read_duration_since_last_refill {
-                            log_error_chain(
-                                module_path!(),
-                                "could not get duration since last refill event",
-                                _e,
-                            );
-                            self.lock_error_read_duration_since_last_refill = true;
+        let mut action = || {
+            match sql_interface_refill.check_empty() {
+                Ok(0) => {
+                    self.lock_error_check_empty = false;
+                    refill_stats_data.duration_since_last_refill =
+                        self.config.min_interval_last_refill.saturating_add(1);
+                }
+                Ok(_) => {
+                    self.lock_error_check_empty = false;
+                    match sql_interface_refill.get_duration_since_last_refill() {
+                        Ok(duration) => {
+                            self.lock_error_read_duration_since_last_refill = false;
+                            refill_stats_data.duration_since_last_refill = duration;
+                        }
+                        Err(_e) => {
+                            self.refill_errors.error_sql_get_historic_data_failed = true;
+                            #[cfg(not(test))] // only required in real-life execution
+                            #[cfg(not(tarpaulin_include))]
+                            if !self.lock_error_read_duration_since_last_refill {
+                                log_error_chain(
+                                    module_path!(),
+                                    "could not get duration since last refill event",
+                                    _e,
+                                );
+                                self.lock_error_read_duration_since_last_refill = true;
+                            }
                         }
                     }
                 }
-            }
-            Err(_e) => {
-                self.refill_errors.error_sql_get_historic_data_failed = true;
-                #[cfg(not(test))] // only required in real-life execution
-                #[cfg(not(tarpaulin_include))]
-                if !self.lock_error_check_empty {
-                    log_error_chain(
-                        module_path!(),
-                        "could not check if refill table is empty or not",
-                        _e,
-                    );
-                    self.lock_error_check_empty = true;
+                Err(_e) => {
+                    self.refill_errors.error_sql_get_historic_data_failed = true;
+                    #[cfg(not(test))] // only required in real-life execution
+                    #[cfg(not(tarpaulin_include))]
+                    if !self.lock_error_check_empty {
+                        log_error_chain(
+                            module_path!(),
+                            "could not check if refill table is empty or not",
+                            _e,
+                        );
+                        self.lock_error_check_empty = true;
+                    }
                 }
-            }
+            };
+
+            self.refill_errors.error_sql_get_historic_data_failed |= Self::read_refill_stats(
+                sql_interface_refill.get_refill_volume_of_last_24h(),
+                &mut refill_stats_data.refill_volume_last_24h,
+                &mut self.locks_error_read.volume_last_24h,
+                #[cfg(not(test))] // only required in real-life execution
+                "volume",
+                #[cfg(not(test))] // only required in real-life execution
+                "24h",
+            );
+
+            self.refill_errors.error_sql_get_historic_data_failed |= Self::read_refill_stats(
+                sql_interface_refill.get_refill_count_of_last_24h(),
+                &mut refill_stats_data.refill_count_last_24h,
+                &mut self.locks_error_read.count_last_24h,
+                #[cfg(not(test))] // only required in real-life execution
+                "count",
+                #[cfg(not(test))] // only required in real-life execution
+                "24h",
+            );
+
+            self.refill_errors.error_sql_get_historic_data_failed |= Self::read_refill_stats(
+                sql_interface_refill.get_refill_volume_of_last_hour(),
+                &mut refill_stats_data.refill_volume_last_hour,
+                &mut self.locks_error_read.volume_last_hour,
+                #[cfg(not(test))] // only required in real-life execution
+                "volume",
+                #[cfg(not(test))] // only required in real-life execution
+                "hour",
+            );
+
+            self.refill_errors.error_sql_get_historic_data_failed |= Self::read_refill_stats(
+                sql_interface_refill.get_refill_count_of_last_hour(),
+                &mut refill_stats_data.refill_count_last_hour,
+                &mut self.locks_error_read.count_last_hour,
+                #[cfg(not(test))] // only required in real-life execution
+                "count",
+                #[cfg(not(test))] // only required in real-life execution
+                "hour",
+            );
         };
 
-        self.refill_errors.error_sql_get_historic_data_failed |= Self::read_refill_stats(
-            sql_interface_refill.get_refill_volume_of_last_24h(),
-            &mut refill_stats_data.refill_volume_last_24h,
-            &mut self.locks_error_read.volume_last_24h,
-            #[cfg(not(test))] // only required in real-life execution
-            "volume",
-            #[cfg(not(test))] // only required in real-life execution
-            "24h",
-        );
+        let is_multi_thread = tokio::runtime::Handle::try_current()
+            .map(|h| matches!(h.runtime_flavor(), tokio::runtime::RuntimeFlavor::MultiThread))
+            .unwrap_or(false);
 
-        self.refill_errors.error_sql_get_historic_data_failed |= Self::read_refill_stats(
-            sql_interface_refill.get_refill_count_of_last_24h(),
-            &mut refill_stats_data.refill_count_last_24h,
-            &mut self.locks_error_read.count_last_24h,
-            #[cfg(not(test))] // only required in real-life execution
-            "count",
-            #[cfg(not(test))] // only required in real-life execution
-            "24h",
-        );
-
-        self.refill_errors.error_sql_get_historic_data_failed |= Self::read_refill_stats(
-            sql_interface_refill.get_refill_volume_of_last_hour(),
-            &mut refill_stats_data.refill_volume_last_hour,
-            &mut self.locks_error_read.volume_last_hour,
-            #[cfg(not(test))] // only required in real-life execution
-            "volume",
-            #[cfg(not(test))] // only required in real-life execution
-            "hour",
-        );
-
-        self.refill_errors.error_sql_get_historic_data_failed |= Self::read_refill_stats(
-            sql_interface_refill.get_refill_count_of_last_hour(),
-            &mut refill_stats_data.refill_count_last_hour,
-            &mut self.locks_error_read.count_last_hour,
-            #[cfg(not(test))] // only required in real-life execution
-            "count",
-            #[cfg(not(test))] // only required in real-life execution
-            "hour",
-        );
+        if is_multi_thread {
+            tokio::task::block_in_place(action);
+        } else {
+            action();
+        }
     }
 
     /// Checks if the duration since the last refill operation exceeds a configurable safety limit, indicating a potential "switch stuck high" error.

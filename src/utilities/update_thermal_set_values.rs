@@ -22,7 +22,17 @@ macro_rules! update_thermal_set_values {
         $lock_flag:expr,
         $location:expr
     ) => {
-        if let Err(e) = $updater.update_set_value(&mut $off_temp, &mut $on_temp) {
+        let is_multi_thread = tokio::runtime::Handle::try_current()
+            .map(|h| matches!(h.runtime_flavor(), tokio::runtime::RuntimeFlavor::MultiThread))
+            .unwrap_or(false);
+
+        let update_res = if is_multi_thread {
+            tokio::task::block_in_place(|| $updater.update_set_value(&mut $off_temp, &mut $on_temp))
+        } else {
+            $updater.update_set_value(&mut $off_temp, &mut $on_temp)
+        };
+
+        if let Err(e) = update_res {
             if !$lock_flag {
                 log::error!(
                     target: $location,
