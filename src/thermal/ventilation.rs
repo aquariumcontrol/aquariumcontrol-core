@@ -117,7 +117,15 @@ fn actuate_ventilation(
     *mutex_blocked_during_actuation |= mutex_device_scheduler_ventilation.try_lock().is_err();
 
     // avoid electrical overloads through parallel device actuation
-    let mut mutex_data = mutex_device_scheduler_ventilation.lock().unwrap();
+    let is_multi_thread = tokio::runtime::Handle::try_current()
+        .map(|h| matches!(h.runtime_flavor(), tokio::runtime::RuntimeFlavor::MultiThread))
+        .unwrap_or(false);
+
+    let mut mutex_data = if is_multi_thread {
+        tokio::task::block_in_place(|| mutex_device_scheduler_ventilation.lock().unwrap())
+    } else {
+        mutex_device_scheduler_ventilation.lock().unwrap()
+    };
 
     // Use if let for cleaner error handling
     if let Err(e) = ventilation_channels.send_to_relay_manager(command.clone()) {

@@ -44,7 +44,15 @@ fn actuate_heater(
     *mutex_blocked_during_actuation |= mutex_device_scheduler_heating.try_lock().is_err();
 
     // avoid electrical overloads through parallel device actuation
-    let mut mutex_data = mutex_device_scheduler_heating.lock().unwrap();
+    let is_multi_thread = tokio::runtime::Handle::try_current()
+        .map(|h| matches!(h.runtime_flavor(), tokio::runtime::RuntimeFlavor::MultiThread))
+        .unwrap_or(false);
+
+    let mut mutex_data = if is_multi_thread {
+        tokio::task::block_in_place(|| mutex_device_scheduler_heating.lock().unwrap())
+    } else {
+        mutex_device_scheduler_heating.lock().unwrap()
+    };
 
     // Use map_err for more concise error handling on the send operation.
     if let Err(e) = heating_channels.send_to_relay_manager(command.clone()) {

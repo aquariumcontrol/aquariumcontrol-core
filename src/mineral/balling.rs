@@ -1254,6 +1254,9 @@ pub mod tests {
                 panic!("Could not connect to SQL database: {e:?}");
             }
         };
+        SqlInterface::truncate_table(&mut sql_interface, SQL_TABLE_BALLING_SET_VALS.to_string()).unwrap();
+        SqlInterface::truncate_table(&mut sql_interface, SQL_TABLE_BALLING_DOSING_LOG.to_string()).unwrap();
+
         let mut sql_interface_balling = SqlInterfaceBalling::new(
             sql_interface.get_connection().unwrap(),
             max_rows_balling_set_values,
