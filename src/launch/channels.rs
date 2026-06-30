@@ -172,9 +172,17 @@ impl<T> AquaReceiver<T> {
         {
             self.count += 1;
         }
-        self.receiver
-            .recv()
-            .map_err(|_| AquaChannelError::Disconnected)
+        let is_multi_thread = tokio::runtime::Handle::try_current()
+            .map(|h| matches!(h.runtime_flavor(), tokio::runtime::RuntimeFlavor::MultiThread))
+            .unwrap_or(false);
+
+        let res = if is_multi_thread {
+            tokio::task::block_in_place(|| self.receiver.recv())
+        } else {
+            self.receiver.recv()
+        };
+
+        res.map_err(|_| AquaChannelError::Disconnected)
     }
 
     /// Receive a value from a channel (non-blocking), and on builds with "debug_channel" feature enabled,
