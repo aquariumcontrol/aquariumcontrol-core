@@ -926,8 +926,8 @@ fn run() -> Result<(), StartupError> {
         // Tokio Async Coordinator thread
         scope.spawn(move || {
             let rt = tokio::runtime::Builder::new_multi_thread()
-                .worker_threads(2)
-                .max_blocking_threads(6)
+                .worker_threads(1)
+                .max_blocking_threads(3)
                 .enable_all()
                 .build()
                 .expect("Failed to build Tokio runtime");
