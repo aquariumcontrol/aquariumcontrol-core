@@ -108,18 +108,25 @@ pub fn send_command(
                     debug!(target: module_path!(), "QUIT sent to {}", thread_name);
 
                     match rx_from_thread_opt {
-                        Some(rx_from_thread) => match rx_from_thread.recv() {
-                            Ok(_) => {
-                                #[cfg(feature = "debug_signal_handler")]
-                                debug!(target: module_path!(), "received acknowledgement from {}", thread_name);
+                        Some(rx_from_thread) => {
+                            let res = if tokio::runtime::Handle::try_current().is_ok() {
+                                tokio::task::block_in_place(|| rx_from_thread.recv())
+                            } else {
+                                rx_from_thread.recv()
+                            };
+                            match res {
+                                Ok(_) => {
+                                    #[cfg(feature = "debug_signal_handler")]
+                                    debug!(target: module_path!(), "received acknowledgement from {}", thread_name);
+                                }
+                                Err(e) => {
+                                    error!(
+                                        target: module_path!(),
+                                        "could not receive answer from {thread_name} thread {e:?}"
+                                    );
+                                }
                             }
-                            Err(e) => {
-                                error!(
-                                    target: module_path!(),
-                                    "could not receive answer from {thread_name} thread {e:?}"
-                                );
-                            }
-                        },
+                        }
                         None => { /* do nothing */ }
                     };
                 }
@@ -586,7 +593,8 @@ pub mod tests {
         let join_handle_test_object = thread::Builder::new()
             .name("test_object".to_string())
             .spawn(move || {
-                tokio::runtime::Builder::new_current_thread()
+                tokio::runtime::Builder::new_multi_thread()
+                    .worker_threads(1)
                     .enable_all()
                     .build()
                     .unwrap()
