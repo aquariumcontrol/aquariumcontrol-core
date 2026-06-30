@@ -1230,6 +1230,19 @@ fn run() -> Result<(), StartupError> {
                     });
                     tasks.push(handle);
                 }
+
+                #[cfg(target_os = "linux")]
+                {
+                    let handle = tokio::spawn(async move {
+                        messaging.execute(&mut chan_messaging).await;
+                        #[cfg(all(target_os = "linux", feature = "debug_channels"))]
+                        debug!(target: module_path!(), "{0}", chan_messaging);
+                        #[cfg(feature = "debug_main")]
+                        debug!(target: module_path!(), "Messaging terminated.");
+                    });
+                    tasks.push(handle);
+                }
+
                 // Wait until all tasks are finished
                 for t in tasks {
                     let _ = t.await;
@@ -1239,26 +1252,15 @@ fn run() -> Result<(), StartupError> {
 
 
 
-        // IPC via messages
-        scope.spawn(move || {
-            // read/send messages
-            #[cfg(target_os = "linux")]
-            messaging.execute(&mut chan_messaging);
-
-            // remove PID from the file
-            let publish_pid_result = publish_pid.erase_pid();
-            if let Err(e) = publish_pid_result {
-                log_error_chain(
-                    module_path!(),
-                    "Error occurred when trying to reset PID.",
-                    e,
-                );
-            }
-            #[cfg(all(target_os = "linux", feature = "debug_channels"))]
-            debug!(target: module_path!(), "{0}", chan_messaging);
-            #[cfg(feature = "debug_main")]
-            debug!(target: module_path!(), "Messaging terminated.");
-        });
+        // remove PID from the file
+        let publish_pid_result = publish_pid.erase_pid();
+        if let Err(e) = publish_pid_result {
+            log_error_chain(
+                module_path!(),
+                "Error occurred when trying to reset PID.",
+                e,
+            );
+        }
 
         Ok(())
     })
