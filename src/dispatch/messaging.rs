@@ -104,7 +104,7 @@ pub struct Messaging {
     config: MessagingConfig,
 
     // Message queue
-    mq: tokio::io::unix::AsyncFd<PosixMq>,
+    mq: Option<PosixMq>,
     mq_max_msg_len: usize,
 
     /// an inhibition flag to avoid flooding the log file with repeated messages about having received an inapplicable command
@@ -174,18 +174,11 @@ impl Messaging {
             }
         };
 
-        let mq = tokio::io::unix::AsyncFd::new(mq).map_err(|e| {
-            MessagingError::PosixMessageQueueAttributesError {
-                location: module_path!().to_string(),
-                source: e,
-            }
-        })?;
-
         Ok(Messaging {
             config,
             lock_warn_inapplicable_command_signal_handler: false,
             lock_error_channel_receive_termination: false,
-            mq,
+            mq: Some(mq),
             mq_max_msg_len,
             execution_config,
         })
@@ -213,6 +206,9 @@ impl Messaging {
         #[cfg(not(tarpaulin_include))]
         info!(target: module_path!(), "Thread started with TID: {}", gettid());
 
+        let mq = self.mq.take().expect("Message queue already taken or not initialized");
+        let async_mq = tokio::io::unix::AsyncFd::new(mq).expect("Failed to create AsyncFd");
+
         let mut msgbuf = vec![0; self.mq_max_msg_len];
 
         let sleep_duration = Duration::from_millis(10);
@@ -220,10 +216,10 @@ impl Messaging {
         loop {
             tokio::select! {
                 // 1. Wait for message queue to become readable
-                readable_result = self.mq.readable() => {
+                readable_result = async_mq.readable() => {
                     if let Ok(mut guard) = readable_result {
                         loop {
-                            match self.mq.get_ref().recv(&mut msgbuf) {
+                            match async_mq.get_ref().recv(&mut msgbuf) {
                                 Ok((_r1, _r2)) => {
                                     if !msgbuf.is_empty() {
                                         if let Ok(msg) = Message::from_bytes(&msgbuf) {
