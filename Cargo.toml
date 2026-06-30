@@ -32,7 +32,7 @@ tempfile = "3.27.0"
 strum_macros = "0.28.0"
 ratatui = "0.30.2"
 crossterm = "0.29.0"
-tokio = { version = "1.52.3", features = ["rt-multi-thread", "time", "sync", "macros", "fs"] }
+tokio = { version = "1.52.3", features = ["rt-multi-thread", "time", "sync", "macros", "fs", "net"] }
 
 [target.'cfg(all(target_os = "linux"))'.dependencies]
 nix = { version = "0.31.1", features = ["user", "process"] }
