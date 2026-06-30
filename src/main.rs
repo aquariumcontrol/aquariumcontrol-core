@@ -103,7 +103,7 @@ use aquarium_control::water::refill_status::RefillStatus;
 use aquarium_control::water::water_injection::WaterInjection;
 use spin_sleep::SpinSleeper;
 pub use std::sync::{atomic::AtomicBool, Arc, Mutex};
-use std::{env, panic, thread::scope, time::Duration};
+use std::{env, panic, time::Duration};
 
 cfg_if::cfg_if! {
     if #[cfg(all(target_os = "linux", feature = "target_hw"))] {
@@ -852,7 +852,7 @@ fn run() -> Result<(), StartupError> {
         messaging: mut chan_messaging,
     } = channels;
 
-    scope(|scope| {
+    let mut thread_handles = vec![];
         // spawn thread for sensor communication first to allow checks
 
 
@@ -873,32 +873,34 @@ fn run() -> Result<(), StartupError> {
 
         // open tcp connection only if configuration requires use of simulator instead of HW
         if use_simulator && tcp_communication_thread_started {
-            scope.spawn(move || {
-                if let Some(mut tcp_communication) = tcp_communication_opt {
-                    tcp_communication.execute(&mut chan_tcp_communication);
-                }
-                #[cfg(feature = "debug_channels")]
-                debug!(target: module_path!(), "{0}", chan_tcp_communication);
-            });
+            let handle = std::thread::Builder::new()
+                .name("TcpCommunication".to_string())
+                .spawn(move || {
+                    if let Some(mut tcp_communication) = tcp_communication_opt {
+                        tcp_communication.execute(&mut chan_tcp_communication);
+                    }
+                    #[cfg(feature = "debug_channels")]
+                    debug!(target: module_path!(), "{0}", chan_tcp_communication);
+                })
+                .expect("Failed to spawn TcpCommunication thread");
+            thread_handles.push(handle);
             #[cfg(feature = "debug_main")]
             debug!(target: module_path!(), "TcpCommunication terminated.");
         };
 
-
-
-
-
-
-
         #[cfg(all(target_os = "linux", feature = "target_hw"))]
         if execution_config.dht {
-            scope.spawn(move || {
-                dht.execute(mutex_dht, &mut chan_dht);
-                #[cfg(feature = "debug_channels")]
-                debug!(target: module_path!(), "{0}", chan_dht);
-                #[cfg(feature = "debug_main")]
-                debug!(target: module_path!(), "Dht terminated.");
-            });
+            let handle = std::thread::Builder::new()
+                .name("Dht".to_string())
+                .spawn(move || {
+                    dht.execute(mutex_dht, &mut chan_dht);
+                    #[cfg(feature = "debug_channels")]
+                    debug!(target: module_path!(), "{0}", chan_dht);
+                    #[cfg(feature = "debug_main")]
+                    debug!(target: module_path!(), "Dht terminated.");
+                })
+                .expect("Failed to spawn Dht thread");
+            thread_handles.push(handle);
         }
 
         // give sensor reading components some time so that they can acquire a first data set
@@ -913,16 +915,14 @@ fn run() -> Result<(), StartupError> {
 
         let mutex_device_scheduler_for_tokio = Arc::clone(&mutex_device_scheduler);
 
-        // Tokio Async Coordinator thread
-        scope.spawn(move || {
-            let rt = tokio::runtime::Builder::new_multi_thread()
-                .worker_threads(1)
-                .max_blocking_threads(3)
-                .enable_all()
-                .build()
-                .expect("Failed to build Tokio runtime");
+        let rt = tokio::runtime::Builder::new_multi_thread()
+            .worker_threads(1)
+            .max_blocking_threads(3)
+            .enable_all()
+            .build()
+            .expect("Failed to build Tokio runtime");
 
-            rt.block_on(async {
+        rt.block_on(async {
                 let mut tasks = vec![];
 
                 let term = Arc::new(AtomicBool::new(false));
@@ -993,7 +993,6 @@ fn run() -> Result<(), StartupError> {
                     });
                     tasks.push(handle);
                 }
-
 
                 if relay_manager_thread_started {
                     let use_simulator = config.relay_manager.use_simulator;
@@ -1247,8 +1246,12 @@ fn run() -> Result<(), StartupError> {
                 for t in tasks {
                     let _ = t.await;
                 }
-            });
         });
+
+        // Wait for all spawned OS threads to finish
+        for handle in thread_handles {
+            let _ = handle.join();
+        }
 
 
 
@@ -1263,7 +1266,6 @@ fn run() -> Result<(), StartupError> {
         }
 
         Ok(())
-    })
 }
 
 /// The main function is a simple error handler.
