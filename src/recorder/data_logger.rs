@@ -622,8 +622,8 @@ impl DataLogger {
     ) {
         {
             // internal scope to limit lifetime of mutex lock
-            #[cfg(feature = "debug_data_logger")]
-            log::debug!(target: module_path!(), "data_logger: Attempting to lock mutex_refill_status");
+            //#[cfg(feature = "debug_data_logger")]
+            //log::debug!(target: module_path!(), "data_logger: Attempting to lock mutex_refill_status");
             match data_logger_mutexes.mutex_refill_status.lock() {
                 Ok(mut refill_status) => {
                     self.lock_error_output_state_refill_in_progress = self.output_state(
@@ -651,15 +651,15 @@ impl DataLogger {
                     error!(target: module_path!(), "error locking mutex for refill status");
                 }
             };
-            #[cfg(feature = "debug_data_logger")]
-            debug!(target: module_path!(), "Releasing lock on mutex_refill_status");
+            //#[cfg(feature = "debug_data_logger")]
+            //debug!(target: module_path!(), "Releasing lock on mutex_refill_status");
 
         }
 
         {
             // internal scope to limit lifetime of mutex lock
-            #[cfg(feature = "debug_data_logger")]
-            log::debug!(target: module_path!(), "data_logger: Attempting to lock mutex_heating_status");
+            //#[cfg(feature = "debug_data_logger")]
+            //log::debug!(target: module_path!(), "data_logger: Attempting to lock mutex_heating_status");
             *heater_status = match data_logger_mutexes.mutex_heating_status.lock() {
                 Ok(heating_status) => {
                     self.lock_error_output_description_heating_controller_state = self
@@ -699,15 +699,15 @@ impl DataLogger {
                     false
                 }
             };
-            #[cfg(feature = "debug_data_logger")]
-            debug!(target: module_path!(), "Releasing lock on heating_status");
+            //#[cfg(feature = "debug_data_logger")]
+            //debug!(target: module_path!(), "Releasing lock on heating_status");
 
         }
 
         {
             // internal scope to limit lifetime of mutex lock
-            #[cfg(feature = "debug_data_logger")]
-            log::debug!(target: module_path!(), "data_logger: Attempting to lock mutex_ventilation_status");
+            //#[cfg(feature = "debug_data_logger")]
+            //log::debug!(target: module_path!(), "data_logger: Attempting to lock mutex_ventilation_status");
             *ventilation_status = match data_logger_mutexes.mutex_ventilation_status.lock() {
                 Ok(ventilation_status) => {
                     self.lock_error_output_description_ventilation_controller_state = self
@@ -750,8 +750,8 @@ impl DataLogger {
                     false
                 }
             };
-            #[cfg(feature = "debug_data_logger")]
-            debug!(target: module_path!(), "Releasing lock on ventilation_status");
+            //#[cfg(feature = "debug_data_logger")]
+            //debug!(target: module_path!(), "Releasing lock on ventilation_status");
         }
     }
 
@@ -841,8 +841,8 @@ impl DataLogger {
                     return;
                 }
             };
-            #[cfg(feature = "debug_data_logger")]
-            debug!(target: module_path!(), "output sequence starting");
+            //#[cfg(feature = "debug_data_logger")]
+            //debug!(target: module_path!(), "output sequence starting");
             self.lock_error_output_signal_water_temperature = self.output_signal(
                 water_temperature,
                 AquariumSignal::WaterTemperature,
@@ -879,8 +879,8 @@ impl DataLogger {
             *conductivity_opt = Some(conductivity);
             *ambient_temperature_opt = Some(ambient_temperature);
             *humidity_opt = Some(humidity);
-            #[cfg(feature = "debug_data_logger")]
-            debug!(target: module_path!(), "output sequence finished");
+            //#[cfg(feature = "debug_data_logger")]
+            //debug!(target: module_path!(), "output sequence finished");
         }
     }
 
@@ -906,8 +906,8 @@ impl DataLogger {
     ) {
         {
             // internal scope to limit lifetime of mutex lock
-            #[cfg(feature = "debug_data_logger")]
-            log::debug!(target: module_path!(), "data_logger: Attempting to lock mutex_tank_level_switch_signals");
+            //#[cfg(feature = "debug_data_logger")]
+            //log::debug!(target: module_path!(), "data_logger: Attempting to lock mutex_tank_level_switch_signals");
             match mutex_tank_level_switch_signals.lock() {
                 Ok(tank_level_switch_signals) => {
                     *tank_level_switch_position_opt =
@@ -950,8 +950,8 @@ impl DataLogger {
                     *tank_level_switch_invalid_opt = None;
                 }
             };
-            #[cfg(feature = "debug_data_logger")]
-            log::debug!(target: module_path!(), "data_logger: Releasing lock on mutex_tank_level_switch_signals");
+            //#[cfg(feature = "debug_data_logger")]
+            //log::debug!(target: module_path!(), "data_logger: Releasing lock on mutex_tank_level_switch_signals");
         }
     }
 
