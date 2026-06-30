@@ -886,17 +886,7 @@ fn run() -> Result<(), StartupError> {
 
 
 
-        scope.spawn(move || {
-            let term = Arc::new(AtomicBool::new(false));
 
-            handle_signals(
-                term,
-                chan_signal_handler,
-                execution_config_clone_for_signal_handler,
-            );
-            #[cfg(feature = "debug_main")]
-            debug!(target: module_path!(), "Signal handler terminated.");
-        });
 
 
 
@@ -934,6 +924,19 @@ fn run() -> Result<(), StartupError> {
 
             rt.block_on(async {
                 let mut tasks = vec![];
+
+                let term = Arc::new(AtomicBool::new(false));
+                let signal_handler_config = execution_config_clone_for_signal_handler;
+                let signal_handle = tokio::spawn(async move {
+                    handle_signals(
+                        term,
+                        chan_signal_handler,
+                        signal_handler_config,
+                    ).await;
+                    #[cfg(feature = "debug_main")]
+                    debug!(target: module_path!(), "Signal handler terminated.");
+                });
+                tasks.push(signal_handle);
 
                 if execution_config.schedule_check {
                     let exec_config = execution_config_clone_for_schedule_check;

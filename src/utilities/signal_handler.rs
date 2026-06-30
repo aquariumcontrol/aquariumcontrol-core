@@ -76,7 +76,6 @@ use crate::launch::channels::{AquaReceiver, AquaSender};
 use crate::launch::execution_config::ExecutionConfig;
 use crate::utilities::channel_content::InternalCommand;
 pub use crate::utilities::signal_handler_channels::SignalHandlerChannels;
-use spin_sleep::SpinSleeper;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::{sync::Arc, time::Duration};
 
@@ -201,7 +200,7 @@ pub fn send_command(
 ///     signal_handler --> temperature_gradient[TemperatureGradient]
 ///     temperature_gradient --> signal_handler
 /// ```
-pub fn handle_signals(
+pub async fn handle_signals(
     term: Arc<AtomicBool>,
     mut signal_handler_channels: SignalHandlerChannels,
     execution_config: ExecutionConfig,
@@ -226,7 +225,6 @@ pub fn handle_signals(
         .tx_signal_handler_to_tcp_opt
         .is_some();
 
-    let spin_sleeper = SpinSleeper::default();
     let sleep_interval_millis = 100;
     let sleep_duration_hundred_milli_sec = Duration::from_millis(sleep_interval_millis);
 
@@ -247,7 +245,7 @@ pub fn handle_signals(
     }
 
     while !term.load(Ordering::Relaxed) {
-        spin_sleeper.sleep(sleep_duration_hundred_milli_sec);
+        tokio::time::sleep(sleep_duration_hundred_milli_sec).await;
     }
     #[cfg(not(test))] // only required in real-life execution
     #[cfg(not(tarpaulin_include))]
@@ -585,15 +583,20 @@ pub mod tests {
 
         let mut channels = Channels::new_for_test();
 
-        // start the test object in a separate thread
         let join_handle_test_object = thread::Builder::new()
             .name("test_object".to_string())
             .spawn(move || {
-                handle_signals(
-                    term_clone,
-                    channels.signal_handler,
-                    ExecutionConfig::default(),
-                );
+                tokio::runtime::Builder::new_current_thread()
+                    .enable_all()
+                    .build()
+                    .unwrap()
+                    .block_on(async {
+                        handle_signals(
+                            term_clone,
+                            channels.signal_handler,
+                            ExecutionConfig::default(),
+                        ).await;
+                    });
             })
             .unwrap();
 
