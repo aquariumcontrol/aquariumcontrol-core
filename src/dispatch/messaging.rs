@@ -204,16 +204,16 @@ impl Messaging {
         #[cfg(not(tarpaulin_include))]
         info!(target: module_path!(), "Thread started with TID: {}", gettid());
 
-        let mut async_mq_opt: Option<tokio::io::unix::AsyncFd<PosixMq>> = None;
+        let mut async_mq_opt: Option<tokio::io::unix::AsyncFd<PosixMq>>;
 
         async_mq_opt = match self.mq.take() {
             Some(mq) => {
-                match (tokio::io::unix::AsyncFd::new(mq)) {
+                match tokio::io::unix::AsyncFd::new(mq) {
                     Ok(async_mq) => Some(async_mq),
                     Err(e) => {
                         error!(
                             target: module_path!(),
-                            "Failed to create AsyncFd for accessing message queue"
+                            "Failed to create AsyncFd for accessing message queue ({e:?})"
                         );
                         None
                     }
