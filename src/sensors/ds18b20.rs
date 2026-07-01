@@ -893,7 +893,7 @@ pub mod tests {
         let (mut tx_signal_handler_to_ds18b20, rx_ds18b20_from_signal_handler): (
             AquaSender<InternalCommand>,
             AquaReceiver<InternalCommand>,
-        ) = channel(1);
+        ) = channel(1, true);
         let mut ds18b20_channels = Ds18b20Channels {
             rx_ds18b20_from_signal_handler,
             #[cfg(feature = "debug_channels")]

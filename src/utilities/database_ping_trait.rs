@@ -63,12 +63,9 @@ pub trait DatabasePingTrait {
     fn check_timing_and_ping_database(
         &mut self,
         database_interface: &mut (impl Pingable + ?Sized),
+        is_multi_thread: bool,
     ) {
         if self.get_last_ping_instant().elapsed() > self.get_ping_interval() {
-            let is_multi_thread = tokio::runtime::Handle::try_current()
-                .map(|h| matches!(h.runtime_flavor(), tokio::runtime::RuntimeFlavor::MultiThread))
-                .unwrap_or(false);
-
             if is_multi_thread {
                 tokio::task::block_in_place(|| database_interface.ping());
             } else {
@@ -161,7 +158,7 @@ mod tests {
         let mut pingable = MockPingable::new();
 
         // Act: Check if a ping is needed.
-        pinger.check_timing_and_ping_database(&mut pingable);
+        pinger.check_timing_and_ping_database(&mut pingable, false);
 
         // Assert: The pingable object's ping method should NOT have been called.
         assert!(
@@ -181,7 +178,7 @@ mod tests {
         let mut pingable = MockPingable::new();
 
         // Act: Check if a ping is needed.
-        pinger.check_timing_and_ping_database(&mut pingable);
+        pinger.check_timing_and_ping_database(&mut pingable, false);
 
         // Assert: The pingable object's ping method SHOULD have been called.
         assert!(
@@ -201,7 +198,7 @@ mod tests {
         let mut pingable = MockPingable::new();
 
         // Act 1: The first check should trigger a ping.
-        pinger.check_timing_and_ping_database(&mut pingable);
+        pinger.check_timing_and_ping_database(&mut pingable, false);
 
         // Assert 1: The ping was triggered.
         assert!(
@@ -213,7 +210,7 @@ mod tests {
         pingable.ping_was_called = false;
 
         // Act 2: Immediately check again. The timer should have been reset, so no ping is needed.
-        pinger.check_timing_and_ping_database(&mut pingable);
+        pinger.check_timing_and_ping_database(&mut pingable, false);
 
         // Assert 2: The ping was NOT triggered a second time.
         assert!(

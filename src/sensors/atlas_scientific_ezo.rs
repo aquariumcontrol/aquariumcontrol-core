@@ -931,23 +931,23 @@ pub mod tests {
         let (tx_atlas_scientific_to_i2c_interface, mut rx_i2c_interface_from_atlas_scientific): (
             AquaSender<I2cRequest>,
             AquaReceiver<I2cRequest>,
-        ) = channel(1);
+        ) = channel(1, false);
         let (_tx_i2c_interface_to_atlas_scientific, rx_atlas_scientific_from_i2c_interface): (
             AquaSender<I2cResult>,
             AquaReceiver<I2cResult>,
-        ) = channel(1);
+        ) = channel(1, false);
         let (tx_atlas_scientific_to_signal_handler, _rx_signal_handler_from_atlas_scientific): (
             AquaSender<bool>,
             AquaReceiver<bool>,
-        ) = channel(1);
+        ) = channel(1, false);
         let (_tx_signal_handler_to_atlas_scientific, rx_atlas_scientific_from_signal_handler): (
             AquaSender<InternalCommand>,
             AquaReceiver<InternalCommand>,
-        ) = channel(1);
+        ) = channel(1, false);
         let (tx_atlas_scientific_to_monitors, _rx_monitors_from_atlas_scientific): (
             AquaSender<AtlasScientificMonitorView>,
             AquaReceiver<AtlasScientificMonitorView>,
-        ) = channel(1);
+        ) = channel(1, false);
         let mut atlas_scientific_channels = AtlasScientificChannels {
             tx_atlas_scientific_to_i2c_interface,
             #[cfg(feature = "debug_channels")]

@@ -617,10 +617,20 @@ fn run() -> Result<(), StartupError> {
         | config.sensor_manager.use_simulator
         | config.tank_level_switch.use_simulator;
 
+    let rt = tokio::runtime::Builder::new_multi_thread()
+        .worker_threads(1)
+        .max_blocking_threads(3)
+        .enable_all()
+        .build()
+        .map_err(|e| StartupError::TokioRuntimeSetupFailure { source: e })?;
+
+    let is_multi_thread = matches!(rt.handle().runtime_flavor(), tokio::runtime::RuntimeFlavor::MultiThread);
+
     let channels = Channels::new(
         config.relay_manager.use_simulator,
         config.sensor_manager.use_simulator,
         config.tank_level_switch.use_simulator,
+        is_multi_thread
     );
 
     #[cfg(target_os = "linux")]
@@ -939,13 +949,6 @@ fn run() -> Result<(), StartupError> {
         spin_sleeper.sleep(duration_one_second);
         println!("starting control...");
 
-        let rt = tokio::runtime::Builder::new_multi_thread()
-            .worker_threads(1)
-            .max_blocking_threads(3)
-            .enable_all()
-            .build()
-            .expect("Failed to build Tokio runtime");
-
         rt.block_on(async {
                 let mut tasks = vec![];
 
@@ -1108,6 +1111,7 @@ fn run() -> Result<(), StartupError> {
                             &mut heating_set_value_updater,
                             heating_mutexes,
                             sql_interface_heating,
+                            is_multi_thread
                         ).await;
                         #[cfg(feature = "debug_channels")]
                         debug!(target: module_path!(), "{0}", chan_heating);
@@ -1131,6 +1135,7 @@ fn run() -> Result<(), StartupError> {
                             &mut chan_ventilation,
                             &mut ventilation_set_value_updater,
                             ventilation_mutexes,
+                            is_multi_thread
                         ).await;
                         #[cfg(feature = "debug_channels")]
                         debug!(target: module_path!(), "{0}", chan_ventilation);
@@ -1162,6 +1167,7 @@ fn run() -> Result<(), StartupError> {
                             mutex_tank_level_switch_signals_clone_for_refill,
                             mutex_refill_status,
                             sql_interface_refill,
+                            is_multi_thread
                         ).await;
                         #[cfg(feature = "debug_channels")]
                         debug!(target: module_path!(), "{0}", chan_refill);
@@ -1179,6 +1185,7 @@ fn run() -> Result<(), StartupError> {
                             &mut chan_feed,
                             &mut food_injection,
                             sql_interface_feed,
+                            is_multi_thread
                         ).await;
                         #[cfg(feature = "debug_channels")]
                         debug!(target: module_path!(), "{0}", chan_feed);
@@ -1196,6 +1203,7 @@ fn run() -> Result<(), StartupError> {
                             &mut chan_balling,
                             &mut mineral_injection,
                             sql_interface_balling,
+                            is_multi_thread
                         ).await;
                         #[cfg(feature = "debug_channels")]
                         debug!(target: module_path!(), "{0}", chan_balling);

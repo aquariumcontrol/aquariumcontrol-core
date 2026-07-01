@@ -1079,7 +1079,7 @@ pub mod tests {
         AquaSender<InternalCommand>,
         Arc<Mutex<DhtResult>>,
     ) {
-        let (tx, rx) = channel(1);
+        let (tx, rx) = channel(1, false);
         let channels = DhtChannels {
             rx_dht_from_signal_handler: rx,
             #[cfg(feature = "debug_channels")]
@@ -1163,7 +1163,7 @@ pub mod tests {
     /// when the measurement interval elapses. This test is for non-hardware platforms.
     fn test_execute_updates_mutex_on_measurement_interval() {
         // Arrange
-        let (mut tx, rx) = channel(1);
+        let (mut tx, rx) = channel(1, false);
         let mut channels = DhtChannels {
             rx_dht_from_signal_handler: rx,
             #[cfg(feature = "debug_channels")]

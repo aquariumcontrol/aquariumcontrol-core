@@ -112,15 +112,12 @@ fn actuate_ventilation(
     mutex_device_scheduler_ventilation: &Arc<Mutex<i32>>,
     mutex_blocked_during_actuation: &mut bool,
     ventilation_channels: &mut VentilationChannels,
+    is_multi_thread: bool,
 ) {
     // reduce the probability of wrong warning
     *mutex_blocked_during_actuation |= mutex_device_scheduler_ventilation.try_lock().is_err();
 
     // avoid electrical overloads through parallel device actuation
-    let is_multi_thread = tokio::runtime::Handle::try_current()
-        .map(|h| matches!(h.runtime_flavor(), tokio::runtime::RuntimeFlavor::MultiThread))
-        .unwrap_or(false);
-
     let mut mutex_data = if is_multi_thread {
         tokio::task::block_in_place(|| mutex_device_scheduler_ventilation.lock().unwrap())
     } else {
@@ -156,12 +153,14 @@ fn switch_on_ventilation(
     mutex_device_scheduler_ventilation: &Arc<Mutex<i32>>,
     mutex_blocked_during_actuation: &mut bool,
     ventilation_channels: &mut VentilationChannels,
+    is_multi_thread: bool,
 ) {
     actuate_ventilation(
         InternalCommand::SwitchOn(AquariumDevice::Ventilation),
         mutex_device_scheduler_ventilation,
         mutex_blocked_during_actuation,
         ventilation_channels,
+        is_multi_thread
     );
 }
 
@@ -179,12 +178,14 @@ fn switch_off_ventilation(
     mutex_device_scheduler_ventilation: &Arc<Mutex<i32>>,
     mutex_blocked_during_actuation: &mut bool,
     ventilation_channels: &mut VentilationChannels,
+    is_multi_thread: bool,
 ) {
     actuate_ventilation(
         InternalCommand::SwitchOff(AquariumDevice::Ventilation),
         mutex_device_scheduler_ventilation,
         mutex_blocked_during_actuation,
         ventilation_channels,
+        is_multi_thread,
     );
 }
 
@@ -336,6 +337,7 @@ impl Ventilation {
         mutex_device_scheduler_ventilation: &Arc<Mutex<i32>>,
         ventilation_channels: &mut VentilationChannels,
         mutex_was_blocked_during_actuation: &mut bool,
+        is_multi_thread: bool
     ) {
         match condition {
             true => {
@@ -345,6 +347,7 @@ impl Ventilation {
                         mutex_device_scheduler_ventilation,
                         mutex_was_blocked_during_actuation,
                         ventilation_channels,
+                        is_multi_thread,
                     );
                     *ventilation_state = ActuatorState::On;
                 }
@@ -356,6 +359,7 @@ impl Ventilation {
                         mutex_device_scheduler_ventilation,
                         mutex_was_blocked_during_actuation,
                         ventilation_channels,
+                        is_multi_thread
                     );
                     *ventilation_state = ActuatorState::Off;
                 }
@@ -392,6 +396,7 @@ impl Ventilation {
         ventilation_channels: &mut VentilationChannels,
         ventilation_set_val_updater: &mut impl ThermalSetValueUpdaterTrait,
         ventilation_mutexes: VentilationMutexes,
+        is_multi_thread: bool
     ) {
         #[cfg(all(target_os = "linux", not(test)))] // only required in real-life execution
         #[cfg(not(tarpaulin_include))]
@@ -469,7 +474,8 @@ impl Ventilation {
                     self.config.switch_off_temperature,
                     self.config.switch_on_temperature,
                     self.lock_error_ventilation_set_value_read_failure,
-                    module_path!()
+                    module_path!(),
+                    is_multi_thread
                 );
 
                 // execute gradient monitoring
@@ -488,6 +494,7 @@ impl Ventilation {
                         &mutex_device_scheduler_ventilation,
                         &mut actuation_mutex_was_blocked_during_actuation,
                         ventilation_channels,
+                        is_multi_thread
                     );
                     ventilation_state = ActuatorState::Off;
                     self.actuator_disabled = true;
@@ -512,6 +519,7 @@ impl Ventilation {
                                     &mutex_device_scheduler_ventilation,
                                     &mut actuation_mutex_was_blocked_during_actuation,
                                     ventilation_channels,
+                                    is_multi_thread
                                 );
                                 ventilation_state = ActuatorState::On;
                             }
@@ -522,6 +530,7 @@ impl Ventilation {
                                     &mutex_device_scheduler_ventilation,
                                     &mut actuation_mutex_was_blocked_during_actuation,
                                     ventilation_channels,
+                                    is_multi_thread
                                 );
                                 ventilation_state = ActuatorState::Off;
                             }
@@ -535,6 +544,7 @@ impl Ventilation {
                                     &mutex_device_scheduler_ventilation,
                                     &mut actuation_mutex_was_blocked_during_actuation,
                                     ventilation_channels,
+                                    is_multi_thread
                                 );
                                 ventilation_state = ActuatorState::On;
                             }
@@ -546,6 +556,7 @@ impl Ventilation {
                                     &mutex_device_scheduler_ventilation,
                                     &mut actuation_mutex_was_blocked_during_actuation,
                                     ventilation_channels,
+                                    is_multi_thread
                                 );
                                 ventilation_state = ActuatorState::Off;
                             }
@@ -559,6 +570,7 @@ impl Ventilation {
                         &mutex_device_scheduler_ventilation,
                         ventilation_channels,
                         &mut actuation_mutex_was_blocked_during_actuation,
+                        is_multi_thread
                     );
                 } else {
                     // schedule check requires stop of ventilation control
@@ -568,6 +580,7 @@ impl Ventilation {
                         &mutex_device_scheduler_ventilation,
                         ventilation_channels,
                         &mut actuation_mutex_was_blocked_during_actuation,
+                        is_multi_thread
                     );
                 }
             }
@@ -637,6 +650,7 @@ impl Ventilation {
                     &mutex_device_scheduler_ventilation,
                     &mut actuation_mutex_was_blocked_during_actuation,
                     ventilation_channels,
+                    is_multi_thread
                 );
             }
         } else {
@@ -646,6 +660,7 @@ impl Ventilation {
                     &mutex_device_scheduler_ventilation,
                     &mut actuation_mutex_was_blocked_during_actuation,
                     ventilation_channels,
+                    is_multi_thread
                 );
             }
         }
@@ -677,12 +692,17 @@ pub mod tests {
             .build()
             .unwrap()
             .block_on(async {
+                let is_multi_thread_test = tokio::runtime::Handle::try_current()
+                    .map(|h| matches!(h.runtime_flavor(), tokio::runtime::RuntimeFlavor::MultiThread))
+                    .unwrap_or(false);
+
                 ventilation
                     .execute(
                         mutex_device_scheduler_ventilation,
                         ventilation_channels,
                         ventilation_set_val_updater,
                         ventilation_mutexes,
+                        is_multi_thread_test
                     )
                     .await;
             });

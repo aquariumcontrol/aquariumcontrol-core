@@ -249,4 +249,11 @@ pub enum StartupError {
         #[source]
         source: TemperatureGradientError,
     },
+
+    /// Setup of Tokio Async Runtime failed
+    #[error("Setup of Tokio Async Runtime failed")]
+    TokioRuntimeSetupFailure {
+        #[source]
+        source: std::io::Error,
+    },
 }

@@ -39,15 +39,12 @@ fn actuate_heater(
     mutex_device_scheduler_heating: &Arc<Mutex<i32>>,
     mutex_blocked_during_actuation: &mut bool,
     heating_channels: &mut HeatingChannels,
+    is_multi_thread: bool
 ) {
     // reduce the probability of wrong warning
     *mutex_blocked_during_actuation |= mutex_device_scheduler_heating.try_lock().is_err();
 
     // avoid electrical overloads through parallel device actuation
-    let is_multi_thread = tokio::runtime::Handle::try_current()
-        .map(|h| matches!(h.runtime_flavor(), tokio::runtime::RuntimeFlavor::MultiThread))
-        .unwrap_or(false);
-
     let mut mutex_data = if is_multi_thread {
         tokio::task::block_in_place(|| mutex_device_scheduler_heating.lock().unwrap())
     } else {
@@ -81,12 +78,14 @@ pub fn switch_on_heater(
     mutex_device_scheduler_heating: &Arc<Mutex<i32>>,
     mutex_blocked_during_actuation: &mut bool,
     heating_channels: &mut HeatingChannels,
+    is_multi_thread: bool,
 ) {
     actuate_heater(
         InternalCommand::SwitchOn(AquariumDevice::Heater),
         mutex_device_scheduler_heating,
         mutex_blocked_during_actuation,
         heating_channels,
+        is_multi_thread
     );
 }
 
@@ -102,11 +101,13 @@ pub fn switch_off_heater(
     mutex_device_scheduler_heating: &Arc<Mutex<i32>>,
     mutex_blocked_during_actuation: &mut bool,
     heating_channels: &mut HeatingChannels,
+    is_multi_thread: bool,
 ) {
     actuate_heater(
         InternalCommand::SwitchOff(AquariumDevice::Heater),
         mutex_device_scheduler_heating,
         mutex_blocked_during_actuation,
         heating_channels,
+        is_multi_thread
     );
 }

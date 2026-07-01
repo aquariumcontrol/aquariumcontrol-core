@@ -358,6 +358,7 @@ impl Refill {
         &mut self,
         refill_stats_data: &mut RefillStatsData,
         sql_interface_refill: &mut dyn DatabaseInterfaceRefillTrait,
+        is_multi_thread: bool
     ) {
         let mut action = || {
             match sql_interface_refill.check_empty() {
@@ -443,10 +444,6 @@ impl Refill {
                 "hour",
             );
         };
-
-        let is_multi_thread = tokio::runtime::Handle::try_current()
-            .map(|h| matches!(h.runtime_flavor(), tokio::runtime::RuntimeFlavor::MultiThread))
-            .unwrap_or(false);
 
         if is_multi_thread {
             tokio::task::block_in_place(action);
@@ -731,6 +728,7 @@ impl Refill {
     /// * `mutex_tank_level_switch_signals_clone_for_refill` - The `Arc<Mutex<TankLevelSwitchSignals>>`
     ///   containing the latest tank level switch readings (raw and stabilized).
     /// * `sql_interface_refill` - The **specific SQL interface** for refill-related database operations.
+    #[allow(clippy::too_many_arguments)]
     pub async fn execute(
         &mut self,
         mutex_device_scheduler_refill: Arc<Mutex<i32>>,
@@ -739,6 +737,7 @@ impl Refill {
         mutex_tank_level_switch_signals_clone_for_refill: Arc<Mutex<TankLevelSwitchSignals>>,
         mutex_refill_status: Arc<Mutex<RefillStatus>>,
         mut sql_interface_refill: Box<dyn DatabaseInterfaceRefillTrait + Sync + Send>,
+        is_multi_thread: bool,
     ) {
         #[cfg(all(target_os = "linux", not(test)))] // only required in real-life execution
         #[cfg(not(tarpaulin_include))]
@@ -768,9 +767,9 @@ impl Refill {
         let mut lock_warn_cycle_time_exceeded: bool = false;
         let mut cycle_time_exceeded: bool; // ensures that signal handler/messaging are polled at least once even if cycle time is exceeded
 
-        // retrieving data from SQL data base
+        // retrieving data from SQL database
         let mut refill_stats_data = RefillStatsData::default();
-        self.get_refill_stats_data(&mut refill_stats_data, &mut *sql_interface_refill);
+        self.get_refill_stats_data(&mut refill_stats_data, &mut *sql_interface_refill, is_multi_thread);
 
         let mut refill_inhibited = false; // a flag indicating the external request to inhibit refill from injecting water
         let mut quit_command_received = false; // the request to end the application has been received
@@ -861,7 +860,7 @@ impl Refill {
                         }
                     }
 
-                    self.get_refill_stats_data(&mut refill_stats_data, &mut *sql_interface_refill);
+                    self.get_refill_stats_data(&mut refill_stats_data, &mut *sql_interface_refill, is_multi_thread);
 
                     let critical_error_present = self
                         .check_volume_count_time_limits(&refill_stats_data, refill_channels)
@@ -1057,7 +1056,7 @@ impl Refill {
                     }
                     tokio::time::sleep(sleep_duration_hundred_millis).await;
 
-                    self.check_timing_and_ping_database(&mut *sql_interface_refill);
+                    self.check_timing_and_ping_database(&mut *sql_interface_refill, is_multi_thread);
 
                     cycle_time_exceeded = false;
                 }
@@ -1149,6 +1148,10 @@ pub mod tests {
             .build()
             .unwrap()
             .block_on(async {
+                let is_multi_thread_test = tokio::runtime::Handle::try_current()
+                    .map(|h| matches!(h.runtime_flavor(), tokio::runtime::RuntimeFlavor::MultiThread))
+                    .unwrap_or(false);
+
                 refill.execute(
                     mutex_device_scheduler_refill,
                     refill_channels,
@@ -1156,6 +1159,7 @@ pub mod tests {
                     mutex_tank_level_switch_signals_clone_for_refill,
                     mutex_refill_status,
                     sql_interface_refill,
+                    is_multi_thread_test
                 ).await;
             });
     }
@@ -1305,12 +1309,12 @@ pub mod tests {
         let (_, mut rx_refill_from_signal_handler): (
             AquaSender<InternalCommand>,
             AquaReceiver<InternalCommand>,
-        ) = channel(1);
+        ) = channel(1, true);
 
         let (_, mut rx_refill_from_messaging): (
             AquaSender<InternalCommand>,
             AquaReceiver<InternalCommand>,
-        ) = channel(1);
+        ) = channel(1, true);
 
         let (quit_command_received, start_command_received, stop_command_received) = refill
             .process_external_request(
@@ -1339,9 +1343,9 @@ pub mod tests {
         let (
             tx_mock_water_injection_to_test_environment,
             mut rx_test_environment_from_mock_water_injection,
-        ) = channel(1);
+        ) = channel(1, true);
         let (mut tx_test_environment_to_monitors, rx_monitors_from_test_environment) =
-            channel::<InternalCommand>(1);
+            channel::<InternalCommand>(1, true);
 
         let mutex_tank_level_switch_signals =
             Arc::new(Mutex::new(TankLevelSwitchSignals::new(false, false, false)));
@@ -1502,11 +1506,11 @@ pub mod tests {
 
         // test environment-specific channels
         let (mut tx_test_environment_to_monitors, rx_monitors_from_test_environment) =
-            channel::<InternalCommand>(1);
+            channel::<InternalCommand>(1, true);
         let (
             tx_mock_water_injection_to_test_environment,
             mut rx_test_environment_from_mock_water_injection,
-        ) = channel(1);
+        ) = channel(1, true);
 
         // this test case shall output debug! macros
         setup_logger(LoggerConfig::default()).unwrap();
@@ -1668,9 +1672,9 @@ pub mod tests {
         let (
             tx_mock_water_injection_to_test_environment,
             mut rx_test_environment_from_mock_water_injection,
-        ) = channel(1);
+        ) = channel(1, true);
         let (mut tx_test_environment_to_monitors, rx_monitors_from_test_environment) =
-            channel::<InternalCommand>(1);
+            channel::<InternalCommand>(1, true);
 
         // empty the refill table
         match SqlInterface::truncate_table(&mut sql_interface, SQL_TABLE_REFILL.to_string()) {
@@ -1835,9 +1839,9 @@ pub mod tests {
         let (
             tx_mock_water_injection_to_test_environment,
             mut rx_test_environment_from_mock_water_injection,
-        ) = channel(1);
+        ) = channel(1, true);
         let (mut tx_test_environment_to_monitors, rx_monitors_from_test_environment) =
-            channel::<InternalCommand>(1);
+            channel::<InternalCommand>(1, true);
 
         let refill_status = RefillStatus::default();
         let mutex_refill_status = Arc::new(Mutex::new(refill_status));
@@ -2034,9 +2038,9 @@ pub mod tests {
         let (
             tx_mock_water_injection_to_test_environment,
             mut rx_test_environment_from_mock_water_injection,
-        ) = channel(1);
+        ) = channel(1, true);
         let (mut tx_test_environment_to_monitors, rx_monitors_from_test_environment) =
-            channel::<InternalCommand>(1);
+            channel::<InternalCommand>(1, true);
 
         // empty the refill table
         match SqlInterface::truncate_table(&mut sql_interface, SQL_TABLE_REFILL.to_string()) {
@@ -2205,11 +2209,11 @@ pub mod tests {
         let mut channels = Channels::new_for_test();
 
         let (mut tx_test_environment_to_monitors, rx_monitors_from_test_environment) =
-            channel::<InternalCommand>(1);
+            channel::<InternalCommand>(1, true);
         let (
             tx_mock_water_injection_to_test_environment,
             _rx_test_environment_from_mock_water_injection,
-        ) = channel(1);
+        ) = channel(1, true);
 
         let mut mock_monitors = MockMonitors::new();
 
@@ -2368,9 +2372,9 @@ pub mod tests {
         let (
             tx_mock_water_injection_to_test_environment,
             mut rx_test_environment_from_mock_water_injection,
-        ) = channel(1);
+        ) = channel(1, true);
         let (mut tx_test_environment_to_monitors, rx_monitors_from_test_environment) =
-            channel::<InternalCommand>(1);
+            channel::<InternalCommand>(1, true);
 
         // empty the refill table
         match SqlInterface::truncate_table(&mut sql_interface, "refill_log".to_string()) {
@@ -2529,9 +2533,9 @@ pub mod tests {
         let (
             tx_mock_water_injection_to_test_environment,
             mut rx_test_environment_from_mock_water_injection,
-        ) = channel(1);
+        ) = channel(1, true);
         let (mut tx_test_environment_to_monitors, rx_monitors_from_test_environment) =
-            channel::<InternalCommand>(1);
+            channel::<InternalCommand>(1, true);
 
         // empty the refill table
         match SqlInterface::truncate_table(&mut sql_interface, SQL_TABLE_REFILL.to_string()) {
@@ -2743,9 +2747,9 @@ pub mod tests {
         let (
             tx_mock_water_injection_to_test_environment,
             mut rx_test_environment_from_mock_water_injection,
-        ) = channel(1);
+        ) = channel(1, true);
         let (mut tx_test_environment_to_monitors, rx_monitors_from_test_environment) =
-            channel::<InternalCommand>(1);
+            channel::<InternalCommand>(1, true);
 
         let mutex_device_scheduler = Arc::new(Mutex::new(0));
         let mutex_tank_level_switch_signals =
@@ -2892,7 +2896,7 @@ pub mod tests {
         let mut channels = Channels::new_for_test();
 
         let (mut tx_test_environment_to_monitors, rx_monitors_from_test_environment) =
-            channel::<InternalCommand>(1);
+            channel::<InternalCommand>(1, true);
 
         // thread for mock monitors
         let join_handle_mock_monitors = thread::Builder::new()

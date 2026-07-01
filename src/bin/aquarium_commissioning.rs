@@ -336,6 +336,7 @@ fn main() -> Result<(), Box<dyn Error>> {
         config.relay_manager.use_simulator,
         config.sensor_manager.use_simulator,
         config.tank_level_switch.use_simulator,
+        true,
     );
 
     // 3. Mutexes for Sensors

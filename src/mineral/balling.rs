@@ -64,6 +64,7 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 
 #[cfg(feature = "debug_balling")]
 use log::debug;
+use std::error;
 use log::{error, info};
 use std::fmt;
 
@@ -515,6 +516,7 @@ impl Balling {
     /// # Returns
     /// A `bool` which is `true` if a `Quit` command was received from the signal handler
     /// during the dosing process, indicating that the application should shut down; otherwise `false`.
+    #[allow(clippy::too_many_arguments)]
     async fn execute_dosing(
         &mut self,
         pump_id: u32,
@@ -523,13 +525,10 @@ impl Balling {
         balling_channels: &mut BallingChannels,
         sql_interface_balling: &mut SqlInterfaceBalling,
         mutex_device_scheduler_balling: &Arc<Mutex<i32>>,
+        is_multi_thread: bool
     ) -> bool {
         let mut quit_command_received: bool = false;
         let actual_dosing_duration_millis: u32;
-
-        let is_multi_thread = tokio::runtime::Handle::try_current()
-            .map(|h| matches!(h.runtime_flavor(), tokio::runtime::RuntimeFlavor::MultiThread))
-            .unwrap_or(false);
 
         let get_setval_res = if is_multi_thread {
             tokio::task::block_in_place(|| {
@@ -598,9 +597,6 @@ impl Balling {
                         &balling_setval,
                         actual_dosing_duration_millis,
                     );
-                    let is_multi_thread = tokio::runtime::Handle::try_current()
-                        .map(|h| matches!(h.runtime_flavor(), tokio::runtime::RuntimeFlavor::MultiThread))
-                        .unwrap_or(false);
 
                     let insert_res = if is_multi_thread {
                         tokio::task::block_in_place(|| {
@@ -679,6 +675,7 @@ impl Balling {
         balling_channels: &mut BallingChannels,
         mineral_injection: &mut (impl MineralInjectionTrait + Send),
         mut sql_interface_balling: SqlInterfaceBalling,
+        is_multi_thread: bool
     ) {
         #[cfg(all(target_os = "linux", not(test)))] // only required in real-life execution
         #[cfg(not(tarpaulin_include))]
@@ -754,6 +751,7 @@ impl Balling {
                                 balling_channels,
                                 &mut sql_interface_balling,
                                 &mutex_device_scheduler_balling,
+                                is_multi_thread
                             ).await;
                             if quit_command_received {
                                 break; // Quit command received during dosing
@@ -796,6 +794,7 @@ impl Balling {
                             balling_channels,
                             &mut sql_interface_balling,
                             &mutex_device_scheduler_balling,
+                            is_multi_thread
                         ).await;
                     }
                     None => {
@@ -832,7 +831,8 @@ impl Balling {
                 sleep_duration_hundred_millis,
                 loop_counter,
                 self,
-                &mut sql_interface_balling
+                &mut sql_interface_balling,
+                is_multi_thread
             );
         }
 
@@ -858,7 +858,7 @@ impl fmt::Display for ThreadJoinError {
     }
 }
 
-impl std::error::Error for ThreadJoinError {}
+impl error::Error for ThreadJoinError {}
 
 #[cfg(test)]
 pub mod tests {
@@ -898,11 +898,16 @@ pub mod tests {
             .build()
             .unwrap()
             .block_on(async {
+                let is_multi_thread_test = tokio::runtime::Handle::try_current()
+                    .map(|h| matches!(h.runtime_flavor(), tokio::runtime::RuntimeFlavor::MultiThread))
+                    .unwrap_or(false);
+
                 balling.execute(
                     mutex_device_scheduler_balling,
                     balling_channels,
                     mineral_injection,
                     sql_interface_balling,
+                    is_multi_thread_test
                 ).await;
             });
     }

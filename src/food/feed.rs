@@ -203,6 +203,7 @@ impl Feed {
         &mut self,
         feed_profile: FeedProfile,
         sql_interface_feed: &mut Box<dyn DatabaseInterfaceFeedTrait + Sync + Send>,
+        is_multi_thread: bool,
     ) -> Result<(), ()> {
         let mut action = || {
             // Get the current timestamp to log the event
@@ -235,10 +236,6 @@ impl Feed {
                 }
             }
         };
-
-        let is_multi_thread = tokio::runtime::Handle::try_current()
-            .map(|h| matches!(h.runtime_flavor(), tokio::runtime::RuntimeFlavor::MultiThread))
-            .unwrap_or(false);
 
         if is_multi_thread {
             tokio::task::block_in_place(action)
@@ -372,6 +369,7 @@ impl Feed {
         feed_channels: &mut FeedChannels,
         food_injection: &mut (impl FoodInjectionTrait + Send),
         mut sql_interface_feed: Box<dyn DatabaseInterfaceFeedTrait + Sync + Send>,
+        is_multi_thread: bool
     ) {
         #[cfg(all(target_os = "linux", not(test)))] // only required in real-life execution
         #[cfg(not(tarpaulin_include))]
@@ -396,10 +394,6 @@ impl Feed {
                     target: module_path!(),
                     "Starting feed control cycle"
                 );
-
-                let is_multi_thread = tokio::runtime::Handle::try_current()
-                    .map(|h| matches!(h.runtime_flavor(), tokio::runtime::RuntimeFlavor::MultiThread))
-                    .unwrap_or(false);
 
                 let get_past_res = if is_multi_thread {
                     tokio::task::block_in_place(|| {
@@ -437,10 +431,6 @@ impl Feed {
                                 if !self.execution_blocked {
                                     // execute database query before locking mutex
                                     // First, load the feed profile from the database.
-                                    let is_multi_thread = tokio::runtime::Handle::try_current()
-                                        .map(|h| matches!(h.runtime_flavor(), tokio::runtime::RuntimeFlavor::MultiThread))
-                                        .unwrap_or(false);
-
                                     let get_profile_res = if is_multi_thread {
                                         tokio::task::block_in_place(|| {
                                             sql_interface_feed.get_single_feed_profile_from_database(
@@ -488,6 +478,7 @@ impl Feed {
                                         let logging_result = self.log_feed_operation(
                                             feed_profile,
                                             &mut sql_interface_feed,
+                                            is_multi_thread
                                         );
                                         if logging_result.is_err() {
                                             // block further execution if logging of feed event does not work
@@ -496,10 +487,6 @@ impl Feed {
                                     }
 
                                     //*** update schedule ***
-                                    let is_multi_thread = tokio::runtime::Handle::try_current()
-                                        .map(|h| matches!(h.runtime_flavor(), tokio::runtime::RuntimeFlavor::MultiThread))
-                                        .unwrap_or(false);
-
                                     let update_res = if is_multi_thread {
                                         tokio::task::block_in_place(|| {
                                             sql_interface_feed.update_feed_schedule_entries_in_database(
@@ -618,10 +605,6 @@ impl Feed {
                 );
 
                 // First, load the feed profile from the database.
-                let is_multi_thread = tokio::runtime::Handle::try_current()
-                    .map(|h| matches!(h.runtime_flavor(), tokio::runtime::RuntimeFlavor::MultiThread))
-                    .unwrap_or(false);
-
                 let get_profile_res = if is_multi_thread {
                     tokio::task::block_in_place(|| {
                         sql_interface_feed.get_single_feed_profile_from_database(self.profile_id_requested)
@@ -653,7 +636,11 @@ impl Feed {
                                     self.execute_feed(feed_profile_clone.clone(), food_injection, feed_channels);
 
                                 let logging_result =
-                                    self.log_feed_operation(feed_profile_clone, &mut sql_interface_feed);
+                                    self.log_feed_operation(
+                                        feed_profile_clone,
+                                        &mut sql_interface_feed,
+                                        is_multi_thread
+                                    );
 
                                 *mutex_data = mutex_data.saturating_add(1);
 
@@ -696,7 +683,8 @@ impl Feed {
                 sleep_duration_hundred_millis,
                 loop_counter,
                 self,
-                &mut *sql_interface_feed
+                &mut *sql_interface_feed,
+                is_multi_thread
             );
         }
 
@@ -774,11 +762,16 @@ pub mod tests {
             .build()
             .unwrap()
             .block_on(async {
+                let is_multi_thread_test = tokio::runtime::Handle::try_current()
+                    .map(|h| matches!(h.runtime_flavor(), tokio::runtime::RuntimeFlavor::MultiThread))
+                    .unwrap_or(false);
+
                 feed.execute(
                     mutex_device_scheduler_feed,
                     feed_channels,
                     food_injection,
                     sql_interface_feed,
+                    is_multi_thread_test
                 ).await;
             });
     }

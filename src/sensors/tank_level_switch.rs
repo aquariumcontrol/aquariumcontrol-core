@@ -730,9 +730,9 @@ pub mod tests {
     #[test]
     // test if position stabilized signal is updating when the invalid signal is true
     pub fn test_refill_calc_tank_level_switch_position_stabilized_false_when_invalid() {
-        let mut channels = Channels::new(false, false, true);
+        let mut channels = Channels::new(false, false, true, true);
 
-        let (_tx_test_environment_to_tcp, mut rx_tcp_from_test_environment) = channel(1);
+        let (_tx_test_environment_to_tcp, mut rx_tcp_from_test_environment) = channel(1, true);
 
         let config: ConfigData =
             read_config_file("/config/aquarium_control_test_generic.toml".to_string()).unwrap();
@@ -874,9 +874,9 @@ pub mod tests {
     #[test]
     // test if the position signal is updating without delay when the invalid signal is false
     pub fn test_refill_calc_tank_level_switch_position_stabilized_false_true() {
-        let mut channels = Channels::new(false, false, true);
+        let mut channels = Channels::new(false, false, true, true);
 
-        let (mut tx_test_environment_to_tcp, mut rx_tcp_from_test_environment) = channel(1);
+        let (mut tx_test_environment_to_tcp, mut rx_tcp_from_test_environment) = channel(1, true);
 
         let mut config: ConfigData =
             read_config_file("/config/aquarium_control_test_generic.toml".to_string()).unwrap();
@@ -988,9 +988,9 @@ pub mod tests {
     #[test]
     // test if the position signal is updating with delay when the invalid signal is false
     pub fn test_refill_calc_tank_level_switch_position_stabilized_true_false() {
-        let mut channels = Channels::new(false, false, true);
+        let mut channels = Channels::new(false, false, true, true);
 
-        let (mut tx_test_environment_to_tcp, mut rx_tcp_from_test_environment) = channel(1);
+        let (mut tx_test_environment_to_tcp, mut rx_tcp_from_test_environment) = channel(1, true);
 
         let config: ConfigData =
             read_config_file("/config/aquarium_control_test_generic.toml".to_string()).unwrap();
@@ -1098,8 +1098,8 @@ pub mod tests {
     #[test]
     // test if position stabilized signal is not updating when the raw input signal is toggling
     pub fn test_refill_calc_tank_level_switch_position_stabilized_is_true_with_toggling_input() {
-        let mut channels = Channels::new(false, false, true);
-        let (mut tx_test_environment_to_tcp, mut rx_tcp_from_test_environment) = channel(1);
+        let mut channels = Channels::new(false, false, true, true);
+        let (mut tx_test_environment_to_tcp, mut rx_tcp_from_test_environment) = channel(1, true);
 
         let config: ConfigData =
             read_config_file("/config/aquarium_control_test_generic.toml".to_string()).unwrap();
@@ -1348,9 +1348,9 @@ pub mod tests {
     // test if mutex access duration is measured and monitored
     pub fn test_refill_calc_tank_level_switch_position_stabilized_false_true_with_mutex_blocked_too_long(
     ) {
-        let mut channels = Channels::new(false, false, true);
+        let mut channels = Channels::new(false, false, true, true);
 
-        let (mut tx_test_environment_to_tcp, mut rx_tcp_from_test_environment) = channel(1);
+        let (mut tx_test_environment_to_tcp, mut rx_tcp_from_test_environment) = channel(1, true);
 
         let mut config: ConfigData =
             read_config_file("/config/aquarium_control_test_generic.toml".to_string()).unwrap();
