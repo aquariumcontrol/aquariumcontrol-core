@@ -332,11 +332,11 @@ impl Messaging {
         // This thread has channel connections to underlying threads.
         // Those threads have to stop receiving commands from this thread.
         // The shutdown sequence is handled by the signal_handler module.
-        self.wait_for_termination(
+        self.wait_for_termination_async(
             &mut messaging_channels.rx_messaging_from_signal_handler,
             sleep_duration,
             module_path!(),
-        );
+        ).await;
     }
 }
 
