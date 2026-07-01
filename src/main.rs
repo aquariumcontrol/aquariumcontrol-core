@@ -176,8 +176,9 @@ fn check_is_command(command: &str) -> Result<bool, VersionInformationError> {
 /// 7.  Initializes all SQL database interfaces and validates database readiness.
 /// 8.  Sets up all inter-thread communication channels (`mpsc`).
 /// 9.  Initializes all application modules (sensors, controls, managers) with their respective configurations and channels/mutexes.
-/// 10. Spawns each module in its own dedicated thread within a `std::thread::scope` for structured concurrency.
-/// 11. Manages the initial data acquisition phase, waiting for sensors to provide first readings before control loops become fully active.
+/// 10. Initializes a multi-threaded Tokio runtime directly on the Main thread (capping worker threads to 1 and blocking threads to 3 to optimize resources). Most application modules are spawned as cooperative asynchronous tasks within this runtime.
+/// 11. Spawns dedicated OS threads via standard builder spawns for timing-critical drivers (e.g., TcpCommunication, DHT GPIO bit-banging) that require blocking or spin-sleep behavior.
+/// 12. Manages the initial data acquisition phase, waiting for sensors to provide first readings before control loops become fully active.
 ///
 /// This function is responsible for the overall lifecycle of the application, including graceful startup and panic handling.
 ///
@@ -197,29 +198,54 @@ fn check_is_command(command: &str) -> Result<bool, VersionInformationError> {
 /// - `StartupError::GpioHandlerSetupFailure`: If the GPIO interface cannot be initialized on the target hardware.
 /// - And various other setup failures for specific modules.
 ///
-/// Global thread communication is as follows:
+/// Global module communication and execution architecture is as follows:
 /// ```mermaid
-/// graph LR
-///     tank_level_switch -.-> refill[Refill]
-///     refill --> relay_manager[Controllino]
+/// flowchart TD
+///     subgraph OS_Threads ["Dedicated OS Threads"]
+///         tcp_communication[TcpCommunication]
+///         dht[Dht]
+///     end
+/// 
+///     subgraph Tokio_Tasks ["Tokio Async Tasks (Main Thread Runtime)"]
+///         refill[Refill]
+///         relay_manager[Controllino / RelayManager]
+///         sensor_manager[SensorManager]
+///         data_logger[DataLogger]
+///         signal_handler[SignalHandler]
+///         balling[Balling]
+///         feed[Feed]
+///         heating[Heating]
+///         ventilation[Ventilation]
+///         atlas_scientific[AtlasScientific]
+///         tank_level_switch[TankLevelSwitch]
+///         monitors[Monitors]
+///         schedule_check[ScheduleCheck]
+///         messaging[Messaging]
+///         watchdog[Watchdog]
+///         i2c_interface[I2C interface]
+///         temperature_gradient[TemperatureGradient]
+///     end
+/// 
+///     tank_level_switch -.-> refill
+///     refill --> relay_manager
 ///     relay_manager --> refill
-///     sensor_manager[SensorManager] -.-> data_logger[DataLogger]
+///     sensor_manager -.-> data_logger
 ///     refill -.-> data_logger
-///     signal_handler[SignalHandler] --> refill
+///     signal_handler --> refill
 ///     refill --> signal_handler
 ///     signal_handler --> tank_level_switch
 ///     tank_level_switch --> signal_handler
-///     signal_handler --> tcp_communication[TcpCommunication]
+///     signal_handler --> tcp_communication
 ///     tcp_communication --> signal_handler
 ///     signal_handler --> relay_manager
 ///     relay_manager --> signal_handler
-///     balling[Balling] --> signal_handler
+///     balling --> signal_handler
 ///     signal_handler --> balling
-///     feed[Feed] --> signal_handler
+///     feed --> signal_handler
 ///     signal_handler --> feed
-///     heating[Heating] --> signal_handler
+///     heating --> signal_handler
 ///     signal_handler --> heating
-///     ventilation[Ventilation] --> signal_handler
+///     ventilation --> signal_handler
 ///     signal_handler --> ventilation
 ///     relay_manager --> tcp_communication
 ///     sensor_manager --> tcp_communication
@@ -246,13 +272,13 @@ fn check_is_command(command: &str) -> Result<bool, VersionInformationError> {
 ///     ventilation --> relay_manager
 ///     atlas_scientific -.-> ventilation
 ///     relay_manager --> ventilation
-///     monitors[Monitors] --> relay_manager
+///     monitors --> relay_manager
 ///     relay_manager --> monitors
 ///     monitors --> refill
 ///     refill --> monitors
 ///     monitors --> signal_handler
 ///     signal_handler --> monitors
-///     ventilation --> schedule_check[ScheduleCheck]
+///     ventilation --> schedule_check
 ///     schedule_check --> ventilation
 ///     heating --> schedule_check
 ///     schedule_check --> heating
@@ -262,13 +288,13 @@ fn check_is_command(command: &str) -> Result<bool, VersionInformationError> {
 ///     schedule_check --> balling
 ///     signal_handler --> schedule_check
 ///     schedule_check --> signal_handler
-///     signal_handler --> messaging[Messaging]
+///     signal_handler --> messaging
 ///     signal_handler --> sensor_manager
 ///     signal_handler --> watchdog
 ///     sensor_manager --> signal_handler
 ///     signal_handler --> atlas_scientific
 ///     atlas_scientific --> signal_handler
-///     atlas_scientific --> i2c_interface[I2C interface]
+///     atlas_scientific --> i2c_interface
 ///     i2c_interface --> atlas_scientific
 ///     dht -.-> sensor_manager
 ///     messaging --> refill
@@ -278,7 +304,7 @@ fn check_is_command(command: &str) -> Result<bool, VersionInformationError> {
 ///     messaging --> feed
 ///     messaging --> monitors
 ///     messaging --> watchdog
-///     temperature_gradient[TemperatureGradient] --> signal_handler
+///     temperature_gradient --> signal_handler
 ///     signal_handler --> temperature_gradient
 /// ```
 fn run() -> Result<(), StartupError> {
@@ -913,8 +939,6 @@ fn run() -> Result<(), StartupError> {
         spin_sleeper.sleep(duration_one_second);
         println!("starting control...");
 
-        let mutex_device_scheduler_for_tokio = Arc::clone(&mutex_device_scheduler);
-
         let rt = tokio::runtime::Builder::new_multi_thread()
             .worker_threads(1)
             .max_blocking_threads(3)
@@ -1068,7 +1092,7 @@ fn run() -> Result<(), StartupError> {
                 }
 
                 if execution_config.heating {
-                    let mutex_device_scheduler_heating = Arc::clone(&mutex_device_scheduler_for_tokio);
+                    let mutex_device_scheduler_heating = Arc::clone(&mutex_device_scheduler);
                     let mut heating_stats_transfer = HeatingStatsDataTransfer;
                     let heating_mutexes = HeatingMutexes {
                         mutex_sensor_manager_signals: mutex_sensor_manager_signals_clone_for_heating,
@@ -1094,7 +1118,7 @@ fn run() -> Result<(), StartupError> {
                 }
 
                 if execution_config.ventilation {
-                    let mutex_device_scheduler_ventilation = Arc::clone(&mutex_device_scheduler_for_tokio);
+                    let mutex_device_scheduler_ventilation = Arc::clone(&mutex_device_scheduler);
                     let ventilation_mutexes = VentilationMutexes {
                         mutex_sensor_manager_signals:
                             mutex_sensor_manager_signals_clone_for_ventilation,
@@ -1117,7 +1141,7 @@ fn run() -> Result<(), StartupError> {
                 }
 
                 if execution_config.monitors {
-                    let mutex_device_scheduler_monitors = Arc::clone(&mutex_device_scheduler_for_tokio);
+                    let mutex_device_scheduler_monitors = Arc::clone(&mutex_device_scheduler);
                     let handle = tokio::spawn(async move {
                         monitors.execute(mutex_device_scheduler_monitors, &mut chan_monitors).await;
                         #[cfg(feature = "debug_channels")]
@@ -1129,7 +1153,7 @@ fn run() -> Result<(), StartupError> {
                 }
 
                 if execution_config.refill {
-                    let mutex_device_scheduler_refill = Arc::clone(&mutex_device_scheduler_for_tokio);
+                    let mutex_device_scheduler_refill = Arc::clone(&mutex_device_scheduler);
                     let handle = tokio::spawn(async move {
                         refill.execute(
                             mutex_device_scheduler_refill,
@@ -1148,7 +1172,7 @@ fn run() -> Result<(), StartupError> {
                 }
 
                 if execution_config.feed {
-                    let mutex_device_scheduler_feed = Arc::clone(&mutex_device_scheduler_for_tokio);
+                    let mutex_device_scheduler_feed = Arc::clone(&mutex_device_scheduler);
                     let handle = tokio::spawn(async move {
                         feed.execute(
                             mutex_device_scheduler_feed,
@@ -1165,7 +1189,7 @@ fn run() -> Result<(), StartupError> {
                 }
 
                 if execution_config.balling {
-                    let mutex_device_scheduler_balling = Arc::clone(&mutex_device_scheduler_for_tokio);
+                    let mutex_device_scheduler_balling = Arc::clone(&mutex_device_scheduler);
                     let handle = tokio::spawn(async move {
                         balling.execute(
                             mutex_device_scheduler_balling,
