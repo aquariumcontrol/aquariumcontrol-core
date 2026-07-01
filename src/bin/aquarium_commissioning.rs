@@ -68,6 +68,7 @@ use ratatui::{
 use std::collections::HashMap;
 use std::error::Error;
 use std::sync::{Arc, Mutex};
+#[cfg(all(target_os = "linux", feature = "target_hw"))]
 use std::thread;
 use std::time::{Duration, Instant};
 use std::{env, io, panic};
@@ -370,25 +371,26 @@ fn main() -> Result<(), Box<dyn Error>> {
         mutex_sensor_manager_signals: mutex_sensor_manager_signals.clone(),
     };
 
-    // 4. Start SensorManager Thread
+    // Initialize shared Tokio runtime for async tasks
+    let rt = tokio::runtime::Builder::new_multi_thread()
+        .worker_threads(1)
+        .enable_all()
+        .build()
+        .map_err(|e| format!("Failed to build Tokio runtime: {:?}", e))?;
+
+    // 4. Start SensorManager Task
     if execution_config.sensor_manager {
         let mut sensor_manager = SensorManager::new(config.sensor_manager)?;
-        // We clone mutexes for the thread, but we need to pass a fresh copy of mutexes struct
-        let sensor_mutexes_for_thread = sensor_mutexes.clone();
+        // We clone mutexes for the task, but we need to pass a fresh copy of mutexes struct
+        let sensor_mutexes_for_task = sensor_mutexes.clone();
 
-        // We need to move the channels for sensor manager into the thread.
+        // We need to move the channels for sensor manager into the task.
         // Channels struct has `sensor_manager: SensorManagerChannels`.
         // We can extract it.
         let mut sensor_manager_channels = channels.sensor_manager; // Move out
 
-        thread::spawn(move || {
-            tokio::runtime::Builder::new_current_thread()
-                .enable_all()
-                .build()
-                .unwrap()
-                .block_on(async {
-                    sensor_manager.execute(&mut sensor_manager_channels, sensor_mutexes_for_thread).await;
-                });
+        rt.spawn(async move {
+            sensor_manager.execute(&mut sensor_manager_channels, sensor_mutexes_for_task).await;
         });
     }
 
@@ -463,14 +465,8 @@ fn main() -> Result<(), Box<dyn Error>> {
             let mut tls_channels = channels.tank_level_switch;
             let mutex_tls_clone = mutex_tank_level_switch_signals.clone();
 
-            thread::spawn(move || {
-                tokio::runtime::Builder::new_current_thread()
-                    .enable_all()
-                    .build()
-                    .unwrap()
-                    .block_on(async {
-                        let _ = tank_level_switch.execute(&mut tls_channels, mutex_tls_clone).await;
-                    });
+            rt.spawn(async move {
+                let _ = tank_level_switch.execute(&mut tls_channels, mutex_tls_clone).await;
             });
         }
 
@@ -488,14 +484,8 @@ fn main() -> Result<(), Box<dyn Error>> {
                 let mut i2c = I2cInterface::new(config.i2c_interface)
                     .map_err(|e| format!("I2C error: {:?}", e))?;
                 let mut i2c_channels = channels.i2c_interface;
-                thread::spawn(move || {
-                    tokio::runtime::Builder::new_current_thread()
-                        .enable_all()
-                        .build()
-                        .unwrap()
-                        .block_on(async {
-                            i2c.execute(&mut i2c_channels).await;
-                        });
+                rt.spawn(async move {
+                    i2c.execute(&mut i2c_channels).await;
                 });
             }
 
@@ -513,14 +503,8 @@ fn main() -> Result<(), Box<dyn Error>> {
         let mut ds18b20_channels = channels.ds18b20;
         let m_water = mutex_ds18b20_water_temperature.clone();
         let m_amb = mutex_ds18b20_ambient_temperature.clone();
-        thread::spawn(move || {
-            tokio::runtime::Builder::new_current_thread()
-                .enable_all()
-                .build()
-                .unwrap()
-                .block_on(async {
-                    ds18b20.execute(&mut ds18b20_channels, m_water, m_amb).await;
-                });
+        rt.spawn(async move {
+            ds18b20.execute(&mut ds18b20_channels, m_water, m_amb).await;
         });
     }
 
