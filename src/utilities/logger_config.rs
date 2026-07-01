@@ -31,6 +31,7 @@ pub struct LoggerConfig {
 }
 
 impl Default for LoggerConfig {
+    /// Creates a default instance of this type.
     fn default() -> Self {
         Self {
             logfile: "/var/log/aquarium.log".to_string(),

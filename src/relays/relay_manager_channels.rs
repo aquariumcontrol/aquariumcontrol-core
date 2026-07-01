@@ -82,6 +82,9 @@ pub struct RelayManagerChannels {
 
 impl RelayManagerChannels {
     /// Sends a response to the refill module.
+    ///
+    /// # Arguments
+    /// * `ack` - A parameter representing `ack`.
     #[allow(unused)]
     pub fn send_to_refill(&mut self, ack: bool) -> Result<(), AquaChannelError> {
         self.tx_relay_manager_to_refill.send(ack)
@@ -94,6 +97,9 @@ impl RelayManagerChannels {
     }
 
     /// Sends a response to the heating module.
+    ///
+    /// # Arguments
+    /// * `ack` - A parameter representing `ack`.
     #[allow(unused)]
     pub fn send_to_heating(&mut self, ack: bool) -> Result<(), AquaChannelError> {
         self.tx_relay_manager_to_heating.send(ack)
@@ -106,6 +112,9 @@ impl RelayManagerChannels {
     }
 
     /// Sends a response to the ventilation module.
+    ///
+    /// # Arguments
+    /// * `ack` - A parameter representing `ack`.
     #[allow(unused)]
     pub fn send_to_ventilation(&mut self, ack: bool) -> Result<(), AquaChannelError> {
         self.tx_relay_manager_to_ventilation.send(ack)
@@ -118,6 +127,9 @@ impl RelayManagerChannels {
     }
 
     /// Sends a response to the balling module.
+    ///
+    /// # Arguments
+    /// * `ack` - A parameter representing `ack`.
     #[allow(unused)]
     pub fn send_to_balling(&mut self, ack: bool) -> Result<(), AquaChannelError> {
         self.tx_relay_manager_to_balling.send(ack)
@@ -130,6 +142,9 @@ impl RelayManagerChannels {
     }
 
     /// Sends a response to the feed module.
+    ///
+    /// # Arguments
+    /// * `ack` - A parameter representing `ack`.
     #[allow(unused)]
     pub fn send_to_feed(&mut self, ack: bool) -> Result<(), AquaChannelError> {
         self.tx_relay_manager_to_feed.send(ack)
@@ -142,6 +157,9 @@ impl RelayManagerChannels {
     }
 
     /// Sends a response to the signal handler.
+    ///
+    /// # Arguments
+    /// * `ack` - A parameter representing `ack`.
     #[allow(unused)]
     pub fn send_to_signal_handler(&mut self, ack: bool) -> Result<(), AquaChannelError> {
         self.tx_relay_manager_to_signal_handler.send(ack)
@@ -156,6 +174,10 @@ impl RelayManagerChannels {
 
 #[cfg(feature = "debug_channels")]
 impl fmt::Display for RelayManagerChannels {
+    /// Formats the value using the given formatter.
+    ///
+    /// # Arguments
+    /// * `f` - The formatter to write the formatted string to.
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         writeln!(f, "=== RelayManagerChannels ===")?;
         writeln!(
@@ -223,6 +245,10 @@ impl fmt::Display for RelayManagerChannels {
 
 #[cfg(not(feature = "debug_channels"))]
 impl fmt::Display for RelayManagerChannels {
+    /// Formats the value using the given formatter.
+    ///
+    /// # Arguments
+    /// * `f` - The formatter to write the formatted string to.
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(
             f,

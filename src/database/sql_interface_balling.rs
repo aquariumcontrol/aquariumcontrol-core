@@ -291,6 +291,12 @@ impl SqlInterfaceBalling {
     // query fails. This can happen due to a lost connection, constraint violation
     // (e.g., foreign key), or incorrect data types. The original `mysql::Error`
     // is included as the source.
+    /// Performs the `insert_balling_event_for_test` operation.
+    ///
+    /// # Arguments
+    /// * `timestamp` - A parameter representing `timestamp`.
+    /// * `pump_id` - A parameter representing `pump_id`.
+    /// * `dosing_volume` - A parameter representing `dosing_volume`.
     #[cfg(test)]
     pub fn insert_balling_event_for_test(
         &mut self,
@@ -435,6 +441,13 @@ impl SqlInterfaceBalling {
     // Returns `SqlInterfaceError::InsertBallingPumpConfigurationFailure` if the
     // `INSERT` query fails. This error should be updated to include the source
     // `mysql::Error` for better diagnostics in test failures.
+    /// Performs the `insert_pump_configuration` operation.
+    ///
+    /// # Arguments
+    /// * `pump_id` - A parameter representing `pump_id`.
+    /// * `dosing_speed` - A parameter representing `dosing_speed`.
+    /// * `dosing_volume` - A parameter representing `dosing_volume`.
+    /// * `label` - A parameter representing `label`.
     pub fn insert_pump_configuration(
         &mut self,
         pump_id: i64,

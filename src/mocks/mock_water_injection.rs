@@ -29,6 +29,11 @@ pub mod tests {
     }
 
     impl MockWaterInjection {
+        /// Creates a new instance.
+        ///
+        /// # Arguments
+        /// * `tx_water_injection_to_test_environment_opt` - A parameter representing `tx_water_injection_to_test_environment_opt`.
+        /// * `refill_errors` - A parameter representing `refill_errors`.
         pub fn new(
             tx_water_injection_to_test_environment_opt: Option<AquaSender<TestCommand>>,
             refill_errors: RefillErrorStates,
@@ -42,6 +47,14 @@ pub mod tests {
     }
 
     impl WaterInjectionTrait for MockWaterInjection {
+        /// Performs the `inject_water` operation.
+        ///
+        /// # Arguments
+        /// * `refill_channels` - A mutable reference to the `RefillChannels` communication interface.
+        /// * `refill_errors` - A parameter representing `refill_errors`.
+        /// * `sql_interface_refill` - Database interface connection for refill operations.
+        /// * `mutex_tank_level_switch` - Shared mutex for the tank level switch signals.
+        /// * `mutex_device_scheduler_refill` - Mutex coordinating access to the device scheduler for refill.
         fn inject_water(
             &mut self,
             _refill_channels: &mut RefillChannels,

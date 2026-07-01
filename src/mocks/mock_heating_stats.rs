@@ -33,6 +33,10 @@ pub mod tests {
         //
         // # Returns
         // A new `HeatingStatsMockDataTransfer` struct.
+        /// Creates a new instance.
+        ///
+        /// # Arguments
+        /// * `conn` - An active pooled database connection.
         pub fn new(conn: &mut PooledConn) -> HeatingStatsMockDataTransfer {
             Self {
                 heating_stats_entry_previous: HeatingStatsEntry::new(conn),
@@ -54,6 +58,11 @@ pub mod tests {
         //   This is passed by value, meaning ownership is transferred to this function.
         // * `_sql_interface_heating` - A mutable reference to the `SqlInterfaceHeating` instance,
         //   not used for this mock function
+        /// Performs the `transfer_heating_stats` operation.
+        ///
+        /// # Arguments
+        /// * `heating_stats_entry` - A parameter representing `heating_stats_entry`.
+        /// * `sql_interface_heating` - Database interface connection for heating stats.
         fn transfer_heating_stats(
             &mut self,
             heating_stats_entry: HeatingStatsEntry,
@@ -87,6 +96,10 @@ pub mod tests {
         //
         // # Returns
         // A new `SqlInterfaceHeatingMockMidnightCalculator` struct.
+        /// Creates a new instance.
+        ///
+        /// # Arguments
+        /// * `seconds_to_midnight` - A parameter representing `seconds_to_midnight`.
         pub fn new(seconds_to_midnight: i64) -> SqlInterfaceHeatingMockMidnightCalculator {
             Self {
                 seconds_to_midnight,
@@ -105,6 +118,7 @@ pub mod tests {
         // # Returns
         // An `Ok(i64)` containing the predefined number of seconds until midnight.
         // This function will always succeed (`Ok`) as it does not interact with a real database.
+        /// Retrieves the duration until midnight.
         fn get_duration_until_midnight(&mut self) -> Result<i64, SqlInterfaceError> {
             Ok(self.seconds_to_midnight) // seconds to midnight after which heating stats are inserted into the database
                                          // for testing, we do not want to wait until midnight

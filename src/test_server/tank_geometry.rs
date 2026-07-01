@@ -85,6 +85,10 @@ impl TankGeometry {
         }
     }
 
+    /// Sets the water volume.
+    ///
+    /// # Arguments
+    /// * `water_volume` - A parameter representing `water_volume`.
     #[cfg(test)]
     pub fn set_water_volume(&mut self, water_volume: f32) {
         if water_volume < self.config.water_volume_min

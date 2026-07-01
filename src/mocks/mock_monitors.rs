@@ -30,6 +30,10 @@ pub mod tests {
 
     // Implement the Display trait for MockMonitors.
     impl fmt::Display for MockMonitors {
+        /// Formats the value using the given formatter.
+        ///
+        /// # Arguments
+        /// * `f` - The formatter to write the formatted string to.
         fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
             if self.refill_monitor_views.is_empty() {
                 writeln!(f, "MockMonitors contains no refill monitor views.")?;
@@ -65,6 +69,7 @@ pub mod tests {
     }
 
     impl MockMonitors {
+        /// Creates a new instance.
         pub fn new() -> MockMonitors {
             MockMonitors {
                 refill_monitor_views: vec![],
@@ -72,6 +77,10 @@ pub mod tests {
             }
         }
 
+        /// Performs the `append_refill_monitor_view` operation.
+        ///
+        /// # Arguments
+        /// * `refill_monitor_view` - A parameter representing `refill_monitor_view`.
         pub fn append_refill_monitor_view(&mut self, refill_monitor_view: RefillMonitorView) {
             // Check if the vector has reached or exceeded its maximum allowed length.
             if self.refill_monitor_views.len() >= MOCK_MONITORS_MAX_VEC_LEN {
@@ -84,6 +93,10 @@ pub mod tests {
                 .push((Instant::now(), refill_monitor_view));
         }
 
+        /// Performs the `append_atlas_scientific_monitor_view` operation.
+        ///
+        /// # Arguments
+        /// * `atlas_scientific_monitor_view` - A parameter representing `atlas_scientific_monitor_view`.
         pub fn append_atlas_scientific_monitor_view(
             &mut self,
             atlas_scientific_monitor_view: AtlasScientificMonitorView,
@@ -99,6 +112,12 @@ pub mod tests {
                 .push((Instant::now(), atlas_scientific_monitor_view));
         }
 
+        /// Executes the main task loop.
+        ///
+        /// # Arguments
+        /// * `rx_from_refill_opt` - A parameter representing `rx_from_refill_opt`.
+        /// * `rx_from_atlas_scientific_opt` - A parameter representing `rx_from_atlas_scientific_opt`.
+        /// * `rx_from_signal_handler` - Receiver channel for signals from the signal handler.
         pub fn execute(
             &mut self,
             mut rx_from_refill_opt: Option<AquaReceiver<RefillMonitorView>>,

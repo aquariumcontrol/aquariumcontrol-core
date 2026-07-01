@@ -271,6 +271,10 @@ impl SqlInterfaceVentilationSetVals {
     // Returns `SqlInterfaceError::InsertVentilationSetValuesFailure` if the `INSERT`
     // query fails. This error should be updated to include the source `mysql::Error`
     // for better diagnostics in test failures.
+    /// Performs the `insert_ventilation_set_values` operation.
+    ///
+    /// # Arguments
+    /// * `ventilation_set_vals` - A parameter representing `ventilation_set_vals`.
     pub fn insert_ventilation_set_values(
         &mut self,
         ventilation_set_vals: &VentilationSetVals,

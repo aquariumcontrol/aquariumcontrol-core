@@ -17,6 +17,13 @@ pub mod tests {
     use spin_sleep::SpinSleeper;
     use std::time::Duration;
 
+    /// Performs the `mock_tcp_for_tank_level_switch` operation.
+    ///
+    /// # Arguments
+    /// * `tcp_communication_channels` - A parameter representing `tcp_communication_channels`.
+    /// * `rx_tcp_from_test_environment_opt` - A parameter representing `rx_tcp_from_test_environment_opt`.
+    /// * `initial_mock_value_position` - A parameter representing `initial_mock_value_position`.
+    /// * `initial_mock_value_invalid` - A parameter representing `initial_mock_value_invalid`.
     pub fn mock_tcp_for_tank_level_switch(
         tcp_communication_channels: TcpCommunicationChannels,
         mut rx_tcp_from_test_environment_opt: Option<&mut AquaReceiver<TestCommand>>,

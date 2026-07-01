@@ -194,6 +194,7 @@ impl Monitors {
     /// * `_mutex_device_scheduler_monitors` - (Ignored) A clone of a mutex for device scheduling.
     ///   This argument is part of a common signature but is not used by this module's logic.
     /// * `monitors_channels` - A mutable reference to the struct containing the channels.
+    /// * `mutex_device_scheduler_monitors` - A parameter representing `mutex_device_scheduler_monitors`.
     pub async fn execute(
         &mut self,
         _mutex_device_scheduler_monitors: Arc<Mutex<i32>>,

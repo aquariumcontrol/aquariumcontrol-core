@@ -217,6 +217,7 @@ impl RelayManager {
     /// # Returns
     /// A new `RelayManager` struct, ready to handle relay actuation commands
     /// and communicate with other modules.    
+    /// * `execution_config` - An execution configuration instance.
     pub fn new(config: RelayManagerConfig, execution_config: ExecutionConfig) -> RelayManager {
         RelayManager {
             config,
@@ -258,6 +259,7 @@ impl RelayManager {
     /// - The name of the actuation that failed.
     /// - The total number of attempts made.
     /// - The specific error from the *last* attempt, providing the root cause of the final failure.
+    /// * `"heater" sleep_duration` - A parameter representing `"heater" sleep_duration`.
     async fn actuate_with_retries(
         &mut self,
         actuator: &mut impl RelayActuationTrait,
@@ -370,95 +372,105 @@ impl RelayManager {
                 (
                     self.lock_error_channel_receive_refill,
                     self.lock_error_channel_send_refill,
-                ) = self.process_actuation_request(
-                    (
-                        &mut relay_manager_channels.rx_relay_manager_from_refill,
-                        &mut relay_manager_channels.tx_relay_manager_to_refill,
-                    ),
-                    (
-                        self.lock_error_channel_receive_refill,
-                        self.lock_error_channel_send_refill,
-                    ),
-                    "refill",
-                    actuator,
-                    sleep_duration_between_retries,
-                ).await;
+                ) = self
+                    .process_actuation_request(
+                        (
+                            &mut relay_manager_channels.rx_relay_manager_from_refill,
+                            &mut relay_manager_channels.tx_relay_manager_to_refill,
+                        ),
+                        (
+                            self.lock_error_channel_receive_refill,
+                            self.lock_error_channel_send_refill,
+                        ),
+                        "refill",
+                        actuator,
+                        sleep_duration_between_retries,
+                    )
+                    .await;
             }
 
             if self.execution_config.heating {
                 (
                     self.lock_error_channel_receive_heating,
                     self.lock_error_channel_send_heating,
-                ) = self.process_actuation_request(
-                    (
-                        &mut relay_manager_channels.rx_relay_manager_from_heating,
-                        &mut relay_manager_channels.tx_relay_manager_to_heating,
-                    ),
-                    (
-                        self.lock_error_channel_receive_heating,
-                        self.lock_error_channel_send_heating,
-                    ),
-                    "heating",
-                    actuator,
-                    sleep_duration_between_retries,
-                ).await;
+                ) = self
+                    .process_actuation_request(
+                        (
+                            &mut relay_manager_channels.rx_relay_manager_from_heating,
+                            &mut relay_manager_channels.tx_relay_manager_to_heating,
+                        ),
+                        (
+                            self.lock_error_channel_receive_heating,
+                            self.lock_error_channel_send_heating,
+                        ),
+                        "heating",
+                        actuator,
+                        sleep_duration_between_retries,
+                    )
+                    .await;
             }
 
             if self.execution_config.ventilation {
                 (
                     self.lock_error_channel_receive_ventilation,
                     self.lock_error_channel_send_ventilation,
-                ) = self.process_actuation_request(
-                    (
-                        &mut relay_manager_channels.rx_relay_manager_from_ventilation,
-                        &mut relay_manager_channels.tx_relay_manager_to_ventilation,
-                    ),
-                    (
-                        self.lock_error_channel_receive_ventilation,
-                        self.lock_error_channel_send_ventilation,
-                    ),
-                    "ventilation",
-                    actuator,
-                    sleep_duration_between_retries,
-                ).await;
+                ) = self
+                    .process_actuation_request(
+                        (
+                            &mut relay_manager_channels.rx_relay_manager_from_ventilation,
+                            &mut relay_manager_channels.tx_relay_manager_to_ventilation,
+                        ),
+                        (
+                            self.lock_error_channel_receive_ventilation,
+                            self.lock_error_channel_send_ventilation,
+                        ),
+                        "ventilation",
+                        actuator,
+                        sleep_duration_between_retries,
+                    )
+                    .await;
             }
 
             if self.execution_config.balling {
                 (
                     self.lock_error_channel_receive_balling,
                     self.lock_error_channel_send_balling,
-                ) = self.process_actuation_request(
-                    (
-                        &mut relay_manager_channels.rx_relay_manager_from_balling,
-                        &mut relay_manager_channels.tx_relay_manager_to_balling,
-                    ),
-                    (
-                        self.lock_error_channel_receive_balling,
-                        self.lock_error_channel_send_balling,
-                    ),
-                    "Balling dosing",
-                    actuator,
-                    sleep_duration_between_retries,
-                ).await;
+                ) = self
+                    .process_actuation_request(
+                        (
+                            &mut relay_manager_channels.rx_relay_manager_from_balling,
+                            &mut relay_manager_channels.tx_relay_manager_to_balling,
+                        ),
+                        (
+                            self.lock_error_channel_receive_balling,
+                            self.lock_error_channel_send_balling,
+                        ),
+                        "Balling dosing",
+                        actuator,
+                        sleep_duration_between_retries,
+                    )
+                    .await;
             }
 
             if self.execution_config.feed {
                 (
                     self.lock_error_channel_receive_feed,
                     self.lock_error_channel_send_feed,
-                ) = self.process_actuation_request(
-                    (
-                        &mut relay_manager_channels.rx_relay_manager_from_feed,
-                        &mut relay_manager_channels.tx_relay_manager_to_feed,
-                    ),
-                    (
-                        self.lock_error_channel_receive_feed,
-                        self.lock_error_channel_send_feed,
-                    ),
-                    "feed",
-                    actuator,
-                    sleep_duration_between_retries,
-                ).await;
+                ) = self
+                    .process_actuation_request(
+                        (
+                            &mut relay_manager_channels.rx_relay_manager_from_feed,
+                            &mut relay_manager_channels.tx_relay_manager_to_feed,
+                        ),
+                        (
+                            self.lock_error_channel_receive_feed,
+                            self.lock_error_channel_send_feed,
+                        ),
+                        "feed",
+                        actuator,
+                        sleep_duration_between_retries,
+                    )
+                    .await;
             }
 
             // *** send heartbeat ***
@@ -521,6 +533,7 @@ impl RelayManager {
     /// # Returns
     /// A tuple `(bool, bool)` containing the updated state of the `lock_receive` and
     /// `lock_send` flags, respectively.
+    /// * `channels` - A parameter representing `channels`.
     async fn process_actuation_request(
         &mut self,
         channels: (&mut AquaReceiver<InternalCommand>, &mut AquaSender<bool>),
@@ -535,12 +548,15 @@ impl RelayManager {
             Ok(_command) => {
                 lock_receive = false;
                 if self.config.active {
-                    if let Err(_actuation_error) = self.actuate_with_retries(
-                        actuator,
-                        &_command,
-                        actuation_name,
-                        sleep_duration_between_retries,
-                    ).await {
+                    if let Err(_actuation_error) = self
+                        .actuate_with_retries(
+                            actuator,
+                            &_command,
+                            actuation_name,
+                            sleep_duration_between_retries,
+                        )
+                        .await
+                    {
                         #[cfg(not(test))] // only required in real-life execution
                         #[cfg(not(tarpaulin_include))]
                         log_error_chain(
@@ -599,6 +615,12 @@ pub mod tests {
     use std::thread::scope;
     use std::time::Duration;
 
+    /// Helper function to execute the relay manager task inside a test Tokio runtime.
+    ///
+    /// # Arguments
+    /// * `relay_manager` - A mutable reference to the `RelayManager` instance.
+    /// * `relay_manager_channels` - A mutable reference to the `RelayManagerChannels` instance.
+    /// * `actuator` - A mutable reference to the relay actuator instance.
     fn execute_blocking(
         relay_manager: &mut RelayManager,
         relay_manager_channels: &mut RelayManagerChannels,
@@ -609,7 +631,9 @@ pub mod tests {
             .build()
             .unwrap()
             .block_on(async {
-                relay_manager.execute(relay_manager_channels, actuator).await;
+                relay_manager
+                    .execute(relay_manager_channels, actuator)
+                    .await;
             });
     }
 
@@ -633,6 +657,10 @@ pub mod tests {
 
     impl RelayActuationTrait for ActuateVoid {
         // Mock function for testing
+        /// Performs the `actuate` operation.
+        ///
+        /// # Arguments
+        /// * `internal_command` - A parameter representing `internal_command`.
         fn actuate(&mut self, internal_command: &InternalCommand) -> Result<(), RelayError> {
             println!(
                 "Received {} - increasing execution counter (currently at {})",
@@ -654,15 +682,18 @@ pub mod tests {
             }
         }
 
+        /// Retrieves the heartbeat interval seconds.
         fn get_heartbeat_interval_seconds(&self) -> Option<u64> {
             Some(1)
         }
 
+        /// Performs the `heartbeat` operation.
         fn heartbeat(&mut self) -> Result<(), RelayError> {
             self.heartbeat_counter += 1;
             Ok(())
         }
 
+        /// Performs the `flush_buffer` operation.
         fn flush_buffer(&mut self) -> Result<(), RelayError> {
             self.flush_counter += 1;
             Ok(())
@@ -671,6 +702,7 @@ pub mod tests {
 
     impl ActuateVoid {
         // provides the number of executions to the test case for assertion
+        /// Retrieves the execution count.
         pub fn get_execution_count(&self) -> u64 {
             self.execution_counter
         }
@@ -926,7 +958,11 @@ pub mod tests {
                     permanent_error_result: None,
                 };
 
-                execute_blocking(&mut relay_manager, &mut channels.relay_manager, &mut mock_actuator);
+                execute_blocking(
+                    &mut relay_manager,
+                    &mut channels.relay_manager,
+                    &mut mock_actuator,
+                );
 
                 // Test object thread has ended.
                 assert_eq!(mock_actuator.get_execution_count(), 24); //Assertion checks the number of calls to the actuator.
@@ -983,7 +1019,11 @@ pub mod tests {
                     permanent_error_result: None,
                 };
 
-                execute_blocking(&mut relay_manager, &mut channels.relay_manager, &mut mock_actuator);
+                execute_blocking(
+                    &mut relay_manager,
+                    &mut channels.relay_manager,
+                    &mut mock_actuator,
+                );
 
                 // Test object thread has ended.
                 assert_eq!(mock_actuator.get_execution_count(), 3); //Assertion checks the number of calls to the actuator.
@@ -1034,7 +1074,11 @@ pub mod tests {
                     )),
                 };
 
-                execute_blocking(&mut relay_manager, &mut channels.relay_manager, &mut mock_actuator);
+                execute_blocking(
+                    &mut relay_manager,
+                    &mut channels.relay_manager,
+                    &mut mock_actuator,
+                );
 
                 // Test object thread has ended.
 

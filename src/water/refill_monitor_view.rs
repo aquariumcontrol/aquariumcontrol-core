@@ -83,6 +83,14 @@ impl RefillMonitorView {
 #[cfg(test)]
 impl RefillMonitorView {
     // Helper function to assert the state of a RefillMonitorView
+    /// Performs the `assert_refill_monitor_view` operation.
+    ///
+    /// # Arguments
+    /// * `expected_volume_last24h` - Expected refill volume in the last 24 hours.
+    /// * `expected_count_last24h` - Expected refill count in the last 24 hours.
+    /// * `expected_volume_last_h` - Expected refill volume in the last hour.
+    /// * `expected_count_last_h` - Expected refill count in the last hour.
+    /// * `expected_interval_last_refill` - Expected time interval since the last refill.
     pub fn assert_refill_monitor_view(
         &self,
         expected_volume_last24h: bool,

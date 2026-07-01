@@ -263,6 +263,11 @@ impl Refill {
     //
     // # Returns
     // A new **`Refill` struct**, with its `refill_errors` field initialized to the provided value.
+    /// Performs the `new_with_errors` operation.
+    ///
+    /// # Arguments
+    /// * `config` - A parameter representing `config`.
+    /// * `refill_errors` - A parameter representing `refill_errors`.
     pub fn new_with_errors(config: RefillConfig, refill_errors: RefillErrorStates) -> Refill {
         Self {
             config,
@@ -317,7 +322,7 @@ impl Refill {
         stats_value: &mut T,
         lock_flag: &mut bool,
         #[cfg(not(test))] check_type: &str, // only required in real-life execution
-        #[cfg(not(test))] duration: &str, // only required in real-life execution
+        #[cfg(not(test))] duration: &str,   // only required in real-life execution
     ) -> bool {
         match database_result {
             Ok(value) => {
@@ -354,11 +359,12 @@ impl Refill {
     /// # Arguments
     /// * `refill_stats_data` - A mutable reference to a `RefillStatsData` struct, which will be
     ///   populated with the retrieved historical data.
+    /// * `is_multi_thread` - A boolean flag indicating if the Tokio runtime is running in multi-threaded mode.
     fn get_refill_stats_data(
         &mut self,
         refill_stats_data: &mut RefillStatsData,
         sql_interface_refill: &mut dyn DatabaseInterfaceRefillTrait,
-        is_multi_thread: bool
+        is_multi_thread: bool,
     ) {
         let mut action = || {
             match sql_interface_refill.check_empty() {
@@ -555,7 +561,7 @@ impl Refill {
         max_value: T,
         lock_flag: &mut bool,
         #[cfg(not(test))] check_type: &str, // only required in real-life execution
-        #[cfg(not(test))] duration: &str, // only required in real-life execution
+        #[cfg(not(test))] duration: &str,   // only required in real-life execution
     ) -> bool {
         if actual_value > max_value {
             if !*lock_flag {
@@ -596,6 +602,7 @@ impl Refill {
     ///
     /// # Returns
     /// `true` if **any** of the configured volume, count, or time limits are exceeded; `false` otherwise.
+    /// * `refill_channels` - A mutable reference to the `RefillChannels` communication interface.
     fn check_volume_count_time_limits(
         &mut self,
         sql_refill_data: &RefillStatsData,
@@ -748,7 +755,6 @@ impl Refill {
         let sleep_duration_hundred_millis = Duration::from_millis(100);
         let mut i = 0;
 
-
         let mut schedule_check_result: bool;
         #[cfg(feature = "debug_refill")]
         {
@@ -769,7 +775,11 @@ impl Refill {
 
         // retrieving data from SQL database
         let mut refill_stats_data = RefillStatsData::default();
-        self.get_refill_stats_data(&mut refill_stats_data, &mut *sql_interface_refill, is_multi_thread);
+        self.get_refill_stats_data(
+            &mut refill_stats_data,
+            &mut *sql_interface_refill,
+            is_multi_thread,
+        );
 
         let mut refill_inhibited = false; // a flag indicating the external request to inhibit refill from injecting water
         let mut quit_command_received = false; // the request to end the application has been received
@@ -860,7 +870,11 @@ impl Refill {
                         }
                     }
 
-                    self.get_refill_stats_data(&mut refill_stats_data, &mut *sql_interface_refill, is_multi_thread);
+                    self.get_refill_stats_data(
+                        &mut refill_stats_data,
+                        &mut *sql_interface_refill,
+                        is_multi_thread,
+                    );
 
                     let critical_error_present = self
                         .check_volume_count_time_limits(&refill_stats_data, refill_channels)
@@ -931,13 +945,14 @@ impl Refill {
                                     match handle.join() {
                                         Ok(quit) => (quit, None),
                                         Err(e) => {
-                                            let panic_msg = if let Some(s) = e.downcast_ref::<&str>() {
-                                                s.to_string()
-                                            } else if let Some(s) = e.downcast_ref::<String>() {
-                                                s.clone()
-                                            } else {
-                                                "Unknown panic payload".to_string()
-                                            };
+                                            let panic_msg =
+                                                if let Some(s) = e.downcast_ref::<&str>() {
+                                                    s.to_string()
+                                                } else if let Some(s) = e.downcast_ref::<String>() {
+                                                    s.clone()
+                                                } else {
+                                                    "Unknown panic payload".to_string()
+                                                };
                                             (false, Some(ThreadJoinError(panic_msg)))
                                         }
                                     }
@@ -946,11 +961,7 @@ impl Refill {
 
                             if let Some(err) = join_err_opt {
                                 self.refill_errors.error_join_failed = true;
-                                log_error_chain(
-                                    module_path!(),
-                                    "could not join thread",
-                                    err,
-                                );
+                                log_error_chain(module_path!(), "could not join thread", err);
                                 quit_command_received = false;
                             } else {
                                 quit_command_received = quit_res;
@@ -1056,7 +1067,10 @@ impl Refill {
                     }
                     tokio::time::sleep(sleep_duration_hundred_millis).await;
 
-                    self.check_timing_and_ping_database(&mut *sql_interface_refill, is_multi_thread);
+                    self.check_timing_and_ping_database(
+                        &mut *sql_interface_refill,
+                        is_multi_thread,
+                    );
 
                     cycle_time_exceeded = false;
                 }
@@ -1086,7 +1100,8 @@ impl Refill {
             &mut refill_channels.rx_refill_from_signal_handler,
             sleep_duration_hundred_millis,
             module_path!(),
-        ).await;
+        )
+        .await;
     }
 }
 
@@ -1094,6 +1109,10 @@ impl Refill {
 struct ThreadJoinError(String);
 
 impl std::fmt::Display for ThreadJoinError {
+    /// Formats the value using the given formatter.
+    ///
+    /// # Arguments
+    /// * `f` - The formatter to write the formatted string to.
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}", self.0)
     }
@@ -1127,13 +1146,20 @@ pub mod tests {
     use std::thread;
     use std::time::{Duration, Instant};
 
+    use crate::database::sql_interface_refill::DatabaseInterfaceRefillTrait;
     use crate::utilities::logger::setup_logger;
     use crate::utilities::logger_config::LoggerConfig;
-    use crate::database::sql_interface_refill::DatabaseInterfaceRefillTrait;
     use crate::water::refill_channels::RefillChannels;
-    use crate::water::water_injection::WaterInjectionTrait;
     use crate::water::refill_stats_data::RefillStatsData;
+    use crate::water::water_injection::WaterInjectionTrait;
 
+    /// Synchronously executes the main task loop for testing.
+    ///
+    /// # Arguments
+    /// * `refill` - A parameter representing `refill`.
+    /// * `mutex_device_scheduler_refill` - Mutex coordinating access to the device scheduler for refill.
+    /// * `refill_channels` - A mutable reference to the `RefillChannels` communication interface.
+    /// * `water_injection` - A parameter representing `water_injection`.
     fn execute_blocking(
         refill: &mut Refill,
         mutex_device_scheduler_refill: Arc<Mutex<i32>>,
@@ -1149,18 +1175,25 @@ pub mod tests {
             .unwrap()
             .block_on(async {
                 let is_multi_thread_test = tokio::runtime::Handle::try_current()
-                    .map(|h| matches!(h.runtime_flavor(), tokio::runtime::RuntimeFlavor::MultiThread))
+                    .map(|h| {
+                        matches!(
+                            h.runtime_flavor(),
+                            tokio::runtime::RuntimeFlavor::MultiThread
+                        )
+                    })
                     .unwrap_or(false);
 
-                refill.execute(
-                    mutex_device_scheduler_refill,
-                    refill_channels,
-                    water_injection,
-                    mutex_tank_level_switch_signals_clone_for_refill,
-                    mutex_refill_status,
-                    sql_interface_refill,
-                    is_multi_thread_test
-                ).await;
+                refill
+                    .execute(
+                        mutex_device_scheduler_refill,
+                        refill_channels,
+                        water_injection,
+                        mutex_tank_level_switch_signals_clone_for_refill,
+                        mutex_refill_status,
+                        sql_interface_refill,
+                        is_multi_thread_test,
+                    )
+                    .await;
             });
     }
 
@@ -1193,6 +1226,13 @@ pub mod tests {
     // - `read_config_file` or `read_config_file_with_test_database` fail (e.g., file not found, invalid DB number).
     // - It fails to connect to the SQL database.
     // - It fails to get a connection from the SQL pool for `SqlInterfaceRefill` initialization.
+    /// Performs the `prepare_refill_tests` operation.
+    ///
+    /// # Arguments
+    /// * `refill_errors` - A parameter representing `refill_errors`.
+    /// * `initial_wait_interval` - A parameter representing `initial_wait_interval`.
+    /// * `check_interval` - A parameter representing `check_interval`.
+    /// * `test_db_number_opt` - A parameter representing `test_db_number_opt`.
     pub fn prepare_refill_tests(
         refill_errors: Option<RefillErrorStates>,
         initial_wait_interval: u64,

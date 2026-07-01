@@ -253,6 +253,9 @@ pub enum InternalCommand {
 #[cfg(target_os = "linux")]
 impl InternalCommand {
     /// Converts contents of a `Message` into an `InternalCommand`.
+    ///
+    /// # Arguments
+    /// * `msg` - The IPC message structure.
     pub fn from_msg(msg: &Message) -> Self {
         match msg.command {
             command_values::RESET => InternalCommand::ResetAllErrors,
@@ -264,6 +267,7 @@ impl InternalCommand {
         }
     }
 
+    /// Provides numeric representation of `InternalCommand`.
     #[cfg(test)]
     pub fn to_numeric(&self) -> i32 {
         match self {

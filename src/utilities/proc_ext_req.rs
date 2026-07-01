@@ -312,6 +312,7 @@ impl ProcessExternalRequestTrait for Refill {
 /// - The first `bool` is `true` if a `Quit` command was received; otherwise `false`.
 /// - The second `bool` is always `false` as "Start" commands are not processed by this function.
 /// - The third `bool` is always `false` as "Stop" commands are not processed by this function.
+/// * `sender` - Sender channel for IPC commands.
 fn process_external_request_without_messaging(
     rx_from_signal_handler: &mut AquaReceiver<InternalCommand>,
     sender: String,
@@ -644,6 +645,10 @@ macro_rules! impl_process_request_no_messaging {
     ($($struct_name:ty),+) => {
         $(
             impl ProcessExternalRequestTrait for $struct_name {
+/// Performs the `process_external_request` operation.
+///
+/// # Arguments
+/// * `rx_from_signal_handler` - Receiver channel for signals from the signal handler.
                 fn process_external_request(
                     &mut self,
                     rx_from_signal_handler: &mut AquaReceiver<InternalCommand>,
@@ -664,6 +669,10 @@ macro_rules! impl_process_request_no_messaging {
 /// that need to listen for commands from the signal handler and messaging, including
 /// the `ResetAllErrors` command which resets `actuator_disabled`.
 /// This macro is used for the trait implementation of Heating and Ventilation.
+///
+/// # Arguments
+/// * `rx_from_signal_handler` - Receiver channel for signals from the signal handler.
+/// * `rx_from_messaging_opt` - Optional receiver channel for messages from messaging.
 macro_rules! impl_process_request_with_reset_errors {
     ($($struct_name:ty),+) => {
         $(

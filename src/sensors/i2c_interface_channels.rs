@@ -62,6 +62,10 @@ pub struct I2cInterfaceChannels {
 
 #[cfg(feature = "debug_channels")]
 impl fmt::Display for I2cInterfaceChannels {
+    /// Formats the value using the given formatter.
+    ///
+    /// # Arguments
+    /// * `f` - The formatter to write the formatted string to.
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         writeln!(f, "=== I2cInterfaceChannels ===")?;
         writeln!(
@@ -84,6 +88,10 @@ impl fmt::Display for I2cInterfaceChannels {
 
 #[cfg(not(feature = "debug_channels"))]
 impl fmt::Display for I2cInterfaceChannels {
+    /// Formats the value using the given formatter.
+    ///
+    /// # Arguments
+    /// * `f` - The formatter to write the formatted string to.
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(
             f,

@@ -208,6 +208,7 @@ impl ModelEnvironment {
     ///
     /// * `rx_from_parser` - reference to receiver for communication with other thread
     /// * `tx_to_parser` - reference to sender for communication with other thread
+    /// * `time_of_day` - A parameter representing `time_of_day`.
     fn process_channel(
         &mut self,
         rx_from_parser: &Receiver<TestServerInternalCommand>,
@@ -243,6 +244,7 @@ impl ModelEnvironment {
     /// # Arguments:
     ///
     /// * `internal_command` - enum describing the request and potentially containing a wrapped value
+    /// * `time_of_day` - A parameter representing `time_of_day`.
     fn process_parser_request(
         &mut self,
         internal_command: TestServerInternalCommand,

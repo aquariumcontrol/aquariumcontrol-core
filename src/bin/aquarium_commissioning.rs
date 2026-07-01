@@ -101,6 +101,10 @@ const SIGNALS: [AquariumSignal; 6] = [
 /// Determines the initial state (On/Off) for a given device.
 ///
 /// Some devices might default to ON or depend on the GPIO configuration.
+///
+/// # Arguments
+/// * `device` - The aquarium device to get the initial state for.
+/// * `use_gpio` - A boolean flag indicating if GPIO is being used.
 fn get_initial_state(device: &AquariumDevice, use_gpio: bool) -> bool {
     match device {
         AquariumDevice::Skimmer
@@ -131,6 +135,14 @@ struct App {
 
 impl App {
     /// Creates a new instance of the application state.
+    ///
+    /// # Arguments
+    /// * `mutexes` - Shared mutexes for accessing sensor readings.
+    /// * `sensor_manager_active` - Whether the sensor manager is active.
+    /// * `tls_mutex` - Shared mutex for tank level switch readings.
+    /// * `tls_active` - Whether the tank level switch is active.
+    /// * `use_gpio` - Whether GPIO relay actuation is active.
+    /// * `beacon_active` - Whether the RGB status LED beacon is active.
     fn new(
         mutexes: SensorManagerMutexes,
         sensor_manager_active: bool,
@@ -233,7 +245,10 @@ impl App {
     }
 }
 
-/// Displays the valid command line parameter combinations
+/// Displays the valid command line parameter combinations.
+///
+/// # Arguments
+/// * `default_config_file` - The default configuration file path to show in usage.
 fn display_usage(default_config_file: &str) {
     println!("This is the aquarium_control commissioning tool.");
     println!("Default configuration file is {}", default_config_file);
@@ -242,6 +257,10 @@ fn display_usage(default_config_file: &str) {
 }
 
 /// Checks if a command-line argument is a recognized command and executes it.
+///
+/// # Arguments
+/// * `command` - The command string to check.
+/// * `default_config_file` - The default configuration file path to display if needed.
 fn check_is_command(command: &str, default_config_file: &str) -> bool {
     match command {
         "-h" | "--help" => {
@@ -391,7 +410,9 @@ fn main() -> Result<(), Box<dyn Error>> {
         let mut sensor_manager_channels = channels.sensor_manager; // Move out
 
         rt.spawn(async move {
-            sensor_manager.execute(&mut sensor_manager_channels, sensor_mutexes_for_task).await;
+            sensor_manager
+                .execute(&mut sensor_manager_channels, sensor_mutexes_for_task)
+                .await;
         });
     }
 
@@ -467,7 +488,9 @@ fn main() -> Result<(), Box<dyn Error>> {
             let mutex_tls_clone = mutex_tank_level_switch_signals.clone();
 
             rt.spawn(async move {
-                let _ = tank_level_switch.execute(&mut tls_channels, mutex_tls_clone).await;
+                let _ = tank_level_switch
+                    .execute(&mut tls_channels, mutex_tls_clone)
+                    .await;
             });
         }
 
@@ -566,6 +589,12 @@ fn main() -> Result<(), Box<dyn Error>> {
 /// Runs the main application loop.
 ///
 /// Handles terminal drawing, input events, and periodic updates (sensor polling, heartbeats).
+///
+/// # Arguments
+/// * `terminal` - A mutable reference to the terminal instance.
+/// * `app` - The application state.
+/// * `actuator` - A mutable reference to the relay actuator interface.
+/// * `ws2812b` - A mutable reference to the WS2812B RGB LED beacon instance.
 fn run_app(
     terminal: &mut Terminal<CrosstermBackend<io::Stdout>>,
     mut app: App,
@@ -658,6 +687,10 @@ fn run_app(
 /// Renders the user interface.
 ///
 /// Draws the list of actuators, the list of sensors, and any active popups.
+///
+/// # Arguments
+/// * `f` - The formatter to write the formatted string to.
+/// * `app` - The TUI application state.
 fn ui(f: &mut Frame, app: &mut App) {
     let chunks = Layout::default()
         .direction(Direction::Horizontal)
@@ -779,6 +812,11 @@ fn ui(f: &mut Frame, app: &mut App) {
 }
 
 /// Helper function to create a centered rect using up certain percentage of the available rect `r`.
+///
+/// # Arguments
+/// * `percent_x` - The width percentage of the centered rectangle.
+/// * `percent_y` - The height percentage of the centered rectangle.
+/// * `r` - The bounding rectangle.
 fn centered_rect(percent_x: u16, percent_y: u16, r: Rect) -> Rect {
     let popup_layout = Layout::default()
         .direction(Direction::Vertical)

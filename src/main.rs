@@ -205,7 +205,7 @@ fn check_is_command(command: &str) -> Result<bool, VersionInformationError> {
 ///         tcp_communication[TcpCommunication]
 ///         dht[Dht]
 ///     end
-/// 
+///
 ///     subgraph Tokio_Tasks ["Tokio Async Tasks (Main Thread Runtime)"]
 ///         refill[Refill]
 ///         relay_manager[Controllino / RelayManager]
@@ -225,7 +225,7 @@ fn check_is_command(command: &str) -> Result<bool, VersionInformationError> {
 ///         i2c_interface[I2C interface]
 ///         temperature_gradient[TemperatureGradient]
 ///     end
-/// 
+///
 ///     tank_level_switch -.-> refill
 ///     refill --> relay_manager
 ///     relay_manager --> refill
@@ -624,13 +624,16 @@ fn run() -> Result<(), StartupError> {
         .build()
         .map_err(|e| StartupError::TokioRuntimeSetupFailure { source: e })?;
 
-    let is_multi_thread = matches!(rt.handle().runtime_flavor(), tokio::runtime::RuntimeFlavor::MultiThread);
+    let is_multi_thread = matches!(
+        rt.handle().runtime_flavor(),
+        tokio::runtime::RuntimeFlavor::MultiThread
+    );
 
     let channels = Channels::new(
         config.relay_manager.use_simulator,
         config.sensor_manager.use_simulator,
         config.tank_level_switch.use_simulator,
-        is_multi_thread
+        is_multi_thread,
     );
 
     #[cfg(target_os = "linux")]
@@ -885,71 +888,70 @@ fn run() -> Result<(), StartupError> {
         sensor_manager: mut chan_sensor_manager,
         temperature_gradient: mut chan_temperature_gradient,
         #[cfg(target_os = "linux")]
-        messaging: mut chan_messaging,
+            messaging: mut chan_messaging,
     } = channels;
 
     let mut thread_handles = vec![];
-        // spawn thread for sensor communication first to allow checks
+    // spawn thread for sensor communication first to allow checks
 
-
-        #[cfg(all(target_os = "linux", feature = "target_hw"))]
-        if !use_simulator && atlas_scientific_active {
-            let result = atlas_scientific.init_devices(&mut chan_atlas_scientific);
-            if let Err(e) = result {
-                // terminate the I2cInterface thread before exiting the application
-                signal_handler::send_command(
-                    InternalCommand::Quit,
-                    Some(&mut chan_signal_handler.tx_signal_handler_to_i2c_interface),
-                    None,
-                    "i2c_interface",
-                );
-                return Err(StartupError::AtlasScientificSensorTypeMismatch { source: e });
-            }
+    #[cfg(all(target_os = "linux", feature = "target_hw"))]
+    if !use_simulator && atlas_scientific_active {
+        let result = atlas_scientific.init_devices(&mut chan_atlas_scientific);
+        if let Err(e) = result {
+            // terminate the I2cInterface thread before exiting the application
+            signal_handler::send_command(
+                InternalCommand::Quit,
+                Some(&mut chan_signal_handler.tx_signal_handler_to_i2c_interface),
+                None,
+                "i2c_interface",
+            );
+            return Err(StartupError::AtlasScientificSensorTypeMismatch { source: e });
         }
+    }
 
-        // open tcp connection only if configuration requires use of simulator instead of HW
-        if use_simulator && tcp_communication_thread_started {
-            let handle = std::thread::Builder::new()
-                .name("TcpCommunication".to_string())
-                .spawn(move || {
-                    if let Some(mut tcp_communication) = tcp_communication_opt {
-                        tcp_communication.execute(&mut chan_tcp_communication);
-                    }
-                    #[cfg(feature = "debug_channels")]
-                    debug!(target: module_path!(), "{0}", chan_tcp_communication);
-                })
-                .expect("Failed to spawn TcpCommunication thread");
-            thread_handles.push(handle);
-            #[cfg(feature = "debug_main")]
-            debug!(target: module_path!(), "TcpCommunication terminated.");
-        };
+    // open tcp connection only if configuration requires use of simulator instead of HW
+    if use_simulator && tcp_communication_thread_started {
+        let handle = std::thread::Builder::new()
+            .name("TcpCommunication".to_string())
+            .spawn(move || {
+                if let Some(mut tcp_communication) = tcp_communication_opt {
+                    tcp_communication.execute(&mut chan_tcp_communication);
+                }
+                #[cfg(feature = "debug_channels")]
+                debug!(target: module_path!(), "{0}", chan_tcp_communication);
+            })
+            .expect("Failed to spawn TcpCommunication thread");
+        thread_handles.push(handle);
+        #[cfg(feature = "debug_main")]
+        debug!(target: module_path!(), "TcpCommunication terminated.");
+    };
 
-        #[cfg(all(target_os = "linux", feature = "target_hw"))]
-        if execution_config.dht {
-            let handle = std::thread::Builder::new()
-                .name("Dht".to_string())
-                .spawn(move || {
-                    dht.execute(mutex_dht, &mut chan_dht);
-                    #[cfg(feature = "debug_channels")]
-                    debug!(target: module_path!(), "{0}", chan_dht);
-                    #[cfg(feature = "debug_main")]
-                    debug!(target: module_path!(), "Dht terminated.");
-                })
-                .expect("Failed to spawn Dht thread");
-            thread_handles.push(handle);
-        }
+    #[cfg(all(target_os = "linux", feature = "target_hw"))]
+    if execution_config.dht {
+        let handle = std::thread::Builder::new()
+            .name("Dht".to_string())
+            .spawn(move || {
+                dht.execute(mutex_dht, &mut chan_dht);
+                #[cfg(feature = "debug_channels")]
+                debug!(target: module_path!(), "{0}", chan_dht);
+                #[cfg(feature = "debug_main")]
+                debug!(target: module_path!(), "Dht terminated.");
+            })
+            .expect("Failed to spawn Dht thread");
+        thread_handles.push(handle);
+    }
 
-        // give sensor reading components some time so that they can acquire a first data set
-        let duration_one_second = Duration::from_secs(1);
-        println!("trying to acquire data before starting control in 3 seconds...");
-        spin_sleeper.sleep(duration_one_second);
-        println!("trying to acquire data before starting control in 2 seconds...");
-        spin_sleeper.sleep(duration_one_second);
-        println!("trying to acquire data before starting control in 1 second...");
-        spin_sleeper.sleep(duration_one_second);
-        println!("starting control...");
+    // give sensor reading components some time so that they can acquire a first data set
+    let duration_one_second = Duration::from_secs(1);
+    println!("trying to acquire data before starting control in 3 seconds...");
+    spin_sleeper.sleep(duration_one_second);
+    println!("trying to acquire data before starting control in 2 seconds...");
+    spin_sleeper.sleep(duration_one_second);
+    println!("trying to acquire data before starting control in 1 second...");
+    spin_sleeper.sleep(duration_one_second);
+    println!("starting control...");
 
-        rt.block_on(async {
+    rt.block_on(async {
                 let mut tasks = vec![];
 
                 let term = Arc::new(AtomicBool::new(false));
@@ -1280,24 +1282,22 @@ fn run() -> Result<(), StartupError> {
                 }
         });
 
-        // Wait for all spawned OS threads to finish
-        for handle in thread_handles {
-            let _ = handle.join();
-        }
+    // Wait for all spawned OS threads to finish
+    for handle in thread_handles {
+        let _ = handle.join();
+    }
 
+    // remove PID from the file
+    let publish_pid_result = publish_pid.erase_pid();
+    if let Err(e) = publish_pid_result {
+        log_error_chain(
+            module_path!(),
+            "Error occurred when trying to reset PID.",
+            e,
+        );
+    }
 
-
-        // remove PID from the file
-        let publish_pid_result = publish_pid.erase_pid();
-        if let Err(e) = publish_pid_result {
-            log_error_chain(
-                module_path!(),
-                "Error occurred when trying to reset PID.",
-                e,
-            );
-        }
-
-        Ok(())
+    Ok(())
 }
 
 /// The main function is a simple error handler.

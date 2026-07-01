@@ -73,6 +73,10 @@ pub struct Ds18b20ResultData {
 }
 
 impl Ds18b20ResultData {
+    /// Creates a new instance.
+    ///
+    /// # Arguments
+    /// * `value` - The value to set.
     pub fn new(value: f32) -> Self {
         Ds18b20ResultData {
             value,
@@ -81,6 +85,7 @@ impl Ds18b20ResultData {
         }
     }
 
+    /// Creates a default instance of this type.
     #[cfg(test)]
     pub fn default() -> Self {
         Ds18b20ResultData {
@@ -327,6 +332,7 @@ impl Ds18b20 {
     ///   will be written, ensuring thread-safe access for other modules.
     /// * `mutex_ambient_temperature` - An `Arc<Mutex<Ds18b20Result>>` into which the latest ambient temperature reading
     ///   will be written, ensuring thread-safe access for other modules.
+    /// * `ds18b20_channels` - A mutable reference to the `Ds18b20Channels` communication interface.
     pub async fn execute(
         &mut self,
         ds18b20_channels: &mut Ds18b20Channels,
@@ -416,6 +422,13 @@ pub mod tests {
     use std::time::Duration;
     use std::{env, thread};
 
+    /// Synchronously executes the main task loop for testing.
+    ///
+    /// # Arguments
+    /// * `ds18b20` - A parameter representing `ds18b20`.
+    /// * `ds18b20_channels` - A mutable reference to the `Ds18b20Channels` communication interface.
+    /// * `mutex_water_temperature` - A parameter representing `mutex_water_temperature`.
+    /// * `mutex_ambient_temperature` - A parameter representing `mutex_ambient_temperature`.
     fn execute_blocking(
         ds18b20: &mut Ds18b20,
         ds18b20_channels: &mut Ds18b20Channels,
@@ -427,11 +440,13 @@ pub mod tests {
             .build()
             .unwrap()
             .block_on(async {
-                ds18b20.execute(
-                    ds18b20_channels,
-                    mutex_water_temperature,
-                    mutex_ambient_temperature,
-                ).await;
+                ds18b20
+                    .execute(
+                        ds18b20_channels,
+                        mutex_water_temperature,
+                        mutex_ambient_temperature,
+                    )
+                    .await;
             });
     }
 

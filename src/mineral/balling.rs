@@ -64,13 +64,12 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 
 #[cfg(feature = "debug_balling")]
 use log::debug;
-use std::error;
 use log::{error, info};
+use std::error;
 use std::fmt;
 
 #[cfg(all(not(test), target_os = "linux"))] // only required in real-life execution
 use nix::unistd::gettid;
-
 
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
@@ -83,9 +82,9 @@ use crate::mineral::mineral_injection::MineralInjectionTrait;
 use crate::utilities::acknowledge_signal_handler::AcknowledgeSignalHandlerTrait;
 use crate::utilities::channel_content::AquariumDevice;
 use crate::utilities::database_ping_trait::DatabasePingTrait;
+use crate::utilities::logger::log_error_chain;
 use crate::utilities::proc_ext_req::ProcessExternalRequestTrait;
 use crate::utilities::wait_for_termination::WaitForTerminationTrait;
-use crate::utilities::logger::log_error_chain;
 use crate::{check_quit_increment_counter_ping_database, perform_schedule_check};
 
 #[cfg_attr(doc, aquamarine::aquamarine)]
@@ -147,6 +146,10 @@ pub struct Balling {
 }
 
 impl fmt::Display for Balling {
+    /// Formats the value using the given formatter.
+    ///
+    /// # Arguments
+    /// * `f` - The formatter to write the formatted string to.
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(
             f,
@@ -525,7 +528,7 @@ impl Balling {
         balling_channels: &mut BallingChannels,
         sql_interface_balling: &mut SqlInterfaceBalling,
         mutex_device_scheduler_balling: &Arc<Mutex<i32>>,
-        is_multi_thread: bool
+        is_multi_thread: bool,
     ) -> bool {
         let mut quit_command_received: bool = false;
         let actual_dosing_duration_millis: u32;
@@ -557,7 +560,11 @@ impl Balling {
                         std::thread::scope(|scope| {
                             let handle = scope.spawn(|| {
                                 let mut mutex_data = mutex_device_scheduler_balling.lock().unwrap();
-                                let res = mineral_injection.inject_mineral(balling_channels, pump_device, dosing_duration_millis);
+                                let res = mineral_injection.inject_mineral(
+                                    balling_channels,
+                                    pump_device,
+                                    dosing_duration_millis,
+                                );
                                 *mutex_data = mutex_data.saturating_add(1);
                                 res
                             });
@@ -579,11 +586,7 @@ impl Balling {
 
                     if let Some(err) = join_err_opt {
                         self.execution_blocked = true;
-                        log_error_chain(
-                            module_path!(),
-                            "could not join thread",
-                            err,
-                        );
+                        log_error_chain(module_path!(), "could not join thread", err);
                         quit_command_received = false;
                         actual_dosing_duration_millis = 0;
                     } else if let Some((q, actual_dur)) = res_opt {
@@ -600,10 +603,12 @@ impl Balling {
 
                     let insert_res = if is_multi_thread {
                         tokio::task::block_in_place(|| {
-                            sql_interface_balling.insert_balling_event(pump_id.into(), actual_dosing_volume.into())
+                            sql_interface_balling
+                                .insert_balling_event(pump_id.into(), actual_dosing_volume.into())
                         })
                     } else {
-                        sql_interface_balling.insert_balling_event(pump_id.into(), actual_dosing_volume.into())
+                        sql_interface_balling
+                            .insert_balling_event(pump_id.into(), actual_dosing_volume.into())
                     };
                     if let Err(e) = insert_res {
                         error!(
@@ -669,13 +674,14 @@ impl Balling {
     ///   `MineralInjectionTrait`, responsible for the physical control of the dosing pumps.
     /// * `sql_interface_balling` - A `SqlInterfaceBalling` instance, providing the
     ///   specific SQL interface for Balling dosing operations.
+    /// * `is_multi_thread` - A boolean indicating if the tokio runtime is running in multi-threaded mode.
     pub async fn execute(
         &mut self,
         mutex_device_scheduler_balling: Arc<Mutex<i32>>,
         balling_channels: &mut BallingChannels,
         mineral_injection: &mut (impl MineralInjectionTrait + Send),
         mut sql_interface_balling: SqlInterfaceBalling,
-        is_multi_thread: bool
+        is_multi_thread: bool,
     ) {
         #[cfg(all(target_os = "linux", not(test)))] // only required in real-life execution
         #[cfg(not(tarpaulin_include))]
@@ -744,15 +750,17 @@ impl Balling {
                                 4 => AquariumDevice::PeristalticPump4,
                                 _ => unreachable!(),
                             };
-                            quit_command_received = self.execute_dosing(
-                                pump_id,
-                                pump_device,
-                                mineral_injection,
-                                balling_channels,
-                                &mut sql_interface_balling,
-                                &mutex_device_scheduler_balling,
-                                is_multi_thread
-                            ).await;
+                            quit_command_received = self
+                                .execute_dosing(
+                                    pump_id,
+                                    pump_device,
+                                    mineral_injection,
+                                    balling_channels,
+                                    &mut sql_interface_balling,
+                                    &mutex_device_scheduler_balling,
+                                    is_multi_thread,
+                                )
+                                .await;
                             if quit_command_received {
                                 break; // Quit command received during dosing
                             }
@@ -787,15 +795,17 @@ impl Balling {
                             "executing external request for actuation of pump #{}",
                             self.pump_id_requested
                         );
-                        quit_command_received = self.execute_dosing(
-                            pump_id,
-                            pump_device,
-                            mineral_injection,
-                            balling_channels,
-                            &mut sql_interface_balling,
-                            &mutex_device_scheduler_balling,
-                            is_multi_thread
-                        ).await;
+                        quit_command_received = self
+                            .execute_dosing(
+                                pump_id,
+                                pump_device,
+                                mineral_injection,
+                                balling_channels,
+                                &mut sql_interface_balling,
+                                &mutex_device_scheduler_balling,
+                                is_multi_thread,
+                            )
+                            .await;
                     }
                     None => {
                         info!(
@@ -845,7 +855,8 @@ impl Balling {
             &mut balling_channels.rx_balling_from_signal_handler,
             sleep_duration_hundred_millis,
             module_path!(),
-        ).await;
+        )
+        .await;
     }
 }
 
@@ -853,6 +864,10 @@ impl Balling {
 struct ThreadJoinError(String);
 
 impl fmt::Display for ThreadJoinError {
+    /// Formats the value using the given formatter.
+    ///
+    /// # Arguments
+    /// * `f` - The formatter to write the formatted string to.
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "{}", self.0)
     }
@@ -870,6 +885,8 @@ pub mod tests {
     };
     use crate::launch::channels::Channels;
     use crate::mineral::balling::{Balling, BallingError};
+    use crate::mineral::balling_channels::BallingChannels;
+    use crate::mineral::mineral_injection::MineralInjectionTrait;
     use crate::mocks::mock_mineral_injection::tests::MockMineralInjection;
     use crate::mocks::mock_schedule_check::tests::mock_schedule_check;
     use crate::utilities::channel_content::AquariumDevice::{
@@ -883,9 +900,15 @@ pub mod tests {
     use std::sync::{Arc, Mutex};
     use std::thread::scope;
     use std::time::{Duration, Instant};
-    use crate::mineral::mineral_injection::MineralInjectionTrait;
-    use crate::mineral::balling_channels::BallingChannels;
 
+    /// Helper function to execute the balling task inside a test Tokio runtime.
+    ///
+    /// # Arguments
+    /// * `balling` - A mutable reference to the `Balling` instance.
+    /// * `mutex_device_scheduler_balling` - Mutex coordinating access to the device scheduler.
+    /// * `balling_channels` - A mutable reference to the `BallingChannels` instance.
+    /// * `mineral_injection` - A mutable reference to the mineral injector instance.
+    /// * `sql_interface_balling` - Database interface for Balling operations.
     fn execute_blocking(
         balling: &mut Balling,
         mutex_device_scheduler_balling: Arc<Mutex<i32>>,
@@ -899,22 +922,34 @@ pub mod tests {
             .unwrap()
             .block_on(async {
                 let is_multi_thread_test = tokio::runtime::Handle::try_current()
-                    .map(|h| matches!(h.runtime_flavor(), tokio::runtime::RuntimeFlavor::MultiThread))
+                    .map(|h| {
+                        matches!(
+                            h.runtime_flavor(),
+                            tokio::runtime::RuntimeFlavor::MultiThread
+                        )
+                    })
                     .unwrap_or(false);
 
-                balling.execute(
-                    mutex_device_scheduler_balling,
-                    balling_channels,
-                    mineral_injection,
-                    sql_interface_balling,
-                    is_multi_thread_test
-                ).await;
+                balling
+                    .execute(
+                        mutex_device_scheduler_balling,
+                        balling_channels,
+                        mineral_injection,
+                        sql_interface_balling,
+                        is_multi_thread_test,
+                    )
+                    .await;
             });
     }
+    /// Performs the `read_balling_config` operation.
     fn read_balling_config() -> ConfigData {
         read_config_file("/config/aquarium_control_test_generic.toml".to_string()).unwrap()
     }
 
+    /// Performs the `read_balling_config_with_database` operation.
+    ///
+    /// # Arguments
+    /// * `db_number` - A parameter representing `db_number`.
     fn read_balling_config_with_database(db_number: u32) -> ConfigData {
         read_config_file_with_test_database(
             "/config/aquarium_control_test_generic.toml".to_string(),
@@ -1259,8 +1294,10 @@ pub mod tests {
                 panic!("Could not connect to SQL database: {e:?}");
             }
         };
-        SqlInterface::truncate_table(&mut sql_interface, SQL_TABLE_BALLING_SET_VALS.to_string()).unwrap();
-        SqlInterface::truncate_table(&mut sql_interface, SQL_TABLE_BALLING_DOSING_LOG.to_string()).unwrap();
+        SqlInterface::truncate_table(&mut sql_interface, SQL_TABLE_BALLING_SET_VALS.to_string())
+            .unwrap();
+        SqlInterface::truncate_table(&mut sql_interface, SQL_TABLE_BALLING_DOSING_LOG.to_string())
+            .unwrap();
 
         let mut sql_interface_balling = SqlInterfaceBalling::new(
             sql_interface.get_connection().unwrap(),

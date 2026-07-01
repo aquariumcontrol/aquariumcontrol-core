@@ -101,10 +101,12 @@ macro_rules! impl_acknowledge_signal_handler {
     // The macro takes the struct type, the location string and the channel as arguments.
     ($struct_name:ty, $location_str:expr, $channel:ident) => {
         impl AcknowledgeSignalHandlerTrait for $struct_name {
+            /// Performs the `send_true_to_signal_handler` operation.
             fn send_true_to_signal_handler(&mut self) -> Result<(), AquaChannelError> {
                 self.$channel.send(true)
             }
 
+            /// Performs the `location` operation.
             fn location(&self) -> String {
                 $location_str.to_string()
             }

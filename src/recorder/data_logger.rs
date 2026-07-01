@@ -226,9 +226,7 @@ impl DataLogger {
     /// - Any of the configured output filenames are empty (`OutputFilenameEmpty`).
     /// - It fails to write to (and thus reset) any of the configured output files,
     ///   which could be due to permission issues or an invalid path (`FileResetFailure`).
-    pub fn new(
-        config: DataLoggerConfig,
-    ) -> Result<DataLogger, DataLoggerError> {
+    pub fn new(config: DataLoggerConfig) -> Result<DataLogger, DataLoggerError> {
         if config.output_to_disk {
             // By defining the files in a collection, we can use iterators to check and
             // initialize them
@@ -611,6 +609,10 @@ impl DataLogger {
     /// * `refill_status` - A mutable reference for indicating if the refill is in progress.
     /// * `heater_status` - A mutable reference for indicating the heater state.
     /// * `ventilation_status` - A mutable reference for indicating the ventilation state.
+    /// * `refill_status_live` - Unmodified refill status.
+    /// * `refill_status_for_database` - Refill status adapted for database recording.
+    /// * `refill_reset_for_database` - Refill reset flag adapted for database recording.
+    /// * `data_logger_mutexes` - A parameter representing `data_logger_mutexes`.
     fn update_signals(
         &mut self,
         refill_status_live: &mut bool,
@@ -653,7 +655,6 @@ impl DataLogger {
             };
             //#[cfg(feature = "debug_data_logger")]
             //debug!(target: module_path!(), "Releasing lock on mutex_refill_status");
-
         }
 
         {
@@ -701,7 +702,6 @@ impl DataLogger {
             };
             //#[cfg(feature = "debug_data_logger")]
             //debug!(target: module_path!(), "Releasing lock on heating_status");
-
         }
 
         {
@@ -971,6 +971,9 @@ impl DataLogger {
     /// A tuple `(Option<f32>, Option<f32>, Option<f32>)` containing the filtered
     /// water temperature, pH, and conductivity values, respectively. Each value is
     /// `Some` if the corresponding input was valid and filtered, or `None` otherwise.
+    /// * `filter_water_temperature` - filter configuration for water temperature.
+    /// * `filter_pH` - filter configuration for pH.
+    /// * `filter_conductivity` - filter configuration for conductivity.
     fn calculate_filtered_signals(
         &mut self,
         water_temperature: Option<f32>,
@@ -1063,7 +1066,8 @@ impl DataLogger {
             &mut data_logger_channels.rx_data_logger_from_signal_handler,
             sleep_duration_hundred_millis,
             module_path!(),
-        ).await;
+        )
+        .await;
     }
 
     /// Executes the main control loop for the data logger module.
@@ -1185,7 +1189,8 @@ impl DataLogger {
             if quit_command_received {
                 #[cfg(feature = "debug_data_logger")]
                 debug!(target: module_path!(), "confirming quit and waiting for termination command");
-                self.confirm_quit_and_wait_for_termination_command(data_logger_channels).await;
+                self.confirm_quit_and_wait_for_termination_command(data_logger_channels)
+                    .await;
                 return;
             }
         }
@@ -1334,7 +1339,8 @@ impl DataLogger {
                                 let conn_for_injection_back =
                                     data_injection.inject_data(data_frame, conn_for_injection);
                                 (data_injection, conn_for_injection_back)
-                            }).await;
+                            })
+                            .await;
                             #[cfg(feature = "debug_data_logger")]
                             log::debug!(target: module_path!(), "data_logger: Database task to inject data frame finished");
                             match injection_task_result {
@@ -1454,7 +1460,8 @@ impl DataLogger {
 
         #[cfg(feature = "debug_data_logger")]
         log::debug!(target: module_path!(), "data_logger: Exited main loop, calling confirm_quit_and_wait_for_termination_command");
-        self.confirm_quit_and_wait_for_termination_command(data_logger_channels).await;
+        self.confirm_quit_and_wait_for_termination_command(data_logger_channels)
+            .await;
     }
 }
 
@@ -1464,6 +1471,14 @@ pub mod tests {
     use super::*;
     use crate::database::sql_interface_data::SqlInterfaceData;
 
+    /// Helper function to execute the data logger task inside a test Tokio runtime.
+    ///
+    /// # Arguments
+    /// * `data_logger` - A mutable reference to the `DataLogger` instance.
+    /// * `data_injection` - Data injection trait implementation.
+    /// * `sql_interface_data` - Database interface for recording data.
+    /// * `data_logger_channels` - A mutable reference to the `DataLoggerChannels` instance.
+    /// * `data_logger_mutexes` - Shared mutexes for sensor data.
     fn execute_blocking<D: DataInjectionTrait + Send + 'static>(
         data_logger: &mut DataLogger,
         data_injection: D,
@@ -1499,6 +1514,9 @@ pub mod tests {
     use std::io::Read;
 
     /// Prepares all necessary parts for a data logger test.
+    ///
+    /// # Arguments
+    /// * `config` - A parameter representing `config`.
     fn prepare_data_logger_test_rig(
         config: DataLoggerConfig,
     ) -> (

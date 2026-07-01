@@ -88,6 +88,10 @@ pub enum MessagingDomain {
 
 #[cfg(target_os = "linux")]
 impl From<i32> for MessagingDomain {
+    /// Performs the `from` operation.
+    ///
+    /// # Arguments
+    /// * `value` - The value to set.
     fn from(value: i32) -> Self {
         match value {
             x if x == MessagingDomain::Refill as i32 => MessagingDomain::Refill,
@@ -104,6 +108,10 @@ impl From<i32> for MessagingDomain {
 
 #[cfg(all(target_os = "linux", test))]
 impl From<MessagingDomain> for i32 {
+    /// Performs the `from` operation.
+    ///
+    /// # Arguments
+    /// * `domain` - A parameter representing `domain`.
     fn from(domain: MessagingDomain) -> Self {
         match domain {
             MessagingDomain::Refill => 1,

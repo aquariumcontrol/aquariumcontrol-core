@@ -27,6 +27,7 @@ impl Petting {
 }
 
 impl Default for Petting {
+    /// Creates a default instance of this type.
     fn default() -> Self {
         Self::new()
     }

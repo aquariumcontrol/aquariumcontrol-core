@@ -84,6 +84,7 @@ impl RefillErrorStates {
     // # Returns
     // `true` if at least one error flag (e.g., `error_switch_stuck_high`, `error_sql_update_failed`)
     // is set to `true`; otherwise, returns `false`.
+    /// Performs the `has_error` operation.
     pub fn has_error(&mut self) -> bool {
         self.error_switch_stuck_high
             || self.error_switch_stuck_low

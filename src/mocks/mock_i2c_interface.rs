@@ -40,6 +40,13 @@ pub mod tests {
     impl ProcessExternalRequestTrait for MockI2cInterface {}
 
     impl MockI2cInterface {
+        /// Creates a new instance.
+        ///
+        /// # Arguments
+        /// * `atlas_scientific_config` - A parameter representing `atlas_scientific_config`.
+        /// * `mock_response_temperature` - A parameter representing `mock_response_temperature`.
+        /// * `mock_response_ph` - A parameter representing `mock_response_ph`.
+        /// * `mock_response_conductivity` - A parameter representing `mock_response_conductivity`.
         pub fn new(
             atlas_scientific_config: &AtlasScientificConfig,
             mock_response_temperature: I2cResponse,
@@ -58,6 +65,10 @@ pub mod tests {
             }
         }
 
+        /// Executes the main task loop.
+        ///
+        /// # Arguments
+        /// * `i2c_interface_channels` - A parameter representing `i2c_interface_channels`.
         pub async fn execute(&mut self, mut i2c_interface_channels: I2cInterfaceChannels) {
             loop {
                 let (

@@ -157,6 +157,10 @@ impl MessagingChannels {
 
 #[cfg(all(feature = "debug_channels", target_os = "linux"))]
 impl fmt::Display for MessagingChannels {
+    /// Formats the value using the given formatter.
+    ///
+    /// # Arguments
+    /// * `f` - The formatter to write the formatted string to.
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         writeln!(f, "=== MessagingChannels ===")?;
         writeln!(
@@ -209,6 +213,10 @@ impl fmt::Display for MessagingChannels {
 
 #[cfg(all(not(feature = "debug_channels"), target_os = "linux"))]
 impl fmt::Display for MessagingChannels {
+    /// Formats the value using the given formatter.
+    ///
+    /// # Arguments
+    /// * `f` - The formatter to write the formatted string to.
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(
             f,

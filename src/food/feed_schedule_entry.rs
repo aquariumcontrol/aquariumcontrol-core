@@ -164,6 +164,9 @@ mod tests {
     use chrono::NaiveDate;
 
     /// Helper function to create a `SqlFeedScheduleEntry` for testing.
+    ///
+    /// # Arguments
+    /// * `repeat_daily` - A parameter representing `repeat_daily`.
     fn create_sql_entry(repeat_daily: i16) -> SqlFeedScheduleEntry {
         SqlFeedScheduleEntry {
             timestamp: NaiveDate::from_ymd_opt(2024, 1, 1)

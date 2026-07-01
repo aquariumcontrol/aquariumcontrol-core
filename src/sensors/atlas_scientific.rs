@@ -113,6 +113,10 @@ pub struct AtlasScientificResultData {
 }
 
 impl AtlasScientificResultData {
+    /// Creates a new instance.
+    ///
+    /// # Arguments
+    /// * `value` - The value to set.
     pub fn new(value: f32) -> Self {
         AtlasScientificResultData {
             value,
@@ -121,6 +125,7 @@ impl AtlasScientificResultData {
         }
     }
 
+    /// Creates a default instance of this type.
     #[cfg(test)]
     pub fn default() -> Self {
         AtlasScientificResultData {
@@ -132,6 +137,10 @@ impl AtlasScientificResultData {
 }
 
 impl fmt::Display for AtlasScientificResultData {
+    /// Formats the value using the given formatter.
+    ///
+    /// # Arguments
+    /// * `f` - The formatter to write the formatted string to.
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         // Write the floating-point sensor value directly to the formatter.
         write!(f, "{}", self.value)
@@ -211,6 +220,10 @@ impl ProcessExternalRequestTrait for AtlasScientific {}
 impl GetResponseFromSimulatorTrait for AtlasScientific {}
 
 impl AtlasScientific {
+    /// Performs the `create_drivers` operation.
+    ///
+    /// # Arguments
+    /// * `config` - A parameter representing `config`.
     #[cfg(any(all(feature = "target_hw", target_os = "linux"), test))]
     pub fn create_drivers(
         config: &AtlasScientificConfig,
@@ -397,6 +410,9 @@ impl AtlasScientific {
     }
 
     /// Helper function for retrieving the driver from the hash map
+    ///
+    /// # Arguments
+    /// * `signal` - A parameter representing `signal`.
     fn get_driver(
         &mut self,
         signal: &AquariumSignal,
@@ -505,6 +521,9 @@ impl AtlasScientific {
 
     /// Iterates over all registered drivers and verifies their device type.
     /// This requires the I2cInterface thread to be running.
+    ///
+    /// # Arguments
+    /// * `channels` - A parameter representing `channels`.
     #[cfg(all(target_os = "linux", feature = "target_hw"))]
     pub fn init_devices(
         &self,
@@ -731,7 +750,8 @@ impl AtlasScientific {
             &mut atlas_scientific_channels.rx_atlas_scientific_from_signal_handler,
             sleep_duration_one_millis,
             module_path!(),
-        ).await;
+        )
+        .await;
     }
 }
 
@@ -968,12 +988,14 @@ pub mod tests {
                     .build()
                     .unwrap()
                     .block_on(async {
-                        atlas_scientific.execute(
-                            &mut channels.atlas_scientific,
-                            mutex_atlas_scientific_temperature,
-                            mutex_atlas_scientific_ph,
-                            mutex_atlas_scientific_conductivity,
-                        ).await;
+                        atlas_scientific
+                            .execute(
+                                &mut channels.atlas_scientific,
+                                mutex_atlas_scientific_temperature,
+                                mutex_atlas_scientific_ph,
+                                mutex_atlas_scientific_conductivity,
+                            )
+                            .await;
                     });
                 let driver_temperature = atlas_scientific
                     .drivers
@@ -1325,7 +1347,8 @@ pub mod tests {
         assert!(complete);
 
         // Test default branch (_) using AmbientTemperature
-        let (next, complete) = AquariumSignal::AmbientTemperature.get_next_atlas_scientific_signal();
+        let (next, complete) =
+            AquariumSignal::AmbientTemperature.get_next_atlas_scientific_signal();
         assert_eq!(next, AquariumSignal::WaterTemperature);
         assert!(!complete);
     }

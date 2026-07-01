@@ -55,6 +55,7 @@ impl pHTimeProfile {
     /// * `pHTimeProfileConfig` - configuration data read from .toml file
     /// * `time_of_day` - time of day used for calculation of the unfiltered pH value which is used for initialization of the filter
     /// * `time_step` - time step in seconds (in case simulation shall run faster than real time)
+    /// * `config` - A parameter representing `config`.
     pub fn new(config: pHTimeProfileConfig, time_of_day: NaiveTime, _time_step: f32) -> Self {
         Self {
             filter: IIRFilter::new(
@@ -68,6 +69,11 @@ impl pHTimeProfile {
     }
 
     // The function calculates unfiltered pH at a given time of day using profile parameters
+    /// Performs the `pH_unfiltered` operation.
+    ///
+    /// # Arguments
+    /// * `config` - A parameter representing `config`.
+    /// * `time_of_day` - A parameter representing `time_of_day`.
     fn pH_unfiltered(config: &pHTimeProfileConfig, time_of_day: NaiveTime) -> f32 {
         // distinguish two different configurations
         if config.time_low < config.time_high {
@@ -129,6 +135,9 @@ impl pHTimeProfile {
     }
 
     /// The function calculates the filtered pH value and returns it as float value.
+    ///
+    /// # Arguments
+    /// * `time_of_day` - A parameter representing `time_of_day`.
     pub fn pH(&mut self, time_of_day: NaiveTime) -> f32 {
         self.filter
             .get_filtered_value(Self::pH_unfiltered(&self.config, time_of_day))
@@ -143,6 +152,13 @@ pub mod tests {
     use assert_float_eq::*;
     use chrono::NaiveTime;
 
+    /// Performs the `create_profile` operation.
+    ///
+    /// # Arguments
+    /// * `high_before_low` - A parameter representing `high_before_low`.
+    /// * `pH_low` - A parameter representing `pH_low`.
+    /// * `pH_high` - A parameter representing `pH_high`.
+    /// * `current_time` - A parameter representing `current_time`.
     fn create_profile<'a>(
         high_before_low: bool,
         pH_low: f32,

@@ -709,6 +709,9 @@ impl Dht {
     ///
     /// # Errors
     /// Always returns `Err(DhtError::IncorrectPlatform)`.
+    ///
+    /// # Arguments
+    /// * `reset_sensor` - A parameter representing `reset_sensor`.
     pub fn read(&self, _reset_sensor: bool) -> DhtResult {
         Err(DhtError::IncorrectPlatform(module_path!().to_string()))
     }

@@ -32,6 +32,7 @@ pub mod tests {
     }
 
     impl MockActuatorStates {
+        /// Creates a new instance.
         pub fn new() -> MockActuatorStates {
             MockActuatorStates {
                 peristaltic_pump1_actuation_state: ActuatorState::Undefined,
@@ -50,6 +51,7 @@ pub mod tests {
             }
         }
 
+        /// Checks the terminal condition refill.
         pub fn check_terminal_condition_refill(&self) {
             assert_eq!(self.refill_pump_actuation_state, ActuatorState::Off);
             assert_eq!(self.skimmer_actuation_state, ActuatorState::Undefined);
@@ -78,6 +80,10 @@ pub mod tests {
             assert_eq!(self.ventilation_actuation_state, ActuatorState::Undefined);
         }
 
+        /// Checks the terminal condition ventilation.
+        ///
+        /// # Arguments
+        /// * `final_ventilation_actuation_state` - A parameter representing `final_ventilation_actuation_state`.
         pub fn check_terminal_condition_ventilation(
             &self,
             final_ventilation_actuation_state: ActuatorState,
@@ -112,6 +118,7 @@ pub mod tests {
             );
         }
 
+        /// Checks the terminal condition heating.
         pub fn check_terminal_condition_heating(&self) {
             assert_eq!(self.refill_pump_actuation_state, ActuatorState::Undefined);
             assert_eq!(self.skimmer_actuation_state, ActuatorState::Undefined);
@@ -142,6 +149,11 @@ pub mod tests {
     }
 
     // Helper function to record the actuation state of the devices.
+    /// Updates the actuator states.
+    ///
+    /// # Arguments
+    /// * `command` - The command string to verify.
+    /// * `mock_actuator_states` - A parameter representing `mock_actuator_states`.
     fn update_actuator_states(
         command: InternalCommand,
         mock_actuator_states: &mut MockActuatorStates,
@@ -201,6 +213,11 @@ pub mod tests {
         }
     }
 
+    /// Performs the `mock_relay_manager` operation.
+    ///
+    /// # Arguments
+    /// * `tx_relay_manager_to_test_object` - A parameter representing `tx_relay_manager_to_test_object`.
+    /// * `rx_relay_manager_from_test_object` - A parameter representing `rx_relay_manager_from_test_object`.
     pub fn mock_relay_manager(
         tx_relay_manager_to_test_object: &mut AquaSender<bool>,
         rx_relay_manager_from_test_object: &mut AquaReceiver<InternalCommand>,

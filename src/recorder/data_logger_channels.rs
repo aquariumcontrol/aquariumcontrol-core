@@ -56,6 +56,10 @@ pub struct DataLoggerChannels {
 
 #[cfg(feature = "debug_channels")]
 impl fmt::Display for DataLoggerChannels {
+    /// Formats the value using the given formatter.
+    ///
+    /// # Arguments
+    /// * `f` - The formatter to write the formatted string to.
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         writeln!(f, "=== DataLoggerChannels ===")?;
         writeln!(
@@ -73,6 +77,10 @@ impl fmt::Display for DataLoggerChannels {
 
 #[cfg(not(feature = "debug_channels"))]
 impl fmt::Display for DataLoggerChannels {
+    /// Formats the value using the given formatter.
+    ///
+    /// # Arguments
+    /// * `f` - The formatter to write the formatted string to.
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(
             f,

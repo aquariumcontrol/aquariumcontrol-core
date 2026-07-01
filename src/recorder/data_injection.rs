@@ -72,6 +72,7 @@ impl DataInjectionTrait for DataInjection {
     ///   This is passed by value, meaning ownership is transferred to this function.
     /// * `sql_interface_data` - A mutable reference to the `SqlInterfaceData` instance,
     ///   which handles the actual database write operation.
+    /// * `conn` - An active pooled database connection.
     fn inject_data(&mut self, data_frame: RecorderDataFrame, mut conn: PooledConn) -> PooledConn {
         match SqlInterfaceData::write_data_frame_to_database(&mut conn, &data_frame) {
             Ok(()) => { /* do nothing */ }

@@ -64,13 +64,23 @@ use std::time::{Duration, Instant};
 pub trait CheckMutexAccessDurationTrait {
     /// Reads the warn-lock.
     /// This flag is used to prevent log-flooding
+    ///
+    /// # Arguments
+    /// * `key_opt` - An optional configuration key.
     fn get_warn_lock(&self, key_opt: &Option<&AquariumSignal>) -> bool;
 
     /// Sets the warn-lock.
     /// This flag is used to prevent log-flooding
+    ///
+    /// # Arguments
+    /// * `key` - The configuration key.
+    /// * `value` - The value to set.
     fn set_warn_lock(&mut self, key: &Option<&AquariumSignal>, value: bool);
 
     /// Records violation of mutex access duration for testing purposes
+    ///
+    /// # Arguments
+    /// * `key_opt` - An optional configuration key.
     #[cfg(test)]
     fn record_access_duration_violation(&mut self, key_opt: &Option<&AquariumSignal>);
 
@@ -81,6 +91,12 @@ pub trait CheckMutexAccessDurationTrait {
     #[cfg(not(test))] // only required in real-life execution
     fn get_location(&self) -> &str;
 
+    /// Checks the mutex access duration.
+    ///
+    /// # Arguments
+    /// * `key_opt` - An optional configuration key.
+    /// * `instant_after_locking_mutex` - A parameter representing `instant_after_locking_mutex`.
+    /// * `instant_before_locking_mutex` - A parameter representing `instant_before_locking_mutex`.
     fn check_mutex_access_duration(
         &mut self,
         key_opt: Option<&AquariumSignal>,
@@ -123,12 +139,19 @@ pub trait CheckMutexAccessDurationTrait {
 impl CheckMutexAccessDurationTrait for TankLevelSwitch {
     /// Method connects the default trait implementation with the specific implementation
     /// reading the warn-lock.
+    ///
+    /// # Arguments
+    /// * `key_opt` - An optional configuration key.
     fn get_warn_lock(&self, _key_opt: &Option<&AquariumSignal>) -> bool {
         self.lock_warn_max_mutex_access_duration
     }
 
     /// Method connects the default trait implementation with the specific implementation
     /// setting the warn-lock.
+    ///
+    /// # Arguments
+    /// * `key_opt` - An optional configuration key.
+    /// * `value` - The value to set.
     fn set_warn_lock(&mut self, _key_opt: &Option<&AquariumSignal>, value: bool) {
         self.lock_warn_max_mutex_access_duration = value;
     }
@@ -136,6 +159,9 @@ impl CheckMutexAccessDurationTrait for TankLevelSwitch {
     #[cfg(test)]
     /// Method connects the default trait implementation with the specific implementation
     /// for recording access duration violation
+    ///
+    /// # Arguments
+    /// * `key_opt` - An optional configuration key.
     fn record_access_duration_violation(&mut self, _key_opt: &Option<&AquariumSignal>) {
         self.mutex_access_duration_exceeded = true;
     }
@@ -156,12 +182,19 @@ impl CheckMutexAccessDurationTrait for TankLevelSwitch {
 impl CheckMutexAccessDurationTrait for Heating {
     /// Method connects the default trait implementation with the specific implementation
     /// reading the warn-lock.
+    ///
+    /// # Arguments
+    /// * `key_opt` - An optional configuration key.
     fn get_warn_lock(&self, _key_opt: &Option<&AquariumSignal>) -> bool {
         self.lock_warn_max_mutex_access_duration
     }
 
     /// Method connects the default trait implementation with the specific implementation
     /// setting the warn-lock.
+    ///
+    /// # Arguments
+    /// * `key_opt` - An optional configuration key.
+    /// * `value` - The value to set.
     fn set_warn_lock(&mut self, _key_opt: &Option<&AquariumSignal>, value: bool) {
         self.lock_warn_max_mutex_access_duration = value;
     }
@@ -169,6 +202,9 @@ impl CheckMutexAccessDurationTrait for Heating {
     #[cfg(test)]
     /// Method connects the default trait implementation with the specific implementation
     /// for recording access duration violation
+    ///
+    /// # Arguments
+    /// * `key_opt` - An optional configuration key.
     fn record_access_duration_violation(&mut self, _key_opt: &Option<&AquariumSignal>) {
         self.mutex_access_duration_exceeded = true;
     }
@@ -189,12 +225,19 @@ impl CheckMutexAccessDurationTrait for Heating {
 impl CheckMutexAccessDurationTrait for Ventilation {
     /// Method connects the default trait implementation with the specific implementation
     /// reading the warn-lock.
+    ///
+    /// # Arguments
+    /// * `key_opt` - An optional configuration key.
     fn get_warn_lock(&self, _key_opt: &Option<&AquariumSignal>) -> bool {
         self.lock_warn_max_mutex_access_duration
     }
 
     /// Method connects the default trait implementation with the specific implementation
     /// setting the warn-lock.
+    ///
+    /// # Arguments
+    /// * `key_opt` - An optional configuration key.
+    /// * `value` - The value to set.
     fn set_warn_lock(&mut self, _key_opt: &Option<&AquariumSignal>, value: bool) {
         self.lock_warn_max_mutex_access_duration = value;
     }
@@ -202,6 +245,9 @@ impl CheckMutexAccessDurationTrait for Ventilation {
     #[cfg(test)]
     /// Method connects the default trait implementation with the specific implementation
     /// for recording access duration violation
+    ///
+    /// # Arguments
+    /// * `key_opt` - An optional configuration key.
     fn record_access_duration_violation(&mut self, _key_opt: &Option<&AquariumSignal>) {
         self.mutex_access_duration_exceeded = true;
     }
@@ -222,12 +268,19 @@ impl CheckMutexAccessDurationTrait for Ventilation {
 impl CheckMutexAccessDurationTrait for Dht {
     /// Method connects the default trait implementation with the specific implementation
     /// reading the warn-lock.
+    ///
+    /// # Arguments
+    /// * `key_opt` - An optional configuration key.
     fn get_warn_lock(&self, _key_opt: &Option<&AquariumSignal>) -> bool {
         self.lock_warn_max_mutex_access_duration
     }
 
     /// Method connects the default trait implementation with the specific implementation
     /// setting the warn-lock.
+    ///
+    /// # Arguments
+    /// * `key_opt` - An optional configuration key.
+    /// * `value` - The value to set.
     fn set_warn_lock(&mut self, _key_opt: &Option<&AquariumSignal>, value: bool) {
         self.lock_warn_max_mutex_access_duration = value;
     }
@@ -235,6 +288,9 @@ impl CheckMutexAccessDurationTrait for Dht {
     #[cfg(test)]
     /// Method connects the default trait implementation with the specific implementation
     /// for recording access duration violation
+    ///
+    /// # Arguments
+    /// * `key_opt` - An optional configuration key.
     fn record_access_duration_violation(&mut self, _key_opt: &Option<&AquariumSignal>) {
         self.mutex_access_duration_exceeded = true;
     }
@@ -255,12 +311,19 @@ impl CheckMutexAccessDurationTrait for Dht {
 impl CheckMutexAccessDurationTrait for SensorManager {
     /// Method connects the default trait implementation with the specific implementation
     /// reading the warn-lock.
+    ///
+    /// # Arguments
+    /// * `key_opt` - An optional configuration key.
     fn get_warn_lock(&self, _key_opt: &Option<&AquariumSignal>) -> bool {
         self.lock_warn_max_mutex_access_duration
     }
 
     /// Method connects the default trait implementation with the specific implementation
     /// setting the warn-lock.
+    ///
+    /// # Arguments
+    /// * `key_opt` - An optional configuration key.
+    /// * `value` - The value to set.
     fn set_warn_lock(&mut self, _key_opt: &Option<&AquariumSignal>, value: bool) {
         self.lock_warn_max_mutex_access_duration = value;
     }
@@ -268,6 +331,9 @@ impl CheckMutexAccessDurationTrait for SensorManager {
     #[cfg(test)]
     /// Method connects the default trait implementation with the specific implementation
     /// for recording access duration violation
+    ///
+    /// # Arguments
+    /// * `key_opt` - An optional configuration key.
     fn record_access_duration_violation(&mut self, _key_opt: &Option<&AquariumSignal>) {
         self.mutex_access_duration_exceeded = true;
     }
@@ -288,12 +354,19 @@ impl CheckMutexAccessDurationTrait for SensorManager {
 impl CheckMutexAccessDurationTrait for WaterInjection {
     /// Method connects the default trait implementation with the specific implementation
     /// reading the warn-lock.
+    ///
+    /// # Arguments
+    /// * `key_opt` - An optional configuration key.
     fn get_warn_lock(&self, _key_opt: &Option<&AquariumSignal>) -> bool {
         self.lock_warn_max_mutex_access_duration
     }
 
     /// Method connects the default trait implementation with the specific implementation
     /// setting the warn-lock.
+    ///
+    /// # Arguments
+    /// * `key_opt` - An optional configuration key.
+    /// * `value` - The value to set.
     fn set_warn_lock(&mut self, _key_opt: &Option<&AquariumSignal>, value: bool) {
         self.lock_warn_max_mutex_access_duration = value;
     }
@@ -301,6 +374,9 @@ impl CheckMutexAccessDurationTrait for WaterInjection {
     #[cfg(test)]
     /// Method connects the default trait implementation with the specific implementation
     /// for recording access duration violation
+    ///
+    /// # Arguments
+    /// * `key_opt` - An optional configuration key.
     fn record_access_duration_violation(&mut self, _key_opt: &Option<&AquariumSignal>) {
         self.mutex_access_duration_exceeded = true;
     }
@@ -321,12 +397,19 @@ impl CheckMutexAccessDurationTrait for WaterInjection {
 impl CheckMutexAccessDurationTrait for Ds18b20 {
     /// Method connects the default trait implementation with the specific implementation
     /// reading the warn-lock.
+    ///
+    /// # Arguments
+    /// * `key_opt` - An optional configuration key.
     fn get_warn_lock(&self, _key_opt: &Option<&AquariumSignal>) -> bool {
         self.lock_warn_max_mutex_access_duration
     }
 
     /// Method connects the default trait implementation with the specific implementation
     /// setting the warn-lock.
+    ///
+    /// # Arguments
+    /// * `key` - The configuration key.
+    /// * `value` - The value to set.
     fn set_warn_lock(&mut self, _key: &Option<&AquariumSignal>, value: bool) {
         self.lock_warn_max_mutex_access_duration = value;
     }
@@ -334,6 +417,9 @@ impl CheckMutexAccessDurationTrait for Ds18b20 {
     #[cfg(test)]
     /// Method connects the default trait implementation with the specific implementation
     /// for recording access duration violation
+    ///
+    /// # Arguments
+    /// * `key_opt` - An optional configuration key.
     fn record_access_duration_violation(&mut self, _key_opt: &Option<&AquariumSignal>) {
         self.mutex_access_duration_exceeded = true;
     }
@@ -351,6 +437,10 @@ impl CheckMutexAccessDurationTrait for Ds18b20 {
     }
 }
 impl CheckMutexAccessDurationTrait for AtlasScientificEzo {
+    /// Retrieves the warn lock.
+    ///
+    /// # Arguments
+    /// * `key_opt` - An optional configuration key.
     fn get_warn_lock(&self, key_opt: &Option<&AquariumSignal>) -> bool {
         if let Some(key) = key_opt {
             match key {
@@ -369,6 +459,11 @@ impl CheckMutexAccessDurationTrait for AtlasScientificEzo {
         }
     }
 
+    /// Sets the warn lock.
+    ///
+    /// # Arguments
+    /// * `key_opt` - An optional configuration key.
+    /// * `value` - The value to set.
     fn set_warn_lock(&mut self, key_opt: &Option<&AquariumSignal>, value: bool) {
         if let Some(key) = key_opt {
             match key {
@@ -387,6 +482,9 @@ impl CheckMutexAccessDurationTrait for AtlasScientificEzo {
     #[cfg(test)]
     /// Method connects the default trait implementation with the specific implementation
     /// for recording access duration violation
+    ///
+    /// # Arguments
+    /// * `key_opt` - An optional configuration key.
     fn record_access_duration_violation(&mut self, key_opt: &Option<&AquariumSignal>) {
         if let Some(key) = key_opt {
             match key {
@@ -417,6 +515,10 @@ impl CheckMutexAccessDurationTrait for AtlasScientificEzo {
 
 #[cfg(any(all(feature = "target_hw", target_os = "linux"), test))]
 impl CheckMutexAccessDurationTrait for AtlasScientificOem {
+    /// Retrieves the warn lock.
+    ///
+    /// # Arguments
+    /// * `key_opt` - An optional configuration key.
     fn get_warn_lock(&self, key_opt: &Option<&AquariumSignal>) -> bool {
         if let Some(key) = key_opt {
             match key {
@@ -435,6 +537,11 @@ impl CheckMutexAccessDurationTrait for AtlasScientificOem {
         }
     }
 
+    /// Sets the warn lock.
+    ///
+    /// # Arguments
+    /// * `key_opt` - An optional configuration key.
+    /// * `value` - The value to set.
     fn set_warn_lock(&mut self, key_opt: &Option<&AquariumSignal>, value: bool) {
         if let Some(key) = key_opt {
             match key {
@@ -452,6 +559,9 @@ impl CheckMutexAccessDurationTrait for AtlasScientificOem {
 
     /// Method connects the default trait implementation with the specific implementation
     /// for recording access duration violation
+    ///
+    /// # Arguments
+    /// * `key_opt` - An optional configuration key.
     #[cfg(test)]
     fn record_access_duration_violation(&mut self, key_opt: &Option<&AquariumSignal>) {
         if let Some(key) = key_opt {

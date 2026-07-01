@@ -267,6 +267,12 @@ pub mod tests {
     use std::thread::scope;
     use std::time::Duration;
 
+    /// Synchronously executes the main task loop for testing.
+    ///
+    /// # Arguments
+    /// * `watchdog` - A parameter representing `watchdog`.
+    /// * `watchdog_channels` - A parameter representing `watchdog_channels`.
+    /// * `petting` - A parameter representing `petting`.
     fn execute_blocking(
         watchdog: &mut Watchdog,
         watchdog_channels: &mut crate::watchmen::watchdog_channels::WatchDogChannels,

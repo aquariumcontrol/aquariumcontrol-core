@@ -431,6 +431,11 @@ impl AtlasScientificDriver for AtlasScientificEzo {
         result
     }
 
+    /// Dummy trait implementation of `device_init` operation.
+    ///
+    /// # Arguments
+    /// * `atlas_scientific_channels`: MPSC channel pair - not used.
+    /// * `signal`: sensor type to be initialized - not used.
     #[cfg(any(all(target_os = "linux", feature = "target_hw"), test))]
     fn device_init(
         &self,
@@ -441,6 +446,10 @@ impl AtlasScientificDriver for AtlasScientificEzo {
         Ok(())
     }
 
+    /// Retrieves the mutex access duration exceeded.
+    ///
+    /// # Arguments
+    /// * `signal` - sensor type.
     #[cfg(test)]
     fn get_mutex_access_duration_exceeded(&self, signal: &AquariumSignal) -> bool {
         match signal {
@@ -1169,6 +1178,9 @@ pub mod tests {
     }
 
     /// Helper function to run a successful receive-and-parse test for a given signal.
+    ///
+    /// # Arguments
+    /// * `value` - The value to set.
     fn run_receive_success_test(signal: AquariumSignal, value: f32) {
         let (
             mut drivers,

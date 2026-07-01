@@ -190,6 +190,7 @@ impl ScheduleCheck {
     /// * `locks` - A mutable reference to the struct containing the lock flags.
     /// * `_module_name` - Name of the module for which the schedule shall be checked for logging purposes.
     ///
+    /// * `module_name` - A parameter representing `module_name`.
     fn check_pending_schedule_request(
         config: &ScheduleCheckConfig,
         tx: &mut AquaSender<bool>,
@@ -289,6 +290,9 @@ impl ScheduleCheck {
     /// * `locks` - A mutable reference to the log-suppression flags for the specific client module.
     /// * `action` - The name of the client module (e.g., "ventilation"), used for logging.
     /// * `schedule_check_channels` - A mutable reference to the struct containing all communication channels.
+    /// * `schedule_type` - A parameter representing `schedule_type`.
+    /// * `module_name` - A parameter representing `module_name`.
+    /// * `channel_pair` - A parameter representing `channel_pair`.
     fn find_schedule_check_request(
         schedule_type: ScheduleType,
         config: &ScheduleCheckConfig,
@@ -487,6 +491,10 @@ mod tests {
     use chrono::NaiveTime;
 
     // Helper function to create a default config for tests.
+    /// Performs the `default_test_config` operation.
+    ///
+    /// # Arguments
+    /// * `strategy_if_not_found` - A parameter representing `strategy_if_not_found`.
     fn default_test_config(strategy_if_not_found: bool) -> ScheduleCheckConfig {
         ScheduleCheckConfig {
             active: true,
@@ -497,6 +505,7 @@ mod tests {
     }
 
     // Helper to create a schedule entry that is always active and covers the entire day.
+    /// Performs the `always_allowed_schedule` operation.
     fn always_allowed_schedule() -> ScheduleEntry {
         ScheduleEntry::new_for_test(
             ScheduleType::Heating,

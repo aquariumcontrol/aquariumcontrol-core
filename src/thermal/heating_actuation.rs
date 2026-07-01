@@ -34,12 +34,13 @@ use std::sync::{Arc, Mutex};
 /// * `mutex_device_scheduler_heating` - A reference to the shared actuation mutex.
 /// * `mutex_blocked_during_actuation` - A mutable flag to track if the actuation mutex was blocked.
 /// * `heating_channels` - A mutable reference to the struct containing the channels.
+/// * `is_multi_thread` - A boolean flag indicating if the Tokio runtime is running in multi-threaded mode.
 fn actuate_heater(
     command: InternalCommand,
     mutex_device_scheduler_heating: &Arc<Mutex<i32>>,
     mutex_blocked_during_actuation: &mut bool,
     heating_channels: &mut HeatingChannels,
-    is_multi_thread: bool
+    is_multi_thread: bool,
 ) {
     // reduce the probability of wrong warning
     *mutex_blocked_during_actuation |= mutex_device_scheduler_heating.try_lock().is_err();
@@ -74,6 +75,7 @@ fn actuate_heater(
 /// * `mutex_device_scheduler_heating` - A reference to the shared actuation mutex.
 /// * `mutex_blocked_during_actuation` - A mutable flag to track if the actuation mutex was blocked.
 /// * `heating_channels` - A mutable reference to the struct containing the channels.
+/// * `is_multi_thread` - A boolean flag indicating if the Tokio runtime is running in multi-threaded mode.
 pub fn switch_on_heater(
     mutex_device_scheduler_heating: &Arc<Mutex<i32>>,
     mutex_blocked_during_actuation: &mut bool,
@@ -85,7 +87,7 @@ pub fn switch_on_heater(
         mutex_device_scheduler_heating,
         mutex_blocked_during_actuation,
         heating_channels,
-        is_multi_thread
+        is_multi_thread,
     );
 }
 
@@ -97,6 +99,7 @@ pub fn switch_on_heater(
 /// * `mutex_device_scheduler_heating` - A reference to the shared actuation mutex.
 /// * `mutex_blocked_during_actuation` - A mutable flag to track if the actuation mutex was blocked.
 /// * `heating_channels` - A mutable reference to the struct containing the channels.
+/// * `is_multi_thread` - A boolean flag indicating if the Tokio runtime is running in multi-threaded mode.
 pub fn switch_off_heater(
     mutex_device_scheduler_heating: &Arc<Mutex<i32>>,
     mutex_blocked_during_actuation: &mut bool,
@@ -108,6 +111,6 @@ pub fn switch_off_heater(
         mutex_device_scheduler_heating,
         mutex_blocked_during_actuation,
         heating_channels,
-        is_multi_thread
+        is_multi_thread,
     );
 }

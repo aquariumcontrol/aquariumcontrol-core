@@ -109,6 +109,10 @@ mod tests {
     }
 
     impl MockMonitor {
+        /// Creates a new instance.
+        ///
+        /// # Arguments
+        /// * `max_time` - A parameter representing `max_time`.
         fn new(max_time: u64) -> Self {
             Self {
                 max_time,
@@ -119,10 +123,12 @@ mod tests {
     }
 
     impl TemperatureGradientMonitorTrait for MockMonitor {
+        /// Performs the `max_time_actuator_effect_monitor` operation.
         fn max_time_actuator_effect_monitor(&self) -> u64 {
             self.max_time
         }
 
+        /// Performs the `monitor_state` operation.
         fn monitor_state(&mut self) -> (&mut Option<Instant>, &mut bool) {
             (&mut self.last_actuator_on_time, &mut self.log_inhibition)
         }

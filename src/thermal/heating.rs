@@ -65,9 +65,9 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 //!   pre-configured parameters from a TOML file, and dynamic setpoints fetched from
 //!   a database.
 
+use log::error;
 #[cfg(not(test))] // only required in real-life execution
 use log::{info, warn};
-use log::error;
 
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
@@ -166,10 +166,12 @@ pub struct Heating {
 }
 
 impl TemperatureGradientMonitorTrait for Heating {
+    /// Performs the `max_time_actuator_effect_monitor` operation.
     fn max_time_actuator_effect_monitor(&self) -> u64 {
         self.config.max_time_actuator_effect_monitor
     }
 
+    /// Performs the `monitor_state` operation.
     fn monitor_state(&mut self) -> (&mut Option<Instant>, &mut bool) {
         (
             &mut self.last_actuator_on_time,
@@ -262,10 +264,14 @@ impl Heating {
     /// This function handles errors internally. If the database call fails, it logs
     /// the error and returns a default fallback value of 24 hours (86.400 seconds).
     /// This prevents a crash and suspends statistics recording until the next day.
+    ///
+    /// # Arguments
+    /// * `sql_interface_heating` - Database interface connection for heating stats.
+    /// * `is_multi_thread` - A boolean flag indicating if the Tokio runtime is running in multi-threaded mode.
     fn get_duration_until_midnight(
         &mut self,
         sql_interface_heating: &mut SqlInterfaceHeatingStats,
-        is_multi_thread: bool
+        is_multi_thread: bool,
     ) -> u64 {
         let default_value: u64 = 24 * 3600; // default value for time in seconds until midnight
 
@@ -275,15 +281,14 @@ impl Heating {
             sql_interface_heating.get_duration_until_midnight()
         };
 
-        let database_seconds_until_midnight = get_midnight_res
-            .unwrap_or_else(|e| {
-                let context = format!(
-                    "Could not get duration until midnight from database - using default value ({}).",
-                    default_value
-                );
-                log_error_chain(module_path!(), &context, e);
-                default_value as i64
-            });
+        let database_seconds_until_midnight = get_midnight_res.unwrap_or_else(|e| {
+            let context = format!(
+                "Could not get duration until midnight from database - using default value ({}).",
+                default_value
+            );
+            log_error_chain(module_path!(), &context, e);
+            default_value as i64
+        });
         if database_seconds_until_midnight < 0 {
             error!(
                 target: module_path!(),
@@ -376,13 +381,14 @@ impl Heating {
     ///   `HeatingStatsDataTransferTrait`, used to perform the actual database write.
     /// * `sql_interface_heating` - A mutable reference to the SQL interface, required for
     ///   creating a new `HeatingStatsEntry` and for calculating the time until the next midnight.
+    /// * `is_multi_thread` - A boolean flag indicating if the Tokio runtime is running in multi-threaded mode.
     fn record_heating_stats(
         &mut self,
         midnight_instant: &mut Instant,
         heating_stats_opt: &mut Option<HeatingStatsEntry>,
         heating_stats_transfer: &mut impl HeatingStatsDataTransferTrait,
         sql_interface_heating: &mut SqlInterfaceHeatingStats,
-        is_multi_thread: bool
+        is_multi_thread: bool,
     ) {
         // check if midnight has arrived
         if Instant::now() > *midnight_instant {
@@ -413,7 +419,9 @@ impl Heating {
                 };
                 *heating_stats_opt = Some(new_stats);
                 *midnight_instant = Instant::now()
-                    + Duration::from_secs(self.get_duration_until_midnight(sql_interface_heating, is_multi_thread));
+                    + Duration::from_secs(
+                        self.get_duration_until_midnight(sql_interface_heating, is_multi_thread),
+                    );
             }
         }
     }
@@ -443,9 +451,11 @@ impl Heating {
     ///   with modules like `RelayManager`, `SignalHandler`, `DataLogger`, `ScheduleCheck`, and `Messaging`.
     /// * `heating_stats_transfer` - A mutable reference to an object implementing `HeatingStatsDataTransferTrait`,
     ///   responsible for persisting daily heating statistics to the database.
-    /// * `heating_stats_transfer` - A mutable reference to an object implementing `HeatingSetValueUpdaterTrait`,
+    /// * `heating_set_val_updater` - A mutable reference to an object implementing `ThermalSetValueUpdaterTrait`,
     ///   responsible for updating the set values dynamically by communicating with SQL database.
     /// * `heating_mutexes` - Struct containing the mutexes to access data from different threads.
+    /// * `sql_interface_heating` - A `SqlInterfaceHeatingStats` instance providing direct interface to database.
+    /// * `is_multi_thread` - A boolean indicating if the tokio runtime is running in multi-threaded mode.
     ///
     /// # Returns
     /// This function does not return a value in the traditional sense, as it is designed
@@ -461,7 +471,7 @@ impl Heating {
         heating_set_val_updater: &mut impl ThermalSetValueUpdaterTrait,
         heating_mutexes: HeatingMutexes,
         mut sql_interface_heating: SqlInterfaceHeatingStats,
-        is_multi_thread: bool
+        is_multi_thread: bool,
     ) {
         #[cfg(all(target_os = "linux", not(test)))] // only required in real-life execution
         #[cfg(not(tarpaulin_include))]
@@ -478,8 +488,9 @@ impl Heating {
         let mut loop_counter = 0;
         let mut heater_state: ActuatorState = ActuatorState::Undefined;
         let mut schedule_check_result: bool;
-        let duration_until_midnight =
-            Duration::from_secs(self.get_duration_until_midnight(&mut sql_interface_heating, is_multi_thread));
+        let duration_until_midnight = Duration::from_secs(
+            self.get_duration_until_midnight(&mut sql_interface_heating, is_multi_thread),
+        );
         let mut midnight_instant = Instant::now() + duration_until_midnight;
         let mut tank_level_low_counter = 0;
         let mut heating_inhibited: bool = false; // state of heating control determined by if the start/stop command has been received
@@ -489,7 +500,9 @@ impl Heating {
         let mut actuator_ineffective: bool = false;
 
         let get_heating_stats_res = if is_multi_thread {
-            tokio::task::block_in_place(|| sql_interface_heating.get_single_heating_stats_from_database())
+            tokio::task::block_in_place(|| {
+                sql_interface_heating.get_single_heating_stats_from_database()
+            })
         } else {
             sql_interface_heating.get_single_heating_stats_from_database()
         };
@@ -504,7 +517,9 @@ impl Heating {
                 );
 
                 let entry = if is_multi_thread {
-                    tokio::task::block_in_place(|| HeatingStatsEntry::new(&mut sql_interface_heating.conn))
+                    tokio::task::block_in_place(|| {
+                        HeatingStatsEntry::new(&mut sql_interface_heating.conn)
+                    })
                 } else {
                     HeatingStatsEntry::new(&mut sql_interface_heating.conn)
                 };
@@ -618,7 +633,7 @@ impl Heating {
                         &mutex_device_scheduler_heating,
                         &mut actuation_mutex_was_blocked_during_actuation,
                         heating_channels,
-                        is_multi_thread
+                        is_multi_thread,
                     );
                     heater_state = ActuatorState::Off;
                     self.actuator_disabled = true;
@@ -637,7 +652,7 @@ impl Heating {
                             &mutex_device_scheduler_heating,
                             &mut actuation_mutex_was_blocked_during_actuation,
                             heating_channels,
-                            is_multi_thread
+                            is_multi_thread,
                         );
                         heater_state = ActuatorState::Off;
                     }
@@ -661,7 +676,7 @@ impl Heating {
                                         &mutex_device_scheduler_heating,
                                         &mut actuation_mutex_was_blocked_during_actuation,
                                         heating_channels,
-                                        is_multi_thread
+                                        is_multi_thread,
                                     );
                                     heater_state = ActuatorState::On;
                                 }
@@ -672,7 +687,7 @@ impl Heating {
                                         &mutex_device_scheduler_heating,
                                         &mut actuation_mutex_was_blocked_during_actuation,
                                         heating_channels,
-                                        is_multi_thread
+                                        is_multi_thread,
                                     );
                                     heater_state = ActuatorState::Off;
                                 }
@@ -686,7 +701,7 @@ impl Heating {
                                         &mutex_device_scheduler_heating,
                                         &mut actuation_mutex_was_blocked_during_actuation,
                                         heating_channels,
-                                        is_multi_thread
+                                        is_multi_thread,
                                     );
                                     heater_state = ActuatorState::Off;
                                 }
@@ -698,7 +713,7 @@ impl Heating {
                                         &mutex_device_scheduler_heating,
                                         &mut actuation_mutex_was_blocked_during_actuation,
                                         heating_channels,
-                                        is_multi_thread
+                                        is_multi_thread,
                                     );
                                     heater_state = ActuatorState::On;
                                 }
@@ -714,7 +729,7 @@ impl Heating {
                                         &mutex_device_scheduler_heating,
                                         &mut actuation_mutex_was_blocked_during_actuation,
                                         heating_channels,
-                                        is_multi_thread
+                                        is_multi_thread,
                                     );
                                     heater_state = ActuatorState::On;
                                 }
@@ -726,7 +741,7 @@ impl Heating {
                                         &mutex_device_scheduler_heating,
                                         &mut actuation_mutex_was_blocked_during_actuation,
                                         heating_channels,
-                                        is_multi_thread
+                                        is_multi_thread,
                                     );
                                     heater_state = ActuatorState::Off;
                                 }
@@ -742,7 +757,7 @@ impl Heating {
                                         &mutex_device_scheduler_heating,
                                         &mut actuation_mutex_was_blocked_during_actuation,
                                         heating_channels,
-                                        is_multi_thread
+                                        is_multi_thread,
                                     );
                                     heater_state = ActuatorState::On;
                                 }
@@ -754,7 +769,7 @@ impl Heating {
                                         &mutex_device_scheduler_heating,
                                         &mut actuation_mutex_was_blocked_during_actuation,
                                         heating_channels,
-                                        is_multi_thread
+                                        is_multi_thread,
                                     );
                                     heater_state = ActuatorState::Off;
                                 }
@@ -780,7 +795,7 @@ impl Heating {
                     &mut heating_stats_opt,
                     heating_stats_transfer,
                     &mut sql_interface_heating,
-                    is_multi_thread
+                    is_multi_thread,
                 );
             }
 
@@ -855,7 +870,7 @@ impl Heating {
                 &mutex_device_scheduler_heating,
                 &mut actuation_mutex_was_blocked_during_actuation,
                 heating_channels,
-                is_multi_thread
+                is_multi_thread,
             );
         }
 
@@ -884,12 +899,23 @@ impl Heating {
             &mut heating_channels.rx_heating_from_signal_handler,
             sleep_duration_hundred_millis,
             module_path!(),
-        ).await;
+        )
+        .await;
     }
 }
 
 #[cfg(test)]
 pub mod tests {
+    /// Helper function to execute the heating task inside a test Tokio runtime.
+    ///
+    /// # Arguments
+    /// * `heating` - A mutable reference to the `Heating` instance.
+    /// * `mutex_device_scheduler_heating` - Mutex coordinating access to the device scheduler.
+    /// * `heating_channels` - A mutable reference to the `HeatingChannels` instance.
+    /// * `heating_stats_transfer` - A mutable reference to the heating stats transfer object.
+    /// * `heating_set_val_updater` - A mutable reference to the set value updater.
+    /// * `heating_mutexes` - Shared mutexes for heating conditions.
+    /// * `sql_interface_heating` - Database interface for heating stats.
     fn execute_blocking(
         heating: &mut Heating,
         mutex_device_scheduler_heating: Arc<Mutex<i32>>,
@@ -905,7 +931,12 @@ pub mod tests {
             .unwrap()
             .block_on(async {
                 let is_multi_thread_test = tokio::runtime::Handle::try_current()
-                    .map(|h| matches!(h.runtime_flavor(), tokio::runtime::RuntimeFlavor::MultiThread))
+                    .map(|h| {
+                        matches!(
+                            h.runtime_flavor(),
+                            tokio::runtime::RuntimeFlavor::MultiThread
+                        )
+                    })
                     .unwrap_or(false);
 
                 heating
@@ -916,7 +947,7 @@ pub mod tests {
                         heating_set_val_updater,
                         heating_mutexes,
                         sql_interface_heating,
-                        is_multi_thread_test
+                        is_multi_thread_test,
                     )
                     .await;
             });
@@ -981,6 +1012,12 @@ pub mod tests {
     // - It fails to connect to the SQL database.
     // - It fails to truncate the `heatingstats` table in the database.
     // - It encounters any issue during the initialization of the `SqlInterfaceHeating` or `Heating` structs.
+    /// Performs the `prepare_heating_tests_mock_midnight_calculator` operation.
+    ///
+    /// # Arguments
+    /// * `seconds_to_midnight` - A parameter representing `seconds_to_midnight`.
+    /// * `test_db_number` - A parameter representing `test_db_number`.
+    /// * `saw_tooth_profile_config_opt` - A parameter representing `saw_tooth_profile_config_opt`.
     pub fn prepare_heating_tests_mock_midnight_calculator(
         seconds_to_midnight: i64,
         test_db_number: u32,
@@ -3418,7 +3455,7 @@ pub mod tests {
             &mut heating_stats_opt,
             &mut mock_transfer,
             &mut sql_interface_heating_stats,
-            false
+            false,
         );
 
         // 3. Assert
@@ -3543,7 +3580,7 @@ pub mod tests {
             &mut heating_stats_opt,
             &mut mock_transfer,
             &mut sql_interface_heating_stats,
-            false
+            false,
         );
 
         // 3. Assert

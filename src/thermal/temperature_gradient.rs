@@ -94,6 +94,9 @@ impl TemperatureGradient {
     ///
     /// # Arguments
     /// * `sensor_manager_signals` - `Arc<Mutex>` to read temperature data from.
+    /// * `mutex_sensor_manager_signals` - Shared mutex for consolidated sensor signals.
+    /// * `temperature_gradient_channels` - A parameter representing `temperature_gradient_channels`.
+    /// * `mutex_temperature_gradient` - A parameter representing `mutex_temperature_gradient`.
     pub async fn execute(
         &mut self,
         mutex_sensor_manager_signals: Arc<Mutex<SensorManagerSignals>>,
@@ -186,6 +189,9 @@ fn current_timestamp_as_f64() -> f64 {
 }
 
 /// Least squares gradient calculation.
+///
+/// # Arguments
+/// * `samples` - A parameter representing `samples`.
 fn calculate_least_squares_gradient(samples: &VecDeque<(f64, f64)>) -> f64 {
     if samples.len() < 2 {
         return 0.0; // Cannot calculate gradient with less than 2 points
@@ -230,6 +236,7 @@ mod tests {
     use spin_sleep::SpinSleeper;
     use std::thread;
 
+    /// Performs the `create_default_config` operation.
     fn create_default_config() -> TemperatureGradientConfig {
         TemperatureGradientConfig {
             active: true,
@@ -374,6 +381,13 @@ mod tests {
         assert_eq!(gradient, 0.0);
     }
 
+    /// Synchronously executes the main task loop for testing.
+    ///
+    /// # Arguments
+    /// * `temperature_gradient` - A parameter representing `temperature_gradient`.
+    /// * `mutex_sensor_manager_signals` - Shared mutex for consolidated sensor signals.
+    /// * `temperature_gradient_channels` - A parameter representing `temperature_gradient_channels`.
+    /// * `mutex_temperature_gradient` - A parameter representing `mutex_temperature_gradient`.
     fn execute_blocking(
         temperature_gradient: &mut TemperatureGradient,
         mutex_sensor_manager_signals: Arc<Mutex<SensorManagerSignals>>,
@@ -536,12 +550,12 @@ mod tests {
         let sql_interface =
             SqlInterface::new(config.sql_interface).expect("Failed to create SqlInterface.");
 
-        let mut sql_interface_data =
-            SqlInterfaceData::new(
-                sql_interface.get_connection().unwrap(),
-                sql_interface.get_connection().unwrap(), 
-                0
-            ).expect("Failed to create SqlInterfaceData.");
+        let mut sql_interface_data = SqlInterfaceData::new(
+            sql_interface.get_connection().unwrap(),
+            sql_interface.get_connection().unwrap(),
+            0,
+        )
+        .expect("Failed to create SqlInterfaceData.");
 
         // --- Get Data ---
         let temperature_data = sql_interface_data

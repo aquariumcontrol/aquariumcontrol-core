@@ -48,6 +48,10 @@ pub struct WatchDogChannels {
 
 #[cfg(feature = "debug_channels")]
 impl fmt::Display for WatchDogChannels {
+    /// Formats the value using the given formatter.
+    ///
+    /// # Arguments
+    /// * `f` - The formatter to write the formatted string to.
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         writeln!(f, "=== WatchDogChannels ===")?;
         writeln!(
@@ -73,6 +77,10 @@ impl fmt::Display for WatchDogChannels {
 
 #[cfg(not(feature = "debug_channels"))]
 impl fmt::Display for WatchDogChannels {
+    /// Formats the value using the given formatter.
+    ///
+    /// # Arguments
+    /// * `f` - The formatter to write the formatted string to.
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(
             f,

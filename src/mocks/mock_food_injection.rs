@@ -24,6 +24,7 @@ impl MockFoodInjection {
     //
     // # Returns
     // A new `MockFoodInjection` struct.
+    /// Creates a new instance.
     pub fn new() -> MockFoodInjection {
         MockFoodInjection {
             profile_ids_executed: Vec::new(),
@@ -40,6 +41,7 @@ impl MockFoodInjection {
     // An `Option<i32>`:
     // - `Some(i32)` containing the last executed profile ID.
     // - `None` if the `profile_ids_executed` list is empty.
+    /// Performs the `pop_profile_id_executed` operation.
     pub fn pop_profile_id_executed(&mut self) -> Option<i32> {
         self.profile_ids_executed.pop()
     }
@@ -66,6 +68,11 @@ impl FoodInjectionTrait for MockFoodInjection {
     //
     // # Returns
     // Always returns `false`, indicating that no `Quit` command was received.
+    /// Performs the `inject_food` operation.
+    ///
+    /// # Arguments
+    /// * `feed_channels` - A mutable reference to the `FeedChannels` communication interface.
+    /// * `feed_pattern` - A parameter representing `feed_pattern`.
     fn inject_food(
         &mut self,
         _feed_channels: &mut FeedChannels,

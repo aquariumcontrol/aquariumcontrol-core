@@ -61,7 +61,8 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 //!   avoiding repeated, potentially costly memory allocations within the main loop.
 
 // reduce terminal output when testing
-#[cfg(all(target_os = "linux", feature = "target_hw", not(test)))] // only required in real-life execution 
+#[cfg(all(target_os = "linux", feature = "target_hw", not(test)))]
+// only required in real-life execution
 use log::info;
 use std::fmt;
 
@@ -71,7 +72,8 @@ use crate::launch::channels::AquaChannelError;
 use crate::sensors::i2c_error::I2cError;
 use crate::sensors::i2c_interface_config::I2cInterfaceConfig;
 
-#[cfg(all(target_os = "linux", feature = "target_hw", not(test)))] // only required in real-life execution
+#[cfg(all(target_os = "linux", feature = "target_hw", not(test)))]
+// only required in real-life execution
 use nix::unistd::gettid;
 
 cfg_if::cfg_if! {
@@ -138,6 +140,9 @@ impl I2cRequest {
     /// Returns an `I2cError` if the provided command is too large for the buffer:
     /// - `I2cError::CommandTooLong`: If the length of `send_slice` exceeds the
     ///   `MAX_I2C_COMMAND_LENGTH` constant.
+    /// * `i2c_address` - A parameter representing `i2c_address`.
+    /// * `sleep_time_millis` - A parameter representing `sleep_time_millis`.
+    /// * `expected_response_length` - A parameter representing `expected_response_length`.
     pub fn new(
         i2c_address: u16,
         send_slice: &[u8],
@@ -182,6 +187,10 @@ pub struct I2cResponse {
 }
 
 impl fmt::Display for I2cResponse {
+    /// Formats the value using the given formatter.
+    ///
+    /// # Arguments
+    /// * `f` - The formatter to write the formatted string to.
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         // descriptive prefix
         write!(f, "I2cResponse [")?;
@@ -244,6 +253,7 @@ impl I2cResponse {
         }
     }
 
+    /// Performs the `empty` operation.
     pub fn empty() -> I2cResponse {
         let read_buf = [0u8; MAX_I2C_RESPONSE_LENGTH];
         I2cResponse {
@@ -358,8 +368,10 @@ impl I2cInterface {
             })?;
 
         let realized_write_len = tokio::task::block_in_place(|| {
-            self.i2c.write(&i2c_request.send_buf[..i2c_request.send_len])
-        }).map_err(|e| I2cError::WriteFailure {
+            self.i2c
+                .write(&i2c_request.send_buf[..i2c_request.send_len])
+        })
+        .map_err(|e| I2cError::WriteFailure {
             location: module_path!().to_string(),
             source: e,
         })?;
@@ -378,12 +390,11 @@ impl I2cInterface {
             // Use a sub-slice of the provided buffer for the read operation.
             let read_slice = &mut self.read_buffer[..i2c_request.expected_response_length];
 
-            let received_message_length = tokio::task::block_in_place(|| {
-                self.i2c.read(read_slice)
-            }).map_err(|e| I2cError::InsufficientRead {
-                location: module_path!().to_string(),
-                source: e,
-            })?;
+            let received_message_length = tokio::task::block_in_place(|| self.i2c.read(read_slice))
+                .map_err(|e| I2cError::InsufficientRead {
+                    location: module_path!().to_string(),
+                    source: e,
+                })?;
             if received_message_length != i2c_request.expected_response_length {
                 Err(I2cError::IncorrectResponseLength(
                     module_path!().to_string(),

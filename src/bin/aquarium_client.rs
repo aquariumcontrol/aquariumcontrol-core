@@ -109,9 +109,8 @@ fn display_usage() {
 /// Loads the configuration data described in a struct of type ConfigData from the .toml file.
 /// In case of failure, the function panics.
 /// In success case, the function returns a variable of type ConfigData.
-/// # Arguments:
-/// * `file_name` - When compiling for development, the configuration file shall be stored in a
-///   subfolder of the cargo base folder. The variable contains the name of the subfolder.
+/// # Arguments
+/// * `user_specified_file` - An optional string containing a custom configuration file path.
 pub fn read_config_file(user_specified_file: Option<String>) -> ConfigData {
     const LOG_TARGET_CONFIG: &str = "config";
 
@@ -173,6 +172,8 @@ pub fn read_config_file(user_specified_file: Option<String>) -> ConfigData {
     }
 }
 
+/// The main entry point of the `aquarium_client` binary.
+/// Parses commands, opens the POSIX message queue, and sends IPC control messages.
 fn main() {
     // get command line parameters from OS
     let args: Vec<String> = env::args().collect();

@@ -207,6 +207,7 @@ pub fn send_command(
 ///     signal_handler --> temperature_gradient[TemperatureGradient]
 ///     temperature_gradient --> signal_handler
 /// ```
+/// * `execution_config` - An execution configuration instance.
 pub async fn handle_signals(
     term: Arc<AtomicBool>,
     mut signal_handler_channels: SignalHandlerChannels,
@@ -574,6 +575,11 @@ pub mod tests {
     use std::{process::Command, sync::Arc, thread};
 
     // helper function to send a signal to the application
+    /// Performs the `send_signal` operation.
+    ///
+    /// # Arguments
+    /// * `pid` - The process ID (PID) of the application.
+    /// * `signal` - A parameter representing `signal`.
     fn send_signal(pid: u32, signal: i32) {
         Command::new("kill")
             .args(&[pid.to_string().as_str()])
@@ -603,7 +609,8 @@ pub mod tests {
                             term_clone,
                             channels.signal_handler,
                             ExecutionConfig::default(),
-                        ).await;
+                        )
+                        .await;
                     });
             })
             .unwrap();

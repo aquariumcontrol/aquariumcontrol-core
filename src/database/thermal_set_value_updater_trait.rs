@@ -39,6 +39,10 @@ use crate::database::sql_interface_error::SqlInterfaceError;
 
 /// Trait for updating the set values of either ventilation or heating with values from the database.
 /// This trait allows running the main control with a mock implementation for testing.
+///
+/// # Arguments
+/// * `switch_off_temperature` - A parameter representing `switch_off_temperature`.
+/// * `switch_on_temperature` - A parameter representing `switch_on_temperature`.
 pub trait ThermalSetValueUpdaterTrait {
     fn update_set_value(
         &mut self,

@@ -284,6 +284,7 @@ impl Display for VersionInformation {
 mod tests {
     use super::*;
 
+    /// Performs the `dummy_hash` operation.
     fn dummy_hash() -> String {
         "dummy_hash_for_testing".to_string()
     }

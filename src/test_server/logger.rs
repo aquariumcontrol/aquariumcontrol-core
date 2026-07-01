@@ -28,10 +28,18 @@ pub struct SenderLogger<'a, T: Debug>(&'a Mutex<File>, &'a Sender<T>);
 
 impl<'a, T: Debug> SenderLogger<'a, T> {
     /// (You shouldn't use this function manually; use `generate_sender_logger_group!`)
+    ///
+    /// # Arguments
+    /// * `file` - A parameter representing `file`.
+    /// * `sender` - Sender channel for IPC commands.
     pub fn new(file: &'a Mutex<File>, sender: &'a Sender<T>) -> Self {
         Self(file, sender)
     }
 
+    /// Performs the `send_and_log` operation.
+    ///
+    /// # Arguments
+    /// * `t` - A parameter representing `t`.
     pub fn send_and_log(&self, t: T) -> Result<(), SenderLoggerErr<T>> {
         let mut guard = self.0.lock().unwrap();
         guard
@@ -98,6 +106,11 @@ macro_rules! generate_sender_logger_group {
         }
 
         impl <$($t:std::fmt::Debug),+> $name <$($t),+> {
+            /// Creates a new instance.
+            ///
+            /// # Arguments
+            /// * `path` - A parameter representing `path`.
+            /// * `$($t` - A parameter representing `$($t`.
             #[allow(non_snake_case)]
             pub fn new(
                 path: impl AsRef<std::path::Path>,
@@ -110,6 +123,7 @@ macro_rules! generate_sender_logger_group {
                 })
             }
 
+            /// Performs the `sender_loggers` operation.
             #[allow(unused_parens)]
             pub fn sender_loggers<'a>(&'a self) -> ($($crate::test_server::logger::SenderLogger<'a, $t>),+) {
                 ($($crate::test_server::logger::SenderLogger::new(&self.file, &self.$t)),+)

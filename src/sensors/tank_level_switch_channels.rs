@@ -98,6 +98,9 @@ impl TankLevelSwitchChannels {
     }
 
     /// Sends an acknowledgment to the signal handler.
+    ///
+    /// # Arguments
+    /// * `ack` - A parameter representing `ack`.
     #[allow(unused)]
     pub fn send_to_signal_handler(&mut self, ack: bool) -> Result<(), AquaChannelError> {
         self.tx_tank_level_switch_to_signal_handler.send(ack)
@@ -112,6 +115,10 @@ impl TankLevelSwitchChannels {
 
 #[cfg(feature = "debug_channels")]
 impl fmt::Display for TankLevelSwitchChannels {
+    /// Formats the value using the given formatter.
+    ///
+    /// # Arguments
+    /// * `f` - The formatter to write the formatted string to.
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         writeln!(f, "=== TankLevelSwitchChannels ===")?;
         if let Some(tx_tank_level_switch_to_tcp) = self.tx_tank_level_switch_to_tcp_opt.as_ref() {
@@ -144,6 +151,10 @@ impl fmt::Display for TankLevelSwitchChannels {
 
 #[cfg(not(feature = "debug_channels"))]
 impl fmt::Display for TankLevelSwitchChannels {
+    /// Formats the value using the given formatter.
+    ///
+    /// # Arguments
+    /// * `f` - The formatter to write the formatted string to.
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(
             f,

@@ -895,6 +895,10 @@ impl SqlInterface {
     /// - The specified table does not exist.
     /// - The database user lacks the necessary permissions to truncate the table.
     /// - The database connection has been lost.
+    ///
+    /// # Arguments
+    /// * `sql_interface` - A parameter representing `sql_interface`.
+    /// * `sql_table_name` - A parameter representing `sql_table_name`.
     pub fn truncate_table(
         sql_interface: &mut SqlInterface,
         sql_table_name: String,
@@ -927,6 +931,11 @@ impl SqlInterface {
     //
     // Returns:
     // A `NaiveDateTime` representing the calculated past timestamp.
+    /// Retrieves the naive timestamp from past.
+    ///
+    /// # Arguments
+    /// * `hours_in_past` - A parameter representing `hours_in_past`.
+    /// * `seconds_in_past` - A parameter representing `seconds_in_past`.
     pub fn get_naive_timestamp_from_past(
         hours_in_past: i64,
         seconds_in_past: i64,
@@ -947,6 +956,10 @@ impl SqlInterface {
     // `Some(Duration)` representing the duration in seconds if the conversion and calculation
     // are successful. Returns `None` if the `timestamp_naive` cannot be unambiguously
     // converted to a local `DateTime`.
+    /// Retrieves the duration from naive timestamp to local now.
+    ///
+    /// # Arguments
+    /// * `timestamp_naive` - A parameter representing `timestamp_naive`.
     pub fn get_duration_from_naive_timestamp_to_local_now(
         timestamp_naive: NaiveDateTime,
     ) -> Option<Duration> {

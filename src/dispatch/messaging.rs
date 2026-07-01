@@ -155,12 +155,11 @@ impl Messaging {
             }
         })?;
 
-        mq.set_nonblocking(true).map_err(|e| {
-            MessagingError::PosixMessageQueueAttributesError {
+        mq.set_nonblocking(true)
+            .map_err(|e| MessagingError::PosixMessageQueueAttributesError {
                 location: module_path!().to_string(),
                 source: e,
-            }
-        })?;
+            })?;
 
         // identify maximum length of message queue
         let mq_max_msg_len = match mq.attributes() {
@@ -204,21 +203,19 @@ impl Messaging {
         #[cfg(not(tarpaulin_include))]
         info!(target: module_path!(), "Thread started with TID: {}", gettid());
 
-        let mut async_mq_opt: Option<tokio::io::unix::AsyncFd<PosixMq>>;
+        let async_mq_opt: Option<tokio::io::unix::AsyncFd<PosixMq>>;
 
         async_mq_opt = match self.mq.take() {
-            Some(mq) => {
-                match tokio::io::unix::AsyncFd::new(mq) {
-                    Ok(async_mq) => Some(async_mq),
-                    Err(e) => {
-                        error!(
-                            target: module_path!(),
-                            "Failed to create AsyncFd for accessing message queue ({e:?})"
-                        );
-                        None
-                    }
+            Some(mq) => match tokio::io::unix::AsyncFd::new(mq) {
+                Ok(async_mq) => Some(async_mq),
+                Err(e) => {
+                    error!(
+                        target: module_path!(),
+                        "Failed to create AsyncFd for accessing message queue ({e:?})"
+                    );
+                    None
                 }
-            }
+            },
             None => {
                 error!(
                     target: module_path!(),
@@ -366,7 +363,8 @@ impl Messaging {
             &mut messaging_channels.rx_messaging_from_signal_handler,
             sleep_duration,
             module_path!(),
-        ).await;
+        )
+        .await;
     }
 }
 
@@ -405,6 +403,10 @@ pub mod tests {
     // # Panics
     // This function will panic if it fails to open the specified POSIX message queue,
     // as this is considered a critical failure for the test setup.
+    /// Performs the `open_posixmq_test_file` operation.
+    ///
+    /// # Arguments
+    /// * `filename` - A parameter representing `filename`.
     fn open_posixmq_test_file(filename: &str) -> PosixMq {
         match PosixMq::open(filename) {
             Ok(c) => c,
@@ -433,6 +435,11 @@ pub mod tests {
     //
     // # Panics
     // This function will panic if the new thread cannot be spawned.
+    /// Performs the `create_test_object` operation.
+    ///
+    /// # Arguments
+    /// * `messaging` - A parameter representing `messaging`.
+    /// * `messaging_channels` - A mutable reference to the `MessagingChannels` communication interface.
     fn create_test_object(
         mut messaging: Messaging,
         mut messaging_channels: MessagingChannels,
@@ -471,6 +478,13 @@ pub mod tests {
     // # Panics
     // This function will panic if:
     // - The new thread cannot be spawned.
+    /// Performs the `create_test_environment` operation.
+    ///
+    /// # Arguments
+    /// * `msg_commands` - A parameter representing `msg_commands`.
+    /// * `tx_environment_to_object` - A parameter representing `tx_environment_to_object`.
+    /// * `signal_handler_channels` - A parameter representing `signal_handler_channels`.
+    /// * `mq_filename` - A parameter representing `mq_filename`.
     fn create_test_environment(
         msg_commands: Vec<Message>,
         mut tx_environment_to_object: AquaSender<InternalCommand>,
@@ -531,6 +545,10 @@ pub mod tests {
     // This function will panic if:
     // - The `commands_received` vector does not contain exactly two elements.
     // - The commands are not `InternalCommand::Stop` followed by `InternalCommand::Start` in that order.
+    /// Performs the `assert_stop_start_sequence` operation.
+    ///
+    /// # Arguments
+    /// * `commands_received` - A parameter representing `commands_received`.
     fn assert_stop_start_sequence(mut commands_received: Vec<InternalCommand>) {
         let spin_sleeper = SpinSleeper::default();
         spin_sleeper.sleep(Duration::from_millis(100));

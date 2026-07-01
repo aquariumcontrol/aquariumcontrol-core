@@ -149,7 +149,7 @@ pub struct SignalHandlerChannels {
 
     /// Receiver from the `Watchdog` thread for shutdown acknowledgements.
     pub rx_signal_handler_from_watchdog: AquaReceiver<bool>,
-    
+
     #[cfg(all(target_os = "linux", feature = "target_hw"))]
     /// Sender to the `Dht` sensor thread for `Quit` command.
     pub tx_signal_handler_to_dht: AquaSender<InternalCommand>,
@@ -164,6 +164,10 @@ pub struct SignalHandlerChannels {
 
 #[cfg(feature = "debug_channels")]
 impl fmt::Display for SignalHandlerChannels {
+    /// Formats the value using the given formatter.
+    ///
+    /// # Arguments
+    /// * `f` - The formatter to write the formatted string to.
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         writeln!(f, "=== Signal Handler Channel Status ===")?;
         if let Some(tx_signal_handler_to_messaging) = &self.tx_signal_handler_to_messaging_opt {
@@ -362,6 +366,10 @@ impl fmt::Display for SignalHandlerChannels {
 
 #[cfg(not(feature = "debug_channels"))]
 impl fmt::Display for SignalHandlerChannels {
+    /// Formats the value using the given formatter.
+    ///
+    /// # Arguments
+    /// * `f` - The formatter to write the formatted string to.
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(
             f,

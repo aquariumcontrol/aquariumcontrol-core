@@ -164,6 +164,7 @@ pub struct SensorManagerMutexes {
 
 #[cfg(test)]
 impl SensorManagerMutexes {
+    /// Creates a default instance of this type.
     pub fn default() -> SensorManagerMutexes {
         SensorManagerMutexes {
             mutex_ds18b20_ambient_temperature: Arc::new(Mutex::new(Ok(
@@ -206,6 +207,10 @@ pub struct SensorManagerSignals {
 }
 
 impl SensorManagerSignals {
+    /// Creates a new instance.
+    ///
+    /// # Arguments
+    /// * `config` - A parameter representing `config`.
     pub fn new(config: &SensorManagerConfig) -> SensorManagerSignals {
         SensorManagerSignals {
             water_temperature: config.replacement_value_water_temperature,
@@ -217,6 +222,7 @@ impl SensorManagerSignals {
         }
     }
 
+    /// Creates a default instance of this type.
     #[cfg(test)]
     pub fn default() -> SensorManagerSignals {
         SensorManagerSignals {
@@ -433,6 +439,7 @@ impl SensorManager {
     /// This function will **panic** if either `tx_sensor_manager_to_tcp_opt` or `rx_sensor_manager_from_tcp_opt`
     /// are `None`. This case is not possible because the `SensorManager` module performs checks beforehand to ensure
     /// these channels are `Some` when running in simulator mode.
+    /// * `sensor_manager_channels` - A mutable reference to the `SensorManagerChannels` communication interface.
     fn communicate_with_simulator(
         &mut self,
         sensor_manager_channels: &mut SensorManagerChannels,
@@ -755,7 +762,8 @@ impl SensorManager {
             &mut sensor_manager_channels.rx_sensor_manager_from_signal_handler,
             sleep_duration_one_millis,
             module_path!(),
-        ).await;
+        )
+        .await;
     }
 }
 
@@ -810,6 +818,11 @@ pub mod tests {
         ));
     }
 
+    /// Performs the `mock_signal_handler_for_sensor_manager` operation.
+    ///
+    /// # Arguments
+    /// * `signal_handler_channels` - A parameter representing `signal_handler_channels`.
+    /// * `mutex_sensor_manager_opt` - A parameter representing `mutex_sensor_manager_opt`.
     fn mock_signal_handler_for_sensor_manager(
         mut signal_handler_channels: SignalHandlerChannels,
         mutex_sensor_manager_opt: Option<Arc<Mutex<SensorManagerSignals>>>,
@@ -846,6 +859,12 @@ pub mod tests {
             .send(InternalCommand::Terminate);
     }
 
+    /// Helper function to execute the sensor manager task inside a test Tokio runtime.
+    ///
+    /// # Arguments
+    /// * `sensor_manager` - A mutable reference to the `SensorManager` instance.
+    /// * `sensor_manager_channels` - A mutable reference to the `SensorManagerChannels` instance.
+    /// * `mutexes` - Shared mutexes for accessing sensor readings.
     fn execute_blocking(
         sensor_manager: &mut SensorManager,
         sensor_manager_channels: &mut SensorManagerChannels,
@@ -856,10 +875,21 @@ pub mod tests {
             .build()
             .unwrap()
             .block_on(async {
-                sensor_manager.execute(sensor_manager_channels, mutexes).await;
+                sensor_manager
+                    .execute(sensor_manager_channels, mutexes)
+                    .await;
             });
     }
 
+    /// Performs the `execute_and_assert_sensor_manager` operation.
+    ///
+    /// # Arguments
+    /// * `sensor_manager_channels` - A mutable reference to the `SensorManagerChannels` communication interface.
+    /// * `sensor_manager` - A parameter representing `sensor_manager`.
+    /// * `mutexes` - Shared mutexes for accessing sensor readings.
+    /// * `target_value_water_temperature` - A parameter representing `target_value_water_temperature`.
+    /// * `target_value_ambient_temperature` - A parameter representing `target_value_ambient_temperature`.
+    /// * `reference_mutex_access_time_exceeded` - A parameter representing `reference_mutex_access_time_exceeded`.
     fn execute_and_assert_sensor_manager(
         mut sensor_manager_channels: SensorManagerChannels,
         mut sensor_manager: SensorManager,

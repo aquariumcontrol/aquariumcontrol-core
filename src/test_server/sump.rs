@@ -154,6 +154,7 @@ impl Sump {
     ///
     /// * `water_volume_in_tank` - model of tank geometry of type TankGeometry
     /// * `time_step` - time step in seconds (in case simulation shall run faster than real time)
+    /// * `water_volume` - A parameter representing `water_volume`.
     pub fn calc_refill(&self, water_volume: &mut TankGeometry, time_step: f32) {
         if self.refill_pump.status == PumpStatus::On {
             println!(

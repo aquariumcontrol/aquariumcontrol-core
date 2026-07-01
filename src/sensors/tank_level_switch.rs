@@ -528,7 +528,7 @@ impl TankLevelSwitch {
     /// from the signal handler for graceful shutdown.
     ///
     /// # Arguments
-    /// * `tank_level_switch_signals` - A mutable reference to the struct containing the channels.
+    /// * `tank_level_switch_channels` - A mutable reference to the struct containing the channels.
     /// * `mutex_tank_level_switch_signals` - The shared `Mutex` where the latest sensor
     ///   signals are written for other modules to consume.
     ///
@@ -700,7 +700,8 @@ impl TankLevelSwitch {
             &mut tank_level_switch_channels.rx_tank_level_switch_from_signal_handler,
             sleep_duration_one_millis,
             module_path!(),
-        ).await;
+        )
+        .await;
         Ok(())
     }
 }
@@ -839,6 +840,12 @@ pub mod tests {
         println!("* [TankLevelSwitch] testing if stabilized tank level position is high when invalid bit is true succeeded.");
     }
 
+    /// Helper function to execute the tank level switch task inside a test Tokio runtime.
+    ///
+    /// # Arguments
+    /// * `tank_level_switch` - A mutable reference to the `TankLevelSwitch` instance.
+    /// * `tank_level_switch_channels` - A mutable reference to the `TankLevelSwitchChannels` instance.
+    /// * `mutex_tank_level_switch_signals` - Shared mutex for tank level switch readings.
     fn execute_blocking(
         tank_level_switch: &mut TankLevelSwitch,
         tank_level_switch_channels: &mut TankLevelSwitchChannels,
@@ -849,11 +856,19 @@ pub mod tests {
             .build()
             .unwrap()
             .block_on(async {
-                tank_level_switch.execute(tank_level_switch_channels, mutex_tank_level_switch_signals).await
+                tank_level_switch
+                    .execute(tank_level_switch_channels, mutex_tank_level_switch_signals)
+                    .await
             })
     }
 
     // helper function for creating the test object
+    /// Performs the `create_test_object` operation.
+    ///
+    /// # Arguments
+    /// * `tank_level_switch` - A parameter representing `tank_level_switch`.
+    /// * `tank_level_switch_channels` - A parameter representing `tank_level_switch_channels`.
+    /// * `mutex_tank_level_switch_signals` - A parameter representing `mutex_tank_level_switch_signals`.
     fn create_test_object(
         mut tank_level_switch: TankLevelSwitch,
         mut tank_level_switch_channels: TankLevelSwitchChannels,

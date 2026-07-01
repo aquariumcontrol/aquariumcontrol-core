@@ -39,6 +39,10 @@ pub struct Evaporation {
 impl Evaporation {
     /// Function calculates an always positive temperature difference value between ambient temperature and a configurable value
     /// Rationale: evaporation goes from tank to the environment, not vice-versa
+    ///
+    /// # Arguments
+    /// * `ambient_temperature` - A parameter representing `ambient_temperature`.
+    /// * `temperature_reference` - A parameter representing `temperature_reference`.
     fn temperature_delta_positive(ambient_temperature: f32, temperature_reference: f32) -> f32 {
         if ambient_temperature > temperature_reference {
             ambient_temperature - temperature_reference

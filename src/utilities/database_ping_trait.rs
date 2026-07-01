@@ -60,6 +60,9 @@ pub trait DatabasePingTrait {
     fn update_last_ping_instant(&mut self);
 
     /// Pings the database.
+    ///
+    /// # Arguments
+    /// * `database_interface` - The database interface connection.
     fn check_timing_and_ping_database(
         &mut self,
         database_interface: &mut (impl Pingable + ?Sized),
@@ -86,10 +89,12 @@ macro_rules! impl_database_ping_trait {
                 self.database_ping_interval
             }
 
+            /// Retrieves the last ping instant.
             fn get_last_ping_instant(&self) -> Instant {
                 self.last_ping_instant
             }
 
+            /// Updates the last ping instant.
             fn update_last_ping_instant(&mut self) {
                 self.last_ping_instant = Instant::now();
             }
@@ -114,6 +119,7 @@ mod tests {
     }
 
     impl MockPingable {
+        /// Creates a new instance.
         fn new() -> Self {
             Self {
                 ping_was_called: false,
@@ -122,6 +128,7 @@ mod tests {
     }
 
     impl Pingable for MockPingable {
+        /// Performs the `ping` operation.
         fn ping(&mut self) {
             self.ping_was_called = true;
         }
@@ -135,14 +142,17 @@ mod tests {
     }
 
     impl DatabasePingTrait for MockPinger {
+        /// Retrieves the ping interval.
         fn get_ping_interval(&self) -> Duration {
             self.database_ping_interval
         }
 
+        /// Retrieves the last ping instant.
         fn get_last_ping_instant(&self) -> Instant {
             self.last_ping_instant
         }
 
+        /// Updates the last ping instant.
         fn update_last_ping_instant(&mut self) {
             self.last_ping_instant = Instant::now();
         }

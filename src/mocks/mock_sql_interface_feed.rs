@@ -22,6 +22,7 @@ pub mod tests {
     pub struct MockSqlInterfaceFeed {}
 
     impl MockSqlInterfaceFeed {
+        /// Creates a new instance.
         pub fn new() -> MockSqlInterfaceFeed {
             MockSqlInterfaceFeed {}
         }
@@ -35,16 +36,24 @@ pub mod tests {
     }
 
     impl DatabaseInterfaceFeedTrait for MockSqlInterfaceFeed {
+        /// Retrieves the current timestamp.
         fn get_current_timestamp(&mut self) -> Result<NaiveDateTime, SqlInterfaceError> {
             Err(SqlInterfaceError::MockError(module_path!().to_string()))
         }
 
+        /// Retrieves the past feed schedule entries from database.
         fn get_past_feed_schedule_entries_from_database(
             &mut self,
         ) -> Result<Option<Vec<FeedScheduleEntry>>, SqlInterfaceError> {
             Err(SqlInterfaceError::MockError(module_path!().to_string()))
         }
 
+        /// Performs the `insert_feed_event` operation.
+        ///
+        /// # Arguments
+        /// * `timestamp` - A parameter representing `timestamp`.
+        /// * `feeder_run_time` - A parameter representing `feeder_run_time`.
+        /// * `profile_id` - A parameter representing `profile_id`.
         fn insert_feed_event(
             &mut self,
             _timestamp: NaiveDateTime,
@@ -54,6 +63,10 @@ pub mod tests {
             Err(SqlInterfaceError::MockError(module_path!().to_string()))
         }
 
+        /// Retrieves the single feed profile from database.
+        ///
+        /// # Arguments
+        /// * `profile_id` - A parameter representing `profile_id`.
         fn get_single_feed_profile_from_database(
             &mut self,
             _profile_id: i32,
@@ -61,6 +74,10 @@ pub mod tests {
             Err(SqlInterfaceError::MockError(module_path!().to_string()))
         }
 
+        /// Updates the feed schedule entries in database.
+        ///
+        /// # Arguments
+        /// * `feedschedule_entry` - A parameter representing `feedschedule_entry`.
         fn update_feed_schedule_entries_in_database(
             &mut self,
             _feedschedule_entry: &mut Vec<FeedScheduleEntry>,
@@ -68,6 +85,13 @@ pub mod tests {
             Err(SqlInterfaceError::MockError(module_path!().to_string()))
         }
 
+        /// Performs the `insert_feed_schedule_entry` operation.
+        ///
+        /// # Arguments
+        /// * `timestamp` - A parameter representing `timestamp`.
+        /// * `profile_id` - A parameter representing `profile_id`.
+        /// * `is_weekly` - A parameter representing `is_weekly`.
+        /// * `is_daily` - A parameter representing `is_daily`.
         #[cfg(test)]
         fn insert_feed_schedule_entry(
             &mut self,

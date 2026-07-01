@@ -17,6 +17,13 @@ pub mod tests {
     use std::time::Duration;
 
     // send via the channel a value to the test object to indicate if actuation is permitted.
+    /// Performs the `mock_schedule_check` operation.
+    ///
+    /// # Arguments
+    /// * `tx_schedule_check_to_test_object` - A parameter representing `tx_schedule_check_to_test_object`.
+    /// * `rx_schedule_check_from_test_object` - A parameter representing `rx_schedule_check_from_test_object`.
+    /// * `rx_schedule_check_from_test_environment_opt` - A parameter representing `rx_schedule_check_from_test_environment_opt`.
+    /// * `initial_stimuli` - A parameter representing `initial_stimuli`.
     pub fn mock_schedule_check(
         tx_schedule_check_to_test_object: &mut AquaSender<bool>,
         rx_schedule_check_from_test_object: &mut AquaReceiver<InternalCommand>,

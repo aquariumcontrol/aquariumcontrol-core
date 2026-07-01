@@ -484,6 +484,10 @@ impl AtlasScientificDriver for AtlasScientificOem {
         }
     }
 
+    /// Retrieves the mutex access duration exceeded.
+    ///
+    /// # Arguments
+    /// * `signal` - sensor type
     #[cfg(test)]
     fn get_mutex_access_duration_exceeded(&self, signal: &AquariumSignal) -> bool {
         match signal {

@@ -29,6 +29,13 @@ const MAX_MUTEX_ACCESS_DURATION_MILLIS: u64 = 10;
 
 /// Trait for the execution of the refill once control has detected that the water level is low.
 /// This trait allows running the main control with a mock implementation for testing.
+///
+/// # Arguments
+/// * `refill_channels` - A mutable reference to the `RefillChannels` communication interface.
+/// * `refill_errors` - A parameter representing `refill_errors`.
+/// * `sql_interface_refill` - Database interface connection for refill operations.
+/// * `mutex_tank_level_switch` - Shared mutex for the tank level switch signals.
+/// * `mutex_device_scheduler_refill` - Mutex coordinating access to the device scheduler for refill.
 pub trait WaterInjectionTrait {
     fn inject_water(
         &mut self,
@@ -149,6 +156,7 @@ impl WaterInjectionTrait for WaterInjection {
     /// # Returns
     /// `true` if the refill operation was **aborted due to a `Quit` command** received from the signal handler;
     /// `false` otherwise (meaning it completed normally or aborted due to other conditions like level reached or errors).
+    /// * `mutex_device_scheduler_refill` - Mutex coordinating access to the device scheduler for refill.
     fn inject_water(
         &mut self,
         refill_channels: &mut RefillChannels,
@@ -343,6 +351,15 @@ pub mod tests {
     //
     // # Panics
     // This function will panic if the new thread cannot be spawned, or if any of the `assert_eq!` calls inside the spawned thread fails.
+    /// Performs the `create_assert_test_object` operation.
+    ///
+    /// # Arguments
+    /// * `refill_channels` - A mutable reference to the `RefillChannels` communication interface.
+    /// * `refill` - A parameter representing `refill`.
+    /// * `sql_interface_refill` - Database interface connection for refill operations.
+    /// * `mutex_tank_level_switch_signals` - A parameter representing `mutex_tank_level_switch_signals`.
+    /// * `target_result` - A parameter representing `target_result`.
+    /// * `target_refill_has_errors` - A parameter representing `target_refill_has_errors`.
     fn create_assert_test_object(
         mut refill_channels: RefillChannels,
         mut refill: Refill,
@@ -471,6 +488,11 @@ pub mod tests {
             .expect("Test object thread did not finish.");
     }
 
+    /// Performs the `create_mock_relay_manager` operation.
+    ///
+    /// # Arguments
+    /// * `tx_relay_manager_to_water_injection` - Sender channel to communicate relay state changes to water injection.
+    /// * `rx_relay_manager_from_water_injection` - Receiver channel to read commands from water injection.
     fn create_mock_relay_manager(
         mut tx_relay_manager_to_water_injection: AquaSender<bool>,
         mut rx_relay_manager_from_water_injection: AquaReceiver<InternalCommand>,
@@ -595,6 +617,11 @@ pub mod tests {
     // This function will panic if:
     // - The new thread cannot be spawned.
     // - It fails to send any of the `InternalCommand::Quit` messages through the channels.
+    /// Performs the `create_test_environment` operation.
+    ///
+    /// # Arguments
+    /// * `tx_signal_handler_to_water_injection` - A parameter representing `tx_signal_handler_to_water_injection`.
+    /// * `tx_signal_handler_to_relay_manager` - A parameter representing `tx_signal_handler_to_relay_manager`.
     fn create_test_environment(
         mut tx_signal_handler_to_water_injection: AquaSender<InternalCommand>,
         mut tx_signal_handler_to_relay_manager: AquaSender<InternalCommand>,

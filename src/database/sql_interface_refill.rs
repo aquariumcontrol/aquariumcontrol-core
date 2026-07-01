@@ -73,21 +73,37 @@ pub enum DatabaseRefillErrorCode {
 pub trait DatabaseInterfaceRefillTrait: Pingable {
     fn get_duration_since_last_refill(&mut self) -> Result<u64, SqlInterfaceError>;
 
+    /// Retrieves the positive integer value from database.
+    ///
+    /// # Arguments
+    /// * `sql_query_string` - A parameter representing `sql_query_string`.
     fn get_positive_integer_value_from_database(
         &mut self,
         sql_query_string: &str,
     ) -> Result<u64, SqlInterfaceError>;
 
+    /// Checks the empty.
     fn check_empty(&mut self) -> Result<u64, SqlInterfaceError>;
 
+    /// Retrieves the refill count of last hour.
     fn get_refill_count_of_last_hour(&mut self) -> Result<u64, SqlInterfaceError>;
 
+    /// Retrieves the refill count of last 24h.
     fn get_refill_count_of_last_24h(&mut self) -> Result<u64, SqlInterfaceError>;
 
+    /// Retrieves the refill volume of last 24h.
     fn get_refill_volume_of_last_24h(&mut self) -> Result<f64, SqlInterfaceError>;
 
+    /// Retrieves the refill volume of last hour.
     fn get_refill_volume_of_last_hour(&mut self) -> Result<f64, SqlInterfaceError>;
 
+    /// Performs the `insert_refill_event` operation.
+    ///
+    /// # Arguments
+    /// * `timestamp` - A parameter representing `timestamp`.
+    /// * `duration` - A parameter representing `duration`.
+    /// * `volume` - A parameter representing `volume`.
+    /// * `error_code` - A parameter representing `error_code`.
     fn insert_refill_event(
         &mut self,
         timestamp: NaiveDateTime,

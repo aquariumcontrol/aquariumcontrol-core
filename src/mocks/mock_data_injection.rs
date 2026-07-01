@@ -14,8 +14,8 @@ pub mod tests {
         data_injection::DataInjectionTrait, recorder_data_frame::RecorderDataFrame,
     };
     use crate::utilities::channel_content::InternalCommand;
-    use std::sync::{Arc, Mutex};
     use mysql::PooledConn;
+    use std::sync::{Arc, Mutex};
 
     /// A mock for the DataInjectionTrait that captures the data frame and then
     /// immediately sends a Quit signal to terminate the data_logger thread.
@@ -27,11 +27,12 @@ pub mod tests {
     }
 
     impl DataInjectionTrait for MockInjectorWithQuit {
-        fn inject_data(
-            &mut self,
-            data_frame: RecorderDataFrame,
-            conn: PooledConn,
-        ) -> PooledConn {
+        /// Performs the `inject_data` operation.
+        ///
+        /// # Arguments
+        /// * `data_frame` - A parameter representing `data_frame`.
+        /// * `conn` - An active pooled database connection.
+        fn inject_data(&mut self, data_frame: RecorderDataFrame, conn: PooledConn) -> PooledConn {
             // Capture the first data frame that gets injected.
             let mut data = self.injected_data.lock().unwrap();
             if data.is_none() {

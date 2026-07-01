@@ -778,6 +778,7 @@ pub mod tests {
         ));
     }
 
+    /// Retrieves the platform specific controllino configuration.
     #[cfg(all(target_os = "macos", feature = "controllino_hw"))]
     fn get_platform_specific_controllino_configuration() -> ActuateControllinoConfig {
         let mut config: ConfigData =
@@ -788,6 +789,7 @@ pub mod tests {
         config.controllino_relay
     }
 
+    /// Retrieves the platform specific controllino configuration.
     #[cfg(all(target_os = "linux", feature = "controllino_hw"))]
     fn get_platform_specific_controllino_configuration() -> ActuateControllinoConfig {
         let mut config: ConfigData =

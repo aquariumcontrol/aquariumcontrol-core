@@ -20,6 +20,12 @@ pub mod tests {
     use std::sync::{Arc, Mutex};
     use std::time::{Duration, Instant};
 
+    /// Performs the `mock_ventilation` operation.
+    ///
+    /// # Arguments
+    /// * `rx_ventilation_from_signal_handler` - A parameter representing `rx_ventilation_from_signal_handler`.
+    /// * `rx_ventilation_from_test_environment_opt` - A parameter representing `rx_ventilation_from_test_environment_opt`.
+    /// * `mutex_ventilation_status` - A parameter representing `mutex_ventilation_status`.
     #[allow(unused)]
     pub fn mock_ventilation(
         rx_ventilation_from_signal_handler: &mut AquaReceiver<InternalCommand>,
@@ -118,6 +124,13 @@ pub mod tests {
         //
         // # Returns
         // A new `VentilationSetValueMockUpdater` struct.
+        /// Creates a new instance.
+        ///
+        /// # Arguments
+        /// * `active` - A parameter representing `active`.
+        /// * `new_set_value_ventilation_switch_off_temperature` - A parameter representing `new_set_value_ventilation_switch_off_temperature`.
+        /// * `new_set_value_ventilation_switch_on_temperature` - A parameter representing `new_set_value_ventilation_switch_on_temperature`.
+        /// * `delay_duration` - A parameter representing `delay_duration`.
         pub fn new(
             active: bool,
             new_set_value_ventilation_switch_off_temperature: Option<f32>,
@@ -134,6 +147,11 @@ pub mod tests {
         }
     }
     impl ThermalSetValueUpdaterTrait for MockSqlInterfaceVentilationSetVals {
+        /// Updates the set value.
+        ///
+        /// # Arguments
+        /// * `ventilation_switch_off_temperature` - A parameter representing `ventilation_switch_off_temperature`.
+        /// * `ventilation_switch_on_temperature` - A parameter representing `ventilation_switch_on_temperature`.
         fn update_set_value(
             &mut self,
             ventilation_switch_off_temperature: &mut f32,

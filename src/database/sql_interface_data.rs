@@ -381,6 +381,11 @@ pub mod tests {
     // - Either query returns zero rows (`SingleDataFrameRequestEmptyResponse`).
     // - Either query returns more than one row (`SingleDataFrameRequestNoSingleResponse`).
     // - The timestamp string retrieved from the database cannot be parsed into a `NaiveDateTime`.
+    /// Retrieves the single dataframe from database.
+    ///
+    /// # Arguments
+    /// * `conn` - An active pooled database connection.
+    /// * `timestamp` - A parameter representing `timestamp`.
     pub fn get_single_dataframe_from_database(
         conn: &mut PooledConn,
         timestamp: NaiveDateTime,
@@ -491,6 +496,11 @@ pub mod tests {
     // # Arguments
     // * `conn` - connection to SQL database
     // * `timestamp` - timestamp data to be inserted into the query
+    /// Checks the database row if all null.
+    ///
+    /// # Arguments
+    /// * `conn` - An active pooled database connection.
+    /// * `timestamp` - A parameter representing `timestamp`.
     pub fn check_database_row_if_all_null(conn: &mut PooledConn, timestamp: NaiveDateTime) {
         let timestamp_string = timestamp.format("%Y-%m-%d %H:%M:%S").to_string();
         // Get a series of NULL values from the database

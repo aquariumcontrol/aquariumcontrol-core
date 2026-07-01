@@ -207,6 +207,13 @@ impl ScheduleEntry {
         }
     }
 
+    /// Performs the `new_for_test` operation.
+    ///
+    /// # Arguments
+    /// * `schedule_type` - A parameter representing `schedule_type`.
+    /// * `start_time` - A parameter representing `start_time`.
+    /// * `stop_time` - A parameter representing `stop_time`.
+    /// * `is_active` - A parameter representing `is_active`.
     #[cfg(test)]
     pub fn new_for_test(
         schedule_type: ScheduleType,
@@ -222,6 +229,7 @@ impl ScheduleEntry {
         }
     }
 
+    /// Performs the `deactivate` operation.
     #[cfg(test)]
     pub fn deactivate(&mut self) {
         self.is_active = false;

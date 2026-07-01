@@ -69,6 +69,10 @@ pub struct RefillChannels {
 }
 
 impl RefillChannels {
+    /// Performs the `send_to_relay_manager` operation.
+    ///
+    /// # Arguments
+    /// * `command` - The command string to verify.
     pub fn send_to_relay_manager(
         &mut self,
         command: InternalCommand,
@@ -76,10 +80,15 @@ impl RefillChannels {
         self.tx_refill_to_relay_manager.send(command)
     }
 
+    /// Performs the `receive_from_relay_manager` operation.
     pub fn receive_from_relay_manager(&mut self) -> Result<bool, AquaChannelError> {
         self.rx_refill_from_relay_manager.recv()
     }
 
+    /// Performs the `send_to_schedule_check` operation.
+    ///
+    /// # Arguments
+    /// * `command` - The command string to verify.
     pub fn send_to_schedule_check(
         &mut self,
         command: InternalCommand,
@@ -87,10 +96,15 @@ impl RefillChannels {
         self.tx_refill_to_schedule_check.send(command)
     }
 
+    /// Performs the `receive_from_schedule_check` operation.
     pub fn receive_from_schedule_check(&mut self) -> Result<bool, AquaChannelError> {
         self.rx_refill_from_schedule_check.recv()
     }
 
+    /// Performs the `send_to_monitor` operation.
+    ///
+    /// # Arguments
+    /// * `view` - A parameter representing `view`.
     pub fn send_to_monitor(&mut self, view: RefillMonitorView) -> Result<(), AquaChannelError> {
         self.tx_refill_to_monitors.send(view)
     }
@@ -98,6 +112,10 @@ impl RefillChannels {
 
 #[cfg(feature = "debug_channels")]
 impl fmt::Display for RefillChannels {
+    /// Formats the value using the given formatter.
+    ///
+    /// # Arguments
+    /// * `f` - The formatter to write the formatted string to.
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         writeln!(f, "=== RefillChannels ===")?;
         writeln!(
@@ -147,6 +165,10 @@ impl fmt::Display for RefillChannels {
 
 #[cfg(not(feature = "debug_channels"))]
 impl fmt::Display for RefillChannels {
+    /// Formats the value using the given formatter.
+    ///
+    /// # Arguments
+    /// * `f` - The formatter to write the formatted string to.
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(
             f,

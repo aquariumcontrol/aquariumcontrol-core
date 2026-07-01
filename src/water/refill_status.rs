@@ -26,6 +26,7 @@ pub struct RefillStatus {
 }
 
 impl RefillStatus {
+    /// Performs the `description` operation.
     pub fn description(&self) -> &'static str {
         if self.external_inhibition_request {
             "STOPPED"

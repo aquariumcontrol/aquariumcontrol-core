@@ -108,6 +108,11 @@ pub struct AquaReceiver<T> {
     pub count: u64,
 }
 
+/// Creates a custom MPSC channel pair.
+///
+/// # Arguments
+/// * `bound` - A parameter representing `bound`.
+/// * `is_multi_thread` - A boolean flag indicating if the Tokio runtime is running in multi-threaded mode.
 pub fn channel<T: Send>(bound: usize, is_multi_thread: bool) -> (AquaSender<T>, AquaReceiver<T>) {
     #[cfg(feature = "debug_channels")]
     {
@@ -123,7 +128,13 @@ pub fn channel<T: Send>(bound: usize, is_multi_thread: bool) -> (AquaSender<T>, 
             let _ = bound;
             mpsc::channel::<T>()
         };
-        (AquaSender { sender }, AquaReceiver { receiver, is_multi_thread })
+        (
+            AquaSender { sender },
+            AquaReceiver {
+                receiver,
+                is_multi_thread,
+            },
+        )
     }
 }
 
@@ -143,6 +154,9 @@ pub enum AquaChannelError {
 impl<T: Send> AquaSender<T> {
     /// Send a value into a channel, and on builds with "debug_channel" feature enabled,
     /// propagate outward an error to whatever thread is over-eagerly sending content.
+    ///
+    /// # Arguments
+    /// * `data` - A parameter representing `data`.
     pub fn send(&mut self, data: T) -> Result<(), AquaChannelError> {
         #[cfg(feature = "debug_channels")]
         {
@@ -202,7 +216,8 @@ impl<T> AquaReceiver<T> {
 macro_rules! create_bidirectional_channel {
     ($req:ty, $resp:ty, $is_multi_thread:expr) => {{
         let (tx_req, rx_req): (AquaSender<$req>, AquaReceiver<$req>) = channel(1, $is_multi_thread);
-        let (tx_resp, rx_resp): (AquaSender<$resp>, AquaReceiver<$resp>) = channel(1, $is_multi_thread);
+        let (tx_resp, rx_resp): (AquaSender<$resp>, AquaReceiver<$resp>) =
+            channel(1, $is_multi_thread);
         ((tx_req, rx_req), (tx_resp, rx_resp))
     }};
 }
@@ -251,6 +266,12 @@ pub struct Channels {
 
 impl Channels {
     /// Creates a new set of channels for the application based on the provided simulator configuration.
+    ///
+    /// # Arguments
+    /// * `relay_manager_use_simulator` - A parameter representing `relay_manager_use_simulator`.
+    /// * `sensor_manager_use_simulator` - A parameter representing `sensor_manager_use_simulator`.
+    /// * `tank_level_switch_use_simulator` - A parameter representing `tank_level_switch_use_simulator`.
+    /// * `is_multi_thread` - A boolean flag indicating if the Tokio runtime is running in multi-threaded mode.
     pub fn new(
         relay_manager_use_simulator: bool,
         sensor_manager_use_simulator: bool,
@@ -272,6 +293,13 @@ impl Channels {
         Self::build(true, true, true, false)
     }
 
+    /// Creates all custom MPSC channel pairs for the application
+    ///
+    /// # Arguments
+    /// * `relay_manager_use_simulator` - A parameter representing `relay_manager_use_simulator`.
+    /// * `sensor_manager_use_simulator` - A parameter representing `sensor_manager_use_simulator`.
+    /// * `tank_level_switch_use_simulator` - A parameter representing `tank_level_switch_use_simulator`.
+    /// * `is_multi_thread` - A boolean flag indicating if the Tokio runtime is running in multi-threaded mode.
     pub fn build(
         relay_manager_use_simulator: bool,
         sensor_manager_use_simulator: bool,
@@ -771,7 +799,7 @@ impl Channels {
             rx_watchdog_from_signal_handler,
             rx_watchdog_from_messaging_opt,
         };
-        
+
         let ds18b20 = Ds18b20Channels {
             rx_ds18b20_from_signal_handler,
         };

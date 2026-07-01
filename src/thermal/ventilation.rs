@@ -107,6 +107,7 @@ const MAX_MUTEX_ACCESS_DURATION_MILLIS: u64 = 10;
 /// * `mutex_device_scheduler_ventilation` - A reference to the shared actuation mutex.
 /// * `mutex_blocked_during_actuation` - A mutable flag to track if the actuation mutex was blocked.
 /// * `ventilation_channels` - A mutable reference to the struct containing the channels.
+/// * `is_multi_thread` - A boolean flag indicating if the Tokio runtime is running in multi-threaded mode.
 fn actuate_ventilation(
     command: InternalCommand,
     mutex_device_scheduler_ventilation: &Arc<Mutex<i32>>,
@@ -149,6 +150,7 @@ fn actuate_ventilation(
 /// * `mutex_blocked_during_actuation` - A mutable boolean flag that is set if the
 /// * `ventilation_channels` - A mutable reference to the struct containing the channels.
 ///   Actuation mutex was found to be blocked.
+/// * `is_multi_thread` - A boolean flag indicating if the Tokio runtime is running in multi-threaded mode.
 fn switch_on_ventilation(
     mutex_device_scheduler_ventilation: &Arc<Mutex<i32>>,
     mutex_blocked_during_actuation: &mut bool,
@@ -160,7 +162,7 @@ fn switch_on_ventilation(
         mutex_device_scheduler_ventilation,
         mutex_blocked_during_actuation,
         ventilation_channels,
-        is_multi_thread
+        is_multi_thread,
     );
 }
 
@@ -174,6 +176,7 @@ fn switch_on_ventilation(
 /// * `mutex_blocked_during_actuation` - A mutable boolean flag that is set if the
 /// * `ventilation_channels` - A mutable reference to the struct containing the channels.
 ///   Actuation mutex was found to be blocked.
+/// * `is_multi_thread` - A boolean flag indicating if the Tokio runtime is running in multi-threaded mode.
 fn switch_off_ventilation(
     mutex_device_scheduler_ventilation: &Arc<Mutex<i32>>,
     mutex_blocked_during_actuation: &mut bool,
@@ -244,10 +247,12 @@ pub struct Ventilation {
 }
 
 impl TemperatureGradientMonitorTrait for Ventilation {
+    /// Performs the `max_time_actuator_effect_monitor` operation.
     fn max_time_actuator_effect_monitor(&self) -> u64 {
         self.config.max_time_actuator_effect_monitor
     }
 
+    /// Performs the `monitor_state` operation.
     fn monitor_state(&mut self) -> (&mut Option<Instant>, &mut bool) {
         (
             &mut self.last_actuator_on_time,
@@ -331,13 +336,14 @@ impl Ventilation {
     /// * `mutex_device_scheduler_ventilation` - A shared mutex for coordinating device actuation.
     /// * `ventilation_channels` - A reference to the `VentilationChannels` struct for communication with the relay manager.
     /// * `mutex_was_blocked_during_actuation` - A mutable flag indicating if the device scheduler mutex was blocked.
+    /// * `is_multi_thread` - A boolean flag indicating if the Tokio runtime is running in multi-threaded mode.
     fn conditional_ventilation_switch(
         condition: bool,
         ventilation_state: &mut ActuatorState,
         mutex_device_scheduler_ventilation: &Arc<Mutex<i32>>,
         ventilation_channels: &mut VentilationChannels,
         mutex_was_blocked_during_actuation: &mut bool,
-        is_multi_thread: bool
+        is_multi_thread: bool,
     ) {
         match condition {
             true => {
@@ -359,7 +365,7 @@ impl Ventilation {
                         mutex_device_scheduler_ventilation,
                         mutex_was_blocked_during_actuation,
                         ventilation_channels,
-                        is_multi_thread
+                        is_multi_thread,
                     );
                     *ventilation_state = ActuatorState::Off;
                 }
@@ -383,7 +389,10 @@ impl Ventilation {
     ///   device actuation, preventing parallel operations, and tracking actuation counts.
     /// * `ventilation_channels` - A mutable reference to `VentilationChannels` struct containing all `mpsc`
     ///   channels for communication with other threads (e.g., relay manager, data logger, schedule checker, signal handler).
+    /// * `ventilation_set_val_updater` - A mutable reference to an object implementing `ThermalSetValueUpdaterTrait`,
+    ///   responsible for updating the set values dynamically by communicating with SQL database.
     /// * `ventilation_mutexes` - Struct containing the mutexes to access data from different threads.
+    /// * `is_multi_thread` - A boolean indicating if the tokio runtime is running in multi-threaded mode.
     ///
     /// # Returns
     /// This function does not return a value in the traditional sense, as it is designed
@@ -396,7 +405,7 @@ impl Ventilation {
         ventilation_channels: &mut VentilationChannels,
         ventilation_set_val_updater: &mut impl ThermalSetValueUpdaterTrait,
         ventilation_mutexes: VentilationMutexes,
-        is_multi_thread: bool
+        is_multi_thread: bool,
     ) {
         #[cfg(all(target_os = "linux", not(test)))] // only required in real-life execution
         #[cfg(not(tarpaulin_include))]
@@ -494,7 +503,7 @@ impl Ventilation {
                         &mutex_device_scheduler_ventilation,
                         &mut actuation_mutex_was_blocked_during_actuation,
                         ventilation_channels,
-                        is_multi_thread
+                        is_multi_thread,
                     );
                     ventilation_state = ActuatorState::Off;
                     self.actuator_disabled = true;
@@ -519,7 +528,7 @@ impl Ventilation {
                                     &mutex_device_scheduler_ventilation,
                                     &mut actuation_mutex_was_blocked_during_actuation,
                                     ventilation_channels,
-                                    is_multi_thread
+                                    is_multi_thread,
                                 );
                                 ventilation_state = ActuatorState::On;
                             }
@@ -530,7 +539,7 @@ impl Ventilation {
                                     &mutex_device_scheduler_ventilation,
                                     &mut actuation_mutex_was_blocked_during_actuation,
                                     ventilation_channels,
-                                    is_multi_thread
+                                    is_multi_thread,
                                 );
                                 ventilation_state = ActuatorState::Off;
                             }
@@ -544,7 +553,7 @@ impl Ventilation {
                                     &mutex_device_scheduler_ventilation,
                                     &mut actuation_mutex_was_blocked_during_actuation,
                                     ventilation_channels,
-                                    is_multi_thread
+                                    is_multi_thread,
                                 );
                                 ventilation_state = ActuatorState::On;
                             }
@@ -556,7 +565,7 @@ impl Ventilation {
                                     &mutex_device_scheduler_ventilation,
                                     &mut actuation_mutex_was_blocked_during_actuation,
                                     ventilation_channels,
-                                    is_multi_thread
+                                    is_multi_thread,
                                 );
                                 ventilation_state = ActuatorState::Off;
                             }
@@ -570,7 +579,7 @@ impl Ventilation {
                         &mutex_device_scheduler_ventilation,
                         ventilation_channels,
                         &mut actuation_mutex_was_blocked_during_actuation,
-                        is_multi_thread
+                        is_multi_thread,
                     );
                 } else {
                     // schedule check requires stop of ventilation control
@@ -580,7 +589,7 @@ impl Ventilation {
                         &mutex_device_scheduler_ventilation,
                         ventilation_channels,
                         &mut actuation_mutex_was_blocked_during_actuation,
-                        is_multi_thread
+                        is_multi_thread,
                     );
                 }
             }
@@ -650,7 +659,7 @@ impl Ventilation {
                     &mutex_device_scheduler_ventilation,
                     &mut actuation_mutex_was_blocked_during_actuation,
                     ventilation_channels,
-                    is_multi_thread
+                    is_multi_thread,
                 );
             }
         } else {
@@ -660,7 +669,7 @@ impl Ventilation {
                     &mutex_device_scheduler_ventilation,
                     &mut actuation_mutex_was_blocked_during_actuation,
                     ventilation_channels,
-                    is_multi_thread
+                    is_multi_thread,
                 );
             }
         }
@@ -674,12 +683,21 @@ impl Ventilation {
             &mut ventilation_channels.rx_ventilation_from_signal_handler,
             sleep_duration_hundred_millis,
             module_path!(),
-        ).await;
+        )
+        .await;
     }
 }
 
 #[cfg(test)]
 pub mod tests {
+    /// Helper function to execute the ventilation task inside a test Tokio runtime.
+    ///
+    /// # Arguments
+    /// * `ventilation` - A mutable reference to the `Ventilation` instance.
+    /// * `mutex_device_scheduler_ventilation` - Mutex coordinating access to the device scheduler.
+    /// * `ventilation_channels` - A mutable reference to the `VentilationChannels` instance.
+    /// * `ventilation_set_val_updater` - A mutable reference to the set value updater.
+    /// * `ventilation_mutexes` - Shared mutexes for ventilation conditions.
     fn execute_blocking(
         ventilation: &mut Ventilation,
         mutex_device_scheduler_ventilation: Arc<Mutex<i32>>,
@@ -693,7 +711,12 @@ pub mod tests {
             .unwrap()
             .block_on(async {
                 let is_multi_thread_test = tokio::runtime::Handle::try_current()
-                    .map(|h| matches!(h.runtime_flavor(), tokio::runtime::RuntimeFlavor::MultiThread))
+                    .map(|h| {
+                        matches!(
+                            h.runtime_flavor(),
+                            tokio::runtime::RuntimeFlavor::MultiThread
+                        )
+                    })
                     .unwrap_or(false);
 
                 ventilation
@@ -702,7 +725,7 @@ pub mod tests {
                         ventilation_channels,
                         ventilation_set_val_updater,
                         ventilation_mutexes,
-                        is_multi_thread_test
+                        is_multi_thread_test,
                     )
                     .await;
             });
@@ -734,6 +757,10 @@ pub mod tests {
     //
     // # Returns
     // A freshly initialized `Ventilation` struct, ready for testing.
+    /// Performs the `prepare_ventilation_tests` operation.
+    ///
+    /// # Arguments
+    /// * `saw_tooth_profile_config_opt` - A parameter representing `saw_tooth_profile_config_opt`.
     fn prepare_ventilation_tests(
         saw_tooth_profile_config_opt: Option<SawToothProfileConfig>,
     ) -> (ConfigData, Ventilation) {
@@ -772,6 +799,12 @@ pub mod tests {
     // - The new thread cannot be spawned.
     // - It fails to send the `Quit` or `Terminate` command.
     // - It fails to receive the acknowledgment from the `Ventilation` test object.
+    /// Performs the `create_test_environment` operation.
+    ///
+    /// # Arguments
+    /// * `duration_seconds` - A parameter representing `duration_seconds`.
+    /// * `signal_handler_channels` - A parameter representing `signal_handler_channels`.
+    /// * `mutex_ventilation_status_opt` - A parameter representing `mutex_ventilation_status_opt`.
     fn create_test_environment(
         duration_seconds: u64,
         mut signal_handler_channels: SignalHandlerChannels,
@@ -946,6 +979,11 @@ pub mod tests {
     // - The new thread cannot be spawned.
     // - The expected commands are not received in the correct order or type.
     // - Any other unexpected command is received.
+    /// Performs the `create_mock_relay_manager` operation.
+    ///
+    /// # Arguments
+    /// * `tx_relay_manager_to_ventilation` - A parameter representing `tx_relay_manager_to_ventilation`.
+    /// * `rx_relay_manager_from_ventilation` - A parameter representing `rx_relay_manager_from_ventilation`.
     fn create_mock_relay_manager(
         mut tx_relay_manager_to_ventilation: AquaSender<bool>,
         mut rx_relay_manager_from_ventilation: AquaReceiver<InternalCommand>,
@@ -2147,6 +2185,11 @@ pub mod tests {
     }
 
     // helper function to avoid warning about duplicated code.
+    /// Performs the `create_mock_relay_manager_for_ventilation_on` operation.
+    ///
+    /// # Arguments
+    /// * `tx_relay_manager_to_ventilation` - A parameter representing `tx_relay_manager_to_ventilation`.
+    /// * `rx_relay_manager_from_ventilation` - A parameter representing `rx_relay_manager_from_ventilation`.
     fn create_mock_relay_manager_for_ventilation_on(
         mut tx_relay_manager_to_ventilation: AquaSender<bool>,
         mut rx_relay_manager_from_ventilation: AquaReceiver<InternalCommand>,

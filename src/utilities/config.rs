@@ -225,6 +225,10 @@ pub fn read_config_file(filename: String) -> Result<ConfigData, ConfigError> {
 // - If the `CARGO_MANIFEST_DIR` environment variable is not set.
 // - If the specified file cannot be read (e.g., the file is not found, permissions issues).
 // - If the file content is not valid TOML or cannot be deserialized into `ConfigData`.
+/// Performs the `read_config_file` operation.
+///
+/// # Arguments
+/// * `filename` - A parameter representing `filename`.
 pub fn read_config_file(filename: String) -> Result<ConfigData, ConfigError> {
     let pathname_test =
         env::var("CARGO_MANIFEST_DIR").map_err(|_| ConfigError::CargoManifestDir)?;
@@ -285,6 +289,11 @@ pub fn read_config_file(filename: String) -> Result<ConfigData, ConfigError> {
 // - If `test_db_number` is 0 or greater than 99.
 // - If `read_config_file` (the underlying function it calls) panics
 //   (e.g., file not found, invalid TOML, `CARGO_MANIFEST_DIR` not set).
+/// Performs the `read_config_file_with_test_database` operation.
+///
+/// # Arguments
+/// * `relative_path` - A parameter representing `relative_path`.
+/// * `test_db_number` - A parameter representing `test_db_number`.
 pub fn read_config_file_with_test_database(
     relative_path: String,
     test_db_number: u32,

@@ -81,6 +81,10 @@ impl FeedChannels {
 
 #[cfg(feature = "debug_channels")]
 impl fmt::Display for FeedChannels {
+    /// Formats the value using the given formatter.
+    ///
+    /// # Arguments
+    /// * `f` - The formatter to write the formatted string to.
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         writeln!(f, "=== FeedChannels ===")?;
         writeln!(
@@ -116,6 +120,10 @@ impl fmt::Display for FeedChannels {
 
 #[cfg(not(feature = "debug_channels"))]
 impl fmt::Display for FeedChannels {
+    /// Formats the value using the given formatter.
+    ///
+    /// # Arguments
+    /// * `f` - The formatter to write the formatted string to.
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(
             f,
