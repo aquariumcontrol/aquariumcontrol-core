@@ -75,7 +75,7 @@ use std::time::Duration;
 use thiserror::Error;
 
 const CONTROLLINO_MAX_RELAY_ID: u8 = 64;
-const CONTROLLINO_MIN_RELAY_ID: u8 = 1;
+const CONTROLLINO_MIN_RELAY_ID: u8 = 0;
 
 /// Contains constants for communication with Controllino
 #[allow(unused)]
@@ -319,14 +319,12 @@ pub fn get_relay_command(
     config: &ActuateControllinoConfig,
 ) -> Result<InternalCommand, RelayError> {
     let (relay_id, is_inverted, supports_pulse) = match device {
-        // Inverted logic, no pulse
-        AquariumDevice::Skimmer => (config.skimmer_id, true, false),
-        AquariumDevice::MainPump1 => (config.main_pump1_id, true, false),
-        AquariumDevice::MainPump2 => (config.main_pump2_id, true, false),
-        AquariumDevice::AuxPump1 => (config.aux_pump1_id, true, false),
-        AquariumDevice::AuxPump2 => (config.aux_pump2_id, true, false),
-
         // Normal logic, no pulse
+        AquariumDevice::Skimmer => (config.skimmer_id, false, false),
+        AquariumDevice::MainPump1 => (config.main_pump1_id, false, false),
+        AquariumDevice::MainPump2 => (config.main_pump2_id, false, false),
+        AquariumDevice::AuxPump1 => (config.aux_pump1_id, false, false),
+        AquariumDevice::AuxPump2 => (config.aux_pump2_id, false, false),
         AquariumDevice::Heater => (config.heater_id, false, false),
         AquariumDevice::Ventilation => (config.ventilation_id, false, false),
         AquariumDevice::RefillPump => (config.refill_pump_id, false, false),
