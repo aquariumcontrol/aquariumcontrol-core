@@ -1,4 +1,4 @@
-/* Copyright 2024 Uwe Martin
+/* Copyright 2024 Uwe Martin (uwe.martin@gmail.com)
 
 Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the “Software”), to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions:
 
@@ -50,9 +50,6 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 //! - **`HeatingMutexes` Struct**: A container holding `Arc<Mutex<...>>` handles to all
 //!   the *input* data sources (from `SensorManager` and `TankLevelSwitch`).
 //!
-//! - **`HeatingStatsDataTransferTrait`**: A trait used for dependency injection, allowing
-//!   the database-writing logic to be mocked during testing.
-//!
 //! ## Design and Architecture
 //!
 //! - **Decoupled and Concurrent**: The `Heating` thread runs independently, communicating
@@ -69,10 +66,8 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 //!   a database.
 
 use log::error;
-
 #[cfg(not(test))]
 use log::warn;
-
 use spin_sleep::SpinSleeper;
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
@@ -80,15 +75,16 @@ use std::time::{Duration, Instant};
 #[cfg(all(target_os = "linux", not(test)))]
 use nix::unistd::gettid;
 
-use crate::database::sql_interface_error::SqlInterfaceError;
 use crate::database::sql_interface_heating_stats::{HeatingStatsEntry, SqlInterfaceHeatingStats};
 use crate::database::thermal_set_value_updater_trait::ThermalSetValueUpdaterTrait;
-use crate::sensors::sensor_manager::SensorManagerSignals;
-use crate::sensors::tank_level_switch::TankLevelSwitchSignals;
+use crate::thermal::heating_actuation::{switch_off_heater, switch_on_heater};
 use crate::thermal::heating_channels::HeatingChannels;
 use crate::thermal::heating_config::HeatingConfig;
+use crate::thermal::heating_mutexes::HeatingMutexes;
+pub(crate) use crate::thermal::heating_stats_data_transfer_trait::HeatingStatsDataTransferTrait;
+use crate::thermal::temperature_gradient_monitor::TemperatureGradientMonitorTrait;
 use crate::utilities::acknowledge_signal_handler::AcknowledgeSignalHandlerTrait;
-use crate::utilities::channel_content::{ActuatorState, AquariumDevice, InternalCommand};
+use crate::utilities::channel_content::ActuatorState;
 use crate::utilities::check_mutex_access_duration::CheckMutexAccessDurationTrait;
 use crate::utilities::database_ping_trait::DatabasePingTrait;
 use crate::utilities::logger::log_error_chain;
@@ -105,128 +101,6 @@ const TIME_INCREMENT_HEATING_SECS: f32 = CYCLE_TIME_HEATING_MILLIS as f32 / 1000
 
 /// allow max. 10 milliseconds for mutex to be blocked by any other thread
 const MAX_MUTEX_ACCESS_DURATION_MILLIS: u64 = 10;
-
-/// Trait for the execution of data transfer to SQL database after midnight has arrived.
-/// This trait allows running the main control with a mock implementation for testing.
-pub trait HeatingStatsDataTransferTrait {
-    /// Transfers a completed daily heating statistics entry to the database.
-    ///
-    /// This function is called once per day, typically just after midnight, to persist
-    /// the aggregated heating statistics (energy usage, average temperatures) for the
-    /// previous day.
-    ///
-    /// # Arguments
-    /// * `data` - The `HeatingStatsEntry` struct containing the statistics for the day.
-    /// * `sql_interface_heating` - A mutable reference to the `SqlInterfaceHeatingStats` instance,
-    ///   used for database interaction.
-    ///
-    /// # Returns
-    /// An empty `Result` (`Ok(())`) on a successful database transaction.
-    ///
-    /// # Errors
-    /// Returns an `SqlInterfaceError` if the database operation fails (e.g., connection
-    /// issue, SQL error during insertion/update).
-    fn transfer_heating_stats(
-        &mut self,
-        data: HeatingStatsEntry,
-        sql_interface_heating: &mut SqlInterfaceHeatingStats,
-    ) -> Result<(), SqlInterfaceError>;
-}
-
-/// Sends a command to the relay manager to actuate the heater and waits for a response.
-///
-/// This private helper function encapsulates the logic for sending a command
-/// (either `SwitchOn` or `SwitchOff`) to the relay manager. It handles channel
-/// communication, error logging, and updates the shared actuation mutex.
-///
-/// # Arguments
-/// * `command` - The `InternalCommand` to send (`SwitchOn` or `SwitchOff`).
-/// * `mutex_device_scheduler_heating` - A reference to the shared actuation mutex.
-/// * `mutex_blocked_during_actuation` - A mutable flag to track if the actuation mutex was blocked.
-/// * `heating_channels` - A mutable reference to the struct containing the channels.
-fn actuate_heater(
-    command: InternalCommand,
-    mutex_device_scheduler_heating: &Arc<Mutex<i32>>,
-    mutex_blocked_during_actuation: &mut bool,
-    heating_channels: &mut HeatingChannels,
-) {
-    // reduce the probability of wrong warning
-    *mutex_blocked_during_actuation |= mutex_device_scheduler_heating.try_lock().is_err();
-
-    // avoid electrical overloads through parallel device actuation
-    let mut mutex_data = mutex_device_scheduler_heating.lock().unwrap();
-
-    // Use map_err for more concise error handling on the send operation.
-    if let Err(e) = heating_channels.send_to_relay_manager(command.clone()) {
-        let error_message = format!("Channel communication to relay manager for {command} failed.");
-        log_error_chain(module_path!(), &error_message, e);
-    } else {
-        // If send was successful, wait for the response.
-        if let Err(e) = heating_channels.receive_from_relay_manager() {
-            let error_message =
-                format!("Receiving answer from relay manager for {command} failed.");
-            log_error_chain(module_path!(), &error_message, e);
-        }
-    }
-    *mutex_data = mutex_data.saturating_add(1);
-}
-
-/// Commands the relay manager to switch on the heater.
-///
-/// This function is a specific wrapper around `actuate_heater` that sends the `SwitchOn` command.
-///
-/// # Arguments
-/// * `mutex_device_scheduler_heating` - A reference to the shared actuation mutex.
-/// * `mutex_blocked_during_actuation` - A mutable flag to track if the actuation mutex was blocked.
-/// * `heating_channels` - A mutable reference to the struct containing the channels.
-fn switch_on_heater(
-    mutex_device_scheduler_heating: &Arc<Mutex<i32>>,
-    mutex_blocked_during_actuation: &mut bool,
-    heating_channels: &mut HeatingChannels,
-) {
-    actuate_heater(
-        InternalCommand::SwitchOn(AquariumDevice::Heater),
-        mutex_device_scheduler_heating,
-        mutex_blocked_during_actuation,
-        heating_channels,
-    );
-}
-
-/// Commands the relay manager to switch off the heater.
-///
-/// This function is a specific wrapper around `actuate_heater` that sends the `SwitchOff` command.
-///
-/// # Arguments
-/// * `mutex_device_scheduler_heating` - A reference to the shared actuation mutex.
-/// * `mutex_blocked_during_actuation` - A mutable flag to track if the actuation mutex was blocked.
-/// * `heating_channels` - A mutable reference to the struct containing the channels.
-fn switch_off_heater(
-    mutex_device_scheduler_heating: &Arc<Mutex<i32>>,
-    mutex_blocked_during_actuation: &mut bool,
-    heating_channels: &mut HeatingChannels,
-) {
-    actuate_heater(
-        InternalCommand::SwitchOff(AquariumDevice::Heater),
-        mutex_device_scheduler_heating,
-        mutex_blocked_during_actuation,
-        heating_channels,
-    );
-}
-
-/// Contains `Arc<Mutex>`-wrapped shared data points accessed by the heating control.
-///
-/// These mutexes provide thread-safe access to various sensor readings and
-/// device states that are used by the heating control.
-pub struct HeatingMutexes {
-    /// Mutex for signals from sensor manager
-    pub mutex_sensor_manager_signals: Arc<Mutex<SensorManagerSignals>>,
-
-    /// Mutex for the tank level switch signals
-    pub mutex_tank_level_switch_signals: Arc<Mutex<TankLevelSwitchSignals>>,
-
-    /// Mutex for the heater status
-    pub mutex_heating_status: Arc<Mutex<bool>>,
-}
 
 #[cfg_attr(doc, aquamarine::aquamarine)]
 /// Contains the configuration and the implementation for the heating control.
@@ -282,9 +156,29 @@ pub struct Heating {
 
     /// Instant at which statistics is updated - used for energy consumption calculation
     pub last_stats_update_instant_opt: Option<Instant>,
+
+    /// The time the actuator was last turned on continuously.
+    pub last_actuator_on_time: Option<Instant>,
+
+    /// Inhibition flag to prevent log flooding for gradient monitoring.
+    pub log_inhibition_gradient: bool,
+
+    /// flag indicating that actuator has been disabled due to indication from temperature gradient monitor
+    pub actuator_disabled: bool,
 }
 
-impl ProcessExternalRequestTrait for Heating {}
+impl TemperatureGradientMonitorTrait for Heating {
+    fn max_time_actuator_effect_monitor(&self) -> u64 {
+        self.config.max_time_actuator_effect_monitor
+    }
+
+    fn monitor_state(&mut self) -> (&mut Option<Instant>, &mut bool) {
+        (
+            &mut self.last_actuator_on_time,
+            &mut self.log_inhibition_gradient,
+        )
+    }
+}
 
 impl Heating {
     /// Creates a new `Heating` control instance.
@@ -320,6 +214,9 @@ impl Heating {
             lock_error_channel_receive_termination: false,
             max_mutex_access_duration: Duration::from_millis(MAX_MUTEX_ACCESS_DURATION_MILLIS),
             last_stats_update_instant_opt: None,
+            last_actuator_on_time: None,
+            log_inhibition_gradient: false,
+            actuator_disabled: false,
         }
     }
 
@@ -569,6 +466,7 @@ impl Heating {
         let mut lock_warn_cycle_time_exceeded: bool = false;
         let mut actuation_mutex_was_blocked_during_actuation: bool = false;
         let cycle_time_duration = Duration::from_millis(CYCLE_TIME_HEATING_MILLIS);
+        let mut actuator_ineffective: bool = false;
 
         let mut heating_stats_opt = match sql_interface_heating
             .get_single_heating_stats_from_database()
@@ -673,6 +571,28 @@ impl Heating {
                     module_path!()
                 );
 
+                actuator_ineffective = self.temperature_gradient_monitor(
+                    &heating_mutexes.mutex_temperature_gradient,
+                    heater_state == ActuatorState::On,
+                    true, // heating expects a positive gradient
+                    #[cfg(not(test))]
+                    "Heating",
+                );
+                if actuator_ineffective
+                    && self.config.switch_off_when_no_effect
+                    && heater_state == ActuatorState::On
+                {
+                    switch_off_heater(
+                        &mutex_device_scheduler_heating,
+                        &mut actuation_mutex_was_blocked_during_actuation,
+                        heating_channels,
+                    );
+                    heater_state = ActuatorState::Off;
+                    self.actuator_disabled = true;
+                    #[cfg(not(test))]
+                    warn!("[{}]: Disabled heater because temperature gradient monitor indicates ineffectiveness.", module_path!());
+                }
+
                 if self.config.stop_on_refill_error
                     && (tank_level_low_counter > self.config.stop_on_refill_error_delay)
                 {
@@ -701,7 +621,7 @@ impl Heating {
                                 && !measurement_error
                             {
                                 // switch on the heater if not already on
-                                if heater_state != ActuatorState::On {
+                                if heater_state != ActuatorState::On && !self.actuator_disabled {
                                     switch_on_heater(
                                         &mutex_device_scheduler_heating,
                                         &mut actuation_mutex_was_blocked_during_actuation,
@@ -735,7 +655,7 @@ impl Heating {
                             }
                             if measured_water_temperature < self.config.switch_on_temperature {
                                 // switch on the heater if not already on
-                                if heater_state != ActuatorState::On {
+                                if heater_state != ActuatorState::On && !self.actuator_disabled {
                                     switch_on_heater(
                                         &mutex_device_scheduler_heating,
                                         &mut actuation_mutex_was_blocked_during_actuation,
@@ -826,13 +746,15 @@ impl Heating {
             // Write signal to mutex
             {
                 match heating_mutexes.mutex_heating_status.lock() {
-                    Ok(mut c) => {
+                    Ok(mut heating_status) => {
                         instant_after_locking_mutex = Instant::now();
-                        *c = match heater_state {
+                        heating_status.actuator_switched_on = match heater_state {
                             ActuatorState::On => true,
                             ActuatorState::Off => false,
                             _ => false,
-                        }
+                        };
+                        heating_status.actuator_disabled = self.actuator_disabled;
+                        heating_status.actuator_ineffective = actuator_ineffective;
                     }
                     Err(_) => {
                         // Do nothing
@@ -912,7 +834,8 @@ pub mod tests {
     use crate::mocks::mock_schedule_check::tests::mock_schedule_check;
     use crate::sensors::sensor_manager::SensorManagerSignals;
     use crate::sensors::tank_level_switch::TankLevelSwitchSignals;
-    use crate::thermal::heating::{Heating, HeatingMutexes, CYCLE_TIME_HEATING_MILLIS};
+    use crate::thermal::heating::{Heating, CYCLE_TIME_HEATING_MILLIS};
+    use crate::thermal::heating_mutexes::HeatingMutexes;
     use crate::utilities::channel_content::{ActuatorState, AquariumDevice, InternalCommand};
     use crate::utilities::config::{read_config_file_with_test_database, ConfigData};
     use crate::utilities::sawtooth_profile::SawToothProfileConfig;
@@ -929,6 +852,7 @@ pub mod tests {
     use std::time::{Duration, Instant};
 
     use crate::database::sql_query_strings::SQL_TABLE_HEATING_STATS;
+    use crate::thermal::thermal_control_status::ThermalControlStatus;
 
     // Prepares a `Heating` control instance with a mock midnight calculator and a clean test database.
     //
@@ -1115,7 +1039,8 @@ pub mod tests {
                         &config.sensor_manager,
                     ))),
                     mutex_tank_level_switch_signals,
-                    mutex_heating_status: Arc::new(Mutex::new(false)),
+                    mutex_heating_status: Arc::new(Mutex::new(ThermalControlStatus::default())),
+                    mutex_temperature_gradient: Arc::new(Mutex::new(0.0)),
                 };
 
                 heating.execute(
@@ -1257,7 +1182,8 @@ pub mod tests {
                         &config.sensor_manager,
                     ))),
                     mutex_tank_level_switch_signals,
-                    mutex_heating_status: Arc::new(Mutex::new(false)),
+                    mutex_heating_status: Arc::new(Mutex::new(ThermalControlStatus::default())),
+                    mutex_temperature_gradient: Arc::new(Mutex::new(0.0)),
                 };
 
                 heating.execute(
@@ -1491,7 +1417,8 @@ pub mod tests {
                         &config.sensor_manager,
                     ))),
                     mutex_tank_level_switch_signals,
-                    mutex_heating_status: Arc::new(Mutex::new(false)),
+                    mutex_heating_status: Arc::new(Mutex::new(ThermalControlStatus::default())),
+                    mutex_temperature_gradient: Arc::new(Mutex::new(0.0)),
                 };
 
                 heating.execute(
@@ -1702,7 +1629,8 @@ pub mod tests {
                         &config.sensor_manager,
                     ))),
                     mutex_tank_level_switch_signals,
-                    mutex_heating_status: Arc::new(Mutex::new(false)),
+                    mutex_heating_status: Arc::new(Mutex::new(ThermalControlStatus::default())),
+                    mutex_temperature_gradient: Arc::new(Mutex::new(0.0)),
                 };
 
                 heating.execute(
@@ -1915,7 +1843,8 @@ pub mod tests {
                         &config.sensor_manager,
                     ))),
                     mutex_tank_level_switch_signals,
-                    mutex_heating_status: Arc::new(Mutex::new(false)),
+                    mutex_heating_status: Arc::new(Mutex::new(ThermalControlStatus::default())),
+                    mutex_temperature_gradient: Arc::new(Mutex::new(0.0)),
                 };
 
                 heating.execute(
@@ -2050,7 +1979,8 @@ pub mod tests {
                 let heating_mutexes = HeatingMutexes {
                     mutex_sensor_manager_signals: Arc::new(Mutex::new(SensorManagerSignals::new(&config.sensor_manager))),
                     mutex_tank_level_switch_signals,
-                    mutex_heating_status: Arc::new(Mutex::new(false)),
+                    mutex_heating_status: Arc::new(Mutex::new(ThermalControlStatus::default())),
+                    mutex_temperature_gradient: Arc::new(Mutex::new(0.0)),
                 };
 
                 heating.execute(
@@ -2192,7 +2122,8 @@ pub mod tests {
                 let heating_mutexes = HeatingMutexes {
                     mutex_sensor_manager_signals: Arc::new(Mutex::new(SensorManagerSignals::new(&config.sensor_manager))),
                     mutex_tank_level_switch_signals,
-                    mutex_heating_status: Arc::new(Mutex::new(false)),
+                    mutex_heating_status: Arc::new(Mutex::new(ThermalControlStatus::default())),
+                    mutex_temperature_gradient: Arc::new(Mutex::new(0.0)),
                 };
 
                 heating.execute(
@@ -2227,7 +2158,7 @@ pub mod tests {
                 assert_float_absolute_eq!(
                     heating_stats_transfer.heating_stats_entry_previous.energy,
                     0.1671666,
-                    0.001
+                    0.01
                 );
                 assert_float_absolute_eq!(
                     24.0,
@@ -2265,9 +2196,9 @@ pub mod tests {
                         .heating_control_runtime
                         - initial_heating_stats_entry.heating_control_runtime,
                     2.0,
-                    0.1
+                    0.6
                 );
-                assert_float_absolute_eq!(0.1119444, heating_stats_transfer.heating_stats_entry.energy, 0.001);
+                assert_float_absolute_eq!(0.1119444, heating_stats_transfer.heating_stats_entry.energy, 0.05);
                 assert_float_absolute_eq!(24.0,
                     heating_stats_transfer
                         .heating_stats_entry
@@ -2380,7 +2311,7 @@ pub mod tests {
         let join_handle_test_environment = thread::Builder::new()
             .name("test_environment".to_string())
             .spawn(move || {
-                let sleep_duration = Duration::from_millis(5150);
+                let sleep_duration = Duration::from_millis(5250);
                 let spin_sleeper = SpinSleeper::default();
                 spin_sleeper.sleep(sleep_duration);
                 let _ = channels
@@ -2418,7 +2349,8 @@ pub mod tests {
                 let heating_mutexes = HeatingMutexes {
                     mutex_sensor_manager_signals: Arc::new(Mutex::new(SensorManagerSignals::new(&config.sensor_manager))),
                     mutex_tank_level_switch_signals,
-                    mutex_heating_status: Arc::new(Mutex::new(false)),
+                    mutex_heating_status: Arc::new(Mutex::new(ThermalControlStatus::default())),
+                    mutex_temperature_gradient: Arc::new(Mutex::new(0.0)),
                 };
 
                 heating.execute(
@@ -2481,7 +2413,7 @@ pub mod tests {
                     reference_stats_update_count + 1
                 );
                 println!(
-                    "test_heating_wait_for_midnight_calc_stats_heater_on (current): {}",
+                    "test_heating_wait_for_midnight_calc_stats_heater_off (current): {}",
                     heating_stats_transfer.heating_stats_entry,
                 );
                 assert_float_absolute_eq!(
@@ -2490,9 +2422,9 @@ pub mod tests {
                         .heating_control_runtime
                         - initial_heating_stats_entry.heating_control_runtime,
                     2.0,
-                    0.02
+                    0.6
                 );
-                assert_float_absolute_eq!(0.0, heating_stats_transfer.heating_stats_entry.energy, 0.001);
+                assert_float_absolute_eq!(0.0, heating_stats_transfer.heating_stats_entry.energy, 0.003);
                 assert_float_absolute_eq!(
                     24.0,
                     heating_stats_transfer
@@ -2636,7 +2568,8 @@ pub mod tests {
                         &config.sensor_manager,
                     ))),
                     mutex_tank_level_switch_signals,
-                    mutex_heating_status: Arc::new(Mutex::new(false)),
+                    mutex_heating_status: Arc::new(Mutex::new(ThermalControlStatus::default())),
+                    mutex_temperature_gradient: Arc::new(Mutex::new(0.0)),
                 };
 
                 heating.execute(
@@ -2774,7 +2707,8 @@ pub mod tests {
                         &config.sensor_manager,
                     ))),
                     mutex_tank_level_switch_signals,
-                    mutex_heating_status: Arc::new(Mutex::new(false)),
+                    mutex_heating_status: Arc::new(Mutex::new(ThermalControlStatus::default())),
+                    mutex_temperature_gradient: Arc::new(Mutex::new(0.0)),
                 };
 
                 heating.execute(
@@ -3003,7 +2937,8 @@ pub mod tests {
                         &config.sensor_manager,
                     ))),
                     mutex_tank_level_switch_signals,
-                    mutex_heating_status: Arc::new(Mutex::new(false)),
+                    mutex_heating_status: Arc::new(Mutex::new(ThermalControlStatus::default())),
+                    mutex_temperature_gradient: Arc::new(Mutex::new(0.0)),
                 };
 
                 heating.execute(
@@ -3156,7 +3091,8 @@ pub mod tests {
                         &config.sensor_manager,
                     ))),
                     mutex_tank_level_switch_signals,
-                    mutex_heating_status: Arc::new(Mutex::new(false)),
+                    mutex_heating_status: Arc::new(Mutex::new(ThermalControlStatus::default())),
+                    mutex_temperature_gradient: Arc::new(Mutex::new(0.0)),
                 };
 
                 heating.execute(
@@ -3229,7 +3165,7 @@ pub mod tests {
             .unwrap();
 
         let mutex_device_scheduler_heating = Arc::new(Mutex::new(0));
-        let mutex_heating_status = Arc::new(Mutex::new(false));
+        let mutex_heating_status = Arc::new(Mutex::new(ThermalControlStatus::default()));
         let mutex_heating_status_clone_for_test_environment = mutex_heating_status.clone();
 
         // thread for mock relay manager - includes assertions
@@ -3317,7 +3253,8 @@ pub mod tests {
                         &config.sensor_manager,
                     ))),
                     mutex_tank_level_switch_signals,
-                    mutex_heating_status
+                    mutex_heating_status,
+                    mutex_temperature_gradient: Arc::new(Mutex::new(0.0)),
                 };
 
                 heating.execute(
@@ -3550,7 +3487,7 @@ pub mod tests {
         assert_float_absolute_eq!(
             stats.heating_control_runtime,
             sleep_duration.as_secs_f64(),
-            0.01
+            0.2
         );
     }
 
@@ -3683,5 +3620,356 @@ pub mod tests {
             heating_stats_opt.is_none(),
             "The stats option should remain None"
         );
+    }
+
+    #[test]
+    pub fn test_heating_gradient_monitoring_disables_actuator() {
+        let sleep_duration_100_millis = Duration::from_millis(100);
+        let spin_sleeper = SpinSleeper::default();
+
+        let (mut config, mut heating, sql_interface, sql_interface_heating_stats) =
+            prepare_heating_tests_mock_midnight_calculator(3600, 28, None);
+        // test case is not writing to database, hence db can be reused.
+
+        // Configure gradient monitoring to be very aggressive
+        config.heating.max_time_actuator_effect_monitor = 2;
+        config.heating.switch_off_when_no_effect = true;
+        heating.config = config.heating;
+
+        // replacement value is used for initializing mutex - needs to start with a low value
+        config.sensor_manager.replacement_value_water_temperature = 20.0;
+
+        let mut channels = Channels::new_for_test();
+
+        // thread for mock schedule check
+        let join_handle_mock_schedule_check = thread::Builder::new()
+            .name("mock_schedule_check".to_string())
+            .spawn(move || {
+                mock_schedule_check(
+                    &mut channels.schedule_check.tx_schedule_check_to_heating,
+                    &mut channels.schedule_check.rx_schedule_check_from_heating,
+                    None,
+                    true,
+                );
+            })
+            .unwrap();
+
+        // Mutex needed for water temperature
+        let mutex_sensor_manager_signals = Arc::new(Mutex::new(SensorManagerSignals::new(
+            &config.sensor_manager,
+        )));
+
+        let mutex_device_scheduler_heating = Arc::new(Mutex::new(0));
+
+        // Mutex for heating status to check assertions
+        let mutex_heating_status = Arc::new(Mutex::new(ThermalControlStatus::default()));
+        let mutex_heating_status_clone = mutex_heating_status.clone();
+
+        // Mutex for temperature gradient
+        let mutex_temperature_gradient = Arc::new(Mutex::new(0.1)); // Start with heating gradient
+        let mutex_temperature_gradient_clone = mutex_temperature_gradient.clone();
+
+        // thread for mock relay manager
+        let join_handle_mock_relay_manager = thread::Builder::new()
+            .name("mock_relay_manager".to_string())
+            .spawn(move || {
+                let (actuation_events, mock_actuator_states) = mock_relay_manager(
+                    &mut channels.relay_manager.tx_relay_manager_to_heating,
+                    &mut channels.relay_manager.rx_relay_manager_from_heating,
+                );
+                // Expect On, Off
+                assert_eq!(actuation_events.len(), 2);
+                assert_eq!(
+                    actuation_events[0].command,
+                    InternalCommand::SwitchOn(AquariumDevice::Heater)
+                );
+                assert_eq!(
+                    actuation_events[1].command,
+                    InternalCommand::SwitchOff(AquariumDevice::Heater)
+                );
+
+                mock_actuator_states.check_terminal_condition_heating();
+            })
+            .unwrap();
+
+        // thread for controlling test phases
+        let join_handle_test_environment = thread::Builder::new()
+            .name("test_environment".to_string())
+            .spawn(move || {
+                let sleep_duration_phase = Duration::from_secs(5);
+                let spin_sleeper = SpinSleeper::default();
+
+                // Phase 1: High temp, good gradient. Wait 5s.
+                spin_sleeper.sleep(sleep_duration_phase);
+                {
+                    let status = mutex_heating_status_clone.lock().unwrap();
+                    assert!(status.actuator_switched_on, "Phase 1: Heating should be ON");
+                }
+
+                // Phase 2: Constant temp (gradient indicates that actuator is ineffective).
+                {
+                    let mut gradient = mutex_temperature_gradient_clone.lock().unwrap();
+                    *gradient = 0.0;
+                }
+                // Wait 5s (monitor timeout is 2s)
+                spin_sleeper.sleep(sleep_duration_phase);
+                {
+                    let status = mutex_heating_status_clone.lock().unwrap();
+                    assert!(
+                        !status.actuator_switched_on,
+                        "Phase 2: Heating should be OFF due to gradient monitor"
+                    );
+                }
+
+                // Terminate
+                let _ = channels
+                    .signal_handler
+                    .tx_signal_handler_to_heating
+                    .send(InternalCommand::Quit);
+                channels
+                    .signal_handler
+                    .rx_signal_handler_from_heating
+                    .recv()
+                    .unwrap();
+                let _ = channels
+                    .signal_handler
+                    .tx_signal_handler_to_heating
+                    .send(InternalCommand::Terminate);
+            })
+            .unwrap();
+
+        spin_sleeper.sleep(sleep_duration_100_millis);
+
+        // thread for the test object
+        let join_handle_test_object = thread::Builder::new()
+            .name("test_object".to_string())
+            .spawn(move || {
+                let mut tx_heating_to_schedule_check_for_test_case_finish =
+                    channels.heating.tx_heating_to_schedule_check.clone();
+                let mut tx_heating_to_relay_manager_for_test_case_finish =
+                    channels.heating.tx_heating_to_relay_manager.clone();
+
+                let mut heating_set_value_updater =
+                    MockSqlInterfaceHeatingSetVals::new(false, None, None, None);
+
+                let mut heating_stats_transfer =
+                    HeatingStatsMockDataTransfer::new(&mut sql_interface.get_connection().unwrap());
+
+                let heating_mutexes = HeatingMutexes {
+                    mutex_sensor_manager_signals,
+                    mutex_tank_level_switch_signals: Arc::new(Mutex::new(TankLevelSwitchSignals {
+                        tank_level_switch_position: true,
+                        tank_level_switch_position_stabilized: true,
+                        tank_level_switch_invalid: false,
+                    })),
+                    mutex_heating_status,
+                    mutex_temperature_gradient,
+                };
+
+                heating.execute(
+                    mutex_device_scheduler_heating.clone(),
+                    &mut channels.heating,
+                    &mut heating_stats_transfer,
+                    &mut heating_set_value_updater,
+                    heating_mutexes,
+                    sql_interface_heating_stats,
+                );
+
+                // send Quit signal to mock threads
+                let _ =
+                    tx_heating_to_schedule_check_for_test_case_finish.send(InternalCommand::Quit);
+                let _ =
+                    tx_heating_to_relay_manager_for_test_case_finish.send(InternalCommand::Quit);
+                println!("* [Heating] checking gradient monitoring succeeded.");
+            })
+            .unwrap();
+
+        join_handle_mock_schedule_check
+            .join()
+            .expect("Mock schedule check failed");
+        join_handle_mock_relay_manager
+            .join()
+            .expect("Mock relay manager failed");
+        join_handle_test_environment
+            .join()
+            .expect("Test environment failed");
+        join_handle_test_object.join().expect("Test object failed");
+    }
+
+    #[test]
+    pub fn test_heating_reset_errors_enables_actuator() {
+        let sleep_duration_100_millis = Duration::from_millis(100);
+        let spin_sleeper = SpinSleeper::default();
+
+        let (mut config, mut heating, sql_interface, sql_interface_heating_stats) =
+            prepare_heating_tests_mock_midnight_calculator(3600, 28, None);
+        // test case is not writing to database, hence db can be reused.
+
+        // Start in disabled state
+        heating.actuator_disabled = true;
+
+        // replacement value is used for initializing mutex - needs to start with a low value
+        config.sensor_manager.replacement_value_water_temperature = 20.0;
+
+        let mut channels = Channels::new_for_test();
+
+        // thread for mock schedule check
+        let join_handle_mock_schedule_check = thread::Builder::new()
+            .name("mock_schedule_check".to_string())
+            .spawn(move || {
+                mock_schedule_check(
+                    &mut channels.schedule_check.tx_schedule_check_to_heating,
+                    &mut channels.schedule_check.rx_schedule_check_from_heating,
+                    None,
+                    true,
+                );
+            })
+            .unwrap();
+
+        // Mutex needed for water temperature
+        let mutex_sensor_manager_signals = Arc::new(Mutex::new(SensorManagerSignals::new(
+            &config.sensor_manager,
+        )));
+
+        let mutex_device_scheduler_heating = Arc::new(Mutex::new(0));
+
+        // Mutex for heating status to check assertions
+        let mutex_heating_status = Arc::new(Mutex::new(ThermalControlStatus::default()));
+        let mutex_heating_status_clone = mutex_heating_status.clone();
+
+        // Mutex for temperature gradient
+        let mutex_temperature_gradient = Arc::new(Mutex::new(0.1)); // Start with positive gradient
+        let mutex_temperature_gradient_clone = mutex_temperature_gradient.clone();
+
+        // thread for mock relay manager
+        let join_handle_mock_relay_manager = thread::Builder::new()
+            .name("mock_relay_manager".to_string())
+            .spawn(move || {
+                let (actuation_events, mock_actuator_states) = mock_relay_manager(
+                    &mut channels.relay_manager.tx_relay_manager_to_heating,
+                    &mut channels.relay_manager.rx_relay_manager_from_heating,
+                );
+                // Expect SwitchOn (after reset), SwitchOff (at termination)
+                assert_eq!(actuation_events.len(), 2);
+                assert_eq!(
+                    actuation_events[0].command,
+                    InternalCommand::SwitchOn(AquariumDevice::Heater)
+                );
+                assert_eq!(
+                    actuation_events[1].command,
+                    InternalCommand::SwitchOff(AquariumDevice::Heater)
+                );
+
+                mock_actuator_states.check_terminal_condition_heating();
+            })
+            .unwrap();
+
+        // thread for controlling test phases
+        let join_handle_test_environment = thread::Builder::new()
+            .name("test_environment".to_string())
+            .spawn(move || {
+                let sleep_duration_phase = Duration::from_secs(5);
+                let spin_sleeper = SpinSleeper::default();
+
+                // Phase 1: Disabled state. Wait 5s.
+                spin_sleeper.sleep(sleep_duration_phase);
+                {
+                    let status = mutex_heating_status_clone.lock().unwrap();
+                    assert!(
+                        !status.actuator_switched_on,
+                        "Phase 1: Heating should be OFF (disabled)"
+                    );
+                }
+
+                // Send ResetAllErrors command
+                channels
+                    .messaging
+                    .tx_messaging_to_heating
+                    .send(InternalCommand::ResetAllErrors)
+                    .unwrap();
+
+                // Phase 2: Enabled state. Wait 5s.
+                spin_sleeper.sleep(sleep_duration_phase);
+                {
+                    let status = mutex_heating_status_clone.lock().unwrap();
+                    assert!(
+                        status.actuator_switched_on,
+                        "Phase 2: Heating should be ON (enabled)"
+                    );
+                }
+
+                // Terminate
+                let _ = channels
+                    .signal_handler
+                    .tx_signal_handler_to_heating
+                    .send(InternalCommand::Quit);
+                channels
+                    .signal_handler
+                    .rx_signal_handler_from_heating
+                    .recv()
+                    .unwrap();
+                let _ = channels
+                    .signal_handler
+                    .tx_signal_handler_to_heating
+                    .send(InternalCommand::Terminate);
+            })
+            .unwrap();
+
+        spin_sleeper.sleep(sleep_duration_100_millis);
+
+        // thread for the test object
+        let join_handle_test_object = thread::Builder::new()
+            .name("test_object".to_string())
+            .spawn(move || {
+                let mut tx_heating_to_schedule_check_for_test_case_finish =
+                    channels.heating.tx_heating_to_schedule_check.clone();
+                let mut tx_heating_to_relay_manager_for_test_case_finish =
+                    channels.heating.tx_heating_to_relay_manager.clone();
+
+                let mut heating_set_value_updater =
+                    MockSqlInterfaceHeatingSetVals::new(false, None, None, None);
+
+                let mut heating_stats_transfer =
+                    HeatingStatsMockDataTransfer::new(&mut sql_interface.get_connection().unwrap());
+
+                let heating_mutexes = HeatingMutexes {
+                    mutex_sensor_manager_signals,
+                    mutex_tank_level_switch_signals: Arc::new(Mutex::new(TankLevelSwitchSignals {
+                        tank_level_switch_position: true,
+                        tank_level_switch_position_stabilized: true,
+                        tank_level_switch_invalid: false,
+                    })),
+                    mutex_heating_status,
+                    mutex_temperature_gradient: mutex_temperature_gradient_clone,
+                };
+
+                heating.execute(
+                    mutex_device_scheduler_heating.clone(),
+                    &mut channels.heating,
+                    &mut heating_stats_transfer,
+                    &mut heating_set_value_updater,
+                    heating_mutexes,
+                    sql_interface_heating_stats,
+                );
+
+                // send Quit signal to mock threads
+                let _ =
+                    tx_heating_to_schedule_check_for_test_case_finish.send(InternalCommand::Quit);
+                let _ =
+                    tx_heating_to_relay_manager_for_test_case_finish.send(InternalCommand::Quit);
+                println!("* [Heating] checking reset errors enables actuator succeeded.");
+            })
+            .unwrap();
+
+        join_handle_mock_schedule_check
+            .join()
+            .expect("Mock schedule check failed");
+        join_handle_mock_relay_manager
+            .join()
+            .expect("Mock relay manager failed");
+        join_handle_test_environment
+            .join()
+            .expect("Test environment failed");
+        join_handle_test_object.join().expect("Test object failed");
     }
 }

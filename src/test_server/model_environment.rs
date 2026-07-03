@@ -6,30 +6,44 @@ The above copyright notice and this permission notice shall be included in all c
 
 THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
-
 #![allow(non_snake_case)]
+
 use crate::test_server::ambient_temperature_time_profile::AmbientTemperatureTimeProfileConfig;
-use crate::test_server::conductivity_reverse_compensation::ConductivityReverseCompensation;
-use crate::test_server::conductivity_reverse_compensation::ConductivityReverseCompensationConfig;
+use crate::test_server::conductivity_reverse_compensation::{
+    ConductivityReverseCompensation, ConductivityReverseCompensationConfig,
+};
 use crate::test_server::evaporation::EvaporationConfig;
 use crate::test_server::heat_flow::HeatFlowConfig;
 use crate::test_server::light_intensity_time_profile::LightIntensityTimeProfileConfig;
 use crate::test_server::logger::SenderLogger;
-use crate::test_server::pH_time_profile::pHTimeProfileConfig;
-use crate::test_server::sump::SumpConfig;
-use crate::test_server::sump::{PumpStatus, Sump};
-use crate::test_server::tank_geometry::TankGeometryConfig;
-use crate::test_server::thermal_model::TankTemperatureModelConfig;
-use crate::test_server::pH_time_profile::pHTimeProfile;
-use crate::test_server::tank_geometry::TankGeometry;
-use crate::test_server::thermal_model::TankTemperatureModel;
+use crate::test_server::pH_time_profile::{pHTimeProfile, pHTimeProfileConfig};
+use crate::test_server::sump::{PumpStatus, Sump, SumpConfig};
+use crate::test_server::tank_geometry::{TankGeometry, TankGeometryConfig};
+use crate::test_server::tank_level_position::{TankLevelPosition, TankLevelPositionConfig};
+use crate::test_server::test_server_channel_content::{
+    BallingFluidInjection, TestServerInternalCommand,
+};
+use crate::test_server::thermal_model::{TankTemperatureModel, TankTemperatureModelConfig};
+use crate::utilities::channel_content::{AquariumDevice, AquariumSignal};
 use chrono::{NaiveTime, Utc};
 use spin_sleep::SpinSleeper;
 use std::sync::mpsc::Receiver;
 use std::time::Duration;
-use crate::test_server::tank_level_position::{TankLevelPosition, TankLevelPositionConfig};
-use crate::test_server::test_server_channel_content::{BallingFluidInjection, TestServerInternalCommand};
-use crate::utilities::channel_content::{AquariumDevice, AquariumSignal};
+
+pub struct ModelEnvironmentConfig {
+    pub tank_geometry: TankGeometryConfig,
+    pub sump: SumpConfig,
+    pub tank_level_switch: TankLevelPositionConfig,
+    pub ph_time_profile: pHTimeProfileConfig,
+    pub tank_temperature_model: TankTemperatureModelConfig,
+    pub heat_flow: HeatFlowConfig,
+    pub light_intensity_time_profile: LightIntensityTimeProfileConfig,
+    pub ambient_temperature_time_profile: AmbientTemperatureTimeProfileConfig,
+    pub evaporation: EvaporationConfig,
+    pub conductivity_reverse_compensation: ConductivityReverseCompensationConfig,
+    pub initial_time: NaiveTime,
+    pub time_step: f32,
+}
 
 /// This struct contains the configuration data for the high-level models and the implementation of the high-level model execution.
 pub struct ModelEnvironment {
@@ -56,61 +70,42 @@ impl ModelEnvironment {
     /// Function returns a variable of type ModelEnvironment after having initialized all models contained in the same.
     /// # Arguments:
     ///
-    /// * `config_tank_geometry` - configuration of tank geometry read from .toml file
-    /// * `config_sump` - configuration of sump read from .toml file
-    /// * `config_tank_level_switch` - configuration of tank level switch read from .toml file
-    /// * `config_pH_time_profile` - configuration of pH time profile read from .toml file
-    /// * `config_tank_temperature_model` - configuration of thermal model read from .toml file
-    /// * `config_heat_flow` - configuration of heat flows read from .toml file
-    /// * `config_light_intensity_time_profile` - configuration of light intensity time profile read from .toml file
-    /// * `config_ambient_temperature_time_profile` - configuration of ambient temperature time profile read from .toml file
-    /// * `config_evaporation` - configuration of evaporation model read from .toml file    
-    /// * `initial_time` - parameter of type NaiveTime that holds the time of day which is used to initialize the filter function of day-time dependent models (currently only pH).
-    /// * `time_step` - time step in seconds (in case simulation shall run faster than real time)
+    /// * `config` - configuration of the model environment
     ///
     /// Limitation: this function takes a NaiveTime as an argument in order to calculate an unfiltered pH value which is used to initialize the pH filter.
     /// If parser requests are processed significantly later than the creation of this struct they will have
     /// seemingly unexplainable results.
     /// The pH signal is not used for any dynamic control circuits. So this limitation will not have impact on functionality of the control application.
     /// However, any functionality implemented additionally should bear this limitation in mind.
-    pub fn new(
-        config_tank_geometry: TankGeometryConfig,
-        config_sump: SumpConfig,
-        config_tank_level_switch: TankLevelPositionConfig,
-        config_pH_time_profile: pHTimeProfileConfig,
-        config_tank_temperature_model: TankTemperatureModelConfig,
-        config_heat_flow: HeatFlowConfig,
-        config_light_intensity_time_profile: LightIntensityTimeProfileConfig,
-        config_ambient_temperature_time_profile: AmbientTemperatureTimeProfileConfig,
-        config_evaporation: EvaporationConfig,
-        config_conductivity_reverse_compensation: ConductivityReverseCompensationConfig,
-        initial_time: NaiveTime,
-        time_step: f32,
-    ) -> ModelEnvironment {
-        let tank_geometry = TankGeometry::new(config_tank_geometry);
+    pub fn new(config: ModelEnvironmentConfig) -> ModelEnvironment {
+        let tank_geometry = TankGeometry::new(config.tank_geometry);
 
-        let sump = Sump::new(config_sump, time_step);
+        let sump = Sump::new(config.sump, config.time_step);
 
-        let tank_level_switch = TankLevelPosition::new(config_tank_level_switch, sump);
+        let tank_level_switch = TankLevelPosition::new(config.tank_level_switch, sump);
 
-        let pH_time_profile = pHTimeProfile::new(config_pH_time_profile, initial_time, time_step);
+        let pH_time_profile = pHTimeProfile::new(
+            config.ph_time_profile,
+            config.initial_time,
+            config.time_step,
+        );
 
         let tank_temperature_model = TankTemperatureModel::new(
-            config_tank_temperature_model,
-            config_heat_flow,
-            config_light_intensity_time_profile,
-            config_ambient_temperature_time_profile,
-            config_evaporation,
-            time_step,
+            config.tank_temperature_model,
+            config.heat_flow,
+            config.light_intensity_time_profile,
+            config.ambient_temperature_time_profile,
+            config.evaporation,
+            config.time_step,
         );
 
         let conductivity_reverse_compensation =
-            ConductivityReverseCompensation::new(config_conductivity_reverse_compensation);
+            ConductivityReverseCompensation::new(config.conductivity_reverse_compensation);
 
-        if time_step == 0.0 {
+        if config.time_step == 0.0 {
             panic!(
                 "Model environment received invalid time step value {}.",
-                time_step
+                config.time_step
             );
         }
 
@@ -120,7 +115,7 @@ impl ModelEnvironment {
             pH_time_profile,
             tank_level_switch,
             conductivity_reverse_compensation,
-            time_step,
+            time_step: config.time_step,
         }
     }
 
@@ -143,7 +138,7 @@ impl ModelEnvironment {
         let sleep_duration = Duration::from_millis(1);
         let spin_sleeper = SpinSleeper::default();
 
-        let mut i:u64 = 0;
+        let mut i: u64 = 0;
 
         // initialize time of day with value requested (not limited to local time)
         let mut time_of_day: NaiveTime = time_of_day_initial;
@@ -160,16 +155,16 @@ impl ModelEnvironment {
                     time_of_day,
                     self.time_step,
                 );
-    
+
                 self.tank_level_switch
                     .sump
                     .calc_refill(&mut self.tank_geometry, self.time_step);
             }
-            
+
             spin_sleeper.sleep(sleep_duration);
 
             i += 1; // counter for reducing frequency of calculation and frequency of logging
-            
+
             // execute logging every 10000 milliseconds == once every 10 seconds
             if i.is_multiple_of(1000) {
                 println!(
@@ -428,7 +423,7 @@ impl ModelEnvironment {
                         } else {
                             println!("ModelEnvironment: Communicating tank level switch LOW");
                             Some(0.0)
-                        }
+                        };
                     }
                     AquariumSignal::TankLevelSwitchInvalid => {
                         //println!("Received request for tank level switch invalid.");
@@ -436,7 +431,7 @@ impl ModelEnvironment {
                             Some(1.0)
                         } else {
                             Some(0.0)
-                        }
+                        };
                     }
                     _ => {}
                 };
@@ -449,32 +444,33 @@ impl ModelEnvironment {
 
 #[cfg(test)]
 pub mod tests {
+    use crate::test_server::command_parser::tests::SenderLoggerTuple;
+    use crate::test_server::model_environment::{ModelEnvironment, ModelEnvironmentConfig};
+    use crate::test_server::test_server_config::read_test_server_config_file;
     use assert_float_eq::*;
     use chrono::NaiveTime;
     use std::sync::mpsc;
-    use crate::test_server::command_parser::tests::SenderLoggerTuple;
-    use crate::test_server::model_environment::ModelEnvironment;
-    use crate::test_server::test_server_config::read_test_server_config_file;
 
     #[test]
     fn test_model_environment_execution() {
-        let config = read_test_server_config_file("/config-test/aquarium_control_test_server.toml".to_string());
+        let config = read_test_server_config_file(None);
         let time_of_day = NaiveTime::from_hms_opt(9, 0, 0).unwrap();
 
-        let mut model_environment = ModelEnvironment::new(
-            config.tank_geometry,
-            config.sump,
-            config.tank_level_switch,
-            config.pH_time_profile,
-            config.tank_temperature_model,
-            config.heat_flow,
-            config.light_intensity_time_profile,
-            config.ambient_temperature_time_profile,
-            config.evaporation,
-            config.conductivity_reverse_compensation,
-            time_of_day,
-            1.0,
-        );
+        let model_config = ModelEnvironmentConfig {
+            tank_geometry: config.tank_geometry,
+            sump: config.sump,
+            tank_level_switch: config.tank_level_switch,
+            ph_time_profile: config.pH_time_profile,
+            tank_temperature_model: config.tank_temperature_model,
+            heat_flow: config.heat_flow,
+            light_intensity_time_profile: config.light_intensity_time_profile,
+            ambient_temperature_time_profile: config.ambient_temperature_time_profile,
+            evaporation: config.evaporation,
+            conductivity_reverse_compensation: config.conductivity_reverse_compensation,
+            initial_time: time_of_day,
+            time_step: 1.0,
+        };
+        let mut model_environment = ModelEnvironment::new(model_config);
 
         let (_command_tx, command_rx) = mpsc::channel();
         let (model_tx, _model_rx) = mpsc::channel();

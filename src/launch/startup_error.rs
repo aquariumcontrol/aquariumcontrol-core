@@ -1,4 +1,4 @@
-/* Copyright 2025 Uwe Martin
+/* Copyright 2025 Uwe Martin (uwe.martin@gmail.com)
 
 Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the “Software”), to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions:
 
@@ -57,7 +57,7 @@ use crate::database::sql_interface_error::SqlInterfaceError;
 use crate::dispatch::messaging_error::MessagingError;
 use crate::mineral::balling_error::BallingError;
 use crate::recorder::data_logger_error::DataLoggerError;
-use crate::relays::actuate_controllino::ActuateControllinoError;
+use crate::relays::actuate_controllino_error::ActuateControllinoError;
 #[cfg(all(feature = "target_hw", target_os = "linux"))]
 use crate::relays::relay_error::RelayError;
 #[cfg(all(feature = "target_hw", target_os = "linux"))]
@@ -70,6 +70,7 @@ use crate::sensors::i2c_error::I2cError;
 use crate::sensors::sensor_manager::SensorManagerError;
 use crate::sensors::tank_level_switch::TankLevelSwitchError;
 use crate::simulator::tcp_communication_error::TcpCommunicationError;
+use crate::thermal::temperature_gradient_error::TemperatureGradientError;
 use crate::utilities::config_error::ConfigError;
 use crate::utilities::config_file_definition_error::ConfigFileDefinitionError;
 use crate::utilities::logger::LoggerSetupError;
@@ -248,5 +249,12 @@ pub enum StartupError {
     AtlasScientificSensorTypeMismatch {
         #[source]
         source: AtlasScientificError,
+    },
+
+    /// Configuration of the temperature gradient calculation is invalid.
+    #[error("Configuration of the temperature gradient calculation is invalid.")]
+    TemperatureGradientConfigFailure {
+        #[source]
+        source: TemperatureGradientError,
     },
 }

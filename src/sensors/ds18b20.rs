@@ -1,4 +1,4 @@
-/* Copyright 2025 Uwe Martin
+/* Copyright 2025 Uwe Martin (uwe.martin@gmail.com)
 
 Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the “Software”), to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions:
 
@@ -81,7 +81,17 @@ impl Ds18b20ResultData {
             measurement_instant: Instant::now(),
         }
     }
+
+    #[cfg(test)]
+    pub fn default() -> Self {
+        Ds18b20ResultData {
+            value: 0.0,
+            invalid: false,
+            measurement_instant: Instant::now(),
+        }
+    }
 }
+
 pub type Ds18b20Result = Result<Ds18b20ResultData, Ds18b20Error>;
 
 /// Represents a Ds18b20 sensor module responsible for reading temperature signals.

@@ -53,7 +53,7 @@ port = 35000                                            # port number for commun
 
 [data_logger]
 active = true                                                                                   # used for testing purposes
-execute = true                                          # used for testing purposes
+execute = true                                                                                  # used for testing purposes
 use_sql_timestamp = true                                                                        # switch for defining the data source of timestamp
 logging_interval = 60                                                                           # log data every x seconds
 filter_coefficient_water_temperature = { filter_coefficient = 0.5, fallback_initial_value=25.0 }    # filter configuration for the water temperature
@@ -71,11 +71,18 @@ output_file_name_tank_level_switch_position = "/var/local/aquarium-ctrl/tnklvlsw
 output_file_name_tank_level_switch_invalid = "/var/local/aquarium-ctrl/tnklvlswtch_invld"       # output file name (in ramdisk) for the current value of tank level switch invalid
 output_file_name_tank_level_switch_position_stabilized = "/var/local/aquarium-ctrl/tnklvlswtch_stblzd"  # output file name (in ramdisk) for the current value of tank level switch stabailized
 output_file_name_ventilation_is_on = "/var/local/aquarium-ctrl/srfcvntltn"                      # output file name (in ramdisk) for the current value of ventilation
+output_file_name_ventilation_actuator_ineffective = "/var/local/aquarium-ctrl/srfcvntltn_actuator_ineffective" # output file name (in ramdisk) for the current value of ventilation
+output_file_name_ventilation_actuator_disabled = "/var/local/aquarium-ctrl/srfcvntltn_actuator_disabled" # output file name (in ramdisk) for the ventilation actuator disabled status
 output_file_name_heating_is_on = "/var/local/aquarium-ctrl/htng"                                # output file name (in ramdisk) for the current value of heating
+output_file_name_heating_actuator_ineffective = "/var/local/aquarium-ctrl/htng_actuator_ineffective" # output file name (in ramdisk) for the current value of ventilation
+output_file_name_heating_actuator_disabled = "/var/local/aquarium-ctrl/htng_actuator_disabled"  # output file name (in ramdisk) for the ventilation actuator disabled status
 output_file_name_ambient_temperature = "/var/local/aquarium-ctrl/ambtemp"                       # output file name (in ramdisk) for the current value of ambient air temperature
 output_file_name_humidity = "/var/local/aquarium-ctrl/ambhum"                                   # output file name (in ramdisk) for the current value of air humidity
+output_file_name_temperature_gradient = "/var/local/aquarium-ctrl/tempgrad"                     # output file name (in ramdisk) for the temperature gradient value"
 output_file_name_refill_in_progress = "/var/local/aquarium-ctrl/refillpump"                     # output file name (in ramdisk) for the current refill pump status
 output_file_name_refill_controller_state = "/var/local/aquarium-ctrl/refillctrl"                # output file name (in ramdisk) for the refill controller state
+output_file_name_heating_controller_state = "/var/local/aquarium-ctrl/htngctrl"                 # output file name (in ramdisk) for the heating controller state
+output_file_name_ventilation_controller_state = "/var/local/aquarium-ctrl/ventctrl"             # output file name (in ramdisk) for the ventilation controller state
 initial_sleep_time_millis = 2000                                                                # sleep time in milliseconds before starting the data recording
 
 [refill]
@@ -96,8 +103,8 @@ additional_refill_volume = 0.2                          # additional refill volu
 [tank_level_switch]
 active = true                                           # used for testing purposes
 execute = true                                          # used for testing purposes
-use_simulator = true                                   # if true, then do not use real HW
-tank_level_switch_position_low_stabilization_count = 5 # number of seconds before stabilized tank level switch turns low
+use_simulator = true                                    # if true, then do not use real HW
+tank_level_switch_position_low_stabilization_count = 5  # number of seconds before stabilized tank level switch turns low
 reverse_gpio_logic = true                               # false: GPIO high is interpreted as level high. true: GPIO low is interpreted as level high
 
 [heating]
@@ -108,11 +115,13 @@ switch_off_temperature = 28.0                           # temperature, at which 
 stop_on_refill_error = true                             # if true, then heating shall be switched off after a configurable time
 stop_on_refill_error_delay = 6000                       # time in seconds after which the heating shall be switched off in case of refill error
 heater_power = 200                                      # The electrical power consumption of the heater in Watt
-# configuration of saw tooth profile for low-frequency PWM-based control. Calibration of these values is usually not necessary.
+# configuration of saw tooth profile for low-frequency PWM-based control. The calibration of these values is usually not necessary.
 saw_tooth_profile_config = { phase1_length = 60, phase2_length = 10, phase3_length = 60, phase4_length = 10}
 switch_on_when_out_of_schedule = false                  # strategy when schedule check does not allow operation: true=heating will be switched on; false=heating will be switched off
 switch_on_when_external_stop = false                    # strategy when external request for stop has been received
 set_value_check_interval = 300                          # interval in seconds for polling the database
+max_time_actuator_effect_monitor = 1800                 # maximum permissible time in seconds until which the actuator must show some effect
+switch_off_when_no_effect = true                        # if true, then heating is switched off when the gradient monitor indicates that the actuator has no effect
 
 [feed]
 active = true
@@ -131,6 +140,8 @@ saw_tooth_profile_config = { phase1_length = 6, phase2_length = 1, phase3_length
 switch_on_when_out_of_schedule = false                  # strategy when schedule check does not allow operation: true=ventilation will be switched on; false=ventilation will be switched off
 switch_on_when_external_stop = false                    # strategy when external request for stop has been received
 set_value_check_interval = 300                          # interval in seconds for polling the database
+max_time_actuator_effect_monitor = 1800                 # maximum permissible time in seconds until which the actuator must show some effect
+switch_off_when_no_effect = true                        # if true, then ventilation is switched off when the gradient monitor indicates that the actuator has no effect
 
 [balling]
 active = true
@@ -150,7 +161,7 @@ pump_switch_delay_millis = 250                          # waiting period between
 active = true                                           # allows deactivation of monitors
 execute = true                                          # used for testing purposes
 max_length_refill_monitor_views = 4096                  # maximum number of monitoring entries
-max_length_atlas_scientific_monitor_views = 100        # maximum number of Atlas Scientific monitoring entries
+max_length_atlas_scientific_monitor_views = 100         # maximum number of Atlas Scientific monitoring entries
 
 [sensor_manager]
 use_simulator = true                                    # if true, then do not use real HW
@@ -166,12 +177,12 @@ source_ambient_temperature = "dht"                      # valid values are "dht"
 [atlas_scientific]
 active = true                                           # allows deactivation of data acquisition
 execute = true                                          # used for testing purposes
-address_atlas_scientific_ph = 101                        # I2C address for Atlas Scientific sensor unit for reading ph
+address_atlas_scientific_ph = 101                       # I2C address for Atlas Scientific sensor unit for reading ph
 address_atlas_scientific_conductivity = 100             # I2C address for Atlas Scientific sensor unit for reading conductivity
 address_atlas_scientific_temperature = 104              # I2C address for Atlas Scientific sensor unit for reading temperature
-sleep_time_millis_ph = 100                                # sleep time in milliseconds before after writing before reading from the pH sensor unit: use 900 for EZO type sensor 
-sleep_time_millis_conductivity = 100                      # sleep time in milliseconds before after writing before reading from the conductivity sensor unit: use 900 for EZO type sensor
-sleep_time_millis_temperature = 100                       # sleep time in milliseconds before after writing before reading from the temperature sensor unit: use 600 for EZO type sensor
+sleep_time_millis_ph = 100                              # sleep time in milliseconds before after writing before reading from the pH sensor unit: use 900 for EZO type sensor
+sleep_time_millis_conductivity = 100                    # sleep time in milliseconds before after writing before reading from the conductivity sensor unit: use 900 for EZO type sensor
+sleep_time_millis_temperature = 100                     # sleep time in milliseconds before after writing before reading from the temperature sensor unit: use 600 for EZO type sensor
 max_val_atlas_scientific_ph = 12.0                      # maximum allowed value for pH used to assess if the temperature sensor reading is valid
 min_val_atlas_scientific_ph = 4.0                       # minimum allowed value for pH used to assess if the temperature sensor reading is valid
 max_val_atlas_scientific_temperature = 40.0             # maximum allowed value for temperature used to assess if the temperature sensor reading is valid
@@ -269,4 +280,10 @@ max_allocated = 100000                                  # maximum allowed alloca
 check_interval = 900                                    # check-interval in seconds
 
 [logger]
-logfile = "/var/log/aquarium.log"                       # path and filename of the log file 
+logfile = "/var/log/aquarium.log"                       # path and filename of the log file
+
+[temperature_gradient]
+active = true                                           # used for testing purposes
+execute = true                                          # used for testing purposes
+sampling_interval = 10                                  # time in seconds between two samplings
+sample_size = 20                                        # number of necessary samples to calculate the gradient

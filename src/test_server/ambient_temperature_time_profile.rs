@@ -89,12 +89,12 @@ impl AmbientTemperatureTimeProfile {
 
 #[cfg(test)]
 pub mod tests {
-    use chrono::NaiveTime;
     use crate::test_server::ambient_temperature_time_profile::AmbientTemperatureTimeProfile;
     use crate::test_server::test_server_config::read_test_server_config_file;
+    use chrono::NaiveTime;
 
     fn create_profile() -> AmbientTemperatureTimeProfile {
-        let config = read_test_server_config_file("/config-test/aquarium_control_test_server.toml".to_string());
+        let config = read_test_server_config_file(None);
 
         AmbientTemperatureTimeProfile {
             config: config.ambient_temperature_time_profile,

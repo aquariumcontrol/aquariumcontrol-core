@@ -157,16 +157,16 @@ pub mod tests {
 
     use crate::test_server::ambient_temperature_time_profile::AmbientTemperatureTimeProfile;
     use crate::test_server::ambient_temperature_time_profile::AmbientTemperatureTimeProfileConfig;
-    use crate::test_server::test_server_config::read_test_server_config_file;
     use crate::test_server::evaporation::Evaporation;
     use crate::test_server::heat_flow::HeatFlow;
     use crate::test_server::light_intensity_time_profile::LightIntensityTimeProfile;
     use crate::test_server::tank_geometry::TankGeometry;
+    use crate::test_server::test_server_config::read_test_server_config_file;
     use crate::test_server::thermal_model::TankTemperatureModel;
 
     #[test]
     fn test_temperature_stabilization_with_heater_switched_on() {
-        let config = read_test_server_config_file("/config-test/aquarium_control_test_server.toml".to_string());
+        let config = read_test_server_config_file(None);
 
         let light_intensity = LightIntensityTimeProfile {
             config: config.light_intensity_time_profile,
@@ -233,7 +233,7 @@ pub mod tests {
 
     #[test]
     fn test_temperature_stabilization_with_ventilation_switched_on() {
-        let config = read_test_server_config_file("/config-test/aquarium_control_test_server.toml".to_string());
+        let config = read_test_server_config_file(None);
 
         let light_intensity = LightIntensityTimeProfile {
             config: config.light_intensity_time_profile,

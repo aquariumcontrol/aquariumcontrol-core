@@ -1,4 +1,4 @@
-/* Copyright 2024 Uwe Martin
+/* Copyright 2024 Uwe Martin (uwe.martin@gmail.com)
 
 Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the “Software”), to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions:
 
@@ -76,6 +76,10 @@ cfg_if::cfg_if! {
 use crate::sensors::atlas_scientific::AtlasScientificResultData;
 use crate::sensors::dht::DhtResult;
 use crate::sensors::ds18b20::Ds18b20Result;
+
+#[cfg(test)]
+use crate::sensors::ds18b20::Ds18b20ResultData;
+
 use crate::sensors::sensor_manager_channels::SensorManagerChannels;
 use crate::sensors::sensor_manager_config::SensorManagerConfig;
 use crate::simulator::get_resp_sim::GetResponseFromSimulatorTrait;
@@ -159,6 +163,27 @@ pub struct SensorManagerMutexes {
     pub mutex_sensor_manager_signals: Arc<Mutex<SensorManagerSignals>>,
 }
 
+#[cfg(test)]
+impl SensorManagerMutexes {
+    pub fn default() -> SensorManagerMutexes {
+        SensorManagerMutexes {
+            mutex_ds18b20_ambient_temperature: Arc::new(Mutex::new(Ok(
+                Ds18b20ResultData::default(),
+            ))),
+            mutex_ds18b20_water_temperature: Arc::new(Mutex::new(Ok(Ds18b20ResultData::default()))),
+            mutex_dht: Arc::new(Mutex::new(Ok((0.0, 0.0)))),
+            mutex_atlas_scientific_temperature: Arc::new(Mutex::new(
+                AtlasScientificResultData::default(),
+            )),
+            mutex_atlas_scientific_ph: Arc::new(Mutex::new(AtlasScientificResultData::default())),
+            mutex_atlas_scientific_conductivity: Arc::new(Mutex::new(
+                AtlasScientificResultData::default(),
+            )),
+            mutex_sensor_manager_signals: Arc::new(Mutex::new(SensorManagerSignals::default())),
+        }
+    }
+}
+
 /// Container for the signals managed by SensorManager.
 /// Controls for heating and ventilation use these signals.
 pub struct SensorManagerSignals {
@@ -189,6 +214,18 @@ impl SensorManagerSignals {
             ambient_humidity: config.replacement_value_ambient_humidity,
             ph: config.replacement_value_ph,
             conductivity: config.replacement_value_conductivity,
+            instant_last_recording: Instant::now(),
+        }
+    }
+
+    #[cfg(test)]
+    pub fn default() -> SensorManagerSignals {
+        SensorManagerSignals {
+            water_temperature: 0.0,
+            ambient_temperature: 0.0,
+            ambient_humidity: 0.0,
+            ph: 0.0,
+            conductivity: 0.0,
             instant_last_recording: Instant::now(),
         }
     }

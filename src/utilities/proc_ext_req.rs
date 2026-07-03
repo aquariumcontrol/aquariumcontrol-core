@@ -1,4 +1,4 @@
-/* Copyright 2024 Uwe Martin
+/* Copyright 2024 Uwe Martin (uwe.martin@gmail.com)
 
 Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the “Software”), to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions:
 
@@ -68,6 +68,8 @@ use crate::permission::schedule_check::ScheduleCheck;
 use crate::sensors::dht::Dht;
 use crate::sensors::i2c_interface::I2cInterface;
 use crate::simulator::tcp_communication::TcpCommunication;
+use crate::thermal::heating::Heating;
+use crate::thermal::ventilation::Ventilation;
 use crate::watchmen::memory::Memory;
 use crate::watchmen::watchdog::Watchdog;
 use crate::water::{refill::Refill, water_injection::WaterInjection};
@@ -640,6 +642,105 @@ macro_rules! impl_process_request_no_messaging {
     };
 }
 
+/// A macro to generate the `ProcessExternalRequestTrait` implementation for structs
+/// that need to listen for commands from the signal handler and messaging, including
+/// the `ResetAllErrors` command which resets `actuator_disabled`.
+/// This macro is used for the trait implementation of Heating and Ventilation.
+macro_rules! impl_process_request_with_reset_errors {
+    ($($struct_name:ty),+) => {
+        $(
+            impl ProcessExternalRequestTrait for $struct_name {
+                fn process_external_request(
+                    &mut self,
+                    rx_from_signal_handler: &mut AquaReceiver<InternalCommand>,
+                    rx_from_messaging_opt: Option<&mut AquaReceiver<InternalCommand>>,
+                ) -> (bool, bool, bool) {
+                    let quit_command_received = match rx_from_signal_handler.try_recv() {
+                        Ok(c) => match c {
+                            InternalCommand::Quit => true,
+                            _ => {
+                                #[cfg(any(not(test), feature = "debug_signal_handler"))]
+                                warn!(
+                                    target: module_path!(),
+                                    "ignoring inapplicable command from signal handler."
+                                );
+                                false
+                            }
+                        },
+                        Err(e) => {
+                            match e {
+                                #[cfg(feature = "debug_channels")]
+                                AquaChannelError::Full => { /* Not applicable. Do nothing */ }
+                                AquaChannelError::Empty => { /* empty buffer - no action required */ }
+                                AquaChannelError::Disconnected => {
+                                    #[cfg(not(test))]
+                                    error!(
+                                        target: module_path!(),
+                                        "receiving command from signal handler failed ({e:?})"
+                                    );
+                                }
+                            }
+                            false
+                        }
+                    };
+
+                    let (start_command_received, stop_command_received) = match rx_from_messaging_opt {
+                        Some(rx_from_messaging) => {
+                            match rx_from_messaging.try_recv() {
+                                Ok(c) => match c {
+                                    InternalCommand::Start => (true, false),
+                                    InternalCommand::Stop => (false, true),
+                                    InternalCommand::ResetAllErrors => {
+                                        #[cfg(not(test))]
+                                        info!(
+                                            target: module_path!(),
+                                            "Received reset command for errors of {} control.",
+                                            stringify!($struct_name).to_lowercase()
+                                        );
+                                        self.actuator_disabled = false;
+                                        (false, false)
+                                    }
+                                    _ => {
+                                        #[cfg(not(test))]
+                                        warn!(
+                                            target: module_path!(),
+                                            "ignoring inapplicable command from messaging."
+                                        );
+                                        (false, false)
+                                    }
+                                },
+                                Err(e) => {
+                                    match e {
+                                        #[cfg(feature = "debug_channels")]
+                                        AquaChannelError::Full => { /* Not applicable. Do nothing */ }
+                                        AquaChannelError::Empty => { /* empty buffer - no action required */ }
+                                        AquaChannelError::Disconnected => {
+                                            #[cfg(not(test))]
+                                            error!(
+                                                target: module_path!(),
+                                                "({}) receiving command from messaging failed ({e:?})",
+                                                stringify!($struct_name).to_lowercase()
+                                            );
+                                        }
+                                    }
+                                    (false, false)
+                                }
+                            }
+                        }
+                        None => (false, false),
+                    };
+
+                    (
+                        quit_command_received,
+                        start_command_received,
+                        stop_command_received,
+                    )
+                }
+            }
+        )+
+    };
+}
+
 impl_process_request_no_messaging!(
     DataLogger,
     Dht,
@@ -652,6 +753,8 @@ impl_process_request_no_messaging!(
     TcpCommunication,
     Memory
 );
+
+impl_process_request_with_reset_errors!(Heating, Ventilation);
 
 // The impl for Messaging is conditional, so it gets its own call.
 #[cfg(target_os = "linux")]

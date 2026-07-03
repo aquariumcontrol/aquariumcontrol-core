@@ -1,4 +1,4 @@
-/* Copyright 2024 Uwe Martin
+/* Copyright 2024 Uwe Martin (uwe.martin@gmail.com)
 
 Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the “Software”), to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions:
 
@@ -879,23 +879,6 @@ impl Refill {
                             && !tank_level_switch_position_stabilized
                             && !tank_level_switch_invalid
                         {
-                            #[cfg(feature = "debug_refill")]
-                            debug!(
-                                target: module_path!(),
-                                "acquiring semaphore...",
-                            );
-
-                            // conditions for allowing the refill operation are given
-                            let mut mutex_data = mutex_device_scheduler_refill.lock().unwrap();
-                            // now we are given exclusive access to actuators
-
-                            #[cfg(feature = "debug_refill")]
-                            debug!(
-                                target: module_path!(),
-                                "mutex_data = {}",
-                                mutex_data
-                            );
-
                             {
                                 // internal scope to limit lifetime of mutex lock
                                 match mutex_refill_status.lock() {
@@ -913,13 +896,15 @@ impl Refill {
                                 };
                             }
 
+                            // conditions for allowing the refill operation are given
                             quit_command_received = water_injection.inject_water(
                                 refill_channels,
                                 &mut self.refill_errors,
                                 &mut sql_interface_refill,
                                 &mutex_tank_level_switch_signals_clone_for_refill,
+                                &mutex_device_scheduler_refill,
                             );
-                            *mutex_data = mutex_data.saturating_add(1);
+
                             water_injected = true;
 
                             {
@@ -937,12 +922,6 @@ impl Refill {
                                     }
                                 };
                             }
-
-                            #[cfg(feature = "debug_refill")]
-                            debug!(
-                                target: module_path!(),
-                                "releasing semaphore..."
-                            );
                         }
                     }
                 }

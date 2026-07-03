@@ -1,4 +1,4 @@
-/* Copyright 2024 Uwe Martin
+/* Copyright 2024 Uwe Martin (uwe.martin@gmail.com)
 
 Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the “Software”), to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions:
 
@@ -63,6 +63,7 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 //!   thread from blocking indefinitely if the hardware becomes unresponsive.
 
 use crate::relays::actuate_controllino_config::ActuateControllinoConfig;
+use crate::relays::actuate_controllino_error::ActuateControllinoError;
 use crate::relays::controllino_message::{ControllinoMessage, ControllinoMessageContent};
 use crate::relays::relay_error::RelayError;
 use crate::relays::relay_manager::RelayActuationTrait;
@@ -72,7 +73,6 @@ use serialport::{ClearBuffer, SerialPort};
 use spin_sleep::SpinSleeper;
 use std::collections::HashSet;
 use std::time::Duration;
-use thiserror::Error;
 
 const CONTROLLINO_MAX_RELAY_ID: u8 = 64;
 const CONTROLLINO_MIN_RELAY_ID: u8 = 0;
@@ -148,54 +148,6 @@ fn check_controllino_checksums(data: &[u8]) -> bool {
         );
     }
     ok_result
-}
-
-/// Contains error definitions for ActuateControllino
-#[derive(Error, Debug)]
-pub enum ActuateControllinoError {
-    /// Relay ID is outside the allowed range.
-    #[error("Relay ID for Controllino ({0}) is outside the allowed range ({1} ... {2}).")]
-    RelayIdOutsideRange(u8, u8, u8),
-
-    /// Found a duplicate value in definition of relay IDs.
-    #[error("Found a duplicate value ({0}) in definition of relay IDs.")]
-    RelayIdDuplicate(u8),
-
-    /// Port name for communication with Controllino is empty.
-    #[error("Port name for communication with Controllino is empty.")]
-    EmptyPortName,
-
-    /// Failed to open serial port for Controllino.
-    #[error("Failed to open serial port for Controllino.")]
-    SerialPortOpenFailed {
-        #[source]
-        source: serialport::Error,
-    },
-
-    /// Failed to set timeout for serial port communication.
-    #[error(
-        "Could not set timeout of {timeout_millis} milliseconds for serial port communication."
-    )]
-    SetTimeoutFailed {
-        timeout_millis: u64,
-
-        #[source]
-        source: serialport::Error,
-    },
-
-    /// Failed to clear DTR of serial port communication.
-    #[error("Failed to clear DTR of serial port communication.")]
-    ClearDTRFailed {
-        #[source]
-        source: serialport::Error,
-    },
-
-    /// Failed to clear buffer of serial port communication.
-    #[error("Failed to clear buffer of serial port communication.")]
-    ClearBufferFailed {
-        #[source]
-        source: serialport::Error,
-    },
 }
 
 /// Contains relay configuration and trait implementation for actuation using Controllino hardware
@@ -761,12 +713,11 @@ pub mod tests {
     // feature-specific imports
     cfg_if::cfg_if! {
         if #[cfg(feature = "controllino_hw")] {
-            use serialport::SerialPort;
             use spin_sleep::SpinSleeper;
             use std::time::Duration;
 
-            use crate::relays::controllino::{Controllino, RelayActuationTrait};
-            use crate::relays::controllino_actuate_hardware::ControllinoActuateHardware;
+            use crate::relays::relay_manager::RelayActuationTrait;
+            use crate::relays::actuate_controllino::ActuateControllinoConfig;
         }
     }
 
@@ -826,13 +777,21 @@ pub mod tests {
     }
 
     #[cfg(all(target_os = "macos", feature = "controllino_hw"))]
-    fn get_platform_specific_configuration_file() -> String {
-        "/config/aquarium_control_test_controllino_macos.toml".to_string()
+    fn get_platform_specific_controllino_configuration() -> ActuateControllinoConfig {
+        let mut config: ConfigData =
+            read_config_file("/config/aquarium_control_test_generic.toml".to_string()).unwrap();
+        config.controllino_relay.active = true;
+        config.controllino_relay.port_name = "/dev/cu.usbmodem112401".to_string();
+        config.controllino_relay.controllino_processing_millis = 10;
+        config.controllino_relay
     }
 
     #[cfg(all(target_os = "linux", feature = "controllino_hw"))]
-    fn get_platform_specific_configuration_file() -> String {
-        "/config/aquarium_control_test_controllino_linux.toml".to_string()
+    fn get_platform_specific_controllino_configuration() -> ActuateControllinoConfig {
+        let mut config: ConfigData =
+            read_config_file("/config/aquarium_control_test_generic.toml".to_string()).unwrap();
+        config.controllino_relay.active = true;
+        config.controllino_relay
     }
 
     #[cfg(feature = "controllino_hw")]
@@ -843,160 +802,151 @@ pub mod tests {
         let sleep_duration_500_millis = Duration::from_millis(500);
         let spin_sleeper = SpinSleeper::default();
 
-        let config: ConfigData = read_config_file(get_platform_specific_configuration_file());
-        let controllino = Controllino::new(config.relay_manager);
+        let controllino_config = get_platform_specific_controllino_configuration();
 
-        let config2: ConfigData = read_config_file(get_platform_specific_configuration_file());
-
-        let serial_port: Box<dyn SerialPort>;
-        serial_port = match controllino.serial_port_opt.as_ref().unwrap().try_clone() {
-            Ok(c) => c,
-            Err(_) => {
-                panic!("Controllino: Error occurred when trying to clone serial port.");
-            }
-        };
-
-        let mut actuator = ControllinoActuateHardware;
-
-        let expect_info =
-            "Controllino test_switch_on_off_pulse failed cloning serial port interface.";
+        let mut actuator = ActuateControllino::new(controllino_config).unwrap();
 
         // Request Controllino to switch on and off all relays sequentially
-        assert_eq!(
-            actuator.actuate(InternalCommand::SwitchOn(Skimmer),),
-            Ok(())
-        );
+        actuator
+            .actuate(&InternalCommand::SwitchOn(Skimmer))
+            .unwrap();
         spin_sleeper.sleep(sleep_duration_500_millis);
-        assert_eq!(
-            actuator.actuate(InternalCommand::SwitchOn(Ventilation),),
-            Ok(())
-        );
+
+        actuator
+            .actuate(&InternalCommand::SwitchOn(Ventilation))
+            .unwrap();
         spin_sleeper.sleep(sleep_duration_500_millis);
-        assert_eq!(actuator.actuate(InternalCommand::SwitchOn(Heater),), Ok(()));
+
+        actuator
+            .actuate(&InternalCommand::SwitchOn(Heater))
+            .unwrap();
         spin_sleeper.sleep(sleep_duration_500_millis);
-        assert_eq!(
-            actuator.actuate(InternalCommand::SwitchOn(MainPump1),),
-            Ok(())
-        );
+
+        actuator
+            .actuate(&InternalCommand::SwitchOn(MainPump1))
+            .unwrap();
         spin_sleeper.sleep(sleep_duration_500_millis);
-        assert_eq!(
-            actuator.actuate(InternalCommand::SwitchOn(MainPump2),),
-            Ok(())
-        );
+
+        actuator
+            .actuate(&InternalCommand::SwitchOn(MainPump2))
+            .unwrap();
         spin_sleeper.sleep(sleep_duration_500_millis);
-        assert_eq!(
-            actuator.actuate(InternalCommand::SwitchOn(AuxPump1),),
-            Ok(())
-        );
+
+        actuator
+            .actuate(&InternalCommand::SwitchOn(AuxPump1))
+            .unwrap();
         spin_sleeper.sleep(sleep_duration_500_millis);
-        assert_eq!(
-            actuator.actuate(InternalCommand::SwitchOn(AuxPump2),),
-            Ok(())
-        );
+
+        actuator
+            .actuate(&InternalCommand::SwitchOn(AuxPump2))
+            .unwrap();
         spin_sleeper.sleep(sleep_duration_500_millis);
-        assert_eq!(
-            actuator.actuate(InternalCommand::SwitchOn(PeristalticPump1),),
-            Ok(())
-        );
+
+        actuator
+            .actuate(&InternalCommand::SwitchOn(PeristalticPump1))
+            .unwrap();
         spin_sleeper.sleep(sleep_duration_500_millis);
-        assert_eq!(
-            actuator.actuate(InternalCommand::SwitchOn(PeristalticPump2),),
-            Ok(())
-        );
+
+        actuator
+            .actuate(&InternalCommand::SwitchOn(PeristalticPump2))
+            .unwrap();
         spin_sleeper.sleep(sleep_duration_500_millis);
-        assert_eq!(
-            actuator.actuate(InternalCommand::SwitchOn(PeristalticPump3),),
-            Ok(())
-        );
+
+        actuator
+            .actuate(&InternalCommand::SwitchOn(PeristalticPump3))
+            .unwrap();
         spin_sleeper.sleep(sleep_duration_500_millis);
-        assert_eq!(
-            actuator.actuate(InternalCommand::SwitchOn(PeristalticPump4),),
-            Ok(())
-        );
+
+        actuator
+            .actuate(&InternalCommand::SwitchOn(PeristalticPump4))
+            .unwrap();
         spin_sleeper.sleep(sleep_duration_500_millis);
-        assert_eq!(actuator.actuate(InternalCommand::SwitchOn(Feeder),), Ok(()));
+
+        actuator
+            .actuate(&InternalCommand::SwitchOn(Feeder))
+            .unwrap();
         spin_sleeper.sleep(sleep_duration_500_millis);
-        assert_eq!(
-            actuator.actuate(InternalCommand::SwitchOff(Skimmer),),
-            Ok(())
-        );
+
+        actuator
+            .actuate(&InternalCommand::SwitchOff(Skimmer))
+            .unwrap();
         spin_sleeper.sleep(sleep_duration_500_millis);
-        assert_eq!(
-            actuator.actuate(InternalCommand::SwitchOff(Ventilation),),
-            Ok(())
-        );
+
+        actuator
+            .actuate(&InternalCommand::SwitchOff(Ventilation))
+            .unwrap();
         spin_sleeper.sleep(sleep_duration_500_millis);
-        assert_eq!(
-            actuator.actuate(InternalCommand::SwitchOff(Heater),),
-            Ok(())
-        );
+
+        actuator
+            .actuate(&InternalCommand::SwitchOff(Heater))
+            .unwrap();
         spin_sleeper.sleep(sleep_duration_500_millis);
-        assert_eq!(
-            actuator.actuate(InternalCommand::SwitchOff(MainPump1),),
-            Ok(())
-        );
+
+        actuator
+            .actuate(&InternalCommand::SwitchOff(MainPump1))
+            .unwrap();
         spin_sleeper.sleep(sleep_duration_500_millis);
-        assert_eq!(
-            actuator.actuate(InternalCommand::SwitchOff(MainPump2),),
-            Ok(())
-        );
+
+        actuator
+            .actuate(&InternalCommand::SwitchOff(MainPump2))
+            .unwrap();
         spin_sleeper.sleep(sleep_duration_500_millis);
-        assert_eq!(
-            actuator.actuate(InternalCommand::SwitchOff(AuxPump1),),
-            Ok(())
-        );
+
+        actuator
+            .actuate(&InternalCommand::SwitchOff(AuxPump1))
+            .unwrap();
         spin_sleeper.sleep(sleep_duration_500_millis);
-        assert_eq!(
-            actuator.actuate(InternalCommand::SwitchOff(AuxPump2),),
-            Ok(())
-        );
+
+        actuator
+            .actuate(&InternalCommand::SwitchOff(AuxPump2))
+            .unwrap();
         spin_sleeper.sleep(sleep_duration_500_millis);
-        assert_eq!(
-            actuator.actuate(InternalCommand::SwitchOff(PeristalticPump1),),
-            Ok(())
-        );
+
+        actuator
+            .actuate(&InternalCommand::SwitchOff(PeristalticPump1))
+            .unwrap();
         spin_sleeper.sleep(sleep_duration_500_millis);
-        assert_eq!(
-            actuator.actuate(InternalCommand::SwitchOff(PeristalticPump2),),
-            Ok(())
-        );
+
+        actuator
+            .actuate(&InternalCommand::SwitchOff(PeristalticPump2))
+            .unwrap();
         spin_sleeper.sleep(sleep_duration_500_millis);
-        assert_eq!(
-            actuator.actuate(InternalCommand::SwitchOff(PeristalticPump3),),
-            Ok(())
-        );
+
+        actuator
+            .actuate(&InternalCommand::SwitchOff(PeristalticPump3))
+            .unwrap();
         spin_sleeper.sleep(sleep_duration_500_millis);
-        assert_eq!(
-            actuator.actuate(InternalCommand::SwitchOff(PeristalticPump4),),
-            Ok(())
-        );
+
+        actuator
+            .actuate(&InternalCommand::SwitchOff(PeristalticPump4))
+            .unwrap();
         spin_sleeper.sleep(sleep_duration_500_millis);
-        assert_eq!(
-            actuator.actuate(InternalCommand::SwitchOff(Feeder),),
-            Ok(())
-        );
+
+        actuator
+            .actuate(&InternalCommand::SwitchOff(Feeder))
+            .unwrap();
+
         spin_sleeper.sleep(sleep_duration_500_millis);
 
         // Request Controllino to pulse all relays for peristaltic pumps
-        assert_eq!(
-            actuator.actuate(InternalCommand::Pulse(PeristalticPump1, 500),),
-            Ok(())
-        );
+        actuator
+            .actuate(&InternalCommand::Pulse(PeristalticPump1, 500))
+            .unwrap();
         spin_sleeper.sleep(sleep_duration_500_millis);
-        assert_eq!(
-            actuator.actuate(InternalCommand::Pulse(PeristalticPump2, 500),),
-            Ok(())
-        );
+
+        actuator
+            .actuate(&InternalCommand::Pulse(PeristalticPump2, 500))
+            .unwrap();
         spin_sleeper.sleep(sleep_duration_500_millis);
-        assert_eq!(
-            actuator.actuate(InternalCommand::Pulse(PeristalticPump3, 500),),
-            Ok(())
-        );
+
+        actuator
+            .actuate(&InternalCommand::Pulse(PeristalticPump3, 500))
+            .unwrap();
         spin_sleeper.sleep(sleep_duration_500_millis);
-        assert_eq!(
-            actuator.actuate(InternalCommand::Pulse(PeristalticPump4, 500),),
-            Ok(())
-        );
+
+        actuator
+            .actuate(&InternalCommand::Pulse(PeristalticPump4, 500))
+            .unwrap();
     }
 
     #[test]
@@ -1458,67 +1408,49 @@ pub mod tests {
         let sleep_duration_6_secs = Duration::from_secs(6);
         let spin_sleeper = SpinSleeper::default();
 
-        let config: ConfigData = read_config_file(get_platform_specific_configuration_file());
-        let controllino = Controllino::new(config.relay_manager);
+        let controllino_config = get_platform_specific_controllino_configuration();
 
-        let config2: ConfigData = read_config_file(get_platform_specific_configuration_file());
-
-        let serial_port: Box<dyn SerialPort>;
-        serial_port = match controllino.serial_port_opt.as_ref().unwrap().try_clone() {
-            Ok(c) => c,
-            Err(_) => {
-                panic!("Controllino: Error occurred when trying to clone serial port.");
-            }
-        };
-
-        let mut actuator = ControllinoActuateHardware;
-
-        let expect_info =
-            "Controllino test_switch_on_off_pulse failed cloning serial port interface.";
+        let mut actuator = ActuateControllino::new(controllino_config).unwrap();
 
         // Request Controllino to switch on and off all relays sequentially
-        assert_eq!(
-            actuator.actuate(InternalCommand::SwitchOff(MainPump1),),
-            Ok(())
-        );
+        actuator
+            .actuate(&InternalCommand::SwitchOff(MainPump1))
+            .unwrap();
         spin_sleeper.sleep(sleep_duration_500_millis);
-        assert_eq!(
-            actuator.actuate(InternalCommand::SwitchOff(MainPump2),),
-            Ok(())
-        );
+        actuator
+            .actuate(&InternalCommand::SwitchOff(MainPump2))
+            .unwrap();
         spin_sleeper.sleep(sleep_duration_500_millis);
-        assert_eq!(
-            actuator.actuate(InternalCommand::SwitchOff(AuxPump1),),
-            Ok(())
-        );
+        actuator
+            .actuate(&InternalCommand::SwitchOff(AuxPump1))
+            .unwrap();
         spin_sleeper.sleep(sleep_duration_8_secs);
-        assert_eq!(actuator.actuate(InternalCommand::SwitchOn(Feeder),), Ok(()));
+        actuator
+            .actuate(&InternalCommand::SwitchOn(Feeder))
+            .unwrap();
         spin_sleeper.sleep(sleep_duration_6_secs);
-        assert_eq!(
-            actuator.actuate(InternalCommand::SwitchOff(Feeder),),
-            Ok(())
-        );
+        actuator
+            .actuate(&InternalCommand::SwitchOff(Feeder))
+            .unwrap();
         spin_sleeper.sleep(sleep_duration_8_secs);
-        assert_eq!(actuator.actuate(InternalCommand::SwitchOn(Feeder),), Ok(()));
+        actuator
+            .actuate(&InternalCommand::SwitchOn(Feeder))
+            .unwrap();
         spin_sleeper.sleep(sleep_duration_6_secs);
-        assert_eq!(
-            actuator.actuate(InternalCommand::SwitchOff(Feeder),),
-            Ok(())
-        );
+        actuator
+            .actuate(&InternalCommand::SwitchOff(Feeder))
+            .unwrap();
         spin_sleeper.sleep(sleep_duration_8_secs);
-        assert_eq!(
-            actuator.actuate(InternalCommand::SwitchOn(MainPump1),),
-            Ok(())
-        );
+        actuator
+            .actuate(&InternalCommand::SwitchOn(MainPump1))
+            .unwrap();
         spin_sleeper.sleep(sleep_duration_500_millis);
-        assert_eq!(
-            actuator.actuate(InternalCommand::SwitchOn(MainPump2),),
-            Ok(())
-        );
+        actuator
+            .actuate(&InternalCommand::SwitchOn(MainPump2))
+            .unwrap();
         spin_sleeper.sleep(sleep_duration_500_millis);
-        assert_eq!(
-            actuator.actuate(InternalCommand::SwitchOn(AuxPump1),),
-            Ok(())
-        );
+        actuator
+            .actuate(&InternalCommand::SwitchOn(AuxPump1))
+            .unwrap();
     }
 }

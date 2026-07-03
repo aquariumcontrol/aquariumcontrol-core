@@ -7,11 +7,13 @@ The above copyright notice and this permission notice shall be included in all c
 THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
+use crate::test_server::test_server_channel_content::{
+    BallingFluidInjection, TestServerInternalCommand,
+};
+use crate::utilities::channel_content::AquariumDevice;
 use serde_derive::Deserialize;
 use std::thread;
 use std::time::Duration;
-use crate::test_server::test_server_channel_content::{BallingFluidInjection, TestServerInternalCommand};
-use crate::utilities::channel_content::AquariumDevice;
 
 /// This struct holds the configuration data for the Controllino device simulation.
 /// The configuration is loaded from the .toml configuration file.
@@ -94,48 +96,70 @@ impl<'a> ControllinoEmulator<'a> {
         if (id as usize) < self.relays.len() {
             self.relays[id as usize] = true;
             if id == self.config.skimmer_id {
-                return Some(TestServerInternalCommand::SwitchOff(AquariumDevice::Skimmer));
+                return Some(TestServerInternalCommand::SwitchOff(
+                    AquariumDevice::Skimmer,
+                ));
                 // note: reverse logic of relay (NO)
             }
             if id == self.config.main_pump1_id {
-                return Some(TestServerInternalCommand::SwitchOff(AquariumDevice::MainPump1));
+                return Some(TestServerInternalCommand::SwitchOff(
+                    AquariumDevice::MainPump1,
+                ));
                 // note: reverse logic of relay (NO)
             }
             if id == self.config.main_pump2_id {
-                return Some(TestServerInternalCommand::SwitchOff(AquariumDevice::MainPump2));
+                return Some(TestServerInternalCommand::SwitchOff(
+                    AquariumDevice::MainPump2,
+                ));
                 // note: reverse logic of relay (NO)
             }
             if id == self.config.aux_pump1_id {
-                return Some(TestServerInternalCommand::SwitchOff(AquariumDevice::AuxPump1));
+                return Some(TestServerInternalCommand::SwitchOff(
+                    AquariumDevice::AuxPump1,
+                ));
                 // note: reverse logic of relay (NO)
             }
             if id == self.config.aux_pump2_id {
-                return Some(TestServerInternalCommand::SwitchOff(AquariumDevice::AuxPump2));
+                return Some(TestServerInternalCommand::SwitchOff(
+                    AquariumDevice::AuxPump2,
+                ));
                 // note: reverse logic of relay (NO)
             }
             if id == self.config.refill_pump_id {
-                return Some(TestServerInternalCommand::SwitchOn(AquariumDevice::RefillPump));
+                return Some(TestServerInternalCommand::SwitchOn(
+                    AquariumDevice::RefillPump,
+                ));
             }
             if id == self.config.heater_id {
                 return Some(TestServerInternalCommand::SwitchOn(AquariumDevice::Heater));
             }
             if id == self.config.ventilation_id {
-                return Some(TestServerInternalCommand::SwitchOn(AquariumDevice::Ventilation));
+                return Some(TestServerInternalCommand::SwitchOn(
+                    AquariumDevice::Ventilation,
+                ));
             }
             if id == self.config.feeder_id {
                 return Some(TestServerInternalCommand::SwitchOn(AquariumDevice::Feeder));
             }
             if id == self.config.peristaltic_pump1_id {
-                return Some(TestServerInternalCommand::SwitchOn(AquariumDevice::PeristalticPump1));
+                return Some(TestServerInternalCommand::SwitchOn(
+                    AquariumDevice::PeristalticPump1,
+                ));
             }
             if id == self.config.peristaltic_pump2_id {
-                return Some(TestServerInternalCommand::SwitchOn(AquariumDevice::PeristalticPump2));
+                return Some(TestServerInternalCommand::SwitchOn(
+                    AquariumDevice::PeristalticPump2,
+                ));
             }
             if id == self.config.peristaltic_pump3_id {
-                return Some(TestServerInternalCommand::SwitchOn(AquariumDevice::PeristalticPump3));
+                return Some(TestServerInternalCommand::SwitchOn(
+                    AquariumDevice::PeristalticPump3,
+                ));
             }
             if id == self.config.peristaltic_pump4_id {
-                return Some(TestServerInternalCommand::SwitchOn(AquariumDevice::PeristalticPump4));
+                return Some(TestServerInternalCommand::SwitchOn(
+                    AquariumDevice::PeristalticPump4,
+                ));
             }
         }
         None
@@ -154,45 +178,65 @@ impl<'a> ControllinoEmulator<'a> {
                 // note: reverse logic of relay (NO)
             }
             if id == self.config.main_pump1_id {
-                return Some(TestServerInternalCommand::SwitchOn(AquariumDevice::MainPump1));
+                return Some(TestServerInternalCommand::SwitchOn(
+                    AquariumDevice::MainPump1,
+                ));
                 // note: reverse logic of relay (NO)
             }
             if id == self.config.main_pump2_id {
-                return Some(TestServerInternalCommand::SwitchOn(AquariumDevice::MainPump2));
+                return Some(TestServerInternalCommand::SwitchOn(
+                    AquariumDevice::MainPump2,
+                ));
                 // note: reverse logic of relay (NO)
             }
             if id == self.config.aux_pump1_id {
-                return Some(TestServerInternalCommand::SwitchOn(AquariumDevice::AuxPump1));
+                return Some(TestServerInternalCommand::SwitchOn(
+                    AquariumDevice::AuxPump1,
+                ));
                 // note: reverse logic of relay (NO)
             }
             if id == self.config.aux_pump2_id {
-                return Some(TestServerInternalCommand::SwitchOn(AquariumDevice::AuxPump2));
+                return Some(TestServerInternalCommand::SwitchOn(
+                    AquariumDevice::AuxPump2,
+                ));
                 // note: reverse logic of relay (NO)
             }
             if id == self.config.refill_pump_id {
-                return Some(TestServerInternalCommand::SwitchOff(AquariumDevice::RefillPump));
+                return Some(TestServerInternalCommand::SwitchOff(
+                    AquariumDevice::RefillPump,
+                ));
                 // note: reverse logic of relay (NO)
             }
             if id == self.config.heater_id {
                 return Some(TestServerInternalCommand::SwitchOff(AquariumDevice::Heater));
             }
             if id == self.config.ventilation_id {
-                return Some(TestServerInternalCommand::SwitchOff(AquariumDevice::Ventilation));
+                return Some(TestServerInternalCommand::SwitchOff(
+                    AquariumDevice::Ventilation,
+                ));
             }
             if id == self.config.feeder_id {
                 return Some(TestServerInternalCommand::SwitchOff(AquariumDevice::Feeder));
             }
             if id == self.config.peristaltic_pump1_id {
-                return Some(TestServerInternalCommand::SwitchOff(AquariumDevice::PeristalticPump1));
+                return Some(TestServerInternalCommand::SwitchOff(
+                    AquariumDevice::PeristalticPump1,
+                ));
             }
             if id == self.config.peristaltic_pump2_id {
-                return Some(TestServerInternalCommand::SwitchOff(AquariumDevice::PeristalticPump2));
+                return Some(TestServerInternalCommand::SwitchOff(
+                    AquariumDevice::PeristalticPump2,
+                ));
             }
             if id == self.config.peristaltic_pump3_id {
-                return Some(TestServerInternalCommand::SwitchOff(AquariumDevice::PeristalticPump3));
+                return Some(TestServerInternalCommand::SwitchOff(
+                    AquariumDevice::PeristalticPump3,
+                ));
             }
             if id == self.config.peristaltic_pump4_id {
-                return Some(TestServerInternalCommand::SwitchOff(AquariumDevice::PeristalticPump4));
+                return Some(TestServerInternalCommand::SwitchOff(
+                    AquariumDevice::PeristalticPump4,
+                ));
             }
         }
         None
@@ -227,22 +271,24 @@ impl<'a> ControllinoEmulator<'a> {
 
             // @todo: external mapping for peristaltic pump id to Balling fluid type
             if id == self.config.peristaltic_pump1_id {
-                return Some(TestServerInternalCommand::Inject(BallingFluidInjection::Calcium(
-                    duration_ms,
-                )));
+                return Some(TestServerInternalCommand::Inject(
+                    BallingFluidInjection::Calcium(duration_ms),
+                ));
             }
             if id == self.config.peristaltic_pump2_id {
-                return Some(TestServerInternalCommand::Inject(BallingFluidInjection::Magnesium(
-                    duration_ms,
-                )));
+                return Some(TestServerInternalCommand::Inject(
+                    BallingFluidInjection::Magnesium(duration_ms),
+                ));
             }
             if id == self.config.peristaltic_pump3_id {
-                return Some(TestServerInternalCommand::Inject(BallingFluidInjection::KH(
-                    duration_ms,
-                )));
+                return Some(TestServerInternalCommand::Inject(
+                    BallingFluidInjection::KH(duration_ms),
+                ));
             }
             if id == self.config.peristaltic_pump4_id {
-                return Some(TestServerInternalCommand::Inject(BallingFluidInjection::NotConnected));
+                return Some(TestServerInternalCommand::Inject(
+                    BallingFluidInjection::NotConnected,
+                ));
             }
         }
         None
@@ -261,7 +307,7 @@ pub mod tests {
 
     #[test]
     fn test_set_unset_relay() {
-        let config = read_test_server_config_file("/config-test/aquarium_control_test_server.toml".to_string());
+        let config = read_test_server_config_file(None);
 
         let mut controllino = ControllinoEmulator {
             relays: vec![

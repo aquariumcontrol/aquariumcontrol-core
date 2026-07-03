@@ -8,43 +8,12 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 */
 
 #![allow(non_snake_case)]
+use crate::simulator::tcp_data::{category, command, signal};
 use crate::test_server::controllino_emulator::ControllinoEmulator;
 use crate::test_server::logger::SenderLogger;
 use crate::test_server::test_server_channel_content::TestServerInternalCommand;
 use crate::utilities::channel_content::AquariumSignal;
 use std::sync::mpsc::Receiver;
-
-/// This module contains constants representing commands received from control application.
-mod command {
-    pub const SETSINGLE: &str = "SETSINGLE";
-    pub const UNSETSINGLE: &str = "UNSETSINGLE";
-    pub const GETSTATUS: &str = "GETSTATUS";
-    pub const PULSE: &str = "PULSE";
-    pub const HEARTBEAT: &str = "HEARTBEAT";
-    pub const READ: &str = "READ";
-    pub const INITIALIZED: &str = "INITIALIZED";
-}
-
-/// This module contains constants representing the category received from control application.
-/// The category describes the device to which the command shall be applied.
-mod category {
-    pub const CONTROLLINO: &str = "CONTROLLINO";
-    pub const DHT22: &str = "DHT22";
-    pub const ATLASSCIENTIFIC: &str = "ATLSSCNTFC";
-    pub const TANKLEVELSWITCH: &str = "TNKLVLSWTCH";
-    pub const REFILLCONTROL: &str = "REFILLCTRL";
-}
-
-/// This module contains constants representing the signal request received from control application.
-mod signal {
-    pub const AMBIENTTEMPERATURE: &str = "AmbTemp";
-    pub const AMBIENTHUMIDITY: &str = "AmbHum";
-    pub const TANKLEVELSWITCHPOSITION: &str = "TnkLvlSwtch";
-    pub const TANKLEVELSWITCHINVALID: &str = "TnkLvlSwtchInvld";
-    pub const ATLASSCIENTIFICTEMPERATURE: &str = "temperature";
-    pub const ATLASSCIENTIFICPH: &str = "pH";
-    pub const ATLASSCIENTIFICCONDUCTIVITY: &str = "conductivity";
-}
 
 #[derive(Debug)]
 /// Enum codifies the errors which the program may encounter during evaluation of the command string.
@@ -190,12 +159,9 @@ pub fn parse_sequence(
                     if words.len() == 4 {
                         match word_signal.parse::<u16>() {
                             Ok(relay_id) => match word_optional.parse::<u32>() {
-                                Ok(pulsetime_ms) => pulse_relay(
-                                    relay_id,
-                                    pulsetime_ms,
-                                    tx_to_model,
-                                    controllino,
-                                ),
+                                Ok(pulsetime_ms) => {
+                                    pulse_relay(relay_id, pulsetime_ms, tx_to_model, controllino)
+                                }
                                 Err(_) => Err(ParseErr::ParseIntErr(word_optional.to_string())),
                             },
                             Err(_) => Err(ParseErr::ParseIntErr(word_signal.to_string())),
@@ -238,7 +204,8 @@ pub fn parse_sequence(
                                     ))
                                     .unwrap();
                                 let ambientHumidityResponse = rx_from_model.recv().unwrap();
-                                let response = sequence + " " + &ambientHumidityResponse.to_string();
+                                let response =
+                                    sequence + " " + &ambientHumidityResponse.to_string();
                                 // todo: send response to client
                                 Ok(Some(response))
                             }
@@ -341,12 +308,12 @@ pub fn parse_sequence(
 
 #[cfg(test)]
 pub mod tests {
+    use crate::generate_sender_logger_group;
     use crate::test_server::command_parser::{parse_sequence, ParseErr};
     use crate::test_server::controllino_emulator::ControllinoEmulator;
-    use crate::test_server::model_environment::ModelEnvironment;
+    use crate::test_server::model_environment::{ModelEnvironment, ModelEnvironmentConfig};
     use crate::test_server::test_server_channel_content::TestServerInternalCommand;
     use crate::test_server::test_server_config::read_test_server_config_file;
-    use crate::generate_sender_logger_group;
     use assert_float_eq::*;
     use chrono::NaiveTime;
     use std::sync::mpsc;
@@ -381,7 +348,7 @@ pub mod tests {
         let input_sequence_tank_level_switch_position = "TNKLVLSWTCH READ TnkLvlSwtch".to_string();
         let input_sequence_tank_level_switch_qualifier =
             "TNKLVLSWTCH READ TnkLvlSwtchInvld".to_string();
-        let config = read_test_server_config_file("/config-test/aquarium_control_test_server.toml".to_string());
+        let config = read_test_server_config_file(None);
 
         let (tx_to_model_environment, rx_by_model_environment): (
             Sender<TestServerInternalCommand>,
@@ -389,20 +356,21 @@ pub mod tests {
         ) = mpsc::channel();
         let (tx_to_parser, rx_by_parser): (Sender<f32>, Receiver<f32>) = mpsc::channel();
 
-        let mut model_environment = ModelEnvironment::new(
-            config.tank_geometry,
-            config.sump,
-            config.tank_level_switch,
-            config.pH_time_profile,
-            config.tank_temperature_model,
-            config.heat_flow,
-            config.light_intensity_time_profile,
-            config.ambient_temperature_time_profile,
-            config.evaporation,
-            config.conductivity_reverse_compensation,
-            time_of_day,
-            1.0,
-        );
+        let model_config = ModelEnvironmentConfig {
+            tank_geometry: config.tank_geometry,
+            sump: config.sump,
+            tank_level_switch: config.tank_level_switch,
+            ph_time_profile: config.pH_time_profile,
+            tank_temperature_model: config.tank_temperature_model,
+            heat_flow: config.heat_flow,
+            light_intensity_time_profile: config.light_intensity_time_profile,
+            ambient_temperature_time_profile: config.ambient_temperature_time_profile,
+            evaporation: config.evaporation,
+            conductivity_reverse_compensation: config.conductivity_reverse_compensation,
+            initial_time: time_of_day,
+            time_step: 1.0,
+        };
+        let mut model_environment = ModelEnvironment::new(model_config);
 
         let mut controllino = ControllinoEmulator::new(&config.controllino);
         let sender_loggers = SenderLoggerTuple::new(
@@ -467,7 +435,8 @@ pub mod tests {
                         &rx_by_parser,
                         &mut controllino,
                     ));
-                let _ = tx_logger_to_model_environment.send_and_log(TestServerInternalCommand::Quit);
+                let _ =
+                    tx_logger_to_model_environment.send_and_log(TestServerInternalCommand::Quit);
                 assert_float_absolute_eq!(model_response_ambient_temperature, 23.0, 0.001);
                 assert_float_absolute_eq!(model_response_ambient_humidity, 60.0, 0.001);
                 assert_float_absolute_eq!(model_response_conductivity, 50000.0, 0.2);

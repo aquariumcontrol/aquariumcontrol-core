@@ -60,7 +60,8 @@ impl pHTimeProfile {
             filter: IIRFilter::new(
                 &config.filter,
                 Some(Self::pH_unfiltered(&config, time_of_day)),
-                #[cfg(not(test))] "pH",
+                #[cfg(not(test))]
+                "pH",
             ),
             config,
         }
@@ -136,9 +137,9 @@ impl pHTimeProfile {
 
 #[cfg(test)]
 pub mod tests {
-    use crate::utilities::iir_filter::IIRFilterConfig;
     use crate::test_server::pH_time_profile::pHTimeProfile;
     use crate::test_server::pH_time_profile::pHTimeProfileConfig;
+    use crate::utilities::iir_filter::IIRFilterConfig;
     use assert_float_eq::*;
     use chrono::NaiveTime;
 

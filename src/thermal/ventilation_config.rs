@@ -1,4 +1,4 @@
-/* Copyright 2025 Uwe Martin
+/* Copyright 2025 Uwe Martin (uwe.martin@gmail.com)
 
 Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the “Software”), to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions:
 
@@ -55,4 +55,10 @@ pub struct VentilationConfig {
 
     /// interval in seconds for polling the database
     pub set_value_check_interval: u64,
+
+    /// Permitted duration in seconds until the gradient must have the expected sign given that the actuator is switched on permanently.
+    pub max_time_actuator_effect_monitor: u64,
+
+    /// If true, then ventilation is switched off when the gradient monitor indicates that the actuator has no effect
+    pub switch_off_when_no_effect: bool,
 }

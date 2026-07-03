@@ -77,12 +77,12 @@ impl LightIntensityTimeProfile {
 
 #[cfg(test)]
 pub mod tests {
-    use chrono::NaiveTime;
     use crate::test_server::light_intensity_time_profile::LightIntensityTimeProfile;
     use crate::test_server::test_server_config::read_test_server_config_file;
+    use chrono::NaiveTime;
 
     fn create_light_intensity_profile() -> LightIntensityTimeProfile {
-        let config = read_test_server_config_file("/config-test/aquarium_control_test_server.toml".to_string());
+        let config = read_test_server_config_file(None);
 
         LightIntensityTimeProfile {
             config: config.light_intensity_time_profile,

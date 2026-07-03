@@ -1,4 +1,4 @@
-/* Copyright 2024 Uwe Martin
+/* Copyright 2024 Uwe Martin (uwe.martin@gmail.com)
 
 Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the “Software”), to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions:
 
@@ -119,10 +119,17 @@ pub const SQL_QUERY_READ_LAST_BALLING_DOSING_TIMESTAMP: &str = concat!(
     "WHERE pump_id=#pump_id ORDER BY timestamp DESC LIMIT 1;"
 );
 
-/// Writes the last Balling dosing event to the database.    
-pub const SQL_QUERY_WRITE_BALLING_EVENT: &str = concat!(
+// Writes a Balling dosing event to the database using given timestamp
+#[cfg(test)]
+pub const SQL_QUERY_WRITE_BALLING_EVENT_WITH_TIMESTAMP: &str = concat!(
     "INSERT into balling_log(timestamp, pump_id, dosing_volume) ",
     "values(:timestamp, :pump_id, :dosing_volume);"
+);
+
+/// Writes a Balling dosing event to the database using current timestamp from database
+pub const SQL_QUERY_WRITE_BALLING_EVENT: &str = concat!(
+    "INSERT into balling_log(timestamp, pump_id, dosing_volume) ",
+    "values(CURRENT_TIMESTAMP(), :pump_id, :dosing_volume);"
 );
 
 #[cfg(test)]
@@ -249,6 +256,12 @@ pub const SQL_QUERY_WRITE_DATA: &str = concat!(
     "surface_ventilation_status=VALUES(surface_ventilation_status), ",
     "ambient_temperature=VALUES(ambient_temperature), ambient_humidity=VALUES(ambient_humidity), ",
     "heater_status=VALUES(heater_status);"
+);
+
+pub const SQL_QUERY_GET_WATER_TEMPERATURE_LAST_24H: &str = concat!(
+    "SELECT UNIX_TIMESTAMP(timestamp), water_temperature, surface_ventilation_status,heater_status FROM data ",
+    "WHERE timestamp >= NOW() - INTERVAL 1 DAY AND water_temperature IS NOT NULL ",
+    "ORDER BY timestamp ASC"
 );
 
 /// Checks how many entries there are in the data table.

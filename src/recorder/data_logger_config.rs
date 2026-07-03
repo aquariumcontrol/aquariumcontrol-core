@@ -1,4 +1,4 @@
-/* Copyright 2025 Uwe Martin
+/* Copyright 2025 Uwe Martin (uwe.martin@gmail.com)
 
 Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the “Software”), to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions:
 
@@ -78,17 +78,38 @@ pub struct DataLoggerConfig {
     /// output file name (in ramdisk) for the current value of tank level switch position stabilized
     pub output_file_name_tank_level_switch_position_stabilized: String,
 
-    /// output file name (in ramdisk) for the current value of ventilation
+    /// output file name (in ramdisk) for the current value of ventilation controller state
+    pub output_file_name_ventilation_controller_state: String,
+
+    /// output file name (in ramdisk) for the current value of ventilation actuator state
     pub output_file_name_ventilation_is_on: String,
 
-    /// output file name (in ramdisk) for the current value of heating
+    /// output file name (in ramdisk) for the ventilation actuator effectiveness status
+    pub output_file_name_ventilation_actuator_ineffective: String,
+
+    /// output file name (in ramdisk) for the ventilation actuator disabled status
+    pub output_file_name_ventilation_actuator_disabled: String,
+
+    /// output file name (in ramdisk) for the current value of heating controller state
+    pub output_file_name_heating_controller_state: String,
+
+    /// output file name (in ramdisk) for the current value of heating actuator state
     pub output_file_name_heating_is_on: String,
+
+    /// output file name (in ramdisk) for the heating actuator effectiveness status
+    pub output_file_name_heating_actuator_ineffective: String,
+
+    /// output file name (in ramdisk) for the heating actuator disabled status
+    pub output_file_name_heating_actuator_disabled: String,
 
     /// output file name (in ramdisk) for the current value of ambient air temperature
     pub output_file_name_ambient_temperature: String,
 
     /// output file name (in ramdisk) for the current value of air humidity
     pub output_file_name_humidity: String,
+
+    /// output file name (in ramdisk) for the temperature gradient value
+    pub output_file_name_temperature_gradient: String,
 
     /// output file name (in ramdisk) for the current refill pump status
     pub output_file_name_refill_in_progress: String,

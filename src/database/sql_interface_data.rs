@@ -1,4 +1,4 @@
-/* Copyright 2024 Uwe Martin
+/* Copyright 2024 Uwe Martin (uwe.martin@gmail.com)
 
 Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the “Software”), to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions:
 
@@ -164,6 +164,47 @@ impl SqlInterfaceData {
             .map_err(|e| SqlInterfaceError::InsertDataFrameFailure {
                 location: module_path!().to_string(),
                 query: sql_query_strings::SQL_QUERY_WRITE_DATA.to_string(),
+                source: e,
+            })
+    }
+
+    #[cfg(test)]
+    /// Retrieves all water temperature readings from the last 24 hours.
+    ///
+    /// This function queries the `data` table for all records within the last
+    /// 24 hours that have a non-NULL `water_temperature`. It returns a vector
+    /// of tuples, where each tuple contains the Unix timestamp (as `f64`) and
+    /// the water temperature (as `f64`).
+    ///
+    /// # Returns
+    /// A `Result` containing a `Vec<(f64, f64, u64, 64)>` on success where the tuple consists of
+    /// timestamp, temperature, ventilation status, heater status.
+    ///
+    /// # Errors
+    /// Returns a `SqlInterfaceError::SelectDataFailure` if the database query fails.
+    pub fn get_water_temperature_last_24h(
+        &mut self,
+    ) -> Result<Vec<(f64, f64, u64, u64)>, SqlInterfaceError> {
+        self.conn
+            .query_map(
+                sql_query_strings::SQL_QUERY_GET_WATER_TEMPERATURE_LAST_24H,
+                |(timestamp, water_temperature, surface_ventilation_status, heater_status): (
+                    i64,
+                    f32,
+                    u64,
+                    u64,
+                )| {
+                    (
+                        timestamp as f64,
+                        water_temperature as f64,
+                        surface_ventilation_status as u64,
+                        heater_status as u64,
+                    )
+                },
+            )
+            .map_err(|e| SqlInterfaceError::SelectDataFailure {
+                location: module_path!().to_string(),
+                query: sql_query_strings::SQL_QUERY_GET_WATER_TEMPERATURE_LAST_24H.to_string(),
                 source: e,
             })
     }

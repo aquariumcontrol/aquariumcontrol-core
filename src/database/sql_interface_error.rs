@@ -1,4 +1,4 @@
-/* Copyright 2024 Uwe Martin
+/* Copyright 2024 Uwe Martin (uwe.martin@gmail.com)
 
 Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the “Software”), to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions:
 
@@ -336,7 +336,7 @@ pub enum SqlInterfaceError {
     #[error(
         "[{0}] Database responded with negative value(s) for feed phase/feed pause duration: {1} {2}"
     )]
-    DatabaseFeedPhaseDurationNegative(String, i16, i16),
+    DatabaseFeedPhaseDurationNegative(String, i32, i32),
 
     /// Could not get a single Balling set value from the database.
     #[error("[{location}] Could not get a single Balling set value from the database using query: {query}")]
@@ -360,6 +360,18 @@ pub enum SqlInterfaceError {
     /// Error occurred when inserting data frame into the database.
     #[error("[{location}] Error occurred when inserting data frame into the database using query: {query}")]
     InsertDataFrameFailure {
+        location: String,
+        query: String,
+
+        #[source]
+        source: MySqlError,
+    },
+
+    /// Error occurred when selecting data from the database.
+    #[error(
+        "[{location}] Error occurred when selecting data from the database using query: {query}"
+    )]
+    SelectDataFailure {
         location: String,
         query: String,
 

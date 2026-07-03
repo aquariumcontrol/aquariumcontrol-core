@@ -1,4 +1,4 @@
-/* Copyright 2024 Uwe Martin
+/* Copyright 2024 Uwe Martin (uwe.martin@gmail.com)
 
 Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the “Software”), to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions:
 
@@ -78,7 +78,10 @@ pub mod tests {
             assert_eq!(self.ventilation_actuation_state, ActuatorState::Undefined);
         }
 
-        pub fn check_terminal_condition_ventilation(&self) {
+        pub fn check_terminal_condition_ventilation(
+            &self,
+            final_ventilation_actuation_state: ActuatorState,
+        ) {
             assert_eq!(self.refill_pump_actuation_state, ActuatorState::Undefined);
             assert_eq!(self.skimmer_actuation_state, ActuatorState::Undefined);
             assert_eq!(self.main_pump1_actuation_state, ActuatorState::Undefined);
@@ -103,7 +106,10 @@ pub mod tests {
             );
             assert_eq!(self.feeder_actuation_state, ActuatorState::Undefined);
             assert_eq!(self.heater_actuation_state, ActuatorState::Undefined);
-            assert_eq!(self.ventilation_actuation_state, ActuatorState::On);
+            assert_eq!(
+                self.ventilation_actuation_state,
+                final_ventilation_actuation_state
+            );
         }
 
         pub fn check_terminal_condition_heating(&self) {

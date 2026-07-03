@@ -1,4 +1,4 @@
-/* Copyright 2024 Uwe Martin
+/* Copyright 2024 Uwe Martin (uwe.martin@gmail.com)
 
 Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the “Software”), to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions:
 
@@ -74,7 +74,6 @@ use spin_sleep::SpinSleeper;
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
-use crate::database::sql_interface::SqlInterface;
 use crate::database::sql_interface_balling::{BallingSetVal, SqlInterfaceBalling};
 use crate::mineral::balling_channels::BallingChannels;
 use crate::mineral::balling_config::BallingConfig;
@@ -163,7 +162,7 @@ impl Balling {
     /// several pre-flight checks, including validating the `schedule_check_interval`
     /// and dosing intervals from the configuration, ensuring that a database entry
     /// exists for every active pump, and calculating the initial countdowns for
-    /// each pump based on their last recorded dosing times.
+    /// each pump based on the respective last recorded dosing of that pump.
     ///
     /// # Arguments
     /// * `config` - Configuration data for the Balling dosing control, loaded from a TOML file.
@@ -488,9 +487,10 @@ impl Balling {
     /// This function performs the complete cycle of a dosing event:
     /// 1. Retrieve the pump's set values (e.g., flow rate, target volume) from the database.
     /// 2. Calculates the required dosing duration.
-    /// 3. Invokes the `mineral_injection` trait method to physically actuate the pump for the calculated duration.
-    /// 4. Calculate the actual volume dosed based on the actual run time.
-    /// 5. Log the completed Balling dosing event, including the actual volume, back to the database.
+    /// 3. Locks the device scheduler mutex
+    /// 4. Invokes the `mineral_injection` trait method to physically actuate the pump for the calculated duration.
+    /// 5. Calculate the actual volume dosed based on the actual run time.
+    /// 6. Log the completed Balling dosing event, including the actual volume, back to the database.
     ///
     /// The function also monitors for a `Quit` command from the signal handler during the injection process.
     ///
@@ -503,6 +503,9 @@ impl Balling {
     /// * `balling_channels` - A mutable reference to `BallingChannels` struct containing all necessary `mpsc`
     /// * `sql_interface_balling` - A mutable reference to a `SqlInterfaceBalling` instance, providing the
     ///   specific SQL interface for Balling dosing operations. This is moved into the struct.
+    /// * `mutex_device_scheduler_balling` - A reference to `Arc<Mutex<i32>>` used for coordinating
+    ///   access to device scheduling, preventing parallel actuation across different
+    ///   control modules. It holds a counter of the completed actuation.
     ///
     /// # Returns
     /// A `bool` which is `true` if a `Quit` command was received from the signal handler
@@ -514,6 +517,7 @@ impl Balling {
         mineral_injection: &mut impl MineralInjectionTrait,
         balling_channels: &mut BallingChannels,
         sql_interface_balling: &mut SqlInterfaceBalling,
+        mutex_device_scheduler_balling: &Arc<Mutex<i32>>,
     ) -> bool {
         let mut quit_command_received: bool = false;
         let actual_dosing_duration_millis: u32;
@@ -532,32 +536,28 @@ impl Balling {
                 );
 
                 if dosing_duration_millis > 0 {
-                    (quit_command_received, actual_dosing_duration_millis) = mineral_injection
-                        .inject_mineral(balling_channels, pump_device, dosing_duration_millis);
+                    // inner scope to limit the lifetime of unlocked mutex
+                    {
+                        let mut mutex_data = mutex_device_scheduler_balling.lock().unwrap();
+
+                        (quit_command_received, actual_dosing_duration_millis) = mineral_injection
+                            .inject_mineral(balling_channels, pump_device, dosing_duration_millis);
+
+                        *mutex_data = mutex_data.saturating_add(1);
+                    }
+
                     let actual_dosing_volume = Self::calc_actual_dosing_volume(
                         &balling_setval,
                         actual_dosing_duration_millis,
                     );
-                    match SqlInterface::get_current_timestamp(&mut sql_interface_balling.conn) {
-                        Ok(timestamp) => {
-                            if let Err(e) = sql_interface_balling.insert_balling_event(
-                                timestamp,
-                                pump_id.into(),
-                                actual_dosing_volume.into(),
-                            ) {
-                                error!(
-                                    target: module_path!(),
-                                    "Error occurred in database communication: {e:?}"
-                                );
-                            }
-                        }
-                        Err(e) => {
-                            error!(
-                                target: module_path!(),
-                                "Error occurred in database communication: {e:?}"
-                            );
-                        }
-                    };
+                    if let Err(e) = sql_interface_balling
+                        .insert_balling_event(pump_id.into(), actual_dosing_volume.into())
+                    {
+                        error!(
+                            target: module_path!(),
+                            "Error occurred in database communication: {e:?}"
+                        );
+                    }
                 }
             }
             Err(e) => {
@@ -688,18 +688,14 @@ impl Balling {
                             4 => AquariumDevice::PeristalticPump4,
                             _ => unreachable!(),
                         };
-                        // inner scope to limit the lifetime of unlocked mutex
-                        {
-                            let mut mutex_data = mutex_device_scheduler_balling.lock().unwrap();
-                            quit_command_received = self.execute_dosing(
-                                pump_id,
-                                pump_device,
-                                mineral_injection,
-                                balling_channels,
-                                &mut sql_interface_balling,
-                            );
-                            *mutex_data = mutex_data.saturating_add(1);
-                        }
+                        quit_command_received = self.execute_dosing(
+                            pump_id,
+                            pump_device,
+                            mineral_injection,
+                            balling_channels,
+                            &mut sql_interface_balling,
+                            &mutex_device_scheduler_balling,
+                        );
                         if quit_command_received {
                             break; // Quit command received during dosing
                         }
@@ -731,18 +727,14 @@ impl Balling {
                             "executing external request for actuation of pump #{}",
                             self.pump_id_requested
                         );
-                        // inner scope to limit the lifetime of unlocked mutex
-                        {
-                            let mut mutex_data = mutex_device_scheduler_balling.lock().unwrap();
-                            quit_command_received = self.execute_dosing(
-                                pump_id,
-                                pump_device,
-                                mineral_injection,
-                                balling_channels,
-                                &mut sql_interface_balling,
-                            );
-                            *mutex_data = mutex_data.saturating_add(1);
-                        }
+                        quit_command_received = self.execute_dosing(
+                            pump_id,
+                            pump_device,
+                            mineral_injection,
+                            balling_channels,
+                            &mut sql_interface_balling,
+                            &mutex_device_scheduler_balling,
+                        );
                     }
                     None => {
                         info!(
@@ -818,7 +810,7 @@ pub mod tests {
     use spin_sleep::SpinSleeper;
     use std::sync::{Arc, Mutex};
     use std::thread::scope;
-    use std::time::Duration;
+    use std::time::{Duration, Instant};
 
     fn read_balling_config() -> ConfigData {
         read_config_file("/config/aquarium_control_test_generic.toml".to_string()).unwrap()
@@ -966,19 +958,19 @@ pub mod tests {
 
         // insert balling dosing events
         sql_interface_balling
-            .insert_balling_event(naive_datetime_100secs_ago, 1, 0.5)
+            .insert_balling_event_for_test(naive_datetime_100secs_ago, 1, 0.5)
             .expect("Could not insert Balling dosing event for pump #1 into database");
 
         sql_interface_balling
-            .insert_balling_event(naive_datetime_200secs_ago, 2, 0.5)
+            .insert_balling_event_for_test(naive_datetime_200secs_ago, 2, 0.5)
             .expect("Could not insert Balling dosing event for pump #2 into database");
 
         sql_interface_balling
-            .insert_balling_event(naive_datetime_300secs_ago, 3, 0.5)
+            .insert_balling_event_for_test(naive_datetime_300secs_ago, 3, 0.5)
             .expect("Could not insert Balling dosing event for pump #3 into database");
 
         sql_interface_balling
-            .insert_balling_event(naive_datetime_400secs_ago, 4, 0.5)
+            .insert_balling_event_for_test(naive_datetime_400secs_ago, 4, 0.5)
             .expect("Could not insert Balling dosing event for pump #4 into database");
     }
 
@@ -1509,7 +1501,6 @@ pub mod tests {
     pub fn test_messaging_stops_starts_balling_dosing() {
         let sleep_duration_100_millis = Duration::from_millis(100);
         let sleep_duration_7_secs = Duration::from_secs(7);
-        let sleep_duration_2_secs = Duration::from_secs(2);
         let spin_sleeper = SpinSleeper::default();
 
         let mut config: ConfigData = read_balling_config_with_database(6);
@@ -1599,14 +1590,20 @@ pub mod tests {
 
             // thread IPC messaging - this scope controls execution of the test case
             scope.spawn(move || {
-                // wait for 2 seconds to make sure the test object can receive the message
-                for _ in 0..20 {
+                // wait for up to 5 seconds to make sure the test object can receive the message and execute first dosing
+                let timeout_initial = Duration::from_secs(5);
+                let start_initial = Instant::now();
+                let mut actuation_count_0: i32;
+                loop {
                     spin_sleeper.sleep(sleep_duration_100_millis);
+                    actuation_count_0 = *mutex_device_scheduler_balling_test_environment
+                        .lock()
+                        .unwrap();
+                    if actuation_count_0 >= 1 || start_initial.elapsed() > timeout_initial {
+                        break;
+                    }
                 }
 
-                let actuation_count_0 = *mutex_device_scheduler_balling_test_environment
-                    .lock()
-                    .unwrap();
                 // check the initial amount of actuation
                 assert_eq!(actuation_count_0, 1);
 
@@ -1650,13 +1647,20 @@ pub mod tests {
                     }
                 }
 
-                // Wait for 2 seconds. If the test object follows the start request,
+                // Wait for up to 10 seconds. If the test object follows the start request,
                 // then dosings will happen in this period.
-                spin_sleeper.sleep(sleep_duration_2_secs);
-
-                let actuation_count_2 = *mutex_device_scheduler_balling_test_environment
-                    .lock()
-                    .unwrap();
+                let timeout_resume = Duration::from_secs(10);
+                let start_resume = Instant::now();
+                let mut actuation_count_2: i32;
+                loop {
+                    spin_sleeper.sleep(sleep_duration_100_millis);
+                    actuation_count_2 = *mutex_device_scheduler_balling_test_environment
+                        .lock()
+                        .unwrap();
+                    if actuation_count_2 >= 3 || start_resume.elapsed() > timeout_resume {
+                        break;
+                    }
+                }
                 // check the amount of actuation (after start request)
                 assert_eq!(actuation_count_2, 3);
 

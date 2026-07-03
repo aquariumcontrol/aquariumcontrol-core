@@ -1,4 +1,4 @@
-/* Copyright 2024 Uwe Martin
+/* Copyright 2024 Uwe Martin (uwe.martin@gmail.com)
 
 Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the “Software”), to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions:
 
@@ -46,6 +46,7 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 //! This entire sequence would be contained within a single `FeedProfile` struct as a `Vec<FeedPhase>`.
 
 /// Holds the configuration data of one feed profile.
+#[derive(Clone)]
 pub struct FeedProfile {
     /// Numeric ID of the feed profile
     /// Data is not used in the implementation. Therefore, it is tagged as unused.
@@ -81,7 +82,7 @@ impl FeedProfile {
 #[derive(Clone, Debug, PartialEq)]
 pub struct FeedPhase {
     /// duration of the pause before switching on the feeder motor in milliseconds
-    pub pause_duration: i16,
+    pub pause_duration: i32,
 
     /// flag indicating if the protein skimmer shall remain switched on during the pause
     pub pause_skimmer: bool,
@@ -99,7 +100,7 @@ pub struct FeedPhase {
     pub pause_aux_pump_2: bool,
 
     /// duration of the feed after switching on the feeder motor in milliseconds
-    pub feed_duration: i16,
+    pub feed_duration: i32,
 
     /// flag indicating if the protein skimmer shall remain switched on during the feed phase
     pub feed_skimmer: bool,
@@ -142,13 +143,13 @@ impl FeedPhase {
     // # Returns
     // A new `FeedPhase` struct initialized with the provided values.
     pub fn new(
-        pause_duration: i16,
+        pause_duration: i32,
         pause_skimmer: bool,
         pause_main_pump_1: bool,
         pause_main_pump_2: bool,
         pause_aux_pump_1: bool,
         pause_aux_pump_2: bool,
-        feed_duration: i16,
+        feed_duration: i32,
         feed_skimmer: bool,
         feed_main_pump_1: bool,
         feed_main_pump_2: bool,

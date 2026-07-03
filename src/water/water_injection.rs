@@ -1,4 +1,4 @@
-/* Copyright 2024 Uwe Martin
+/* Copyright 2024 Uwe Martin (uwe.martin@gmail.com)
 
 Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the “Software”), to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions:
 
@@ -36,6 +36,7 @@ pub trait WaterInjectionTrait {
         refill_errors: &mut RefillErrorStates,
         sql_interface_refill: &mut Box<dyn DatabaseInterfaceRefillTrait + Sync + Send>,
         mutex_tank_level_switch: &Arc<Mutex<TankLevelSwitchSignals>>,
+        mutex_device_scheduler_refill: &Arc<Mutex<i32>>,
     ) -> bool;
 }
 
@@ -154,121 +155,131 @@ impl WaterInjectionTrait for WaterInjection {
         refill_errors: &mut RefillErrorStates,
         sql_interface_refill: &mut Box<dyn DatabaseInterfaceRefillTrait + Sync + Send>,
         mutex_tank_level_switch_signals: &Arc<Mutex<TankLevelSwitchSignals>>,
+        mutex_device_scheduler_refill: &Arc<Mutex<i32>>,
     ) -> bool {
-        let mut quit_command_received = false;
-
-        // command start of refill pump
-        match refill_channels
-            .send_to_relay_manager(InternalCommand::SwitchOn(AquariumDevice::RefillPump))
-        {
-            Ok(_) => {
-                // now listen for the response
-                match refill_channels.receive_from_relay_manager() {
-                    Ok(_) => {}
-                    Err(e) => {
-                        error!(
-                            target: module_path!(),
-                            "receiving answer from relay manager when switching on refill pump failed ({e:?})"
-                        );
-                    }
-                };
-            }
-            Err(e) => {
-                error!(
-                    target: module_path!(),
-                    "channel communication to relay manager when switching on refill pump failed ({e:?})"
-                );
-            }
-        }
-
-        //*** wait for condition to stop refilling ***
         let mut refill_volume = 0.0;
         let mut refill_time_seconds = 0.0;
         let mut refill_error_code = DatabaseRefillErrorCode::Success;
         let mut additional_refill_volume_executed = 0.0;
         let mut tank_level_switch_position = false;
         let mut tank_level_switch_invalid = false;
+        let mut quit_command_received = false;
 
-        loop {
-            self.spin_sleeper
-                .sleep(self.sleep_duration_hundred_milli_sec);
-            refill_time_seconds += self.sleep_interval_seconds;
+        {
+            // internal scope to limit the lifetime of the mutex lock
+            let mut mutex_device_scheduler = mutex_device_scheduler_refill.lock().unwrap();
+            // now we are given exclusive access to actuators
 
-            let instant_before_locking_mutex = Instant::now();
-            let mut instant_after_locking_mutex = Instant::now(); // initialization is overwritten
-
-            // access mutex for reading tank level switch signals
+            // command start of refill pump
+            match refill_channels
+                .send_to_relay_manager(InternalCommand::SwitchOn(AquariumDevice::RefillPump))
             {
-                match mutex_tank_level_switch_signals.lock() {
-                    Ok(c) => {
-                        tank_level_switch_position = c.tank_level_switch_position;
-                        tank_level_switch_invalid = c.tank_level_switch_invalid;
-                        instant_after_locking_mutex = Instant::now();
-                    }
-                    Err(_) => {
-                        // Do nothing, keep values as they are.
-                    }
+                Ok(_) => {
+                    // now listen for the response
+                    match refill_channels.receive_from_relay_manager() {
+                        Ok(_) => {}
+                        Err(e) => {
+                            error!(
+                                target: module_path!(),
+                                "receiving answer from relay manager when switching on refill pump failed ({e:?})"
+                            );
+                        }
+                    };
+                }
+                Err(e) => {
+                    error!(
+                        target: module_path!(),
+                        "channel communication to relay manager when switching on refill pump failed ({e:?})"
+                    );
                 }
             }
 
-            // check if access to mutex took too long
-            self.check_mutex_access_duration(
-                None,
-                instant_after_locking_mutex,
-                instant_before_locking_mutex,
-            );
+            //*** wait for condition to stop refilling ***
+            loop {
+                self.spin_sleeper
+                    .sleep(self.sleep_duration_hundred_milli_sec);
+                refill_time_seconds += self.sleep_interval_seconds;
 
-            if tank_level_switch_position
-                && additional_refill_volume_executed > self.additional_refill_volume
-            {
-                // the water level changed to high
-                break;
-            }
-            if tank_level_switch_invalid {
-                // switch signal is invalid
-                refill_error_code = DatabaseRefillErrorCode::InvalidSwitch;
-                break;
-            }
+                let instant_before_locking_mutex = Instant::now();
+                let mut instant_after_locking_mutex = Instant::now(); // initialization is overwritten
 
-            // calculate volume refilled in this operation
-            refill_volume += self.refill_increment;
-            if tank_level_switch_position {
-                additional_refill_volume_executed += self.refill_increment;
-            }
-            (quit_command_received, _, _) = self
-                .process_external_request(&mut refill_channels.rx_refill_from_signal_handler, None);
-            if quit_command_received {
-                break;
-            }
-            if refill_volume > self.max_refill_volume {
-                refill_errors.error_switch_stuck_low = true;
-                refill_error_code = DatabaseRefillErrorCode::StuckLowTimeout;
-                break;
-            }
-        }
-
-        // command stop of refill pump
-        match refill_channels
-            .send_to_relay_manager(InternalCommand::SwitchOff(AquariumDevice::RefillPump))
-        {
-            Ok(_) => {
-                // now listen for the response
-                match refill_channels.receive_from_relay_manager() {
-                    Ok(_) => {}
-                    Err(e) => {
-                        error!(
-                            target: module_path!(),
-                            "receiving answer from relay manager when switching off refill pump failed ({e:?})"
-                        );
+                // access mutex for reading tank level switch signals
+                {
+                    match mutex_tank_level_switch_signals.lock() {
+                        Ok(c) => {
+                            tank_level_switch_position = c.tank_level_switch_position;
+                            tank_level_switch_invalid = c.tank_level_switch_invalid;
+                            instant_after_locking_mutex = Instant::now();
+                        }
+                        Err(_) => {
+                            // Do nothing, keep values as they are.
+                        }
                     }
-                };
-            }
-            Err(e) => {
-                error!(
-                    target: module_path!(),
-                    "channel communication to relay manager when switching off refill pump failed ({e:?})"
+                }
+
+                // check if access to mutex took too long
+                self.check_mutex_access_duration(
+                    None,
+                    instant_after_locking_mutex,
+                    instant_before_locking_mutex,
                 );
+
+                if tank_level_switch_position
+                    && additional_refill_volume_executed > self.additional_refill_volume
+                {
+                    // the water level changed to high
+                    break;
+                }
+                if tank_level_switch_invalid {
+                    // switch signal is invalid
+                    refill_error_code = DatabaseRefillErrorCode::InvalidSwitch;
+                    break;
+                }
+
+                // calculate volume refilled in this operation
+                refill_volume += self.refill_increment;
+                if tank_level_switch_position {
+                    additional_refill_volume_executed += self.refill_increment;
+                }
+                (quit_command_received, _, _) = self.process_external_request(
+                    &mut refill_channels.rx_refill_from_signal_handler,
+                    None,
+                );
+                if quit_command_received {
+                    break;
+                }
+                if refill_volume > self.max_refill_volume {
+                    refill_errors.error_switch_stuck_low = true;
+                    refill_error_code = DatabaseRefillErrorCode::StuckLowTimeout;
+                    break;
+                }
             }
+
+            // command stop of refill pump
+            match refill_channels
+                .send_to_relay_manager(InternalCommand::SwitchOff(AquariumDevice::RefillPump))
+            {
+                Ok(_) => {
+                    // now listen for the response
+                    match refill_channels.receive_from_relay_manager() {
+                        Ok(_) => {}
+                        Err(e) => {
+                            error!(
+                                target: module_path!(),
+                                "receiving answer from relay manager when switching off refill pump failed ({e:?})"
+                            );
+                        }
+                    };
+                }
+                Err(e) => {
+                    error!(
+                        target: module_path!(),
+                        "channel communication to relay manager when switching off refill pump failed ({e:?})"
+                    );
+                }
+            }
+
+            *mutex_device_scheduler = mutex_device_scheduler.saturating_add(1);
         }
 
         // write the result to the database
@@ -343,6 +354,7 @@ pub mod tests {
         thread::Builder::new()
             .name("test_object".to_string())
             .spawn(move || {
+                let mutex_device_scheduler_refill: Arc<Mutex<i32>> = Arc::new(Mutex::new(0));
                 let mut water_injection = WaterInjection::new(&refill.config);
 
                 let mut boxed_sql_interface_refill: Box<
@@ -356,6 +368,7 @@ pub mod tests {
                     &mut refill.refill_errors,
                     &mut boxed_sql_interface_refill,
                     &mutex_tank_level_switch_signals,
+                    &mutex_device_scheduler_refill,
                 );
                 assert_eq!(result, target_result);
                 assert_eq!(refill.refill_errors.has_error(), target_refill_has_errors);
@@ -844,6 +857,7 @@ pub mod tests {
         let join_handle_test_object = thread::Builder::new()
             .name("test_object".to_string())
             .spawn(move || {
+                let mutex_device_scheduler_refill: Arc<Mutex<i32>> = Arc::new(Mutex::new(0));
                 let mut boxed_sql_interface_refill: Box<
                     dyn crate::database::sql_interface_refill::DatabaseInterfaceRefillTrait
                         + Sync
@@ -855,6 +869,7 @@ pub mod tests {
                     &mut refill.refill_errors,
                     &mut boxed_sql_interface_refill,
                     &mutex_tank_level_switch_signals,
+                    &mutex_device_scheduler_refill,
                 );
                 assert_eq!(result, false);
                 assert_eq!(refill.refill_errors.has_error(), true);
@@ -937,6 +952,7 @@ pub mod tests {
         let join_handle_test_object = thread::Builder::new()
             .name("test_object".to_string())
             .spawn(move || {
+                let mutex_device_scheduler_refill: Arc<Mutex<i32>> = Arc::new(Mutex::new(0));
                 let mut boxed_sql_interface_refill: Box<
                     dyn crate::database::sql_interface_refill::DatabaseInterfaceRefillTrait
                         + Sync
@@ -947,6 +963,7 @@ pub mod tests {
                     &mut refill.refill_errors,
                     &mut boxed_sql_interface_refill,
                     &mutex_tank_level_switch_signals,
+                    &mutex_device_scheduler_refill,
                 );
                 assert_eq!(result, true);
                 assert_eq!(refill.refill_errors.has_error(), false);

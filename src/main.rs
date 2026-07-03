@@ -1,4 +1,4 @@
-/* Copyright 2024 Uwe Martin
+/* Copyright 2024 Uwe Martin (uwe.martin@gmail.com)
 
 Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the “Software”), to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions:
 
@@ -49,7 +49,8 @@ use aquarium_control::mineral::balling::Balling;
 use aquarium_control::mineral::mineral_injection::MineralInjection;
 use aquarium_control::permission::schedule_check::ScheduleCheck;
 use aquarium_control::recorder::data_injection::DataInjection;
-use aquarium_control::recorder::data_logger::{DataLogger, DataLoggerMutexes};
+use aquarium_control::recorder::data_logger::DataLogger;
+use aquarium_control::recorder::data_logger_mutexes::DataLoggerMutexes;
 use aquarium_control::relays::actuate_controllino::ActuateControllino;
 #[cfg(all(target_os = "linux", feature = "target_hw"))]
 use aquarium_control::relays::actuate_gpio::{ActuateGpio, ActuateGpioConfig};
@@ -73,8 +74,11 @@ use aquarium_control::sensors::sensor_manager::{
 use aquarium_control::sensors::tank_level_switch::{TankLevelSwitch, TankLevelSwitchSignals};
 use aquarium_control::simulator::tcp_communication::TcpCommunication;
 use aquarium_control::thermal::distinct_interval_check::distinct_thermal_control_interval_check;
-use aquarium_control::thermal::heating::{Heating, HeatingMutexes};
+use aquarium_control::thermal::heating::Heating;
+use aquarium_control::thermal::heating_mutexes::HeatingMutexes;
+use aquarium_control::thermal::temperature_gradient::TemperatureGradient;
 use aquarium_control::thermal::ventilation::Ventilation;
+use aquarium_control::thermal::ventilation_mutexes::VentilationMutexes;
 use aquarium_control::utilities::config::read_config_file;
 use aquarium_control::utilities::logger::{log_error_chain, setup_logger};
 use aquarium_control::utilities::logger_config::LoggerConfig;
@@ -84,6 +88,7 @@ use aquarium_control::utilities::publish_pid::PublishPid;
 use aquarium_control::utilities::signal_handler;
 
 use aquarium_control::launch::argument_parser::check_argument_for_valid_config_file_name;
+use aquarium_control::thermal::thermal_control_status::ThermalControlStatus;
 #[cfg(all(feature = "target_hw", target_os = "linux"))]
 use aquarium_control::utilities::channel_content::InternalCommand;
 use aquarium_control::utilities::signal_handler::handle_signals;
@@ -282,6 +287,8 @@ fn check_is_command(command: &str) -> Result<bool, VersionInformationError> {
 ///     messaging --> feed
 ///     messaging --> monitors
 ///     messaging --> watchdog
+///     temperature_gradient[TemperatureGradient] --> signal_handler
+///     signal_handler --> temperature_gradient
 /// ```
 fn run() -> Result<(), StartupError> {
     let spin_sleeper = SpinSleeper::default();
@@ -380,6 +387,9 @@ fn run() -> Result<(), StartupError> {
     if !distinct_thermal_control_interval_check(&config.heating, &config.ventilation) {
         return Err(StartupError::InvalidThermalConfig);
     }
+
+    let mut temperature_gradient = TemperatureGradient::new(config.temperature_gradient)
+        .map_err(|e| StartupError::TemperatureGradientConfigFailure { source: e })?;
 
     // instantiate the duration for the database ping
     let database_ping_duration = Duration::from_secs(config.sql_interface.db_ping_interval);
@@ -700,11 +710,11 @@ fn run() -> Result<(), StartupError> {
     let mutex_tank_level_switch_signals_clone_for_refill = mutex_tank_level_switch_signals.clone();
 
     // Mutex for heating
-    let mutex_heating_status = Arc::new(Mutex::new(false));
+    let mutex_heating_status = Arc::new(Mutex::new(ThermalControlStatus::default()));
     let mutex_heating_status_clone_for_data_logger = mutex_heating_status.clone();
 
     // Mutex for ventilation
-    let mutex_ventilation_status = Arc::new(Mutex::new(false));
+    let mutex_ventilation_status = Arc::new(Mutex::new(ThermalControlStatus::default()));
     let mutex_ventilation_status_clone_for_data_logger = mutex_ventilation_status.clone();
 
     // Mutex for refill
@@ -728,6 +738,13 @@ fn run() -> Result<(), StartupError> {
     let mutex_sensor_manager_signals_clone_for_data_logger = mutex_sensor_manager_signals.clone();
     let mutex_sensor_manager_signals_clone_for_heating = mutex_sensor_manager_signals.clone();
     let mutex_sensor_manager_signals_clone_for_ventilation = mutex_sensor_manager_signals.clone();
+    let mutex_sensor_manager_signals_clone_for_temp_gradient = mutex_sensor_manager_signals.clone();
+
+    // Mutex for temperature gradient
+    let mutex_temperature_gradient: Arc<Mutex<f64>> = Arc::new(Mutex::new(0.0));
+    let mutex_temperature_gradient_clone_for_heating = mutex_temperature_gradient.clone();
+    let mutex_temperature_gradient_clone_for_ventilation = mutex_temperature_gradient.clone();
+    let mutex_temperature_gradient_clone_for_data_logger = mutex_temperature_gradient.clone();
     //**********************************************************************************************
 
     #[cfg(all(target_os = "linux", feature = "target_hw"))]
@@ -978,6 +995,7 @@ fn run() -> Result<(), StartupError> {
                     mutex_heating_status: mutex_heating_status_clone_for_data_logger,
                     mutex_ventilation_status: mutex_ventilation_status_clone_for_data_logger,
                     mutex_refill_status: mutex_refill_status_clone_for_data_logger,
+                    mutex_temperature_gradient: mutex_temperature_gradient_clone_for_data_logger,
                 };
 
                 data_logger.execute(
@@ -1036,6 +1054,7 @@ fn run() -> Result<(), StartupError> {
                 mutex_sensor_manager_signals: mutex_sensor_manager_signals_clone_for_heating,
                 mutex_tank_level_switch_signals: mutex_tank_level_switch_signals_clone_for_heating,
                 mutex_heating_status,
+                mutex_temperature_gradient: mutex_temperature_gradient_clone_for_heating,
             };
 
             scope.spawn(move || {
@@ -1059,12 +1078,18 @@ fn run() -> Result<(), StartupError> {
             let mutex_device_scheduler_ventilation = Arc::clone(&mutex_device_scheduler);
 
             scope.spawn(move || {
+                let ventilation_mutexes = VentilationMutexes {
+                    mutex_sensor_manager_signals:
+                        mutex_sensor_manager_signals_clone_for_ventilation,
+                    mutex_ventilation_status,
+                    mutex_temperature_gradient: mutex_temperature_gradient_clone_for_ventilation,
+                };
+
                 ventilation.execute(
                     mutex_device_scheduler_ventilation,
                     &mut channels.ventilation,
                     &mut ventilation_set_value_updater,
-                    mutex_sensor_manager_signals_clone_for_ventilation,
-                    mutex_ventilation_status,
+                    ventilation_mutexes,
                 );
                 #[cfg(feature = "debug_channels")]
                 debug!(target: module_path!(), "{0}", channels.ventilation);
@@ -1177,6 +1202,18 @@ fn run() -> Result<(), StartupError> {
                 debug!(target: module_path!(), "{0}", channels.ds18b20);
                 #[cfg(feature = "debug_main")]
                 debug!(target: module_path!(), "Ds18b20 terminated");
+            });
+        }
+
+        if execution_config.temperature_gradient {
+            scope.spawn(move || {
+                temperature_gradient.execute(
+                    mutex_sensor_manager_signals_clone_for_temp_gradient,
+                    &mut channels.temperature_gradient,
+                    mutex_temperature_gradient,
+                );
+                #[cfg(feature = "debug_main")]
+                debug!(target: module_path!(), "Temperature gradient calculation terminated.");
             });
         }
         Ok(())

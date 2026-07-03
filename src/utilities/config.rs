@@ -1,4 +1,4 @@
-/* Copyright 2024 Uwe Martin
+/* Copyright 2024 Uwe Martin (uwe.martin@gmail.com)
 
 Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the “Software”), to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions:
 
@@ -75,6 +75,7 @@ use crate::database::sql_interface_config::SqlInterfaceConfig;
 use crate::permission::schedule_check_config::ScheduleCheckConfig;
 use crate::sensors::ds18b20_config::Ds18b20Config;
 use crate::simulator::tcp_communication_config::TcpCommunicationConfig;
+use crate::thermal::temperature_gradient_config::TemperatureGradientConfig;
 use crate::thermal::ventilation_config::VentilationConfig;
 use crate::utilities::config_error::ConfigError;
 use crate::utilities::logger_config::LoggerConfig;
@@ -122,6 +123,9 @@ pub struct ConfigData {
 
     /// configuration of the ventilation control
     pub ventilation: VentilationConfig,
+
+    /// configuration of the temperature gradient calculation
+    pub temperature_gradient: TemperatureGradientConfig,
 
     /// configuration of the monitors
     pub monitors: MonitorsConfig,

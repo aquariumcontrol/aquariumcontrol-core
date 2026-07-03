@@ -1,4 +1,4 @@
-/* Copyright 2025 Uwe Martin
+/* Copyright 2025 Uwe Martin (uwe.martin@gmail.com)
 
 Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the “Software”), to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions:
 
@@ -60,6 +60,7 @@ use log::error;
 #[cfg(target_os = "linux")]
 use crate::dispatch::messaging_channels::MessagingChannels;
 use crate::launch::channels::AquaChannelError;
+use crate::thermal::temperature_gradient_channels::TemperatureGradientChannels;
 
 /// A trait for objects that can send a shutdown acknowledgment to the `SignalHandler`.
 ///
@@ -111,6 +112,12 @@ macro_rules! impl_acknowledge_signal_handler {
     };
 }
 
+// Generate the implementations using the macro
+impl_acknowledge_signal_handler!(
+    TemperatureGradientChannels,
+    "temperature_gradient",
+    tx_temperature_gradient_to_signal_handler
+);
 // Generate the implementations using the macro
 impl_acknowledge_signal_handler!(
     AtlasScientificChannels,

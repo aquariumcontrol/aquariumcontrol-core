@@ -1,4 +1,3 @@
-
 /* Copyright 2024 Ashley Kupke
    Copyright 2025-2026 Uwe Martin
 Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the “Software”), to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions:
@@ -8,9 +7,9 @@ The above copyright notice and this permission notice shall be included in all c
 THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
-use serde_derive::Deserialize;
 use crate::test_server::tank_geometry::TankGeometry;
 use crate::utilities::iir_filter::{IIRFilter, IIRFilterConfig};
+use serde_derive::Deserialize;
 
 /// This enumeration describes the status of a pump.
 #[derive(PartialEq, Clone, Copy, Deserialize)]
@@ -97,7 +96,12 @@ impl Sump {
             refill_pump: Pump {
                 status: sump_config.refill_pump_initial_state,
             },
-            level_filter: IIRFilter::new(&sump_config.level_filter, None, #[cfg(not(test))] "sump level"),
+            level_filter: IIRFilter::new(
+                &sump_config.level_filter,
+                None,
+                #[cfg(not(test))]
+                "sump level",
+            ),
             config: sump_config,
         }
     }
@@ -163,18 +167,18 @@ impl Sump {
 
 #[cfg(test)]
 pub mod tests {
-    use crate::utilities::iir_filter::{IIRFilter, IIRFilterConfig};
     use crate::test_server::sump::Pump;
     use crate::test_server::sump::PumpStatus;
     use crate::test_server::sump::Sump;
     use crate::test_server::tank_geometry::TankGeometry;
     use crate::test_server::tank_geometry::TankGeometryConfig;
-    use assert_float_eq::*;
     use crate::test_server::test_server_config::read_test_server_config_file;
+    use crate::utilities::iir_filter::{IIRFilter, IIRFilterConfig};
+    use assert_float_eq::*;
 
     #[test]
     fn test_static_sump_water_level() {
-        let config = read_test_server_config_file("/config-test/aquarium_control_test_server.toml".to_string());
+        let config = read_test_server_config_file(None);
 
         let tank_config = TankGeometryConfig {
             width: 1.0,
@@ -210,7 +214,8 @@ pub mod tests {
                     fallback_initial_value: 0.8,
                 },
                 Some(1.0),
-                #[cfg(not(test))] "sump level"
+                #[cfg(not(test))]
+                "sump level",
             ),
             config: config.sump,
         };
@@ -220,7 +225,7 @@ pub mod tests {
 
     #[test]
     fn test_dynamic_sump_water_level() {
-        let config = read_test_server_config_file("/config-test/aquarium_control_test_server.toml".to_string());
+        let config = read_test_server_config_file(None);
 
         let tank_config = TankGeometryConfig {
             width: 1.0,
@@ -256,7 +261,8 @@ pub mod tests {
                     fallback_initial_value: 0.8,
                 },
                 Some(0.8),
-                #[cfg(not(test))] "sump level"
+                #[cfg(not(test))]
+                "sump level",
             ),
             config: config.sump,
         };

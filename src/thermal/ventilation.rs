@@ -1,4 +1,4 @@
-/* Copyright 2024 Uwe Martin
+/* Copyright 2024 Uwe Martin (uwe.martin@gmail.com)
 
 Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the “Software”), to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions:
 
@@ -67,22 +67,22 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 //!   a database.
 
 #[cfg(not(test))]
-use log::warn;
-
-#[cfg(not(test))]
 use log::info;
 
 use crate::database::thermal_set_value_updater_trait::ThermalSetValueUpdaterTrait;
-use crate::sensors::sensor_manager::SensorManagerSignals;
 use crate::utilities::channel_content::{ActuatorState, AquariumDevice, InternalCommand};
 use crate::utilities::proc_ext_req::ProcessExternalRequestTrait;
 use crate::utilities::sawtooth_profile::SawToothProfile;
+#[cfg(not(test))]
+use log::warn;
 use spin_sleep::SpinSleeper;
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
+use crate::thermal::temperature_gradient_monitor::TemperatureGradientMonitorTrait;
 use crate::thermal::ventilation_channels::VentilationChannels;
 use crate::thermal::ventilation_config::VentilationConfig;
+use crate::thermal::ventilation_mutexes::VentilationMutexes;
 use crate::utilities::acknowledge_signal_handler::AcknowledgeSignalHandlerTrait;
 use crate::utilities::check_mutex_access_duration::CheckMutexAccessDurationTrait;
 use crate::utilities::logger::log_error_chain;
@@ -225,9 +225,29 @@ pub struct Ventilation {
 
     /// Maximum permissible access duration for Mutex
     pub max_mutex_access_duration: Duration,
+
+    /// The time the actuator was last turned on continuously.
+    pub last_actuator_on_time: Option<Instant>,
+
+    /// Inhibition flag to prevent log flooding for gradient monitoring.
+    pub log_inhibition_gradient: bool,
+
+    /// flag indicating that actuator has been disabled due to indication from temperature gradient monitor
+    pub actuator_disabled: bool,
 }
 
-impl ProcessExternalRequestTrait for Ventilation {}
+impl TemperatureGradientMonitorTrait for Ventilation {
+    fn max_time_actuator_effect_monitor(&self) -> u64 {
+        self.config.max_time_actuator_effect_monitor
+    }
+
+    fn monitor_state(&mut self) -> (&mut Option<Instant>, &mut bool) {
+        (
+            &mut self.last_actuator_on_time,
+            &mut self.log_inhibition_gradient,
+        )
+    }
+}
 
 impl Ventilation {
     /// Creates a new `Ventilation` control instance.
@@ -257,6 +277,9 @@ impl Ventilation {
             mutex_access_duration_exceeded: false,
             lock_error_channel_receive_termination: false,
             max_mutex_access_duration: Duration::from_millis(MAX_MUTEX_ACCESS_DURATION_MILLIS),
+            last_actuator_on_time: None,
+            log_inhibition_gradient: false,
+            actuator_disabled: false,
         }
     }
 
@@ -350,9 +373,7 @@ impl Ventilation {
     ///   device actuation, preventing parallel operations, and tracking actuation counts.
     /// * `ventilation_channels` - A mutable reference to `VentilationChannels` struct containing all `mpsc`
     ///   channels for communication with other threads (e.g., relay manager, data logger, schedule checker, signal handler).
-    /// * `mutex_sensor_manager_channels` - An `Arc<Mutex<SensorManagerSignals>>` from which the latest water temperature
-    ///   reading will be retrieved.
-    /// * `mutex_ventilation_status` - An `Arc<Mutex<bool>>` for communicating the ventilation status to the data logger.
+    /// * `ventilation_mutexes` - Struct containing the mutexes to access data from different threads.
     ///
     /// # Returns
     /// This function does not return a value in the traditional sense, as it is designed
@@ -364,8 +385,7 @@ impl Ventilation {
         mutex_device_scheduler_ventilation: Arc<Mutex<i32>>,
         ventilation_channels: &mut VentilationChannels,
         ventilation_set_val_updater: &mut impl ThermalSetValueUpdaterTrait,
-        mutex_sensor_manager_signals: Arc<Mutex<SensorManagerSignals>>,
-        mutex_ventilation_status: Arc<Mutex<bool>>,
+        ventilation_mutexes: VentilationMutexes,
     ) {
         #[cfg(all(target_os = "linux", not(test)))]
         info!(target: module_path!(), "Thread started with TID: {}", gettid());
@@ -382,6 +402,7 @@ impl Ventilation {
         let mut lock_warn_cycle_time_exceeded = false;
         let mut start_time = Instant::now();
         let mut actuation_mutex_was_blocked_during_actuation: bool = false;
+        let mut actuator_ineffective: bool = false;
 
         loop {
             let (quit_command_received, start_command_received, stop_command_received) = self
@@ -414,7 +435,7 @@ impl Ventilation {
             if self.config.active {
                 // read water temperature from mutex
                 {
-                    match mutex_sensor_manager_signals.lock() {
+                    match ventilation_mutexes.mutex_sensor_manager_signals.lock() {
                         Ok(c) => {
                             measurement_error_water_temperature = false;
                             measured_water_temperature = c.water_temperature;
@@ -443,6 +464,29 @@ impl Ventilation {
                     module_path!()
                 );
 
+                // execute gradient monitoring
+                actuator_ineffective = self.temperature_gradient_monitor(
+                    &ventilation_mutexes.mutex_temperature_gradient,
+                    ventilation_state == ActuatorState::On,
+                    false, // ventilation expects a negative gradient
+                    #[cfg(not(test))]
+                    "Ventilation",
+                );
+                if actuator_ineffective
+                    && self.config.switch_off_when_no_effect
+                    && ventilation_state == ActuatorState::On
+                {
+                    switch_off_ventilation(
+                        &mutex_device_scheduler_ventilation,
+                        &mut actuation_mutex_was_blocked_during_actuation,
+                        ventilation_channels,
+                    );
+                    ventilation_state = ActuatorState::Off;
+                    self.actuator_disabled = true;
+                    #[cfg(not(test))]
+                    warn!("[{}]: Disabled ventilation because temperature gradient monitor indicates ineffectiveness.", module_path!());
+                }
+
                 if schedule_check_result && !ventilation_inhibited {
                     // actuation is allowed. proceed with control.
                     if (measured_water_temperature >= self.config.switch_off_temperature)
@@ -454,7 +498,7 @@ impl Ventilation {
                             && !measurement_error_water_temperature
                         {
                             // switch on ventilation if not already on
-                            if ventilation_state != ActuatorState::On {
+                            if ventilation_state != ActuatorState::On && !self.actuator_disabled {
                                 switch_on_ventilation(
                                     &mutex_device_scheduler_ventilation,
                                     &mut actuation_mutex_was_blocked_during_actuation,
@@ -477,7 +521,7 @@ impl Ventilation {
                         // The temperature is above or below (dynamic) control window
                         if measured_water_temperature > self.config.switch_on_temperature {
                             // switch on ventilation if not already on
-                            if ventilation_state != ActuatorState::On {
+                            if ventilation_state != ActuatorState::On && !self.actuator_disabled {
                                 switch_on_ventilation(
                                     &mutex_device_scheduler_ventilation,
                                     &mut actuation_mutex_was_blocked_during_actuation,
@@ -524,14 +568,16 @@ impl Ventilation {
 
             // Write signal to mutex
             {
-                match mutex_ventilation_status.lock() {
-                    Ok(mut c) => {
+                match ventilation_mutexes.mutex_ventilation_status.lock() {
+                    Ok(mut ventilation_status) => {
                         instant_after_locking_mutex = Instant::now();
-                        *c = match ventilation_state {
+                        ventilation_status.actuator_switched_on = match ventilation_state {
                             ActuatorState::On => true,
                             ActuatorState::Off => false,
                             _ => false,
-                        }
+                        };
+                        ventilation_status.actuator_disabled = self.actuator_disabled;
+                        ventilation_status.actuator_ineffective = actuator_ineffective;
                     }
                     Err(_) => {
                         // Do nothing
@@ -600,8 +646,10 @@ pub mod tests {
     use crate::mocks::mock_schedule_check::tests::mock_schedule_check;
     use crate::mocks::mock_ventilation::tests::MockSqlInterfaceVentilationSetVals;
     use crate::sensors::sensor_manager::SensorManagerSignals;
+    use crate::thermal::thermal_control_status::ThermalControlStatus;
     use crate::thermal::ventilation::Ventilation;
-    use crate::utilities::channel_content::{AquariumDevice, InternalCommand};
+    use crate::thermal::ventilation_mutexes::VentilationMutexes;
+    use crate::utilities::channel_content::{ActuatorState, AquariumDevice, InternalCommand};
     use crate::utilities::config::{read_config_file, ConfigData};
     use crate::utilities::sawtooth_profile::SawToothProfileConfig;
     use crate::utilities::signal_handler::SignalHandlerChannels;
@@ -660,7 +708,7 @@ pub mod tests {
     fn create_test_environment(
         duration_seconds: u64,
         mut signal_handler_channels: SignalHandlerChannels,
-        mutex_ventilation_status_opt: Option<Arc<Mutex<bool>>>,
+        mutex_ventilation_status_opt: Option<Arc<Mutex<ThermalControlStatus>>>,
     ) -> thread::JoinHandle<()> {
         thread::Builder::new()
             .name("test_environment".to_string())
@@ -770,12 +818,17 @@ pub mod tests {
                 let mut ventilation_set_value_updater =
                     MockSqlInterfaceVentilationSetVals::new(false, None, None, None);
 
+                let ventilation_mutexes = VentilationMutexes {
+                    mutex_sensor_manager_signals,
+                    mutex_ventilation_status: Arc::new(Mutex::new(ThermalControlStatus::default())),
+                    mutex_temperature_gradient: Arc::new(Mutex::new(0.0)),
+                };
+
                 ventilation.execute(
                     mutex_device_scheduler_ventilation.clone(),
                     &mut channels.ventilation,
                     &mut ventilation_set_value_updater,
-                    mutex_sensor_manager_signals,
-                    Arc::new(Mutex::new(false)),
+                    ventilation_mutexes,
                 );
 
                 assert_eq!(ventilation.mutex_access_duration_exceeded, false);
@@ -847,7 +900,7 @@ pub mod tests {
                     actuation_event.command,
                     InternalCommand::SwitchOff(AquariumDevice::Ventilation)
                 );
-                mock_actuator_states.check_terminal_condition_ventilation();
+                mock_actuator_states.check_terminal_condition_ventilation(ActuatorState::On);
             })
             .unwrap()
     }
@@ -916,12 +969,17 @@ pub mod tests {
                 let mut ventilation_set_value_updater =
                     MockSqlInterfaceVentilationSetVals::new(false, None, None, None);
 
+                let ventilation_mutexes = VentilationMutexes {
+                    mutex_sensor_manager_signals,
+                    mutex_ventilation_status: Arc::new(Mutex::new(ThermalControlStatus::default())),
+                    mutex_temperature_gradient: Arc::new(Mutex::new(0.0)),
+                };
+
                 ventilation.execute(
                     mutex_device_scheduler_ventilation.clone(),
                     &mut channels.ventilation,
                     &mut ventilation_set_value_updater,
-                    mutex_sensor_manager_signals,
-                    Arc::new(Mutex::new(false)),
+                    ventilation_mutexes,
                 );
 
                 // send Quit signal to mock threads because the test object has terminated
@@ -1101,7 +1159,7 @@ pub mod tests {
 
                 println!("delta_min_max_duration={}", delta_min_max_duration);
                 assert_le!(delta_min_max_duration, 50);
-                mock_actuator_states.check_terminal_condition_ventilation();
+                mock_actuator_states.check_terminal_condition_ventilation(ActuatorState::On);
             })
             .unwrap();
 
@@ -1129,12 +1187,17 @@ pub mod tests {
                 let mut ventilation_set_value_updater =
                     MockSqlInterfaceVentilationSetVals::new(false, None, None, None);
 
+                let ventilation_mutexes = VentilationMutexes {
+                    mutex_sensor_manager_signals,
+                    mutex_ventilation_status: Arc::new(Mutex::new(ThermalControlStatus::default())),
+                    mutex_temperature_gradient: Arc::new(Mutex::new(0.0)),
+                };
+
                 ventilation.execute(
                     mutex_device_scheduler_ventilation.clone(),
                     &mut channels.ventilation,
                     &mut ventilation_set_value_updater,
-                    mutex_sensor_manager_signals,
-                    Arc::new(Mutex::new(false)),
+                    ventilation_mutexes,
                 );
 
                 // send Quit signal to mock threads because the test object has terminated
@@ -1287,7 +1350,7 @@ pub mod tests {
                 assert_le!(sixth_last_actuation_duration, 1100);
                 assert_ge!(sixth_last_actuation_duration, 900);
 
-                mock_actuator_states.check_terminal_condition_ventilation();
+                mock_actuator_states.check_terminal_condition_ventilation(ActuatorState::On);
             })
             .unwrap();
 
@@ -1315,12 +1378,17 @@ pub mod tests {
                 let mut ventilation_set_value_updater =
                     MockSqlInterfaceVentilationSetVals::new(false, None, None, None);
 
+                let ventilation_mutexes = VentilationMutexes {
+                    mutex_sensor_manager_signals,
+                    mutex_ventilation_status: Arc::new(Mutex::new(ThermalControlStatus::default())),
+                    mutex_temperature_gradient: Arc::new(Mutex::new(0.0)),
+                };
+
                 ventilation.execute(
                     mutex_device_scheduler_ventilation.clone(),
                     &mut channels.ventilation,
                     &mut ventilation_set_value_updater,
-                    mutex_sensor_manager_signals,
-                    Arc::new(Mutex::new(false)),
+                    ventilation_mutexes,
                 );
 
                 // send Quit signal to mock threads because the test object has terminated
@@ -1474,7 +1542,7 @@ pub mod tests {
                 assert_le!(sixth_last_actuation_duration, 1100);
                 assert_ge!(sixth_last_actuation_duration, 900);
                 */
-                mock_actuator_states.check_terminal_condition_ventilation();
+                mock_actuator_states.check_terminal_condition_ventilation(ActuatorState::On);
             })
             .unwrap();
 
@@ -1502,12 +1570,17 @@ pub mod tests {
                 let mut ventilation_set_value_updater =
                     MockSqlInterfaceVentilationSetVals::new(false, None, None, None);
 
+                let ventilation_mutexes = VentilationMutexes {
+                    mutex_sensor_manager_signals,
+                    mutex_ventilation_status: Arc::new(Mutex::new(ThermalControlStatus::default())),
+                    mutex_temperature_gradient: Arc::new(Mutex::new(0.0)),
+                };
+
                 ventilation.execute(
                     mutex_device_scheduler_ventilation.clone(),
                     &mut channels.ventilation,
                     &mut ventilation_set_value_updater,
-                    mutex_sensor_manager_signals,
-                    Arc::new(Mutex::new(false)),
+                    ventilation_mutexes,
                 );
 
                 // send Quit signal to mock threads because the test object has terminated
@@ -1596,12 +1669,17 @@ pub mod tests {
                 let mut ventilation_set_value_updater =
                     MockSqlInterfaceVentilationSetVals::new(false, None, None, None);
 
+                let ventilation_mutexes = VentilationMutexes {
+                    mutex_sensor_manager_signals,
+                    mutex_ventilation_status: Arc::new(Mutex::new(ThermalControlStatus::default())),
+                    mutex_temperature_gradient: Arc::new(Mutex::new(0.0)),
+                };
+
                 ventilation.execute(
                     mutex_device_scheduler_ventilation.clone(),
                     &mut channels.ventilation,
                     &mut ventilation_set_value_updater,
-                    mutex_sensor_manager_signals,
-                    Arc::new(Mutex::new(false)),
+                    ventilation_mutexes,
                 );
 
                 // send Quit signal to mock threads because the test object has terminated
@@ -1708,7 +1786,7 @@ pub mod tests {
                     actuation_event.command,
                     InternalCommand::SwitchOn(AquariumDevice::Ventilation)
                 );
-                mock_actuator_states.check_terminal_condition_ventilation();
+                mock_actuator_states.check_terminal_condition_ventilation(ActuatorState::On);
             })
             .unwrap();
 
@@ -1827,12 +1905,17 @@ pub mod tests {
                 let mut ventilation_set_value_updater =
                     MockSqlInterfaceVentilationSetVals::new(false, None, None, None);
 
+                let ventilation_mutexes = VentilationMutexes {
+                    mutex_sensor_manager_signals,
+                    mutex_ventilation_status: Arc::new(Mutex::new(ThermalControlStatus::default())),
+                    mutex_temperature_gradient: Arc::new(Mutex::new(0.0)),
+                };
+
                 ventilation.execute(
                     mutex_device_scheduler_ventilation.clone(),
                     &mut channels.ventilation,
                     &mut ventilation_set_value_updater,
-                    mutex_sensor_manager_signals,
-                    Arc::new(Mutex::new(false)),
+                    ventilation_mutexes,
                 );
 
                 // send Quit signal to mock threads because the test object has terminated
@@ -1919,7 +2002,7 @@ pub mod tests {
                     actuation_event_3.command,
                     InternalCommand::SwitchOn(AquariumDevice::Ventilation)
                 );
-                mock_actuator_states.check_terminal_condition_ventilation();
+                mock_actuator_states.check_terminal_condition_ventilation(ActuatorState::On);
             })
             .unwrap();
 
@@ -1952,12 +2035,17 @@ pub mod tests {
                     Some(Duration::from_secs(10)),
                 );
 
+                let ventilation_mutexes = VentilationMutexes {
+                    mutex_sensor_manager_signals,
+                    mutex_ventilation_status: Arc::new(Mutex::new(ThermalControlStatus::default())),
+                    mutex_temperature_gradient: Arc::new(Mutex::new(0.0)),
+                };
+
                 ventilation.execute(
                     mutex_device_scheduler_ventilation.clone(),
                     &mut channels.ventilation,
                     &mut ventilation_set_value_updater,
-                    mutex_sensor_manager_signals,
-                    Arc::new(Mutex::new(false)),
+                    ventilation_mutexes,
                 );
 
                 // send Quit signal to mock threads because the test object has terminated
@@ -2001,7 +2089,7 @@ pub mod tests {
                     actuation_event.command,
                     InternalCommand::SwitchOn(AquariumDevice::Ventilation)
                 );
-                mock_actuator_states.check_terminal_condition_ventilation();
+                mock_actuator_states.check_terminal_condition_ventilation(ActuatorState::On);
             })
             .unwrap()
     }
@@ -2020,7 +2108,7 @@ pub mod tests {
 
         let mut channels = Channels::new_for_test();
 
-        let mutex_ventilation_status = Arc::new(Mutex::new(false));
+        let mutex_ventilation_status = Arc::new(Mutex::new(ThermalControlStatus::default()));
         let mutex_ventilation_status_clone_for_test_environment = mutex_ventilation_status.clone();
 
         // thread for mock schedule check
@@ -2073,12 +2161,17 @@ pub mod tests {
                 let mut ventilation_set_value_updater =
                     MockSqlInterfaceVentilationSetVals::new(false, None, None, None);
 
+                let ventilation_mutexes = VentilationMutexes {
+                    mutex_sensor_manager_signals,
+                    mutex_ventilation_status,
+                    mutex_temperature_gradient: Arc::new(Mutex::new(0.0)),
+                };
+
                 ventilation.execute(
                     mutex_device_scheduler_ventilation.clone(),
                     &mut channels.ventilation,
                     &mut ventilation_set_value_updater,
-                    mutex_sensor_manager_signals,
-                    mutex_ventilation_status,
+                    ventilation_mutexes,
                 );
 
                 assert_eq!(ventilation.mutex_access_duration_exceeded, true);
@@ -2104,5 +2197,347 @@ pub mod tests {
         join_handle_test_object
             .join()
             .expect("Test object thread did not finish.");
+    }
+
+    #[test]
+    pub fn test_ventilation_gradient_monitoring_disables_actuator() {
+        let sleep_duration_100_millis = Duration::from_millis(100);
+        let spin_sleeper = SpinSleeper::default();
+
+        let (mut config, mut ventilation) = prepare_ventilation_tests(None);
+
+        // Configure gradient monitoring to be very aggressive
+        config.ventilation.max_time_actuator_effect_monitor = 2;
+        config.ventilation.switch_off_when_no_effect = true;
+        config.ventilation.switch_on_when_terminating = false;
+        ventilation.config = config.ventilation;
+
+        // replacement value is used for initializing mutex - needs to start with a high value
+        config.sensor_manager.replacement_value_water_temperature = 30.0;
+
+        let mut channels = Channels::new_for_test();
+
+        // thread for mock schedule check
+        let join_handle_mock_schedule_check = thread::Builder::new()
+            .name("mock_schedule_check".to_string())
+            .spawn(move || {
+                mock_schedule_check(
+                    &mut channels.schedule_check.tx_schedule_check_to_ventilation,
+                    &mut channels.schedule_check.rx_schedule_check_from_ventilation,
+                    None,
+                    true,
+                );
+            })
+            .unwrap();
+
+        // Mutex needed for water temperature
+        let mutex_sensor_manager_signals = Arc::new(Mutex::new(SensorManagerSignals::new(
+            &config.sensor_manager,
+        )));
+
+        let mutex_device_scheduler_ventilation = Arc::new(Mutex::new(0));
+
+        // Mutex for ventilation status to check assertions
+        let mutex_ventilation_status = Arc::new(Mutex::new(ThermalControlStatus::default()));
+        let mutex_ventilation_status_clone = mutex_ventilation_status.clone();
+
+        // Mutex for temperature gradient
+        let mutex_temperature_gradient = Arc::new(Mutex::new(-0.1)); // Start with cooling gradient
+        let mutex_temperature_gradient_clone = mutex_temperature_gradient.clone();
+
+        // thread for mock relay manager
+        let join_handle_mock_relay_manager = thread::Builder::new()
+            .name("mock_relay_manager".to_string())
+            .spawn(move || {
+                let (actuation_events, mock_actuator_states) = mock_relay_manager(
+                    &mut channels.relay_manager.tx_relay_manager_to_ventilation,
+                    &mut channels.relay_manager.rx_relay_manager_from_ventilation,
+                );
+                // Expect On, Off
+                assert_eq!(actuation_events.len(), 2);
+                assert_eq!(
+                    actuation_events[0].command,
+                    InternalCommand::SwitchOn(AquariumDevice::Ventilation)
+                );
+                assert_eq!(
+                    actuation_events[1].command,
+                    InternalCommand::SwitchOff(AquariumDevice::Ventilation)
+                );
+
+                mock_actuator_states.check_terminal_condition_ventilation(ActuatorState::Off);
+            })
+            .unwrap();
+
+        // thread for controlling test phases
+        let join_handle_test_environment = thread::Builder::new()
+            .name("test_environment".to_string())
+            .spawn(move || {
+                let sleep_duration_phase = Duration::from_secs(5);
+                let spin_sleeper = SpinSleeper::default();
+
+                // Phase 1: High temp, good gradient. Wait 5s.
+                spin_sleeper.sleep(sleep_duration_phase);
+                {
+                    let status = mutex_ventilation_status_clone.lock().unwrap();
+                    assert!(
+                        status.actuator_switched_on,
+                        "Phase 1: Ventilation should be ON"
+                    );
+                }
+
+                // Phase 2: Constant temp (gradient indicates that actuator is ineffective).
+                {
+                    let mut gradient = mutex_temperature_gradient_clone.lock().unwrap();
+                    *gradient = 0.0;
+                }
+                // Wait 5s (monitor timeout is 2s)
+                spin_sleeper.sleep(sleep_duration_phase);
+                {
+                    let status = mutex_ventilation_status_clone.lock().unwrap();
+                    assert!(
+                        !status.actuator_switched_on,
+                        "Phase 2: Ventilation should be OFF due to gradient monitor"
+                    );
+                }
+
+                // Terminate
+                let _ = channels
+                    .signal_handler
+                    .tx_signal_handler_to_ventilation
+                    .send(InternalCommand::Quit);
+                channels
+                    .signal_handler
+                    .rx_signal_handler_from_ventilation
+                    .recv()
+                    .unwrap();
+                let _ = channels
+                    .signal_handler
+                    .tx_signal_handler_to_ventilation
+                    .send(InternalCommand::Terminate);
+            })
+            .unwrap();
+
+        spin_sleeper.sleep(sleep_duration_100_millis);
+
+        // thread for the test object
+        let join_handle_test_object = thread::Builder::new()
+            .name("test_object".to_string())
+            .spawn(move || {
+                let mut tx_ventilation_to_schedule_check_for_test_case_finish = channels
+                    .ventilation
+                    .tx_ventilation_to_schedule_check
+                    .clone();
+                let mut tx_ventilation_to_relay_manager_for_test_case_finish =
+                    channels.ventilation.tx_ventilation_to_relay_manager.clone();
+
+                let mut ventilation_set_value_updater =
+                    MockSqlInterfaceVentilationSetVals::new(false, None, None, None);
+
+                let ventilation_mutexes = VentilationMutexes {
+                    mutex_sensor_manager_signals,
+                    mutex_ventilation_status,
+                    mutex_temperature_gradient,
+                };
+
+                ventilation.execute(
+                    mutex_device_scheduler_ventilation.clone(),
+                    &mut channels.ventilation,
+                    &mut ventilation_set_value_updater,
+                    ventilation_mutexes,
+                );
+
+                // send Quit signal to mock threads
+                let _ = tx_ventilation_to_schedule_check_for_test_case_finish
+                    .send(InternalCommand::Quit);
+                let _ = tx_ventilation_to_relay_manager_for_test_case_finish
+                    .send(InternalCommand::Quit);
+                println!("* [Ventilation] checking gradient monitoring succeeded.");
+            })
+            .unwrap();
+
+        join_handle_mock_schedule_check
+            .join()
+            .expect("Mock schedule check failed");
+        join_handle_mock_relay_manager
+            .join()
+            .expect("Mock relay manager failed");
+        join_handle_test_environment
+            .join()
+            .expect("Test environment failed");
+        join_handle_test_object.join().expect("Test object failed");
+    }
+
+    #[test]
+    pub fn test_ventilation_reset_errors_enables_actuator() {
+        let sleep_duration_100_millis = Duration::from_millis(100);
+        let spin_sleeper = SpinSleeper::default();
+
+        let (mut config, mut ventilation) = prepare_ventilation_tests(None);
+
+        // Start in disabled state
+        ventilation.actuator_disabled = true;
+
+        // replacement value is used for initializing mutex - needs to start with a high value
+        config.sensor_manager.replacement_value_water_temperature = 30.0;
+        config.ventilation.switch_off_when_no_effect = true;
+        config.ventilation.switch_on_when_terminating = false;
+        ventilation.config = config.ventilation;
+
+        let mut channels = Channels::new_for_test();
+
+        // thread for mock schedule check
+        let join_handle_mock_schedule_check = thread::Builder::new()
+            .name("mock_schedule_check".to_string())
+            .spawn(move || {
+                mock_schedule_check(
+                    &mut channels.schedule_check.tx_schedule_check_to_ventilation,
+                    &mut channels.schedule_check.rx_schedule_check_from_ventilation,
+                    None,
+                    true,
+                );
+            })
+            .unwrap();
+
+        // Mutex needed for water temperature
+        let mutex_sensor_manager_signals = Arc::new(Mutex::new(SensorManagerSignals::new(
+            &config.sensor_manager,
+        )));
+
+        let mutex_device_scheduler_ventilation = Arc::new(Mutex::new(0));
+
+        // Mutex for ventilation status to check assertions
+        let mutex_ventilation_status = Arc::new(Mutex::new(ThermalControlStatus::default()));
+        let mutex_ventilation_status_clone = mutex_ventilation_status.clone();
+
+        // Mutex for temperature gradient
+        let mutex_temperature_gradient = Arc::new(Mutex::new(0.1)); // Start with positive gradient
+        let mutex_temperature_gradient_clone = mutex_temperature_gradient.clone();
+
+        // thread for mock relay manager
+        let join_handle_mock_relay_manager = thread::Builder::new()
+            .name("mock_relay_manager".to_string())
+            .spawn(move || {
+                let (actuation_events, mock_actuator_states) = mock_relay_manager(
+                    &mut channels.relay_manager.tx_relay_manager_to_ventilation,
+                    &mut channels.relay_manager.rx_relay_manager_from_ventilation,
+                );
+                // Expect SwitchOn (after reset), SwitchOff (at termination)
+                assert_eq!(actuation_events.len(), 2);
+                assert_eq!(
+                    actuation_events[0].command,
+                    InternalCommand::SwitchOn(AquariumDevice::Ventilation)
+                );
+                assert_eq!(
+                    actuation_events[1].command,
+                    InternalCommand::SwitchOff(AquariumDevice::Ventilation)
+                );
+
+                mock_actuator_states.check_terminal_condition_ventilation(ActuatorState::Off);
+            })
+            .unwrap();
+
+        // thread for controlling test phases
+        let join_handle_test_environment = thread::Builder::new()
+            .name("test_environment".to_string())
+            .spawn(move || {
+                let sleep_duration_phase = Duration::from_secs(5);
+                let spin_sleeper = SpinSleeper::default();
+
+                // Phase 1: Disabled state. Wait 5s.
+                spin_sleeper.sleep(sleep_duration_phase);
+                {
+                    let status = mutex_ventilation_status_clone.lock().unwrap();
+                    assert!(
+                        !status.actuator_switched_on,
+                        "Phase 1: Ventilation should be OFF (disabled)"
+                    );
+                }
+
+                // Send ResetAllErrors command
+                channels
+                    .messaging
+                    .tx_messaging_to_ventilation
+                    .send(InternalCommand::ResetAllErrors)
+                    .unwrap();
+
+                // Phase 2: Enabled state. Wait 5s.
+                spin_sleeper.sleep(sleep_duration_phase);
+                {
+                    let status = mutex_ventilation_status_clone.lock().unwrap();
+                    assert!(
+                        status.actuator_switched_on,
+                        "Phase 2: Ventilation should be ON (enabled)"
+                    );
+                }
+
+                // Terminate
+                let _ = channels
+                    .signal_handler
+                    .tx_signal_handler_to_ventilation
+                    .send(InternalCommand::Quit);
+                channels
+                    .signal_handler
+                    .rx_signal_handler_from_ventilation
+                    .recv()
+                    .unwrap();
+                let _ = channels
+                    .signal_handler
+                    .tx_signal_handler_to_ventilation
+                    .send(InternalCommand::Terminate);
+            })
+            .unwrap();
+
+        spin_sleeper.sleep(sleep_duration_100_millis);
+
+        // thread for the test object
+        let join_handle_test_object = thread::Builder::new()
+            .name("test_object".to_string())
+            .spawn(move || {
+                let mut tx_ventilation_to_schedule_check_for_test_case_finish = channels
+                    .ventilation
+                    .tx_ventilation_to_schedule_check
+                    .clone();
+                let mut tx_ventilation_to_relay_manager_for_test_case_finish =
+                    channels.ventilation.tx_ventilation_to_relay_manager.clone();
+
+                let mut ventilation_set_value_updater =
+                    MockSqlInterfaceVentilationSetVals::new(false, None, None, None);
+
+                let ventilation_mutexes = VentilationMutexes {
+                    mutex_sensor_manager_signals,
+                    mutex_ventilation_status,
+                    mutex_temperature_gradient: mutex_temperature_gradient_clone,
+                };
+
+                ventilation.execute(
+                    mutex_device_scheduler_ventilation.clone(),
+                    &mut channels.ventilation,
+                    &mut ventilation_set_value_updater,
+                    ventilation_mutexes,
+                );
+
+                // Add a small delay to allow mock_relay_manager to process the final command
+                let spin_sleeper = SpinSleeper::default();
+                spin_sleeper.sleep(Duration::from_millis(100));
+
+                // send Quit signal to mock threads
+                let _ = tx_ventilation_to_schedule_check_for_test_case_finish
+                    .send(InternalCommand::Quit);
+                let _ = tx_ventilation_to_relay_manager_for_test_case_finish
+                    .send(InternalCommand::Quit);
+                println!("* [Ventilation] checking reset errors enables actuator succeeded.");
+            })
+            .unwrap();
+
+        join_handle_mock_schedule_check
+            .join()
+            .expect("Mock schedule check failed");
+        join_handle_mock_relay_manager
+            .join()
+            .expect("Mock relay manager failed");
+        join_handle_test_environment
+            .join()
+            .expect("Test environment failed");
+        join_handle_test_object.join().expect("Test object failed");
     }
 }
