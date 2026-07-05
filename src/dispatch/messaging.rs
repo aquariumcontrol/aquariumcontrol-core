@@ -66,6 +66,9 @@ use std::time::Duration;
 use crate::utilities::acknowledge_signal_handler::AcknowledgeSignalHandlerTrait;
 use crate::utilities::proc_ext_req::ProcessExternalRequestTrait;
 use crate::utilities::wait_for_termination::WaitForTerminationTrait;
+use crate::dispatch::messaging_error::MessagingError;
+use crate::dispatch::messaging_config::MessagingConfig;
+use crate::launch::execution_config::ExecutionConfig;
 
 cfg_if::cfg_if! {
     if #[cfg(target_os = "linux")] {
@@ -77,22 +80,9 @@ cfg_if::cfg_if! {
         #[cfg(not(test))] // only required in real-life execution
         use nix::unistd::gettid;
 
-        use crate::utilities::channel_content::InternalCommand;
-        use crate::dispatch::messaging_channels::MessagingChannels;
-        use crate::dispatch::messaging_error::MessagingError;
         use crate::dispatch::messaging_domain::MessagingDomain;
-        use crate::dispatch::messaging_config::MessagingConfig;
-        use crate::launch::execution_config::ExecutionConfig;
         use crate::dispatch::ipc_message::Message;
         use std::io::ErrorKind;
-    }
-}
-
-cfg_if::cfg_if! {
-    if #[cfg(not(target_os = "linux"))] {
-        use crate::dispatch::messaging_error::MessagingError;
-        use crate::dispatch::messaging_config::MessagingConfig;
-        use crate::launch::execution_config::ExecutionConfig;
     }
 }
 

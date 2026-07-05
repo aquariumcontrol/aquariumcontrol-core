@@ -95,14 +95,14 @@ use std::{env, panic, time::Duration};
 
 cfg_if::cfg_if! {
     if #[cfg(all(target_os = "linux", feature = "target_hw"))] {
-        use aquarium_control::sensors::gpio_handler::GpioHandler;
-        use aquarium_control::beacon::ws2812b::RgbLedColor;
-        use aquarium_control::beacon::ws2812b::Ws2812B;
+        use crate::sensors::gpio_handler::GpioHandler;
+        use crate::beacon::ws2812b::RgbLedColor;
+        use crate::beacon::ws2812b::Ws2812B;
     }
 }
 cfg_if::cfg_if! {
     if #[cfg(all(feature = "target_hw", target_os = "linux"))] {
-        use aquarium_control::sensors::i2c_interface::I2cInterface;
+        use crate::sensors::i2c_interface::I2cInterface;
     }
 }
 
