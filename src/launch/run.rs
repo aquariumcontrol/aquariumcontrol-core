@@ -940,7 +940,7 @@ pub fn run() -> Result<(), StartupError> {
 
         // 2. Perform the initialization check synchronously via spawn_blocking
         #[cfg(all(target_os = "linux", feature = "target_hw"))]
-        let (atlas_scientific, mut chan_atlas_scientific) = if !use_simulator && atlas_scientific_active {
+        let (mut atlas_scientific, mut chan_atlas_scientific) = if !use_simulator && atlas_scientific_active {
             let (res, atlas_scientific, chan_atlas_scientific) = tokio::task::spawn_blocking(move || {
                 let res = atlas_scientific.init_devices(&mut chan_atlas_scientific);
                 (res, atlas_scientific, chan_atlas_scientific)
