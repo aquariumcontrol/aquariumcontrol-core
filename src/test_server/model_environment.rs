@@ -182,12 +182,10 @@ impl ModelEnvironment {
             // check termination condition for simulation
             match max_loop_count_opt {
                 None => {} // no limit provided.
-                Some(max_loop_count) => {
-                    // limit provided. Check if loop shall be aborted.
-                    if i > max_loop_count * 1000 {
-                        break;
-                    }
+                Some(max_loop_count) if i > max_loop_count * 1000 => { // provided limit has been exceeded.
+                    break;
                 }
+                Some(_) => {} // provided limit has not been exceeded - do nothing
             };
 
             // process channel every millisecond, because there can be lots of requests

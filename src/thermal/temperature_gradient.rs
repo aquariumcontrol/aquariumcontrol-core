@@ -94,7 +94,7 @@ impl TemperatureGradient {
     /// The main execution loop for the temperature gradient calculation.
     ///
     /// # Arguments
-    /// * `sensor_manager_signals` - Arc<Mutex> to read temperature data from.
+    /// * `sensor_manager_signals` - `Arc<Mutex>` to read temperature data from.
     pub fn execute(
         &mut self,
         mutex_sensor_manager_signals: Arc<Mutex<SensorManagerSignals>>,

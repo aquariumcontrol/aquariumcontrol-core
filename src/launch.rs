@@ -20,3 +20,6 @@ pub mod argument_parser;
 
 // Checks if the application is started with root privileges
 pub mod privilege_check;
+
+// Initialized the application and starts all threads/tasks
+pub mod run;
