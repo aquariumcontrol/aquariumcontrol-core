@@ -878,20 +878,7 @@ pub fn run() -> Result<(), StartupError> {
     let mut thread_handles = vec![];
     // spawn thread for sensor communication first to allow checks
 
-    #[cfg(all(target_os = "linux", feature = "target_hw"))]
-    if !use_simulator && atlas_scientific_active {
-        let result = atlas_scientific.init_devices(&mut chan_atlas_scientific);
-        if let Err(e) = result {
-            // terminate the I2cInterface thread before exiting the application
-            signal_handler::send_command(
-                InternalCommand::Quit,
-                Some(&mut chan_signal_handler.tx_signal_handler_to_i2c_interface),
-                None,
-                "i2c_interface",
-            );
-            return Err(StartupError::AtlasScientificSensorTypeMismatch { source: e });
-        }
-    }
+
 
     // open tcp connection only if configuration requires use of simulator instead of HW
     if use_simulator && tcp_communication_thread_started {
@@ -937,6 +924,44 @@ pub fn run() -> Result<(), StartupError> {
 
     rt.block_on(async {
         let mut tasks = vec![];
+
+        // 1. Spawn I2cInterface FIRST so it is running and ready to handle commands
+        #[cfg(all(target_os = "linux", feature = "target_hw"))]
+        if !use_simulator && execution_config.i2c_interface {
+            let handle = tokio::spawn(async move {
+                i2c_interface.execute(&mut chan_i2c_interface).await;
+                #[cfg(all(target_os = "linux", feature = "target_hw", feature = "debug_channels"))]
+                debug!(target: module_path!(), "{0}", chan_i2c_interface);
+                #[cfg(feature = "debug_main")]
+                debug!(target: module_path!(), "i2c_interface terminated.");
+            });
+            tasks.push(handle);
+        }
+
+        // 2. Perform the initialization check synchronously via spawn_blocking
+        #[cfg(all(target_os = "linux", feature = "target_hw"))]
+        let (atlas_scientific, mut chan_atlas_scientific) = if !use_simulator && atlas_scientific_active {
+            let (res, atlas_scientific, chan_atlas_scientific) = tokio::task::spawn_blocking(move || {
+                let res = atlas_scientific.init_devices(&mut chan_atlas_scientific);
+                (res, atlas_scientific, chan_atlas_scientific)
+            })
+            .await
+            .map_err(|e| StartupError::TokioRuntimeSetupFailure { source: e.into() })?;
+
+            if let Err(e) = res {
+                // terminate the I2cInterface task before exiting the application
+                signal_handler::send_command(
+                    InternalCommand::Quit,
+                    Some(&mut chan_signal_handler.tx_signal_handler_to_i2c_interface),
+                    None,
+                    "i2c_interface",
+                );
+                return Err(StartupError::AtlasScientificSensorTypeMismatch { source: e });
+            }
+            (atlas_scientific, chan_atlas_scientific)
+        } else {
+            (atlas_scientific, chan_atlas_scientific)
+        };
 
         let term = Arc::new(AtomicBool::new(false));
         let signal_handler_config = execution_config_clone_for_signal_handler;
@@ -1222,17 +1247,7 @@ pub fn run() -> Result<(), StartupError> {
             tasks.push(handle);
         }
 
-        #[cfg(all(target_os = "linux", feature = "target_hw"))]
-        if !use_simulator && execution_config.i2c_interface {
-            let handle = tokio::spawn(async move {
-                i2c_interface.execute(&mut chan_i2c_interface).await;
-                #[cfg(all(target_os = "linux", feature = "target_hw", feature = "debug_channels"))]
-                debug!(target: module_path!(), "{0}", chan_i2c_interface);
-                #[cfg(feature = "debug_main")]
-                debug!(target: module_path!(), "i2c_interface terminated.");
-            });
-            tasks.push(handle);
-        }
+
         if execution_config.ds18b20 {
             let handle = tokio::spawn(async move {
                 ds18b20.execute(
@@ -1261,7 +1276,8 @@ pub fn run() -> Result<(), StartupError> {
         for t in tasks {
             let _ = t.await;
         }
-    });
+        Ok::<(), StartupError>(())
+    })?;
 
     // Wait for all spawned OS threads to finish
     for handle in thread_handles {
