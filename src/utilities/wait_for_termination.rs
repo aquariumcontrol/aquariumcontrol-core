@@ -15,8 +15,6 @@ use crate::utilities::channel_content::InternalCommand;
 use log::{error, warn};
 use spin_sleep::SpinSleeper;
 use std::time::Duration;
-
-#[cfg(target_os = "linux")]
 use crate::dispatch::messaging::Messaging;
 use crate::launch::channels::{AquaChannelError, AquaReceiver};
 use crate::sensors::sensor_manager::SensorManager;
@@ -214,6 +212,4 @@ impl_wait_for_termination!(
     DataLogger
 );
 
-// The impl for Messaging is conditional, so it gets its own call.
-#[cfg(target_os = "linux")]
 impl_wait_for_termination!(Messaging);

@@ -67,10 +67,7 @@ use std::env;
 use crate::sensors::i2c_interface_config::I2cInterfaceConfig;
 
 use crate::sensors::tank_level_switch_config::TankLevelSwitchConfig;
-
-#[cfg(target_os = "linux")]
 use crate::dispatch::messaging_config::MessagingConfig;
-
 use crate::database::sql_interface_config::SqlInterfaceConfig;
 use crate::permission::schedule_check_config::ScheduleCheckConfig;
 use crate::sensors::ds18b20_config::Ds18b20Config;
@@ -148,7 +145,6 @@ pub struct ConfigData {
     /// configuration of I2C interface
     pub i2c_interface: I2cInterfaceConfig,
 
-    #[cfg(target_os = "linux")]
     /// configuration of messaging (IPC)
     pub messaging: MessagingConfig,
 

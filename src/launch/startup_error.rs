@@ -53,7 +53,6 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 #[cfg(all(feature = "target_hw", target_os = "linux"))]
 use crate::beacon::ws2812b::Ws2812BError;
 use crate::database::sql_interface_error::SqlInterfaceError;
-#[cfg(target_os = "linux")]
 use crate::dispatch::messaging_error::MessagingError;
 use crate::mineral::balling_error::BallingError;
 use crate::recorder::data_logger_error::DataLoggerError;
@@ -120,7 +119,6 @@ pub enum StartupError {
     },
 
     /// Could not open POSIX message queue.
-    #[cfg(target_os = "linux")]
     #[error("Could not establish connection to messaging system.")]
     Messaging {
         #[source]

@@ -75,7 +75,7 @@ use std::collections::HashSet;
 use std::time::Duration;
 
 const CONTROLLINO_MAX_RELAY_ID: u8 = 64;
-const CONTROLLINO_MIN_RELAY_ID: u8 = 0;
+const CONTROLLINO_MIN_RELAY_ID: u8 = 1;
 
 /// Contains constants for communication with Controllino
 #[allow(unused)]
@@ -984,7 +984,7 @@ pub mod tests {
         .unwrap();
         assert_eq!(
             message.data[0],
-            controllino_constants::COMMAND_UNSET_RELAY as u8
+            controllino_constants::COMMAND_SET_RELAY as u8
         );
         assert_eq!(message.data[1], config.controllino_relay.skimmer_id);
 
@@ -1015,7 +1015,7 @@ pub mod tests {
         .unwrap();
         assert_eq!(
             message.data[0],
-            controllino_constants::COMMAND_UNSET_RELAY as u8
+            controllino_constants::COMMAND_SET_RELAY as u8
         );
         assert_eq!(message.data[1], config.controllino_relay.main_pump1_id);
 
@@ -1026,7 +1026,7 @@ pub mod tests {
         .unwrap();
         assert_eq!(
             message.data[0],
-            controllino_constants::COMMAND_UNSET_RELAY as u8
+            controllino_constants::COMMAND_SET_RELAY as u8
         );
         assert_eq!(message.data[1], config.controllino_relay.main_pump2_id);
 
@@ -1037,7 +1037,7 @@ pub mod tests {
         .unwrap();
         assert_eq!(
             message.data[0],
-            controllino_constants::COMMAND_UNSET_RELAY as u8
+            controllino_constants::COMMAND_SET_RELAY as u8
         );
         assert_eq!(message.data[1], config.controllino_relay.aux_pump1_id);
 
@@ -1048,7 +1048,7 @@ pub mod tests {
         .unwrap();
         assert_eq!(
             message.data[0],
-            controllino_constants::COMMAND_UNSET_RELAY as u8
+            controllino_constants::COMMAND_SET_RELAY as u8
         );
         assert_eq!(message.data[1], config.controllino_relay.aux_pump2_id);
 
@@ -1125,7 +1125,7 @@ pub mod tests {
         .unwrap();
         assert_eq!(
             message.data[0],
-            controllino_constants::COMMAND_SET_RELAY as u8
+            controllino_constants::COMMAND_UNSET_RELAY as u8
         );
         assert_eq!(message.data[1], config.controllino_relay.skimmer_id);
 
@@ -1158,7 +1158,7 @@ pub mod tests {
         .unwrap();
         assert_eq!(
             message.data[0],
-            controllino_constants::COMMAND_SET_RELAY as u8
+            controllino_constants::COMMAND_UNSET_RELAY as u8
         );
         assert_eq!(message.data[1], config.controllino_relay.main_pump1_id);
 
@@ -1169,7 +1169,7 @@ pub mod tests {
         .unwrap();
         assert_eq!(
             message.data[0],
-            controllino_constants::COMMAND_SET_RELAY as u8
+            controllino_constants::COMMAND_UNSET_RELAY as u8
         );
         assert_eq!(message.data[1], config.controllino_relay.main_pump2_id);
 
@@ -1180,7 +1180,7 @@ pub mod tests {
         .unwrap();
         assert_eq!(
             message.data[0],
-            controllino_constants::COMMAND_SET_RELAY as u8
+            controllino_constants::COMMAND_UNSET_RELAY as u8
         );
         assert_eq!(message.data[1], config.controllino_relay.aux_pump1_id);
 
@@ -1191,7 +1191,7 @@ pub mod tests {
         .unwrap();
         assert_eq!(
             message.data[0],
-            controllino_constants::COMMAND_SET_RELAY as u8
+            controllino_constants::COMMAND_UNSET_RELAY as u8
         );
         assert_eq!(message.data[1], config.controllino_relay.aux_pump2_id);
 

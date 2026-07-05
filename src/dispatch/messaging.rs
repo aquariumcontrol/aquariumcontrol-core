@@ -60,6 +60,13 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 #[cfg(feature = "debug_messaging")]
 use log::debug;
 
+use crate::dispatch::messaging_channels::MessagingChannels;
+use crate::utilities::channel_content::InternalCommand;
+use std::time::Duration;
+use crate::utilities::acknowledge_signal_handler::AcknowledgeSignalHandlerTrait;
+use crate::utilities::proc_ext_req::ProcessExternalRequestTrait;
+use crate::utilities::wait_for_termination::WaitForTerminationTrait;
+
 cfg_if::cfg_if! {
     if #[cfg(target_os = "linux")] {
         #[cfg(not(test))] // only required in real-life execution
@@ -67,21 +74,25 @@ cfg_if::cfg_if! {
 
         use log::{error, warn};
         use posixmq::PosixMq;
-        use std::time::Duration;
         #[cfg(not(test))] // only required in real-life execution
         use nix::unistd::gettid;
 
         use crate::utilities::channel_content::InternalCommand;
         use crate::dispatch::messaging_channels::MessagingChannels;
         use crate::dispatch::messaging_error::MessagingError;
-        use crate::utilities::proc_ext_req::ProcessExternalRequestTrait;
-        use crate::utilities::wait_for_termination::WaitForTerminationTrait;
-        use crate::utilities::acknowledge_signal_handler::AcknowledgeSignalHandlerTrait;
         use crate::dispatch::messaging_domain::MessagingDomain;
         use crate::dispatch::messaging_config::MessagingConfig;
         use crate::launch::execution_config::ExecutionConfig;
         use crate::dispatch::ipc_message::Message;
         use std::io::ErrorKind;
+    }
+}
+
+cfg_if::cfg_if! {
+    if #[cfg(not(target_os = "linux"))] {
+        use crate::dispatch::messaging_error::MessagingError;
+        use crate::dispatch::messaging_config::MessagingConfig;
+        use crate::launch::execution_config::ExecutionConfig;
     }
 }
 
@@ -115,6 +126,14 @@ pub struct Messaging {
 
     /// configuration data indicating which threads are started
     execution_config: ExecutionConfig,
+}
+#[cfg(not(target_os = "linux"))]
+pub struct Messaging {
+    /// an inhibition flag to avoid flooding the log file with repeated messages about failure to receive termination signal via the channel
+    pub lock_error_channel_receive_termination: bool,
+
+    /// an inhibition flag to avoid flooding the log file with repeated messages about having received an inapplicable command
+    pub lock_warn_inapplicable_command_signal_handler: bool,
 }
 
 #[cfg(target_os = "linux")]
@@ -365,6 +384,54 @@ impl Messaging {
             module_path!(),
         )
         .await;
+    }
+}
+#[cfg(not(target_os = "linux"))]
+impl Messaging {
+    pub fn new(
+        _config: MessagingConfig,
+        _execution_config: ExecutionConfig,
+    ) -> Result<Messaging, MessagingError> {
+        Ok(Messaging {
+            lock_error_channel_receive_termination: false,
+            lock_warn_inapplicable_command_signal_handler: false,
+        })
+    }
+
+    pub async fn execute(&mut self, messaging_channels: &mut MessagingChannels) {
+        messaging_channels.tx_messaging_to_monitors.send(InternalCommand::NoOp).unwrap();
+        messaging_channels.tx_messaging_to_feed.send(InternalCommand::NoOp).unwrap();
+        messaging_channels.tx_messaging_to_balling.send(InternalCommand::NoOp).unwrap();
+        messaging_channels.tx_messaging_to_heating.send(InternalCommand::NoOp).unwrap();
+
+        let sleep_duration = Duration::from_millis(10);
+
+        loop {
+            _ = tokio::time::sleep(Duration::from_millis(100));
+            let (quit_command_received, _, _) = self.process_external_request(
+                &mut messaging_channels.rx_messaging_from_signal_handler,
+                None,
+            );
+            if quit_command_received {
+                #[cfg(feature = "debug_messaging")]
+                debug!(
+                    target: module_path!(),
+                    "received QUIT command from signal handler"
+                );
+                break;
+            }
+        }
+
+        messaging_channels.acknowledge_signal_handler();
+
+        // This thread has channel connections to underlying threads.
+        // Those threads have to stop receiving commands from this thread.
+        // The shutdown sequence is handled by the signal_handler module.
+        self.wait_for_termination_async(
+            &mut messaging_channels.rx_messaging_from_signal_handler,
+            sleep_duration,
+            module_path!(),
+        ).await;
     }
 }
 

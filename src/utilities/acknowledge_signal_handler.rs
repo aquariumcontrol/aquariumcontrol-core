@@ -57,7 +57,6 @@ use crate::watchmen::watchdog_channels::WatchDogChannels;
 use crate::water::refill_channels::RefillChannels;
 use log::error;
 
-#[cfg(target_os = "linux")]
 use crate::dispatch::messaging_channels::MessagingChannels;
 use crate::launch::channels::AquaChannelError;
 use crate::thermal::temperature_gradient_channels::TemperatureGradientChannels;
@@ -167,8 +166,6 @@ impl_acknowledge_signal_handler!(
 impl_acknowledge_signal_handler!(MonitorsChannels, "monitors", tx_monitors_to_signal_handler);
 impl_acknowledge_signal_handler!(WatchDogChannels, "watchdog", tx_watchdog_to_signal_handler);
 impl_acknowledge_signal_handler!(RefillChannels, "refill", tx_refill_to_signal_handler);
-
-#[cfg(target_os = "linux")]
 impl_acknowledge_signal_handler!(
     MessagingChannels,
     "messaging",

@@ -197,6 +197,9 @@ impl AquariumSignal {
 /// Note: Relay state and device state do not necessarily correlate.
 #[derive(Clone, Debug, PartialEq, Display)]
 pub enum InternalCommand {
+    /// Used in stubs
+    NoOp,
+
     /// Switch on a device
     SwitchOn(AquariumDevice),
 

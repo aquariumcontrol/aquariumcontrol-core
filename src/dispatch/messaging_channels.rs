@@ -43,11 +43,9 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 //!   unit testing, allowing for isolated testing of the `Feed` thread's logic without
 //!   needing to run the entire application.
 
-#[cfg(any(test, target_os = "linux"))]
 use crate::launch::channels::AquaReceiver;
 #[allow(unused)]
 use crate::launch::channels::AquaSender;
-#[cfg(any(test, target_os = "linux"))]
 use crate::utilities::channel_content::InternalCommand;
 
 cfg_if::cfg_if! {
@@ -58,7 +56,6 @@ cfg_if::cfg_if! {
     }
 }
 
-#[cfg(any(test, target_os = "linux"))]
 /// Collects all channels used by the `Messaging` module for IPC.
 ///
 /// This struct acts as a central container for all the communication endpoints

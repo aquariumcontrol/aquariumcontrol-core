@@ -53,7 +53,6 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 //!   `TcpCommunication` simulator are only created and wired up if a simulator is enabled,
 //!   and IPC channels are only created on Linux.
 
-#[cfg(any(test, target_os = "linux"))]
 use crate::dispatch::messaging_channels::MessagingChannels;
 use crate::food::feed_channels::FeedChannels;
 use crate::mineral::balling_channels::BallingChannels;
@@ -240,27 +239,24 @@ pub struct Channels {
 
     #[allow(unused)] // used in conditionally compiled code
     pub dht: DhtChannels,
+
     pub ds18b20: Ds18b20Channels,
     pub balling: BallingChannels,
     pub data_logger: DataLoggerChannels,
 
     #[allow(unused)] // used in conditionally compiled code
     pub i2c_interface: I2cInterfaceChannels,
-    pub tank_level_switch: TankLevelSwitchChannels,
 
+    pub tank_level_switch: TankLevelSwitchChannels,
     pub tcp_communication: TcpCommunicationChannels,
     pub heating: HeatingChannels,
     pub ventilation: VentilationChannels,
-
     pub signal_handler: SignalHandlerChannels,
     pub monitors: MonitorsChannels,
     pub watchdog: WatchDogChannels,
     pub refill: RefillChannels,
     pub sensor_manager: SensorManagerChannels,
     pub temperature_gradient: TemperatureGradientChannels,
-
-    // used in conditionally compiled implementation and platform-independent testing
-    #[cfg(any(test, target_os = "linux"))]
     pub messaging: MessagingChannels,
 }
 
@@ -323,43 +319,51 @@ impl Channels {
         #[allow(clippy::needless_late_init)]
         let rx_watchdog_from_messaging_opt: Option<AquaReceiver<InternalCommand>>;
 
+        // *** signal_handler <=> messaging ***
+        #[allow(unused)]
+        let ((tx_signal_handler_to_messaging, rx_messaging_from_signal_handler),
+            (tx_messaging_to_signal_handler, rx_signal_handler_from_messaging))
+            = create_bidirectional_channel!(InternalCommand, bool, is_multi_thread);
+
+        // *** messaging => refill ***
+        #[allow(unused)]
+        let (tx_messaging_to_refill, rx_refill_from_messaging) = create_unidirectional_channel!(InternalCommand, is_multi_thread);
+
+        // *** messaging => ventilation ***
+        #[allow(unused)]
+        let (tx_messaging_to_ventilation, rx_ventilation_from_messaging) = create_unidirectional_channel!(InternalCommand, is_multi_thread);
+
+        // *** messaging => heating ***
+        #[allow(unused)]
+        let (tx_messaging_to_heating, rx_heating_from_messaging) = create_unidirectional_channel!(InternalCommand, is_multi_thread);
+
+        // *** messaging => feed ***
+        #[allow(unused)]
+        let (tx_messaging_to_feed, rx_feed_from_messaging) = create_unidirectional_channel!(InternalCommand, is_multi_thread);
+
+        // *** messaging => balling ***
+        #[allow(unused)]
+        let (tx_messaging_to_balling, rx_balling_from_messaging) = create_unidirectional_channel!(InternalCommand, is_multi_thread);
+
+        // *** messaging => monitors ***
+        #[allow(unused)]
+        let (tx_messaging_to_monitors, rx_monitors_from_messaging) = create_unidirectional_channel!(InternalCommand, is_multi_thread);
+
+        // *** messaging => monitors ***
+        #[allow(unused)]
+        let (tx_messaging_to_watchdog, rx_watchdog_from_messaging) = create_unidirectional_channel!(InternalCommand, is_multi_thread);
+
         // channels for messaging used in Linux implementation and on unit testing on any platform
         cfg_if::cfg_if! {
             if #[cfg(any(test, target_os = "linux"))] {
-                // *** signal_handler <=> messaging ***
-                let ((tx_signal_handler_to_messaging, rx_messaging_from_signal_handler),
-                    (tx_messaging_to_signal_handler, rx_signal_handler_from_messaging))
-                    = create_bidirectional_channel!(InternalCommand, bool, is_multi_thread);
-
                 tx_signal_handler_to_messaging_opt = Some(tx_signal_handler_to_messaging);
                 rx_signal_handler_from_messaging_opt = Some(rx_signal_handler_from_messaging);
-
-                // *** messaging => refill ***
-                let (tx_messaging_to_refill, rx_refill_from_messaging) = create_unidirectional_channel!(InternalCommand, is_multi_thread);
                 rx_refill_from_messaging_opt = Some(rx_refill_from_messaging);
-
-                // *** messaging => ventilation ***
-                let (tx_messaging_to_ventilation, rx_ventilation_from_messaging) = create_unidirectional_channel!(InternalCommand, is_multi_thread);
                 rx_ventilation_from_messaging_opt = Some(rx_ventilation_from_messaging);
-
-                // *** messaging => heating ***
-                let (tx_messaging_to_heating, rx_heating_from_messaging) = create_unidirectional_channel!(InternalCommand, is_multi_thread);
                 rx_heating_from_messaging_opt = Some(rx_heating_from_messaging);
-
-                // *** messaging => feed ***
-                let (tx_messaging_to_feed, rx_feed_from_messaging) = create_unidirectional_channel!(InternalCommand, is_multi_thread);
                 rx_feed_from_messaging_opt = Some(rx_feed_from_messaging);
-
-                // *** messaging => balling ***
-                let (tx_messaging_to_balling, rx_balling_from_messaging) = create_unidirectional_channel!(InternalCommand, is_multi_thread);
                 rx_balling_from_messaging_opt = Some(rx_balling_from_messaging);
-
-                // *** messaging => monitors ***
-                let (tx_messaging_to_monitors, rx_monitors_from_messaging) = create_unidirectional_channel!(InternalCommand, is_multi_thread);
                 rx_monitors_from_messaging_opt = Some(rx_monitors_from_messaging);
-
-                // *** messaging => monitors ***
-                let (tx_messaging_to_watchdog, rx_watchdog_from_messaging) = create_unidirectional_channel!(InternalCommand, is_multi_thread);
                 rx_watchdog_from_messaging_opt = Some(rx_watchdog_from_messaging);
             }
             else {
@@ -774,7 +778,6 @@ impl Channels {
             rx_monitors_from_messaging_opt,
         };
 
-        #[cfg(any(test, target_os = "linux"))]
         let messaging = MessagingChannels {
             tx_messaging_to_signal_handler,
             rx_messaging_from_signal_handler,
@@ -850,8 +853,6 @@ impl Channels {
             refill,
             sensor_manager,
             temperature_gradient,
-
-            #[cfg(any(test, target_os = "linux"))]
             messaging,
         }
     }

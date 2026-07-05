@@ -60,7 +60,6 @@ use crate::recorder::data_logger::DataLogger;
 use crate::relays::relay_manager::RelayManager;
 use crate::utilities::channel_content::InternalCommand;
 
-#[cfg(target_os = "linux")]
 use crate::dispatch::messaging::Messaging;
 use crate::launch::channels::{AquaChannelError, AquaReceiver};
 use crate::mineral::{balling::Balling, mineral_injection::MineralInjection};
@@ -787,6 +786,4 @@ impl_process_request_no_messaging!(
 
 impl_process_request_with_reset_errors!(Heating, Ventilation);
 
-// The impl for Messaging is conditional, so it gets its own call.
-#[cfg(target_os = "linux")]
 impl_process_request_no_messaging!(Messaging);
