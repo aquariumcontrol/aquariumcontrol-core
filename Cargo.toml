@@ -13,7 +13,7 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-mysql = {  version = "27.0.0", features = ["chrono"] }
+mysql = {  version = "28.0.0", features = ["chrono"] }
 chrono = { version = "0.4.43", features = ["serde"] }
 serde = "1.0.228"
 serde_derive = "1.0.228"
@@ -29,7 +29,7 @@ cfg-if = "1.0.4"
 nix = {  version = "0.31.1", features = ["user", "process"] }
 thiserror = "2.0.18"
 tempfile = "3.24.0"
-strum_macros = "0.27.2"
+strum_macros = "0.28.0"
 ratatui = "0.30.0"
 crossterm = "0.29.0"
 
