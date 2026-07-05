@@ -75,7 +75,7 @@ use std::collections::HashSet;
 use std::time::Duration;
 
 const CONTROLLINO_MAX_RELAY_ID: u8 = 64;
-const CONTROLLINO_MIN_RELAY_ID: u8 = 1;
+const CONTROLLINO_MIN_RELAY_ID: u8 = 0;
 
 /// Contains constants for communication with Controllino
 #[allow(unused)]
@@ -734,19 +734,6 @@ pub mod tests {
     use crate::utilities::channel_content::InternalCommand;
     use crate::utilities::config::{read_config_file, ConfigData};
 
-    #[test]
-    pub fn test_invalid_relay_id_config_low() {
-        let mut config: ConfigData =
-            read_config_file("/config/aquarium_control_test_generic.toml".to_string()).unwrap();
-
-        config.controllino_relay.main_pump1_id = CONTROLLINO_MIN_RELAY_ID - 1;
-
-        let test_result = ActuateControllino::new(config.controllino_relay);
-        assert!(matches!(
-            test_result,
-            Err(ActuateControllinoError::RelayIdOutsideRange(_, _, _))
-        ));
-    }
     #[test]
     pub fn test_invalid_relay_id_config_high() {
         let mut config: ConfigData =

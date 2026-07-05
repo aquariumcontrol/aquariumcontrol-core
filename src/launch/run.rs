@@ -777,7 +777,7 @@ pub fn run() -> Result<(), StartupError> {
     let atlas_scientific_drivers = AtlasScientific::create_drivers(&config.atlas_scientific)
         .map_err(|e| StartupError::AtlasScientificSetupFailure { source: e })?;
     #[cfg(all(target_os = "linux", feature = "target_hw"))]
-    let mut atlas_scientific =
+    let atlas_scientific =
         AtlasScientific::new(config.atlas_scientific, atlas_scientific_drivers);
 
     let mut sensor_manager = SensorManager::new(config.sensor_manager)
