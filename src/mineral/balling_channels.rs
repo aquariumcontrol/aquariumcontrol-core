@@ -80,8 +80,8 @@ impl BallingChannels {
     }
 
     /// Receives a response from the relay manager.
-    pub fn receive_from_relay_manager(&mut self) -> Result<bool, AquaChannelError> {
-        self.rx_balling_from_relay_manager.recv()
+    pub async fn receive_from_relay_manager(&mut self) -> Result<bool, AquaChannelError> {
+        self.rx_balling_from_relay_manager.recv().await
     }
 
     /// Sends a command to the schedule checker.
@@ -93,8 +93,8 @@ impl BallingChannels {
     }
 
     /// Receives a response from the schedule checker.
-    pub fn receive_from_schedule_check(&mut self) -> Result<bool, AquaChannelError> {
-        self.rx_balling_from_schedule_check.recv()
+    pub async fn receive_from_schedule_check(&mut self) -> Result<bool, AquaChannelError> {
+        self.rx_balling_from_schedule_check.recv().await
     }
 }
 

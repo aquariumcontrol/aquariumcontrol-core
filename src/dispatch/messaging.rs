@@ -579,7 +579,7 @@ pub mod tests {
                 let _ = tx_signal_handler_to_messaging.send(InternalCommand::Quit);
 
                 // waiting for confirmation from messaging
-                let _ = rx_signal_handler_from_messaging.recv();
+                let _ = rx_signal_handler_from_messaging.blocking_recv();
 
                 let _ = tx_signal_handler_to_messaging.send(InternalCommand::Terminate);
             })

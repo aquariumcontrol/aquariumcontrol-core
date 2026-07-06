@@ -728,7 +728,7 @@ pub mod tests {
 
     use crate::relays::actuate_controllino::{
         controllino_constants, create_command_message, ActuateControllino, ActuateControllinoError,
-        CONTROLLINO_MAX_RELAY_ID, CONTROLLINO_MIN_RELAY_ID,
+        CONTROLLINO_MAX_RELAY_ID,
     };
     use crate::relays::relay_error::RelayError;
     use crate::utilities::channel_content::InternalCommand;

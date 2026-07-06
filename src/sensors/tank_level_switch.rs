@@ -416,7 +416,7 @@ impl TankLevelSwitch {
 
             // Fetch the position signal.
             let position_signal = AquariumSignal::TankLevelSwitchPosition;
-            let position_val = Self::get_response_from_simulator(
+            let position_val = Self::get_response_from_simulator_blocking(
                 module_path!().to_string(),
                 tx_tank_level_switch_to_tcp,
                 rx_tank_level_switch_from_tcp,
@@ -431,7 +431,7 @@ impl TankLevelSwitch {
 
             // Fetch the invalid signal.
             let invalid_signal = AquariumSignal::TankLevelSwitchInvalid;
-            let invalid_val = Self::get_response_from_simulator(
+            let invalid_val = Self::get_response_from_simulator_blocking(
                 module_path!().to_string(),
                 tx_tank_level_switch_to_tcp,
                 rx_tank_level_switch_from_tcp,
@@ -785,7 +785,7 @@ pub mod tests {
                 channels
                     .signal_handler
                     .rx_signal_handler_from_tank_level_switch
-                    .recv()
+                    .blocking_recv()
                     .unwrap();
                 let _ = channels
                     .signal_handler
@@ -962,7 +962,7 @@ pub mod tests {
                 channels
                     .signal_handler
                     .rx_signal_handler_from_tank_level_switch
-                    .recv()
+                    .blocking_recv()
                     .unwrap();
                 let _ = channels
                     .signal_handler
@@ -1072,7 +1072,7 @@ pub mod tests {
                 channels
                     .signal_handler
                     .rx_signal_handler_from_tank_level_switch
-                    .recv()
+                    .blocking_recv()
                     .unwrap();
                 let _ = channels
                     .signal_handler
@@ -1185,7 +1185,7 @@ pub mod tests {
                 channels
                     .signal_handler
                     .rx_signal_handler_from_tank_level_switch
-                    .recv()
+                    .blocking_recv()
                     .unwrap();
                 let _ = channels
                     .signal_handler
@@ -1334,7 +1334,7 @@ pub mod tests {
                 );
 
                 let _ = channels.signal_handler.tx_signal_handler_to_tank_level_switch.send(InternalCommand::Quit);
-                let _ = channels.signal_handler.rx_signal_handler_from_tank_level_switch.recv().unwrap();
+                let _ = channels.signal_handler.rx_signal_handler_from_tank_level_switch.blocking_recv().unwrap();
                 let _ = channels.signal_handler.tx_signal_handler_to_tank_level_switch.send(InternalCommand::Terminate);
                 spin_sleeper.sleep(sleep_duration_part);
             })
@@ -1442,7 +1442,7 @@ pub mod tests {
                 channels
                     .signal_handler
                     .rx_signal_handler_from_tank_level_switch
-                    .recv()
+                    .blocking_recv()
                     .unwrap();
                 let _ = channels
                     .signal_handler

@@ -81,8 +81,8 @@ impl RefillChannels {
     }
 
     /// Performs the `receive_from_relay_manager` operation.
-    pub fn receive_from_relay_manager(&mut self) -> Result<bool, AquaChannelError> {
-        self.rx_refill_from_relay_manager.recv()
+    pub async fn receive_from_relay_manager(&mut self) -> Result<bool, AquaChannelError> {
+        self.rx_refill_from_relay_manager.recv().await
     }
 
     /// Performs the `send_to_schedule_check` operation.
@@ -97,8 +97,8 @@ impl RefillChannels {
     }
 
     /// Performs the `receive_from_schedule_check` operation.
-    pub fn receive_from_schedule_check(&mut self) -> Result<bool, AquaChannelError> {
-        self.rx_refill_from_schedule_check.recv()
+    pub async fn receive_from_schedule_check(&mut self) -> Result<bool, AquaChannelError> {
+        self.rx_refill_from_schedule_check.recv().await
     }
 
     /// Performs the `send_to_monitor` operation.
@@ -213,7 +213,7 @@ mod tests {
 
         // Assert
         assert!(result.is_ok(), "Sending should not fail");
-        let received_command = rx_schedule_test.recv().unwrap();
+        let received_command = rx_schedule_test.blocking_recv().unwrap();
         assert_eq!(
             received_command, command,
             "The correct command should be received"
@@ -236,7 +236,7 @@ mod tests {
         tx_schedule_resp_test.send(expected_response).unwrap();
 
         // Act
-        let result = channels.receive_from_schedule_check();
+        let result = channels.rx_refill_from_schedule_check.blocking_recv();
 
         // Assert
         assert!(result.is_ok(), "Receiving should not fail");
@@ -266,7 +266,7 @@ mod tests {
 
         // Assert
         assert!(result.is_ok(), "Sending should not fail");
-        let received_view = rx_monitor_test.recv().unwrap();
+        let received_view = rx_monitor_test.blocking_recv().unwrap();
         assert_eq!(
             received_view,
             RefillMonitorView::default(),

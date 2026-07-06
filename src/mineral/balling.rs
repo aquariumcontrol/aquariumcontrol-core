@@ -1363,7 +1363,7 @@ pub mod tests {
                 channels
                     .signal_handler
                     .rx_signal_handler_from_balling
-                    .recv()
+                    .blocking_recv()
                     .unwrap();
                 println!(
                     "test_balling_dosing: Received confirmation of Quit command from test object."
@@ -1812,7 +1812,7 @@ pub mod tests {
                 channels
                     .signal_handler
                     .rx_signal_handler_from_balling
-                    .recv()
+                    .blocking_recv()
                     .unwrap();
 
                 let actuation_count_3 = *mutex_device_scheduler_balling_test_environment
@@ -2064,7 +2064,7 @@ pub mod tests {
                 channels
                     .signal_handler
                     .rx_signal_handler_from_balling
-                    .recv()
+                    .blocking_recv()
                     .unwrap();
                 println!(
                     "test_balling_dosing: Received confirmation of Quit command from test object."

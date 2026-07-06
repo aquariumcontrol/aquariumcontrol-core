@@ -300,7 +300,7 @@ impl AtlasScientificDriver for AtlasScientificOem {
         // 1. Get the response from the channel
         let response = atlas_scientific_channels
             .rx_atlas_scientific_from_i2c_interface
-            .recv()
+            .blocking_recv()
             .map_err(|_| AtlasScientificError::ChannelIsDisconnected {
                 location: "AtlasScientificOem::receive_response".to_string(),
                 source: AquaChannelError::Disconnected,
@@ -399,7 +399,7 @@ impl AtlasScientificDriver for AtlasScientificOem {
 
         let _response = atlas_scientific_channels
             .rx_atlas_scientific_from_i2c_interface
-            .recv()
+            .blocking_recv()
             .map_err(|_| AtlasScientificError::ChannelIsDisconnected {
                 location: "AtlasScientificOem::receive_response".to_string(),
                 source: AquaChannelError::Disconnected,
@@ -431,7 +431,7 @@ impl AtlasScientificDriver for AtlasScientificOem {
 
         let response = atlas_scientific_channels
             .rx_atlas_scientific_from_i2c_interface
-            .recv()
+            .blocking_recv()
             .map_err(|_| AtlasScientificError::ChannelIsDisconnected {
                 location: "AtlasScientificOem::receive_response".to_string(),
                 source: AquaChannelError::Disconnected,
@@ -797,7 +797,7 @@ mod tests {
         // We read from the I2C interface's receiver end
         let request = i2c_interface_channels
             .rx_i2c_interface_from_atlas_scientific
-            .recv()
+            .blocking_recv()
             .expect("Did not receive request on channel");
 
         assert_eq!(request.i2c_address, driver.i2c_address);
@@ -1046,7 +1046,7 @@ mod tests {
         // 1. Wake Up Request
         let wake_request = i2c_interface_channels
             .rx_i2c_interface_from_atlas_scientific
-            .recv()
+            .blocking_recv()
             .expect("Missing wake up request");
         assert_eq!(wake_request.send_len, 2);
         assert_eq!(
@@ -1057,7 +1057,7 @@ mod tests {
         // 2. Type Check Request
         let type_request = i2c_interface_channels
             .rx_i2c_interface_from_atlas_scientific
-            .recv()
+            .blocking_recv()
             .expect("Missing type check request");
         assert_eq!(type_request.send_len, 1);
         assert_eq!(

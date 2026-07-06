@@ -1714,7 +1714,7 @@ pub mod tests {
         let mock_signal_handler_thread = std::thread::spawn(move || {
             let _ = signal_handler_channels
                 .rx_signal_handler_from_data_logger
-                .recv()
+                .blocking_recv()
                 .unwrap();
             tx_signal_handler_to_data_logger_clone
                 .send(InternalCommand::Terminate)
@@ -1839,7 +1839,7 @@ pub mod tests {
         let mock_signal_handler_thread = std::thread::spawn(move || {
             let _ = signal_handler_channels
                 .rx_signal_handler_from_data_logger
-                .recv()
+                .blocking_recv()
                 .unwrap();
             tx_signal_handler_to_data_logger_clone
                 .send(InternalCommand::Terminate)

@@ -454,7 +454,7 @@ impl SensorManager {
             .as_mut()
             .unwrap();
 
-        self.ambient_temperature = Self::get_response_from_simulator(
+        self.ambient_temperature = Self::get_response_from_simulator_blocking(
             module_path!().to_string(),
             tx_sensor_manager_to_simulator,
             rx_sensor_manager_from_simulator,
@@ -465,7 +465,7 @@ impl SensorManager {
             signal: AquariumSignal::AmbientTemperature,
             source: e,
         })?;
-        self.ambient_humidity = Self::get_response_from_simulator(
+        self.ambient_humidity = Self::get_response_from_simulator_blocking(
             module_path!().to_string(),
             tx_sensor_manager_to_simulator,
             rx_sensor_manager_from_simulator,
@@ -476,7 +476,7 @@ impl SensorManager {
             signal: AquariumSignal::AmbientHumidity,
             source: e,
         })?;
-        self.water_temperature = Self::get_response_from_simulator(
+        self.water_temperature = Self::get_response_from_simulator_blocking(
             module_path!().to_string(),
             tx_sensor_manager_to_simulator,
             rx_sensor_manager_from_simulator,
@@ -487,7 +487,7 @@ impl SensorManager {
             signal: AquariumSignal::WaterTemperature,
             source: e,
         })?;
-        self.conductivity = Self::get_response_from_simulator(
+        self.conductivity = Self::get_response_from_simulator_blocking(
             module_path!().to_string(),
             tx_sensor_manager_to_simulator,
             rx_sensor_manager_from_simulator,
@@ -498,7 +498,7 @@ impl SensorManager {
             signal: AquariumSignal::Conductivity,
             source: e,
         })?;
-        self.pH = Self::get_response_from_simulator(
+        self.pH = Self::get_response_from_simulator_blocking(
             module_path!().to_string(),
             tx_sensor_manager_to_simulator,
             rx_sensor_manager_from_simulator,
@@ -852,7 +852,7 @@ pub mod tests {
             .send(InternalCommand::Quit);
         signal_handler_channels
             .rx_signal_handler_from_sensor_manager
-            .recv()
+            .blocking_recv()
             .unwrap();
         let _ = signal_handler_channels
             .tx_signal_handler_to_sensor_manager

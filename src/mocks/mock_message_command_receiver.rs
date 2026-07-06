@@ -21,7 +21,7 @@ pub mod tests {
         let mut commands_received: Vec<InternalCommand> = Vec::new();
 
         loop {
-            match rx_message_command.recv() {
+            match rx_message_command.blocking_recv() {
                 Ok(command) => match command {
                     InternalCommand::Quit => {
                         // println!("{}: received quit command", module_path!());

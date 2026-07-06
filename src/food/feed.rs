@@ -832,7 +832,7 @@ pub mod tests {
     ) {
         spin_sleeper.sleep(sleep_duration);
         let _ = tx_signal_handler_to_feed.send(InternalCommand::Quit);
-        rx_signal_handler_from_feed.recv().unwrap();
+        rx_signal_handler_from_feed.blocking_recv().unwrap();
         let _ = tx_signal_handler_to_feed.send(InternalCommand::Terminate);
     }
 
@@ -1120,7 +1120,7 @@ pub mod tests {
                 channels
                     .signal_handler
                     .rx_signal_handler_from_feed
-                    .recv()
+                    .blocking_recv()
                     .unwrap();
                 let _ = channels
                     .signal_handler
@@ -1209,7 +1209,7 @@ pub mod tests {
                 channels
                     .signal_handler
                     .rx_signal_handler_from_feed
-                    .recv()
+                    .blocking_recv()
                     .unwrap();
                 let _ = channels
                     .signal_handler

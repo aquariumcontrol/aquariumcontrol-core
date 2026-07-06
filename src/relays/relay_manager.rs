@@ -726,7 +726,7 @@ pub mod tests {
             // thread for test environment
             scope.spawn(move || {
                 let _ = channels.refill.send_to_relay_manager(InternalCommand::SwitchOn(AquariumDevice::RefillPump));
-                match channels.refill.receive_from_relay_manager() {
+                match channels.refill.rx_refill_from_relay_manager.blocking_recv() {
                     Ok(c) => {
                         assert_eq!(c, true);
                     },
@@ -735,7 +735,7 @@ pub mod tests {
                     }
                 }
                 let _ = channels.heating.send_to_relay_manager(InternalCommand::SwitchOn(AquariumDevice::Heater));
-                match channels.heating.receive_from_relay_manager() {
+                match channels.heating.rx_heating_from_relay_manager.blocking_recv() {
                     Ok(c) => {
                         assert_eq!(c, true);
                     },
@@ -744,7 +744,7 @@ pub mod tests {
                     }
                 }
                 let _ = channels.ventilation.send_to_relay_manager(InternalCommand::SwitchOn(AquariumDevice::Ventilation));
-                match channels.ventilation.receive_from_relay_manager() {
+                match channels.ventilation.rx_ventilation_from_relay_manager.blocking_recv() {
                     Ok(c) => {
                         assert_eq!(c, true);
                     },
@@ -753,7 +753,7 @@ pub mod tests {
                     }
                 }
                 let _ = channels.balling.send_to_relay_manager(InternalCommand::SwitchOn(AquariumDevice::PeristalticPump1));
-                match channels.balling.receive_from_relay_manager() {
+                match channels.balling.rx_balling_from_relay_manager.blocking_recv() {
                     Ok(c) => {
                         assert_eq!(c, true);
                     },
@@ -762,7 +762,7 @@ pub mod tests {
                     }
                 }
                 let _ = channels.balling.send_to_relay_manager(InternalCommand::SwitchOn(AquariumDevice::PeristalticPump2));
-                match channels.balling.receive_from_relay_manager() {
+                match channels.balling.rx_balling_from_relay_manager.blocking_recv() {
                     Ok(c) => {
                         assert_eq!(c, true);
                     },
@@ -771,7 +771,7 @@ pub mod tests {
                     }
                 }
                 let _ = channels.balling.send_to_relay_manager(InternalCommand::SwitchOn(AquariumDevice::PeristalticPump3));
-                match channels.balling.receive_from_relay_manager() {
+                match channels.balling.rx_balling_from_relay_manager.blocking_recv() {
                     Ok(c) => {
                         assert_eq!(c, true);
                     },
@@ -780,7 +780,7 @@ pub mod tests {
                     }
                 }
                 let _ = channels.balling.send_to_relay_manager(InternalCommand::SwitchOn(AquariumDevice::PeristalticPump4));
-                match channels.balling.receive_from_relay_manager() {
+                match channels.balling.rx_balling_from_relay_manager.blocking_recv() {
                     Ok(c) => {
                         assert_eq!(c, true);
                     },
@@ -789,7 +789,7 @@ pub mod tests {
                     }
                 }
                 let _ = channels.feed.send_to_relay_manager(InternalCommand::SwitchOn(AquariumDevice::Feeder));
-                match channels.feed.receive_from_relay_manager() {
+                match channels.feed.rx_feed_from_relay_manager.blocking_recv() {
                     Ok(c) => {
                         assert_eq!(c, true);
                     },
@@ -798,7 +798,7 @@ pub mod tests {
                     }
                 }
                 let _ = channels.feed.send_to_relay_manager(InternalCommand::SwitchOn(AquariumDevice::MainPump1));
-                match channels.feed.receive_from_relay_manager() {
+                match channels.feed.rx_feed_from_relay_manager.blocking_recv() {
                     Ok(c) => {
                         assert_eq!(c, true);
                     },
@@ -807,7 +807,7 @@ pub mod tests {
                     }
                 }
                 let _ = channels.feed.send_to_relay_manager(InternalCommand::SwitchOn(AquariumDevice::MainPump2));
-                match channels.feed.receive_from_relay_manager() {
+                match channels.feed.rx_feed_from_relay_manager.blocking_recv() {
                     Ok(c) => {
                         assert_eq!(c, true);
                     },
@@ -816,7 +816,7 @@ pub mod tests {
                     }
                 }
                 let _ = channels.feed.send_to_relay_manager(InternalCommand::SwitchOn(AquariumDevice::AuxPump1));
-                match channels.feed.receive_from_relay_manager() {
+                match channels.feed.rx_feed_from_relay_manager.blocking_recv() {
                     Ok(c) => {
                         assert_eq!(c, true);
                     },
@@ -825,7 +825,7 @@ pub mod tests {
                     }
                 }
                 let _ = channels.feed.send_to_relay_manager(InternalCommand::SwitchOn(AquariumDevice::AuxPump2));
-                match channels.feed.receive_from_relay_manager() {
+                match channels.feed.rx_feed_from_relay_manager.blocking_recv() {
                     Ok(c) => {
                         assert_eq!(c, true);
                     },
@@ -834,7 +834,7 @@ pub mod tests {
                     }
                 }
                 let _ = channels.refill.send_to_relay_manager(InternalCommand::SwitchOff(AquariumDevice::RefillPump));
-                match channels.refill.receive_from_relay_manager() {
+                match channels.refill.rx_refill_from_relay_manager.blocking_recv() {
                     Ok(c) => {
                         assert_eq!(c, true);
                     },
@@ -843,7 +843,7 @@ pub mod tests {
                     }
                 }
                 let _ = channels.heating.send_to_relay_manager(InternalCommand::SwitchOff(AquariumDevice::Heater));
-                match channels.heating.receive_from_relay_manager() {
+                match channels.heating.rx_heating_from_relay_manager.blocking_recv() {
                     Ok(c) => {
                         assert_eq!(c, true);
                     },
@@ -852,7 +852,7 @@ pub mod tests {
                     }
                 }
                 let _ = channels.ventilation.send_to_relay_manager(InternalCommand::SwitchOff(AquariumDevice::Ventilation));
-                match channels.ventilation.receive_from_relay_manager() {
+                match channels.ventilation.rx_ventilation_from_relay_manager.blocking_recv() {
                     Ok(c) => {
                         assert_eq!(c, true);
                     },
@@ -861,7 +861,7 @@ pub mod tests {
                     }
                 }
                 let _ = channels.balling.send_to_relay_manager(InternalCommand::SwitchOff(AquariumDevice::PeristalticPump1));
-                match channels.balling.receive_from_relay_manager() {
+                match channels.balling.rx_balling_from_relay_manager.blocking_recv() {
                     Ok(c) => {
                         assert_eq!(c, true);
                     },
@@ -870,7 +870,7 @@ pub mod tests {
                     }
                 }
                 let _ = channels.balling.send_to_relay_manager(InternalCommand::SwitchOff(AquariumDevice::PeristalticPump2));
-                match channels.balling.receive_from_relay_manager() {
+                match channels.balling.rx_balling_from_relay_manager.blocking_recv() {
                     Ok(c) => {
                         assert_eq!(c, true);
                     },
@@ -879,7 +879,7 @@ pub mod tests {
                     }
                 }
                 let _ = channels.balling.send_to_relay_manager(InternalCommand::SwitchOff(AquariumDevice::PeristalticPump3));
-                match channels.balling.receive_from_relay_manager() {
+                match channels.balling.rx_balling_from_relay_manager.blocking_recv() {
                     Ok(c) => {
                         assert_eq!(c, true);
                     },
@@ -888,7 +888,7 @@ pub mod tests {
                     }
                 }
                 let _ = channels.balling.send_to_relay_manager(InternalCommand::SwitchOff(AquariumDevice::PeristalticPump4));
-                match channels.balling.receive_from_relay_manager() {
+                match channels.balling.rx_balling_from_relay_manager.blocking_recv() {
                     Ok(c) => {
                         assert_eq!(c, true);
                     },
@@ -897,7 +897,7 @@ pub mod tests {
                     }
                 }
                 let _ = channels.feed.send_to_relay_manager(InternalCommand::SwitchOff(AquariumDevice::Feeder));
-                match channels.feed.receive_from_relay_manager() {
+                match channels.feed.rx_feed_from_relay_manager.blocking_recv() {
                     Ok(c) => {
                         assert_eq!(c, true);
                     },
@@ -906,7 +906,7 @@ pub mod tests {
                     }
                 }
                 let _ = channels.feed.send_to_relay_manager(InternalCommand::SwitchOff(AquariumDevice::MainPump1));
-                match channels.feed.receive_from_relay_manager() {
+                match channels.feed.rx_feed_from_relay_manager.blocking_recv() {
                     Ok(c) => {
                         assert_eq!(c, true);
                     },
@@ -915,7 +915,7 @@ pub mod tests {
                     }
                 }
                 let _ = channels.feed.send_to_relay_manager(InternalCommand::SwitchOff(AquariumDevice::MainPump2));
-                match channels.feed.receive_from_relay_manager() {
+                match channels.feed.rx_feed_from_relay_manager.blocking_recv() {
                     Ok(c) => {
                         assert_eq!(c, true);
                     },
@@ -924,7 +924,7 @@ pub mod tests {
                     }
                 }
                 let _ = channels.feed.send_to_relay_manager(InternalCommand::SwitchOff(AquariumDevice::AuxPump1));
-                match channels.feed.receive_from_relay_manager() {
+                match channels.feed.rx_feed_from_relay_manager.blocking_recv() {
                     Ok(c) => {
                         assert_eq!(c, true);
                     },
@@ -933,7 +933,7 @@ pub mod tests {
                     }
                 }
                 let _ = channels.feed.send_to_relay_manager(InternalCommand::SwitchOff(AquariumDevice::AuxPump2));
-                match channels.feed.receive_from_relay_manager() {
+                match channels.feed.rx_feed_from_relay_manager.blocking_recv() {
                     Ok(c) => {
                         assert_eq!(c, true);
                     },
@@ -945,7 +945,7 @@ pub mod tests {
                 spin_sleeper.sleep(sleep_duration); // wait for two seconds to test the heartbeat
 
                 let _ = channels.signal_handler.tx_signal_handler_to_relay_manager.send(InternalCommand::Quit);
-                channels.signal_handler.rx_signal_handler_from_relay_manager.recv().unwrap();
+                channels.signal_handler.rx_signal_handler_from_relay_manager.blocking_recv().unwrap();
             });
 
             // thread for the test object
@@ -985,7 +985,7 @@ pub mod tests {
             // thread for test environment
             scope.spawn(move || {
                 let _ = channels.refill.send_to_relay_manager(InternalCommand::SwitchOn(AquariumDevice::RefillPump));
-                match channels.refill.receive_from_relay_manager() {
+                match channels.refill.rx_refill_from_relay_manager.blocking_recv() {
                     Ok(c) => {
                         assert_eq!(c, true);
                     },
@@ -994,7 +994,7 @@ pub mod tests {
                     }
                 }
                 let _ = channels.heating.send_to_relay_manager(InternalCommand::SwitchOn(AquariumDevice::Heater));
-                match channels.heating.receive_from_relay_manager() {
+                match channels.heating.rx_heating_from_relay_manager.blocking_recv() {
                     Ok(c) => {
                         assert_eq!(c, true);
                     },
@@ -1004,7 +1004,7 @@ pub mod tests {
                 }
 
                 let _ = channels.signal_handler.tx_signal_handler_to_relay_manager.send(InternalCommand::Quit);
-                channels.signal_handler.rx_signal_handler_from_relay_manager.recv().unwrap();
+                channels.signal_handler.rx_signal_handler_from_relay_manager.blocking_recv().unwrap();
             });
 
             // thread for the test object
@@ -1049,7 +1049,7 @@ pub mod tests {
             // thread for test environment
             scope.spawn(move || {
                 let _ = channels.refill.send_to_relay_manager(InternalCommand::SwitchOn(AquariumDevice::RefillPump));
-                match channels.refill.receive_from_relay_manager() {
+                match channels.refill.rx_refill_from_relay_manager.blocking_recv() {
                     Ok(c) => {
                         assert_eq!(c, true);
                     },
@@ -1059,7 +1059,7 @@ pub mod tests {
                 }
 
                 let _ = channels.signal_handler.tx_signal_handler_to_relay_manager.send(InternalCommand::Quit);
-                channels.signal_handler.rx_signal_handler_from_relay_manager.recv().unwrap();
+                channels.signal_handler.rx_signal_handler_from_relay_manager.blocking_recv().unwrap();
             });
 
             // thread for the test object

@@ -1142,7 +1142,7 @@ pub mod tests {
                 channels
                     .signal_handler
                     .rx_signal_handler_from_heating
-                    .recv()
+                    .blocking_recv()
                     .unwrap();
                 let _ = channels
                     .signal_handler
@@ -1286,7 +1286,7 @@ pub mod tests {
                 channels
                     .signal_handler
                     .rx_signal_handler_from_heating
-                    .recv()
+                    .blocking_recv()
                     .unwrap();
                 let _ = channels
                     .signal_handler
@@ -1522,7 +1522,7 @@ pub mod tests {
                 channels
                     .signal_handler
                     .rx_signal_handler_from_heating
-                    .recv()
+                    .blocking_recv()
                     .unwrap();
                 let _ = channels
                     .signal_handler
@@ -1735,7 +1735,7 @@ pub mod tests {
                 channels
                     .signal_handler
                     .rx_signal_handler_from_heating
-                    .recv()
+                    .blocking_recv()
                     .unwrap();
                 let _ = channels
                     .signal_handler
@@ -1950,7 +1950,7 @@ pub mod tests {
                 channels
                     .signal_handler
                     .rx_signal_handler_from_heating
-                    .recv()
+                    .blocking_recv()
                     .unwrap();
                 let _ = channels
                     .signal_handler
@@ -2091,7 +2091,7 @@ pub mod tests {
                 channels
                     .signal_handler
                     .rx_signal_handler_from_heating
-                    .recv()
+                    .blocking_recv()
                     .unwrap();
                 let _ = channels
                     .signal_handler
@@ -2234,7 +2234,7 @@ pub mod tests {
                 channels
                     .signal_handler
                     .rx_signal_handler_from_heating
-                    .recv()
+                    .blocking_recv()
                     .unwrap();
                 let _ = channels
                     .signal_handler
@@ -2461,7 +2461,7 @@ pub mod tests {
                 channels
                     .signal_handler
                     .rx_signal_handler_from_heating
-                    .recv()
+                    .blocking_recv()
                     .unwrap();
                 let _ = channels
                     .signal_handler
@@ -2676,7 +2676,7 @@ pub mod tests {
                 channels
                     .signal_handler
                     .rx_signal_handler_from_heating
-                    .recv()
+                    .blocking_recv()
                     .unwrap();
                 let _ = channels
                     .signal_handler
@@ -2816,7 +2816,7 @@ pub mod tests {
                 channels
                     .signal_handler
                     .rx_signal_handler_from_heating
-                    .recv()
+                    .blocking_recv()
                     .unwrap();
                 let _ = channels
                     .signal_handler
@@ -3047,7 +3047,7 @@ pub mod tests {
                 channels
                     .signal_handler
                     .rx_signal_handler_from_heating
-                    .recv()
+                    .blocking_recv()
                     .unwrap();
 
                 // check if heating is not actuated
@@ -3196,7 +3196,7 @@ pub mod tests {
                 channels
                     .signal_handler
                     .rx_signal_handler_from_heating
-                    .recv()
+                    .blocking_recv()
                     .unwrap();
                 let _ = channels
                     .signal_handler
@@ -3365,7 +3365,7 @@ pub mod tests {
                 channels
                     .signal_handler
                     .rx_signal_handler_from_heating
-                    .recv()
+                    .blocking_recv()
                     .unwrap();
                 let _ = channels
                     .signal_handler
@@ -3877,7 +3877,7 @@ pub mod tests {
                 channels
                     .signal_handler
                     .rx_signal_handler_from_heating
-                    .recv()
+                    .blocking_recv()
                     .unwrap();
                 let _ = channels
                     .signal_handler
@@ -4055,7 +4055,7 @@ pub mod tests {
                 channels
                     .signal_handler
                     .rx_signal_handler_from_heating
-                    .recv()
+                    .blocking_recv()
                     .unwrap();
                 let _ = channels
                     .signal_handler

@@ -89,7 +89,7 @@ impl TcpCommunicationChannels {
     ) -> Option<Result<InternalCommand, AquaChannelError>> {
         self.rx_tcp_communication_from_relay_manager_opt
             .as_mut()
-            .map(|rx| rx.recv())
+            .map(|rx| rx.blocking_recv())
     }
 
     /// Receives a command from the sensor manager if the channel exists.
@@ -99,7 +99,7 @@ impl TcpCommunicationChannels {
     ) -> Option<Result<InternalCommand, AquaChannelError>> {
         self.rx_tcp_communication_from_sensor_manager_opt
             .as_mut()
-            .map(|rx| rx.recv())
+            .map(|rx| rx.blocking_recv())
     }
 
     /// Sends a result to the sensor manager if the channel exists.
@@ -123,7 +123,7 @@ impl TcpCommunicationChannels {
     ) -> Option<Result<InternalCommand, AquaChannelError>> {
         self.rx_tcp_communication_from_tank_level_switch_opt
             .as_mut()
-            .map(|rx| rx.recv())
+            .map(|rx| rx.blocking_recv())
     }
 
     /// Sends a result to the tank level switch if the channel exists.

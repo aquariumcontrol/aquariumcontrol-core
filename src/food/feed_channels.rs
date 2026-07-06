@@ -74,8 +74,8 @@ impl FeedChannels {
     }
 
     /// Receives a response from the relay manager.
-    pub fn receive_from_relay_manager(&mut self) -> Result<bool, AquaChannelError> {
-        self.rx_feed_from_relay_manager.recv()
+    pub async fn receive_from_relay_manager(&mut self) -> Result<bool, AquaChannelError> {
+        self.rx_feed_from_relay_manager.recv().await
     }
 }
 

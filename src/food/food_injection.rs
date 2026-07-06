@@ -231,7 +231,7 @@ impl FoodInjection {
                             device: device.clone(),
                             source: e,
                         });
-                    } else if let Err(e) = feed_channels.receive_from_relay_manager() {
+                    } else if let Err(e) = feed_channels.rx_feed_from_relay_manager.blocking_recv() {
                         println!(
                             "Encountered error when receiving command to relay manager: {e:?}"
                         );
@@ -283,7 +283,7 @@ impl FoodInjection {
                             device: device.clone(),
                             source: e,
                         });
-                    } else if let Err(e) = feed_channels.receive_from_relay_manager() {
+                    } else if let Err(e) = feed_channels.rx_feed_from_relay_manager.blocking_recv() {
                         errors.push(FoodInjectionError::RelayManagerReceive {
                             location: module_path!().to_string(),
                             device: device.clone(),
@@ -328,7 +328,7 @@ impl FoodInjection {
                             device: device.clone(),
                             source: e,
                         });
-                    } else if let Err(e) = feed_channels.receive_from_relay_manager() {
+                    } else if let Err(e) = feed_channels.rx_feed_from_relay_manager.blocking_recv() {
                         errors.push(FoodInjectionError::RelayManagerReceive {
                             location: module_path!().to_string(),
                             device: device.clone(),
@@ -373,7 +373,7 @@ impl FoodInjection {
                             device: device.clone(),
                             source: e,
                         });
-                    } else if let Err(e) = feed_channels.receive_from_relay_manager() {
+                    } else if let Err(e) = feed_channels.rx_feed_from_relay_manager.blocking_recv() {
                         errors.push(FoodInjectionError::RelayManagerReceive {
                             location: module_path!().to_string(),
                             device: device.clone(),
@@ -418,7 +418,7 @@ impl FoodInjection {
                             device: device.clone(),
                             source: e,
                         });
-                    } else if let Err(e) = feed_channels.receive_from_relay_manager() {
+                    } else if let Err(e) = feed_channels.rx_feed_from_relay_manager.blocking_recv() {
                         errors.push(FoodInjectionError::RelayManagerReceive {
                             location: module_path!().to_string(),
                             device: device.clone(),
@@ -463,7 +463,7 @@ impl FoodInjection {
                             device: device.clone(),
                             source: e,
                         });
-                    } else if let Err(e) = feed_channels.receive_from_relay_manager() {
+                    } else if let Err(e) = feed_channels.rx_feed_from_relay_manager.blocking_recv() {
                         errors.push(FoodInjectionError::RelayManagerReceive {
                             location: module_path!().to_string(),
                             device: device.clone(),
@@ -715,7 +715,7 @@ pub mod tests {
         counter_switch_off: &mut i32,
     ) -> InternalCommand {
         // receive command from the test object
-        let (command, device) = match rx_relay_manager_from_feed.recv() {
+        let (command, device) = match rx_relay_manager_from_feed.blocking_recv() {
             Ok(c) => match c {
                 InternalCommand::SwitchOn(ref d) => (c.clone(), d.clone()),
                 InternalCommand::SwitchOff(ref d) => (c.clone(), d.clone()),

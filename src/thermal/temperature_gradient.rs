@@ -524,7 +524,7 @@ mod tests {
         channels
             .signal_handler
             .rx_signal_handler_from_temperature_gradient
-            .recv()
+            .blocking_recv()
             .unwrap();
 
         join_handle_test_object

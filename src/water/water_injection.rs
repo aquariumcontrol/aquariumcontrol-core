@@ -184,7 +184,7 @@ impl WaterInjectionTrait for WaterInjection {
             {
                 Ok(_) => {
                     // now listen for the response
-                    match refill_channels.receive_from_relay_manager() {
+                    match refill_channels.rx_refill_from_relay_manager.blocking_recv() {
                         Ok(_) => {}
                         Err(e) => {
                             error!(
@@ -269,7 +269,7 @@ impl WaterInjectionTrait for WaterInjection {
             {
                 Ok(_) => {
                     // now listen for the response
-                    match refill_channels.receive_from_relay_manager() {
+                    match refill_channels.rx_refill_from_relay_manager.blocking_recv() {
                         Ok(_) => {}
                         Err(e) => {
                             error!(

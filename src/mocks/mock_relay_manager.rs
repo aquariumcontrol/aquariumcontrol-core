@@ -229,7 +229,7 @@ pub mod tests {
         let spin_sleeper = SpinSleeper::default();
         loop {
             // receive command from the test object
-            match rx_relay_manager_from_test_object.recv() {
+            match rx_relay_manager_from_test_object.blocking_recv() {
                 Ok(command) => {
                     match command {
                         InternalCommand::SwitchOn(_) => {

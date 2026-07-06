@@ -1450,7 +1450,7 @@ pub mod tests {
 
                 // wait for the test object to trigger water injection
                 let _ = rx_test_environment_from_mock_water_injection
-                    .recv()
+                    .blocking_recv()
                     .unwrap();
 
                 // update of mock tank level position signals
@@ -1471,7 +1471,7 @@ pub mod tests {
                 channels
                     .signal_handler
                     .rx_signal_handler_from_refill
-                    .recv()
+                    .blocking_recv()
                     .unwrap();
 
                 let _ = tx_test_environment_to_monitors.send(InternalCommand::Quit);
@@ -1616,7 +1616,7 @@ pub mod tests {
 
                 // wait for the test object to trigger water injection
                 let _ = rx_test_environment_from_mock_water_injection
-                    .recv()
+                    .blocking_recv()
                     .unwrap();
 
                 let start_time = Instant::now();
@@ -1629,7 +1629,7 @@ pub mod tests {
                 channels
                     .signal_handler
                     .rx_signal_handler_from_refill
-                    .recv()
+                    .blocking_recv()
                     .unwrap();
                 let _ = tx_test_environment_to_monitors.send(InternalCommand::Quit);
 
@@ -1776,7 +1776,7 @@ pub mod tests {
 
                 // wait for the test object to trigger water injection
                 let _ = rx_test_environment_from_mock_water_injection
-                    .recv()
+                    .blocking_recv()
                     .unwrap();
 
                 // record time after the test object triggered water injection
@@ -1790,7 +1790,7 @@ pub mod tests {
                 channels
                     .signal_handler
                     .rx_signal_handler_from_refill
-                    .recv()
+                    .blocking_recv()
                     .unwrap();
                 let _ = tx_test_environment_to_monitors.send(InternalCommand::Quit);
                 let _ = tx_test_environment_to_monitors.send(InternalCommand::Quit);
@@ -1975,7 +1975,7 @@ pub mod tests {
                 // wait for the test object to trigger water injection
                 println!("waiting for water injection...");
                 let _ = rx_test_environment_from_mock_water_injection
-                    .recv()
+                    .blocking_recv()
                     .unwrap();
 
                 spin_sleeper.sleep(sleep_duration_two_secs);
@@ -2001,7 +2001,7 @@ pub mod tests {
                 channels
                     .signal_handler
                     .rx_signal_handler_from_refill
-                    .recv()
+                    .blocking_recv()
                     .unwrap();
                 let _ = tx_test_environment_to_monitors.send(InternalCommand::Quit);
 
@@ -2161,7 +2161,7 @@ pub mod tests {
                 channels
                     .signal_handler
                     .rx_signal_handler_from_refill
-                    .recv()
+                    .blocking_recv()
                     .unwrap();
                 let _ = tx_test_environment_to_monitors.send(InternalCommand::Quit);
 
@@ -2329,7 +2329,7 @@ pub mod tests {
                 channels
                     .signal_handler
                     .rx_signal_handler_from_refill
-                    .recv()
+                    .blocking_recv()
                     .unwrap();
                 let _ = tx_test_environment_to_monitors.send(InternalCommand::Quit);
 
@@ -2494,7 +2494,7 @@ pub mod tests {
                 channels
                     .signal_handler
                     .rx_signal_handler_from_refill
-                    .recv()
+                    .blocking_recv()
                     .unwrap();
                 let _ = tx_test_environment_to_monitors.send(InternalCommand::Quit);
 
@@ -2694,7 +2694,7 @@ pub mod tests {
 
                 // expect to see one event
                 assert!(matches!(
-                    rx_test_environment_from_mock_water_injection.recv(),
+                    rx_test_environment_from_mock_water_injection.blocking_recv(),
                     Ok(TestCommand::InformWaterInjectionEvent)
                 ));
 
@@ -2706,7 +2706,7 @@ pub mod tests {
                 channels
                     .signal_handler
                     .rx_signal_handler_from_refill
-                    .recv()
+                    .blocking_recv()
                     .unwrap();
                 let _ = tx_test_environment_to_monitors.send(InternalCommand::Quit);
 
@@ -2862,7 +2862,7 @@ pub mod tests {
                 channels
                     .signal_handler
                     .rx_signal_handler_from_refill
-                    .recv()
+                    .blocking_recv()
                     .unwrap();
                 let _ = tx_test_environment_to_monitors.send(InternalCommand::Quit);
 

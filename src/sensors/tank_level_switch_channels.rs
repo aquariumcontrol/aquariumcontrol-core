@@ -89,12 +89,13 @@ impl TankLevelSwitchChannels {
 
     /// Receives a result from the TCP simulator if the channel exists.
     #[allow(unused)]
-    pub fn receive_from_tcp(
+    pub async fn receive_from_tcp(
         &mut self,
     ) -> Option<Result<Result<f32, TcpCommunicationError>, AquaChannelError>> {
-        self.rx_tank_level_switch_from_tcp_opt
-            .as_mut()
-            .map(|rx| rx.recv())
+        match &mut self.rx_tank_level_switch_from_tcp_opt {
+            Some(rx) => Some(rx.recv().await),
+            None => None,
+        }
     }
 
     /// Sends an acknowledgment to the signal handler.
@@ -108,8 +109,8 @@ impl TankLevelSwitchChannels {
 
     /// Receives a command from the signal handler.
     #[allow(unused)]
-    pub fn receive_from_signal_handler(&mut self) -> Result<InternalCommand, AquaChannelError> {
-        self.rx_tank_level_switch_from_signal_handler.recv()
+    pub async fn receive_from_signal_handler(&mut self) -> Result<InternalCommand, AquaChannelError> {
+        self.rx_tank_level_switch_from_signal_handler.recv().await
     }
 }
 

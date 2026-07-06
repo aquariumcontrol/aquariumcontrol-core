@@ -410,7 +410,7 @@ pub mod tests {
                 channels
                     .signal_handler
                     .rx_signal_handler_from_watchdog
-                    .recv()
+                    .blocking_recv()
                     .unwrap();
             });
 
@@ -504,7 +504,7 @@ pub mod tests {
                 channels
                     .signal_handler
                     .rx_signal_handler_from_watchdog
-                    .recv()
+                    .blocking_recv()
                     .unwrap();
             });
 

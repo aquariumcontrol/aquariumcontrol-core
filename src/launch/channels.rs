@@ -80,29 +80,24 @@ use crate::watchmen::monitors_channels::MonitorsChannels;
 use crate::watchmen::watchdog_channels::WatchDogChannels;
 use crate::water::refill_channels::RefillChannels;
 use crate::water::refill_monitor_view::RefillMonitorView;
-use std::sync::mpsc;
-#[cfg(feature = "debug_channels")]
-use std::sync::mpsc::SyncSender;
-use std::sync::mpsc::TryRecvError;
-#[cfg(feature = "debug_channels")]
-use std::sync::mpsc::TrySendError;
 use thiserror::Error;
+
+use tokio::sync::mpsc::{unbounded_channel, UnboundedSender, UnboundedReceiver};
 
 #[cfg(feature = "debug_channels")]
 pub struct AquaSender<T: Send> {
-    sender: SyncSender<T>,
+    sender: UnboundedSender<T>,
     pub count: u64,
 }
 
 #[cfg(not(feature = "debug_channels"))]
 #[derive(Debug, Clone)]
 pub struct AquaSender<T: Send> {
-    sender: mpsc::Sender<T>,
+    sender: UnboundedSender<T>,
 }
 
 pub struct AquaReceiver<T> {
-    receiver: mpsc::Receiver<T>,
-    is_multi_thread: bool,
+    receiver: UnboundedReceiver<T>,
     #[cfg(feature = "debug_channels")]
     pub count: u64,
 }
@@ -112,10 +107,10 @@ pub struct AquaReceiver<T> {
 /// # Arguments
 /// * `bound` - A parameter representing `bound`.
 /// * `is_multi_thread` - A boolean flag indicating if the Tokio runtime is running in multi-threaded mode.
-pub fn channel<T: Send>(bound: usize, is_multi_thread: bool) -> (AquaSender<T>, AquaReceiver<T>) {
+pub fn channel<T: Send>(_bound: usize, _is_multi_thread: bool) -> (AquaSender<T>, AquaReceiver<T>) {
+    let (sender, receiver) = unbounded_channel::<T>();
     #[cfg(feature = "debug_channels")]
     {
-        let (sender, receiver) = mpsc::sync_channel::<T>(bound);
         (
             AquaSender { sender, count: 0 },
             AquaReceiver { receiver, count: 0 },
@@ -123,15 +118,10 @@ pub fn channel<T: Send>(bound: usize, is_multi_thread: bool) -> (AquaSender<T>, 
     }
     #[cfg(not(feature = "debug_channels"))]
     {
-        let (sender, receiver) = {
-            let _ = bound;
-            mpsc::channel::<T>()
-        };
         (
             AquaSender { sender },
             AquaReceiver {
                 receiver,
-                is_multi_thread,
             },
         )
     }
@@ -151,53 +141,32 @@ pub enum AquaChannelError {
 }
 
 impl<T: Send> AquaSender<T> {
-    /// Send a value into a channel, and on builds with "debug_channel" feature enabled,
-    /// propagate outward an error to whatever thread is over-eagerly sending content.
+    /// Send a value into a channel.
     ///
     /// # Arguments
     /// * `data` - A parameter representing `data`.
     pub fn send(&mut self, data: T) -> Result<(), AquaChannelError> {
         #[cfg(feature = "debug_channels")]
         {
-            match self.sender.try_send(data) {
-                Ok(_) => {
-                    self.count += 1;
-                    Ok(())
-                }
-                Err(TrySendError::Full(_)) => Err(AquaChannelError::Full),
-                Err(TrySendError::Disconnected(_)) => Err(AquaChannelError::Disconnected),
-            }
+            self.count += 1;
         }
-        #[cfg(not(feature = "debug_channels"))]
-        {
-            self.sender
-                .send(data)
-                .map_err(|_| AquaChannelError::Disconnected)?;
-            Ok(())
-        }
+        self.sender
+            .send(data)
+            .map_err(|_| AquaChannelError::Disconnected)
     }
 }
 
 impl<T> AquaReceiver<T> {
-    /// Receive a value from a channel (blocking), and on builds with "debug_channel" feature enabled,
-    /// count each call for each receiver
-    pub fn recv(&mut self) -> Result<T, AquaChannelError> {
+    /// Receive a value from a channel (non-blocking async), yielding when empty.
+    pub async fn recv(&mut self) -> Result<T, AquaChannelError> {
         #[cfg(feature = "debug_channels")]
         {
             self.count += 1;
         }
-
-        let res = if self.is_multi_thread {
-            tokio::task::block_in_place(|| self.receiver.recv())
-        } else {
-            self.receiver.recv()
-        };
-
-        res.map_err(|_| AquaChannelError::Disconnected)
+        self.receiver.recv().await.ok_or(AquaChannelError::Disconnected)
     }
 
-    /// Receive a value from a channel (non-blocking), and on builds with "debug_channel" feature enabled,
-    /// count each call for each receiver
+    /// Receive a value from a channel (non-blocking try), returning immediately.
     pub fn try_recv(&mut self) -> Result<T, AquaChannelError> {
         #[cfg(feature = "debug_channels")]
         {
@@ -205,8 +174,35 @@ impl<T> AquaReceiver<T> {
         }
         match self.receiver.try_recv() {
             Ok(c) => Ok(c),
-            Err(TryRecvError::Empty) => Err(AquaChannelError::Empty),
-            Err(TryRecvError::Disconnected) => Err(AquaChannelError::Disconnected),
+            Err(tokio::sync::mpsc::error::TryRecvError::Empty) => Err(AquaChannelError::Empty),
+            Err(tokio::sync::mpsc::error::TryRecvError::Disconnected) => Err(AquaChannelError::Disconnected),
+        }
+    }
+
+    /// Receive a value from a channel (blocking sync), blocking the current thread.
+    pub fn blocking_recv(&mut self) -> Result<T, AquaChannelError> {
+        #[cfg(feature = "debug_channels")]
+        {
+            self.count += 1;
+        }
+        if tokio::runtime::Handle::try_current().is_ok() {
+            let handle = tokio::runtime::Handle::current();
+            if handle.runtime_flavor() == tokio::runtime::RuntimeFlavor::CurrentThread {
+                loop {
+                    match self.try_recv() {
+                        Ok(val) => return Ok(val),
+                        Err(AquaChannelError::Empty) => {
+                            std::thread::sleep(std::time::Duration::from_millis(1));
+                        }
+                        Err(e) => return Err(e),
+                    }
+                }
+            } else {
+                tokio::task::block_in_place(|| self.receiver.blocking_recv())
+                    .ok_or(AquaChannelError::Disconnected)
+            }
+        } else {
+            self.receiver.blocking_recv().ok_or(AquaChannelError::Disconnected)
         }
     }
 }

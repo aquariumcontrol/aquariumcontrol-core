@@ -109,11 +109,7 @@ pub fn send_command(
 
                     match rx_from_thread_opt {
                         Some(rx_from_thread) => {
-                            let res = if tokio::runtime::Handle::try_current().is_ok() {
-                                tokio::task::block_in_place(|| rx_from_thread.recv())
-                            } else {
-                                rx_from_thread.recv()
-                            };
+                            let res = rx_from_thread.blocking_recv();
                             match res {
                                 Ok(_) => {
                                     #[cfg(feature = "debug_signal_handler")]
@@ -629,7 +625,7 @@ pub mod tests {
             channels
                 .data_logger
                 .rx_data_logger_from_signal_handler
-                .recv()
+                .blocking_recv()
                 .unwrap(),
             InternalCommand::Quit
         );
@@ -642,7 +638,7 @@ pub mod tests {
             channels
                 .messaging
                 .rx_messaging_from_signal_handler
-                .recv()
+                .blocking_recv()
                 .unwrap(),
             InternalCommand::Quit
         );
@@ -652,7 +648,7 @@ pub mod tests {
             channels
                 .refill
                 .rx_refill_from_signal_handler
-                .recv()
+                .blocking_recv()
                 .unwrap(),
             InternalCommand::Quit
         );
@@ -662,7 +658,7 @@ pub mod tests {
             channels
                 .heating
                 .rx_heating_from_signal_handler
-                .recv()
+                .blocking_recv()
                 .unwrap(),
             InternalCommand::Quit
         );
@@ -672,7 +668,7 @@ pub mod tests {
             channels
                 .ventilation
                 .rx_ventilation_from_signal_handler
-                .recv()
+                .blocking_recv()
                 .unwrap(),
             InternalCommand::Quit
         );
@@ -682,7 +678,7 @@ pub mod tests {
             .send(true);
 
         assert_eq!(
-            channels.feed.rx_feed_from_signal_handler.recv().unwrap(),
+            channels.feed.rx_feed_from_signal_handler.blocking_recv().unwrap(),
             InternalCommand::Quit
         );
         _ = channels.feed.tx_feed_to_signal_handler.send(true);
@@ -691,7 +687,7 @@ pub mod tests {
             channels
                 .balling
                 .rx_balling_from_signal_handler
-                .recv()
+                .blocking_recv()
                 .unwrap(),
             InternalCommand::Quit
         );
@@ -701,7 +697,7 @@ pub mod tests {
             channels
                 .tank_level_switch
                 .rx_tank_level_switch_from_signal_handler
-                .recv()
+                .blocking_recv()
                 .unwrap(),
             InternalCommand::Quit
         );
@@ -715,7 +711,7 @@ pub mod tests {
                 channels
                     .atlas_scientific
                     .rx_atlas_scientific_from_signal_handler
-                    .recv()
+                    .blocking_recv()
                     .unwrap(),
                 InternalCommand::Quit
             );
@@ -728,7 +724,7 @@ pub mod tests {
             channels
                 .sensor_manager
                 .rx_sensor_manager_from_signal_handler
-                .recv()
+                .blocking_recv()
                 .unwrap(),
             InternalCommand::Quit
         );
@@ -740,7 +736,7 @@ pub mod tests {
             channels
                 .temperature_gradient
                 .rx_temperature_gradient_from_signal_handler
-                .recv()
+                .blocking_recv()
                 .unwrap(),
             InternalCommand::Quit
         );
@@ -752,7 +748,7 @@ pub mod tests {
             channels
                 .schedule_check
                 .rx_schedule_check_from_signal_handler
-                .recv()
+                .blocking_recv()
                 .unwrap(),
             InternalCommand::Quit
         );
@@ -765,7 +761,7 @@ pub mod tests {
             channels
                 .i2c_interface
                 .rx_i2c_interface_from_signal_handler
-                .recv()
+                .blocking_recv()
                 .unwrap(),
             InternalCommand::Quit
         );
@@ -773,7 +769,7 @@ pub mod tests {
 
         #[cfg(all(target_os = "linux", feature = "target_hw"))]
         assert_eq!(
-            channels.dht.rx_dht_from_signal_handler.recv().unwrap(),
+            channels.dht.rx_dht_from_signal_handler.blocking_recv().unwrap(),
             InternalCommand::Quit
         );
         // no response from dht
@@ -782,7 +778,7 @@ pub mod tests {
             channels
                 .relay_manager
                 .rx_relay_manager_from_signal_handler
-                .recv()
+                .blocking_recv()
                 .unwrap(),
             InternalCommand::Quit
         );
@@ -795,7 +791,7 @@ pub mod tests {
             channels
                 .tcp_communication
                 .rx_tcp_communication_from_signal_handler
-                .recv()
+                .blocking_recv()
                 .unwrap(),
             InternalCommand::Quit
         );
@@ -808,7 +804,7 @@ pub mod tests {
             channels
                 .monitors
                 .rx_monitors_from_signal_handler
-                .recv()
+                .blocking_recv()
                 .unwrap(),
             InternalCommand::Quit
         );
@@ -818,7 +814,7 @@ pub mod tests {
             channels
                 .data_logger
                 .rx_data_logger_from_signal_handler
-                .recv()
+                .blocking_recv()
                 .unwrap(),
             InternalCommand::Terminate
         );
@@ -828,7 +824,7 @@ pub mod tests {
             channels
                 .heating
                 .rx_heating_from_signal_handler
-                .recv()
+                .blocking_recv()
                 .unwrap(),
             InternalCommand::Terminate
         );
@@ -838,14 +834,14 @@ pub mod tests {
             channels
                 .ventilation
                 .rx_ventilation_from_signal_handler
-                .recv()
+                .blocking_recv()
                 .unwrap(),
             InternalCommand::Terminate
         );
         // no response to termination request
 
         assert_eq!(
-            channels.feed.rx_feed_from_signal_handler.recv().unwrap(),
+            channels.feed.rx_feed_from_signal_handler.blocking_recv().unwrap(),
             InternalCommand::Terminate
         );
         // no response to termination request
@@ -854,7 +850,7 @@ pub mod tests {
             channels
                 .refill
                 .rx_refill_from_signal_handler
-                .recv()
+                .blocking_recv()
                 .unwrap(),
             InternalCommand::Terminate
         );
@@ -864,7 +860,7 @@ pub mod tests {
             channels
                 .balling
                 .rx_balling_from_signal_handler
-                .recv()
+                .blocking_recv()
                 .unwrap(),
             InternalCommand::Terminate
         );
@@ -874,7 +870,7 @@ pub mod tests {
             channels
                 .ds18b20
                 .rx_ds18b20_from_signal_handler
-                .recv()
+                .blocking_recv()
                 .unwrap(),
             InternalCommand::Quit
         );
@@ -886,7 +882,7 @@ pub mod tests {
                 channels
                     .atlas_scientific
                     .rx_atlas_scientific_from_signal_handler
-                    .recv()
+                    .blocking_recv()
                     .unwrap(),
                 InternalCommand::Terminate
             );
@@ -897,7 +893,7 @@ pub mod tests {
             channels
                 .sensor_manager
                 .rx_sensor_manager_from_signal_handler
-                .recv()
+                .blocking_recv()
                 .unwrap(),
             InternalCommand::Terminate
         );
@@ -907,7 +903,7 @@ pub mod tests {
             channels
                 .tank_level_switch
                 .rx_tank_level_switch_from_signal_handler
-                .recv()
+                .blocking_recv()
                 .unwrap(),
             InternalCommand::Terminate
         );
@@ -917,7 +913,7 @@ pub mod tests {
             channels
                 .watchdog
                 .rx_watchdog_from_signal_handler
-                .recv()
+                .blocking_recv()
                 .unwrap(),
             InternalCommand::Terminate
         );
@@ -927,7 +923,7 @@ pub mod tests {
             channels
                 .messaging
                 .rx_messaging_from_signal_handler
-                .recv()
+                .blocking_recv()
                 .unwrap(),
             InternalCommand::Terminate
         );

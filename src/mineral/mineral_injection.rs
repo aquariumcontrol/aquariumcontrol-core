@@ -118,7 +118,7 @@ impl MineralInjection {
             return; // Don't wait for a response if the send-operation failed
         }
 
-        if let Err(e) = balling_channels.receive_from_relay_manager() {
+        if let Err(e) = balling_channels.rx_balling_from_relay_manager.blocking_recv() {
             error!(
                 target: module_path!(),
                 "Receiving answer from relay manager when {} failed ({:?})", action_description, e
@@ -256,7 +256,7 @@ pub mod tests {
         let command: InternalCommand;
 
         // receive command from the test object
-        match rx_relay_manager_from_mineral_injection.recv() {
+        match rx_relay_manager_from_mineral_injection.blocking_recv() {
             Ok(c) => match c {
                 InternalCommand::SwitchOn(_) => command = c,
                 InternalCommand::SwitchOff(_) => command = c,

@@ -131,7 +131,7 @@ fn actuate_ventilation(
         log_error_chain(module_path!(), &error_message, e);
     } else {
         // now listen for the response
-        if let Err(e) = ventilation_channels.receive_from_relay_manager() {
+        if let Err(e) = ventilation_channels.rx_ventilation_from_relay_manager.blocking_recv() {
             let error_message =
                 format!("Receiving answer from relay manager for {command} failed.");
             log_error_chain(module_path!(), &error_message, e);
@@ -845,7 +845,7 @@ pub mod tests {
                     .send(InternalCommand::Quit);
                 signal_handler_channels
                     .rx_signal_handler_from_ventilation
-                    .recv()
+                    .blocking_recv()
                     .unwrap();
                 let _ = signal_handler_channels
                     .tx_signal_handler_to_ventilation
@@ -1989,7 +1989,7 @@ pub mod tests {
                 channels
                     .signal_handler
                     .rx_signal_handler_from_ventilation
-                    .recv()
+                    .blocking_recv()
                     .unwrap();
 
                 // check if ventilation is actuated
@@ -2427,7 +2427,7 @@ pub mod tests {
                 channels
                     .signal_handler
                     .rx_signal_handler_from_ventilation
-                    .recv()
+                    .blocking_recv()
                     .unwrap();
                 let _ = channels
                     .signal_handler
@@ -2598,7 +2598,7 @@ pub mod tests {
                 channels
                     .signal_handler
                     .rx_signal_handler_from_ventilation
-                    .recv()
+                    .blocking_recv()
                     .unwrap();
                 let _ = channels
                     .signal_handler
