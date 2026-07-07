@@ -267,7 +267,7 @@ impl Heating {
     ///
     /// # Arguments
     /// * `sql_interface_heating` - Database interface connection for heating stats.
-    /// * `is_multi_thread` - A boolean flag indicating if the Tokio runtime is running in multi-threaded mode.
+    /// * `is_multi_thread` - A boolean flag indicating if the Tokio runtime is running in multithreaded mode.
     fn get_duration_until_midnight(
         &mut self,
         sql_interface_heating: &mut SqlInterfaceHeatingStats,
@@ -381,7 +381,7 @@ impl Heating {
     ///   `HeatingStatsDataTransferTrait`, used to perform the actual database write.
     /// * `sql_interface_heating` - A mutable reference to the SQL interface, required for
     ///   creating a new `HeatingStatsEntry` and for calculating the time until the next midnight.
-    /// * `is_multi_thread` - A boolean flag indicating if the Tokio runtime is running in multi-threaded mode.
+    /// * `is_multi_thread` - A boolean flag indicating if the Tokio runtime is running in multithreaded mode.
     fn record_heating_stats(
         &mut self,
         midnight_instant: &mut Instant,
@@ -455,7 +455,7 @@ impl Heating {
     ///   responsible for updating the set values dynamically by communicating with SQL database.
     /// * `heating_mutexes` - Struct containing the mutexes to access data from different threads.
     /// * `sql_interface_heating` - A `SqlInterfaceHeatingStats` instance providing direct interface to database.
-    /// * `is_multi_thread` - A boolean indicating if the tokio runtime is running in multi-threaded mode.
+    /// * `is_multi_thread` - A boolean indicating if the tokio runtime is running in multithreaded mode.
     ///
     /// # Returns
     /// This function does not return a value in the traditional sense, as it is designed
@@ -535,7 +535,7 @@ impl Heating {
                 stop_command_received, // the request to (temporarily) stop heating has been received
             ) = self.process_external_request(
                 &mut heating_channels.rx_heating_from_signal_handler,
-                heating_channels.rx_heating_from_messaging_opt.as_mut(),
+                Some(&mut heating_channels.rx_heating_from_messaging),
             );
             if quit_command_received {
                 break;

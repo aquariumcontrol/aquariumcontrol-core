@@ -293,7 +293,7 @@ impl Monitors {
                 stop_command_received,
             ) = self.process_external_request(
                 &mut monitors_channels.rx_monitors_from_signal_handler,
-                monitors_channels.rx_monitors_from_messaging_opt.as_mut(),
+                Some(&mut monitors_channels.rx_monitors_from_messaging),
             );
             if quit_command_received {
                 break;

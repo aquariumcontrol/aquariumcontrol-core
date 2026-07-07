@@ -106,7 +106,7 @@ pub struct AquaReceiver<T> {
 ///
 /// # Arguments
 /// * `bound` - A parameter representing `bound`.
-/// * `is_multi_thread` - A boolean flag indicating if the Tokio runtime is running in multi-threaded mode.
+/// * `is_multi_thread` - A boolean flag indicating if the Tokio runtime is running in multithreaded mode.
 pub fn channel<T: Send>(_bound: usize, _is_multi_thread: bool) -> (AquaSender<T>, AquaReceiver<T>) {
     let (sender, receiver) = unbounded_channel::<T>();
     #[cfg(feature = "debug_channels")]
@@ -263,7 +263,7 @@ impl Channels {
     /// * `relay_manager_use_simulator` - A parameter representing `relay_manager_use_simulator`.
     /// * `sensor_manager_use_simulator` - A parameter representing `sensor_manager_use_simulator`.
     /// * `tank_level_switch_use_simulator` - A parameter representing `tank_level_switch_use_simulator`.
-    /// * `is_multi_thread` - A boolean flag indicating if the Tokio runtime is running in multi-threaded mode.
+    /// * `is_multi_thread` - A boolean flag indicating if the Tokio runtime is running in multithreaded mode.
     pub fn new(
         relay_manager_use_simulator: bool,
         sensor_manager_use_simulator: bool,
@@ -285,13 +285,19 @@ impl Channels {
         Self::build(true, true, true, false)
     }
 
+    /// Creates a new set of channels with all simulators disabled for unit testing of signal handler.
+    #[cfg(test)]
+    pub fn new_for_test_for_signal_handler() -> Channels {
+        Self::build(false, false, false, false)
+    }
+
     /// Creates all custom MPSC channel pairs for the application
     ///
     /// # Arguments
     /// * `relay_manager_use_simulator` - A parameter representing `relay_manager_use_simulator`.
     /// * `sensor_manager_use_simulator` - A parameter representing `sensor_manager_use_simulator`.
     /// * `tank_level_switch_use_simulator` - A parameter representing `tank_level_switch_use_simulator`.
-    /// * `is_multi_thread` - A boolean flag indicating if the Tokio runtime is running in multi-threaded mode.
+    /// * `is_multi_thread` - A boolean flag indicating if the Tokio runtime is running in multithreaded mode.
     pub fn build(
         relay_manager_use_simulator: bool,
         sensor_manager_use_simulator: bool,
@@ -302,78 +308,31 @@ impl Channels {
             | sensor_manager_use_simulator
             | tank_level_switch_use_simulator;
 
-        // create channels for communication between threads
-        let tx_signal_handler_to_messaging_opt: Option<AquaSender<InternalCommand>>;
-        let rx_signal_handler_from_messaging_opt: Option<AquaReceiver<bool>>;
-        let rx_refill_from_messaging_opt: Option<AquaReceiver<InternalCommand>>;
-        let rx_ventilation_from_messaging_opt: Option<AquaReceiver<InternalCommand>>;
-        let rx_heating_from_messaging_opt: Option<AquaReceiver<InternalCommand>>;
-        let rx_feed_from_messaging_opt: Option<AquaReceiver<InternalCommand>>;
-        let rx_balling_from_messaging_opt: Option<AquaReceiver<InternalCommand>>;
-        let rx_monitors_from_messaging_opt: Option<AquaReceiver<InternalCommand>>;
-
-        #[allow(clippy::needless_late_init)]
-        let rx_watchdog_from_messaging_opt: Option<AquaReceiver<InternalCommand>>;
-
         // *** signal_handler <=> messaging ***
-        #[allow(unused)]
         let ((tx_signal_handler_to_messaging, rx_messaging_from_signal_handler),
             (tx_messaging_to_signal_handler, rx_signal_handler_from_messaging))
             = create_bidirectional_channel!(InternalCommand, bool, is_multi_thread);
 
         // *** messaging => refill ***
-        #[allow(unused)]
         let (tx_messaging_to_refill, rx_refill_from_messaging) = create_unidirectional_channel!(InternalCommand, is_multi_thread);
 
         // *** messaging => ventilation ***
-        #[allow(unused)]
         let (tx_messaging_to_ventilation, rx_ventilation_from_messaging) = create_unidirectional_channel!(InternalCommand, is_multi_thread);
 
         // *** messaging => heating ***
-        #[allow(unused)]
         let (tx_messaging_to_heating, rx_heating_from_messaging) = create_unidirectional_channel!(InternalCommand, is_multi_thread);
 
         // *** messaging => feed ***
-        #[allow(unused)]
         let (tx_messaging_to_feed, rx_feed_from_messaging) = create_unidirectional_channel!(InternalCommand, is_multi_thread);
 
         // *** messaging => balling ***
-        #[allow(unused)]
         let (tx_messaging_to_balling, rx_balling_from_messaging) = create_unidirectional_channel!(InternalCommand, is_multi_thread);
 
         // *** messaging => monitors ***
-        #[allow(unused)]
         let (tx_messaging_to_monitors, rx_monitors_from_messaging) = create_unidirectional_channel!(InternalCommand, is_multi_thread);
 
         // *** messaging => monitors ***
-        #[allow(unused)]
         let (tx_messaging_to_watchdog, rx_watchdog_from_messaging) = create_unidirectional_channel!(InternalCommand, is_multi_thread);
-
-        // channels for messaging used in Linux implementation and on unit testing on any platform
-        cfg_if::cfg_if! {
-            if #[cfg(any(test, target_os = "linux"))] {
-                tx_signal_handler_to_messaging_opt = Some(tx_signal_handler_to_messaging);
-                rx_signal_handler_from_messaging_opt = Some(rx_signal_handler_from_messaging);
-                rx_refill_from_messaging_opt = Some(rx_refill_from_messaging);
-                rx_ventilation_from_messaging_opt = Some(rx_ventilation_from_messaging);
-                rx_heating_from_messaging_opt = Some(rx_heating_from_messaging);
-                rx_feed_from_messaging_opt = Some(rx_feed_from_messaging);
-                rx_balling_from_messaging_opt = Some(rx_balling_from_messaging);
-                rx_monitors_from_messaging_opt = Some(rx_monitors_from_messaging);
-                rx_watchdog_from_messaging_opt = Some(rx_watchdog_from_messaging);
-            }
-            else {
-                tx_signal_handler_to_messaging_opt = None;
-                rx_signal_handler_from_messaging_opt = None;
-                rx_refill_from_messaging_opt = None;
-                rx_ventilation_from_messaging_opt = None;
-                rx_heating_from_messaging_opt = None;
-                rx_feed_from_messaging_opt = None;
-                rx_balling_from_messaging_opt = None;
-                rx_monitors_from_messaging_opt = None;
-                rx_watchdog_from_messaging_opt = None;
-            }
-        }
 
         // *** refill <=> relay_manager ***
         let (
@@ -481,7 +440,6 @@ impl Channels {
             (tx_signal_handler_to_monitors, rx_monitors_from_signal_handler),
             (tx_monitors_to_signal_handler, rx_signal_handler_from_monitors),
         ) = create_bidirectional_channel!(InternalCommand, bool, is_multi_thread);
-
         // ***********************************
 
         // *** signal handler <=> ventilation ***
@@ -489,7 +447,6 @@ impl Channels {
             (tx_signal_handler_to_ventilation, rx_ventilation_from_signal_handler),
             (tx_ventilation_to_signal_handler, rx_signal_handler_from_ventilation),
         ) = create_bidirectional_channel!(InternalCommand, bool, is_multi_thread);
-
         // ***********************************
 
         // *** signal handler <=> schedule_check ***
@@ -497,7 +454,6 @@ impl Channels {
             (tx_signal_handler_to_schedule_check, rx_schedule_check_from_signal_handler),
             (tx_schedule_check_to_signal_handler, rx_signal_handler_from_schedule_check),
         ) = create_bidirectional_channel!(InternalCommand, bool, is_multi_thread);
-
         // ***********************************
 
         // *** signal handler <=> gpio ***
@@ -656,7 +612,7 @@ impl Channels {
             tx_refill_to_schedule_check,
             rx_refill_from_schedule_check,
             tx_refill_to_monitors,
-            rx_refill_from_messaging_opt,
+            rx_refill_from_messaging,
         };
 
         let balling = BallingChannels {
@@ -666,7 +622,7 @@ impl Channels {
             rx_balling_from_signal_handler,
             tx_balling_to_schedule_check,
             rx_balling_from_schedule_check,
-            rx_balling_from_messaging_opt,
+            rx_balling_from_messaging,
         };
 
         let ventilation = VentilationChannels {
@@ -676,7 +632,7 @@ impl Channels {
             rx_ventilation_from_signal_handler,
             tx_ventilation_to_schedule_check,
             rx_ventilation_from_schedule_check,
-            rx_ventilation_from_messaging_opt,
+            rx_ventilation_from_messaging,
         };
 
         let feed = FeedChannels {
@@ -684,7 +640,7 @@ impl Channels {
             rx_feed_from_relay_manager,
             tx_feed_to_signal_handler,
             rx_feed_from_signal_handler,
-            rx_feed_from_messaging_opt,
+            rx_feed_from_messaging,
         };
 
         let heating = HeatingChannels {
@@ -694,7 +650,7 @@ impl Channels {
             rx_heating_from_signal_handler,
             tx_heating_to_schedule_check,
             rx_heating_from_schedule_check,
-            rx_heating_from_messaging_opt,
+            rx_heating_from_messaging,
         };
 
         let tcp_communication = TcpCommunicationChannels {
@@ -727,8 +683,8 @@ impl Channels {
         };
 
         let signal_handler = SignalHandlerChannels {
-            tx_signal_handler_to_messaging_opt,
-            rx_signal_handler_from_messaging_opt,
+            tx_signal_handler_to_messaging,
+            rx_signal_handler_from_messaging,
             tx_signal_handler_to_refill,
             rx_signal_handler_from_refill,
             tx_signal_handler_to_tank_level_switch,
@@ -757,9 +713,7 @@ impl Channels {
             rx_signal_handler_from_schedule_check,
             tx_signal_handler_to_tcp_opt,
             rx_signal_handler_from_tcp_opt,
-            #[cfg(all(target_os = "linux", feature = "target_hw"))]
             tx_signal_handler_to_dht,
-            #[cfg(any(test, all(target_os = "linux", feature = "target_hw")))]
             tx_signal_handler_to_i2c_interface,
             tx_signal_handler_to_watchdog,
             rx_signal_handler_from_watchdog,
@@ -771,7 +725,7 @@ impl Channels {
             rx_monitors_from_atlas_scientific,
             tx_monitors_to_signal_handler,
             rx_monitors_from_signal_handler,
-            rx_monitors_from_messaging_opt,
+            rx_monitors_from_messaging,
         };
 
         let messaging = MessagingChannels {
@@ -796,7 +750,7 @@ impl Channels {
         let watchdog = WatchDogChannels {
             tx_watchdog_to_signal_handler,
             rx_watchdog_from_signal_handler,
-            rx_watchdog_from_messaging_opt,
+            rx_watchdog_from_messaging,
         };
 
         let ds18b20 = Ds18b20Channels {

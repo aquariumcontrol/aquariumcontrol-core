@@ -359,7 +359,7 @@ impl Refill {
     /// # Arguments
     /// * `refill_stats_data` - A mutable reference to a `RefillStatsData` struct, which will be
     ///   populated with the retrieved historical data.
-    /// * `is_multi_thread` - A boolean flag indicating if the Tokio runtime is running in multi-threaded mode.
+    /// * `is_multi_thread` - A boolean flag indicating if the Tokio runtime is running in multithreaded mode.
     fn get_refill_stats_data(
         &mut self,
         refill_stats_data: &mut RefillStatsData,
@@ -804,7 +804,7 @@ impl Refill {
                     stop_command_received,
                 ) = self.process_external_request(
                     &mut refill_channels.rx_refill_from_signal_handler,
-                    refill_channels.rx_refill_from_messaging_opt.as_mut(),
+                    Some(&mut refill_channels.rx_refill_from_messaging),
                 );
                 refill_inhibited = self.calc_inhibition_flag(
                     refill_inhibited,
@@ -1055,7 +1055,7 @@ impl Refill {
                         stop_command_received,
                     ) = self.process_external_request(
                         &mut refill_channels.rx_refill_from_signal_handler,
-                        refill_channels.rx_refill_from_messaging_opt.as_mut(),
+                        Some(&mut refill_channels.rx_refill_from_messaging),
                     );
                     refill_inhibited = self.calc_inhibition_flag(
                         refill_inhibited,

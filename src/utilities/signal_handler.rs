@@ -270,12 +270,8 @@ pub async fn handle_signals(
     }
     send_command(
         InternalCommand::Quit,
-        signal_handler_channels
-            .tx_signal_handler_to_messaging_opt
-            .as_mut(),
-        signal_handler_channels
-            .rx_signal_handler_from_messaging_opt
-            .as_mut(),
+        Some(&mut signal_handler_channels.tx_signal_handler_to_messaging),
+        Some(&mut signal_handler_channels.rx_signal_handler_from_messaging),
         "messaging",
     );
     #[cfg(feature = "debug_signal_handler")]
@@ -381,24 +377,21 @@ pub async fn handle_signals(
     );
 
     // phase 4: shut down low-level controls
-    #[cfg(all(feature = "target_hw", target_os = "linux"))]
-    {
-        if execution_config.i2c_interface {
-            send_command(
-                InternalCommand::Quit,
-                Some(&mut signal_handler_channels.tx_signal_handler_to_i2c_interface),
-                None,
-                "i2c_interface",
-            );
-        }
-        if execution_config.dht {
-            send_command(
-                InternalCommand::Quit,
-                Some(&mut signal_handler_channels.tx_signal_handler_to_dht),
-                None,
-                "dht",
-            );
-        }
+    if execution_config.i2c_interface {
+        send_command(
+            InternalCommand::Quit,
+            Some(&mut signal_handler_channels.tx_signal_handler_to_i2c_interface),
+            None,
+            "i2c_interface",
+        );
+    }
+    if execution_config.dht {
+        send_command(
+            InternalCommand::Quit,
+            Some(&mut signal_handler_channels.tx_signal_handler_to_dht),
+            None,
+            "dht",
+        );
     }
     if execution_config.relay_manager {
         send_command(
@@ -503,16 +496,13 @@ pub async fn handle_signals(
             "ds18b20",
         );
     }
-    #[cfg(all(feature = "target_hw", target_os = "linux"))]
-    {
-        if execution_config.atlas_scientific {
-            send_command(
-                InternalCommand::Terminate,
-                Some(&mut signal_handler_channels.tx_signal_handler_to_atlas_scientific),
-                None,
-                "atlas_scientific",
-            );
-        }
+    if execution_config.atlas_scientific {
+        send_command(
+            InternalCommand::Terminate,
+            Some(&mut signal_handler_channels.tx_signal_handler_to_atlas_scientific),
+            None,
+            "atlas_scientific",
+        );
     }
 
     if execution_config.sensor_manager {
@@ -548,9 +538,7 @@ pub async fn handle_signals(
     }
     send_command(
         InternalCommand::Terminate,
-        signal_handler_channels
-            .tx_signal_handler_to_messaging_opt
-            .as_mut(),
+        Some(&mut signal_handler_channels.tx_signal_handler_to_messaging),
         None,
         "messaging",
     );
@@ -590,7 +578,7 @@ pub mod tests {
         let term = Arc::new(AtomicBool::new(false));
         let term_clone = Arc::clone(&term);
 
-        let mut channels = Channels::new_for_test();
+        let mut channels = Channels::new_for_test_for_signal_handler();
 
         let join_handle_test_object = thread::Builder::new()
             .name("test_object".to_string())
@@ -705,21 +693,21 @@ pub mod tests {
             .tank_level_switch
             .tx_tank_level_switch_to_signal_handler
             .send(true);
-        #[cfg(all(feature = "target_hw", target_os = "linux"))]
-        {
-            assert_eq!(
-                channels
-                    .atlas_scientific
-                    .rx_atlas_scientific_from_signal_handler
-                    .blocking_recv()
-                    .unwrap(),
-                InternalCommand::Quit
-            );
-            _ = channels
+
+        assert_eq!(
+            channels
                 .atlas_scientific
-                .tx_atlas_scientific_to_signal_handler
-                .send(true);
-        }
+                .rx_atlas_scientific_from_signal_handler
+                .blocking_recv()
+                .unwrap(),
+            InternalCommand::Quit
+        );
+
+        _ = channels
+            .atlas_scientific
+            .tx_atlas_scientific_to_signal_handler
+            .send(true);
+
         assert_eq!(
             channels
                 .sensor_manager
@@ -728,6 +716,7 @@ pub mod tests {
                 .unwrap(),
             InternalCommand::Quit
         );
+
         _ = channels
             .sensor_manager
             .tx_sensor_manager_to_signal_handler
@@ -756,7 +745,6 @@ pub mod tests {
             .schedule_check
             .tx_schedule_check_to_signal_handler
             .send(true);
-        #[cfg(all(target_os = "linux", feature = "target_hw"))]
         assert_eq!(
             channels
                 .i2c_interface
@@ -766,8 +754,6 @@ pub mod tests {
             InternalCommand::Quit
         );
         // no response from i2c_interface
-
-        #[cfg(all(target_os = "linux", feature = "target_hw"))]
         assert_eq!(
             channels.dht.rx_dht_from_signal_handler.blocking_recv().unwrap(),
             InternalCommand::Quit
@@ -785,19 +771,6 @@ pub mod tests {
         _ = channels
             .relay_manager
             .tx_relay_manager_to_signal_handler
-            .send(true);
-
-        assert_eq!(
-            channels
-                .tcp_communication
-                .rx_tcp_communication_from_signal_handler
-                .blocking_recv()
-                .unwrap(),
-            InternalCommand::Quit
-        );
-        _ = channels
-            .tcp_communication
-            .tx_tcp_communication_to_signal_handler
             .send(true);
 
         assert_eq!(
@@ -876,17 +849,14 @@ pub mod tests {
         );
         // no response to quit signal from ds18b20
 
-        #[cfg(all(feature = "target_hw", target_os = "linux"))]
-        {
-            assert_eq!(
-                channels
-                    .atlas_scientific
-                    .rx_atlas_scientific_from_signal_handler
-                    .blocking_recv()
-                    .unwrap(),
-                InternalCommand::Terminate
-            );
-        }
+        assert_eq!(
+            channels
+                .atlas_scientific
+                .rx_atlas_scientific_from_signal_handler
+                .blocking_recv()
+                .unwrap(),
+            InternalCommand::Terminate
+        );
         // no response to termination request
 
         assert_eq!(

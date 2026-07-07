@@ -71,7 +71,7 @@ pub struct HeatingChannels {
     pub rx_heating_from_schedule_check: AquaReceiver<bool>,
 
     /// Receiver part of the channel for communication from the messaging
-    pub rx_heating_from_messaging_opt: Option<AquaReceiver<InternalCommand>>,
+    pub rx_heating_from_messaging: AquaReceiver<InternalCommand>,
 }
 
 impl HeatingChannels {

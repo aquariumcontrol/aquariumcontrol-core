@@ -780,7 +780,7 @@ impl Balling {
                 stop_command_received,
             ) = self.process_external_request(
                 &mut balling_channels.rx_balling_from_signal_handler,
-                balling_channels.rx_balling_from_messaging_opt.as_mut(),
+                Some(&mut balling_channels.rx_balling_from_messaging),
             );
 
             if self.execute_command_received && self.config.active && !self.execution_blocked {

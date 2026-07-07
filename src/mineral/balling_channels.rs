@@ -66,8 +66,8 @@ pub struct BallingChannels {
     /// receiver part of the channel for communication from the schedule checker
     pub rx_balling_from_schedule_check: AquaReceiver<bool>,
 
-    /// receiver part of the channel communication wrapped in Option from Messaging
-    pub rx_balling_from_messaging_opt: Option<AquaReceiver<InternalCommand>>,
+    /// receiver part of the channel communication from Messaging
+    pub rx_balling_from_messaging: AquaReceiver<InternalCommand>,
 }
 
 impl BallingChannels {

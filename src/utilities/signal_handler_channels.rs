@@ -54,11 +54,11 @@ use std::fmt;
 /// Fields for optional modules (e.g., `messaging`, `tcp`) are wrapped in `Option`,
 /// allowing for flexible compilation with different feature sets. They have a postfix `_opt`.
 pub struct SignalHandlerChannels {
-    /// (Optional) Sender to the `Messaging` thread for `Quit`/`Terminate` commands.
-    pub tx_signal_handler_to_messaging_opt: Option<AquaSender<InternalCommand>>,
+    /// Sender to the `Messaging` thread for `Quit`/`Terminate` commands.
+    pub tx_signal_handler_to_messaging: AquaSender<InternalCommand>,
 
-    /// (Optional) Receiver from the `Messaging` thread for shutdown acknowledgements.
-    pub rx_signal_handler_from_messaging_opt: Option<AquaReceiver<bool>>,
+    /// Receiver from the `Messaging` thread for shutdown acknowledgements.
+    pub rx_signal_handler_from_messaging: AquaReceiver<bool>,
 
     /// Sender to the `Refill` thread for `Quit`/`Terminate` commands.
     pub tx_signal_handler_to_refill: AquaSender<InternalCommand>,
@@ -150,11 +150,9 @@ pub struct SignalHandlerChannels {
     /// Receiver from the `Watchdog` thread for shutdown acknowledgements.
     pub rx_signal_handler_from_watchdog: AquaReceiver<bool>,
 
-    #[cfg(all(target_os = "linux", feature = "target_hw"))]
     /// Sender to the `Dht` sensor thread for `Quit` command.
     pub tx_signal_handler_to_dht: AquaSender<InternalCommand>,
 
-    #[cfg(any(test, all(target_os = "linux", feature = "target_hw")))]
     /// Sender to the `I2cInterface` thread for `Quit` command.
     pub tx_signal_handler_to_i2c_interface: AquaSender<InternalCommand>,
 

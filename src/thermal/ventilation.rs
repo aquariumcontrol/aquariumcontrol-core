@@ -107,7 +107,7 @@ const MAX_MUTEX_ACCESS_DURATION_MILLIS: u64 = 10;
 /// * `mutex_device_scheduler_ventilation` - A reference to the shared actuation mutex.
 /// * `mutex_blocked_during_actuation` - A mutable flag to track if the actuation mutex was blocked.
 /// * `ventilation_channels` - A mutable reference to the struct containing the channels.
-/// * `is_multi_thread` - A boolean flag indicating if the Tokio runtime is running in multi-threaded mode.
+/// * `is_multi_thread` - A boolean flag indicating if the Tokio runtime is running in multithreaded mode.
 fn actuate_ventilation(
     command: InternalCommand,
     mutex_device_scheduler_ventilation: &Arc<Mutex<i32>>,
@@ -150,7 +150,7 @@ fn actuate_ventilation(
 /// * `mutex_blocked_during_actuation` - A mutable boolean flag that is set if the
 /// * `ventilation_channels` - A mutable reference to the struct containing the channels.
 ///   Actuation mutex was found to be blocked.
-/// * `is_multi_thread` - A boolean flag indicating if the Tokio runtime is running in multi-threaded mode.
+/// * `is_multi_thread` - A boolean flag indicating if the Tokio runtime is running in multithreaded mode.
 fn switch_on_ventilation(
     mutex_device_scheduler_ventilation: &Arc<Mutex<i32>>,
     mutex_blocked_during_actuation: &mut bool,
@@ -176,7 +176,7 @@ fn switch_on_ventilation(
 /// * `mutex_blocked_during_actuation` - A mutable boolean flag that is set if the
 /// * `ventilation_channels` - A mutable reference to the struct containing the channels.
 ///   Actuation mutex was found to be blocked.
-/// * `is_multi_thread` - A boolean flag indicating if the Tokio runtime is running in multi-threaded mode.
+/// * `is_multi_thread` - A boolean flag indicating if the Tokio runtime is running in multithreaded mode.
 fn switch_off_ventilation(
     mutex_device_scheduler_ventilation: &Arc<Mutex<i32>>,
     mutex_blocked_during_actuation: &mut bool,
@@ -336,7 +336,7 @@ impl Ventilation {
     /// * `mutex_device_scheduler_ventilation` - A shared mutex for coordinating device actuation.
     /// * `ventilation_channels` - A reference to the `VentilationChannels` struct for communication with the relay manager.
     /// * `mutex_was_blocked_during_actuation` - A mutable flag indicating if the device scheduler mutex was blocked.
-    /// * `is_multi_thread` - A boolean flag indicating if the Tokio runtime is running in multi-threaded mode.
+    /// * `is_multi_thread` - A boolean flag indicating if the Tokio runtime is running in multithreaded mode.
     fn conditional_ventilation_switch(
         condition: bool,
         ventilation_state: &mut ActuatorState,
@@ -392,7 +392,7 @@ impl Ventilation {
     /// * `ventilation_set_val_updater` - A mutable reference to an object implementing `ThermalSetValueUpdaterTrait`,
     ///   responsible for updating the set values dynamically by communicating with SQL database.
     /// * `ventilation_mutexes` - Struct containing the mutexes to access data from different threads.
-    /// * `is_multi_thread` - A boolean indicating if the tokio runtime is running in multi-threaded mode.
+    /// * `is_multi_thread` - A boolean indicating if the tokio runtime is running in multithreaded mode.
     ///
     /// # Returns
     /// This function does not return a value in the traditional sense, as it is designed
@@ -428,9 +428,7 @@ impl Ventilation {
             let (quit_command_received, start_command_received, stop_command_received) = self
                 .process_external_request(
                     &mut ventilation_channels.rx_ventilation_from_signal_handler,
-                    ventilation_channels
-                        .rx_ventilation_from_messaging_opt
-                        .as_mut(),
+                    Some(&mut ventilation_channels.rx_ventilation_from_messaging)
                 );
             if quit_command_received {
                 break;

@@ -62,7 +62,7 @@ pub struct RefillChannels {
     pub rx_refill_from_schedule_check: AquaReceiver<bool>,
 
     /// Receiver part of the channel for communication from the messaging
-    pub rx_refill_from_messaging_opt: Option<AquaReceiver<InternalCommand>>,
+    pub rx_refill_from_messaging: AquaReceiver<InternalCommand>,
 
     /// Sender part of the channel for communication to the monitors
     pub tx_refill_to_monitors: AquaSender<RefillMonitorView>,

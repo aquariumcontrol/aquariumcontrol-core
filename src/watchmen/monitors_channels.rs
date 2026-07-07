@@ -53,7 +53,7 @@ pub struct MonitorsChannels {
     pub rx_monitors_from_signal_handler: AquaReceiver<InternalCommand>,
 
     /// Receiver part of the channel for communication from the messaging
-    pub rx_monitors_from_messaging_opt: Option<AquaReceiver<InternalCommand>>,
+    pub rx_monitors_from_messaging: AquaReceiver<InternalCommand>,
 }
 
 #[cfg(feature = "debug_channels")]

@@ -60,8 +60,8 @@ pub struct FeedChannels {
     /// Receiver part of the channel for communication from the signal handler
     pub rx_feed_from_signal_handler: AquaReceiver<InternalCommand>,
 
-    /// Receiver part of the channel wrapped in Option for communication from the messaging
-    pub rx_feed_from_messaging_opt: Option<AquaReceiver<InternalCommand>>,
+    /// Receiver part of the channel for communication from the messaging
+    pub rx_feed_from_messaging: AquaReceiver<InternalCommand>,
 }
 
 impl FeedChannels {

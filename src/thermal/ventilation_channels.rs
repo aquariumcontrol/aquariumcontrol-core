@@ -71,7 +71,7 @@ pub struct VentilationChannels {
     pub rx_ventilation_from_schedule_check: AquaReceiver<bool>,
 
     /// Receiver part of the channel for communication from the messaging
-    pub rx_ventilation_from_messaging_opt: Option<AquaReceiver<InternalCommand>>,
+    pub rx_ventilation_from_messaging: AquaReceiver<InternalCommand>,
 }
 
 impl VentilationChannels {

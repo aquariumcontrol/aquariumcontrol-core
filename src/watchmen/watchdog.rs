@@ -225,7 +225,7 @@ impl Watchdog {
                 stop_command_received,
             ) = self.process_external_request(
                 &mut watchdog_channels.rx_watchdog_from_signal_handler,
-                watchdog_channels.rx_watchdog_from_messaging_opt.as_mut(),
+                Some(&mut watchdog_channels.rx_watchdog_from_messaging),
             );
 
             if quit_command_received {

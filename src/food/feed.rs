@@ -559,7 +559,7 @@ impl Feed {
                 stop_command_received, // the request to (temporarily) stop the feed has been received
             ) = self.process_external_request(
                 &mut feed_channels.rx_feed_from_signal_handler,
-                feed_channels.rx_feed_from_messaging_opt.as_mut(),
+                Some(&mut feed_channels.rx_feed_from_messaging),
             );
             if quit_command_received {
                 break;
