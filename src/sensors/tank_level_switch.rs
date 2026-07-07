@@ -446,7 +446,6 @@ impl TankLevelSwitch {
         } else {
             #[cfg(all(target_os = "linux", feature = "target_hw"))]
             {
-                // Use `if let` for more idiomatic Option handling.
                 if let Some(pin) = self.input_pin_opt.as_mut() {
                     if self.config.reverse_gpio_logic {
                         self.tank_level_switch_position = pin.is_low();
@@ -460,6 +459,10 @@ impl TankLevelSwitch {
                         module_path!().to_string(),
                     ));
                 }
+            }
+            #[cfg(all(not(feature = "target_hw"), test))]
+            {
+                // testing async runtime: do nothing
             }
         }
         Ok(())

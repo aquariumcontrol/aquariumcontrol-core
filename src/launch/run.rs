@@ -51,11 +51,8 @@ use crate::sensors::atlas_scientific::AtlasScientific;
 
 use crate::sensors::atlas_scientific::AtlasScientificResultData;
 
-#[cfg(all(feature = "target_hw", target_os = "linux"))]
-use crate::sensors::dht::Dht;
-
 use crate::launch::execution_config::ExecutionConfig;
-use crate::sensors::dht::DhtResult;
+use crate::sensors::dht::{Dht, DhtResult};
 use crate::sensors::ds18b20::{Ds18b20, Ds18b20ResultData};
 use crate::sensors::sensor_manager::{
     SensorManager, SensorManagerMutexes, SensorManagerSignals,
@@ -634,10 +631,10 @@ pub fn run() -> Result<(), StartupError> {
 
     // The following structs have a high amount of platform-specific code:
     let mut tank_level_switch: TankLevelSwitch;
+    let mut dht: Dht;
 
     cfg_if::cfg_if! {
         if #[cfg(all(target_os = "linux", feature = "target_hw"))] {
-            let mut dht;
             let gpio_dht22_io = config.gpio_handler.dht22_io;
             let gpio_dht22_vcc = config.gpio_handler.dht22_vcc;
             let mut actuate_gpio_opt: Option<ActuateGpio> = None;
@@ -693,6 +690,7 @@ pub fn run() -> Result<(), StartupError> {
                 config.tank_level_switch,
                 true,
             ).map_err(|e| StartupError::TankLevelSwitchSetupFailure { source: e })?;
+            dht = Dht::new(config.dht, None, 6, 7); // arbitrary GPIO pins - not used for testing
         }
     }
 
@@ -897,7 +895,6 @@ pub fn run() -> Result<(), StartupError> {
         debug!(target: module_path!(), "TcpCommunication terminated.");
     };
 
-    #[cfg(all(target_os = "linux", feature = "target_hw"))]
     if execution_config.dht {
         let handle = std::thread::Builder::new()
             .name("Dht".to_string())

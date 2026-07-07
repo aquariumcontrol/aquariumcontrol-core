@@ -54,7 +54,6 @@ pub struct ExecutionConfig {
     pub feed: bool,
     pub balling: bool,
     pub monitors: bool,
-    #[cfg(feature = "target_hw")]
     pub dht: bool,
     #[cfg(feature = "target_hw")]
     pub i2c_interface: bool,
@@ -86,7 +85,6 @@ impl ExecutionConfig {
             feed: config.feed.execute,
             balling: config.balling.execute,
             monitors: config.monitors.execute,
-            #[cfg(feature = "target_hw")]
             dht: config.dht.execute,
             #[cfg(feature = "target_hw")]
             i2c_interface: config.i2c_interface.execute,
@@ -119,7 +117,6 @@ impl Default for ExecutionConfig {
             feed: true,
             balling: true,
             monitors: true,
-            #[cfg(feature = "target_hw")]
             dht: true,
             #[cfg(feature = "target_hw")]
             i2c_interface: true,

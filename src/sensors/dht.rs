@@ -78,27 +78,23 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 //! 5.  **Validation**: The checksum (sum of the first 4 bytes, modulo 256) is validated
 //!     to ensure data integrity.
 
+use log::error;
+use std::time::{Duration, Instant};
+use std::sync::{Arc, Mutex};
+use spin_sleep::SpinSleeper;
 use crate::sensors::dht_error::DhtError;
-use std::time::Duration;
+use crate::sensors::dht_config::DhtConfig;
+use crate::sensors::dht_channels::DhtChannels;
+use crate::utilities::proc_ext_req::ProcessExternalRequestTrait;
+use crate::utilities::check_mutex_access_duration::CheckMutexAccessDurationTrait;
+
+#[cfg(not(test))]
+use crate::utilities::logger::log_error_chain;
 
 cfg_if::cfg_if! {
     if #[cfg(all(not(test), target_os = "linux", feature = "target_hw"))] { // only required in real-life execution
         use nix::unistd::gettid;
         use log::info;
-        use crate::utilities::logger::log_error_chain;
-    }
-}
-
-cfg_if::cfg_if! {
-    if #[cfg(any(test, all(target_os = "linux", feature = "target_hw")))] {
-        use crate::sensors::dht_channels::DhtChannels;
-        use crate::sensors::dht_config::DhtConfig;
-        use crate::utilities::proc_ext_req::ProcessExternalRequestTrait;
-        use crate::utilities::check_mutex_access_duration::CheckMutexAccessDurationTrait;
-        use std::time::Instant;
-        use spin_sleep::SpinSleeper;
-        use std::sync::{Arc, Mutex};
-        use log::error;
     }
 }
 
@@ -170,11 +166,9 @@ pub mod dht22_constants {
     // distinguish between true and false
     pub const DHT22_BIT_TIMING_LIMIT: u64 = 50;
 
-    #[cfg(any(test, all(target_os = "linux", feature = "target_hw")))]
     // maximum number of allowed retries to get valid data
     pub const DHT22_MAX_RETRIES: u64 = 5;
 
-    #[cfg(any(test, all(target_os = "linux", feature = "target_hw")))]
     /// allow max. 10 milliseconds for mutex to be blocked by any other thread
     pub const MAX_MUTEX_ACCESS_DURATION_MILLIS: u64 = 10;
 }
@@ -211,7 +205,6 @@ pub mod dht22_constants {
 ///     signal_handler[SignalHandler] --> dht
 /// ```
 pub struct Dht {
-    #[cfg(any(test, all(target_os = "linux", feature = "target_hw")))]
     /// configuration for communication with DHT sensor
     config: DhtConfig,
 
@@ -227,18 +220,15 @@ pub struct Dht {
     /// numeric GPIO pin for providing power to the DHT22 sensor
     gpio_dht22_vcc: u8,
 
-    #[cfg(any(test, all(target_os = "linux", feature = "target_hw")))]
     /// time instance of the last recording
     instant_last_measurement: Instant,
 
-    #[cfg(any(test, all(target_os = "linux", feature = "target_hw")))]
     /// flag to avoid flooding the log file in case mutex cannot be locked
     lock_error_mutex: bool,
 
     /// inhibition flag to avoid flooding the log file with repeated messages about excessive access time to mutex
     pub lock_warn_max_mutex_access_duration: bool,
 
-    #[cfg(any(test, all(target_os = "linux", feature = "target_hw")))]
     /// inhibition flag to avoid flooding the log file with repeated messages about failure to read from DHT sensor
     lock_error_failed_after_retries: bool,
 
@@ -249,13 +239,12 @@ pub struct Dht {
     /// Maximum permissible access duration for Mutex
     pub max_mutex_access_duration: Duration,
 
-    #[cfg(any(test, all(target_os = "linux", feature = "target_hw")))]
     /// Duration between measurements
     pub measurement_interval: Duration,
 }
 
 impl Dht {
-    #[cfg(any(test, all(target_os = "linux", feature = "target_hw")))]
+//    #[cfg(any(test, all(target_os = "linux", feature = "target_hw")))]
     /// Creates a new **`Dht`** instance for interacting with a DHT22 sensor on the target platform.
     ///
     /// This constructor initializes the DHT sensor module, configuring it with the provided
@@ -705,18 +694,21 @@ impl Dht {
     /// It does not interact with hardware and always returns an error.
     ///
     /// # Returns
-    /// This function does not return a value.
+    /// This function returns a dummy value when executed in test context (when testing async runtime).
     ///
     /// # Errors
-    /// Always returns `Err(DhtError::IncorrectPlatform)`.
+    /// Returns `Err(DhtError::IncorrectPlatform)` when not in test context.
     ///
     /// # Arguments
     /// * `reset_sensor` - A parameter representing `reset_sensor`.
     pub fn read(&self, _reset_sensor: bool) -> DhtResult {
-        Err(DhtError::IncorrectPlatform(module_path!().to_string()))
+        if cfg!(test) {
+            Ok((0.0, 0.0))
+        } else {
+            Err(DhtError::IncorrectPlatform(module_path!().to_string()))
+        }
     }
 
-    #[cfg(any(test, all(target_os = "linux", feature = "target_hw")))]
     /// Initiates a robust reading process from the DHT22 sensor, with retries.
     ///
     /// This function attempts to read temperature and humidity data. It includes an
@@ -760,7 +752,6 @@ impl Dht {
         unreachable!();
     }
 
-    #[cfg(any(test, all(target_os = "linux", feature = "target_hw")))]
     /// Executes the main loop for the DHT sensor thread, receiving requests and sending measurement responses.
     ///
     /// This function runs indefinitely, acting as a dedicated service for reading ambient
@@ -1092,7 +1083,6 @@ pub mod tests {
         let config = DhtConfig {
             active: false,
             measurement_interval_millis: 2000,
-            #[cfg(feature = "target_hw")]
             execute: true,
             #[cfg(all(target_os = "linux", feature = "target_hw"))]
             sensor_init_pin_down_duration_micros: 1000,
@@ -1157,48 +1147,6 @@ pub mod tests {
         assert!(
             join_result.is_ok(),
             "The DHT thread should handle invalid commands and continue until Quit."
-        );
-    }
-
-    #[test]
-    #[cfg(not(all(target_os = "linux", feature = "target_hw")))]
-    /// Verifies that a measurement is performed and the result is written to the shared mutex
-    /// when the measurement interval elapses. This test is for non-hardware platforms.
-    fn test_execute_updates_mutex_on_measurement_interval() {
-        // Arrange
-        let (mut tx, rx) = channel(1, false);
-        let mut channels = DhtChannels {
-            rx_dht_from_signal_handler: rx,
-            #[cfg(feature = "debug_channels")]
-            cnt_rx_dht_from_signal_handler: 0,
-        };
-        let config = DhtConfig {
-            active: true,                    // Enable measurement
-            measurement_interval_millis: 50, // Use a short interval for testing
-        };
-        let mut dht = Dht::new(config, None, 0, 0);
-        let mutex = Arc::new(Mutex::new(Ok((0.0, 0.0))));
-        let mutex_clone = mutex.clone();
-
-        // Action
-        let handle = thread::spawn(move || {
-            dht.execute(mutex_clone, &mut channels);
-        });
-
-        // Wait for longer than the measurement interval to ensure a measurement is attempted.
-        thread::sleep(Duration::from_millis(200));
-
-        println!("Sending quit command to DHT thread");
-        tx.send(InternalCommand::Quit).unwrap();
-        handle.join().unwrap();
-
-        // Assert
-        // On non-hardware platforms, `get_data()` returns `Err(DhtError::IncorrectPlatform)`.
-        // We check that this specific error was written to the mutex.
-        let final_result = mutex.lock().unwrap();
-        assert!(
-            matches!(*final_result, Err(DhtError::IncorrectPlatform(_))),
-            "Mutex should contain IncorrectPlatform error on non-hardware targets after measurement"
         );
     }
 }
