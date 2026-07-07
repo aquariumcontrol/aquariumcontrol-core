@@ -64,7 +64,6 @@ use crate::sensors::atlas_scientific_error::AtlasScientificError;
 use crate::sensors::ds18b20_error::Ds18b20Error;
 #[cfg(all(feature = "target_hw", target_os = "linux"))]
 use crate::sensors::gpio_handler::GpioHandlerError;
-#[cfg(all(feature = "target_hw", target_os = "linux"))]
 use crate::sensors::i2c_error::I2cError;
 use crate::sensors::sensor_manager::SensorManagerError;
 use crate::sensors::tank_level_switch::TankLevelSwitchError;
@@ -175,7 +174,6 @@ pub enum StartupError {
     },
 
     /// Could not initialize the interface to the I2c.
-    #[cfg(all(feature = "target_hw", target_os = "linux"))]
     #[error("Could not setup the interface to the I2C.")]
     I2cSetupFailure {
         #[source]

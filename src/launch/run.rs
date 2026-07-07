@@ -89,6 +89,7 @@ use crate::water::water_injection::WaterInjection;
 use spin_sleep::SpinSleeper;
 pub use std::sync::{atomic::AtomicBool, Arc, Mutex};
 use std::{env, panic, time::Duration};
+use crate::sensors::i2c_interface::I2cInterface;
 
 cfg_if::cfg_if! {
     if #[cfg(all(target_os = "linux", feature = "target_hw"))] {
@@ -682,8 +683,6 @@ pub fn run() -> Result<(), StartupError> {
                     actuate_gpio_opt = Some(actuate_gpio);
                 }
             }
-            let mut i2c_interface = I2cInterface::new(config.i2c_interface)
-                .map_err(|e| StartupError::I2cSetupFailure { source: e })?;
         }
         else {
             tank_level_switch = TankLevelSwitch::new(
@@ -693,6 +692,8 @@ pub fn run() -> Result<(), StartupError> {
             dht = Dht::new(config.dht, None, 6, 7); // arbitrary GPIO pins - not used for testing
         }
     }
+    let mut i2c_interface = I2cInterface::new(config.i2c_interface)
+        .map_err(|e| StartupError::I2cSetupFailure { source: e })?;
 
     //**************************************** Mutexes *********************************************
     let mutex_device_scheduler = Arc::new(Mutex::new(0));
@@ -923,7 +924,6 @@ pub fn run() -> Result<(), StartupError> {
         let mut tasks = vec![];
 
         // 1. Spawn I2cInterface FIRST so it is running and ready to handle commands
-        #[cfg(all(target_os = "linux", feature = "target_hw"))]
         if !use_simulator && execution_config.i2c_interface {
             let handle = tokio::spawn(async move {
                 i2c_interface.execute(&mut chan_i2c_interface).await;

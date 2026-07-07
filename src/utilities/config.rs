@@ -63,9 +63,7 @@ use crate::thermal::heating_config::HeatingConfig;
 #[cfg(test)]
 use std::env;
 
-#[cfg(feature = "target_hw")]
 use crate::sensors::i2c_interface_config::I2cInterfaceConfig;
-
 use crate::sensors::tank_level_switch_config::TankLevelSwitchConfig;
 use crate::dispatch::messaging_config::MessagingConfig;
 use crate::database::sql_interface_config::SqlInterfaceConfig;
@@ -105,7 +103,6 @@ pub struct ConfigData {
     pub gpio_handler: GpioHandlerConfig,
 
     /// configuration of the DHT driver
-    #[allow(unused)] // used in conditionally compiled code
     pub dht: DhtConfig,
 
     /// configuration of the fresh water refill control
@@ -141,7 +138,6 @@ pub struct ConfigData {
     /// configuration for schedule check
     pub schedule_check: ScheduleCheckConfig,
 
-    #[cfg(feature = "target_hw")]
     /// configuration of I2C interface
     pub i2c_interface: I2cInterfaceConfig,
 

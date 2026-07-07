@@ -38,7 +38,7 @@ use crate::utilities::config::ConfigData;
 /// A snapshot of which application threads are configured to be active at runtime.
 ///
 /// This struct is created at application startup from the main `ConfigData`. It serves
-/// as a lightweight, easily passable representation of the execution state, allowing
+/// as a lightweight, easily passable representation of the execution state. It allows
 /// different parts of the application (like the messaging dispatcher) to quickly
 /// check if a specific thread or module was launched without needing access to the
 /// full configuration object.
@@ -55,7 +55,6 @@ pub struct ExecutionConfig {
     pub balling: bool,
     pub monitors: bool,
     pub dht: bool,
-    #[cfg(feature = "target_hw")]
     pub i2c_interface: bool,
     pub ventilation: bool,
     pub temperature_gradient: bool,
@@ -86,7 +85,6 @@ impl ExecutionConfig {
             balling: config.balling.execute,
             monitors: config.monitors.execute,
             dht: config.dht.execute,
-            #[cfg(feature = "target_hw")]
             i2c_interface: config.i2c_interface.execute,
             ventilation: config.ventilation.execute,
             temperature_gradient: config.temperature_gradient.execute,
@@ -118,7 +116,6 @@ impl Default for ExecutionConfig {
             balling: true,
             monitors: true,
             dht: true,
-            #[cfg(feature = "target_hw")]
             i2c_interface: true,
             ventilation: true,
             temperature_gradient: true,
