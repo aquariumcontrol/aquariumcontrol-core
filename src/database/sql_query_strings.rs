@@ -636,3 +636,8 @@ pub const SQL_QUERY_WRITE_BALLING_SET_VALS: &str = concat!(
     "INSERT into balling_set_vals(pump_id, dosing_speed, dosing_volume, label) ",
     "values(:pump_id, :dosing_speed, :dosing_volume, :label);"
 );
+
+#[cfg(test)]
+// Query for writing the version information of the application into the version table
+pub const SQL_QUERY_WRITE_VERSION_INFORMATION: &str =
+    "INSERT into version(major, minor, build, hash) values(:major, :minor, :build, :hash);";

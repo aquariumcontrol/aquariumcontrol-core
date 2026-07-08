@@ -508,6 +508,25 @@ pub mod tests {
         dosing_volume: f32,
     }
 
+    // Helper function to create mock dosing profile
+    pub fn add_balling_profile(
+        conn: &mut mysql::PooledConn,
+        pump_id: i32,
+        dosing_speed: f32,
+        dosing_volume: f32,
+        label: String,
+    ) {
+        conn.exec_drop(
+            sql_query_strings::SQL_QUERY_WRITE_BALLING_SET_VALS,
+            params! {
+                "pump_id" => pump_id,
+                "dosing_speed" => dosing_speed,
+                "dosing_volume" => dosing_volume,
+                "label" => label
+            },
+        ).unwrap();
+    }
+
     #[test]
     // This test case verifies the validation logic within the `SqlInterfaceBalling::new()` constructor.
     // It covers the following scenarios:
@@ -541,10 +560,7 @@ pub mod tests {
 
         // Insert one valid row into each table
         let mut conn = sql_interface.get_connection().unwrap();
-        conn.exec_drop(
-            sql_query_strings::SQL_QUERY_WRITE_BALLING_SET_VALS,
-            params! { "pump_id" => 1, "dosing_speed" => 1.0, "dosing_volume" => 1.0, "label" => "valid" },
-        ).unwrap();
+        add_balling_profile(&mut conn, 1, 1.0, 1.0, "valid".to_string());
         conn.exec_drop(
             sql_query_strings::SQL_QUERY_WRITE_BALLING_EVENT_WITH_TIMESTAMP,
             params! { "timestamp" => Local::now().naive_local(), "pump_id" => 1, "dosing_volume" => 1.0 },
@@ -566,8 +582,8 @@ pub mod tests {
         )
         .unwrap();
         let mut conn = sql_interface.get_connection().unwrap();
-        conn.exec_drop(sql_query_strings::SQL_QUERY_WRITE_BALLING_SET_VALS, params! { "pump_id" => 1, "dosing_speed" => 1.0, "dosing_volume" => 1.0, "label" => "row1" }).unwrap();
-        conn.exec_drop(sql_query_strings::SQL_QUERY_WRITE_BALLING_SET_VALS, params! { "pump_id" => 2, "dosing_speed" => 1.0, "dosing_volume" => 1.0, "label" => "row2" }).unwrap();
+        add_balling_profile(&mut conn, 1, 1.0, 1.0, "row1".to_string());
+        add_balling_profile(&mut conn, 2, 1.0, 1.0, "row2".to_string());
 
         let result = SqlInterfaceBalling::new(conn, 1, 10); // Set the limit to 1
         assert!(
@@ -767,21 +783,8 @@ pub mod tests {
 
         // *** read balling set vals from pre-filled table *****************************************
         // prepare database: insert Balling set vals
-        let sql_query_string = sql_query_strings::SQL_QUERY_WRITE_BALLING_SET_VALS.to_string();
-        match sql_interface_balling.conn.exec_drop::<_, _>(
-            sql_query_string.clone(),
-            params! {
-            "pump_id" => 1,
-            "dosing_speed" => 2.0,
-            "dosing_volume" => 0.5,
-            "label" => "test_pump".to_string(),
-            },
-        ) {
-            Ok(_) => {}
-            Err(e) => {
-                panic!("Error when inserting Balling set values into database: {e:?}");
-            }
-        };
+        add_balling_profile(&mut sql_interface_balling.conn, 1, 2.0, 0.5, "test_pump".to_string());
+
         match sql_interface_balling.get_single_balling_setval_from_database(1) {
             Ok(c) => {
                 assert_eq!(c.pump_id, 1);
@@ -797,20 +800,7 @@ pub mod tests {
 
         // *** check if instantiation of SqlInterfaceBalling checks maximum number of rows ******
         // add one more Balling set value row
-        match sql_interface_balling.conn.exec_drop::<_, _>(
-            sql_query_string,
-            params! {
-            "pump_id" => 2,
-            "dosing_speed" => 3.0,
-            "dosing_volume" => 0.5,
-            "label" => "test_pump2".to_string(),
-            },
-        ) {
-            Ok(_) => {}
-            Err(e) => {
-                panic!("Error when inserting Balling set values into database: {e:?}");
-            }
-        };
+        add_balling_profile(&mut sql_interface_balling.conn, 2, 3.0, 0.5, "test_pump2".to_string());
         let test_result = SqlInterfaceBalling::new(sql_interface.get_connection().unwrap(), 1, 0);
         assert!(matches!(
             test_result,

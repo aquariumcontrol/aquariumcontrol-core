@@ -134,13 +134,27 @@ impl SqlInterface {
             }
         };
 
-        // Get connection for requests of the main thread.
-        let mut conn = pool
-            .get_conn()
-            .map_err(|e| SqlInterfaceError::ConnectionFromPool {
-                location: module_path!().to_string(),
-                source: e,
-            })?;
+        // Get connection for requests of the main thread, retrying in case of transient too many connections errors
+        let mut conn_opt = None;
+        let mut last_err = None;
+        for i in 0..10 {
+            match pool.get_conn() {
+                Ok(c) => {
+                    conn_opt = Some(c);
+                    break;
+                }
+                Err(e) => {
+                    last_err = Some(e);
+                    if i < 9 {
+                        std::thread::sleep(std::time::Duration::from_millis(500));
+                    }
+                }
+            }
+        }
+        let mut conn = conn_opt.ok_or_else(|| SqlInterfaceError::ConnectionFromPool {
+            location: module_path!().to_string(),
+            source: last_err.unwrap(),
+        })?;
 
         // Call the refactored check_wait_timeout
         Self::check_wait_timeout(&mut conn, config.db_min_wait_timeout)?;
@@ -986,9 +1000,60 @@ pub mod tests {
     use mysql::prelude::Queryable;
 
     use crate::database::sql_interface::{SqlInterface, SqlInterfaceError};
+    use crate::database::sql_query_strings::SQL_QUERY_WRITE_VERSION_INFORMATION;
     use crate::utilities::config::{read_config_file_with_test_database, ConfigData};
     use crate::utilities::version_information::VersionInformation;
 
+    // Helper function to insert mock version information into database
+    pub fn insert_mock_version_information(sql_interface: &mut SqlInterface) {
+        let unknown_version_information = VersionInformation {
+            major: -1,
+            minor: -1,
+            build: -1,
+            hash: "void".to_string(),
+        };
+        let sql_query_string = SQL_QUERY_WRITE_VERSION_INFORMATION.to_string();
+        match sql_interface.conn.exec_drop::<_, _>(
+            sql_query_string,
+            params! {
+            "major" => unknown_version_information.major,
+            "minor" => unknown_version_information.minor,
+            "build" => unknown_version_information.build,
+            "hash" => unknown_version_information.hash.clone(),
+            },
+        ) {
+            Ok(_) => {}
+            Err(e) => {
+                panic!("Error when inserting version information into database: {e:?}");
+            }
+        };
+    }
+    
+    // Helper function to truncate all tables (used in testing of run.rs)
+    pub fn truncate_all_tables(sql_interface: &mut SqlInterface) {
+        // List of all tables to truncate
+        let tables = [
+            "balling_log",
+            "balling_set_vals",
+            "data",
+            "feed_log",
+            "feed_profiles",
+            "feed_schedule",
+            "heating_stats",
+            "refill_log",
+            "schedule",
+            "users",
+            "ventilation_set_vals",
+            "heating_set_vals",
+            "version",
+        ];
+        
+        // Truncate all tables in the test database
+        for table in &tables {
+            let _ = SqlInterface::truncate_table(sql_interface, table.to_string());
+        }
+    }
+    
     #[test]
     // This test case checks the functionality of get_string_array_from_database.
     // - response when querying an empty table (should be Ok with an empty Vec)
@@ -1438,10 +1503,7 @@ pub mod tests {
             Err(SqlInterfaceError::WaitTimeoutTooLow(_, _, _))
         ));
     }
-
-    pub const SQL_QUERY_WRITE_VERSION_INFORMATION: &str =
-        "INSERT into version(major, minor, build, hash) values(:major, :minor, :build, :hash);";
-
+    
     #[test]
     // This test case checks
     // - error response when querying empty table
@@ -1476,28 +1538,9 @@ pub mod tests {
         }
         // *****************************************************************************************
 
+        insert_mock_version_information(&mut sql_interface);
+
         // *** check error response when version information does not match entry in database ******
-        let unknown_version_information = VersionInformation {
-            major: -1,
-            minor: -1,
-            build: -1,
-            hash: "void".to_string(),
-        };
-        let sql_query_string = SQL_QUERY_WRITE_VERSION_INFORMATION.to_string();
-        match sql_interface.conn.exec_drop::<_, _>(
-            sql_query_string,
-            params! {
-            "major" => unknown_version_information.major,
-            "minor" => unknown_version_information.minor,
-            "build" => unknown_version_information.build,
-            "hash" => unknown_version_information.hash.clone(),
-            },
-        ) {
-            Ok(_) => {}
-            Err(e) => {
-                panic!("Error when inserting version information into database: {e:?}");
-            }
-        };
         match sql_interface.get_hash_from_database(&version_information) {
             Ok(_) => {
                 panic!("Found correct version information although having inserted incorrect version information table.");

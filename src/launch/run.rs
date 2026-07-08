@@ -7,7 +7,10 @@ The above copyright notice and this permission notice shall be included in all c
 THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
-use log::{error, info, warn};
+#[cfg(not(test))]
+use log::{info, warn};
+
+use log::error;
 
 #[cfg(any(feature = "debug_main", feature = "debug_channels"))]
 use log::debug;
@@ -16,6 +19,7 @@ use crate::database::database_interface_feed_trait::DatabaseInterfaceFeedTrait;
 use crate::database::sql_interface::SqlInterface;
 use crate::database::sql_interface_balling::SqlInterfaceBalling;
 use crate::database::sql_interface_data::SqlInterfaceData;
+#[cfg(not(test))]
 use crate::database::sql_interface_error::SqlInterfaceError;
 use crate::database::sql_interface_feed::SqlInterfaceFeed;
 use crate::database::sql_interface_heating_set_vals::SqlInterfaceHeatingSetVals;
@@ -32,6 +36,7 @@ use crate::dispatch::messaging::Messaging;
 use crate::food::feed::Feed;
 use crate::food::food_injection::FoodInjection;
 use crate::launch::channels::Channels;
+#[cfg(all(any(target_os = "linux", target_os = "macos"), not(test)))]
 use crate::launch::privilege_check::is_running_as_root;
 use crate::launch::startup_error::StartupError;
 use crate::mineral::balling::Balling;
@@ -72,14 +77,18 @@ use crate::utilities::publish_pid::PublishPid;
 #[cfg(all(feature = "target_hw", target_os = "linux"))]
 use crate::utilities::signal_handler;
 
+#[cfg(not(test))]
 use crate::launch::argument_parser::check_argument_for_valid_config_file_name;
+use crate::sensors::i2c_interface::I2cInterface;
 use crate::thermal::thermal_control_status::ThermalControlStatus;
 #[cfg(all(feature = "target_hw", target_os = "linux"))]
 use crate::utilities::channel_content::InternalCommand;
 use crate::utilities::signal_handler::handle_signals;
-use crate::utilities::version_information::{
-    VersionInformation, VersionInformationError,
-};
+#[cfg(not(test))]
+use crate::utilities::version_information::VersionInformation;
+#[cfg(not(test))]
+use crate::utilities::version_information::VersionInformationError;
+
 use crate::watchmen::monitors::Monitors;
 use crate::watchmen::petting::Petting;
 use crate::watchmen::watchdog::Watchdog;
@@ -88,8 +97,10 @@ use crate::water::refill_status::RefillStatus;
 use crate::water::water_injection::WaterInjection;
 use spin_sleep::SpinSleeper;
 pub use std::sync::{atomic::AtomicBool, Arc, Mutex};
-use std::{env, panic, time::Duration};
-use crate::sensors::i2c_interface::I2cInterface;
+use std::{panic, time::Duration};
+
+#[cfg(not(test))]
+use std::env;
 
 cfg_if::cfg_if! {
     if #[cfg(all(target_os = "linux", feature = "target_hw"))] {
@@ -104,6 +115,7 @@ cfg_if::cfg_if! {
     }
 }
 
+#[cfg(not(test))]
 /// Displays the valid command line parameter combinations
 fn display_usage() {
     println!("aquarium_control requires a configuration file to be specified to enter operation. Alternatively, the following options are available:");
@@ -111,6 +123,7 @@ fn display_usage() {
     println!("-v, --version: Output version information including hash of executable.");
 }
 
+#[cfg(not(test))]
 /// Checks if a command-line argument is a recognized command and executes it.
 ///
 /// This function handles special command-line flags that provide information
@@ -293,19 +306,32 @@ fn check_is_command(command: &str) -> Result<bool, VersionInformationError> {
 ///     temperature_gradient --> signal_handler
 ///     signal_handler --> temperature_gradient
 /// ```
-pub fn run() -> Result<(), StartupError> {
+pub fn run(
+    #[cfg(test)]
+    config_file_name_for_test: String
+) -> Result<(), StartupError> {
     let spin_sleeper = SpinSleeper::default();
 
     #[cfg(all(not(target_os = "linux"), feature = "target_hw"))]
     compile_error!("Target hardware is only available with Linux operating system.");
 
     // get command line parameters from OS
+    #[cfg(not(test))]
     let args: Vec<String> = env::args().collect();
 
-    // initialize with a default configuration file name
-    let mut config_file_name = "/etc/aquarium_control/aquarium_control.toml".to_string();
+    #[allow(unused_mut)]
+    let mut config_file_name: String;
+    #[cfg(test)]
+    {
+        config_file_name = config_file_name_for_test;
+    }
+    #[cfg(not(test))]
+    {
+        config_file_name = "/etc/aquarium_control/aquarium_control.toml".to_string();
+    }
 
     // Check command line parameters
+    #[cfg(not(test))]
     if args.len() > 1 {
         // If the first argument contains a path and file name, then let's use that.
         config_file_name = match check_argument_for_valid_config_file_name(&args[1]) {
@@ -347,6 +373,7 @@ pub fn run() -> Result<(), StartupError> {
     setup_logger(config.logger).map_err(|e| StartupError::LoggingSetupFailure { source: e })?;
 
     // calculate hash of executable
+    #[cfg(not(test))]
     let version_information = VersionInformation::new()
         .map_err(|e| StartupError::VersionInformationRetrievalFailure { source: e })?;
     #[cfg(not(test))] // only required in real-life execution
@@ -354,7 +381,7 @@ pub fn run() -> Result<(), StartupError> {
     info!(target: module_path!(), "{version_information}");
 
     // check if the user has root privileges - disabled when developing on the Windows platform
-    #[cfg(any(target_os = "linux", target_os = "macos"))]
+    #[cfg(all(any(target_os = "linux", target_os = "macos"), not(test)))]
     if !is_running_as_root() {
         return Err(StartupError::NotRoot);
     }
@@ -547,8 +574,10 @@ pub fn run() -> Result<(), StartupError> {
             source: Box::new(e),
         })?;
 
+    #[cfg(not(test))]
     match sql_interface.get_hash_from_database(&version_information) {
         Ok(c) => {
+            #[cfg(not(test))]
             info!(
                 target: module_path!(),
                 "version information including hash of executable found in database: {c}"
@@ -564,6 +593,7 @@ pub fn run() -> Result<(), StartupError> {
                 e,
                 SqlInterfaceError::SingleVersionRequestMultipleResults(_, _, _, _, _)
             ) {
+                #[cfg(not(test))]
                 warn!(
                     target: module_path!(),
                     "main: Found multiple hash values for version in database. Proceed with caution.");
@@ -575,11 +605,13 @@ pub fn run() -> Result<(), StartupError> {
         }
     }
 
+    #[cfg(not(test))]
     let database = sql_interface
         .get_database()
         .map_err(|e| StartupError::Database {
             source: Box::new(e),
         })?;
+    #[cfg(not(test))]
     info!(target: module_path!(), "current database name is {database}");
 
     sql_interface
@@ -587,6 +619,7 @@ pub fn run() -> Result<(), StartupError> {
         .map_err(|e| StartupError::Database {
             source: Box::new(e),
         })?;
+    #[cfg(not(test))]
     info!(target: module_path!(), "required tables are existing in database.");
 
     let mut tables_string: String = "read the following tables from database:".to_string();
@@ -594,6 +627,7 @@ pub fn run() -> Result<(), StartupError> {
         tables_string += " ";
         tables_string += &table;
     }
+    #[cfg(not(test))]
     info!(target: module_path!(), "{tables_string}");
 
     // check if any of the components requires use of the simulator
@@ -1292,4 +1326,76 @@ pub fn run() -> Result<(), StartupError> {
     }
 
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::database::sql_interface::tests::insert_mock_version_information;
+    use crate::database::sql_interface::tests::truncate_all_tables;
+    use crate::database::sql_interface_balling::tests::add_balling_profile;
+    use std::sync::atomic::{AtomicBool, Ordering};
+    use std::sync::Arc;
+    use std::time::Duration;
+    #[cfg(unix)]
+    use nix::sys::signal::{kill, Signal};
+    #[cfg(unix)]
+    use nix::unistd::getpid;
+
+    #[test]
+    fn test_run_async_runtime_configuration() {
+        // Path of the dedicated config file
+        let config_path = "config/aquarium_control_test_runtime.toml".to_string();
+
+        // Delete any stale PID file from previous test executions to avoid PidCheckError
+        let _ = std::fs::remove_file("/tmp/aquarium-ctrl-test.pid");
+
+        // Connect to database and prepare the test environment
+        let config_data = read_config_file(config_path.to_string()).unwrap();
+        let mut sql_interface = SqlInterface::new(config_data.sql_interface).unwrap();
+
+        truncate_all_tables(&mut sql_interface);
+        insert_mock_version_information(&mut sql_interface);
+
+
+        // Insert default balling set values to satisfy startup configuration checks
+        for pump_id in 1..=4 {
+            add_balling_profile(
+                &mut sql_interface.conn,
+                pump_id,
+                1.0f32,
+                10.0f32,
+                format!("Pump {}", pump_id)
+            );
+        }
+
+        let run_finished = Arc::new(AtomicBool::new(false));
+        let run_finished_clone = Arc::clone(&run_finished);
+
+        // Spawn a thread that sleeps for 50 seconds and then sends the kill signal (SIGTERM) to the current process
+        let kill_thread = std::thread::spawn(move || {
+            std::thread::sleep(Duration::from_secs(20));
+            if !run_finished_clone.load(Ordering::Relaxed) {
+                #[cfg(unix)]
+                {
+                    let current_pid = getpid();
+                    println!("Sending SIGTERM signal to current process {current_pid}...");
+                    let _ = kill(getpid(), Signal::SIGTERM);
+                }
+            } else {
+                println!("run() already finished, skipping signal.");
+            }
+        });
+
+        // Run the main application run() function
+        let run_result = run(config_path);
+
+        run_finished.store(true, Ordering::Relaxed);
+
+        // Join the kill thread
+        let _ = kill_thread.join();
+
+        // The run function should return Ok(()) since the signal handler gracefully shuts everything down upon receiving SIGINT
+        assert!(run_result.is_ok(), "run() failed with error: {:?}", run_result.err());
+    }
 }
