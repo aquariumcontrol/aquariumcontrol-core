@@ -214,11 +214,17 @@ pub enum SqlInterfaceError {
     #[error("[{0}] Error in conversion of database result to schedule entry ({1}).")]
     ScheduleTypeConversionFailure(String, String),
 
-    /// Type-specific schedule could not be found in the database.
+    /// Type-specific schedule could not be found in the database, but other entries are existing.
     #[error(
         "[{0}] Schedule of type {1} could not be found in database. Existing entries are: {2}."
     )]
-    ScheduleTypeNotFound(String, String, String),
+    ScheduleTypeNotFoundOtherEntriesExisting(String, String, String),
+
+    /// Type-specific schedule could not be found in the database.
+    #[error(
+        "[{0}] Schedule of type {1} could not be found in database. There are no entries at all."
+    )]
+    ScheduleTypeNotFoundEmptyDatabase(String, String),
 
     /// Error when inserting heating stats into the database.
     #[error(

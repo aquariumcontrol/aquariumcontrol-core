@@ -598,7 +598,7 @@ impl AtlasScientific {
             }
 
             // Check if data acquisition is enabled.
-            if self.config.active && !channel_is_disconnected {
+            if self.config.active && !channel_is_disconnected && !self.drivers.is_empty() {
                 let duration_since_last_measurement =
                     Instant::now().duration_since(self.last_measurement_instant);
                 if !state_send_receive

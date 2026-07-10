@@ -79,6 +79,9 @@ pub use crate::utilities::signal_handler_channels::SignalHandlerChannels;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::{sync::Arc, time::Duration};
 
+#[cfg(test)]
+pub static TEST_SHUTDOWN_TRIGGER: AtomicBool = AtomicBool::new(false);
+
 /// Sends a specified `InternalCommand` to a target thread's channel and optionally waits for an acknowledgment.
 ///
 /// The signal handler uses this helper function to communicate termination
@@ -94,7 +97,7 @@ use std::{sync::Arc, time::Duration};
 ///   for communication *from* the target thread, used to receive an acknowledgment.
 ///   If `None`, no acknowledgment is expected or waited for.
 /// * `thread_name` - The name of the target thread (for logging and debugging purposes).
-pub fn send_command(
+pub async fn send_command(
     command: InternalCommand,
     tx_to_thread_opt: Option<&mut AquaSender<InternalCommand>>,
     rx_from_thread_opt: Option<&mut AquaReceiver<bool>>,
@@ -109,7 +112,7 @@ pub fn send_command(
 
                     match rx_from_thread_opt {
                         Some(rx_from_thread) => {
-                            let res = rx_from_thread.blocking_recv();
+                            let res = rx_from_thread.recv().await;
                             match res {
                                 Ok(_) => {
                                     #[cfg(feature = "debug_signal_handler")]
@@ -208,6 +211,8 @@ pub async fn handle_signals(
     term: Arc<AtomicBool>,
     mut signal_handler_channels: SignalHandlerChannels,
     execution_config: ExecutionConfig,
+    #[cfg(test)]
+    wait_for_test_shutdown_opt: Option<Duration>
 ) {
     #[cfg(all(target_os = "linux", not(test)))] // only required in real-life execution
     #[cfg(not(tarpaulin_include))]
@@ -248,7 +253,34 @@ pub async fn handle_signals(
         }
     }
 
+    #[cfg(feature = "debug_signal_handler")]
+    debug!(
+        target: module_path!(),
+        "Waiting for shutdown signal",
+    );
+    #[cfg(test)]
+    let start_instant = std::time::Instant::now();
     while !term.load(Ordering::Relaxed) {
+        #[cfg(test)]
+        if let Some(wait_duration) = wait_for_test_shutdown_opt {
+            if start_instant.elapsed() >= wait_duration {
+                term.store(true, Ordering::Relaxed);
+                #[cfg(feature = "debug_signal_handler")]
+                debug!(
+                    target: module_path!(),
+                    "Test shutdown triggered via wait_for_test_shutdown_opt."
+                );
+            }
+        }
+        #[cfg(test)]
+        if TEST_SHUTDOWN_TRIGGER.load(Ordering::Relaxed) {
+            term.store(true, Ordering::Relaxed);
+            #[cfg(feature = "debug_signal_handler")]
+            debug!(
+                target: module_path!(),
+                "Test shutdown triggered."
+            );
+        }
         tokio::time::sleep(sleep_duration_hundred_milli_sec).await;
     }
     #[cfg(not(test))] // only required in real-life execution
@@ -256,6 +288,11 @@ pub async fn handle_signals(
     info!(
         target: module_path!(),
         "received termination signal from operating system",
+    );
+    #[cfg(feature = "debug_signal_handler")]
+    debug!(
+        target: module_path!(),
+        "Starting phase 1 of shutdown",
     );
 
     // phase 1: shut down highest level controls: data_logger
@@ -266,14 +303,14 @@ pub async fn handle_signals(
             Some(&mut signal_handler_channels.tx_signal_handler_to_data_logger),
             Some(&mut signal_handler_channels.rx_signal_handler_from_data_logger),
             "data_logger",
-        );
+        ).await;
     }
     send_command(
         InternalCommand::Quit,
         Some(&mut signal_handler_channels.tx_signal_handler_to_messaging),
         Some(&mut signal_handler_channels.rx_signal_handler_from_messaging),
         "messaging",
-    );
+    ).await;
     #[cfg(feature = "debug_signal_handler")]
     debug!(
         target: module_path!(),
@@ -288,7 +325,7 @@ pub async fn handle_signals(
             Some(&mut signal_handler_channels.tx_signal_handler_to_refill),
             Some(&mut signal_handler_channels.rx_signal_handler_from_refill),
             "refill",
-        );
+        ).await;
     }
     if execution_config.heating {
         send_command(
@@ -296,7 +333,7 @@ pub async fn handle_signals(
             Some(&mut signal_handler_channels.tx_signal_handler_to_heating),
             Some(&mut signal_handler_channels.rx_signal_handler_from_heating),
             "heating",
-        );
+        ).await;
     }
     if execution_config.ventilation {
         send_command(
@@ -304,7 +341,7 @@ pub async fn handle_signals(
             Some(&mut signal_handler_channels.tx_signal_handler_to_ventilation),
             Some(&mut signal_handler_channels.rx_signal_handler_from_ventilation),
             "ventilation",
-        );
+        ).await;
     }
     if execution_config.feed {
         send_command(
@@ -312,7 +349,7 @@ pub async fn handle_signals(
             Some(&mut signal_handler_channels.tx_signal_handler_to_feed),
             Some(&mut signal_handler_channels.rx_signal_handler_from_feed),
             "feed",
-        );
+        ).await;
     }
     if execution_config.balling {
         send_command(
@@ -320,7 +357,7 @@ pub async fn handle_signals(
             Some(&mut signal_handler_channels.tx_signal_handler_to_balling),
             Some(&mut signal_handler_channels.rx_signal_handler_from_balling),
             "balling",
-        );
+        ).await;
     }
     #[cfg(feature = "debug_signal_handler")]
     debug!(
@@ -336,7 +373,7 @@ pub async fn handle_signals(
             Some(&mut signal_handler_channels.tx_signal_handler_to_tank_level_switch),
             Some(&mut signal_handler_channels.rx_signal_handler_from_tank_level_switch),
             "tank_level_switch",
-        );
+        ).await;
     }
     if !use_simulator && execution_config.atlas_scientific {
         send_command(
@@ -344,7 +381,7 @@ pub async fn handle_signals(
             Some(&mut signal_handler_channels.tx_signal_handler_to_atlas_scientific),
             Some(&mut signal_handler_channels.rx_signal_handler_from_atlas_scientific),
             "atlas_scientific",
-        );
+        ).await;
     }
     if execution_config.sensor_manager {
         send_command(
@@ -352,7 +389,7 @@ pub async fn handle_signals(
             Some(&mut signal_handler_channels.tx_signal_handler_to_sensor_manager),
             Some(&mut signal_handler_channels.rx_signal_handler_from_sensor_manager),
             "sensor_manager",
-        );
+        ).await;
     }
     if execution_config.temperature_gradient {
         send_command(
@@ -360,7 +397,7 @@ pub async fn handle_signals(
             Some(&mut signal_handler_channels.tx_signal_handler_to_temperature_gradient),
             Some(&mut signal_handler_channels.rx_signal_handler_from_temperature_gradient),
             "temperature_gradient",
-        );
+        ).await;
     }
     if execution_config.schedule_check {
         send_command(
@@ -368,7 +405,7 @@ pub async fn handle_signals(
             Some(&mut signal_handler_channels.tx_signal_handler_to_schedule_check),
             Some(&mut signal_handler_channels.rx_signal_handler_from_schedule_check),
             "schedule_check",
-        );
+        ).await;
     }
     #[cfg(feature = "debug_signal_handler")]
     debug!(
@@ -383,7 +420,7 @@ pub async fn handle_signals(
             Some(&mut signal_handler_channels.tx_signal_handler_to_i2c_interface),
             None,
             "i2c_interface",
-        );
+        ).await;
     }
     if execution_config.dht {
         send_command(
@@ -391,7 +428,7 @@ pub async fn handle_signals(
             Some(&mut signal_handler_channels.tx_signal_handler_to_dht),
             None,
             "dht",
-        );
+        ).await;
     }
     if execution_config.relay_manager {
         send_command(
@@ -399,7 +436,7 @@ pub async fn handle_signals(
             Some(&mut signal_handler_channels.tx_signal_handler_to_relay_manager),
             Some(&mut signal_handler_channels.rx_signal_handler_from_relay_manager),
             "relay_manager",
-        );
+        ).await;
     }
     send_command(
         InternalCommand::Quit,
@@ -410,14 +447,14 @@ pub async fn handle_signals(
             .rx_signal_handler_from_tcp_opt
             .as_mut(),
         "tcp",
-    );
+    ).await;
     if execution_config.monitors {
         send_command(
             InternalCommand::Quit,
             Some(&mut signal_handler_channels.tx_signal_handler_to_monitors),
             Some(&mut signal_handler_channels.rx_signal_handler_from_monitors),
             "monitors",
-        );
+        ).await;
     }
     #[cfg(feature = "debug_signal_handler")]
     debug!(
@@ -432,7 +469,7 @@ pub async fn handle_signals(
             Some(&mut signal_handler_channels.tx_signal_handler_to_data_logger),
             None,
             "data_logger",
-        );
+        ).await;
     }
     #[cfg(feature = "debug_signal_handler")]
     debug!(
@@ -447,7 +484,7 @@ pub async fn handle_signals(
             Some(&mut signal_handler_channels.tx_signal_handler_to_heating),
             None,
             "heating",
-        );
+        ).await;
     }
     if execution_config.ventilation {
         send_command(
@@ -455,7 +492,7 @@ pub async fn handle_signals(
             Some(&mut signal_handler_channels.tx_signal_handler_to_ventilation),
             None,
             "ventilation",
-        );
+        ).await;
     }
     if execution_config.feed {
         send_command(
@@ -463,7 +500,7 @@ pub async fn handle_signals(
             Some(&mut signal_handler_channels.tx_signal_handler_to_feed),
             None,
             "feed",
-        );
+        ).await;
     }
     if execution_config.refill {
         send_command(
@@ -471,7 +508,7 @@ pub async fn handle_signals(
             Some(&mut signal_handler_channels.tx_signal_handler_to_refill),
             None,
             "refill",
-        );
+        ).await;
     }
     if execution_config.balling {
         send_command(
@@ -479,7 +516,7 @@ pub async fn handle_signals(
             Some(&mut signal_handler_channels.tx_signal_handler_to_balling),
             None,
             "balling",
-        );
+        ).await;
     }
     #[cfg(feature = "debug_signal_handler")]
     debug!(
@@ -494,7 +531,7 @@ pub async fn handle_signals(
             Some(&mut signal_handler_channels.tx_signal_handler_to_ds18b20),
             None,
             "ds18b20",
-        );
+        ).await;
     }
     if execution_config.atlas_scientific {
         send_command(
@@ -502,7 +539,7 @@ pub async fn handle_signals(
             Some(&mut signal_handler_channels.tx_signal_handler_to_atlas_scientific),
             None,
             "atlas_scientific",
-        );
+        ).await;
     }
 
     if execution_config.sensor_manager {
@@ -511,7 +548,7 @@ pub async fn handle_signals(
             Some(&mut signal_handler_channels.tx_signal_handler_to_sensor_manager),
             None,
             "ambient",
-        );
+        ).await;
     }
     if execution_config.tank_level_switch {
         send_command(
@@ -519,7 +556,7 @@ pub async fn handle_signals(
             Some(&mut signal_handler_channels.tx_signal_handler_to_tank_level_switch),
             None,
             "tank_level_switch",
-        );
+        ).await;
     }
     #[cfg(feature = "debug_signal_handler")]
     debug!(
@@ -534,14 +571,14 @@ pub async fn handle_signals(
             Some(&mut signal_handler_channels.tx_signal_handler_to_watchdog),
             Some(&mut signal_handler_channels.rx_signal_handler_from_watchdog),
             "watchdog",
-        );
+        ).await;
     }
     send_command(
         InternalCommand::Terminate,
         Some(&mut signal_handler_channels.tx_signal_handler_to_messaging),
         None,
         "messaging",
-    );
+    ).await;
 
     #[cfg(feature = "debug_channels")]
     debug!(target: module_path!(), "{signal_handler_channels}");
@@ -593,6 +630,7 @@ pub mod tests {
                             term_clone,
                             channels.signal_handler,
                             ExecutionConfig::default(),
+                            None,
                         )
                         .await;
                     });

@@ -55,7 +55,7 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 
 use log::{error, info};
 
-#[cfg(any(feature = "debug_channels", test))]
+#[cfg(feature = "debug_channels")]
 use log::debug;
 
 #[cfg(all(not(test), target_os = "linux"))] // only required in real-life execution
@@ -220,11 +220,6 @@ impl Monitors {
                     self.lock_info_monitors_inhibited = true;
                 } else {
                     self.lock_info_monitors_inhibited = false;
-                    #[cfg(test)]
-                    debug!(
-                        target: module_path!(),
-                        "executing monitors"
-                    );
                 }
 
                 match monitors_channels.rx_monitors_from_refill.try_recv() {

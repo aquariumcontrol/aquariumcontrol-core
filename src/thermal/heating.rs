@@ -510,12 +510,6 @@ impl Heating {
         let mut heating_stats_opt = match get_heating_stats_res {
             Ok(c) => Some(c),
             Err(_) => {
-                #[cfg(test)]
-                println!(
-                    "{}: could not get existing heating stats entry for today from database - creating new one for today",
-                    module_path!()
-                );
-
                 let entry = if is_multi_thread {
                     tokio::task::block_in_place(|| {
                         HeatingStatsEntry::new(&mut sql_interface_heating.conn)

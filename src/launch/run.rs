@@ -7,7 +7,7 @@ The above copyright notice and this permission notice shall be included in all c
 THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
-#[cfg(not(test))]
+#[cfg(not(test))] // only required in real-life execution
 use log::{info, warn};
 
 use log::error;
@@ -19,7 +19,7 @@ use crate::database::database_interface_feed_trait::DatabaseInterfaceFeedTrait;
 use crate::database::sql_interface::SqlInterface;
 use crate::database::sql_interface_balling::SqlInterfaceBalling;
 use crate::database::sql_interface_data::SqlInterfaceData;
-#[cfg(not(test))]
+#[cfg(not(test))] // only required in real-life execution
 use crate::database::sql_interface_error::SqlInterfaceError;
 use crate::database::sql_interface_feed::SqlInterfaceFeed;
 use crate::database::sql_interface_heating_set_vals::SqlInterfaceHeatingSetVals;
@@ -50,8 +50,6 @@ use crate::relays::actuate_controllino::ActuateControllino;
 use crate::relays::actuate_gpio::{ActuateGpio, ActuateGpioConfig};
 use crate::relays::actuate_simulator::ActuateSimulator;
 use crate::relays::relay_manager::RelayManager;
-
-#[cfg(all(feature = "target_hw", target_os = "linux"))]
 use crate::sensors::atlas_scientific::AtlasScientific;
 
 use crate::sensors::atlas_scientific::AtlasScientificResultData;
@@ -77,16 +75,16 @@ use crate::utilities::publish_pid::PublishPid;
 #[cfg(all(feature = "target_hw", target_os = "linux"))]
 use crate::utilities::signal_handler;
 
-#[cfg(not(test))]
+#[cfg(not(test))] // only required in real-life execution
 use crate::launch::argument_parser::check_argument_for_valid_config_file_name;
 use crate::sensors::i2c_interface::I2cInterface;
 use crate::thermal::thermal_control_status::ThermalControlStatus;
 #[cfg(all(feature = "target_hw", target_os = "linux"))]
 use crate::utilities::channel_content::InternalCommand;
 use crate::utilities::signal_handler::handle_signals;
-#[cfg(not(test))]
+#[cfg(not(test))] // only required in real-life execution
 use crate::utilities::version_information::VersionInformation;
-#[cfg(not(test))]
+#[cfg(not(test))] // only required in real-life execution
 use crate::utilities::version_information::VersionInformationError;
 
 use crate::watchmen::monitors::Monitors;
@@ -98,8 +96,8 @@ use crate::water::water_injection::WaterInjection;
 use spin_sleep::SpinSleeper;
 pub use std::sync::{atomic::AtomicBool, Arc, Mutex};
 use std::{panic, time::Duration};
-
-#[cfg(not(test))]
+use std::collections::HashMap;
+#[cfg(not(test))] // only required in real-life execution
 use std::env;
 
 cfg_if::cfg_if! {
@@ -115,7 +113,8 @@ cfg_if::cfg_if! {
     }
 }
 
-#[cfg(not(test))]
+#[cfg(not(test))] // only required in real-life execution
+#[cfg(not(tarpaulin_include))]
 /// Displays the valid command line parameter combinations
 fn display_usage() {
     println!("aquarium_control requires a configuration file to be specified to enter operation. Alternatively, the following options are available:");
@@ -123,7 +122,8 @@ fn display_usage() {
     println!("-v, --version: Output version information including hash of executable.");
 }
 
-#[cfg(not(test))]
+#[cfg(not(test))] // only required in real-life execution
+#[cfg(not(tarpaulin_include))]
 /// Checks if a command-line argument is a recognized command and executes it.
 ///
 /// This function handles special command-line flags that provide information
@@ -308,7 +308,9 @@ fn check_is_command(command: &str) -> Result<bool, VersionInformationError> {
 /// ```
 pub fn run(
     #[cfg(test)]
-    config_file_name_for_test: String
+    config_file_name_for_test: String,
+    #[cfg(test)]
+    wait_for_test_shutdown_opt: Option<Duration>
 ) -> Result<(), StartupError> {
     let spin_sleeper = SpinSleeper::default();
 
@@ -316,7 +318,8 @@ pub fn run(
     compile_error!("Target hardware is only available with Linux operating system.");
 
     // get command line parameters from OS
-    #[cfg(not(test))]
+    #[cfg(not(test))] // only required in real-life execution
+    #[cfg(not(tarpaulin_include))]
     let args: Vec<String> = env::args().collect();
 
     #[allow(unused_mut)]
@@ -325,13 +328,15 @@ pub fn run(
     {
         config_file_name = config_file_name_for_test;
     }
-    #[cfg(not(test))]
+    #[cfg(not(test))] // only required in real-life execution
+    #[cfg(not(tarpaulin_include))]
     {
         config_file_name = "/etc/aquarium_control/aquarium_control.toml".to_string();
     }
 
     // Check command line parameters
-    #[cfg(not(test))]
+    #[cfg(not(test))] // only required in real-life execution
+    #[cfg(not(tarpaulin_include))]
     if args.len() > 1 {
         // If the first argument contains a path and file name, then let's use that.
         config_file_name = match check_argument_for_valid_config_file_name(&args[1]) {
@@ -373,7 +378,8 @@ pub fn run(
     setup_logger(config.logger).map_err(|e| StartupError::LoggingSetupFailure { source: e })?;
 
     // calculate hash of executable
-    #[cfg(not(test))]
+    #[cfg(not(test))] // only required in real-life execution
+    #[cfg(not(tarpaulin_include))]
     let version_information = VersionInformation::new()
         .map_err(|e| StartupError::VersionInformationRetrievalFailure { source: e })?;
     #[cfg(not(test))] // only required in real-life execution
@@ -574,10 +580,12 @@ pub fn run(
             source: Box::new(e),
         })?;
 
-    #[cfg(not(test))]
+    #[cfg(not(test))] // only required in real-life execution
+    #[cfg(not(tarpaulin_include))]
     match sql_interface.get_hash_from_database(&version_information) {
         Ok(c) => {
-            #[cfg(not(test))]
+            #[cfg(not(test))] // only required in real-life execution
+            #[cfg(not(tarpaulin_include))]
             info!(
                 target: module_path!(),
                 "version information including hash of executable found in database: {c}"
@@ -593,7 +601,8 @@ pub fn run(
                 e,
                 SqlInterfaceError::SingleVersionRequestMultipleResults(_, _, _, _, _)
             ) {
-                #[cfg(not(test))]
+                #[cfg(not(test))] // only required in real-life execution
+                #[cfg(not(tarpaulin_include))]
                 warn!(
                     target: module_path!(),
                     "main: Found multiple hash values for version in database. Proceed with caution.");
@@ -605,13 +614,15 @@ pub fn run(
         }
     }
 
-    #[cfg(not(test))]
+    #[cfg(not(test))] // only required in real-life execution
+    #[cfg(not(tarpaulin_include))]
     let database = sql_interface
         .get_database()
         .map_err(|e| StartupError::Database {
             source: Box::new(e),
         })?;
-    #[cfg(not(test))]
+    #[cfg(not(test))] // only required in real-life execution
+    #[cfg(not(tarpaulin_include))]
     info!(target: module_path!(), "current database name is {database}");
 
     sql_interface
@@ -619,7 +630,8 @@ pub fn run(
         .map_err(|e| StartupError::Database {
             source: Box::new(e),
         })?;
-    #[cfg(not(test))]
+    #[cfg(not(test))] // only required in real-life execution
+    #[cfg(not(tarpaulin_include))]
     info!(target: module_path!(), "required tables are existing in database.");
 
     let mut tables_string: String = "read the following tables from database:".to_string();
@@ -627,7 +639,8 @@ pub fn run(
         tables_string += " ";
         tables_string += &table;
     }
-    #[cfg(not(test))]
+    #[cfg(not(test))] // only required in real-life execution
+    #[cfg(not(tarpaulin_include))]
     info!(target: module_path!(), "{tables_string}");
 
     // check if any of the components requires use of the simulator
@@ -637,8 +650,10 @@ pub fn run(
         | config.tank_level_switch.use_simulator;
 
     let rt = tokio::runtime::Builder::new_multi_thread()
-        .worker_threads(1)
-        .max_blocking_threads(3)
+        .worker_threads(8)
+        .max_blocking_threads(
+            16
+        )
         .enable_all()
         .build()
         .map_err(|e| StartupError::TokioRuntimeSetupFailure { source: e })?;
@@ -806,11 +821,13 @@ pub fn run(
     let mutex_temperature_gradient_clone_for_data_logger = mutex_temperature_gradient.clone();
     //**********************************************************************************************
 
-    #[cfg(all(target_os = "linux", feature = "target_hw"))]
+    #[cfg(all(target_os = "linux", feature = "target_hw", not(test)))]
     let atlas_scientific_drivers = AtlasScientific::create_drivers(&config.atlas_scientific)
         .map_err(|e| StartupError::AtlasScientificSetupFailure { source: e })?;
-    #[cfg(all(target_os = "linux", feature = "target_hw"))]
-    let atlas_scientific =
+    #[cfg(any(test, not(target_os = "linux"), not(feature = "target_hw")))]
+    let atlas_scientific_drivers = HashMap::new();
+
+    let mut atlas_scientific =
         AtlasScientific::new(config.atlas_scientific, atlas_scientific_drivers);
 
     let mut sensor_manager = SensorManager::new(config.sensor_manager)
@@ -946,12 +963,20 @@ pub fn run(
 
     // give sensor reading components some time so that they can acquire a first data set
     let duration_one_second = Duration::from_secs(1);
+    #[cfg(not(test))] // only required in real-life execution
+    #[cfg(not(tarpaulin_include))]
     println!("trying to acquire data before starting control in 3 seconds...");
     spin_sleeper.sleep(duration_one_second);
+    #[cfg(not(test))] // only required in real-life execution
+    #[cfg(not(tarpaulin_include))]
     println!("trying to acquire data before starting control in 2 seconds...");
     spin_sleeper.sleep(duration_one_second);
+    #[cfg(not(test))] // only required in real-life execution
+    #[cfg(not(tarpaulin_include))]
     println!("trying to acquire data before starting control in 1 second...");
     spin_sleeper.sleep(duration_one_second);
+    #[cfg(not(test))] // only required in real-life execution
+    #[cfg(not(tarpaulin_include))]
     println!("starting control...");
 
     rt.block_on(async {
@@ -1001,6 +1026,8 @@ pub fn run(
                 term,
                 chan_signal_handler,
                 signal_handler_config,
+                #[cfg(test)]
+                wait_for_test_shutdown_opt,
             ).await;
             #[cfg(feature = "debug_main")]
             debug!(target: module_path!(), "Signal handler terminated.");
@@ -1046,7 +1073,6 @@ pub fn run(
             tasks.push(handle);
         }
 
-        #[cfg(all(target_os = "linux", feature = "target_hw"))]
         if !use_simulator && execution_config.atlas_scientific {
             let handle = tokio::spawn(async move {
                 atlas_scientific.execute(
@@ -1334,68 +1360,43 @@ mod tests {
     use crate::database::sql_interface::tests::insert_mock_version_information;
     use crate::database::sql_interface::tests::truncate_all_tables;
     use crate::database::sql_interface_balling::tests::add_balling_profile;
-    use std::sync::atomic::{AtomicBool, Ordering};
-    use std::sync::Arc;
+    use std::sync::atomic::Ordering;
     use std::time::Duration;
-    #[cfg(unix)]
-    use nix::sys::signal::{kill, Signal};
-    #[cfg(unix)]
-    use nix::unistd::getpid;
 
     #[test]
     fn test_run_async_runtime_configuration() {
         // Path of the dedicated config file
         let config_path = "config/aquarium_control_test_runtime.toml".to_string();
 
+        // Reset the test shutdown trigger flag to false
+        crate::utilities::signal_handler::TEST_SHUTDOWN_TRIGGER.store(false, Ordering::Relaxed);
+
         // Delete any stale PID file from previous test executions to avoid PidCheckError
         let _ = std::fs::remove_file("/tmp/aquarium-ctrl-test.pid");
 
-        // Connect to database and prepare the test environment
-        let config_data = read_config_file(config_path.to_string()).unwrap();
-        let mut sql_interface = SqlInterface::new(config_data.sql_interface).unwrap();
+        // Connect to database and prepare the test environment within a scope so the connection is returned to the pool
+        {
+            let config_data = read_config_file(config_path.to_string()).unwrap();
+            let mut sql_interface = SqlInterface::new(config_data.sql_interface).unwrap();
 
-        truncate_all_tables(&mut sql_interface);
-        insert_mock_version_information(&mut sql_interface);
+            truncate_all_tables(&mut sql_interface);
+            insert_mock_version_information(&mut sql_interface);
 
-
-        // Insert default balling set values to satisfy startup configuration checks
-        for pump_id in 1..=4 {
-            add_balling_profile(
-                &mut sql_interface.conn,
-                pump_id,
-                1.0f32,
-                10.0f32,
-                format!("Pump {}", pump_id)
-            );
+            // Insert default balling set values to satisfy startup configuration checks
+            for pump_id in 1..=4 {
+                add_balling_profile(
+                    &mut sql_interface.conn,
+                    pump_id,
+                    1.0f32,
+                    10.0f32,
+                    format!("Pump {}", pump_id)
+                );
+            }
         }
 
-        let run_finished = Arc::new(AtomicBool::new(false));
-        let run_finished_clone = Arc::clone(&run_finished);
+        // Run the main application run() function with 50 seconds test shutdown duration
+        let run_result = run(config_path, Some(Duration::from_secs(20)));
 
-        // Spawn a thread that sleeps for 50 seconds and then sends the kill signal (SIGTERM) to the current process
-        let kill_thread = std::thread::spawn(move || {
-            std::thread::sleep(Duration::from_secs(20));
-            if !run_finished_clone.load(Ordering::Relaxed) {
-                #[cfg(unix)]
-                {
-                    let current_pid = getpid();
-                    println!("Sending SIGTERM signal to current process {current_pid}...");
-                    let _ = kill(getpid(), Signal::SIGTERM);
-                }
-            } else {
-                println!("run() already finished, skipping signal.");
-            }
-        });
-
-        // Run the main application run() function
-        let run_result = run(config_path);
-
-        run_finished.store(true, Ordering::Relaxed);
-
-        // Join the kill thread
-        let _ = kill_thread.join();
-
-        // The run function should return Ok(()) since the signal handler gracefully shuts everything down upon receiving SIGINT
         assert!(run_result.is_ok(), "run() failed with error: {:?}", run_result.err());
     }
 }

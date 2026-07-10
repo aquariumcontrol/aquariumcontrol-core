@@ -88,7 +88,7 @@ use crate::sensors::dht_channels::DhtChannels;
 use crate::utilities::proc_ext_req::ProcessExternalRequestTrait;
 use crate::utilities::check_mutex_access_duration::CheckMutexAccessDurationTrait;
 
-#[cfg(not(test))]
+#[cfg(not(test))] // only required in real-life execution
 use crate::utilities::logger::log_error_chain;
 
 cfg_if::cfg_if! {

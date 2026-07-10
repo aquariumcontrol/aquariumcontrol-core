@@ -310,10 +310,11 @@ impl ScheduleCheck {
                         locks.find_schedule = false;
                         Some(c)
                     }
-                    Err(e) => {
+                    Err(_e) => {
+                        #[cfg(not(test))] // only required in real-life execution
                         if !locks.find_schedule {
                             let context = format!("could not find schedule for {module_name}");
-                            log_error_chain(module_path!(), &context, e);
+                            log_error_chain(module_path!(), &context, _e);
                             locks.find_schedule = true;
                         }
                         None

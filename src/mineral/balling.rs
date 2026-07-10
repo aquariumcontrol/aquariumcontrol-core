@@ -415,14 +415,6 @@ impl Balling {
             }
         };
 
-        #[cfg(test)]
-        println!(
-            "{}, Duration since last dosing for pump {} is {} seconds.",
-            module_path!(),
-            pump_id,
-            duration_since_balling_dosing.as_secs()
-        );
-
         let target_dosing_interval_duration = Duration::from_secs(target_dosing_interval as u64);
 
         let remaining_time_until_next_dosing =
@@ -431,14 +423,6 @@ impl Balling {
             } else {
                 target_dosing_interval_duration - duration_since_balling_dosing
             };
-
-        #[cfg(test)]
-        println!(
-            "{}: Duration until next dosing dosing of pump {} is {} seconds.",
-            module_path!(),
-            pump_id,
-            remaining_time_until_next_dosing.as_secs()
-        );
 
         Ok(remaining_time_until_next_dosing)
     }
@@ -545,14 +529,6 @@ impl Balling {
             Ok(balling_setval) => {
                 let dosing_duration_millis =
                     Self::calc_target_dosing_duration_millis(&balling_setval);
-
-                #[cfg(test)]
-                println!(
-                    "{}: Calculated target dosing duration of {} ms for pump #{}",
-                    module_path!(),
-                    dosing_duration_millis,
-                    pump_id
-                );
 
                 if dosing_duration_millis > 0 {
                     // inner scope to limit the lifetime of unlocked mutex
@@ -690,9 +666,8 @@ impl Balling {
         let sleep_duration_hundred_millis = Duration::from_millis(100); // used to reduce the frequency of channel polling
         let sleep_duration_pump_switch =
             Duration::from_millis(self.config.pump_switch_delay_millis.into()); // wait between actuation of pumps
-
         let mut loop_counter = 0; // used to reduce the frequency of DB requests
-        let mut quit_command_received: bool; // the request to end the application has been received
+        let mut quit_command_received: bool = false; // the request to end the application has been received
         let mut stop_command_received: bool; // the request to (temporarily) stop dosing has been received
         let mut start_command_received: bool; // the request to (temporarily) stop dosing has been received
         let mut dosing_inhibited: bool = false; // state of dosing control determined if the start/stop command has been received
@@ -721,19 +696,6 @@ impl Balling {
                     module_path!() // Pass the current module path for accurate logging
                 );
 
-                // debug information
-                #[cfg(feature = "debug_balling")]
-                {
-                    // output countdowns every 10 seconds
-                    debug!(
-                        target: module_path!(),
-                        "countdown 1 = {}, countdown 2 = {}, countdown 3 = {}, countdown 4 = {}",
-                        self.countdown_dosing_pump1,
-                        self.countdown_dosing_pump2,
-                        self.countdown_dosing_pump3,
-                        self.countdown_dosing_pump4,
-                    );
-                }
                 #[allow(clippy::needless_range_loop)]
                 if !self.execution_blocked {
                     for pump_array_index in 0..=3 {
@@ -762,13 +724,16 @@ impl Balling {
                                 )
                                 .await;
                             if quit_command_received {
-                                break; // Quit command received during dosing
+                                break; // Break from inner loop
                             }
                             // wait a little period between dosings of each pump
                             tokio::time::sleep(sleep_duration_pump_switch).await;
                             target_instants_dosing[pump_array_index] +=
                                 self.dosing_intervals[pump_array_index];
                         }
+                    }
+                    if quit_command_received {
+                        break; // Break from outer loop
                     }
                 }
             }
@@ -782,7 +747,6 @@ impl Balling {
                 &mut balling_channels.rx_balling_from_signal_handler,
                 Some(&mut balling_channels.rx_balling_from_messaging),
             );
-
             if self.execute_command_received && self.config.active && !self.execution_blocked {
                 let pump_device_opt = Self::get_pump_from_id(self.pump_id_requested);
                 match pump_device_opt {

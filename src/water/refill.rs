@@ -1085,12 +1085,6 @@ impl Refill {
 
         // The application received the request to terminate. That is why the loop was left.
         // Answer to the thread which sent the request for termination, so that shutdown can proceed further.
-        #[cfg(test)]
-        println!(
-            "{}: sending Quit confirmation to signal handler.",
-            module_path!()
-        );
-
         refill_channels.acknowledge_signal_handler();
 
         // This thread has channel connections to underlying threads (relay manager, tank level switch).

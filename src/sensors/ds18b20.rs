@@ -236,9 +236,6 @@ impl Ds18b20 {
     /// - `Ds18b20Error::TemperatureOutOfRange`: If the parsed temperature is outside the plausible range defined
     ///   by `MIN_TEMPERATURE` and `MAX_TEMPERATURE`.
     pub fn read(&self, sensor_id: &str) -> Ds18b20Result {
-        #[cfg(test)]
-        println!("{}: reading from {}", module_path!(), sensor_id);
-
         let base_dir = PathBuf::from(self.config.system_driver_base_path.clone());
         let device_folder =
             base_dir.join(self.config.system_driver_sensor_path_prefix.to_string() + sensor_id);
