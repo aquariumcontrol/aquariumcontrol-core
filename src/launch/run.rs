@@ -820,6 +820,10 @@ pub fn run(
     #[cfg(any(test, not(target_os = "linux"), not(feature = "target_hw")))]
     let atlas_scientific_drivers = HashMap::new();
 
+    #[cfg(all(target_os = "linux", feature = "target_hw"))]
+    let atlas_scientific =
+        AtlasScientific::new(config.atlas_scientific, atlas_scientific_drivers);
+    #[cfg(not(all(target_os = "linux", feature = "target_hw")))]
     let mut atlas_scientific =
         AtlasScientific::new(config.atlas_scientific, atlas_scientific_drivers);
 
@@ -1002,7 +1006,7 @@ pub fn run(
                     Some(&mut chan_signal_handler.tx_signal_handler_to_i2c_interface),
                     None,
                     "i2c_interface",
-                );
+                ).await;
                 return Err(StartupError::AtlasScientificSensorTypeMismatch { source: e });
             }
             (atlas_scientific, chan_atlas_scientific)
