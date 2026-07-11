@@ -874,7 +874,8 @@ pub mod tests {
             .enable_all()
             .build()
             .unwrap()
-            .block_on(async { // blocking execution used for testing
+            .block_on(async {
+                // blocking execution used for testing
                 sensor_manager
                     .execute(sensor_manager_channels, mutexes)
                     .await;

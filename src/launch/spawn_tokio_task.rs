@@ -35,7 +35,7 @@ macro_rules! spawn_tokio_task {
             .spawn($future)
             .map_err(|e| StartupError::TokioSpawnFailure {
                 location: $name.to_string(),
-                source: e
+                source: e,
             })?
     };
 }

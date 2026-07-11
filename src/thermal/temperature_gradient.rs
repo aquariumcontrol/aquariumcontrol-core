@@ -398,7 +398,8 @@ mod tests {
             .enable_all()
             .build()
             .unwrap()
-            .block_on(async { // blocking execution used for testing
+            .block_on(async {
+                // blocking execution used for testing
                 temperature_gradient
                     .execute(
                         mutex_sensor_manager_signals,

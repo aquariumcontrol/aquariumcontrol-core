@@ -653,7 +653,8 @@ pub mod tests {
                     .enable_all()
                     .build()
                     .unwrap()
-                    .block_on(async { // blocking execution used for testing
+                    .block_on(async {
+                        // blocking execution used for testing
                         handle_signals(
                             term_clone,
                             channels.signal_handler,

@@ -630,7 +630,8 @@ pub mod tests {
             .enable_all()
             .build()
             .unwrap()
-            .block_on(async { // blocking execution used for testing
+            .block_on(async {
+                // blocking execution used for testing
                 relay_manager
                     .execute(relay_manager_channels, actuator)
                     .await;

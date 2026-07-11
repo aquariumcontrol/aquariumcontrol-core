@@ -531,7 +531,8 @@ pub mod tests {
                     .enable_all()
                     .build()
                     .unwrap()
-                    .block_on(async { // blocking execution used for testing
+                    .block_on(async {
+                        // blocking execution used for testing
                         messaging.execute(&mut messaging_channels).await;
                     });
             })

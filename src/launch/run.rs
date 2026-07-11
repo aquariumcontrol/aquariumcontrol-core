@@ -91,6 +91,7 @@ use crate::water::refill::Refill;
 use crate::water::refill_status::RefillStatus;
 use crate::water::water_injection::WaterInjection;
 use spin_sleep::SpinSleeper;
+#[cfg(any(test, not(target_os = "linux"), not(feature = "target_hw")))]
 use std::collections::HashMap;
 #[cfg(not(test))] // only required in real-life execution
 use std::env;
@@ -102,11 +103,6 @@ cfg_if::cfg_if! {
         use crate::sensors::gpio_handler::GpioHandler;
         use crate::beacon::ws2812b::RgbLedColor;
         use crate::beacon::ws2812b::Ws2812B;
-    }
-}
-cfg_if::cfg_if! {
-    if #[cfg(all(feature = "target_hw", target_os = "linux"))] {
-        use crate::sensors::i2c_interface::I2cInterface;
     }
 }
 

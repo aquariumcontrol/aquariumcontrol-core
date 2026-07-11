@@ -858,7 +858,8 @@ pub mod tests {
             .enable_all()
             .build()
             .unwrap()
-            .block_on(async { // blocking execution used for testing
+            .block_on(async {
+                // blocking execution used for testing
                 tank_level_switch
                     .execute(tank_level_switch_channels, mutex_tank_level_switch_signals)
                     .await

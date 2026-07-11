@@ -957,7 +957,8 @@ pub mod tests {
                     .enable_all()
                     .build()
                     .unwrap()
-                    .block_on(async { // blocking execution used for testing
+                    .block_on(async {
+                        // blocking execution used for testing
                         mock_i2c_interface.execute(channels.i2c_interface).await;
                     });
             })
@@ -987,7 +988,8 @@ pub mod tests {
                     .enable_all()
                     .build()
                     .unwrap()
-                    .block_on(async { // blocking execution used for testing
+                    .block_on(async {
+                        // blocking execution used for testing
                         atlas_scientific
                             .execute(
                                 &mut channels.atlas_scientific,
