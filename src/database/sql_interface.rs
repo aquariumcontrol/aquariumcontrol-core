@@ -1028,7 +1028,7 @@ pub mod tests {
             }
         };
     }
-    
+
     // Helper function to truncate all tables (used in testing of run.rs)
     pub fn truncate_all_tables(sql_interface: &mut SqlInterface) {
         // List of all tables to truncate
@@ -1047,13 +1047,13 @@ pub mod tests {
             "heating_set_vals",
             "version",
         ];
-        
+
         // Truncate all tables in the test database
         for table in &tables {
             let _ = SqlInterface::truncate_table(sql_interface, table.to_string());
         }
     }
-    
+
     #[test]
     // This test case checks the functionality of get_string_array_from_database.
     // - response when querying an empty table (should be Ok with an empty Vec)
@@ -1503,7 +1503,7 @@ pub mod tests {
             Err(SqlInterfaceError::WaitTimeoutTooLow(_, _, _))
         ));
     }
-    
+
     #[test]
     // This test case checks
     // - error response when querying empty table

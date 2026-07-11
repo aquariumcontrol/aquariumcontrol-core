@@ -118,7 +118,10 @@ impl MineralInjection {
             return; // Don't wait for a response if the send-operation failed
         }
 
-        if let Err(e) = balling_channels.rx_balling_from_relay_manager.blocking_recv() {
+        if let Err(e) = balling_channels
+            .rx_balling_from_relay_manager
+            .blocking_recv()
+        {
             error!(
                 target: module_path!(),
                 "Receiving answer from relay manager when {} failed ({:?})", action_description, e

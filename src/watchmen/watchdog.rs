@@ -282,7 +282,7 @@ pub mod tests {
             .enable_all()
             .build()
             .unwrap()
-            .block_on(async {
+            .block_on(async { // blocking execution used for testing
                 watchdog.execute(watchdog_channels, petting).await;
             });
     }

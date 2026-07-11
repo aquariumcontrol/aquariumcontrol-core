@@ -32,7 +32,8 @@ tempfile = "3.27.0"
 strum_macros = "0.28.0"
 ratatui = "0.30.2"
 crossterm = "0.29.0"
-tokio = { version = "1.52.3", features = ["rt-multi-thread", "time", "sync", "macros", "fs", "net"] }
+console-subscriber = "0.5.0"
+tokio = { version = "1.52.3", features = ["rt", "rt-multi-thread", "time", "sync", "macros", "fs", "net", "tracing"] }
 
 [target.'cfg(all(target_os = "linux"))'.dependencies]
 nix = { version = "0.31.1", features = ["user", "process", "signal"] }
@@ -67,7 +68,8 @@ debug_balling = []
 debug_tank_level_switch = []
 debug_refill = []
 debug_channels = []
-debug = ["debug_schedule_check", "debug_signal_handler", "debug_data_logger", "debug_sawtooth_profile", "debug_main",  "debug_dht", "debug_i2c_interface", "debug_relay_manager", "debug_sensor_manager", "debug_feed", "debug_messaging", "debug_balling", "debug_tank_level_switch", "debug_refill"]
+debug_tokio = []
+debug = ["debug_tokio", "debug_schedule_check", "debug_signal_handler", "debug_data_logger", "debug_sawtooth_profile", "debug_main",  "debug_dht", "debug_i2c_interface", "debug_relay_manager", "debug_sensor_manager", "debug_feed", "debug_messaging", "debug_balling", "debug_tank_level_switch", "debug_refill"]
 commissioning_prep = []
 
 [lints.rust]

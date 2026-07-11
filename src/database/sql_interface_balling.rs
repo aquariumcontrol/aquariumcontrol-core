@@ -524,7 +524,8 @@ pub mod tests {
                 "dosing_volume" => dosing_volume,
                 "label" => label
             },
-        ).unwrap();
+        )
+        .unwrap();
     }
 
     #[test]
@@ -783,7 +784,13 @@ pub mod tests {
 
         // *** read balling set vals from pre-filled table *****************************************
         // prepare database: insert Balling set vals
-        add_balling_profile(&mut sql_interface_balling.conn, 1, 2.0, 0.5, "test_pump".to_string());
+        add_balling_profile(
+            &mut sql_interface_balling.conn,
+            1,
+            2.0,
+            0.5,
+            "test_pump".to_string(),
+        );
 
         match sql_interface_balling.get_single_balling_setval_from_database(1) {
             Ok(c) => {
@@ -800,7 +807,13 @@ pub mod tests {
 
         // *** check if instantiation of SqlInterfaceBalling checks maximum number of rows ******
         // add one more Balling set value row
-        add_balling_profile(&mut sql_interface_balling.conn, 2, 3.0, 0.5, "test_pump2".to_string());
+        add_balling_profile(
+            &mut sql_interface_balling.conn,
+            2,
+            3.0,
+            0.5,
+            "test_pump2".to_string(),
+        );
         let test_result = SqlInterfaceBalling::new(sql_interface.get_connection().unwrap(), 1, 0);
         assert!(matches!(
             test_result,

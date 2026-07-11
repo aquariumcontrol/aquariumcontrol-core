@@ -923,7 +923,7 @@ pub mod tests {
             .enable_all()
             .build()
             .unwrap()
-            .block_on(async {
+            .block_on(async { // blocking execution used for testing
                 let is_multi_thread_test = tokio::runtime::Handle::try_current()
                     .map(|h| {
                         matches!(
@@ -2117,7 +2117,7 @@ pub mod tests {
                     mutex_temperature_gradient: Arc::new(Mutex::new(0.0)),
                 };
 
-                execute_blocking(&mut heating, 
+                execute_blocking(&mut heating,
                     mutex_device_scheduler_heating.clone(),
                     &mut channels.heating,
                     &mut heating_stats_transfer,
@@ -2260,7 +2260,7 @@ pub mod tests {
                     mutex_temperature_gradient: Arc::new(Mutex::new(0.0)),
                 };
 
-                execute_blocking(&mut heating, 
+                execute_blocking(&mut heating,
                     mutex_device_scheduler_heating.clone(),
                     &mut channels.heating,
                     &mut heating_stats_transfer,
@@ -2487,7 +2487,7 @@ pub mod tests {
                     mutex_temperature_gradient: Arc::new(Mutex::new(0.0)),
                 };
 
-                execute_blocking(&mut heating, 
+                execute_blocking(&mut heating,
                     mutex_device_scheduler_heating.clone(),
                     &mut channels.heating,
                     &mut heating_stats_transfer,
@@ -3395,7 +3395,7 @@ pub mod tests {
                     mutex_temperature_gradient: Arc::new(Mutex::new(0.0)),
                 };
 
-                execute_blocking(&mut heating, 
+                execute_blocking(&mut heating,
                     mutex_device_scheduler_heating.clone(),
                     &mut channels.heating,
                     &mut heating_stats_transfer,

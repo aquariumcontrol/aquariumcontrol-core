@@ -414,14 +414,13 @@ impl SqlInterfaceSchedule {
                     .collect::<Vec<_>>()
                     .join(", ");
 
-                // Provide specific error depending on if database is empty or not. 
+                // Provide specific error depending on if database is empty or not.
                 if available_types.is_empty() {
                     SqlInterfaceError::ScheduleTypeNotFoundEmptyDatabase(
                         module_path!().to_string(),
-                        schedule_type.to_string()
+                        schedule_type.to_string(),
                     )
-                }
-                else {
+                } else {
                     SqlInterfaceError::ScheduleTypeNotFoundOtherEntriesExisting(
                         module_path!().to_string(),
                         schedule_type.to_string(),
@@ -711,11 +710,20 @@ pub mod tests {
         // Assert that we get the correct error variant
         assert!(matches!(
             find_result,
-            Err(SqlInterfaceError::ScheduleTypeNotFoundOtherEntriesExisting(_, _, _))
+            Err(SqlInterfaceError::ScheduleTypeNotFoundOtherEntriesExisting(
+                _,
+                _,
+                _
+            ))
         ));
 
         // For more robust testing, also verify the content of the error message.
-        if let Err(SqlInterfaceError::ScheduleTypeNotFoundOtherEntriesExisting(_, requested, available)) = find_result {
+        if let Err(SqlInterfaceError::ScheduleTypeNotFoundOtherEntriesExisting(
+            _,
+            requested,
+            available,
+        )) = find_result
+        {
             assert_eq!(requested, "Balling");
             assert!(available.contains("Heating") && available.contains("Ventilation"));
             println!(

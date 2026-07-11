@@ -61,14 +61,14 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 use log::debug;
 
 use crate::dispatch::messaging_channels::MessagingChannels;
-use crate::utilities::channel_content::InternalCommand;
-use std::time::Duration;
+use crate::dispatch::messaging_config::MessagingConfig;
+use crate::dispatch::messaging_error::MessagingError;
+use crate::launch::execution_config::ExecutionConfig;
 use crate::utilities::acknowledge_signal_handler::AcknowledgeSignalHandlerTrait;
+use crate::utilities::channel_content::InternalCommand;
 use crate::utilities::proc_ext_req::ProcessExternalRequestTrait;
 use crate::utilities::wait_for_termination::WaitForTerminationTrait;
-use crate::dispatch::messaging_error::MessagingError;
-use crate::dispatch::messaging_config::MessagingConfig;
-use crate::launch::execution_config::ExecutionConfig;
+use std::time::Duration;
 
 cfg_if::cfg_if! {
     if #[cfg(target_os = "linux")] {
@@ -378,6 +378,11 @@ impl Messaging {
 }
 #[cfg(not(target_os = "linux"))]
 impl Messaging {
+    /// Mock constructor for `Messaging` on non-Linux platforms.
+    ///
+    /// This is a stub implementation used during testing or development on operating
+    /// systems other than Linux (e.g., macOS, Windows) where POSIX message queues are
+    /// not supported or used. It initializes the struct with default diagnostic flags.
     pub fn new(
         _config: MessagingConfig,
         _execution_config: ExecutionConfig,
@@ -388,16 +393,33 @@ impl Messaging {
         })
     }
 
+    /// Mock execution loop for `Messaging` on non-Linux platforms.
+    ///
+    /// This is a stub implementation that simulates the loop without accessing a physical
+    /// POSIX message queue. It sends `NoOp` commands to other tasks, and then loops
+    /// periodically to check for termination requests from the signal handler.
     pub async fn execute(&mut self, messaging_channels: &mut MessagingChannels) {
-        messaging_channels.tx_messaging_to_monitors.send(InternalCommand::NoOp).unwrap();
-        messaging_channels.tx_messaging_to_feed.send(InternalCommand::NoOp).unwrap();
-        messaging_channels.tx_messaging_to_balling.send(InternalCommand::NoOp).unwrap();
-        messaging_channels.tx_messaging_to_heating.send(InternalCommand::NoOp).unwrap();
+        messaging_channels
+            .tx_messaging_to_monitors
+            .send(InternalCommand::NoOp)
+            .unwrap();
+        messaging_channels
+            .tx_messaging_to_feed
+            .send(InternalCommand::NoOp)
+            .unwrap();
+        messaging_channels
+            .tx_messaging_to_balling
+            .send(InternalCommand::NoOp)
+            .unwrap();
+        messaging_channels
+            .tx_messaging_to_heating
+            .send(InternalCommand::NoOp)
+            .unwrap();
 
         let sleep_duration = Duration::from_millis(10);
 
         loop {
-            _ = tokio::time::sleep(Duration::from_millis(100));
+            _ = tokio::time::sleep(Duration::from_millis(100)).await;
             let (quit_command_received, _, _) = self.process_external_request(
                 &mut messaging_channels.rx_messaging_from_signal_handler,
                 None,
@@ -421,7 +443,8 @@ impl Messaging {
             &mut messaging_channels.rx_messaging_from_signal_handler,
             sleep_duration,
             module_path!(),
-        ).await;
+        )
+        .await;
     }
 }
 
@@ -508,7 +531,7 @@ pub mod tests {
                     .enable_all()
                     .build()
                     .unwrap()
-                    .block_on(async {
+                    .block_on(async { // blocking execution used for testing
                         messaging.execute(&mut messaging_channels).await;
                     });
             })

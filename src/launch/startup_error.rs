@@ -252,4 +252,14 @@ pub enum StartupError {
         #[source]
         source: std::io::Error,
     },
+
+    #[cfg(feature = "debug_tokio")]
+    /// Spawning a task failed
+    #[error("Spawning Tokio task failed for ")]
+    TokioSpawnFailure {
+        location: String,
+
+        #[source]
+        source: std::io::Error,
+    },
 }

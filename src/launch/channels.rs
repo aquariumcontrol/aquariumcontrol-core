@@ -82,7 +82,7 @@ use crate::water::refill_channels::RefillChannels;
 use crate::water::refill_monitor_view::RefillMonitorView;
 use thiserror::Error;
 
-use tokio::sync::mpsc::{unbounded_channel, UnboundedSender, UnboundedReceiver};
+use tokio::sync::mpsc::{unbounded_channel, UnboundedReceiver, UnboundedSender};
 
 #[cfg(feature = "debug_channels")]
 pub struct AquaSender<T: Send> {
@@ -118,12 +118,7 @@ pub fn channel<T: Send>(_bound: usize, _is_multi_thread: bool) -> (AquaSender<T>
     }
     #[cfg(not(feature = "debug_channels"))]
     {
-        (
-            AquaSender { sender },
-            AquaReceiver {
-                receiver,
-            },
-        )
+        (AquaSender { sender }, AquaReceiver { receiver })
     }
 }
 
@@ -163,7 +158,10 @@ impl<T> AquaReceiver<T> {
         {
             self.count += 1;
         }
-        self.receiver.recv().await.ok_or(AquaChannelError::Disconnected)
+        self.receiver
+            .recv()
+            .await
+            .ok_or(AquaChannelError::Disconnected)
     }
 
     /// Receive a value from a channel (non-blocking try), returning immediately.
@@ -175,7 +173,9 @@ impl<T> AquaReceiver<T> {
         match self.receiver.try_recv() {
             Ok(c) => Ok(c),
             Err(tokio::sync::mpsc::error::TryRecvError::Empty) => Err(AquaChannelError::Empty),
-            Err(tokio::sync::mpsc::error::TryRecvError::Disconnected) => Err(AquaChannelError::Disconnected),
+            Err(tokio::sync::mpsc::error::TryRecvError::Disconnected) => {
+                Err(AquaChannelError::Disconnected)
+            }
         }
     }
 
@@ -202,7 +202,9 @@ impl<T> AquaReceiver<T> {
                     .ok_or(AquaChannelError::Disconnected)
             }
         } else {
-            self.receiver.blocking_recv().ok_or(AquaChannelError::Disconnected)
+            self.receiver
+                .blocking_recv()
+                .ok_or(AquaChannelError::Disconnected)
         }
     }
 }
@@ -309,30 +311,38 @@ impl Channels {
             | tank_level_switch_use_simulator;
 
         // *** signal_handler <=> messaging ***
-        let ((tx_signal_handler_to_messaging, rx_messaging_from_signal_handler),
-            (tx_messaging_to_signal_handler, rx_signal_handler_from_messaging))
-            = create_bidirectional_channel!(InternalCommand, bool, is_multi_thread);
+        let (
+            (tx_signal_handler_to_messaging, rx_messaging_from_signal_handler),
+            (tx_messaging_to_signal_handler, rx_signal_handler_from_messaging),
+        ) = create_bidirectional_channel!(InternalCommand, bool, is_multi_thread);
 
         // *** messaging => refill ***
-        let (tx_messaging_to_refill, rx_refill_from_messaging) = create_unidirectional_channel!(InternalCommand, is_multi_thread);
+        let (tx_messaging_to_refill, rx_refill_from_messaging) =
+            create_unidirectional_channel!(InternalCommand, is_multi_thread);
 
         // *** messaging => ventilation ***
-        let (tx_messaging_to_ventilation, rx_ventilation_from_messaging) = create_unidirectional_channel!(InternalCommand, is_multi_thread);
+        let (tx_messaging_to_ventilation, rx_ventilation_from_messaging) =
+            create_unidirectional_channel!(InternalCommand, is_multi_thread);
 
         // *** messaging => heating ***
-        let (tx_messaging_to_heating, rx_heating_from_messaging) = create_unidirectional_channel!(InternalCommand, is_multi_thread);
+        let (tx_messaging_to_heating, rx_heating_from_messaging) =
+            create_unidirectional_channel!(InternalCommand, is_multi_thread);
 
         // *** messaging => feed ***
-        let (tx_messaging_to_feed, rx_feed_from_messaging) = create_unidirectional_channel!(InternalCommand, is_multi_thread);
+        let (tx_messaging_to_feed, rx_feed_from_messaging) =
+            create_unidirectional_channel!(InternalCommand, is_multi_thread);
 
         // *** messaging => balling ***
-        let (tx_messaging_to_balling, rx_balling_from_messaging) = create_unidirectional_channel!(InternalCommand, is_multi_thread);
+        let (tx_messaging_to_balling, rx_balling_from_messaging) =
+            create_unidirectional_channel!(InternalCommand, is_multi_thread);
 
         // *** messaging => monitors ***
-        let (tx_messaging_to_monitors, rx_monitors_from_messaging) = create_unidirectional_channel!(InternalCommand, is_multi_thread);
+        let (tx_messaging_to_monitors, rx_monitors_from_messaging) =
+            create_unidirectional_channel!(InternalCommand, is_multi_thread);
 
         // *** messaging => monitors ***
-        let (tx_messaging_to_watchdog, rx_watchdog_from_messaging) = create_unidirectional_channel!(InternalCommand, is_multi_thread);
+        let (tx_messaging_to_watchdog, rx_watchdog_from_messaging) =
+            create_unidirectional_channel!(InternalCommand, is_multi_thread);
 
         // *** refill <=> relay_manager ***
         let (

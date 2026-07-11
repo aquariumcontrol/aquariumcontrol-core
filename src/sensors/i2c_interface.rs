@@ -60,16 +60,16 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 //!   once on the stack at startup. This buffer is then reused for every transaction,
 //!   avoiding repeated, potentially costly memory allocations within the main loop.
 
+use log::error;
 #[cfg(target_os = "linux")]
 use log::info;
-use log::error;
 use std::fmt;
 use std::time::Duration;
 
 use crate::launch::channels::AquaChannelError;
 use crate::sensors::i2c_error::I2cError;
-use crate::sensors::i2c_interface_config::I2cInterfaceConfig;
 use crate::sensors::i2c_interface_channels::I2cInterfaceChannels;
+use crate::sensors::i2c_interface_config::I2cInterfaceConfig;
 use crate::utilities::proc_ext_req::ProcessExternalRequestTrait;
 
 #[cfg(all(target_os = "linux", feature = "target_hw", not(test)))]
@@ -321,11 +321,9 @@ impl I2cInterface {
     #[cfg(not(all(target_os = "linux", feature = "target_hw")))]
     /// Stub function for testing async runtime
     pub fn new(config: I2cInterfaceConfig) -> Result<I2cInterface, I2cError> {
-        Ok(I2cInterface {
-            config,
-        })
+        Ok(I2cInterface { config })
     }
-    
+
     /// Performs a complete I2C write/read transaction with a sensor.
     ///
     /// This function orchestrates a full I2C communication cycle:
@@ -353,9 +351,10 @@ impl I2cInterface {
     pub async fn get_response_from_i2c(
         &mut self,
         #[allow(unused)] // not used for async runtime testing
-        i2c_request: I2cRequest
+        i2c_request: I2cRequest,
     ) -> I2cResult {
-        #[cfg(all(target_os = "linux", feature = "target_hw"))] {
+        #[cfg(all(target_os = "linux", feature = "target_hw"))]
+        {
             let sleep_duration = Duration::from_millis(i2c_request.sleep_time_millis);
 
             // Check the buffer's capacity against the request's needs.
@@ -379,10 +378,10 @@ impl I2cInterface {
                 self.i2c
                     .write(&i2c_request.send_buf[..i2c_request.send_len])
             })
-                .map_err(|e| I2cError::WriteFailure {
-                    location: module_path!().to_string(),
-                    source: e,
-                })?;
+            .map_err(|e| I2cError::WriteFailure {
+                location: module_path!().to_string(),
+                source: e,
+            })?;
             if realized_write_len != i2c_request.send_len {
                 return Err(I2cError::InsufficientWrite(
                     module_path!().to_string(),
@@ -398,11 +397,13 @@ impl I2cInterface {
                 // Use a sub-slice of the provided buffer for the read operation.
                 let read_slice = &mut self.read_buffer[..i2c_request.expected_response_length];
 
-                let received_message_length = tokio::task::block_in_place(|| self.i2c.read(read_slice))
-                    .map_err(|e| I2cError::InsufficientRead {
-                        location: module_path!().to_string(),
-                        source: e,
-                    })?;
+                let received_message_length = tokio::task::block_in_place(|| {
+                    self.i2c.read(read_slice)
+                })
+                .map_err(|e| I2cError::InsufficientRead {
+                    location: module_path!().to_string(),
+                    source: e,
+                })?;
                 if received_message_length != i2c_request.expected_response_length {
                     Err(I2cError::IncorrectResponseLength(
                         module_path!().to_string(),
@@ -416,7 +417,8 @@ impl I2cInterface {
                 Ok(I2cResponse::empty())
             }
         }
-        #[cfg(not(all(target_os = "linux", feature = "target_hw")))] {
+        #[cfg(not(all(target_os = "linux", feature = "target_hw")))]
+        {
             // dummy result for testing async runtime
             Ok(I2cResponse::empty())
         }

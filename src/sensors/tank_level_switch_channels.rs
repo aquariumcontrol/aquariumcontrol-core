@@ -109,7 +109,9 @@ impl TankLevelSwitchChannels {
 
     /// Receives a command from the signal handler.
     #[allow(unused)]
-    pub async fn receive_from_signal_handler(&mut self) -> Result<InternalCommand, AquaChannelError> {
+    pub async fn receive_from_signal_handler(
+        &mut self,
+    ) -> Result<InternalCommand, AquaChannelError> {
         self.rx_tank_level_switch_from_signal_handler.recv().await
     }
 }

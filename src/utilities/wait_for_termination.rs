@@ -6,21 +6,21 @@ The above copyright notice and this permission notice shall be included in all c
 
 THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
+use crate::dispatch::messaging::Messaging;
 use crate::food::feed::Feed;
+use crate::launch::channels::{AquaChannelError, AquaReceiver};
 use crate::mineral::balling::Balling;
 use crate::recorder::data_logger::DataLogger;
 use crate::sensors::atlas_scientific::AtlasScientific;
+use crate::sensors::sensor_manager::SensorManager;
 use crate::sensors::tank_level_switch::TankLevelSwitch;
+use crate::thermal::heating::Heating;
+use crate::thermal::ventilation::Ventilation;
 use crate::utilities::channel_content::InternalCommand;
+use crate::water::refill::Refill;
 use log::{error, warn};
 use spin_sleep::SpinSleeper;
 use std::time::Duration;
-use crate::dispatch::messaging::Messaging;
-use crate::launch::channels::{AquaChannelError, AquaReceiver};
-use crate::sensors::sensor_manager::SensorManager;
-use crate::thermal::heating::Heating;
-use crate::thermal::ventilation::Ventilation;
-use crate::water::refill::Refill;
 
 /// Defines a standard behavior for components that need to wait for a termination signal.
 ///

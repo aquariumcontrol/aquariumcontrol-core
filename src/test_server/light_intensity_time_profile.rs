@@ -80,7 +80,7 @@ pub mod tests {
     use crate::test_server::light_intensity_time_profile::LightIntensityTimeProfile;
     use crate::test_server::test_server_config::read_test_server_config_file;
     use chrono::NaiveTime;
-    
+
     fn create_light_intensity_profile() -> LightIntensityTimeProfile {
         let config = read_test_server_config_file(None);
 

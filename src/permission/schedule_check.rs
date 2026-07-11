@@ -541,7 +541,11 @@ mod tests {
         );
 
         // Assert
-        let result = channels.heating.rx_heating_from_schedule_check.blocking_recv().unwrap();
+        let result = channels
+            .heating
+            .rx_heating_from_schedule_check
+            .blocking_recv()
+            .unwrap();
         assert_eq!(result, true, "Should be allowed by the active schedule");
         assert!(!locks.channel_receive, "Receive lock should not be set");
         assert!(!locks.channel_send, "Send lock should not be set");
@@ -579,7 +583,11 @@ mod tests {
         );
 
         // Assert
-        let result = channels.heating.rx_heating_from_schedule_check.blocking_recv().unwrap();
+        let result = channels
+            .heating
+            .rx_heating_from_schedule_check
+            .blocking_recv()
+            .unwrap();
         assert_eq!(
             result, true,
             "Should be disallowed by the inactive schedule"
@@ -610,7 +618,11 @@ mod tests {
         );
 
         // Assert
-        let result = channels.heating.rx_heating_from_schedule_check.blocking_recv().unwrap();
+        let result = channels
+            .heating
+            .rx_heating_from_schedule_check
+            .blocking_recv()
+            .unwrap();
         assert_eq!(result, true, "Should be allowed by the fallback strategy");
     }
 
@@ -638,7 +650,11 @@ mod tests {
         );
 
         // Assert
-        let result = channels.heating.rx_heating_from_schedule_check.blocking_recv().unwrap();
+        let result = channels
+            .heating
+            .rx_heating_from_schedule_check
+            .blocking_recv()
+            .unwrap();
         assert_eq!(
             result, false,
             "Should be disallowed by the fallback strategy"

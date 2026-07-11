@@ -1490,7 +1490,7 @@ pub mod tests {
             .enable_all()
             .build()
             .unwrap()
-            .block_on(async {
+            .block_on(async { // blocking execution used for testing
                 data_logger
                     .execute(
                         data_injection,

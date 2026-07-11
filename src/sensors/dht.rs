@@ -78,15 +78,15 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 //! 5.  **Validation**: The checksum (sum of the first 4 bytes, modulo 256) is validated
 //!     to ensure data integrity.
 
-use log::error;
-use std::time::{Duration, Instant};
-use std::sync::{Arc, Mutex};
-use spin_sleep::SpinSleeper;
-use crate::sensors::dht_error::DhtError;
-use crate::sensors::dht_config::DhtConfig;
 use crate::sensors::dht_channels::DhtChannels;
-use crate::utilities::proc_ext_req::ProcessExternalRequestTrait;
+use crate::sensors::dht_config::DhtConfig;
+use crate::sensors::dht_error::DhtError;
 use crate::utilities::check_mutex_access_duration::CheckMutexAccessDurationTrait;
+use crate::utilities::proc_ext_req::ProcessExternalRequestTrait;
+use log::error;
+use spin_sleep::SpinSleeper;
+use std::sync::{Arc, Mutex};
+use std::time::{Duration, Instant};
 
 #[cfg(not(test))] // only required in real-life execution
 use crate::utilities::logger::log_error_chain;
@@ -244,7 +244,7 @@ pub struct Dht {
 }
 
 impl Dht {
-//    #[cfg(any(test, all(target_os = "linux", feature = "target_hw")))]
+    //    #[cfg(any(test, all(target_os = "linux", feature = "target_hw")))]
     /// Creates a new **`Dht`** instance for interacting with a DHT22 sensor on the target platform.
     ///
     /// This constructor initializes the DHT sensor module, configuring it with the provided

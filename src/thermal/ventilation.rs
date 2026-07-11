@@ -131,7 +131,10 @@ fn actuate_ventilation(
         log_error_chain(module_path!(), &error_message, e);
     } else {
         // now listen for the response
-        if let Err(e) = ventilation_channels.rx_ventilation_from_relay_manager.blocking_recv() {
+        if let Err(e) = ventilation_channels
+            .rx_ventilation_from_relay_manager
+            .blocking_recv()
+        {
             let error_message =
                 format!("Receiving answer from relay manager for {command} failed.");
             log_error_chain(module_path!(), &error_message, e);
@@ -428,7 +431,7 @@ impl Ventilation {
             let (quit_command_received, start_command_received, stop_command_received) = self
                 .process_external_request(
                     &mut ventilation_channels.rx_ventilation_from_signal_handler,
-                    Some(&mut ventilation_channels.rx_ventilation_from_messaging)
+                    Some(&mut ventilation_channels.rx_ventilation_from_messaging),
                 );
             if quit_command_received {
                 break;
@@ -707,7 +710,7 @@ pub mod tests {
             .enable_all()
             .build()
             .unwrap()
-            .block_on(async {
+            .block_on(async { // blocking execution used for testing
                 let is_multi_thread_test = tokio::runtime::Handle::try_current()
                     .map(|h| {
                         matches!(

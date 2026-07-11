@@ -63,12 +63,12 @@ use crate::thermal::heating_config::HeatingConfig;
 #[cfg(test)]
 use std::env;
 
-use crate::sensors::i2c_interface_config::I2cInterfaceConfig;
-use crate::sensors::tank_level_switch_config::TankLevelSwitchConfig;
-use crate::dispatch::messaging_config::MessagingConfig;
 use crate::database::sql_interface_config::SqlInterfaceConfig;
+use crate::dispatch::messaging_config::MessagingConfig;
 use crate::permission::schedule_check_config::ScheduleCheckConfig;
 use crate::sensors::ds18b20_config::Ds18b20Config;
+use crate::sensors::i2c_interface_config::I2cInterfaceConfig;
+use crate::sensors::tank_level_switch_config::TankLevelSwitchConfig;
 use crate::simulator::tcp_communication_config::TcpCommunicationConfig;
 use crate::thermal::temperature_gradient_config::TemperatureGradientConfig;
 use crate::thermal::ventilation_config::VentilationConfig;

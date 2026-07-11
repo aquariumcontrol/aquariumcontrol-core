@@ -26,9 +26,7 @@ use crate::database::sql_interface_heating_set_vals::SqlInterfaceHeatingSetVals;
 use crate::database::sql_interface_heating_stats::SqlInterfaceHeatingStats;
 use crate::database::sql_interface_heating_stats_data_transfer::HeatingStatsDataTransfer;
 use crate::database::sql_interface_midnight::SqlInterfaceMidnightCalculator;
-use crate::database::sql_interface_refill::{
-    DatabaseInterfaceRefillTrait, SqlInterfaceRefill,
-};
+use crate::database::sql_interface_refill::{DatabaseInterfaceRefillTrait, SqlInterfaceRefill};
 use crate::database::sql_interface_schedule::SqlInterfaceSchedule;
 use crate::database::sql_interface_ventilation_set_vals::SqlInterfaceVentilationSetVals;
 use crate::dispatch::messaging::Messaging;
@@ -57,9 +55,7 @@ use crate::sensors::atlas_scientific::AtlasScientificResultData;
 use crate::launch::execution_config::ExecutionConfig;
 use crate::sensors::dht::{Dht, DhtResult};
 use crate::sensors::ds18b20::{Ds18b20, Ds18b20ResultData};
-use crate::sensors::sensor_manager::{
-    SensorManager, SensorManagerMutexes, SensorManagerSignals,
-};
+use crate::sensors::sensor_manager::{SensorManager, SensorManagerMutexes, SensorManagerSignals};
 use crate::sensors::tank_level_switch::{TankLevelSwitch, TankLevelSwitchSignals};
 use crate::simulator::tcp_communication::TcpCommunication;
 use crate::thermal::distinct_interval_check::distinct_thermal_control_interval_check;
@@ -78,6 +74,7 @@ use crate::utilities::signal_handler;
 #[cfg(not(test))] // only required in real-life execution
 use crate::launch::argument_parser::check_argument_for_valid_config_file_name;
 use crate::sensors::i2c_interface::I2cInterface;
+use crate::spawn_tokio_task;
 use crate::thermal::thermal_control_status::ThermalControlStatus;
 #[cfg(all(feature = "target_hw", target_os = "linux"))]
 use crate::utilities::channel_content::InternalCommand;
@@ -94,11 +91,11 @@ use crate::water::refill::Refill;
 use crate::water::refill_status::RefillStatus;
 use crate::water::water_injection::WaterInjection;
 use spin_sleep::SpinSleeper;
-pub use std::sync::{atomic::AtomicBool, Arc, Mutex};
-use std::{panic, time::Duration};
 use std::collections::HashMap;
 #[cfg(not(test))] // only required in real-life execution
 use std::env;
+pub use std::sync::{atomic::AtomicBool, Arc, Mutex};
+use std::{panic, time::Duration};
 
 cfg_if::cfg_if! {
     if #[cfg(all(target_os = "linux", feature = "target_hw"))] {
@@ -307,11 +304,13 @@ fn check_is_command(command: &str) -> Result<bool, VersionInformationError> {
 ///     signal_handler --> temperature_gradient
 /// ```
 pub fn run(
-    #[cfg(test)]
-    config_file_name_for_test: String,
-    #[cfg(test)]
-    wait_for_test_shutdown_opt: Option<Duration>
+    #[cfg(test)] config_file_name_for_test: String,
+    #[cfg(test)] wait_for_test_shutdown_opt: Option<Duration>,
 ) -> Result<(), StartupError> {
+    // setting up grpc so that tokio-console can monitor the tokio runtime
+    #[cfg(feature = "debug_tokio")]
+    console_subscriber::init();
+
     let spin_sleeper = SpinSleeper::default();
 
     #[cfg(all(not(target_os = "linux"), feature = "target_hw"))]
@@ -493,9 +492,9 @@ pub fn run(
         max_rows_balling_set_values,
         max_rows_balling_dosing_log,
     )
-        .map_err(|e| StartupError::Database {
-            source: Box::new(e),
-        })?;
+    .map_err(|e| StartupError::Database {
+        source: Box::new(e),
+    })?;
 
     let database_connection_refill =
         sql_interface
@@ -531,9 +530,9 @@ pub fn run(
         max_rows_heating_stats,
         Box::new(sql_interface_midnight_calculator),
     )
-        .map_err(|e| StartupError::Database {
-            source: Box::new(e),
-        })?;
+    .map_err(|e| StartupError::Database {
+        source: Box::new(e),
+    })?;
 
     let database_connection_feed =
         sql_interface
@@ -548,9 +547,9 @@ pub fn run(
             max_rows_feed_schedule,
             max_rows_feed_log,
         )
-            .map_err(|e| StartupError::Database {
-                source: Box::new(e),
-            })?,
+        .map_err(|e| StartupError::Database {
+            source: Box::new(e),
+        })?,
     );
 
     let database_connection_data_for_timestamp =
@@ -570,9 +569,9 @@ pub fn run(
         database_connection_data_for_data,
         max_rows_data,
     )
-        .map_err(|e| StartupError::Database {
-            source: Box::new(e),
-        })?;
+    .map_err(|e| StartupError::Database {
+        source: Box::new(e),
+    })?;
 
     let tables = sql_interface
         .get_tables()
@@ -650,10 +649,8 @@ pub fn run(
         | config.tank_level_switch.use_simulator;
 
     let rt = tokio::runtime::Builder::new_multi_thread()
-        .worker_threads(8)
-        .max_blocking_threads(
-            16
-        )
+        .worker_threads(1)
+        .max_blocking_threads(4)
         .enable_all()
         .build()
         .map_err(|e| StartupError::TokioRuntimeSetupFailure { source: e })?;
@@ -870,8 +867,8 @@ pub fn run(
     let mut ventilation_set_value_updater =
         SqlInterfaceVentilationSetVals::new(database_connection_ventilation, &config.ventilation)
             .map_err(|e| StartupError::Database {
-                source: Box::new(e),
-            })?;
+            source: Box::new(e),
+        })?;
 
     let mut ventilation = Ventilation::new(config.ventilation);
     let mut balling = Balling::new(
@@ -879,7 +876,7 @@ pub fn run(
         database_ping_duration,
         &mut sql_interface_balling,
     )
-        .map_err(|e| StartupError::InvalidBallingConfiguration { source: e })?;
+    .map_err(|e| StartupError::InvalidBallingConfiguration { source: e })?;
     let mut monitors = Monitors::new(config.monitors);
     let mut watchdog = Watchdog::new(config.watchdog)
         .map_err(|e| StartupError::WatchdogSetupFailure { source: e })?;
@@ -893,7 +890,7 @@ pub fn run(
             &config.tcp_communication,
             execution_config_clone_for_tcp_communication,
         )
-            .map_err(|e| StartupError::TcpConnection { source: e })?;
+        .map_err(|e| StartupError::TcpConnection { source: e })?;
         tcp_communication_opt = Some(tcp_communication);
     }
 
@@ -927,8 +924,6 @@ pub fn run(
 
     let mut thread_handles = vec![];
     // spawn thread for sensor communication first to allow checks
-
-
 
     // open tcp connection only if configuration requires use of simulator instead of HW
     if use_simulator && tcp_communication_thread_started {
@@ -984,7 +979,7 @@ pub fn run(
 
         // 1. Spawn I2cInterface FIRST so it is running and ready to handle commands
         if !use_simulator && execution_config.i2c_interface {
-            let handle = tokio::spawn(async move {
+            let handle = spawn_tokio_task!("i2c_interface", async move {
                 i2c_interface.execute(&mut chan_i2c_interface).await;
                 #[cfg(all(target_os = "linux", feature = "target_hw", feature = "debug_channels"))]
                 debug!(target: module_path!(), "{0}", chan_i2c_interface);
@@ -1021,7 +1016,7 @@ pub fn run(
 
         let term = Arc::new(AtomicBool::new(false));
         let signal_handler_config = execution_config_clone_for_signal_handler;
-        let signal_handle = tokio::spawn(async move {
+        let signal_handle = spawn_tokio_task!("signal_handler", async move {
             handle_signals(
                 term,
                 chan_signal_handler,
@@ -1036,7 +1031,7 @@ pub fn run(
 
         if execution_config.schedule_check {
             let exec_config = execution_config_clone_for_schedule_check;
-            let handle = tokio::spawn(async move {
+            let handle = spawn_tokio_task!("schedule_check", async move {
                 schedule_check.execute(
                     &mut chan_schedule_check,
                     exec_config,
@@ -1063,7 +1058,7 @@ pub fn run(
                 mutex_atlas_scientific_conductivity_clone_for_sensor_manager,
                 mutex_sensor_manager_signals,
             };
-            let handle = tokio::spawn(async move {
+            let handle = spawn_tokio_task!("sensor_manager", async move {
                 sensor_manager.execute(&mut chan_sensor_manager, mutexes_sensor_manager).await;
                 #[cfg(feature = "debug_channels")]
                 debug!(target: module_path!(), "{0}", chan_sensor_manager);
@@ -1074,7 +1069,7 @@ pub fn run(
         }
 
         if !use_simulator && execution_config.atlas_scientific {
-            let handle = tokio::spawn(async move {
+            let handle = spawn_tokio_task!("atlas_scientific", async move {
                 atlas_scientific.execute(
                     &mut chan_atlas_scientific,
                     mutex_atlas_scientific_temperature,
@@ -1093,7 +1088,7 @@ pub fn run(
             let use_simulator = config.relay_manager.use_simulator;
             let use_gpio = config.relay_manager.use_gpio;
             let controllino_relay_config = config.controllino_relay.clone();
-            let handle = tokio::spawn(async move {
+            let handle = spawn_tokio_task!("relay_manager", async move {
                 if use_simulator {
                     let mut actuate_simulator =
                         ActuateSimulator::new(&mut chan_actuate_simulator, controllino_relay_config);
@@ -1134,7 +1129,7 @@ pub fn run(
                 mutex_refill_status: mutex_refill_status_clone_for_data_logger,
                 mutex_temperature_gradient: mutex_temperature_gradient_clone_for_data_logger,
             };
-            let handle = tokio::spawn(async move {
+            let handle = spawn_tokio_task!("data_logger", async move {
                 data_logger.execute(
                     data_injection,
                     sql_interface_data,
@@ -1150,7 +1145,7 @@ pub fn run(
         }
 
         if execution_config.temperature_gradient {
-            let handle = tokio::spawn(async move {
+            let handle = spawn_tokio_task!("temperature_gradient", async move {
                 temperature_gradient.execute(
                     mutex_sensor_manager_signals_clone_for_temp_gradient,
                     &mut chan_temperature_gradient,
@@ -1171,7 +1166,7 @@ pub fn run(
                 mutex_heating_status,
                 mutex_temperature_gradient: mutex_temperature_gradient_clone_for_heating,
             };
-            let handle = tokio::spawn(async move {
+            let handle = spawn_tokio_task!("heating", async move {
                 heating.execute(
                     mutex_device_scheduler_heating,
                     &mut chan_heating,
@@ -1197,7 +1192,7 @@ pub fn run(
                 mutex_ventilation_status,
                 mutex_temperature_gradient: mutex_temperature_gradient_clone_for_ventilation,
             };
-            let handle = tokio::spawn(async move {
+            let handle = spawn_tokio_task!("ventilation", async move {
                 ventilation.execute(
                     mutex_device_scheduler_ventilation,
                     &mut chan_ventilation,
@@ -1215,7 +1210,7 @@ pub fn run(
 
         if execution_config.monitors {
             let mutex_device_scheduler_monitors = Arc::clone(&mutex_device_scheduler);
-            let handle = tokio::spawn(async move {
+            let handle = spawn_tokio_task!("monitors", async move {
                 monitors.execute(mutex_device_scheduler_monitors, &mut chan_monitors).await;
                 #[cfg(feature = "debug_channels")]
                 debug!(target: module_path!(), "{0}", chan_monitors);
@@ -1227,7 +1222,7 @@ pub fn run(
 
         if execution_config.refill {
             let mutex_device_scheduler_refill = Arc::clone(&mutex_device_scheduler);
-            let handle = tokio::spawn(async move {
+            let handle = spawn_tokio_task!("refill", async move {
                 refill.execute(
                     mutex_device_scheduler_refill,
                     &mut chan_refill,
@@ -1247,7 +1242,7 @@ pub fn run(
 
         if execution_config.feed {
             let mutex_device_scheduler_feed = Arc::clone(&mutex_device_scheduler);
-            let handle = tokio::spawn(async move {
+            let handle = spawn_tokio_task!("feed", async move {
                 feed.execute(
                     mutex_device_scheduler_feed,
                     &mut chan_feed,
@@ -1265,7 +1260,7 @@ pub fn run(
 
         if execution_config.balling {
             let mutex_device_scheduler_balling = Arc::clone(&mutex_device_scheduler);
-            let handle = tokio::spawn(async move {
+            let handle = spawn_tokio_task!("balling", async move {
                 balling.execute(
                     mutex_device_scheduler_balling,
                     &mut chan_balling,
@@ -1282,7 +1277,7 @@ pub fn run(
         }
 
         if execution_config.tank_level_switch {
-            let handle = tokio::spawn(async move {
+            let handle = spawn_tokio_task!("tank_level_switch", async move {
                 let _ = tank_level_switch
                     .execute(&mut chan_tank_level_switch, mutex_tank_level_switch_signals).await;
                 #[cfg(feature = "debug_channels")]
@@ -1294,7 +1289,7 @@ pub fn run(
         }
 
         if execution_config.watchdog {
-            let handle = tokio::spawn(async move {
+            let handle = spawn_tokio_task!("watchdog", async move {
                 watchdog.execute(&mut chan_watchdog, &mut petting).await;
                 #[cfg(all(target_os = "linux", feature = "target_hw", feature = "debug_channels"))]
                 debug!(target: module_path!(), "{0}", chan_watchdog);
@@ -1306,7 +1301,7 @@ pub fn run(
 
 
         if execution_config.ds18b20 {
-            let handle = tokio::spawn(async move {
+            let handle = spawn_tokio_task!("ds18b20", async move {
                 ds18b20.execute(
                     &mut chan_ds18b20,
                     mutex_ds18b20_water_temperature,
@@ -1320,7 +1315,7 @@ pub fn run(
             tasks.push(handle);
         }
 
-        let handle = tokio::spawn(async move {
+        let handle = spawn_tokio_task!("messaging", async move {
             messaging.execute(&mut chan_messaging).await;
             #[cfg(all(target_os = "linux", feature = "debug_channels"))]
             debug!(target: module_path!(), "{0}", chan_messaging);
@@ -1336,7 +1331,7 @@ pub fn run(
         Ok::<(), StartupError>(())
     })?;
 
-    // Wait for all spawned OS threads to finish
+    // Wait for all spawned tasks to finish
     for handle in thread_handles {
         let _ = handle.join();
     }
@@ -1389,7 +1384,7 @@ mod tests {
                     pump_id,
                     1.0f32,
                     10.0f32,
-                    format!("Pump {}", pump_id)
+                    format!("Pump {}", pump_id),
                 );
             }
         }
@@ -1397,6 +1392,10 @@ mod tests {
         // Run the main application run() function with 50 seconds test shutdown duration
         let run_result = run(config_path, Some(Duration::from_secs(20)));
 
-        assert!(run_result.is_ok(), "run() failed with error: {:?}", run_result.err());
+        assert!(
+            run_result.is_ok(),
+            "run() failed with error: {:?}",
+            run_result.err()
+        );
     }
 }
