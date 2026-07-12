@@ -43,7 +43,7 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 //!   sampling environments.
 //!
 
-#[cfg(not(test))]
+#[cfg(not(test))] // only required in real-life execution
 use log::warn;
 use serde_derive::Deserialize;
 
@@ -86,10 +86,11 @@ impl IIRFilter {
     pub fn new(
         filter_config: &IIRFilterConfig,
         initial_value_opt: Option<f32>,
-        #[cfg(not(test))] signal_name: &str,
+        #[cfg(not(test))] signal_name: &str, // only required in real-life execution
     ) -> Self {
         let safe_filter_coefficient = filter_config.filter_coefficient.clamp(0.0, 1.0);
-        #[cfg(not(test))]
+        #[cfg(not(test))] // only required in real-life execution
+        #[cfg(not(tarpaulin_include))]
         if safe_filter_coefficient != filter_config.filter_coefficient {
             warn!(
                 target: module_path!(),
@@ -149,7 +150,8 @@ pub mod tests {
         /// Verifies the `new` constructor correctly initializes the filter's starting value.
         fn test_new_constructor_initialization() {
             let config = prepare_filter_config();
-            #[cfg(not(test))]
+            #[cfg(not(test))] // only required in real-life execution
+            #[cfg(not(tarpaulin_include))]
             let signal_name = "test_signal";
 
             // Scenario 1: An explicit initial value is provided via Some(10.0).
@@ -157,7 +159,7 @@ pub mod tests {
             let filter_with_some = IIRFilter::new(
                 &config,
                 Some(10.0),
-                #[cfg(not(test))]
+                #[cfg(not(test))] // only required in real-life execution
                 signal_name,
             );
             assert_float_absolute_eq!(filter_with_some.old_value, 10.0, 0.001);
@@ -167,7 +169,7 @@ pub mod tests {
             let filter_with_none = IIRFilter::new(
                 &config,
                 None,
-                #[cfg(not(test))]
+                #[cfg(not(test))] // only required in real-life execution
                 signal_name,
             );
             assert_float_absolute_eq!(
@@ -180,7 +182,8 @@ pub mod tests {
         #[test]
         /// Verifies the constructor sanitizes invalid coefficients from the config file.
         fn test_new_constructor_sanitizes_config_coefficient() {
-            #[cfg(not(test))]
+            #[cfg(not(test))] // only required in real-life execution
+            #[cfg(not(tarpaulin_include))]
             let signal_name = "test_signal";
 
             // Scenario 1: Coefficient is > 1.0
@@ -191,7 +194,7 @@ pub mod tests {
             let filter_high = IIRFilter::new(
                 &config_high,
                 Some(0.0),
-                #[cfg(not(test))]
+                #[cfg(not(test))] // only required in real-life execution
                 signal_name,
             );
 
@@ -206,7 +209,7 @@ pub mod tests {
             let filter_low = IIRFilter::new(
                 &config_low,
                 Some(0.0),
-                #[cfg(not(test))]
+                #[cfg(not(test))] // only required in real-life execution
                 signal_name,
             );
             // It should be clamped to 0.0

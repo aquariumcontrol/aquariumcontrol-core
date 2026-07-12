@@ -87,6 +87,13 @@ impl SawToothProfileConfig {
     //
     // # Returns
     // A new `SawToothProfileConfig` instance initialized with the given phase lengths.
+    /// Creates a new instance.
+    ///
+    /// # Arguments
+    /// * `phase1_length` - A parameter representing `phase1_length`.
+    /// * `phase2_length` - A parameter representing `phase2_length`.
+    /// * `phase3_length` - A parameter representing `phase3_length`.
+    /// * `phase4_length` - A parameter representing `phase4_length`.
     pub fn new(
         phase1_length: u32,
         phase2_length: u32,

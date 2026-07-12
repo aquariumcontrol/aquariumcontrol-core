@@ -23,11 +23,9 @@ use serde_derive::Deserialize;
 #[derive(Deserialize, Debug)]
 pub struct DhtConfig {
     /// allows deactivation of the data acquisition
-    #[cfg(any(test, all(target_os = "linux", feature = "target_hw")))]
     pub active: bool,
 
     /// indicates if the thread shall be started or not
-    #[cfg(feature = "target_hw")]
     pub execute: bool,
 
     /// duration to keep pin down during start signal in microseconds
@@ -55,6 +53,5 @@ pub struct DhtConfig {
     pub sensor_pause_duration_millis: u64,
 
     /// duration in milliseconds between two measurements
-    #[cfg(any(test, all(target_os = "linux", feature = "target_hw")))]
     pub measurement_interval_millis: u64,
 }

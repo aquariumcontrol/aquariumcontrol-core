@@ -45,7 +45,6 @@ use crate::database::pingable::Pingable;
 use crate::food::feed::Feed;
 use crate::mineral::balling::Balling;
 use crate::permission::schedule_check::ScheduleCheck;
-use crate::recorder::data_logger::DataLogger;
 use crate::thermal::heating::Heating;
 use crate::water::refill::Refill;
 use std::time::{Duration, Instant};
@@ -61,12 +60,20 @@ pub trait DatabasePingTrait {
     fn update_last_ping_instant(&mut self);
 
     /// Pings the database.
+    ///
+    /// # Arguments
+    /// * `database_interface` - The database interface connection.
     fn check_timing_and_ping_database(
         &mut self,
         database_interface: &mut (impl Pingable + ?Sized),
+        is_multi_thread: bool,
     ) {
         if self.get_last_ping_instant().elapsed() > self.get_ping_interval() {
-            database_interface.ping();
+            if is_multi_thread {
+                tokio::task::block_in_place(|| database_interface.ping());
+            } else {
+                database_interface.ping();
+            }
             self.update_last_ping_instant();
         }
     }
@@ -82,10 +89,12 @@ macro_rules! impl_database_ping_trait {
                 self.database_ping_interval
             }
 
+            /// Retrieves the last ping instant.
             fn get_last_ping_instant(&self) -> Instant {
                 self.last_ping_instant
             }
 
+            /// Updates the last ping instant.
             fn update_last_ping_instant(&mut self) {
                 self.last_ping_instant = Instant::now();
             }
@@ -93,7 +102,6 @@ macro_rules! impl_database_ping_trait {
     };
 }
 
-impl_database_ping_trait!(DataLogger);
 impl_database_ping_trait!(Feed);
 impl_database_ping_trait!(Refill);
 impl_database_ping_trait!(Heating);
@@ -111,6 +119,7 @@ mod tests {
     }
 
     impl MockPingable {
+        /// Creates a new instance.
         fn new() -> Self {
             Self {
                 ping_was_called: false,
@@ -119,6 +128,7 @@ mod tests {
     }
 
     impl Pingable for MockPingable {
+        /// Performs the `ping` operation.
         fn ping(&mut self) {
             self.ping_was_called = true;
         }
@@ -132,14 +142,17 @@ mod tests {
     }
 
     impl DatabasePingTrait for MockPinger {
+        /// Retrieves the ping interval.
         fn get_ping_interval(&self) -> Duration {
             self.database_ping_interval
         }
 
+        /// Retrieves the last ping instant.
         fn get_last_ping_instant(&self) -> Instant {
             self.last_ping_instant
         }
 
+        /// Updates the last ping instant.
         fn update_last_ping_instant(&mut self) {
             self.last_ping_instant = Instant::now();
         }
@@ -155,7 +168,7 @@ mod tests {
         let mut pingable = MockPingable::new();
 
         // Act: Check if a ping is needed.
-        pinger.check_timing_and_ping_database(&mut pingable);
+        pinger.check_timing_and_ping_database(&mut pingable, false);
 
         // Assert: The pingable object's ping method should NOT have been called.
         assert!(
@@ -175,7 +188,7 @@ mod tests {
         let mut pingable = MockPingable::new();
 
         // Act: Check if a ping is needed.
-        pinger.check_timing_and_ping_database(&mut pingable);
+        pinger.check_timing_and_ping_database(&mut pingable, false);
 
         // Assert: The pingable object's ping method SHOULD have been called.
         assert!(
@@ -195,7 +208,7 @@ mod tests {
         let mut pingable = MockPingable::new();
 
         // Act 1: The first check should trigger a ping.
-        pinger.check_timing_and_ping_database(&mut pingable);
+        pinger.check_timing_and_ping_database(&mut pingable, false);
 
         // Assert 1: The ping was triggered.
         assert!(
@@ -207,7 +220,7 @@ mod tests {
         pingable.ping_was_called = false;
 
         // Act 2: Immediately check again. The timer should have been reset, so no ping is needed.
-        pinger.check_timing_and_ping_database(&mut pingable);
+        pinger.check_timing_and_ping_database(&mut pingable, false);
 
         // Assert 2: The ping was NOT triggered a second time.
         assert!(

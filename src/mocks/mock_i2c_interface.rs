@@ -14,6 +14,7 @@ pub mod tests {
     use crate::sensors::i2c_interface_channels::I2cInterfaceChannels;
     use crate::utilities::channel_content::InternalCommand;
     use crate::utilities::proc_ext_req::ProcessExternalRequestTrait;
+    use std::time::Duration;
 
     pub struct MockI2cInterface {
         /// I2C address of Atlas Scientific pH sensor unit
@@ -39,6 +40,13 @@ pub mod tests {
     impl ProcessExternalRequestTrait for MockI2cInterface {}
 
     impl MockI2cInterface {
+        /// Creates a new instance.
+        ///
+        /// # Arguments
+        /// * `atlas_scientific_config` - A parameter representing `atlas_scientific_config`.
+        /// * `mock_response_temperature` - A parameter representing `mock_response_temperature`.
+        /// * `mock_response_ph` - A parameter representing `mock_response_ph`.
+        /// * `mock_response_conductivity` - A parameter representing `mock_response_conductivity`.
         pub fn new(
             atlas_scientific_config: &AtlasScientificConfig,
             mock_response_temperature: I2cResponse,
@@ -57,7 +65,11 @@ pub mod tests {
             }
         }
 
-        pub fn execute(&mut self, mut i2c_interface_channels: I2cInterfaceChannels) {
+        /// Executes the main task loop.
+        ///
+        /// # Arguments
+        /// * `i2c_interface_channels` - A parameter representing `i2c_interface_channels`.
+        pub async fn execute(&mut self, mut i2c_interface_channels: I2cInterfaceChannels) {
             loop {
                 let (
                     quit_command_received, // the request to end the application has been received
@@ -113,6 +125,8 @@ pub mod tests {
                     }
                     _ => { /* no message available, do nothing */ }
                 }
+
+                tokio::time::sleep(Duration::from_millis(10)).await;
             }
         }
     }

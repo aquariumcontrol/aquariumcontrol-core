@@ -89,15 +89,19 @@ impl TankLevelSwitchChannels {
 
     /// Receives a result from the TCP simulator if the channel exists.
     #[allow(unused)]
-    pub fn receive_from_tcp(
+    pub async fn receive_from_tcp(
         &mut self,
     ) -> Option<Result<Result<f32, TcpCommunicationError>, AquaChannelError>> {
-        self.rx_tank_level_switch_from_tcp_opt
-            .as_mut()
-            .map(|rx| rx.recv())
+        match &mut self.rx_tank_level_switch_from_tcp_opt {
+            Some(rx) => Some(rx.recv().await),
+            None => None,
+        }
     }
 
     /// Sends an acknowledgment to the signal handler.
+    ///
+    /// # Arguments
+    /// * `ack` - A parameter representing `ack`.
     #[allow(unused)]
     pub fn send_to_signal_handler(&mut self, ack: bool) -> Result<(), AquaChannelError> {
         self.tx_tank_level_switch_to_signal_handler.send(ack)
@@ -105,13 +109,19 @@ impl TankLevelSwitchChannels {
 
     /// Receives a command from the signal handler.
     #[allow(unused)]
-    pub fn receive_from_signal_handler(&mut self) -> Result<InternalCommand, AquaChannelError> {
-        self.rx_tank_level_switch_from_signal_handler.recv()
+    pub async fn receive_from_signal_handler(
+        &mut self,
+    ) -> Result<InternalCommand, AquaChannelError> {
+        self.rx_tank_level_switch_from_signal_handler.recv().await
     }
 }
 
 #[cfg(feature = "debug_channels")]
 impl fmt::Display for TankLevelSwitchChannels {
+    /// Formats the value using the given formatter.
+    ///
+    /// # Arguments
+    /// * `f` - The formatter to write the formatted string to.
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         writeln!(f, "=== TankLevelSwitchChannels ===")?;
         if let Some(tx_tank_level_switch_to_tcp) = self.tx_tank_level_switch_to_tcp_opt.as_ref() {
@@ -144,6 +154,10 @@ impl fmt::Display for TankLevelSwitchChannels {
 
 #[cfg(not(feature = "debug_channels"))]
 impl fmt::Display for TankLevelSwitchChannels {
+    /// Formats the value using the given formatter.
+    ///
+    /// # Arguments
+    /// * `f` - The formatter to write the formatted string to.
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(
             f,

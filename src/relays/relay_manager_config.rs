@@ -50,6 +50,9 @@ impl fmt::Display for RelayManagerConfig {
     /// This implementation provides a clean, multi-line string representation of the
     /// relay manager's configuration, which is ideal for logging at startup or
     /// for debugging purposes.
+    ///
+    /// # Arguments
+    /// * `f` - The formatter to write the formatted string to.
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         writeln!(f, "Relay Manager Configuration:")?;
         writeln!(f, "  Active: {}", self.active)?;

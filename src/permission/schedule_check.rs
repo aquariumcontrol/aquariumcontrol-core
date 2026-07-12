@@ -60,15 +60,16 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 #[cfg(feature = "debug_schedule_check")]
 use log::debug;
 
-#[cfg(all(not(test), target_os = "linux"))]
+#[cfg(all(not(test), target_os = "linux"))] // only required in real-life execution
 use log::info;
 
-#[cfg(all(target_os = "linux", not(test)))]
+#[cfg(all(target_os = "linux", not(test)))] // only required in real-life execution
 use nix::unistd::gettid;
 
-#[cfg(not(test))]
+#[cfg(not(test))] // only required in real-life execution
 use log::warn;
 
+use crate::database::pingable::Pingable;
 use crate::database::sql_interface_schedule::{ScheduleEntry, ScheduleType, SqlInterfaceSchedule};
 use crate::launch::channels::{AquaChannelError, AquaReceiver, AquaSender};
 use crate::launch::execution_config::ExecutionConfig;
@@ -79,7 +80,6 @@ use crate::utilities::channel_content::InternalCommand;
 use crate::utilities::database_ping_trait::DatabasePingTrait;
 use crate::utilities::logger::log_error_chain;
 use crate::utilities::proc_ext_req::ProcessExternalRequestTrait;
-use spin_sleep::SpinSleeper;
 use std::time::{Duration, Instant};
 
 /// Contains all inhibition flags for a specific schedule communication
@@ -190,6 +190,7 @@ impl ScheduleCheck {
     /// * `locks` - A mutable reference to the struct containing the lock flags.
     /// * `_module_name` - Name of the module for which the schedule shall be checked for logging purposes.
     ///
+    /// * `module_name` - A parameter representing `module_name`.
     fn check_pending_schedule_request(
         config: &ScheduleCheckConfig,
         tx: &mut AquaSender<bool>,
@@ -214,9 +215,9 @@ impl ScheduleCheck {
                     }
                     AquaChannelError::Disconnected => {
                         if !locks.channel_receive {
-                            #[cfg(not(test))]
+                            #[cfg(not(test))] // only required in real-life execution
                             let context = format!("receiving command from {_module_name} failed.");
-                            #[cfg(not(test))]
+                            #[cfg(not(test))] // only required in real-life execution
                             log_error_chain(module_path!(), &context, e);
                             locks.channel_receive = true;
                         }
@@ -237,7 +238,8 @@ impl ScheduleCheck {
             }
             _c => {
                 if !locks.inapplicable_command {
-                    #[cfg(not(test))]
+                    #[cfg(not(test))] // only required in real-life execution
+                    #[cfg(not(tarpaulin_include))]
                     warn!(
                         target: module_path!(),
                         "ignoring inapplicable command ({_c}) from {_module_name}"
@@ -255,7 +257,8 @@ impl ScheduleCheck {
             }
             Err(_e) => {
                 if !locks.channel_send {
-                    #[cfg(not(test))]
+                    #[cfg(not(test))] // only required in real-life execution
+                    #[cfg(not(tarpaulin_include))]
                     {
                         let context = format!("sending back message to {_module_name} failed");
                         log_error_chain(module_path!(), &context, _e);
@@ -287,6 +290,9 @@ impl ScheduleCheck {
     /// * `locks` - A mutable reference to the log-suppression flags for the specific client module.
     /// * `action` - The name of the client module (e.g., "ventilation"), used for logging.
     /// * `schedule_check_channels` - A mutable reference to the struct containing all communication channels.
+    /// * `schedule_type` - A parameter representing `schedule_type`.
+    /// * `module_name` - A parameter representing `module_name`.
+    /// * `channel_pair` - A parameter representing `channel_pair`.
     fn find_schedule_check_request(
         schedule_type: ScheduleType,
         config: &ScheduleCheckConfig,
@@ -304,10 +310,11 @@ impl ScheduleCheck {
                         locks.find_schedule = false;
                         Some(c)
                     }
-                    Err(e) => {
+                    Err(_e) => {
+                        #[cfg(not(test))] // only required in real-life execution
                         if !locks.find_schedule {
                             let context = format!("could not find schedule for {module_name}");
-                            log_error_chain(module_path!(), &context, e);
+                            log_error_chain(module_path!(), &context, _e);
                             locks.find_schedule = true;
                         }
                         None
@@ -347,17 +354,17 @@ impl ScheduleCheck {
     ///   have been started.
     /// * `sql_interface_schedule` - A `SqlInterfaceSchedule` instance providing
     ///   the interface to the SQL database for retrieving schedule entries.
-    pub fn execute(
+    pub async fn execute(
         &mut self,
         schedule_check_channels: &mut ScheduleCheckChannels,
         execution_config: ExecutionConfig,
         mut sql_interface_schedule: SqlInterfaceSchedule,
     ) {
-        #[cfg(all(target_os = "linux", not(test)))]
+        #[cfg(all(target_os = "linux", not(test)))] // only required in real-life execution
+        #[cfg(not(tarpaulin_include))]
         info!(target: module_path!(), "Thread started with TID: {}", gettid());
 
         let sleep_duration_hundred_millis = Duration::from_millis(100);
-        let spin_sleeper = SpinSleeper::default();
 
         let duration_schedule_check_interval =
             Duration::from_secs(self.config.schedule_check_interval.into());
@@ -371,7 +378,14 @@ impl ScheduleCheck {
             {
                 first_iteration = false;
                 last_check_instant = Instant::now();
-                if let Err(errors) = sql_interface_schedule.read_schedule() {
+                let (res, sql_interface) = tokio::task::spawn_blocking(move || {
+                    let res = sql_interface_schedule.read_schedule();
+                    (res, sql_interface_schedule)
+                })
+                .await
+                .unwrap();
+                sql_interface_schedule = sql_interface;
+                if let Err(errors) = res {
                     if !self.lock_error_database_read {
                         for e in errors {
                             log_error_chain(module_path!(), "Reading schedule failed", e);
@@ -453,9 +467,17 @@ impl ScheduleCheck {
                 ),
             );
 
-            spin_sleeper.sleep(sleep_duration_hundred_millis);
+            tokio::time::sleep(sleep_duration_hundred_millis).await;
 
-            self.check_timing_and_ping_database(&mut sql_interface_schedule);
+            if self.get_last_ping_instant().elapsed() > self.get_ping_interval() {
+                sql_interface_schedule = tokio::task::spawn_blocking(move || {
+                    sql_interface_schedule.ping();
+                    sql_interface_schedule
+                })
+                .await
+                .unwrap();
+                self.update_last_ping_instant();
+            }
         }
 
         schedule_check_channels.acknowledge_signal_handler();
@@ -470,6 +492,10 @@ mod tests {
     use chrono::NaiveTime;
 
     // Helper function to create a default config for tests.
+    /// Performs the `default_test_config` operation.
+    ///
+    /// # Arguments
+    /// * `strategy_if_not_found` - A parameter representing `strategy_if_not_found`.
     fn default_test_config(strategy_if_not_found: bool) -> ScheduleCheckConfig {
         ScheduleCheckConfig {
             active: true,
@@ -480,6 +506,7 @@ mod tests {
     }
 
     // Helper to create a schedule entry that is always active and covers the entire day.
+    /// Performs the `always_allowed_schedule` operation.
     fn always_allowed_schedule() -> ScheduleEntry {
         ScheduleEntry::new_for_test(
             ScheduleType::Heating,
@@ -514,7 +541,11 @@ mod tests {
         );
 
         // Assert
-        let result = channels.heating.receive_from_schedule_check().unwrap();
+        let result = channels
+            .heating
+            .rx_heating_from_schedule_check
+            .blocking_recv()
+            .unwrap();
         assert_eq!(result, true, "Should be allowed by the active schedule");
         assert!(!locks.channel_receive, "Receive lock should not be set");
         assert!(!locks.channel_send, "Send lock should not be set");
@@ -552,7 +583,11 @@ mod tests {
         );
 
         // Assert
-        let result = channels.heating.receive_from_schedule_check().unwrap();
+        let result = channels
+            .heating
+            .rx_heating_from_schedule_check
+            .blocking_recv()
+            .unwrap();
         assert_eq!(
             result, true,
             "Should be disallowed by the inactive schedule"
@@ -583,7 +618,11 @@ mod tests {
         );
 
         // Assert
-        let result = channels.heating.receive_from_schedule_check().unwrap();
+        let result = channels
+            .heating
+            .rx_heating_from_schedule_check
+            .blocking_recv()
+            .unwrap();
         assert_eq!(result, true, "Should be allowed by the fallback strategy");
     }
 
@@ -611,7 +650,11 @@ mod tests {
         );
 
         // Assert
-        let result = channels.heating.receive_from_schedule_check().unwrap();
+        let result = channels
+            .heating
+            .rx_heating_from_schedule_check
+            .blocking_recv()
+            .unwrap();
         assert_eq!(
             result, false,
             "Should be disallowed by the fallback strategy"

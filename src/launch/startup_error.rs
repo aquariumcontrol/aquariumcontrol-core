@@ -53,7 +53,6 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 #[cfg(all(feature = "target_hw", target_os = "linux"))]
 use crate::beacon::ws2812b::Ws2812BError;
 use crate::database::sql_interface_error::SqlInterfaceError;
-#[cfg(target_os = "linux")]
 use crate::dispatch::messaging_error::MessagingError;
 use crate::mineral::balling_error::BallingError;
 use crate::recorder::data_logger_error::DataLoggerError;
@@ -65,7 +64,6 @@ use crate::sensors::atlas_scientific_error::AtlasScientificError;
 use crate::sensors::ds18b20_error::Ds18b20Error;
 #[cfg(all(feature = "target_hw", target_os = "linux"))]
 use crate::sensors::gpio_handler::GpioHandlerError;
-#[cfg(all(feature = "target_hw", target_os = "linux"))]
 use crate::sensors::i2c_error::I2cError;
 use crate::sensors::sensor_manager::SensorManagerError;
 use crate::sensors::tank_level_switch::TankLevelSwitchError;
@@ -76,7 +74,6 @@ use crate::utilities::config_file_definition_error::ConfigFileDefinitionError;
 use crate::utilities::logger::LoggerSetupError;
 use crate::utilities::publish_pid::PublishPidError;
 use crate::utilities::version_information::VersionInformationError;
-use crate::watchmen::memory_config_check::MemoryConfigError;
 use crate::watchmen::watchdog::WatchdogError;
 use thiserror::Error;
 
@@ -121,7 +118,6 @@ pub enum StartupError {
     },
 
     /// Could not open POSIX message queue.
-    #[cfg(target_os = "linux")]
     #[error("Could not establish connection to messaging system.")]
     Messaging {
         #[source]
@@ -132,13 +128,6 @@ pub enum StartupError {
     #[allow(unused)]
     #[error("Configuration error: GPIO handler not initialized.")]
     GpioHandlerMissing,
-
-    /// Configuration error: Memory configuration of the operating system is invalid.
-    #[error("Configuration error: Memory configuration of operating system is invalid.")]
-    InvalidMemoryConfig {
-        #[source]
-        source: MemoryConfigError,
-    },
 
     /// Could not retrieve version information.
     #[error("Could not retrieve version information.")]
@@ -185,7 +174,6 @@ pub enum StartupError {
     },
 
     /// Could not initialize the interface to the I2c.
-    #[cfg(all(feature = "target_hw", target_os = "linux"))]
     #[error("Could not setup the interface to the I2C.")]
     I2cSetupFailure {
         #[source]
@@ -256,5 +244,22 @@ pub enum StartupError {
     TemperatureGradientConfigFailure {
         #[source]
         source: TemperatureGradientError,
+    },
+
+    /// Setup of Tokio Async Runtime failed
+    #[error("Setup of Tokio Async Runtime failed")]
+    TokioRuntimeSetupFailure {
+        #[source]
+        source: std::io::Error,
+    },
+
+    #[cfg(feature = "debug_tokio")]
+    /// Spawning a task failed
+    #[error("Spawning Tokio task failed for ")]
+    TokioSpawnFailure {
+        location: String,
+
+        #[source]
+        source: std::io::Error,
     },
 }

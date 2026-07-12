@@ -77,6 +77,10 @@ pub struct SensorManagerChannels {
 
 #[cfg(feature = "debug_channels")]
 impl fmt::Display for SensorManagerChannels {
+    /// Formats the value using the given formatter.
+    ///
+    /// # Arguments
+    /// * `f` - The formatter to write the formatted string to.
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         writeln!(f, "=== SensorManagerChannels ===")?;
         if let Some(tx_sensor_manager_to_tcp) = self.tx_sensor_manager_to_tcp_opt.as_ref() {
@@ -108,6 +112,10 @@ impl fmt::Display for SensorManagerChannels {
 
 #[cfg(not(feature = "debug_channels"))]
 impl fmt::Display for SensorManagerChannels {
+    /// Formats the value using the given formatter.
+    ///
+    /// # Arguments
+    /// * `f` - The formatter to write the formatted string to.
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(
             f,

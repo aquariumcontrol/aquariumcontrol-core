@@ -67,16 +67,17 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 //! 7.  Finally, it updates the `feed_schedule` table to mark the entry as completed or to
 //!     reschedule it if it's a repeating event.
 
-#[cfg(not(test))]
+#[cfg(not(test))] // only required in real-life execution
 use log::info;
 
-#[cfg(all(feature = "debug_feed", not(test)))]
+#[cfg(all(feature = "debug_feed", not(test)))] // only required in real-life execution
 use log::debug;
 
 #[cfg(all(feature = "debug_signal_handler", not(test)))]
+// only required in real-life execution
 use log::debug;
 
-#[cfg(all(target_os = "linux", not(test)))]
+#[cfg(all(target_os = "linux", not(test)))] // only required in real-life execution
 use nix::unistd::gettid;
 
 use crate::check_quit_increment_counter_ping_database;
@@ -91,7 +92,6 @@ use crate::utilities::database_ping_trait::DatabasePingTrait;
 use crate::utilities::logger::log_error_chain;
 use crate::utilities::proc_ext_req::ProcessExternalRequestTrait;
 use crate::utilities::wait_for_termination::WaitForTerminationTrait;
-use spin_sleep::SpinSleeper;
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
@@ -167,7 +167,8 @@ impl Feed {
         }
     }
 
-    #[cfg(all(feature = "debug_feed", not(test)))]
+    #[cfg(all(feature = "debug_feed", not(test)))] // only required in real-life execution
+    #[cfg(not(tarpaulin_include))]
     // Converts a vector of `FeedScheduleEntry` into a human-readable string for visualization.
     //
     // This helper function is active only in non-test builds when the `debug_feed` feature is enabled.
@@ -199,39 +200,49 @@ impl Feed {
     ///
     /// # Returns
     /// An empty Ok() or Err() depending on result of the logging operation.
+    /// * `is_multi_thread` - A boolean flag indicating if the Tokio runtime is running in multi-threaded mode.
     fn log_feed_operation(
         &mut self,
         feed_profile: FeedProfile,
         sql_interface_feed: &mut Box<dyn DatabaseInterfaceFeedTrait + Sync + Send>,
+        is_multi_thread: bool,
     ) -> Result<(), ()> {
-        // Get the current timestamp to log the event
-        let current_timestamp = match sql_interface_feed.get_current_timestamp() {
-            Ok(c) => c,
-            Err(e) => {
-                log_error_chain(
-                    module_path!(),
-                    "Could not get current timestamp from database.",
-                    e,
-                );
-                return Err(());
+        let mut action = || {
+            // Get the current timestamp to log the event
+            let current_timestamp = match sql_interface_feed.get_current_timestamp() {
+                Ok(c) => c,
+                Err(e) => {
+                    log_error_chain(
+                        module_path!(),
+                        "Could not get current timestamp from database.",
+                        e,
+                    );
+                    return Err(());
+                }
+            };
+
+            //*** Insert the feed event into the log ***
+            match sql_interface_feed.insert_feed_event(
+                current_timestamp,
+                feed_profile.calc_feeder_runtime(),
+                feed_profile.profile_id,
+            ) {
+                Ok(_) => Ok(()),
+                Err(e) => {
+                    log_error_chain(
+                        module_path!(),
+                        "Could not insert feed event into database.",
+                        e,
+                    );
+                    Err(())
+                }
             }
         };
 
-        //*** Insert the feed event into the log ***
-        match sql_interface_feed.insert_feed_event(
-            current_timestamp,
-            feed_profile.calc_feeder_runtime(),
-            feed_profile.profile_id,
-        ) {
-            Ok(_) => Ok(()),
-            Err(e) => {
-                log_error_chain(
-                    module_path!(),
-                    "Could not insert feed event into database.",
-                    e,
-                );
-                Err(())
-            }
+        if is_multi_thread {
+            tokio::task::block_in_place(action)
+        } else {
+            action()
         }
     }
 
@@ -354,18 +365,21 @@ impl Feed {
     /// * `sql_interface_feed` - A boxed trait object representing the interface
     ///   to the SQL database for feed-specific operations. This allows for
     ///   dependency injection and mock implementations during testing.
-    pub fn execute(
+    /// * `is_multi_thread` - A boolean indicating if the tokio runtime is running in multi-threaded mode.
+    pub async fn execute(
         &mut self,
         mutex_device_scheduler_feed: Arc<Mutex<i32>>,
         feed_channels: &mut FeedChannels,
-        food_injection: &mut impl FoodInjectionTrait,
+        food_injection: &mut (impl FoodInjectionTrait + Send),
         mut sql_interface_feed: Box<dyn DatabaseInterfaceFeedTrait + Sync + Send>,
+        is_multi_thread: bool,
     ) {
-        #[cfg(all(target_os = "linux", not(test)))]
+        #[cfg(all(target_os = "linux", not(test)))] // only required in real-life execution
+        #[cfg(not(tarpaulin_include))]
         info!(target: module_path!(), "Thread started with TID: {}", gettid());
 
         let sleep_duration_hundred_millis = Duration::from_millis(100);
-        let spin_sleeper = SpinSleeper::default();
+
         let mut loop_counter = 0;
         let mut feed_inhibited: bool = false; // state of feed control determined by if the start/stop command has been received
         let mut quit_command_received: bool = false; // the request to end the application has been received
@@ -377,16 +391,26 @@ impl Feed {
                 && !feed_inhibited
                 && (loop_counter % (self.config.schedule_check_interval * 10) == 0)
             {
-                #[cfg(all(feature = "debug_feed", not(test)))]
+                #[cfg(all(feature = "debug_feed", not(test)))] // only required in real-life execution
+                #[cfg(not(tarpaulin_include))]
                 debug!(
                     target: module_path!(),
                     "Starting feed control cycle"
                 );
 
-                match sql_interface_feed.get_past_feed_schedule_entries_from_database() {
+                let get_past_res = if is_multi_thread {
+                    tokio::task::block_in_place(|| {
+                        sql_interface_feed.get_past_feed_schedule_entries_from_database()
+                    })
+                } else {
+                    sql_interface_feed.get_past_feed_schedule_entries_from_database()
+                };
+
+                match get_past_res {
                     Ok(feed_schedule_entries_opt) => {
                         if let Some(mut feed_schedule_entries) = feed_schedule_entries_opt {
-                            #[cfg(all(feature = "debug_feed", not(test)))]
+                            #[cfg(all(feature = "debug_feed", not(test)))] // only required in real-life execution
+                            #[cfg(not(tarpaulin_include))]
                             debug!(
                                 target: module_path!(),
                                 "Discovered following feed schedule entries in the past: {}",
@@ -397,7 +421,8 @@ impl Feed {
                                 .select_feed_schedule_entry_for_execution(&feed_schedule_entries);
 
                             if let Some(feed_schedule_entry) = feed_schedule_entry_opt {
-                                #[cfg(all(feature = "debug_feed", not(test)))]
+                                #[cfg(all(feature = "debug_feed", not(test)))] // only required in real-life execution
+                                #[cfg(not(tarpaulin_include))]
                                 debug!(
                                     target: module_path!(),
                                     "Selected following feed schedule entry for execution: {}",
@@ -409,10 +434,20 @@ impl Feed {
                                 if !self.execution_blocked {
                                     // execute database query before locking mutex
                                     // First, load the feed profile from the database.
-                                    let feed_profile_opt = match sql_interface_feed
-                                        .get_single_feed_profile_from_database(
+                                    let get_profile_res = if is_multi_thread {
+                                        tokio::task::block_in_place(|| {
+                                            sql_interface_feed
+                                                .get_single_feed_profile_from_database(
+                                                    feed_schedule_entry.profile_id,
+                                                )
+                                        })
+                                    } else {
+                                        sql_interface_feed.get_single_feed_profile_from_database(
                                             feed_schedule_entry.profile_id,
-                                        ) {
+                                        )
+                                    };
+
+                                    let feed_profile_opt = match get_profile_res {
                                         Ok(feed_profile_loaded) => Some(feed_profile_loaded),
                                         Err(e) => {
                                             log_error_chain(
@@ -447,6 +482,7 @@ impl Feed {
                                         let logging_result = self.log_feed_operation(
                                             feed_profile,
                                             &mut sql_interface_feed,
+                                            is_multi_thread,
                                         );
                                         if logging_result.is_err() {
                                             // block further execution if logging of feed event does not work
@@ -455,14 +491,25 @@ impl Feed {
                                     }
 
                                     //*** update schedule ***
-                                    match sql_interface_feed
-                                        .update_feed_schedule_entries_in_database(
+                                    let update_res = if is_multi_thread {
+                                        tokio::task::block_in_place(|| {
+                                            sql_interface_feed
+                                                .update_feed_schedule_entries_in_database(
+                                                    &mut feed_schedule_entries,
+                                                )
+                                        })
+                                    } else {
+                                        sql_interface_feed.update_feed_schedule_entries_in_database(
                                             &mut feed_schedule_entries,
-                                        ) {
+                                        )
+                                    };
+
+                                    match update_res {
                                         Ok(()) => {
                                             // do nothing
                                         }
-                                        #[cfg(not(test))]
+                                        #[cfg(not(test))] // only required in real-life execution
+                                        #[cfg(not(tarpaulin_include))]
                                         Err(e) => {
                                             log_error_chain(
                                                 module_path!(),
@@ -483,7 +530,8 @@ impl Feed {
                         }
                     }
                     Err(e) => {
-                        #[cfg(not(test))]
+                        #[cfg(not(test))] // only required in real-life execution
+                        #[cfg(not(tarpaulin_include))]
                         if !self.lock_error_get_feed_schedule_entry {
                             log_error_chain(
                                 module_path!(),
@@ -511,19 +559,21 @@ impl Feed {
                 stop_command_received, // the request to (temporarily) stop the feed has been received
             ) = self.process_external_request(
                 &mut feed_channels.rx_feed_from_signal_handler,
-                feed_channels.rx_feed_from_messaging_opt.as_mut(),
+                Some(&mut feed_channels.rx_feed_from_messaging),
             );
             if quit_command_received {
                 break;
             }
             if stop_command_received {
-                #[cfg(not(test))]
+                #[cfg(not(test))] // only required in real-life execution
+                #[cfg(not(tarpaulin_include))]
                 info!(
                     target: module_path!(),
                     "received Stop command. Inhibiting feed."
                 );
 
-                #[cfg(all(feature = "debug_feed", not(test)))]
+                #[cfg(all(feature = "debug_feed", not(test)))] // only required in real-life execution
+                #[cfg(not(tarpaulin_include))]
                 debug!(
                     target: module_path!(),
                     "received Stop command."
@@ -532,13 +582,15 @@ impl Feed {
                 feed_inhibited = true;
             }
             if start_command_received {
-                #[cfg(not(test))]
+                #[cfg(not(test))] // only required in real-life execution
+                #[cfg(not(tarpaulin_include))]
                 info!(
                     target: module_path!(),
                     "received Start command. Restarting feed."
                 );
 
-                #[cfg(all(feature = "debug_feed", not(test)))]
+                #[cfg(all(feature = "debug_feed", not(test)))] // only required in real-life execution
+                #[cfg(not(tarpaulin_include))]
                 debug!(
                     target: module_path!(),
                     "received Start command"
@@ -550,16 +602,25 @@ impl Feed {
                 && self.profile_id_requested >= 0
                 && !self.execution_blocked
             {
-                #[cfg(all(feature = "debug_feed", not(test)))]
+                #[cfg(all(feature = "debug_feed", not(test)))] // only required in real-life execution
+                #[cfg(not(tarpaulin_include))]
                 debug!(
                     target: module_path!(),
                     "received execution command"
                 );
 
                 // First, load the feed profile from the database.
-                let feed_profile_opt = match sql_interface_feed
-                    .get_single_feed_profile_from_database(self.profile_id_requested)
-                {
+                let get_profile_res = if is_multi_thread {
+                    tokio::task::block_in_place(|| {
+                        sql_interface_feed
+                            .get_single_feed_profile_from_database(self.profile_id_requested)
+                    })
+                } else {
+                    sql_interface_feed
+                        .get_single_feed_profile_from_database(self.profile_id_requested)
+                };
+
+                let feed_profile_opt = match get_profile_res {
                     Ok(feed_profile_loaded) => Some(feed_profile_loaded),
                     Err(e) => {
                         log_error_chain(
@@ -572,35 +633,84 @@ impl Feed {
                 };
 
                 if let Some(feed_profile) = feed_profile_opt {
-                    // this scope limits the lifetime of unlocked mutex
-                    let mut mutex_data = mutex_device_scheduler_feed.lock().unwrap();
+                    let feed_profile_clone = feed_profile.clone();
+                    let (res_opt, join_err_opt) = tokio::task::block_in_place(|| {
+                        std::thread::scope(|scope| {
+                            let handle =
+                                scope.spawn(|| {
+                                    let mut mutex_data =
+                                        mutex_device_scheduler_feed.lock().unwrap();
 
-                    let (injection_result, quit_command_received_during_requested_feed) =
-                        self.execute_feed(feed_profile.clone(), food_injection, feed_channels);
-                    self.execution_blocked |= injection_result.is_err(); // block next execution if error occurred during injection
+                                    let (
+                                        injection_result,
+                                        quit_command_received_during_requested_feed,
+                                    ) = self.execute_feed(
+                                        feed_profile_clone.clone(),
+                                        food_injection,
+                                        feed_channels,
+                                    );
 
-                    let logging_result =
-                        self.log_feed_operation(feed_profile, &mut sql_interface_feed);
-                    self.execution_blocked |= logging_result.is_err(); // block next execution if error occurred during logging
+                                    let logging_result = self.log_feed_operation(
+                                        feed_profile_clone,
+                                        &mut sql_interface_feed,
+                                        is_multi_thread,
+                                    );
 
-                    quit_command_received = quit_command_received_during_requested_feed;
-                    *mutex_data = mutex_data.saturating_add(1);
+                                    *mutex_data = mutex_data.saturating_add(1);
+
+                                    (
+                                        injection_result,
+                                        quit_command_received_during_requested_feed,
+                                        logging_result,
+                                    )
+                                });
+                            match handle.join() {
+                                Ok(res) => (Some(res), None),
+                                Err(e) => {
+                                    let panic_msg = if let Some(s) = e.downcast_ref::<&str>() {
+                                        s.to_string()
+                                    } else if let Some(s) = e.downcast_ref::<String>() {
+                                        s.clone()
+                                    } else {
+                                        "Unknown panic payload".to_string()
+                                    };
+                                    (None, Some(ThreadJoinError(panic_msg)))
+                                }
+                            }
+                        })
+                    });
+
+                    if let Some(err) = join_err_opt {
+                        self.execution_blocked = true;
+                        log_error_chain(module_path!(), "could not join thread", err);
+                        quit_command_received = false;
+                    } else if let Some((
+                        injection_result,
+                        quit_command_received_during_requested_feed,
+                        logging_result,
+                    )) = res_opt
+                    {
+                        self.execution_blocked |= injection_result.is_err();
+                        self.execution_blocked |= logging_result.is_err();
+                        quit_command_received = quit_command_received_during_requested_feed;
+                    }
                 }
             }
 
             check_quit_increment_counter_ping_database!(
                 quit_command_received,
-                spin_sleeper,
                 sleep_duration_hundred_millis,
                 loop_counter,
                 self,
-                &mut *sql_interface_feed
+                &mut *sql_interface_feed,
+                is_multi_thread
             );
         }
 
         // The application received request to terminate. That is why the loop was left.
         // Answer to the thread which sent the request for termination, so that shutdown can proceed further.
-        #[cfg(all(feature = "debug_signal_handler", not(test)))]
+        #[cfg(all(feature = "debug_signal_handler", not(test)))] // only required in real-life execution
+        #[cfg(not(tarpaulin_include))]
         debug!(
             target: module_path!(),
             "Sending Quit confirmation to signal handler."
@@ -611,13 +721,29 @@ impl Feed {
         // This thread has channel connections to underlying threads.
         // Those threads have to stop receiving commands from this thread.
         // The shutdown sequence is handled by the signal_handler module.
-        self.wait_for_termination(
+        self.wait_for_termination_async(
             &mut feed_channels.rx_feed_from_signal_handler,
             sleep_duration_hundred_millis,
             module_path!(),
-        );
+        )
+        .await;
     }
 }
+
+#[derive(Debug)]
+struct ThreadJoinError(String);
+
+impl std::fmt::Display for ThreadJoinError {
+    /// Formats the value using the given formatter.
+    ///
+    /// # Arguments
+    /// * `f` - The formatter to write the formatted string to.
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.0)
+    }
+}
+
+impl std::error::Error for ThreadJoinError {}
 
 #[cfg(test)]
 pub mod tests {
@@ -645,6 +771,50 @@ pub mod tests {
     use crate::mocks::mock_food_injection::MockFoodInjection;
     use crate::mocks::mock_sql_interface_feed::tests::MockSqlInterfaceFeed;
 
+    use crate::food::feed_channels::FeedChannels;
+    use crate::food::food_injection::FoodInjectionTrait;
+
+    /// Helper function to execute the feed task inside a test Tokio runtime.
+    ///
+    /// # Arguments
+    /// * `feed` - A mutable reference to the `Feed` instance.
+    /// * `mutex_device_scheduler_feed` - Mutex coordinating access to the device scheduler.
+    /// * `feed_channels` - A mutable reference to the `FeedChannels` instance.
+    /// * `food_injection` - A mutable reference to the food injector instance.
+    /// * `sql_interface_feed` - Database interface for feed operations.
+    fn execute_blocking(
+        feed: &mut Feed,
+        mutex_device_scheduler_feed: Arc<Mutex<i32>>,
+        feed_channels: &mut FeedChannels,
+        food_injection: &mut (impl FoodInjectionTrait + Send),
+        sql_interface_feed: Box<dyn DatabaseInterfaceFeedTrait + Sync + Send>,
+    ) {
+        tokio::runtime::Builder::new_multi_thread()
+            .enable_all()
+            .build()
+            .unwrap()
+            .block_on(async {
+                // blocking execution used for testing
+                let is_multi_thread_test = tokio::runtime::Handle::try_current()
+                    .map(|h| {
+                        matches!(
+                            h.runtime_flavor(),
+                            tokio::runtime::RuntimeFlavor::MultiThread
+                        )
+                    })
+                    .unwrap_or(false);
+
+                feed.execute(
+                    mutex_device_scheduler_feed,
+                    feed_channels,
+                    food_injection,
+                    sql_interface_feed,
+                    is_multi_thread_test,
+                )
+                .await;
+            });
+    }
+
     /// Helper function for test cases to simulate the signal handler.
     ///
     /// The function waits for a determined period and then sends the Quit and the Terminate
@@ -663,7 +833,7 @@ pub mod tests {
     ) {
         spin_sleeper.sleep(sleep_duration);
         let _ = tx_signal_handler_to_feed.send(InternalCommand::Quit);
-        rx_signal_handler_from_feed.recv().unwrap();
+        rx_signal_handler_from_feed.blocking_recv().unwrap();
         let _ = tx_signal_handler_to_feed.send(InternalCommand::Terminate);
     }
 
@@ -768,7 +938,8 @@ pub mod tests {
 
             // thread for the test object
             scope.spawn(move || {
-                feed.execute(
+                execute_blocking(
+                    &mut feed,
                     mutex_device_scheduler_feed.clone(),
                     &mut channels.feed,
                     &mut mock_food_injection,
@@ -950,7 +1121,7 @@ pub mod tests {
                 channels
                     .signal_handler
                     .rx_signal_handler_from_feed
-                    .recv()
+                    .blocking_recv()
                     .unwrap();
                 let _ = channels
                     .signal_handler
@@ -965,7 +1136,8 @@ pub mod tests {
         let join_handle_test_object = thread::Builder::new()
             .name("test_object".to_string())
             .spawn(move || {
-                feed.execute(
+                execute_blocking(
+                    &mut feed,
                     mutex_device_scheduler_feed_test_object.clone(),
                     &mut channels.feed,
                     &mut mock_food_injection,
@@ -1038,7 +1210,7 @@ pub mod tests {
                 channels
                     .signal_handler
                     .rx_signal_handler_from_feed
-                    .recv()
+                    .blocking_recv()
                     .unwrap();
                 let _ = channels
                     .signal_handler
@@ -1053,7 +1225,8 @@ pub mod tests {
         let join_handle_test_object = thread::Builder::new()
             .name("test_object".to_string())
             .spawn(move || {
-                feed.execute(
+                execute_blocking(
+                    &mut feed,
                     mutex_device_scheduler_feed_test_object.clone(),
                     &mut channels.feed,
                     &mut mock_food_injection,
@@ -1076,6 +1249,7 @@ pub mod tests {
 
     // Helper function that creates an array of feed schedule entries
     // with data from the past.
+    /// Performs the `create_mock_feed_schedule_entries` operation.
     fn create_mock_feed_schedule_entries() -> Vec<FeedScheduleEntry> {
         let mut feed_schedule_entries: Vec<FeedScheduleEntry> = Vec::new();
 
@@ -1288,7 +1462,8 @@ pub mod tests {
 
             // thread for the test object
             scope.spawn(move || {
-                feed.execute(
+                execute_blocking(
+                    &mut feed,
                     mutex_device_scheduler_feed.clone(),
                     &mut channels.feed,
                     &mut mock_food_injection,
@@ -1401,7 +1576,8 @@ pub mod tests {
 
             // thread for the test object
             scope.spawn(move || {
-                feed.execute(
+                execute_blocking(
+                    &mut feed,
                     mutex_device_scheduler_feed.clone(),
                     &mut channels.feed,
                     &mut mock_food_injection,

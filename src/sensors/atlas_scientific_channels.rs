@@ -94,6 +94,10 @@ impl AtlasScientificChannels {
 
 #[cfg(feature = "debug_channels")]
 impl fmt::Display for AtlasScientificChannels {
+    /// Formats the value using the given formatter.
+    ///
+    /// # Arguments
+    /// * `f` - The formatter to write the formatted string to.
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         writeln!(f, "=== AtlasScientificChannels ===")?;
         writeln!(
@@ -126,6 +130,10 @@ impl fmt::Display for AtlasScientificChannels {
 
 #[cfg(not(feature = "debug_channels"))]
 impl fmt::Display for AtlasScientificChannels {
+    /// Formats the value using the given formatter.
+    ///
+    /// # Arguments
+    /// * `f` - The formatter to write the formatted string to.
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(
             f,

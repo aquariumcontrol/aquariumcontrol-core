@@ -17,16 +17,16 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 macro_rules! check_quit_increment_counter_ping_database {
     (
         $quit_flag:expr,
-        $sleeper:expr,
         $sleep_duration:expr,
         $loop_counter:expr,
         $self_ref:expr,
-        $sql_interface_mut_ref:expr
+        $sql_interface_mut_ref:expr,
+        $is_multi_thread:expr
     ) => {
         if $quit_flag {
             break;
         }
-        $sleeper.sleep($sleep_duration);
+        tokio::time::sleep($sleep_duration).await;
 
         $loop_counter += 1;
 
@@ -35,6 +35,6 @@ macro_rules! check_quit_increment_counter_ping_database {
             $loop_counter = 0;
         }
 
-        $self_ref.check_timing_and_ping_database($sql_interface_mut_ref);
+        $self_ref.check_timing_and_ping_database($sql_interface_mut_ref, $is_multi_thread);
     };
 }

@@ -27,7 +27,7 @@ macro_rules! perform_schedule_check {
             Ok(_) => {
                 $send_lock = false;
                 // Now listen for the response
-                $result_var = match $channels.receive_from_schedule_check() {
+                $result_var = match $channels.receive_from_schedule_check().await {
                     Ok(c) => {
                         $receive_lock = false;
                         c

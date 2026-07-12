@@ -89,11 +89,12 @@ impl FromStr for ScheduleType {
     /// Returns an empty `Err(())` if the input string does not match any of the known
     /// `ScheduleType` variants.
     fn from_str(input: &str) -> Result<ScheduleType, Self::Err> {
-        match input {
-            "Balling" => Ok(ScheduleType::Balling),
-            "Refill" => Ok(ScheduleType::Refill),
-            "Ventilation" => Ok(ScheduleType::Ventilation),
-            "Heating" => Ok(ScheduleType::Heating),
+        let lowercase_input = input.to_lowercase();
+        match lowercase_input.as_str() {
+            "balling" => Ok(ScheduleType::Balling),
+            "refill" => Ok(ScheduleType::Refill),
+            "ventilation" => Ok(ScheduleType::Ventilation),
+            "heating" => Ok(ScheduleType::Heating),
             _ => Err(()),
         }
     }
@@ -207,6 +208,13 @@ impl ScheduleEntry {
         }
     }
 
+    /// Performs the `new_for_test` operation.
+    ///
+    /// # Arguments
+    /// * `schedule_type` - A parameter representing `schedule_type`.
+    /// * `start_time` - A parameter representing `start_time`.
+    /// * `stop_time` - A parameter representing `stop_time`.
+    /// * `is_active` - A parameter representing `is_active`.
     #[cfg(test)]
     pub fn new_for_test(
         schedule_type: ScheduleType,
@@ -222,6 +230,7 @@ impl ScheduleEntry {
         }
     }
 
+    /// Performs the `deactivate` operation.
     #[cfg(test)]
     pub fn deactivate(&mut self) {
         self.is_active = false;
@@ -406,11 +415,19 @@ impl SqlInterfaceSchedule {
                     .collect::<Vec<_>>()
                     .join(", ");
 
-                SqlInterfaceError::ScheduleTypeNotFound(
-                    module_path!().to_string(),
-                    schedule_type.to_string(),
-                    available_types,
-                )
+                // Provide specific error depending on if database is empty or not.
+                if available_types.is_empty() {
+                    SqlInterfaceError::ScheduleTypeNotFoundEmptyDatabase(
+                        module_path!().to_string(),
+                        schedule_type.to_string(),
+                    )
+                } else {
+                    SqlInterfaceError::ScheduleTypeNotFoundOtherEntriesExisting(
+                        module_path!().to_string(),
+                        schedule_type.to_string(),
+                        available_types,
+                    )
+                }
             })
     }
 }
@@ -694,11 +711,20 @@ pub mod tests {
         // Assert that we get the correct error variant
         assert!(matches!(
             find_result,
-            Err(SqlInterfaceError::ScheduleTypeNotFound(_, _, _))
+            Err(SqlInterfaceError::ScheduleTypeNotFoundOtherEntriesExisting(
+                _,
+                _,
+                _
+            ))
         ));
 
         // For more robust testing, also verify the content of the error message.
-        if let Err(SqlInterfaceError::ScheduleTypeNotFound(_, requested, available)) = find_result {
+        if let Err(SqlInterfaceError::ScheduleTypeNotFoundOtherEntriesExisting(
+            _,
+            requested,
+            available,
+        )) = find_result
+        {
             assert_eq!(requested, "Balling");
             assert!(available.contains("Heating") && available.contains("Ventilation"));
             println!(

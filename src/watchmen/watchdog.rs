@@ -62,15 +62,14 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 use crate::utilities::proc_ext_req::ProcessExternalRequestTrait;
 use crate::watchmen::petting::PettingTrait;
 use crate::watchmen::watchdog_channels::WatchDogChannels;
-use spin_sleep::SpinSleeper;
 use std::time::Duration;
 
-#[cfg(all(target_os = "linux", not(test)))]
+#[cfg(all(target_os = "linux", not(test)))] // only required in real-life execution
 use log::info;
 
 use crate::utilities::acknowledge_signal_handler::AcknowledgeSignalHandlerTrait;
 use crate::watchmen::watchdog_config::WatchdogConfig;
-#[cfg(all(target_os = "linux", not(test)))]
+#[cfg(all(target_os = "linux", not(test)))] // only required in real-life execution
 use nix::unistd::gettid;
 use thiserror::Error;
 
@@ -196,15 +195,15 @@ impl Watchdog {
     /// * `watchdog_channels` - A mutable reference to the struct containing the channels.
     /// * `petting` - A mutable reference to an object implementing the `PettingTrait`,
     ///   responsible for the actual writing of heartbeat/deactivation messages to the watchdog file.
-    pub fn execute(
+    pub async fn execute(
         &mut self,
         watchdog_channels: &mut WatchDogChannels,
         petting: &mut impl PettingTrait,
     ) {
-        #[cfg(all(target_os = "linux", not(test)))]
+        #[cfg(all(target_os = "linux", not(test)))] // only required in real-life execution
+        #[cfg(not(tarpaulin_include))]
         info!(target: module_path!(), "Thread started with TID: {}", gettid());
 
-        let spin_sleeper = SpinSleeper::default();
         let sleep_duration = Duration::from_millis(self.config.heartbeat_duration_millis);
         let mut quit_command_received: bool; // the request to end the application has been received
         let mut stop_command_received: bool; // the request to (temporarily) stop watchdog communication has been received
@@ -219,14 +218,14 @@ impl Watchdog {
                     &self.config.watchdog_heartbeat,
                 );
             }
-            spin_sleeper.sleep(sleep_duration);
+            tokio::time::sleep(sleep_duration).await;
             (
                 quit_command_received,
                 start_command_received,
                 stop_command_received,
             ) = self.process_external_request(
                 &mut watchdog_channels.rx_watchdog_from_signal_handler,
-                watchdog_channels.rx_watchdog_from_messaging_opt.as_mut(),
+                Some(&mut watchdog_channels.rx_watchdog_from_messaging),
             );
 
             if quit_command_received {
@@ -267,6 +266,27 @@ pub mod tests {
     use std::io::Read;
     use std::thread::scope;
     use std::time::Duration;
+
+    /// Synchronously executes the main task loop for testing.
+    ///
+    /// # Arguments
+    /// * `watchdog` - A parameter representing `watchdog`.
+    /// * `watchdog_channels` - A parameter representing `watchdog_channels`.
+    /// * `petting` - A parameter representing `petting`.
+    fn execute_blocking(
+        watchdog: &mut Watchdog,
+        watchdog_channels: &mut crate::watchmen::watchdog_channels::WatchDogChannels,
+        petting: &mut impl crate::watchmen::petting::PettingTrait,
+    ) {
+        tokio::runtime::Builder::new_multi_thread()
+            .enable_all()
+            .build()
+            .unwrap()
+            .block_on(async {
+                // blocking execution used for testing
+                watchdog.execute(watchdog_channels, petting).await;
+            });
+    }
 
     #[test]
     // test if Watchdog::new fails if the configuration contains an empty watchdog filename
@@ -391,13 +411,14 @@ pub mod tests {
                 channels
                     .signal_handler
                     .rx_signal_handler_from_watchdog
-                    .recv()
+                    .blocking_recv()
                     .unwrap();
             });
 
             // thread for the test object
             scope.spawn(move || {
-                watchdog.execute(
+                execute_blocking(
+                    &mut watchdog,
                     &mut channels.watchdog,
                     &mut mock_petting,
                 );
@@ -484,7 +505,7 @@ pub mod tests {
                 channels
                     .signal_handler
                     .rx_signal_handler_from_watchdog
-                    .recv()
+                    .blocking_recv()
                     .unwrap();
             });
 
@@ -521,7 +542,7 @@ pub mod tests {
 
             // thread for the test object
             scope.spawn(move || {
-                watchdog.execute(&mut channels.watchdog, &mut petting);
+                execute_blocking(&mut watchdog, &mut channels.watchdog, &mut petting);
             });
         });
     }

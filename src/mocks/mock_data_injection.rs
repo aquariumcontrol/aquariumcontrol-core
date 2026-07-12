@@ -9,12 +9,12 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 
 #[cfg(test)]
 pub mod tests {
-    use crate::database::sql_interface_data::SqlInterfaceData;
     use crate::launch::channels::AquaSender;
     use crate::recorder::{
         data_injection::DataInjectionTrait, recorder_data_frame::RecorderDataFrame,
     };
     use crate::utilities::channel_content::InternalCommand;
+    use mysql::PooledConn;
     use std::sync::{Arc, Mutex};
 
     /// A mock for the DataInjectionTrait that captures the data frame and then
@@ -27,11 +27,12 @@ pub mod tests {
     }
 
     impl DataInjectionTrait for MockInjectorWithQuit {
-        fn inject_data(
-            &mut self,
-            data_frame: RecorderDataFrame,
-            _sql_interface_data: &mut SqlInterfaceData,
-        ) {
+        /// Performs the `inject_data` operation.
+        ///
+        /// # Arguments
+        /// * `data_frame` - A parameter representing `data_frame`.
+        /// * `conn` - An active pooled database connection.
+        fn inject_data(&mut self, data_frame: RecorderDataFrame, conn: PooledConn) -> PooledConn {
             // Capture the first data frame that gets injected.
             let mut data = self.injected_data.lock().unwrap();
             if data.is_none() {
@@ -47,6 +48,7 @@ pub mod tests {
                 let _ = tx_signal_handler_to_data_logger_clone.send(InternalCommand::Quit);
                 println!("{}: sent quit command", module_path!());
             });
+            conn
         }
     }
 }

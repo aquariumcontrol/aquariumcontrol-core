@@ -10,7 +10,7 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 //! Provides a trait for monitoring the effect of thermal actuators on the temperature gradient.
 
 use log::error;
-#[cfg(not(test))]
+#[cfg(not(test))] // only required in real-life execution
 use log::info;
 use std::sync::{Arc, Mutex};
 use std::time::Instant;
@@ -40,7 +40,7 @@ pub trait TemperatureGradientMonitorTrait {
         mutex_temperature_gradient: &Arc<Mutex<f64>>,
         actuator_status: bool,
         expected_gradient_is_positive: bool,
-        #[cfg(not(test))] component_name: &str,
+        #[cfg(not(test))] component_name: &str, // only required in real-life execution
     ) -> bool {
         let max_time = self.max_time_actuator_effect_monitor();
         if max_time == 0 {
@@ -65,7 +65,8 @@ pub trait TemperatureGradientMonitorTrait {
 
                         if !gradient_sign_correct {
                             if !*log_inhibition {
-                                #[cfg(not(test))]
+                                #[cfg(not(test))] // only required in real-life execution
+                                #[cfg(not(tarpaulin_include))]
                                 info!(
                                     target: module_path!(),
                                     "{} has been active for {}s, but the temperature gradient ({:.4}) does not have the expected {} sign.",
@@ -108,6 +109,10 @@ mod tests {
     }
 
     impl MockMonitor {
+        /// Creates a new instance.
+        ///
+        /// # Arguments
+        /// * `max_time` - A parameter representing `max_time`.
         fn new(max_time: u64) -> Self {
             Self {
                 max_time,
@@ -118,10 +123,12 @@ mod tests {
     }
 
     impl TemperatureGradientMonitorTrait for MockMonitor {
+        /// Performs the `max_time_actuator_effect_monitor` operation.
         fn max_time_actuator_effect_monitor(&self) -> u64 {
             self.max_time
         }
 
+        /// Performs the `monitor_state` operation.
         fn monitor_state(&mut self) -> (&mut Option<Instant>, &mut bool) {
             (&mut self.last_actuator_on_time, &mut self.log_inhibition)
         }
@@ -139,7 +146,7 @@ mod tests {
             &gradient,
             true,
             true,
-            #[cfg(not(test))]
+            #[cfg(not(test))] // only required in real-life execution
             "TestComponent",
         );
 
@@ -161,7 +168,7 @@ mod tests {
             &gradient,
             false,
             true,
-            #[cfg(not(test))]
+            #[cfg(not(test))] // only required in real-life execution
             "TestComponent",
         );
 
@@ -185,7 +192,7 @@ mod tests {
             &gradient,
             true,
             true,
-            #[cfg(not(test))]
+            #[cfg(not(test))] // only required in real-life execution
             "TestComponent",
         );
 
@@ -208,7 +215,7 @@ mod tests {
             &gradient,
             true,
             true,
-            #[cfg(not(test))]
+            #[cfg(not(test))] // only required in real-life execution
             "TestComponent",
         );
 
@@ -231,7 +238,7 @@ mod tests {
             &gradient,
             true,
             false,
-            #[cfg(not(test))]
+            #[cfg(not(test))] // only required in real-life execution
             "TestComponent",
         );
 
@@ -254,7 +261,7 @@ mod tests {
             &gradient,
             true,
             true,
-            #[cfg(not(test))]
+            #[cfg(not(test))] // only required in real-life execution
             "TestComponent",
         );
 
@@ -277,7 +284,7 @@ mod tests {
             &gradient,
             true,
             false,
-            #[cfg(not(test))]
+            #[cfg(not(test))] // only required in real-life execution
             "TestComponent",
         );
 
@@ -301,7 +308,7 @@ mod tests {
             &gradient,
             true,
             true,
-            #[cfg(not(test))]
+            #[cfg(not(test))] // only required in real-life execution
             "TestComponent",
         );
 
@@ -323,7 +330,7 @@ mod tests {
             &gradient,
             true,
             true,
-            #[cfg(not(test))]
+            #[cfg(not(test))] // only required in real-life execution
             "TestComponent",
         );
 

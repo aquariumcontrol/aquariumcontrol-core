@@ -60,8 +60,8 @@ pub struct FeedChannels {
     /// Receiver part of the channel for communication from the signal handler
     pub rx_feed_from_signal_handler: AquaReceiver<InternalCommand>,
 
-    /// Receiver part of the channel wrapped in Option for communication from the messaging
-    pub rx_feed_from_messaging_opt: Option<AquaReceiver<InternalCommand>>,
+    /// Receiver part of the channel for communication from the messaging
+    pub rx_feed_from_messaging: AquaReceiver<InternalCommand>,
 }
 
 impl FeedChannels {
@@ -74,13 +74,17 @@ impl FeedChannels {
     }
 
     /// Receives a response from the relay manager.
-    pub fn receive_from_relay_manager(&mut self) -> Result<bool, AquaChannelError> {
-        self.rx_feed_from_relay_manager.recv()
+    pub async fn receive_from_relay_manager(&mut self) -> Result<bool, AquaChannelError> {
+        self.rx_feed_from_relay_manager.recv().await
     }
 }
 
 #[cfg(feature = "debug_channels")]
 impl fmt::Display for FeedChannels {
+    /// Formats the value using the given formatter.
+    ///
+    /// # Arguments
+    /// * `f` - The formatter to write the formatted string to.
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         writeln!(f, "=== FeedChannels ===")?;
         writeln!(
@@ -116,6 +120,10 @@ impl fmt::Display for FeedChannels {
 
 #[cfg(not(feature = "debug_channels"))]
 impl fmt::Display for FeedChannels {
+    /// Formats the value using the given formatter.
+    ///
+    /// # Arguments
+    /// * `f` - The formatter to write the formatted string to.
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(
             f,

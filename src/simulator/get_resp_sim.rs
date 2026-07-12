@@ -80,7 +80,8 @@ pub trait GetResponseFromSimulatorTrait {
     ///   fails, which also indicates the simulator thread is no longer available.
     /// - It will also propagate any `TcpCommunicationError` that the simulator
     ///   thread itself sends back within its `Result`.
-    fn get_response_from_simulator(
+    #[allow(async_fn_in_trait)]
+    async fn get_response_from_simulator(
         requester: String,
         tx_to_tcp: &mut AquaSender<InternalCommand>,
         rx_from_tcp: &mut AquaReceiver<Result<f32, TcpCommunicationError>>,
@@ -99,7 +100,44 @@ pub trait GetResponseFromSimulatorTrait {
 
                 // 2. Block and wait for the response, mapping the error if it fails.
                 // The inner `Result` is the actual payload from the simulator.
-                rx_from_tcp.recv().map_err(|e| {
+                rx_from_tcp.recv().await.map_err(|e| {
+                    TcpCommunicationError::ReceivingFromTCPThreadFailed {
+                        location: module_path!().to_string(),
+                        requester, // Move the original requester string here
+                        source: e,
+                    }
+                })? // This '?' unwraps the outer Result<_, RecvError>
+            }
+            _ => {
+                warn!(
+                    target: module_path!(),
+                    "ignoring not applicable internal command ({internal_command}) from {requester}"
+                );
+                Ok(0.0)
+            }
+        }
+    }
+
+    fn get_response_from_simulator_blocking(
+        requester: String,
+        tx_to_tcp: &mut AquaSender<InternalCommand>,
+        rx_from_tcp: &mut AquaReceiver<Result<f32, TcpCommunicationError>>,
+        internal_command: InternalCommand,
+    ) -> Result<f32, TcpCommunicationError> {
+        match internal_command {
+            InternalCommand::RequestSignal(_) => {
+                // 1. Try to send the command, mapping the error if it fails.
+                tx_to_tcp.send(internal_command).map_err(|e| {
+                    TcpCommunicationError::SendingToTCPThreadFailed {
+                        location: module_path!().to_string(),
+                        requester: requester.clone(), // Clone for this error path
+                        source: e,
+                    }
+                })?;
+
+                // 2. Block and wait for the response, mapping the error if it fails.
+                // The inner `Result` is the actual payload from the simulator.
+                rx_from_tcp.blocking_recv().map_err(|e| {
                     TcpCommunicationError::ReceivingFromTCPThreadFailed {
                         location: module_path!().to_string(),
                         requester, // Move the original requester string here

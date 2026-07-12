@@ -67,21 +67,20 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 use log::debug;
 use std::sync::{Arc, Mutex};
 
-#[cfg(all(target_os = "linux", not(test)))]
+#[cfg(all(target_os = "linux", not(test)))] // only required in real-life execution
 use nix::unistd::gettid;
 
 use log::error;
-#[cfg(all(target_os = "linux", not(test)))]
+#[cfg(all(target_os = "linux", not(test)))] // only required in real-life execution
 use log::info;
 
-#[cfg(not(test))]
+#[cfg(not(test))] // only required in real-life execution
 use log::warn;
 
 use crate::launch::channels::{AquaReceiver, AquaSender};
 use crate::sensors::tank_level_switch_channels::TankLevelSwitchChannels;
 use crate::sensors::tank_level_switch_config::TankLevelSwitchConfig;
 use crate::utilities::check_mutex_access_duration::CheckMutexAccessDurationTrait;
-use spin_sleep::SpinSleeper;
 use std::time::{Duration, Instant};
 use thiserror::Error;
 
@@ -417,7 +416,7 @@ impl TankLevelSwitch {
 
             // Fetch the position signal.
             let position_signal = AquariumSignal::TankLevelSwitchPosition;
-            let position_val = Self::get_response_from_simulator(
+            let position_val = Self::get_response_from_simulator_blocking(
                 module_path!().to_string(),
                 tx_tank_level_switch_to_tcp,
                 rx_tank_level_switch_from_tcp,
@@ -432,7 +431,7 @@ impl TankLevelSwitch {
 
             // Fetch the invalid signal.
             let invalid_signal = AquariumSignal::TankLevelSwitchInvalid;
-            let invalid_val = Self::get_response_from_simulator(
+            let invalid_val = Self::get_response_from_simulator_blocking(
                 module_path!().to_string(),
                 tx_tank_level_switch_to_tcp,
                 rx_tank_level_switch_from_tcp,
@@ -447,7 +446,6 @@ impl TankLevelSwitch {
         } else {
             #[cfg(all(target_os = "linux", feature = "target_hw"))]
             {
-                // Use `if let` for more idiomatic Option handling.
                 if let Some(pin) = self.input_pin_opt.as_mut() {
                     if self.config.reverse_gpio_logic {
                         self.tank_level_switch_position = pin.is_low();
@@ -461,6 +459,10 @@ impl TankLevelSwitch {
                         module_path!().to_string(),
                     ));
                 }
+            }
+            #[cfg(all(not(feature = "target_hw"), test))]
+            {
+                // testing async runtime: do nothing
             }
         }
         Ok(())
@@ -529,7 +531,7 @@ impl TankLevelSwitch {
     /// from the signal handler for graceful shutdown.
     ///
     /// # Arguments
-    /// * `tank_level_switch_signals` - A mutable reference to the struct containing the channels.
+    /// * `tank_level_switch_channels` - A mutable reference to the struct containing the channels.
     /// * `mutex_tank_level_switch_signals` - The shared `Mutex` where the latest sensor
     ///   signals are written for other modules to consume.
     ///
@@ -540,15 +542,15 @@ impl TankLevelSwitch {
     /// Returns a `TankLevelSwitchError::SimulatorChannelNotProvided` if the module is
     /// configured to use the simulator, but the required TCP communication channels
     /// are not provided at startup.
-    pub fn execute(
+    pub async fn execute(
         &mut self,
         tank_level_switch_channels: &mut TankLevelSwitchChannels,
         mutex_tank_level_switch_signals: Arc<Mutex<TankLevelSwitchSignals>>,
     ) -> Result<(), TankLevelSwitchError> {
-        #[cfg(all(target_os = "linux", not(test)))]
+        #[cfg(all(target_os = "linux", not(test)))] // only required in real-life execution
+        #[cfg(not(tarpaulin_include))]
         info!(target: module_path!(), "Thread started with TID: {}", gettid());
 
-        let spin_sleeper = SpinSleeper::default();
         let mut lock_warn_cycle_time_exceeded: bool = false;
         let cycle_time_duration = Duration::from_millis(CYCLE_TIME_TANK_LEVEL_SWITCH_MILLIS);
 
@@ -582,10 +584,13 @@ impl TankLevelSwitch {
 
             if self.config.active {
                 // either communicate with real HW or with the simulator to get updated signal information
-                if let Err(e) = self.update_tank_level_switch_signals(
-                    &mut tank_level_switch_channels.tx_tank_level_switch_to_tcp_opt,
-                    &mut tank_level_switch_channels.rx_tank_level_switch_from_tcp_opt,
-                ) {
+                let update_result = tokio::task::block_in_place(|| {
+                    self.update_tank_level_switch_signals(
+                        &mut tank_level_switch_channels.tx_tank_level_switch_to_tcp_opt,
+                        &mut tank_level_switch_channels.rx_tank_level_switch_from_tcp_opt,
+                    )
+                });
+                if let Err(e) = update_result {
                     if matches!(e, TankLevelSwitchError::InputPinNotProvided(_)) {
                         if !self.lock_error_input_pin_none {
                             log_error_chain(
@@ -668,7 +673,8 @@ impl TankLevelSwitch {
                         > PERMISSIBLE_CYCLE_TIME_DEVIATION_TANK_LEVEL_SWITCH_MILLIS
                     && !lock_warn_cycle_time_exceeded
                 {
-                    #[cfg(not(test))]
+                    #[cfg(not(test))] // only required in real-life execution
+                    #[cfg(not(tarpaulin_include))]
                     warn!(target: module_path!(),
                         "execution duration of {} milliseconds exceeds cycle time of {} (delta duration={})",
                         execution_duration.as_millis(),
@@ -681,7 +687,7 @@ impl TankLevelSwitch {
                 let remaining_sleep_time = cycle_time_duration - execution_duration;
                 lock_warn_cycle_time_exceeded = false;
                 // sleep time does not need to be split up because cycle time is 100 milliseconds only
-                spin_sleeper.sleep(remaining_sleep_time);
+                tokio::time::sleep(remaining_sleep_time).await;
             }
 
             start_time = Instant::now();
@@ -693,11 +699,12 @@ impl TankLevelSwitch {
         // Those threads have to stop receiving commands from this thread.
         // The shutdown sequence is handled by the signal_handler module.
         let sleep_duration_one_millis = Duration::from_millis(1);
-        self.wait_for_termination(
+        self.wait_for_termination_async(
             &mut tank_level_switch_channels.rx_tank_level_switch_from_signal_handler,
             sleep_duration_one_millis,
             module_path!(),
-        );
+        )
+        .await;
         Ok(())
     }
 }
@@ -727,9 +734,9 @@ pub mod tests {
     #[test]
     // test if position stabilized signal is updating when the invalid signal is true
     pub fn test_refill_calc_tank_level_switch_position_stabilized_false_when_invalid() {
-        let mut channels = Channels::new(false, false, true);
+        let mut channels = Channels::new(false, false, true, true);
 
-        let (_tx_test_environment_to_tcp, mut rx_tcp_from_test_environment) = channel(1);
+        let (_tx_test_environment_to_tcp, mut rx_tcp_from_test_environment) = channel(1, true);
 
         let config: ConfigData =
             read_config_file("/config/aquarium_control_test_generic.toml".to_string()).unwrap();
@@ -781,7 +788,7 @@ pub mod tests {
                 channels
                     .signal_handler
                     .rx_signal_handler_from_tank_level_switch
-                    .recv()
+                    .blocking_recv()
                     .unwrap();
                 let _ = channels
                     .signal_handler
@@ -803,7 +810,8 @@ pub mod tests {
 
                 let mutex_tank_level_switch_signals_for_assert =
                     mutex_tank_level_switch_signals.clone();
-                let _ = tank_level_switch.execute(
+                let _ = execute_blocking(
+                    &mut tank_level_switch,
                     &mut channels.tank_level_switch,
                     mutex_tank_level_switch_signals,
                 );
@@ -835,7 +843,36 @@ pub mod tests {
         println!("* [TankLevelSwitch] testing if stabilized tank level position is high when invalid bit is true succeeded.");
     }
 
+    /// Helper function to execute the tank level switch task inside a test Tokio runtime.
+    ///
+    /// # Arguments
+    /// * `tank_level_switch` - A mutable reference to the `TankLevelSwitch` instance.
+    /// * `tank_level_switch_channels` - A mutable reference to the `TankLevelSwitchChannels` instance.
+    /// * `mutex_tank_level_switch_signals` - Shared mutex for tank level switch readings.
+    fn execute_blocking(
+        tank_level_switch: &mut TankLevelSwitch,
+        tank_level_switch_channels: &mut TankLevelSwitchChannels,
+        mutex_tank_level_switch_signals: Arc<Mutex<TankLevelSwitchSignals>>,
+    ) -> Result<(), super::TankLevelSwitchError> {
+        tokio::runtime::Builder::new_multi_thread()
+            .enable_all()
+            .build()
+            .unwrap()
+            .block_on(async {
+                // blocking execution used for testing
+                tank_level_switch
+                    .execute(tank_level_switch_channels, mutex_tank_level_switch_signals)
+                    .await
+            })
+    }
+
     // helper function for creating the test object
+    /// Performs the `create_test_object` operation.
+    ///
+    /// # Arguments
+    /// * `tank_level_switch` - A parameter representing `tank_level_switch`.
+    /// * `tank_level_switch_channels` - A parameter representing `tank_level_switch_channels`.
+    /// * `mutex_tank_level_switch_signals` - A parameter representing `mutex_tank_level_switch_signals`.
     fn create_test_object(
         mut tank_level_switch: TankLevelSwitch,
         mut tank_level_switch_channels: TankLevelSwitchChannels,
@@ -844,7 +881,8 @@ pub mod tests {
         thread::Builder::new()
             .name("test_object".to_string())
             .spawn(move || {
-                let _ = tank_level_switch.execute(
+                let _ = execute_blocking(
+                    &mut tank_level_switch,
                     &mut tank_level_switch_channels,
                     mutex_tank_level_switch_signals,
                 );
@@ -855,9 +893,9 @@ pub mod tests {
     #[test]
     // test if the position signal is updating without delay when the invalid signal is false
     pub fn test_refill_calc_tank_level_switch_position_stabilized_false_true() {
-        let mut channels = Channels::new(false, false, true);
+        let mut channels = Channels::new(false, false, true, true);
 
-        let (mut tx_test_environment_to_tcp, mut rx_tcp_from_test_environment) = channel(1);
+        let (mut tx_test_environment_to_tcp, mut rx_tcp_from_test_environment) = channel(1, true);
 
         let mut config: ConfigData =
             read_config_file("/config/aquarium_control_test_generic.toml".to_string()).unwrap();
@@ -928,7 +966,7 @@ pub mod tests {
                 channels
                     .signal_handler
                     .rx_signal_handler_from_tank_level_switch
-                    .recv()
+                    .blocking_recv()
                     .unwrap();
                 let _ = channels
                     .signal_handler
@@ -969,9 +1007,9 @@ pub mod tests {
     #[test]
     // test if the position signal is updating with delay when the invalid signal is false
     pub fn test_refill_calc_tank_level_switch_position_stabilized_true_false() {
-        let mut channels = Channels::new(false, false, true);
+        let mut channels = Channels::new(false, false, true, true);
 
-        let (mut tx_test_environment_to_tcp, mut rx_tcp_from_test_environment) = channel(1);
+        let (mut tx_test_environment_to_tcp, mut rx_tcp_from_test_environment) = channel(1, true);
 
         let config: ConfigData =
             read_config_file("/config/aquarium_control_test_generic.toml".to_string()).unwrap();
@@ -1038,7 +1076,7 @@ pub mod tests {
                 channels
                     .signal_handler
                     .rx_signal_handler_from_tank_level_switch
-                    .recv()
+                    .blocking_recv()
                     .unwrap();
                 let _ = channels
                     .signal_handler
@@ -1079,8 +1117,8 @@ pub mod tests {
     #[test]
     // test if position stabilized signal is not updating when the raw input signal is toggling
     pub fn test_refill_calc_tank_level_switch_position_stabilized_is_true_with_toggling_input() {
-        let mut channels = Channels::new(false, false, true);
-        let (mut tx_test_environment_to_tcp, mut rx_tcp_from_test_environment) = channel(1);
+        let mut channels = Channels::new(false, false, true, true);
+        let (mut tx_test_environment_to_tcp, mut rx_tcp_from_test_environment) = channel(1, true);
 
         let config: ConfigData =
             read_config_file("/config/aquarium_control_test_generic.toml".to_string()).unwrap();
@@ -1151,7 +1189,7 @@ pub mod tests {
                 channels
                     .signal_handler
                     .rx_signal_handler_from_tank_level_switch
-                    .recv()
+                    .blocking_recv()
                     .unwrap();
                 let _ = channels
                     .signal_handler
@@ -1300,7 +1338,7 @@ pub mod tests {
                 );
 
                 let _ = channels.signal_handler.tx_signal_handler_to_tank_level_switch.send(InternalCommand::Quit);
-                let _ = channels.signal_handler.rx_signal_handler_from_tank_level_switch.recv().unwrap();
+                let _ = channels.signal_handler.rx_signal_handler_from_tank_level_switch.blocking_recv().unwrap();
                 let _ = channels.signal_handler.tx_signal_handler_to_tank_level_switch.send(InternalCommand::Terminate);
                 spin_sleeper.sleep(sleep_duration_part);
             })
@@ -1310,7 +1348,8 @@ pub mod tests {
         let join_handle_test_object = thread::Builder::new()
             .name("test_object".to_string())
             .spawn(move || {
-                let _ = tank_level_switch.execute(
+                let _ = execute_blocking(
+                    &mut tank_level_switch,
                     &mut channels.tank_level_switch,
                     mutex_tank_level_switch_signals_clone_for_test_object,
                 );
@@ -1328,9 +1367,9 @@ pub mod tests {
     // test if mutex access duration is measured and monitored
     pub fn test_refill_calc_tank_level_switch_position_stabilized_false_true_with_mutex_blocked_too_long(
     ) {
-        let mut channels = Channels::new(false, false, true);
+        let mut channels = Channels::new(false, false, true, true);
 
-        let (mut tx_test_environment_to_tcp, mut rx_tcp_from_test_environment) = channel(1);
+        let (mut tx_test_environment_to_tcp, mut rx_tcp_from_test_environment) = channel(1, true);
 
         let mut config: ConfigData =
             read_config_file("/config/aquarium_control_test_generic.toml".to_string()).unwrap();
@@ -1407,7 +1446,7 @@ pub mod tests {
                 channels
                     .signal_handler
                     .rx_signal_handler_from_tank_level_switch
-                    .recv()
+                    .blocking_recv()
                     .unwrap();
                 let _ = channels
                     .signal_handler
@@ -1429,7 +1468,8 @@ pub mod tests {
         let join_handle_test_object = thread::Builder::new()
             .name("test_object".to_string())
             .spawn(move || {
-                let _ = tank_level_switch.execute(
+                let _ = execute_blocking(
+                    &mut tank_level_switch,
                     &mut channels.tank_level_switch,
                     mutex_tank_level_switch_signals,
                 );

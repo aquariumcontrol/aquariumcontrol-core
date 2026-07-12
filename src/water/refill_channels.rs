@@ -62,13 +62,17 @@ pub struct RefillChannels {
     pub rx_refill_from_schedule_check: AquaReceiver<bool>,
 
     /// Receiver part of the channel for communication from the messaging
-    pub rx_refill_from_messaging_opt: Option<AquaReceiver<InternalCommand>>,
+    pub rx_refill_from_messaging: AquaReceiver<InternalCommand>,
 
     /// Sender part of the channel for communication to the monitors
     pub tx_refill_to_monitors: AquaSender<RefillMonitorView>,
 }
 
 impl RefillChannels {
+    /// Performs the `send_to_relay_manager` operation.
+    ///
+    /// # Arguments
+    /// * `command` - The command string to verify.
     pub fn send_to_relay_manager(
         &mut self,
         command: InternalCommand,
@@ -76,10 +80,15 @@ impl RefillChannels {
         self.tx_refill_to_relay_manager.send(command)
     }
 
-    pub fn receive_from_relay_manager(&mut self) -> Result<bool, AquaChannelError> {
-        self.rx_refill_from_relay_manager.recv()
+    /// Performs the `receive_from_relay_manager` operation.
+    pub async fn receive_from_relay_manager(&mut self) -> Result<bool, AquaChannelError> {
+        self.rx_refill_from_relay_manager.recv().await
     }
 
+    /// Performs the `send_to_schedule_check` operation.
+    ///
+    /// # Arguments
+    /// * `command` - The command string to verify.
     pub fn send_to_schedule_check(
         &mut self,
         command: InternalCommand,
@@ -87,10 +96,15 @@ impl RefillChannels {
         self.tx_refill_to_schedule_check.send(command)
     }
 
-    pub fn receive_from_schedule_check(&mut self) -> Result<bool, AquaChannelError> {
-        self.rx_refill_from_schedule_check.recv()
+    /// Performs the `receive_from_schedule_check` operation.
+    pub async fn receive_from_schedule_check(&mut self) -> Result<bool, AquaChannelError> {
+        self.rx_refill_from_schedule_check.recv().await
     }
 
+    /// Performs the `send_to_monitor` operation.
+    ///
+    /// # Arguments
+    /// * `view` - A parameter representing `view`.
     pub fn send_to_monitor(&mut self, view: RefillMonitorView) -> Result<(), AquaChannelError> {
         self.tx_refill_to_monitors.send(view)
     }
@@ -98,6 +112,10 @@ impl RefillChannels {
 
 #[cfg(feature = "debug_channels")]
 impl fmt::Display for RefillChannels {
+    /// Formats the value using the given formatter.
+    ///
+    /// # Arguments
+    /// * `f` - The formatter to write the formatted string to.
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         writeln!(f, "=== RefillChannels ===")?;
         writeln!(
@@ -147,6 +165,10 @@ impl fmt::Display for RefillChannels {
 
 #[cfg(not(feature = "debug_channels"))]
 impl fmt::Display for RefillChannels {
+    /// Formats the value using the given formatter.
+    ///
+    /// # Arguments
+    /// * `f` - The formatter to write the formatted string to.
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(
             f,
@@ -191,7 +213,7 @@ mod tests {
 
         // Assert
         assert!(result.is_ok(), "Sending should not fail");
-        let received_command = rx_schedule_test.recv().unwrap();
+        let received_command = rx_schedule_test.blocking_recv().unwrap();
         assert_eq!(
             received_command, command,
             "The correct command should be received"
@@ -214,7 +236,7 @@ mod tests {
         tx_schedule_resp_test.send(expected_response).unwrap();
 
         // Act
-        let result = channels.receive_from_schedule_check();
+        let result = channels.rx_refill_from_schedule_check.blocking_recv();
 
         // Assert
         assert!(result.is_ok(), "Receiving should not fail");
@@ -244,7 +266,7 @@ mod tests {
 
         // Assert
         assert!(result.is_ok(), "Sending should not fail");
-        let received_view = rx_monitor_test.recv().unwrap();
+        let received_view = rx_monitor_test.blocking_recv().unwrap();
         assert_eq!(
             received_view,
             RefillMonitorView::default(),

@@ -40,7 +40,7 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 //! enabled features (`feature = "target_hw"`). This allows the application to have a single
 //! configuration file format while only compiling the necessary fields for a given build target.
 
-#[cfg(not(test))]
+#[cfg(not(test))] // only required in real-life execution
 use log::info;
 
 use serde_derive::Deserialize;
@@ -63,24 +63,18 @@ use crate::thermal::heating_config::HeatingConfig;
 #[cfg(test)]
 use std::env;
 
-#[cfg(feature = "target_hw")]
-use crate::sensors::i2c_interface_config::I2cInterfaceConfig;
-
-use crate::sensors::tank_level_switch_config::TankLevelSwitchConfig;
-
-#[cfg(target_os = "linux")]
-use crate::dispatch::messaging_config::MessagingConfig;
-
 use crate::database::sql_interface_config::SqlInterfaceConfig;
+use crate::dispatch::messaging_config::MessagingConfig;
 use crate::permission::schedule_check_config::ScheduleCheckConfig;
 use crate::sensors::ds18b20_config::Ds18b20Config;
+use crate::sensors::i2c_interface_config::I2cInterfaceConfig;
+use crate::sensors::tank_level_switch_config::TankLevelSwitchConfig;
 use crate::simulator::tcp_communication_config::TcpCommunicationConfig;
 use crate::thermal::temperature_gradient_config::TemperatureGradientConfig;
 use crate::thermal::ventilation_config::VentilationConfig;
 use crate::utilities::config_error::ConfigError;
 use crate::utilities::logger_config::LoggerConfig;
 use crate::utilities::publish_pid_config::PublishPidConfig;
-use crate::watchmen::memory_config::MemoryConfig;
 use crate::watchmen::monitors_config::MonitorsConfig;
 use crate::watchmen::watchdog_config::WatchdogConfig;
 use crate::water::refill_config::RefillConfig;
@@ -109,7 +103,6 @@ pub struct ConfigData {
     pub gpio_handler: GpioHandlerConfig,
 
     /// configuration of the DHT driver
-    #[allow(unused)] // used in conditionally compiled code
     pub dht: DhtConfig,
 
     /// configuration of the fresh water refill control
@@ -145,11 +138,9 @@ pub struct ConfigData {
     /// configuration for schedule check
     pub schedule_check: ScheduleCheckConfig,
 
-    #[cfg(feature = "target_hw")]
     /// configuration of I2C interface
     pub i2c_interface: I2cInterfaceConfig,
 
-    #[cfg(target_os = "linux")]
     /// configuration of messaging (IPC)
     pub messaging: MessagingConfig,
 
@@ -166,14 +157,12 @@ pub struct ConfigData {
     #[cfg(all(target_os = "linux", feature = "target_hw"))]
     pub ws2812b: Ws2812BConfig,
 
-    /// check of memory configuration
-    pub memory: MemoryConfig,
-
     /// configuration of the general log file
     pub logger: LoggerConfig,
 }
 
-#[cfg(not(test))]
+#[cfg(not(test))] // only required in real-life execution
+#[cfg(not(tarpaulin_include))]
 /// Loads configuration data from a specified `.toml` file into a `ConfigData` struct.
 ///
 /// This version of the function is intended for production environments. It reads
@@ -195,7 +184,7 @@ pub struct ConfigData {
 /// - `ConfigError::TomlParse`: If the file's content is not valid TOML, or if its
 ///   structure does not match the `ConfigData` struct, preventing deserialization.
 pub fn read_config_file(filename: String) -> Result<ConfigData, ConfigError> {
-    #[cfg(not(test))]
+    #[cfg(not(test))] // only required in real-life execution
     info!(target: module_path!(), "reading configuration from {filename}");
 
     // Read the contents of the file and return error in case of failure.
@@ -228,6 +217,10 @@ pub fn read_config_file(filename: String) -> Result<ConfigData, ConfigError> {
 // - If the `CARGO_MANIFEST_DIR` environment variable is not set.
 // - If the specified file cannot be read (e.g., the file is not found, permissions issues).
 // - If the file content is not valid TOML or cannot be deserialized into `ConfigData`.
+/// Performs the `read_config_file` operation.
+///
+/// # Arguments
+/// * `filename` - A parameter representing `filename`.
 pub fn read_config_file(filename: String) -> Result<ConfigData, ConfigError> {
     let pathname_test =
         env::var("CARGO_MANIFEST_DIR").map_err(|_| ConfigError::CargoManifestDir)?;
@@ -288,6 +281,11 @@ pub fn read_config_file(filename: String) -> Result<ConfigData, ConfigError> {
 // - If `test_db_number` is 0 or greater than 99.
 // - If `read_config_file` (the underlying function it calls) panics
 //   (e.g., file not found, invalid TOML, `CARGO_MANIFEST_DIR` not set).
+/// Performs the `read_config_file_with_test_database` operation.
+///
+/// # Arguments
+/// * `relative_path` - A parameter representing `relative_path`.
+/// * `test_db_number` - A parameter representing `test_db_number`.
 pub fn read_config_file_with_test_database(
     relative_path: String,
     test_db_number: u32,

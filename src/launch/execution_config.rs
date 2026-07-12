@@ -38,7 +38,7 @@ use crate::utilities::config::ConfigData;
 /// A snapshot of which application threads are configured to be active at runtime.
 ///
 /// This struct is created at application startup from the main `ConfigData`. It serves
-/// as a lightweight, easily passable representation of the execution state, allowing
+/// as a lightweight, easily passable representation of the execution state. It allows
 /// different parts of the application (like the messaging dispatcher) to quickly
 /// check if a specific thread or module was launched without needing access to the
 /// full configuration object.
@@ -54,16 +54,13 @@ pub struct ExecutionConfig {
     pub feed: bool,
     pub balling: bool,
     pub monitors: bool,
-    #[cfg(feature = "target_hw")]
     pub dht: bool,
-    #[cfg(feature = "target_hw")]
     pub i2c_interface: bool,
     pub ventilation: bool,
     pub temperature_gradient: bool,
     pub schedule_check: bool,
     pub ds18b20: bool,
     pub watchdog: bool,
-    pub memory: bool,
     pub tcp_communication: bool,
 }
 
@@ -87,16 +84,13 @@ impl ExecutionConfig {
             feed: config.feed.execute,
             balling: config.balling.execute,
             monitors: config.monitors.execute,
-            #[cfg(feature = "target_hw")]
             dht: config.dht.execute,
-            #[cfg(feature = "target_hw")]
             i2c_interface: config.i2c_interface.execute,
             ventilation: config.ventilation.execute,
             temperature_gradient: config.temperature_gradient.execute,
             schedule_check: config.schedule_check.execute,
             ds18b20: config.ds18b20.execute,
             watchdog: config.watchdog.execute,
-            memory: config.memory.execute,
             tcp_communication: config.tcp_communication.execute,
         }
     }
@@ -121,16 +115,13 @@ impl Default for ExecutionConfig {
             feed: true,
             balling: true,
             monitors: true,
-            #[cfg(feature = "target_hw")]
             dht: true,
-            #[cfg(feature = "target_hw")]
             i2c_interface: true,
             ventilation: true,
             temperature_gradient: true,
             schedule_check: true,
             ds18b20: true,
             watchdog: true,
-            memory: true,
             tcp_communication: true,
         }
     }

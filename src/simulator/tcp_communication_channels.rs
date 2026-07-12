@@ -89,7 +89,7 @@ impl TcpCommunicationChannels {
     ) -> Option<Result<InternalCommand, AquaChannelError>> {
         self.rx_tcp_communication_from_relay_manager_opt
             .as_mut()
-            .map(|rx| rx.recv())
+            .map(|rx| rx.blocking_recv())
     }
 
     /// Receives a command from the sensor manager if the channel exists.
@@ -99,10 +99,13 @@ impl TcpCommunicationChannels {
     ) -> Option<Result<InternalCommand, AquaChannelError>> {
         self.rx_tcp_communication_from_sensor_manager_opt
             .as_mut()
-            .map(|rx| rx.recv())
+            .map(|rx| rx.blocking_recv())
     }
 
     /// Sends a result to the sensor manager if the channel exists.
+    ///
+    /// # Arguments
+    /// * `data` - A parameter representing `data`.
     #[allow(unused)]
     pub fn send_to_sensor_manager(
         &mut self,
@@ -120,10 +123,13 @@ impl TcpCommunicationChannels {
     ) -> Option<Result<InternalCommand, AquaChannelError>> {
         self.rx_tcp_communication_from_tank_level_switch_opt
             .as_mut()
-            .map(|rx| rx.recv())
+            .map(|rx| rx.blocking_recv())
     }
 
     /// Sends a result to the tank level switch if the channel exists.
+    ///
+    /// # Arguments
+    /// * `data` - A parameter representing `data`.
     #[allow(unused)]
     pub fn send_to_tank_level_switch(
         &mut self,
@@ -143,6 +149,10 @@ impl TcpCommunicationChannels {
 
 #[cfg(feature = "debug_channels")]
 impl fmt::Display for TcpCommunicationChannels {
+    /// Formats the value using the given formatter.
+    ///
+    /// # Arguments
+    /// * `f` - The formatter to write the formatted string to.
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         writeln!(f, "=== TcpCommunicationChannels ===")?;
         writeln!(
@@ -200,6 +210,10 @@ impl fmt::Display for TcpCommunicationChannels {
 
 #[cfg(not(feature = "debug_channels"))]
 impl fmt::Display for TcpCommunicationChannels {
+    /// Formats the value using the given formatter.
+    ///
+    /// # Arguments
+    /// * `f` - The formatter to write the formatted string to.
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(
             f,
@@ -209,7 +223,9 @@ impl fmt::Display for TcpCommunicationChannels {
 }
 
 impl TcpCommunicationChannels {
-    #[cfg(all(not(test), feature = "debug_channels"))]
+    /// Performs the `report_status` operation.
+    #[cfg(all(not(test), feature = "debug_channels"))] // only required in real-life execution
+    #[cfg(not(tarpaulin_include))]
     pub fn report_status(&self) {
         println!("TcpCommunicationChannels Status:");
 

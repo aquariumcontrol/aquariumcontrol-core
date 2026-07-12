@@ -67,7 +67,7 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 
 #![allow(non_snake_case)]
 
-#[cfg(all(not(test), target_os = "linux"))]
+#[cfg(all(not(test), target_os = "linux"))] // only required in real-life execution
 use log::info;
 use std::collections::HashMap;
 use std::fmt;
@@ -89,9 +89,8 @@ use crate::utilities::channel_content::AquariumSignal;
 use crate::utilities::logger::log_error_chain;
 use crate::utilities::proc_ext_req::ProcessExternalRequestTrait;
 use crate::utilities::wait_for_termination::WaitForTerminationTrait;
-#[cfg(all(not(test), target_os = "linux"))]
+#[cfg(all(not(test), target_os = "linux"))] // only required in real-life execution
 use nix::unistd::gettid;
-use spin_sleep::SpinSleeper;
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
@@ -114,6 +113,10 @@ pub struct AtlasScientificResultData {
 }
 
 impl AtlasScientificResultData {
+    /// Creates a new instance.
+    ///
+    /// # Arguments
+    /// * `value` - The value to set.
     pub fn new(value: f32) -> Self {
         AtlasScientificResultData {
             value,
@@ -122,6 +125,7 @@ impl AtlasScientificResultData {
         }
     }
 
+    /// Creates a default instance of this type.
     #[cfg(test)]
     pub fn default() -> Self {
         AtlasScientificResultData {
@@ -133,6 +137,10 @@ impl AtlasScientificResultData {
 }
 
 impl fmt::Display for AtlasScientificResultData {
+    /// Formats the value using the given formatter.
+    ///
+    /// # Arguments
+    /// * `f` - The formatter to write the formatted string to.
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         // Write the floating-point sensor value directly to the formatter.
         write!(f, "{}", self.value)
@@ -212,6 +220,10 @@ impl ProcessExternalRequestTrait for AtlasScientific {}
 impl GetResponseFromSimulatorTrait for AtlasScientific {}
 
 impl AtlasScientific {
+    /// Performs the `create_drivers` operation.
+    ///
+    /// # Arguments
+    /// * `config` - A parameter representing `config`.
     #[cfg(any(all(feature = "target_hw", target_os = "linux"), test))]
     pub fn create_drivers(
         config: &AtlasScientificConfig,
@@ -398,6 +410,9 @@ impl AtlasScientific {
     }
 
     /// Helper function for retrieving the driver from the hash map
+    ///
+    /// # Arguments
+    /// * `signal` - A parameter representing `signal`.
     fn get_driver(
         &mut self,
         signal: &AquariumSignal,
@@ -506,6 +521,9 @@ impl AtlasScientific {
 
     /// Iterates over all registered drivers and verifies their device type.
     /// This requires the I2cInterface thread to be running.
+    ///
+    /// # Arguments
+    /// * `channels` - A parameter representing `channels`.
     #[cfg(all(target_os = "linux", feature = "target_hw"))]
     pub fn init_devices(
         &self,
@@ -538,19 +556,19 @@ impl AtlasScientific {
     /// * `mutex_atlas_scientific_ph` - The shared `Mutex` for storing the pH result.
     /// * `mutex_atlas_scientific_conductivity` - The shared `Mutex` for storing the conductivity result.
     #[allow(unused)] // used in conditionally compiled code
-    pub fn execute(
+    pub async fn execute(
         &mut self,
         atlas_scientific_channels: &mut AtlasScientificChannels,
         mutex_atlas_scientific_water_temperature: Arc<Mutex<AtlasScientificResultData>>,
         mutex_atlas_scientific_ph: Arc<Mutex<AtlasScientificResultData>>,
         mutex_atlas_scientific_conductivity: Arc<Mutex<AtlasScientificResultData>>,
     ) {
-        #[cfg(all(target_os = "linux", not(test)))]
+        #[cfg(all(target_os = "linux", not(test)))] // only required in real-life execution
+        #[cfg(not(tarpaulin_include))]
         info!(target: module_path!(), "Thread started with TID: {}", gettid());
 
         let sleep_duration_ten_millis = Duration::from_millis(10);
         let sleep_duration_one_millis = Duration::from_millis(1);
-        let spin_sleeper = SpinSleeper::default();
 
         let mut state_send_receive: bool = false;
         let mut measurement_set_complete: bool = false;
@@ -580,7 +598,7 @@ impl AtlasScientific {
             }
 
             // Check if data acquisition is enabled.
-            if self.config.active && !channel_is_disconnected {
+            if self.config.active && !channel_is_disconnected && !self.drivers.is_empty() {
                 let duration_since_last_measurement =
                     Instant::now().duration_since(self.last_measurement_instant);
                 if !state_send_receive
@@ -645,13 +663,16 @@ impl AtlasScientific {
                     // read from the channel if the measurement result is available from I2cInterface thread
                     match self.get_driver(&signal) {
                         Ok(driver) => {
-                            match driver.receive_response_from_i2c_interface(
-                                &signal,
-                                atlas_scientific_channels,
-                                &mutex_atlas_scientific_water_temperature,
-                                &mutex_atlas_scientific_ph,
-                                &mutex_atlas_scientific_conductivity,
-                            ) {
+                            let receive_result = tokio::task::block_in_place(|| {
+                                driver.receive_response_from_i2c_interface(
+                                    &signal,
+                                    atlas_scientific_channels,
+                                    &mutex_atlas_scientific_water_temperature,
+                                    &mutex_atlas_scientific_ph,
+                                    &mutex_atlas_scientific_conductivity,
+                                )
+                            });
+                            match receive_result {
                                 Ok(_) => {
                                     state_send_receive = false; // allow sending again
                                 }
@@ -717,7 +738,7 @@ impl AtlasScientific {
                 }
             }
 
-            spin_sleeper.sleep(sleep_duration_ten_millis);
+            tokio::time::sleep(sleep_duration_ten_millis).await;
         }
 
         atlas_scientific_channels.acknowledge_signal_handler();
@@ -725,11 +746,12 @@ impl AtlasScientific {
         // This thread has channel connections to underlying threads.
         // Those threads have to stop receiving commands from this thread.
         // The shutdown sequence is handled by the signal_handler module.
-        self.wait_for_termination(
+        self.wait_for_termination_async(
             &mut atlas_scientific_channels.rx_atlas_scientific_from_signal_handler,
             sleep_duration_one_millis,
             module_path!(),
-        );
+        )
+        .await;
     }
 }
 
@@ -931,7 +953,14 @@ pub mod tests {
         let join_handle_mock_i2c_interface = thread::Builder::new()
             .name("i2c_interface".to_string())
             .spawn(move || {
-                mock_i2c_interface.execute(channels.i2c_interface);
+                tokio::runtime::Builder::new_current_thread()
+                    .enable_all()
+                    .build()
+                    .unwrap()
+                    .block_on(async {
+                        // blocking execution used for testing
+                        mock_i2c_interface.execute(channels.i2c_interface).await;
+                    });
             })
             .unwrap();
 
@@ -955,12 +984,21 @@ pub mod tests {
                 let sleep_time = Duration::from_millis(1000);
                 let spin_sleeper = SpinSleeper::default();
                 spin_sleeper.sleep(sleep_time);
-                atlas_scientific.execute(
-                    &mut channels.atlas_scientific,
-                    mutex_atlas_scientific_temperature,
-                    mutex_atlas_scientific_ph,
-                    mutex_atlas_scientific_conductivity,
-                );
+                tokio::runtime::Builder::new_multi_thread()
+                    .enable_all()
+                    .build()
+                    .unwrap()
+                    .block_on(async {
+                        // blocking execution used for testing
+                        atlas_scientific
+                            .execute(
+                                &mut channels.atlas_scientific,
+                                mutex_atlas_scientific_temperature,
+                                mutex_atlas_scientific_ph,
+                                mutex_atlas_scientific_conductivity,
+                            )
+                            .await;
+                    });
                 let driver_temperature = atlas_scientific
                     .drivers
                     .get(&AquariumSignal::WaterTemperature)
@@ -1291,5 +1329,29 @@ pub mod tests {
         } else {
             panic!("Expected InvalidSensorType error, got {:?}", result);
         }
+    }
+
+    #[test]
+    fn test_get_next_atlas_scientific_signal() {
+        // Test WaterTemperature branch
+        let (next, complete) = AquariumSignal::WaterTemperature.get_next_atlas_scientific_signal();
+        assert_eq!(next, AquariumSignal::pH);
+        assert!(!complete);
+
+        // Test pH branch
+        let (next, complete) = AquariumSignal::pH.get_next_atlas_scientific_signal();
+        assert_eq!(next, AquariumSignal::Conductivity);
+        assert!(!complete);
+
+        // Test Conductivity branch
+        let (next, complete) = AquariumSignal::Conductivity.get_next_atlas_scientific_signal();
+        assert_eq!(next, AquariumSignal::WaterTemperature);
+        assert!(complete);
+
+        // Test default branch (_) using AmbientTemperature
+        let (next, complete) =
+            AquariumSignal::AmbientTemperature.get_next_atlas_scientific_signal();
+        assert_eq!(next, AquariumSignal::WaterTemperature);
+        assert!(!complete);
     }
 }

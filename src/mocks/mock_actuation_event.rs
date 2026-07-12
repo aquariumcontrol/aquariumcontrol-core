@@ -21,6 +21,10 @@ pub mod tests {
     }
 
     impl MockActuationEvent {
+        /// Creates a new instance.
+        ///
+        /// # Arguments
+        /// * `command` - The command string to verify.
         pub fn new(command: InternalCommand) -> MockActuationEvent {
             println!(
                 "MockActuationEvent created with command = {} at {}",

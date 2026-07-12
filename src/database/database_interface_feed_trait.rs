@@ -55,10 +55,17 @@ pub const NUM_FEEDPHASES: i32 = 10;
 pub trait DatabaseInterfaceFeedTrait: Pingable {
     fn get_current_timestamp(&mut self) -> mysql::Result<NaiveDateTime, SqlInterfaceError>;
 
+    /// Retrieves the past feed schedule entries from database.
     fn get_past_feed_schedule_entries_from_database(
         &mut self,
     ) -> mysql::Result<Option<Vec<FeedScheduleEntry>>, SqlInterfaceError>;
 
+    /// Performs the `insert_feed_event` operation.
+    ///
+    /// # Arguments
+    /// * `timestamp` - A parameter representing `timestamp`.
+    /// * `feeder_run_time` - A parameter representing `feeder_run_time`.
+    /// * `profile_id` - A parameter representing `profile_id`.
     fn insert_feed_event(
         &mut self,
         timestamp: NaiveDateTime,
@@ -66,16 +73,31 @@ pub trait DatabaseInterfaceFeedTrait: Pingable {
         profile_id: i32,
     ) -> mysql::Result<(), SqlInterfaceError>;
 
+    /// Retrieves the single feed profile from database.
+    ///
+    /// # Arguments
+    /// * `profile_id` - A parameter representing `profile_id`.
     fn get_single_feed_profile_from_database(
         &mut self,
         profile_id: i32,
     ) -> mysql::Result<FeedProfile, SqlInterfaceError>;
 
+    /// Updates the feed schedule entries in database.
+    ///
+    /// # Arguments
+    /// * `feedschedule_entries` - A parameter representing `feedschedule_entries`.
     fn update_feed_schedule_entries_in_database(
         &mut self,
         feedschedule_entries: &mut Vec<FeedScheduleEntry>,
     ) -> mysql::Result<(), SqlInterfaceError>;
 
+    /// Inserts a feed schedule entry in the database - for testing only
+    ///
+    /// # Arguments
+    /// * `timestamp` - A parameter representing `timestamp`.
+    /// * `profile_id` - A parameter representing `profile_id`.
+    /// * `is_weekly` - A parameter representing `is_weekly`.
+    /// * `is_daily` - A parameter representing `is_daily`.
     #[cfg(test)]
     fn insert_feed_schedule_entry(
         &mut self,

@@ -23,3 +23,6 @@ pub mod privilege_check;
 
 // Initialized the application and starts all threads/tasks
 pub mod run;
+
+// Macro for spawning tasks used in run
+pub mod spawn_tokio_task;

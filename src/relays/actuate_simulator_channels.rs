@@ -37,6 +37,10 @@ pub struct ActuateSimulatorChannels {
 
 #[cfg(feature = "debug_channels")]
 impl fmt::Display for ActuateSimulatorChannels {
+    /// Formats the value using the given formatter.
+    ///
+    /// # Arguments
+    /// * `f` - The formatter to write the formatted string to.
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         writeln!(f, "=== ActuateSimulatorChannels ===")?;
 
@@ -51,6 +55,10 @@ impl fmt::Display for ActuateSimulatorChannels {
 
 #[cfg(not(feature = "debug_channels"))]
 impl fmt::Display for ActuateSimulatorChannels {
+    /// Formats the value using the given formatter.
+    ///
+    /// # Arguments
+    /// * `f` - The formatter to write the formatted string to.
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(
             f,

@@ -66,13 +66,13 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 //!   a database.
 
 use log::error;
-#[cfg(not(test))]
-use log::warn;
-use spin_sleep::SpinSleeper;
+#[cfg(not(test))] // only required in real-life execution
+use log::{info, warn};
+
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
-#[cfg(all(target_os = "linux", not(test)))]
+#[cfg(all(target_os = "linux", not(test)))] // only required in real-life execution
 use nix::unistd::gettid;
 
 use crate::database::sql_interface_heating_stats::{HeatingStatsEntry, SqlInterfaceHeatingStats};
@@ -91,9 +91,7 @@ use crate::utilities::logger::log_error_chain;
 use crate::utilities::proc_ext_req::ProcessExternalRequestTrait;
 use crate::utilities::sawtooth_profile::SawToothProfile;
 use crate::utilities::wait_for_termination::WaitForTerminationTrait;
-use crate::{manage_cycle_time_thermal, perform_schedule_check, update_thermal_set_values};
-#[cfg(not(test))]
-use log::info;
+use crate::{perform_schedule_check, update_thermal_set_values};
 
 const CYCLE_TIME_HEATING_MILLIS: u64 = 500;
 
@@ -168,10 +166,12 @@ pub struct Heating {
 }
 
 impl TemperatureGradientMonitorTrait for Heating {
+    /// Performs the `max_time_actuator_effect_monitor` operation.
     fn max_time_actuator_effect_monitor(&self) -> u64 {
         self.config.max_time_actuator_effect_monitor
     }
 
+    /// Performs the `monitor_state` operation.
     fn monitor_state(&mut self) -> (&mut Option<Instant>, &mut bool) {
         (
             &mut self.last_actuator_on_time,
@@ -264,22 +264,31 @@ impl Heating {
     /// This function handles errors internally. If the database call fails, it logs
     /// the error and returns a default fallback value of 24 hours (86.400 seconds).
     /// This prevents a crash and suspends statistics recording until the next day.
+    ///
+    /// # Arguments
+    /// * `sql_interface_heating` - Database interface connection for heating stats.
+    /// * `is_multi_thread` - A boolean flag indicating if the Tokio runtime is running in multithreaded mode.
     fn get_duration_until_midnight(
         &mut self,
         sql_interface_heating: &mut SqlInterfaceHeatingStats,
+        is_multi_thread: bool,
     ) -> u64 {
         let default_value: u64 = 24 * 3600; // default value for time in seconds until midnight
 
-        let database_seconds_until_midnight = sql_interface_heating
-            .get_duration_until_midnight()
-            .unwrap_or_else(|e| {
-                let context = format!(
-                    "Could not get duration until midnight from database - using default value ({}).",
-                    default_value
-                );
-                log_error_chain(module_path!(), &context, e);
-                default_value as i64
-            });
+        let get_midnight_res = if is_multi_thread {
+            tokio::task::block_in_place(|| sql_interface_heating.get_duration_until_midnight())
+        } else {
+            sql_interface_heating.get_duration_until_midnight()
+        };
+
+        let database_seconds_until_midnight = get_midnight_res.unwrap_or_else(|e| {
+            let context = format!(
+                "Could not get duration until midnight from database - using default value ({}).",
+                default_value
+            );
+            log_error_chain(module_path!(), &context, e);
+            default_value as i64
+        });
         if database_seconds_until_midnight < 0 {
             error!(
                 target: module_path!(),
@@ -372,30 +381,47 @@ impl Heating {
     ///   `HeatingStatsDataTransferTrait`, used to perform the actual database write.
     /// * `sql_interface_heating` - A mutable reference to the SQL interface, required for
     ///   creating a new `HeatingStatsEntry` and for calculating the time until the next midnight.
+    /// * `is_multi_thread` - A boolean flag indicating if the Tokio runtime is running in multithreaded mode.
     fn record_heating_stats(
         &mut self,
         midnight_instant: &mut Instant,
         heating_stats_opt: &mut Option<HeatingStatsEntry>,
         heating_stats_transfer: &mut impl HeatingStatsDataTransferTrait,
         sql_interface_heating: &mut SqlInterfaceHeatingStats,
+        is_multi_thread: bool,
     ) {
         // check if midnight has arrived
         if Instant::now() > *midnight_instant {
             println!("***  Transferring heating stats ***");
             // Use take() to move the value out of the Option without cloning.
             if let Some(stats) = heating_stats_opt.take() {
-                if let Err(e) =
+                let transfer_res = if is_multi_thread {
+                    tokio::task::block_in_place(|| {
+                        heating_stats_transfer.transfer_heating_stats(stats, sql_interface_heating)
+                    })
+                } else {
                     heating_stats_transfer.transfer_heating_stats(stats, sql_interface_heating)
-                {
+                };
+
+                if let Err(e) = transfer_res {
                     error!(
                         target: module_path!(),
                         "Error occurred when trying to store heating stats data in database: {e:?}"
                     );
                 }
                 // Reset heating stats
-                *heating_stats_opt = Some(HeatingStatsEntry::new(&mut sql_interface_heating.conn));
+                let new_stats = if is_multi_thread {
+                    tokio::task::block_in_place(|| {
+                        HeatingStatsEntry::new(&mut sql_interface_heating.conn)
+                    })
+                } else {
+                    HeatingStatsEntry::new(&mut sql_interface_heating.conn)
+                };
+                *heating_stats_opt = Some(new_stats);
                 *midnight_instant = Instant::now()
-                    + Duration::from_secs(self.get_duration_until_midnight(sql_interface_heating));
+                    + Duration::from_secs(
+                        self.get_duration_until_midnight(sql_interface_heating, is_multi_thread),
+                    );
             }
         }
     }
@@ -425,16 +451,19 @@ impl Heating {
     ///   with modules like `RelayManager`, `SignalHandler`, `DataLogger`, `ScheduleCheck`, and `Messaging`.
     /// * `heating_stats_transfer` - A mutable reference to an object implementing `HeatingStatsDataTransferTrait`,
     ///   responsible for persisting daily heating statistics to the database.
-    /// * `heating_stats_transfer` - A mutable reference to an object implementing `HeatingSetValueUpdaterTrait`,
+    /// * `heating_set_val_updater` - A mutable reference to an object implementing `ThermalSetValueUpdaterTrait`,
     ///   responsible for updating the set values dynamically by communicating with SQL database.
     /// * `heating_mutexes` - Struct containing the mutexes to access data from different threads.
+    /// * `sql_interface_heating` - A `SqlInterfaceHeatingStats` instance providing direct interface to database.
+    /// * `is_multi_thread` - A boolean indicating if the tokio runtime is running in multithreaded mode.
     ///
     /// # Returns
     /// This function does not return a value in the traditional sense, as it is designed
     /// to loop indefinitely. It will only break out of its loop and terminate when a `Quit`
     /// command is received from the signal handler, after which it performs final cleanup
     /// (switching off the heater, logging final stats) and confirms shutdown.
-    pub fn execute(
+    #[allow(clippy::too_many_arguments)]
+    pub async fn execute(
         &mut self,
         mutex_device_scheduler_heating: Arc<Mutex<i32>>,
         heating_channels: &mut HeatingChannels,
@@ -442,12 +471,13 @@ impl Heating {
         heating_set_val_updater: &mut impl ThermalSetValueUpdaterTrait,
         heating_mutexes: HeatingMutexes,
         mut sql_interface_heating: SqlInterfaceHeatingStats,
+        is_multi_thread: bool,
     ) {
-        #[cfg(all(target_os = "linux", not(test)))]
+        #[cfg(all(target_os = "linux", not(test)))] // only required in real-life execution
+        #[cfg(not(tarpaulin_include))]
         info!(target: module_path!(), "Thread started with TID: {}", gettid());
 
         let _refill_error = false;
-        let spin_sleeper = SpinSleeper::default();
         let sleep_duration_hundred_millis = Duration::from_millis(100);
         let mut saw_tooth_profile = SawToothProfile::new(&self.config.saw_tooth_profile_config);
         let mut measured_water_temperature = 0.0;
@@ -458,8 +488,9 @@ impl Heating {
         let mut loop_counter = 0;
         let mut heater_state: ActuatorState = ActuatorState::Undefined;
         let mut schedule_check_result: bool;
-        let duration_until_midnight =
-            Duration::from_secs(self.get_duration_until_midnight(&mut sql_interface_heating));
+        let duration_until_midnight = Duration::from_secs(
+            self.get_duration_until_midnight(&mut sql_interface_heating, is_multi_thread),
+        );
         let mut midnight_instant = Instant::now() + duration_until_midnight;
         let mut tank_level_low_counter = 0;
         let mut heating_inhibited: bool = false; // state of heating control determined by if the start/stop command has been received
@@ -468,18 +499,25 @@ impl Heating {
         let cycle_time_duration = Duration::from_millis(CYCLE_TIME_HEATING_MILLIS);
         let mut actuator_ineffective: bool = false;
 
-        let mut heating_stats_opt = match sql_interface_heating
-            .get_single_heating_stats_from_database()
-        {
+        let get_heating_stats_res = if is_multi_thread {
+            tokio::task::block_in_place(|| {
+                sql_interface_heating.get_single_heating_stats_from_database()
+            })
+        } else {
+            sql_interface_heating.get_single_heating_stats_from_database()
+        };
+
+        let mut heating_stats_opt = match get_heating_stats_res {
             Ok(c) => Some(c),
             Err(_) => {
-                #[cfg(test)]
-                println!(
-                    "{}: could not get existing heating stats entry for today from database - creating new one for today",
-                    module_path!()
-                );
-
-                Some(HeatingStatsEntry::new(&mut sql_interface_heating.conn))
+                let entry = if is_multi_thread {
+                    tokio::task::block_in_place(|| {
+                        HeatingStatsEntry::new(&mut sql_interface_heating.conn)
+                    })
+                } else {
+                    HeatingStatsEntry::new(&mut sql_interface_heating.conn)
+                };
+                Some(entry)
             }
         };
 
@@ -491,13 +529,14 @@ impl Heating {
                 stop_command_received, // the request to (temporarily) stop heating has been received
             ) = self.process_external_request(
                 &mut heating_channels.rx_heating_from_signal_handler,
-                heating_channels.rx_heating_from_messaging_opt.as_mut(),
+                Some(&mut heating_channels.rx_heating_from_messaging),
             );
             if quit_command_received {
                 break;
             }
             if stop_command_received {
-                #[cfg(not(test))]
+                #[cfg(not(test))] // only required in real-life execution
+                #[cfg(not(tarpaulin_include))]
                 info!(
                     target: module_path!(),
                     "received Stop command. inhibiting heating."
@@ -506,7 +545,8 @@ impl Heating {
                 heating_inhibited = true;
             }
             if start_command_received {
-                #[cfg(not(test))]
+                #[cfg(not(test))] // only required in real-life execution
+                #[cfg(not(tarpaulin_include))]
                 info!(
                     target: module_path!(),
                     "received Start command. restarting heating."
@@ -568,14 +608,15 @@ impl Heating {
                     self.config.switch_off_temperature,
                     self.config.switch_on_temperature,
                     self.lock_error_heating_set_value_read_failure,
-                    module_path!()
+                    module_path!(),
+                    is_multi_thread
                 );
 
                 actuator_ineffective = self.temperature_gradient_monitor(
                     &heating_mutexes.mutex_temperature_gradient,
                     heater_state == ActuatorState::On,
                     true, // heating expects a positive gradient
-                    #[cfg(not(test))]
+                    #[cfg(not(test))] // only required in real-life execution
                     "Heating",
                 );
                 if actuator_ineffective
@@ -586,10 +627,12 @@ impl Heating {
                         &mutex_device_scheduler_heating,
                         &mut actuation_mutex_was_blocked_during_actuation,
                         heating_channels,
+                        is_multi_thread,
                     );
                     heater_state = ActuatorState::Off;
                     self.actuator_disabled = true;
-                    #[cfg(not(test))]
+                    #[cfg(not(test))] // only required in real-life execution
+                    #[cfg(not(tarpaulin_include))]
                     warn!("[{}]: Disabled heater because temperature gradient monitor indicates ineffectiveness.", module_path!());
                 }
 
@@ -603,6 +646,7 @@ impl Heating {
                             &mutex_device_scheduler_heating,
                             &mut actuation_mutex_was_blocked_during_actuation,
                             heating_channels,
+                            is_multi_thread,
                         );
                         heater_state = ActuatorState::Off;
                     }
@@ -626,6 +670,7 @@ impl Heating {
                                         &mutex_device_scheduler_heating,
                                         &mut actuation_mutex_was_blocked_during_actuation,
                                         heating_channels,
+                                        is_multi_thread,
                                     );
                                     heater_state = ActuatorState::On;
                                 }
@@ -636,6 +681,7 @@ impl Heating {
                                         &mutex_device_scheduler_heating,
                                         &mut actuation_mutex_was_blocked_during_actuation,
                                         heating_channels,
+                                        is_multi_thread,
                                     );
                                     heater_state = ActuatorState::Off;
                                 }
@@ -649,6 +695,7 @@ impl Heating {
                                         &mutex_device_scheduler_heating,
                                         &mut actuation_mutex_was_blocked_during_actuation,
                                         heating_channels,
+                                        is_multi_thread,
                                     );
                                     heater_state = ActuatorState::Off;
                                 }
@@ -660,6 +707,7 @@ impl Heating {
                                         &mutex_device_scheduler_heating,
                                         &mut actuation_mutex_was_blocked_during_actuation,
                                         heating_channels,
+                                        is_multi_thread,
                                     );
                                     heater_state = ActuatorState::On;
                                 }
@@ -675,6 +723,7 @@ impl Heating {
                                         &mutex_device_scheduler_heating,
                                         &mut actuation_mutex_was_blocked_during_actuation,
                                         heating_channels,
+                                        is_multi_thread,
                                     );
                                     heater_state = ActuatorState::On;
                                 }
@@ -686,6 +735,7 @@ impl Heating {
                                         &mutex_device_scheduler_heating,
                                         &mut actuation_mutex_was_blocked_during_actuation,
                                         heating_channels,
+                                        is_multi_thread,
                                     );
                                     heater_state = ActuatorState::Off;
                                 }
@@ -701,6 +751,7 @@ impl Heating {
                                         &mutex_device_scheduler_heating,
                                         &mut actuation_mutex_was_blocked_during_actuation,
                                         heating_channels,
+                                        is_multi_thread,
                                     );
                                     heater_state = ActuatorState::On;
                                 }
@@ -712,6 +763,7 @@ impl Heating {
                                         &mutex_device_scheduler_heating,
                                         &mut actuation_mutex_was_blocked_during_actuation,
                                         heating_channels,
+                                        is_multi_thread,
                                     );
                                     heater_state = ActuatorState::Off;
                                 }
@@ -737,6 +789,7 @@ impl Heating {
                     &mut heating_stats_opt,
                     heating_stats_transfer,
                     &mut sql_interface_heating,
+                    is_multi_thread,
                 );
             }
 
@@ -777,17 +830,32 @@ impl Heating {
             }
 
             // Manage the loop's cycle time, sleeping or logging a warning as needed.
-            manage_cycle_time_thermal!(
-                start_time,
-                cycle_time_duration,
-                CYCLE_TIME_HEATING_MILLIS,
-                spin_sleeper,
-                lock_warn_cycle_time_exceeded,
-                actuation_mutex_was_blocked_during_actuation,
-                module_path!()
-            );
+            let stop_time = Instant::now();
+            let execution_duration = stop_time.duration_since(start_time);
 
-            self.check_timing_and_ping_database(&mut sql_interface_heating);
+            if execution_duration > cycle_time_duration {
+                if !lock_warn_cycle_time_exceeded && !actuation_mutex_was_blocked_during_actuation {
+                    #[cfg(not(test))] // only required in real-life execution
+                    #[cfg(not(tarpaulin_include))]
+                    warn!(target: module_path!(),
+                        "execution duration of {} milliseconds exceeds cycle time of {}",
+                        execution_duration.as_millis(),
+                        CYCLE_TIME_HEATING_MILLIS);
+                    lock_warn_cycle_time_exceeded = true;
+                }
+            } else {
+                let remaining_sleep_time = cycle_time_duration - execution_duration;
+                tokio::time::sleep(remaining_sleep_time).await;
+                lock_warn_cycle_time_exceeded = false;
+            }
+
+            // Reset the actuation block flag for the next cycle.
+            actuation_mutex_was_blocked_during_actuation = false;
+
+            // Reset the start time for the next cycle.
+            start_time = Instant::now();
+
+            self.check_timing_and_ping_database(&mut sql_interface_heating, is_multi_thread);
         }
 
         // switch off the heater if not already off
@@ -796,15 +864,22 @@ impl Heating {
                 &mutex_device_scheduler_heating,
                 &mut actuation_mutex_was_blocked_during_actuation,
                 heating_channels,
+                is_multi_thread,
             );
         }
 
         // update the database with the heating stats data recorded
         // so far for this date
         if let Some(stats) = heating_stats_opt.take() {
-            if let Err(e) =
+            let transfer_res = if is_multi_thread {
+                tokio::task::block_in_place(|| {
+                    heating_stats_transfer.transfer_heating_stats(stats, &mut sql_interface_heating)
+                })
+            } else {
                 heating_stats_transfer.transfer_heating_stats(stats, &mut sql_interface_heating)
-            {
+            };
+
+            if let Err(e) = transfer_res {
                 error!("Error occurred when trying to store heating stats data in database (during termination): {e:?}");
             }
         }
@@ -814,16 +889,65 @@ impl Heating {
         // This thread has channel connections to underlying threads.
         // Those threads have to stop receiving commands from this thread.
         // The shutdown sequence is handled by the signal_handler module.
-        self.wait_for_termination(
+        self.wait_for_termination_async(
             &mut heating_channels.rx_heating_from_signal_handler,
             sleep_duration_hundred_millis,
             module_path!(),
-        );
+        )
+        .await;
     }
 }
 
 #[cfg(test)]
 pub mod tests {
+    /// Helper function to execute the heating task inside a test Tokio runtime.
+    ///
+    /// # Arguments
+    /// * `heating` - A mutable reference to the `Heating` instance.
+    /// * `mutex_device_scheduler_heating` - Mutex coordinating access to the device scheduler.
+    /// * `heating_channels` - A mutable reference to the `HeatingChannels` instance.
+    /// * `heating_stats_transfer` - A mutable reference to the heating stats transfer object.
+    /// * `heating_set_val_updater` - A mutable reference to the set value updater.
+    /// * `heating_mutexes` - Shared mutexes for heating conditions.
+    /// * `sql_interface_heating` - Database interface for heating stats.
+    fn execute_blocking(
+        heating: &mut Heating,
+        mutex_device_scheduler_heating: Arc<Mutex<i32>>,
+        heating_channels: &mut super::HeatingChannels,
+        heating_stats_transfer: &mut impl super::HeatingStatsDataTransferTrait,
+        heating_set_val_updater: &mut impl crate::database::thermal_set_value_updater_trait::ThermalSetValueUpdaterTrait,
+        heating_mutexes: HeatingMutexes,
+        sql_interface_heating: SqlInterfaceHeatingStats,
+    ) {
+        tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+            .unwrap()
+            .block_on(async {
+                // blocking execution used for testing
+                let is_multi_thread_test = tokio::runtime::Handle::try_current()
+                    .map(|h| {
+                        matches!(
+                            h.runtime_flavor(),
+                            tokio::runtime::RuntimeFlavor::MultiThread
+                        )
+                    })
+                    .unwrap_or(false);
+
+                heating
+                    .execute(
+                        mutex_device_scheduler_heating,
+                        heating_channels,
+                        heating_stats_transfer,
+                        heating_set_val_updater,
+                        heating_mutexes,
+                        sql_interface_heating,
+                        is_multi_thread_test,
+                    )
+                    .await;
+            });
+    }
+
     use crate::database::sql_interface::SqlInterface;
     use crate::database::sql_interface_heating_stats::{
         HeatingStatsEntry, SqlInterfaceHeatingStats,
@@ -883,6 +1007,12 @@ pub mod tests {
     // - It fails to connect to the SQL database.
     // - It fails to truncate the `heatingstats` table in the database.
     // - It encounters any issue during the initialization of the `SqlInterfaceHeating` or `Heating` structs.
+    /// Performs the `prepare_heating_tests_mock_midnight_calculator` operation.
+    ///
+    /// # Arguments
+    /// * `seconds_to_midnight` - A parameter representing `seconds_to_midnight`.
+    /// * `test_db_number` - A parameter representing `test_db_number`.
+    /// * `saw_tooth_profile_config_opt` - A parameter representing `saw_tooth_profile_config_opt`.
     pub fn prepare_heating_tests_mock_midnight_calculator(
         seconds_to_midnight: i64,
         test_db_number: u32,
@@ -1007,7 +1137,7 @@ pub mod tests {
                 channels
                     .signal_handler
                     .rx_signal_handler_from_heating
-                    .recv()
+                    .blocking_recv()
                     .unwrap();
                 let _ = channels
                     .signal_handler
@@ -1043,7 +1173,8 @@ pub mod tests {
                     mutex_temperature_gradient: Arc::new(Mutex::new(0.0)),
                 };
 
-                heating.execute(
+                execute_blocking(
+                    &mut heating,
                     mutex_device_scheduler_heating.clone(),
                     &mut channels.heating,
                     &mut heating_stats_transfer,
@@ -1150,7 +1281,7 @@ pub mod tests {
                 channels
                     .signal_handler
                     .rx_signal_handler_from_heating
-                    .recv()
+                    .blocking_recv()
                     .unwrap();
                 let _ = channels
                     .signal_handler
@@ -1186,7 +1317,8 @@ pub mod tests {
                     mutex_temperature_gradient: Arc::new(Mutex::new(0.0)),
                 };
 
-                heating.execute(
+                execute_blocking(
+                    &mut heating,
                     mutex_device_scheduler_heating.clone(),
                     &mut channels.heating,
                     &mut heating_stats_transfer,
@@ -1385,7 +1517,7 @@ pub mod tests {
                 channels
                     .signal_handler
                     .rx_signal_handler_from_heating
-                    .recv()
+                    .blocking_recv()
                     .unwrap();
                 let _ = channels
                     .signal_handler
@@ -1421,7 +1553,8 @@ pub mod tests {
                     mutex_temperature_gradient: Arc::new(Mutex::new(0.0)),
                 };
 
-                heating.execute(
+                execute_blocking(
+                    &mut heating,
                     mutex_device_scheduler_heating.clone(),
                     &mut channels.heating,
                     &mut heating_stats_transfer,
@@ -1597,7 +1730,7 @@ pub mod tests {
                 channels
                     .signal_handler
                     .rx_signal_handler_from_heating
-                    .recv()
+                    .blocking_recv()
                     .unwrap();
                 let _ = channels
                     .signal_handler
@@ -1633,7 +1766,8 @@ pub mod tests {
                     mutex_temperature_gradient: Arc::new(Mutex::new(0.0)),
                 };
 
-                heating.execute(
+                execute_blocking(
+                    &mut heating,
                     mutex_device_scheduler_heating.clone(),
                     &mut channels.heating,
                     &mut heating_stats_transfer,
@@ -1811,7 +1945,7 @@ pub mod tests {
                 channels
                     .signal_handler
                     .rx_signal_handler_from_heating
-                    .recv()
+                    .blocking_recv()
                     .unwrap();
                 let _ = channels
                     .signal_handler
@@ -1847,7 +1981,8 @@ pub mod tests {
                     mutex_temperature_gradient: Arc::new(Mutex::new(0.0)),
                 };
 
-                heating.execute(
+                execute_blocking(
+                    &mut heating,
                     mutex_device_scheduler_heating.clone(),
                     &mut channels.heating,
                     &mut heating_stats_transfer,
@@ -1951,7 +2086,7 @@ pub mod tests {
                 channels
                     .signal_handler
                     .rx_signal_handler_from_heating
-                    .recv()
+                    .blocking_recv()
                     .unwrap();
                 let _ = channels
                     .signal_handler
@@ -1983,7 +2118,7 @@ pub mod tests {
                     mutex_temperature_gradient: Arc::new(Mutex::new(0.0)),
                 };
 
-                heating.execute(
+                execute_blocking(&mut heating,
                     mutex_device_scheduler_heating.clone(),
                     &mut channels.heating,
                     &mut heating_stats_transfer,
@@ -2094,7 +2229,7 @@ pub mod tests {
                 channels
                     .signal_handler
                     .rx_signal_handler_from_heating
-                    .recv()
+                    .blocking_recv()
                     .unwrap();
                 let _ = channels
                     .signal_handler
@@ -2126,7 +2261,7 @@ pub mod tests {
                     mutex_temperature_gradient: Arc::new(Mutex::new(0.0)),
                 };
 
-                heating.execute(
+                execute_blocking(&mut heating,
                     mutex_device_scheduler_heating.clone(),
                     &mut channels.heating,
                     &mut heating_stats_transfer,
@@ -2321,7 +2456,7 @@ pub mod tests {
                 channels
                     .signal_handler
                     .rx_signal_handler_from_heating
-                    .recv()
+                    .blocking_recv()
                     .unwrap();
                 let _ = channels
                     .signal_handler
@@ -2353,7 +2488,7 @@ pub mod tests {
                     mutex_temperature_gradient: Arc::new(Mutex::new(0.0)),
                 };
 
-                heating.execute(
+                execute_blocking(&mut heating,
                     mutex_device_scheduler_heating.clone(),
                     &mut channels.heating,
                     &mut heating_stats_transfer,
@@ -2536,7 +2671,7 @@ pub mod tests {
                 channels
                     .signal_handler
                     .rx_signal_handler_from_heating
-                    .recv()
+                    .blocking_recv()
                     .unwrap();
                 let _ = channels
                     .signal_handler
@@ -2572,7 +2707,8 @@ pub mod tests {
                     mutex_temperature_gradient: Arc::new(Mutex::new(0.0)),
                 };
 
-                heating.execute(
+                execute_blocking(
+                    &mut heating,
                     mutex_device_scheduler_heating.clone(),
                     &mut channels.heating,
                     &mut heating_stats_transfer,
@@ -2675,7 +2811,7 @@ pub mod tests {
                 channels
                     .signal_handler
                     .rx_signal_handler_from_heating
-                    .recv()
+                    .blocking_recv()
                     .unwrap();
                 let _ = channels
                     .signal_handler
@@ -2711,7 +2847,8 @@ pub mod tests {
                     mutex_temperature_gradient: Arc::new(Mutex::new(0.0)),
                 };
 
-                heating.execute(
+                execute_blocking(
+                    &mut heating,
                     mutex_device_scheduler_heating.clone(),
                     &mut channels.heating,
                     &mut heating_stats_transfer,
@@ -2905,7 +3042,7 @@ pub mod tests {
                 channels
                     .signal_handler
                     .rx_signal_handler_from_heating
-                    .recv()
+                    .blocking_recv()
                     .unwrap();
 
                 // check if heating is not actuated
@@ -2941,7 +3078,8 @@ pub mod tests {
                     mutex_temperature_gradient: Arc::new(Mutex::new(0.0)),
                 };
 
-                heating.execute(
+                execute_blocking(
+                    &mut heating,
                     mutex_device_scheduler_heating.clone(),
                     &mut channels.heating,
                     &mut heating_stats_transfer,
@@ -3053,7 +3191,7 @@ pub mod tests {
                 channels
                     .signal_handler
                     .rx_signal_handler_from_heating
-                    .recv()
+                    .blocking_recv()
                     .unwrap();
                 let _ = channels
                     .signal_handler
@@ -3095,7 +3233,8 @@ pub mod tests {
                     mutex_temperature_gradient: Arc::new(Mutex::new(0.0)),
                 };
 
-                heating.execute(
+                execute_blocking(
+                    &mut heating,
                     mutex_device_scheduler_heating.clone(),
                     &mut channels.heating,
                     &mut heating_stats_transfer,
@@ -3221,7 +3360,7 @@ pub mod tests {
                 channels
                     .signal_handler
                     .rx_signal_handler_from_heating
-                    .recv()
+                    .blocking_recv()
                     .unwrap();
                 let _ = channels
                     .signal_handler
@@ -3257,7 +3396,7 @@ pub mod tests {
                     mutex_temperature_gradient: Arc::new(Mutex::new(0.0)),
                 };
 
-                heating.execute(
+                execute_blocking(&mut heating,
                     mutex_device_scheduler_heating.clone(),
                     &mut channels.heating,
                     &mut heating_stats_transfer,
@@ -3311,6 +3450,7 @@ pub mod tests {
             &mut heating_stats_opt,
             &mut mock_transfer,
             &mut sql_interface_heating_stats,
+            false,
         );
 
         // 3. Assert
@@ -3346,6 +3486,7 @@ pub mod tests {
             &mut heating_stats_opt,
             &mut mock_transfer,
             &mut sql_interface_heating_stats,
+            false,
         );
 
         // 3. Assert
@@ -3395,6 +3536,7 @@ pub mod tests {
             &mut heating_stats_opt,
             &mut mock_transfer,
             &mut sql_interface_heating_stats,
+            false,
         );
 
         // 3. Assert
@@ -3433,6 +3575,7 @@ pub mod tests {
             &mut heating_stats_opt,
             &mut mock_transfer,
             &mut sql_interface_heating_stats,
+            false,
         );
 
         // 3. Assert
@@ -3729,7 +3872,7 @@ pub mod tests {
                 channels
                     .signal_handler
                     .rx_signal_handler_from_heating
-                    .recv()
+                    .blocking_recv()
                     .unwrap();
                 let _ = channels
                     .signal_handler
@@ -3766,7 +3909,8 @@ pub mod tests {
                     mutex_temperature_gradient,
                 };
 
-                heating.execute(
+                execute_blocking(
+                    &mut heating,
                     mutex_device_scheduler_heating.clone(),
                     &mut channels.heating,
                     &mut heating_stats_transfer,
@@ -3906,7 +4050,7 @@ pub mod tests {
                 channels
                     .signal_handler
                     .rx_signal_handler_from_heating
-                    .recv()
+                    .blocking_recv()
                     .unwrap();
                 let _ = channels
                     .signal_handler
@@ -3943,7 +4087,8 @@ pub mod tests {
                     mutex_temperature_gradient: mutex_temperature_gradient_clone,
                 };
 
-                heating.execute(
+                execute_blocking(
+                    &mut heating,
                     mutex_device_scheduler_heating.clone(),
                     &mut channels.heating,
                     &mut heating_stats_transfer,

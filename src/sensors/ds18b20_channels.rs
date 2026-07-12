@@ -65,6 +65,10 @@ impl Ds18b20Channels {
 
 #[cfg(feature = "debug_channels")]
 impl fmt::Display for Ds18b20Channels {
+    /// Formats the value using the given formatter.
+    ///
+    /// # Arguments
+    /// * `f` - The formatter to write the formatted string to.
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         writeln!(f, "=== Ds18b20Channels ===")?;
         write!(
@@ -77,6 +81,10 @@ impl fmt::Display for Ds18b20Channels {
 
 #[cfg(not(feature = "debug_channels"))]
 impl fmt::Display for Ds18b20Channels {
+    /// Formats the value using the given formatter.
+    ///
+    /// # Arguments
+    /// * `f` - The formatter to write the formatted string to.
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(
             f,

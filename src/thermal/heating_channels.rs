@@ -71,7 +71,7 @@ pub struct HeatingChannels {
     pub rx_heating_from_schedule_check: AquaReceiver<bool>,
 
     /// Receiver part of the channel for communication from the messaging
-    pub rx_heating_from_messaging_opt: Option<AquaReceiver<InternalCommand>>,
+    pub rx_heating_from_messaging: AquaReceiver<InternalCommand>,
 }
 
 impl HeatingChannels {
@@ -84,8 +84,8 @@ impl HeatingChannels {
     }
 
     /// Receives a response from the relay manager.
-    pub fn receive_from_relay_manager(&mut self) -> Result<bool, AquaChannelError> {
-        self.rx_heating_from_relay_manager.recv()
+    pub async fn receive_from_relay_manager(&mut self) -> Result<bool, AquaChannelError> {
+        self.rx_heating_from_relay_manager.recv().await
     }
 
     /// Sends a command to the schedule checker.
@@ -97,13 +97,17 @@ impl HeatingChannels {
     }
 
     /// Receives a response from the schedule checker.
-    pub fn receive_from_schedule_check(&mut self) -> Result<bool, AquaChannelError> {
-        self.rx_heating_from_schedule_check.recv()
+    pub async fn receive_from_schedule_check(&mut self) -> Result<bool, AquaChannelError> {
+        self.rx_heating_from_schedule_check.recv().await
     }
 }
 
 #[cfg(feature = "debug_channels")]
 impl fmt::Display for HeatingChannels {
+    /// Formats the value using the given formatter.
+    ///
+    /// # Arguments
+    /// * `f` - The formatter to write the formatted string to.
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         writeln!(f, "=== HeatingChannels ===")?;
         writeln!(
@@ -150,6 +154,10 @@ impl fmt::Display for HeatingChannels {
 
 #[cfg(not(feature = "debug_channels"))]
 impl fmt::Display for HeatingChannels {
+    /// Formats the value using the given formatter.
+    ///
+    /// # Arguments
+    /// * `f` - The formatter to write the formatted string to.
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(
             f,

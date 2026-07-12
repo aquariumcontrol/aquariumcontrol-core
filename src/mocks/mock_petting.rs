@@ -20,6 +20,10 @@ pub mod tests {
     }
 
     impl Display for MockPetting {
+        /// Formats the value using the given formatter.
+        ///
+        /// # Arguments
+        /// * `f` - The formatter to write the formatted string to.
         fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
             writeln!(f, "Watchdog Petting Recorder Timestamps:")?;
             // Check if any timestamps have been recorded
@@ -48,6 +52,7 @@ pub mod tests {
     }
 
     impl MockPetting {
+        /// Creates a new instance.
         pub fn new() -> MockPetting {
             MockPetting {
                 petting_recorder: Vec::new(),
@@ -57,6 +62,10 @@ pub mod tests {
     }
 
     impl PettingTrait for MockPetting {
+        /// Performs the `pet` operation.
+        ///
+        /// # Arguments
+        /// * `s` - A parameter representing `s`.
         fn pet(&mut self, _: &str, s: &str) {
             let time = Instant::now();
             self.petting_recorder.push(time);

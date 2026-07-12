@@ -100,6 +100,10 @@ impl MineralInjection {
 
     /// Sends a command to the relay manager and handles the response.
     /// Logs an error if either the send or receive operation fails.
+    ///
+    /// # Arguments
+    /// * `balling_channels` - A mutable reference to the `BallingChannels` communication interface.
+    /// * `action_description` - A parameter representing `action_description`.
     fn send_and_confirm(
         &self,
         balling_channels: &mut BallingChannels,
@@ -114,7 +118,10 @@ impl MineralInjection {
             return; // Don't wait for a response if the send-operation failed
         }
 
-        if let Err(e) = balling_channels.receive_from_relay_manager() {
+        if let Err(e) = balling_channels
+            .rx_balling_from_relay_manager
+            .blocking_recv()
+        {
             error!(
                 target: module_path!(),
                 "Receiving answer from relay manager when {} failed ({:?})", action_description, e
@@ -124,6 +131,7 @@ impl MineralInjection {
 }
 
 impl Default for MineralInjection {
+    /// Creates a default instance of this type.
     fn default() -> Self {
         Self::new()
     }
@@ -251,7 +259,7 @@ pub mod tests {
         let command: InternalCommand;
 
         // receive command from the test object
-        match rx_relay_manager_from_mineral_injection.recv() {
+        match rx_relay_manager_from_mineral_injection.blocking_recv() {
             Ok(c) => match c {
                 InternalCommand::SwitchOn(_) => command = c,
                 InternalCommand::SwitchOff(_) => command = c,
@@ -278,6 +286,14 @@ pub mod tests {
     }
 
     // Helper function to record the actuation state of the devices.
+    /// Updates the actuator states.
+    ///
+    /// # Arguments
+    /// * `command` - The command string to verify.
+    /// * `peristaltic_pump1_actuation_state` - A parameter representing `peristaltic_pump1_actuation_state`.
+    /// * `peristaltic_pump2_actuation_state` - A parameter representing `peristaltic_pump2_actuation_state`.
+    /// * `peristaltic_pump3_actuation_state` - A parameter representing `peristaltic_pump3_actuation_state`.
+    /// * `peristaltic_pump4_actuation_state` - A parameter representing `peristaltic_pump4_actuation_state`.
     fn update_actuator_states(
         command: InternalCommand,
         peristaltic_pump1_actuation_state: &mut ActuatorState,
@@ -312,6 +328,11 @@ pub mod tests {
         }
     }
 
+    /// Performs the `mineral_injection_test_environment` operation.
+    ///
+    /// # Arguments
+    /// * `tx_relay_manager_to_mineral_injection` - A parameter representing `tx_relay_manager_to_mineral_injection`.
+    /// * `rx_relay_manager_from_mineral_injection` - A parameter representing `rx_relay_manager_from_mineral_injection`.
     fn mineral_injection_test_environment(
         mut tx_relay_manager_to_mineral_injection: AquaSender<bool>,
         mut rx_relay_manager_from_mineral_injection: AquaReceiver<InternalCommand>,

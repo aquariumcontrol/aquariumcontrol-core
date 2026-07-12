@@ -27,10 +27,6 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 //!   - Receiving `Quit`/`Terminate` commands from the `signal_handler` for shutdown.
 //!   - Sending shutdown acknowledgements back to the `signal_handler`.
 //!
-//! - **Optionality**: The channel for receiving commands from `Messaging` is wrapped
-//!   in an `Option`, allowing the application to be compiled with or without the
-//!   messaging feature.
-
 use crate::launch::channels::{AquaReceiver, AquaSender};
 use crate::utilities::channel_content::InternalCommand;
 use std::fmt;
@@ -43,11 +39,15 @@ pub struct WatchDogChannels {
     pub rx_watchdog_from_signal_handler: AquaReceiver<InternalCommand>,
 
     /// Receiver part of channel from messaging
-    pub rx_watchdog_from_messaging_opt: Option<AquaReceiver<InternalCommand>>,
+    pub rx_watchdog_from_messaging: AquaReceiver<InternalCommand>,
 }
 
 #[cfg(feature = "debug_channels")]
 impl fmt::Display for WatchDogChannels {
+    /// Formats the value using the given formatter.
+    ///
+    /// # Arguments
+    /// * `f` - The formatter to write the formatted string to.
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         writeln!(f, "=== WatchDogChannels ===")?;
         writeln!(
@@ -60,19 +60,21 @@ impl fmt::Display for WatchDogChannels {
             "rx_watchdog_from_signal_handler: {}",
             self.rx_watchdog_from_signal_handler.count
         )?;
-        if let Some(rx_watchdog_from_messaging) = self.rx_watchdog_from_messaging_opt.as_ref() {
-            write!(
-                f,
-                "rx_watchdog_from_messaging_opt: {}",
-                rx_watchdog_from_messaging.count
-            )?;
-        }
+        write!(
+            f,
+            "rx_watchdog_from_messaging_opt: {}",
+            rx_watchdog_from_messaging.count
+        )?;
         Ok(())
     }
 }
 
 #[cfg(not(feature = "debug_channels"))]
 impl fmt::Display for WatchDogChannels {
+    /// Formats the value using the given formatter.
+    ///
+    /// # Arguments
+    /// * `f` - The formatter to write the formatted string to.
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(
             f,

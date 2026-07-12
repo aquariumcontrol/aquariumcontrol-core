@@ -17,6 +17,15 @@ pub mod tests {
     use spin_sleep::SpinSleeper;
     use std::time::Duration;
 
+    /// Performs the `mock_atlas_scientific` operation.
+    ///
+    /// # Arguments
+    /// * `tx_atlas_scientific_to_test_object` - A parameter representing `tx_atlas_scientific_to_test_object`.
+    /// * `rx_atlas_scientific_from_test_object` - A parameter representing `rx_atlas_scientific_from_test_object`.
+    /// * `rx_atlas_scientific_from_test_environment_opt` - A parameter representing `rx_atlas_scientific_from_test_environment_opt`.
+    /// * `initial_stimuli_water_temperature` - A parameter representing `initial_stimuli_water_temperature`.
+    /// * `initial_stimuli_conductivity` - A parameter representing `initial_stimuli_conductivity`.
+    /// * `initial_stimuli_ph` - A parameter representing `initial_stimuli_ph`.
     pub fn mock_atlas_scientific(
         tx_atlas_scientific_to_test_object: &mut AquaSender<f32>,
         rx_atlas_scientific_from_test_object: &mut AquaReceiver<InternalCommand>,

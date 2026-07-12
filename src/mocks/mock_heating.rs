@@ -20,6 +20,14 @@ pub mod tests {
     use std::sync::{Arc, Mutex};
     use std::time::{Duration, Instant};
 
+    /// Performs the `mock_heating` operation.
+    ///
+    /// # Arguments
+    /// * `tx_heating_to_tank_level_switch_opt` - A parameter representing `tx_heating_to_tank_level_switch_opt`.
+    /// * `rx_heating_from_tank_level_switch_opt` - A parameter representing `rx_heating_from_tank_level_switch_opt`.
+    /// * `rx_heating_from_signal_handler` - A parameter representing `rx_heating_from_signal_handler`.
+    /// * `rx_heating_from_test_environment_opt` - A parameter representing `rx_heating_from_test_environment_opt`.
+    /// * `mutex_heating_status` - A parameter representing `mutex_heating_status`.
     #[allow(unused)]
     pub fn mock_heating(
         mut tx_heating_to_tank_level_switch_opt: Option<&mut AquaSender<InternalCommand>>,
@@ -167,6 +175,13 @@ pub mod tests {
         //
         // # Returns
         // A new `HeatingSetValueMockUpdater` struct.
+        /// Creates a new instance.
+        ///
+        /// # Arguments
+        /// * `active` - A parameter representing `active`.
+        /// * `new_set_value_heating_switch_off_temperature` - A parameter representing `new_set_value_heating_switch_off_temperature`.
+        /// * `new_set_value_heating_switch_on_temperature` - A parameter representing `new_set_value_heating_switch_on_temperature`.
+        /// * `delay_duration` - A parameter representing `delay_duration`.
         pub fn new(
             active: bool,
             new_set_value_heating_switch_off_temperature: Option<f32>,
@@ -183,6 +198,11 @@ pub mod tests {
         }
     }
     impl ThermalSetValueUpdaterTrait for MockSqlInterfaceHeatingSetVals {
+        /// Updates the set value.
+        ///
+        /// # Arguments
+        /// * `heating_switch_off_temperature` - A parameter representing `heating_switch_off_temperature`.
+        /// * `heating_switch_on_temperature` - A parameter representing `heating_switch_on_temperature`.
         fn update_set_value(
             &mut self,
             heating_switch_off_temperature: &mut f32,

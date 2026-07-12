@@ -18,14 +18,14 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 //!
 //! The `MessagingError` enum is built using the `thiserror` crate.
 
+use thiserror::Error;
+
 cfg_if::cfg_if! {
     if #[cfg(target_os = "linux")] {
-        use thiserror::Error;
         use crate::launch::channels::AquaChannelError;
     }
 }
 
-#[cfg(target_os = "linux")]
 #[derive(Debug, Error)]
 /// Enum codifies the errors which the program may encounter in communication with the Linux messaging system.
 pub enum MessagingError {

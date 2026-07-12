@@ -60,27 +60,27 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 #[cfg(feature = "debug_messaging")]
 use log::debug;
 
+use crate::dispatch::messaging_channels::MessagingChannels;
+use crate::dispatch::messaging_config::MessagingConfig;
+use crate::dispatch::messaging_error::MessagingError;
+use crate::launch::execution_config::ExecutionConfig;
+use crate::utilities::acknowledge_signal_handler::AcknowledgeSignalHandlerTrait;
+use crate::utilities::channel_content::InternalCommand;
+use crate::utilities::proc_ext_req::ProcessExternalRequestTrait;
+use crate::utilities::wait_for_termination::WaitForTerminationTrait;
+use std::time::Duration;
+
 cfg_if::cfg_if! {
     if #[cfg(target_os = "linux")] {
-        #[cfg(not(test))]
+        #[cfg(not(test))] // only required in real-life execution
         use log::info;
 
         use log::{error, warn};
         use posixmq::PosixMq;
-        use std::time::Duration;
-        use spin_sleep::SpinSleeper;
-        #[cfg(not(test))]
+        #[cfg(not(test))] // only required in real-life execution
         use nix::unistd::gettid;
 
-        use crate::utilities::channel_content::InternalCommand;
-        use crate::dispatch::messaging_channels::MessagingChannels;
-        use crate::dispatch::messaging_error::MessagingError;
-        use crate::utilities::proc_ext_req::ProcessExternalRequestTrait;
-        use crate::utilities::wait_for_termination::WaitForTerminationTrait;
-        use crate::utilities::acknowledge_signal_handler::AcknowledgeSignalHandlerTrait;
         use crate::dispatch::messaging_domain::MessagingDomain;
-        use crate::dispatch::messaging_config::MessagingConfig;
-        use crate::launch::execution_config::ExecutionConfig;
         use crate::dispatch::ipc_message::Message;
         use std::io::ErrorKind;
     }
@@ -102,10 +102,10 @@ cfg_if::cfg_if! {
 /// ```
 #[cfg(target_os = "linux")]
 pub struct Messaging {
-    config: MessagingConfig,
-
     // Message queue
-    mq: PosixMq,
+    mq: Option<PosixMq>,
+
+    // maximum length of messages in the queue
     mq_max_msg_len: usize,
 
     /// an inhibition flag to avoid flooding the log file with repeated messages about having received an inapplicable command
@@ -116,6 +116,14 @@ pub struct Messaging {
 
     /// configuration data indicating which threads are started
     execution_config: ExecutionConfig,
+}
+#[cfg(not(target_os = "linux"))]
+pub struct Messaging {
+    /// an inhibition flag to avoid flooding the log file with repeated messages about failure to receive termination signal via the channel
+    pub lock_error_channel_receive_termination: bool,
+
+    /// an inhibition flag to avoid flooding the log file with repeated messages about having received an inapplicable command
+    pub lock_warn_inapplicable_command_signal_handler: bool,
 }
 
 #[cfg(target_os = "linux")]
@@ -156,8 +164,13 @@ impl Messaging {
             }
         })?;
 
-        // identify maximum length of message queue
+        mq.set_nonblocking(true)
+            .map_err(|e| MessagingError::PosixMessageQueueAttributesError {
+                location: module_path!().to_string(),
+                source: e,
+            })?;
 
+        // identify maximum length of message queue
         let mq_max_msg_len = match mq.attributes() {
             Ok(c) => c.max_msg_len,
             Err(e) => {
@@ -167,14 +180,11 @@ impl Messaging {
                 });
             }
         };
-        #[cfg(not(target_os = "linux"))]
-        let mq_max_msg_len = 0;
 
         Ok(Messaging {
-            config,
             lock_warn_inapplicable_command_signal_handler: false,
             lock_error_channel_receive_termination: false,
-            mq,
+            mq: Some(mq),
             mq_max_msg_len,
             execution_config,
         })
@@ -197,103 +207,147 @@ impl Messaging {
     /// This function will panic if:
     /// - It encounters a fatal error while receiving from the POSIX message queue (other than a timeout).
     /// - It fails to receive the `Terminate` command from the signal handler during shutdown.
-    pub fn execute(&mut self, messaging_channels: &mut MessagingChannels) {
-        #[cfg(not(test))]
+    pub async fn execute(&mut self, messaging_channels: &mut MessagingChannels) {
+        #[cfg(not(test))] // only required in real-life execution
+        #[cfg(not(tarpaulin_include))]
         info!(target: module_path!(), "Thread started with TID: {}", gettid());
-        let duration_timeout = Duration::from_millis(self.config.timeout_millis);
+
+        let async_mq_opt: Option<tokio::io::unix::AsyncFd<PosixMq>>;
+
+        async_mq_opt = match self.mq.take() {
+            Some(mq) => match tokio::io::unix::AsyncFd::new(mq) {
+                Ok(async_mq) => Some(async_mq),
+                Err(e) => {
+                    error!(
+                        target: module_path!(),
+                        "Failed to create AsyncFd for accessing message queue ({e:?})"
+                    );
+                    None
+                }
+            },
+            None => {
+                error!(
+                    target: module_path!(),
+                    "Message queue already taken or not initialized"
+                );
+                None
+            }
+        };
 
         let mut msgbuf = vec![0; self.mq_max_msg_len];
 
         let sleep_duration = Duration::from_millis(10);
-        let spin_sleeper = SpinSleeper::default();
 
         loop {
-            match self.mq.recv_timeout(&mut msgbuf, duration_timeout) {
-                Ok((_r1, _r2)) => {
-                    if !msgbuf.is_empty() {
-                        if let Ok(msg) = Message::from_bytes(&msgbuf) {
-                            #[cfg(not(test))]
-                            info!(
-                                target: module_path!(),
-                                "received message: domain={}, cmd={}, param1={}, param2={}",
-                                msg.domain,
-                                msg.command,
-                                msg.command_param1,
-                                msg.command_param2
-                            );
+            match &async_mq_opt {
+                Some(async_mq) => {
+                    tokio::select! {
+                        // 1. Wait for message queue to become readable
+                        readable_result = async_mq.readable() => {
+                            if let Ok(mut guard) = readable_result {
+                                loop {
+                                    match async_mq.get_ref().recv(&mut msgbuf) {
+                                        Ok((_r1, _r2)) => {
+                                            if !msgbuf.is_empty() {
+                                                if let Ok(msg) = Message::from_bytes(&msgbuf) {
+                                                    #[cfg(not(test))] // only required in real-life execution
+                                                    #[cfg(not(tarpaulin_include))]
+                                                    info!(
+                                                        target: module_path!(),
+                                                        "received message: domain={}, cmd={}, param1={}, param2={}",
+                                                        msg.domain,
+                                                        msg.command,
+                                                        msg.command_param1,
+                                                        msg.command_param2
+                                                    );
 
-                            // interpret the domain in a message
-                            let domain = MessagingDomain::from(msg.domain);
-                            if domain == MessagingDomain::Unknown {
-                                warn!(
-                                    target: module_path!(),
-                                    "ignoring message for unknown domain {}",
-                                    msg.domain
-                                );
-                            }
+                                                    // interpret the domain in a message
+                                                    let domain = MessagingDomain::from(msg.domain);
+                                                    if domain == MessagingDomain::Unknown {
+                                                        warn!(
+                                                            target: module_path!(),
+                                                            "ignoring message for unknown domain {}",
+                                                            msg.domain
+                                                        );
+                                                    }
 
-                            // interpret command in a message
-                            let command = InternalCommand::from_msg(&msg);
-                            if command == InternalCommand::Unknown {
-                                warn!(
-                                    target: module_path!(),
-                                    "Messaging: ignoring message with unknown command {}",
-                                    msg.command
-                                );
-                            }
+                                                    // interpret command in a message
+                                                    let command = InternalCommand::from_msg(&msg);
+                                                    if command == InternalCommand::Unknown {
+                                                        warn!(
+                                                            target: module_path!(),
+                                                            "Messaging: ignoring message with unknown command {}",
+                                                            msg.command
+                                                        );
+                                                    }
 
-                            // prepare and execute communication to domain
-                            if (domain != MessagingDomain::Unknown)
-                                && (command != InternalCommand::Unknown)
-                                && (domain.is_domain_thread_executed(&self.execution_config))
-                            {
-                                #[cfg(not(test))]
-                                info!(
-                                    target: module_path!(),
-                                    "forwarding message to domain {}",
-                                    domain
-                                );
+                                                    // prepare and execute communication to domain
+                                                    if (domain != MessagingDomain::Unknown)
+                                                        && (command != InternalCommand::Unknown)
+                                                        && (domain.is_domain_thread_executed(&self.execution_config))
+                                                    {
+                                                        #[cfg(not(test))] // only required in real-life execution
+                                                        #[cfg(not(tarpaulin_include))]
+                                                        info!(
+                                                            target: module_path!(),
+                                                            "forwarding message to domain {}",
+                                                            domain
+                                                        );
 
-                                match messaging_channels
-                                    .send_command_to_domain(command, domain.clone())
-                                {
-                                    Ok(_) => { /* do nothing */ }
-                                    Err(e) => {
-                                        error!(
-                                            target: module_path!(),
-                                            "channel communication to domain {} failed ({e:?})",
-                                            domain
-                                        );
+                                                        match messaging_channels
+                                                            .send_command_to_domain(command, domain.clone())
+                                                        {
+                                                            Ok(_) => { /* do nothing */ }
+                                                            Err(e) => {
+                                                                error!(
+                                                                    target: module_path!(),
+                                                                    "channel communication to domain {} failed ({e:?})",
+                                                                    domain
+                                                                );
+                                                            }
+                                                        }
+                                                    }
+                                                } else {
+                                                    error!(
+                                                        target: module_path!(),
+                                                        "message has incorrect length ({}). ignoring it.",
+                                                        msgbuf.len()
+                                                    );
+                                                }
+                                            } else {
+                                                error!(
+                                                    target: module_path!(),
+                                                    "message has incorrect length ({}). ignoring it.",
+                                                    msgbuf.len()
+                                                );
+                                            }
+                                        }
+                                        Err(ref e) if e.kind() == ErrorKind::WouldBlock => {
+                                            guard.clear_ready();
+                                            break;
+                                        }
+                                        Err(e) => {
+                                            error!(
+                                                target: module_path!(),
+                                                "Error occurred when reading POSIX message ({e:?})"
+                                            );
+                                            break;
+                                        }
                                     }
                                 }
                             }
-                        } else {
-                            error!(
-                                target: module_path!(),
-                                "message has incorrect length ({}). ignoring it.",
-                                msgbuf.len()
-                            );
                         }
-                    } else {
-                        error!(
-                            target: module_path!(),
-                            "message has incorrect length ({}). ignoring it.",
-                            msgbuf.len()
-                        );
+                        // 2. Or wake up periodically (every 100ms) to check for signals
+                        _ = tokio::time::sleep(Duration::from_millis(100)) => {}
                     }
                 }
-                Err(e) => {
-                    match e.kind() {
-                        ErrorKind::TimedOut => { /* do nothing */ }
-                        _ => {
-                            error!(
-                                target: module_path!(),
-                                "Error occurred when reading POSIX message ({e:?})"
-                            );
-                        }
-                    }
+                None => {
+                    // Getting access to message queue was not successful.
+                    // Instead of exiting directly, we wait for quit command.
+                    // Wake up periodically (every 100ms) to check for signals
+                    _ = tokio::time::sleep(Duration::from_millis(100))
                 }
-            }
+            };
             let (quit_command_received, _, _) = self.process_external_request(
                 &mut messaging_channels.rx_messaging_from_signal_handler,
                 None,
@@ -307,8 +361,6 @@ impl Messaging {
 
                 break;
             }
-
-            spin_sleeper.sleep(sleep_duration);
         }
 
         messaging_channels.acknowledge_signal_handler();
@@ -316,11 +368,83 @@ impl Messaging {
         // This thread has channel connections to underlying threads.
         // Those threads have to stop receiving commands from this thread.
         // The shutdown sequence is handled by the signal_handler module.
-        self.wait_for_termination(
+        self.wait_for_termination_async(
             &mut messaging_channels.rx_messaging_from_signal_handler,
             sleep_duration,
             module_path!(),
-        );
+        )
+        .await;
+    }
+}
+#[cfg(not(target_os = "linux"))]
+impl Messaging {
+    /// Mock constructor for `Messaging` on non-Linux platforms.
+    ///
+    /// This is a stub implementation used during testing or development on operating
+    /// systems other than Linux (e.g., macOS, Windows) where POSIX message queues are
+    /// not supported or used. It initializes the struct with default diagnostic flags.
+    pub fn new(
+        _config: MessagingConfig,
+        _execution_config: ExecutionConfig,
+    ) -> Result<Messaging, MessagingError> {
+        Ok(Messaging {
+            lock_error_channel_receive_termination: false,
+            lock_warn_inapplicable_command_signal_handler: false,
+        })
+    }
+
+    /// Mock execution loop for `Messaging` on non-Linux platforms.
+    ///
+    /// This is a stub implementation that simulates the loop without accessing a physical
+    /// POSIX message queue. It sends `NoOp` commands to other tasks, and then loops
+    /// periodically to check for termination requests from the signal handler.
+    pub async fn execute(&mut self, messaging_channels: &mut MessagingChannels) {
+        messaging_channels
+            .tx_messaging_to_monitors
+            .send(InternalCommand::NoOp)
+            .unwrap();
+        messaging_channels
+            .tx_messaging_to_feed
+            .send(InternalCommand::NoOp)
+            .unwrap();
+        messaging_channels
+            .tx_messaging_to_balling
+            .send(InternalCommand::NoOp)
+            .unwrap();
+        messaging_channels
+            .tx_messaging_to_heating
+            .send(InternalCommand::NoOp)
+            .unwrap();
+
+        let sleep_duration = Duration::from_millis(10);
+
+        loop {
+            _ = tokio::time::sleep(Duration::from_millis(100)).await;
+            let (quit_command_received, _, _) = self.process_external_request(
+                &mut messaging_channels.rx_messaging_from_signal_handler,
+                None,
+            );
+            if quit_command_received {
+                #[cfg(feature = "debug_messaging")]
+                debug!(
+                    target: module_path!(),
+                    "received QUIT command from signal handler"
+                );
+                break;
+            }
+        }
+
+        messaging_channels.acknowledge_signal_handler();
+
+        // This thread has channel connections to underlying threads.
+        // Those threads have to stop receiving commands from this thread.
+        // The shutdown sequence is handled by the signal_handler module.
+        self.wait_for_termination_async(
+            &mut messaging_channels.rx_messaging_from_signal_handler,
+            sleep_duration,
+            module_path!(),
+        )
+        .await;
     }
 }
 
@@ -359,6 +483,10 @@ pub mod tests {
     // # Panics
     // This function will panic if it fails to open the specified POSIX message queue,
     // as this is considered a critical failure for the test setup.
+    /// Performs the `open_posixmq_test_file` operation.
+    ///
+    /// # Arguments
+    /// * `filename` - A parameter representing `filename`.
     fn open_posixmq_test_file(filename: &str) -> PosixMq {
         match PosixMq::open(filename) {
             Ok(c) => c,
@@ -387,6 +515,11 @@ pub mod tests {
     //
     // # Panics
     // This function will panic if the new thread cannot be spawned.
+    /// Performs the `create_test_object` operation.
+    ///
+    /// # Arguments
+    /// * `messaging` - A parameter representing `messaging`.
+    /// * `messaging_channels` - A mutable reference to the `MessagingChannels` communication interface.
     fn create_test_object(
         mut messaging: Messaging,
         mut messaging_channels: MessagingChannels,
@@ -394,7 +527,14 @@ pub mod tests {
         thread::Builder::new()
             .name("test_object".to_string())
             .spawn(move || {
-                messaging.execute(&mut messaging_channels);
+                tokio::runtime::Builder::new_current_thread()
+                    .enable_all()
+                    .build()
+                    .unwrap()
+                    .block_on(async {
+                        // blocking execution used for testing
+                        messaging.execute(&mut messaging_channels).await;
+                    });
             })
             .unwrap()
     }
@@ -419,6 +559,13 @@ pub mod tests {
     // # Panics
     // This function will panic if:
     // - The new thread cannot be spawned.
+    /// Performs the `create_test_environment` operation.
+    ///
+    /// # Arguments
+    /// * `msg_commands` - A parameter representing `msg_commands`.
+    /// * `tx_environment_to_object` - A parameter representing `tx_environment_to_object`.
+    /// * `signal_handler_channels` - A parameter representing `signal_handler_channels`.
+    /// * `mq_filename` - A parameter representing `mq_filename`.
     fn create_test_environment(
         msg_commands: Vec<Message>,
         mut tx_environment_to_object: AquaSender<InternalCommand>,
@@ -456,7 +603,7 @@ pub mod tests {
                 let _ = tx_signal_handler_to_messaging.send(InternalCommand::Quit);
 
                 // waiting for confirmation from messaging
-                let _ = rx_signal_handler_from_messaging.recv();
+                let _ = rx_signal_handler_from_messaging.blocking_recv();
 
                 let _ = tx_signal_handler_to_messaging.send(InternalCommand::Terminate);
             })
@@ -479,6 +626,10 @@ pub mod tests {
     // This function will panic if:
     // - The `commands_received` vector does not contain exactly two elements.
     // - The commands are not `InternalCommand::Stop` followed by `InternalCommand::Start` in that order.
+    /// Performs the `assert_stop_start_sequence` operation.
+    ///
+    /// # Arguments
+    /// * `commands_received` - A parameter representing `commands_received`.
     fn assert_stop_start_sequence(mut commands_received: Vec<InternalCommand>) {
         let spin_sleeper = SpinSleeper::default();
         spin_sleeper.sleep(Duration::from_millis(100));

@@ -431,6 +431,11 @@ impl AtlasScientificDriver for AtlasScientificEzo {
         result
     }
 
+    /// Dummy trait implementation of `device_init` operation.
+    ///
+    /// # Arguments
+    /// * `atlas_scientific_channels`: MPSC channel pair - not used.
+    /// * `signal`: sensor type to be initialized - not used.
     #[cfg(any(all(target_os = "linux", feature = "target_hw"), test))]
     fn device_init(
         &self,
@@ -441,6 +446,10 @@ impl AtlasScientificDriver for AtlasScientificEzo {
         Ok(())
     }
 
+    /// Retrieves the mutex access duration exceeded.
+    ///
+    /// # Arguments
+    /// * `signal` - sensor type.
     #[cfg(test)]
     fn get_mutex_access_duration_exceeded(&self, signal: &AquariumSignal) -> bool {
         match signal {
@@ -931,23 +940,23 @@ pub mod tests {
         let (tx_atlas_scientific_to_i2c_interface, mut rx_i2c_interface_from_atlas_scientific): (
             AquaSender<I2cRequest>,
             AquaReceiver<I2cRequest>,
-        ) = channel(1);
+        ) = channel(1, false);
         let (_tx_i2c_interface_to_atlas_scientific, rx_atlas_scientific_from_i2c_interface): (
             AquaSender<I2cResult>,
             AquaReceiver<I2cResult>,
-        ) = channel(1);
+        ) = channel(1, false);
         let (tx_atlas_scientific_to_signal_handler, _rx_signal_handler_from_atlas_scientific): (
             AquaSender<bool>,
             AquaReceiver<bool>,
-        ) = channel(1);
+        ) = channel(1, false);
         let (_tx_signal_handler_to_atlas_scientific, rx_atlas_scientific_from_signal_handler): (
             AquaSender<InternalCommand>,
             AquaReceiver<InternalCommand>,
-        ) = channel(1);
+        ) = channel(1, false);
         let (tx_atlas_scientific_to_monitors, _rx_monitors_from_atlas_scientific): (
             AquaSender<AtlasScientificMonitorView>,
             AquaReceiver<AtlasScientificMonitorView>,
-        ) = channel(1);
+        ) = channel(1, false);
         let mut atlas_scientific_channels = AtlasScientificChannels {
             tx_atlas_scientific_to_i2c_interface,
             #[cfg(feature = "debug_channels")]
@@ -1169,6 +1178,9 @@ pub mod tests {
     }
 
     /// Helper function to run a successful receive-and-parse test for a given signal.
+    ///
+    /// # Arguments
+    /// * `value` - The value to set.
     fn run_receive_success_test(signal: AquariumSignal, value: f32) {
         let (
             mut drivers,

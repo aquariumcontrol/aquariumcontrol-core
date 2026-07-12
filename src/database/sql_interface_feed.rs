@@ -358,6 +358,7 @@ impl SqlInterfaceFeed {
     // - `Ok(None)` if no future feed schedule entries are found in the database.
     // - `Err(SqlInterfaceError)` if an error occurs during the database query
     //   or post-processing of the data.
+    /// Retrieves the future feed schedule entry from database.
     fn get_future_feed_schedule_entry_from_database(
         &mut self,
     ) -> Result<Option<FeedScheduleEntry>, SqlInterfaceError> {
@@ -380,6 +381,7 @@ impl SqlInterfaceFeed {
     // - `Ok(None)` if no future feed schedule entries are found in the database.
     // - `Err(SqlInterfaceError)` if an error occurs during the database query
     //   or post-processing of the data.
+    /// Retrieves the future feed schedule entries from database.
     fn get_future_feed_schedule_entries_from_database(
         &mut self,
     ) -> Result<Option<Vec<FeedScheduleEntry>>, SqlInterfaceError> {
@@ -586,6 +588,11 @@ pub mod tests {
     // Arguments:
     // * `sql_interface`: A mutable reference to the general SQL interface, used for table truncation.
     // * `sql_interface_feed`: A mutable reference to the feed-specific SQL interface, used for inserting feed profiles.
+    /// Performs the `insert_feed_profiles` operation.
+    ///
+    /// # Arguments
+    /// * `sql_interface` - A parameter representing `sql_interface`.
+    /// * `sql_interface_feed` - Database interface connection for feed operations.
     pub fn insert_feed_profiles(
         sql_interface: &mut SqlInterface,
         sql_interface_feed: &mut SqlInterfaceFeed,

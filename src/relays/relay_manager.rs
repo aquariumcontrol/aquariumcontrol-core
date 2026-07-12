@@ -59,18 +59,19 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 //!   (like the Controllino), the `RelayManager` automatically sends a heartbeat at the
 //!   configured interval to maintain the connection.
 
-#[cfg(not(test))]
+#[cfg(not(test))] // only required in real-life execution
 use log::error;
-#[cfg(all(not(test), target_os = "linux"))]
+#[cfg(all(not(test), target_os = "linux"))] // only required in real-life execution
 use log::info;
 
-#[cfg(not(test))]
+#[cfg(not(test))] // only required in real-life execution
 use log::warn;
 
 #[cfg(feature = "debug_relay_manager")]
 use log::debug;
 
-#[cfg(all(not(test), target_os = "linux"))]
+// reduce terminal output when testing
+#[cfg(all(not(test), target_os = "linux"))] // only required in real-life execution
 use nix::unistd::gettid;
 
 use crate::launch::channels::{AquaChannelError, AquaReceiver, AquaSender};
@@ -81,7 +82,6 @@ use crate::relays::relay_manager_config::RelayManagerConfig;
 use crate::utilities::channel_content::InternalCommand;
 use crate::utilities::logger::log_error_chain;
 use crate::utilities::proc_ext_req::ProcessExternalRequestTrait;
-use spin_sleep::SpinSleeper;
 use std::time::{Duration, Instant};
 
 /// Trait for the execution of relay actuation on either simulator or real hardware.
@@ -217,6 +217,7 @@ impl RelayManager {
     /// # Returns
     /// A new `RelayManager` struct, ready to handle relay actuation commands
     /// and communicate with other modules.    
+    /// * `execution_config` - An execution configuration instance.
     pub fn new(config: RelayManagerConfig, execution_config: ExecutionConfig) -> RelayManager {
         RelayManager {
             config,
@@ -258,12 +259,12 @@ impl RelayManager {
     /// - The name of the actuation that failed.
     /// - The total number of attempts made.
     /// - The specific error from the *last* attempt, providing the root cause of the final failure.
-    fn actuate_with_retries(
+    /// * `"heater" sleep_duration` - A parameter representing `"heater" sleep_duration`.
+    async fn actuate_with_retries(
         &mut self,
         actuator: &mut impl RelayActuationTrait,
         command: &InternalCommand,
         actuation_name: &str, // Name for logging, e.g., "refill pump", "heater"
-        spin_sleeper: &mut SpinSleeper,
         sleep_duration: Duration,
     ) -> Result<(), RelayError> {
         let mut attempts = 0;
@@ -271,10 +272,12 @@ impl RelayManager {
         let mut error_to_be_reported_opt = None;
 
         while attempts < max_attempts {
-            match actuator.actuate(command) {
+            let actuate_result = tokio::task::block_in_place(|| actuator.actuate(command));
+            match actuate_result {
                 Ok(()) => {
                     if attempts > 0 {
-                        #[cfg(not(test))]
+                        #[cfg(not(test))] // only required in real-life execution
+                        #[cfg(not(tarpaulin_include))]
                         warn!(
                             target: module_path!(),
                             "{actuation_name}: actuation succeeded after {attempts} retries."
@@ -288,7 +291,8 @@ impl RelayManager {
                 }
                 Err(e) => {
                     if matches!(e, RelayError::IncorrectChecksum(_)) {
-                        if let Err(f) = actuator.flush_buffer() {
+                        let flush_result = tokio::task::block_in_place(|| actuator.flush_buffer());
+                        if let Err(f) = flush_result {
                             // if we cannot flush the buffer, mission abort
                             error_to_be_reported_opt = Some(f);
                             break;
@@ -301,7 +305,7 @@ impl RelayManager {
                         break;
                     } else {
                         // Wait a little before retrying
-                        spin_sleeper.sleep(sleep_duration);
+                        tokio::time::sleep(sleep_duration).await;
                     }
                     attempts += 1;
                 }
@@ -336,16 +340,16 @@ impl RelayManager {
     ///   communication with other control threads.
     /// * `actuator` - A mutable reference to an object implementing the `RelayActuationTrait`,
     ///   which handles the actual hardware interaction or simulation.
-    pub fn execute(
+    pub async fn execute(
         &mut self,
         relay_manager_channels: &mut RelayManagerChannels,
         actuator: &mut impl RelayActuationTrait,
     ) {
-        #[cfg(all(target_os = "linux", not(test)))]
+        #[cfg(all(target_os = "linux", not(test)))] // only required in real-life execution
+        #[cfg(not(tarpaulin_include))]
         info!(target: module_path!(), "Thread started with TID: {}", gettid());
 
         let mut last_heartbeat_time = Instant::now();
-        let mut spin_sleeper = SpinSleeper::default();
         let sleep_duration_between_retries =
             Duration::from_millis(self.config.pause_between_retries_millis);
         let sleep_duration_main_cycle = Duration::from_millis(10);
@@ -368,106 +372,112 @@ impl RelayManager {
                 (
                     self.lock_error_channel_receive_refill,
                     self.lock_error_channel_send_refill,
-                ) = self.process_actuation_request(
-                    (
-                        &mut relay_manager_channels.rx_relay_manager_from_refill,
-                        &mut relay_manager_channels.tx_relay_manager_to_refill,
-                    ),
-                    (
-                        self.lock_error_channel_receive_refill,
-                        self.lock_error_channel_send_refill,
-                    ),
-                    "refill",
-                    actuator,
-                    &mut spin_sleeper,
-                    sleep_duration_between_retries,
-                );
+                ) = self
+                    .process_actuation_request(
+                        (
+                            &mut relay_manager_channels.rx_relay_manager_from_refill,
+                            &mut relay_manager_channels.tx_relay_manager_to_refill,
+                        ),
+                        (
+                            self.lock_error_channel_receive_refill,
+                            self.lock_error_channel_send_refill,
+                        ),
+                        "refill",
+                        actuator,
+                        sleep_duration_between_retries,
+                    )
+                    .await;
             }
 
             if self.execution_config.heating {
                 (
                     self.lock_error_channel_receive_heating,
                     self.lock_error_channel_send_heating,
-                ) = self.process_actuation_request(
-                    (
-                        &mut relay_manager_channels.rx_relay_manager_from_heating,
-                        &mut relay_manager_channels.tx_relay_manager_to_heating,
-                    ),
-                    (
-                        self.lock_error_channel_receive_heating,
-                        self.lock_error_channel_send_heating,
-                    ),
-                    "heating",
-                    actuator,
-                    &mut spin_sleeper,
-                    sleep_duration_between_retries,
-                );
+                ) = self
+                    .process_actuation_request(
+                        (
+                            &mut relay_manager_channels.rx_relay_manager_from_heating,
+                            &mut relay_manager_channels.tx_relay_manager_to_heating,
+                        ),
+                        (
+                            self.lock_error_channel_receive_heating,
+                            self.lock_error_channel_send_heating,
+                        ),
+                        "heating",
+                        actuator,
+                        sleep_duration_between_retries,
+                    )
+                    .await;
             }
 
             if self.execution_config.ventilation {
                 (
                     self.lock_error_channel_receive_ventilation,
                     self.lock_error_channel_send_ventilation,
-                ) = self.process_actuation_request(
-                    (
-                        &mut relay_manager_channels.rx_relay_manager_from_ventilation,
-                        &mut relay_manager_channels.tx_relay_manager_to_ventilation,
-                    ),
-                    (
-                        self.lock_error_channel_receive_ventilation,
-                        self.lock_error_channel_send_ventilation,
-                    ),
-                    "ventilation",
-                    actuator,
-                    &mut spin_sleeper,
-                    sleep_duration_between_retries,
-                );
+                ) = self
+                    .process_actuation_request(
+                        (
+                            &mut relay_manager_channels.rx_relay_manager_from_ventilation,
+                            &mut relay_manager_channels.tx_relay_manager_to_ventilation,
+                        ),
+                        (
+                            self.lock_error_channel_receive_ventilation,
+                            self.lock_error_channel_send_ventilation,
+                        ),
+                        "ventilation",
+                        actuator,
+                        sleep_duration_between_retries,
+                    )
+                    .await;
             }
 
             if self.execution_config.balling {
                 (
                     self.lock_error_channel_receive_balling,
                     self.lock_error_channel_send_balling,
-                ) = self.process_actuation_request(
-                    (
-                        &mut relay_manager_channels.rx_relay_manager_from_balling,
-                        &mut relay_manager_channels.tx_relay_manager_to_balling,
-                    ),
-                    (
-                        self.lock_error_channel_receive_balling,
-                        self.lock_error_channel_send_balling,
-                    ),
-                    "Balling dosing",
-                    actuator,
-                    &mut spin_sleeper,
-                    sleep_duration_between_retries,
-                );
+                ) = self
+                    .process_actuation_request(
+                        (
+                            &mut relay_manager_channels.rx_relay_manager_from_balling,
+                            &mut relay_manager_channels.tx_relay_manager_to_balling,
+                        ),
+                        (
+                            self.lock_error_channel_receive_balling,
+                            self.lock_error_channel_send_balling,
+                        ),
+                        "Balling dosing",
+                        actuator,
+                        sleep_duration_between_retries,
+                    )
+                    .await;
             }
 
             if self.execution_config.feed {
                 (
                     self.lock_error_channel_receive_feed,
                     self.lock_error_channel_send_feed,
-                ) = self.process_actuation_request(
-                    (
-                        &mut relay_manager_channels.rx_relay_manager_from_feed,
-                        &mut relay_manager_channels.tx_relay_manager_to_feed,
-                    ),
-                    (
-                        self.lock_error_channel_receive_feed,
-                        self.lock_error_channel_send_feed,
-                    ),
-                    "feed",
-                    actuator,
-                    &mut spin_sleeper,
-                    sleep_duration_between_retries,
-                );
+                ) = self
+                    .process_actuation_request(
+                        (
+                            &mut relay_manager_channels.rx_relay_manager_from_feed,
+                            &mut relay_manager_channels.tx_relay_manager_to_feed,
+                        ),
+                        (
+                            self.lock_error_channel_receive_feed,
+                            self.lock_error_channel_send_feed,
+                        ),
+                        "feed",
+                        actuator,
+                        sleep_duration_between_retries,
+                    )
+                    .await;
             }
 
             // *** send heartbeat ***
             if let Some(interval_secs) = actuator.get_heartbeat_interval_seconds() {
                 if Instant::now().duration_since(last_heartbeat_time).as_secs() >= interval_secs {
-                    if let Err(e) = actuator.heartbeat() {
+                    let hb_result = tokio::task::block_in_place(|| actuator.heartbeat());
+                    if let Err(e) = hb_result {
                         log_error_chain(
                             module_path!(),
                             "Execution of heartbeat for relay control failed.",
@@ -479,7 +489,7 @@ impl RelayManager {
             }
 
             // have a minimum of sleep time in between checking channels
-            spin_sleeper.sleep(sleep_duration_main_cycle);
+            tokio::time::sleep(sleep_duration_main_cycle).await;
         }
 
         #[cfg(feature = "debug_relay_manager")]
@@ -494,7 +504,8 @@ impl RelayManager {
             .tx_relay_manager_to_signal_handler
             .send(true)
         {
-            #[cfg(not(test))]
+            #[cfg(not(test))] // only required in real-life execution
+            #[cfg(not(tarpaulin_include))]
             error!(target: module_path!(), "Sending confirmation to signal handler failed. ({_e:?})");
         };
     }
@@ -522,13 +533,13 @@ impl RelayManager {
     /// # Returns
     /// A tuple `(bool, bool)` containing the updated state of the `lock_receive` and
     /// `lock_send` flags, respectively.
-    fn process_actuation_request(
+    /// * `channels` - A parameter representing `channels`.
+    async fn process_actuation_request(
         &mut self,
         channels: (&mut AquaReceiver<InternalCommand>, &mut AquaSender<bool>),
         locks: (bool, bool),
         actuation_name: &str,
         actuator: &mut impl RelayActuationTrait,
-        spin_sleeper: &mut SpinSleeper,
         sleep_duration_between_retries: Duration,
     ) -> (bool, bool) {
         let (rx, tx) = channels;
@@ -537,14 +548,17 @@ impl RelayManager {
             Ok(_command) => {
                 lock_receive = false;
                 if self.config.active {
-                    if let Err(_actuation_error) = self.actuate_with_retries(
-                        actuator,
-                        &_command,
-                        actuation_name,
-                        spin_sleeper,
-                        sleep_duration_between_retries,
-                    ) {
-                        #[cfg(not(test))]
+                    if let Err(_actuation_error) = self
+                        .actuate_with_retries(
+                            actuator,
+                            &_command,
+                            actuation_name,
+                            sleep_duration_between_retries,
+                        )
+                        .await
+                    {
+                        #[cfg(not(test))] // only required in real-life execution
+                        #[cfg(not(tarpaulin_include))]
                         log_error_chain(
                             module_path!(),
                             &format!("Actuation of {actuation_name} failed."),
@@ -554,7 +568,8 @@ impl RelayManager {
                 }
                 if let Err(_e) = tx.send(true) {
                     if !lock_send {
-                        #[cfg(not(test))]
+                        #[cfg(not(test))] // only required in real-life execution
+                        #[cfg(not(tarpaulin_include))]
                         error!(
                             target: module_path!(),
                             "responding to {actuation_name} control ({_e:?})",
@@ -573,7 +588,8 @@ impl RelayManager {
                 }
                 AquaChannelError::Disconnected => {
                     if !lock_receive {
-                        #[cfg(not(test))]
+                        #[cfg(not(test))] // only required in real-life execution
+                        #[cfg(not(tarpaulin_include))]
                         error!(
                             "{}: error when trying to receive command from {actuation_name} control ({e:?})",
                             module_path!(),
@@ -592,11 +608,35 @@ pub mod tests {
     use crate::launch::channels::Channels;
     use crate::launch::execution_config::ExecutionConfig;
     use crate::relays::relay_manager::{RelayActuationTrait, RelayError, RelayManager};
+    use crate::relays::relay_manager_channels::RelayManagerChannels;
     use crate::utilities::channel_content::{AquariumDevice, InternalCommand};
     use crate::utilities::config::{read_config_file, ConfigData};
     use spin_sleep::SpinSleeper;
     use std::thread::scope;
     use std::time::Duration;
+
+    /// Helper function to execute the relay manager task inside a test Tokio runtime.
+    ///
+    /// # Arguments
+    /// * `relay_manager` - A mutable reference to the `RelayManager` instance.
+    /// * `relay_manager_channels` - A mutable reference to the `RelayManagerChannels` instance.
+    /// * `actuator` - A mutable reference to the relay actuator instance.
+    fn execute_blocking(
+        relay_manager: &mut RelayManager,
+        relay_manager_channels: &mut RelayManagerChannels,
+        actuator: &mut impl RelayActuationTrait,
+    ) {
+        tokio::runtime::Builder::new_multi_thread()
+            .enable_all()
+            .build()
+            .unwrap()
+            .block_on(async {
+                // blocking execution used for testing
+                relay_manager
+                    .execute(relay_manager_channels, actuator)
+                    .await;
+            });
+    }
 
     // Contains mock trait implementation for unit testing purposes.
     pub struct ActuateVoid {
@@ -618,6 +658,10 @@ pub mod tests {
 
     impl RelayActuationTrait for ActuateVoid {
         // Mock function for testing
+        /// Performs the `actuate` operation.
+        ///
+        /// # Arguments
+        /// * `internal_command` - A parameter representing `internal_command`.
         fn actuate(&mut self, internal_command: &InternalCommand) -> Result<(), RelayError> {
             println!(
                 "Received {} - increasing execution counter (currently at {})",
@@ -639,15 +683,18 @@ pub mod tests {
             }
         }
 
+        /// Retrieves the heartbeat interval seconds.
         fn get_heartbeat_interval_seconds(&self) -> Option<u64> {
             Some(1)
         }
 
+        /// Performs the `heartbeat` operation.
         fn heartbeat(&mut self) -> Result<(), RelayError> {
             self.heartbeat_counter += 1;
             Ok(())
         }
 
+        /// Performs the `flush_buffer` operation.
         fn flush_buffer(&mut self) -> Result<(), RelayError> {
             self.flush_counter += 1;
             Ok(())
@@ -656,6 +703,7 @@ pub mod tests {
 
     impl ActuateVoid {
         // provides the number of executions to the test case for assertion
+        /// Retrieves the execution count.
         pub fn get_execution_count(&self) -> u64 {
             self.execution_counter
         }
@@ -679,7 +727,7 @@ pub mod tests {
             // thread for test environment
             scope.spawn(move || {
                 let _ = channels.refill.send_to_relay_manager(InternalCommand::SwitchOn(AquariumDevice::RefillPump));
-                match channels.refill.receive_from_relay_manager() {
+                match channels.refill.rx_refill_from_relay_manager.blocking_recv() {
                     Ok(c) => {
                         assert_eq!(c, true);
                     },
@@ -688,7 +736,7 @@ pub mod tests {
                     }
                 }
                 let _ = channels.heating.send_to_relay_manager(InternalCommand::SwitchOn(AquariumDevice::Heater));
-                match channels.heating.receive_from_relay_manager() {
+                match channels.heating.rx_heating_from_relay_manager.blocking_recv() {
                     Ok(c) => {
                         assert_eq!(c, true);
                     },
@@ -697,7 +745,7 @@ pub mod tests {
                     }
                 }
                 let _ = channels.ventilation.send_to_relay_manager(InternalCommand::SwitchOn(AquariumDevice::Ventilation));
-                match channels.ventilation.receive_from_relay_manager() {
+                match channels.ventilation.rx_ventilation_from_relay_manager.blocking_recv() {
                     Ok(c) => {
                         assert_eq!(c, true);
                     },
@@ -706,7 +754,7 @@ pub mod tests {
                     }
                 }
                 let _ = channels.balling.send_to_relay_manager(InternalCommand::SwitchOn(AquariumDevice::PeristalticPump1));
-                match channels.balling.receive_from_relay_manager() {
+                match channels.balling.rx_balling_from_relay_manager.blocking_recv() {
                     Ok(c) => {
                         assert_eq!(c, true);
                     },
@@ -715,7 +763,7 @@ pub mod tests {
                     }
                 }
                 let _ = channels.balling.send_to_relay_manager(InternalCommand::SwitchOn(AquariumDevice::PeristalticPump2));
-                match channels.balling.receive_from_relay_manager() {
+                match channels.balling.rx_balling_from_relay_manager.blocking_recv() {
                     Ok(c) => {
                         assert_eq!(c, true);
                     },
@@ -724,7 +772,7 @@ pub mod tests {
                     }
                 }
                 let _ = channels.balling.send_to_relay_manager(InternalCommand::SwitchOn(AquariumDevice::PeristalticPump3));
-                match channels.balling.receive_from_relay_manager() {
+                match channels.balling.rx_balling_from_relay_manager.blocking_recv() {
                     Ok(c) => {
                         assert_eq!(c, true);
                     },
@@ -733,7 +781,7 @@ pub mod tests {
                     }
                 }
                 let _ = channels.balling.send_to_relay_manager(InternalCommand::SwitchOn(AquariumDevice::PeristalticPump4));
-                match channels.balling.receive_from_relay_manager() {
+                match channels.balling.rx_balling_from_relay_manager.blocking_recv() {
                     Ok(c) => {
                         assert_eq!(c, true);
                     },
@@ -742,7 +790,7 @@ pub mod tests {
                     }
                 }
                 let _ = channels.feed.send_to_relay_manager(InternalCommand::SwitchOn(AquariumDevice::Feeder));
-                match channels.feed.receive_from_relay_manager() {
+                match channels.feed.rx_feed_from_relay_manager.blocking_recv() {
                     Ok(c) => {
                         assert_eq!(c, true);
                     },
@@ -751,7 +799,7 @@ pub mod tests {
                     }
                 }
                 let _ = channels.feed.send_to_relay_manager(InternalCommand::SwitchOn(AquariumDevice::MainPump1));
-                match channels.feed.receive_from_relay_manager() {
+                match channels.feed.rx_feed_from_relay_manager.blocking_recv() {
                     Ok(c) => {
                         assert_eq!(c, true);
                     },
@@ -760,7 +808,7 @@ pub mod tests {
                     }
                 }
                 let _ = channels.feed.send_to_relay_manager(InternalCommand::SwitchOn(AquariumDevice::MainPump2));
-                match channels.feed.receive_from_relay_manager() {
+                match channels.feed.rx_feed_from_relay_manager.blocking_recv() {
                     Ok(c) => {
                         assert_eq!(c, true);
                     },
@@ -769,7 +817,7 @@ pub mod tests {
                     }
                 }
                 let _ = channels.feed.send_to_relay_manager(InternalCommand::SwitchOn(AquariumDevice::AuxPump1));
-                match channels.feed.receive_from_relay_manager() {
+                match channels.feed.rx_feed_from_relay_manager.blocking_recv() {
                     Ok(c) => {
                         assert_eq!(c, true);
                     },
@@ -778,7 +826,7 @@ pub mod tests {
                     }
                 }
                 let _ = channels.feed.send_to_relay_manager(InternalCommand::SwitchOn(AquariumDevice::AuxPump2));
-                match channels.feed.receive_from_relay_manager() {
+                match channels.feed.rx_feed_from_relay_manager.blocking_recv() {
                     Ok(c) => {
                         assert_eq!(c, true);
                     },
@@ -787,7 +835,7 @@ pub mod tests {
                     }
                 }
                 let _ = channels.refill.send_to_relay_manager(InternalCommand::SwitchOff(AquariumDevice::RefillPump));
-                match channels.refill.receive_from_relay_manager() {
+                match channels.refill.rx_refill_from_relay_manager.blocking_recv() {
                     Ok(c) => {
                         assert_eq!(c, true);
                     },
@@ -796,7 +844,7 @@ pub mod tests {
                     }
                 }
                 let _ = channels.heating.send_to_relay_manager(InternalCommand::SwitchOff(AquariumDevice::Heater));
-                match channels.heating.receive_from_relay_manager() {
+                match channels.heating.rx_heating_from_relay_manager.blocking_recv() {
                     Ok(c) => {
                         assert_eq!(c, true);
                     },
@@ -805,7 +853,7 @@ pub mod tests {
                     }
                 }
                 let _ = channels.ventilation.send_to_relay_manager(InternalCommand::SwitchOff(AquariumDevice::Ventilation));
-                match channels.ventilation.receive_from_relay_manager() {
+                match channels.ventilation.rx_ventilation_from_relay_manager.blocking_recv() {
                     Ok(c) => {
                         assert_eq!(c, true);
                     },
@@ -814,7 +862,7 @@ pub mod tests {
                     }
                 }
                 let _ = channels.balling.send_to_relay_manager(InternalCommand::SwitchOff(AquariumDevice::PeristalticPump1));
-                match channels.balling.receive_from_relay_manager() {
+                match channels.balling.rx_balling_from_relay_manager.blocking_recv() {
                     Ok(c) => {
                         assert_eq!(c, true);
                     },
@@ -823,7 +871,7 @@ pub mod tests {
                     }
                 }
                 let _ = channels.balling.send_to_relay_manager(InternalCommand::SwitchOff(AquariumDevice::PeristalticPump2));
-                match channels.balling.receive_from_relay_manager() {
+                match channels.balling.rx_balling_from_relay_manager.blocking_recv() {
                     Ok(c) => {
                         assert_eq!(c, true);
                     },
@@ -832,7 +880,7 @@ pub mod tests {
                     }
                 }
                 let _ = channels.balling.send_to_relay_manager(InternalCommand::SwitchOff(AquariumDevice::PeristalticPump3));
-                match channels.balling.receive_from_relay_manager() {
+                match channels.balling.rx_balling_from_relay_manager.blocking_recv() {
                     Ok(c) => {
                         assert_eq!(c, true);
                     },
@@ -841,7 +889,7 @@ pub mod tests {
                     }
                 }
                 let _ = channels.balling.send_to_relay_manager(InternalCommand::SwitchOff(AquariumDevice::PeristalticPump4));
-                match channels.balling.receive_from_relay_manager() {
+                match channels.balling.rx_balling_from_relay_manager.blocking_recv() {
                     Ok(c) => {
                         assert_eq!(c, true);
                     },
@@ -850,7 +898,7 @@ pub mod tests {
                     }
                 }
                 let _ = channels.feed.send_to_relay_manager(InternalCommand::SwitchOff(AquariumDevice::Feeder));
-                match channels.feed.receive_from_relay_manager() {
+                match channels.feed.rx_feed_from_relay_manager.blocking_recv() {
                     Ok(c) => {
                         assert_eq!(c, true);
                     },
@@ -859,7 +907,7 @@ pub mod tests {
                     }
                 }
                 let _ = channels.feed.send_to_relay_manager(InternalCommand::SwitchOff(AquariumDevice::MainPump1));
-                match channels.feed.receive_from_relay_manager() {
+                match channels.feed.rx_feed_from_relay_manager.blocking_recv() {
                     Ok(c) => {
                         assert_eq!(c, true);
                     },
@@ -868,7 +916,7 @@ pub mod tests {
                     }
                 }
                 let _ = channels.feed.send_to_relay_manager(InternalCommand::SwitchOff(AquariumDevice::MainPump2));
-                match channels.feed.receive_from_relay_manager() {
+                match channels.feed.rx_feed_from_relay_manager.blocking_recv() {
                     Ok(c) => {
                         assert_eq!(c, true);
                     },
@@ -877,7 +925,7 @@ pub mod tests {
                     }
                 }
                 let _ = channels.feed.send_to_relay_manager(InternalCommand::SwitchOff(AquariumDevice::AuxPump1));
-                match channels.feed.receive_from_relay_manager() {
+                match channels.feed.rx_feed_from_relay_manager.blocking_recv() {
                     Ok(c) => {
                         assert_eq!(c, true);
                     },
@@ -886,7 +934,7 @@ pub mod tests {
                     }
                 }
                 let _ = channels.feed.send_to_relay_manager(InternalCommand::SwitchOff(AquariumDevice::AuxPump2));
-                match channels.feed.receive_from_relay_manager() {
+                match channels.feed.rx_feed_from_relay_manager.blocking_recv() {
                     Ok(c) => {
                         assert_eq!(c, true);
                     },
@@ -898,7 +946,7 @@ pub mod tests {
                 spin_sleeper.sleep(sleep_duration); // wait for two seconds to test the heartbeat
 
                 let _ = channels.signal_handler.tx_signal_handler_to_relay_manager.send(InternalCommand::Quit);
-                channels.signal_handler.rx_signal_handler_from_relay_manager.recv().unwrap();
+                channels.signal_handler.rx_signal_handler_from_relay_manager.blocking_recv().unwrap();
             });
 
             // thread for the test object
@@ -911,7 +959,11 @@ pub mod tests {
                     permanent_error_result: None,
                 };
 
-                relay_manager.execute(&mut channels.relay_manager, &mut mock_actuator);
+                execute_blocking(
+                    &mut relay_manager,
+                    &mut channels.relay_manager,
+                    &mut mock_actuator,
+                );
 
                 // Test object thread has ended.
                 assert_eq!(mock_actuator.get_execution_count(), 24); //Assertion checks the number of calls to the actuator.
@@ -934,7 +986,7 @@ pub mod tests {
             // thread for test environment
             scope.spawn(move || {
                 let _ = channels.refill.send_to_relay_manager(InternalCommand::SwitchOn(AquariumDevice::RefillPump));
-                match channels.refill.receive_from_relay_manager() {
+                match channels.refill.rx_refill_from_relay_manager.blocking_recv() {
                     Ok(c) => {
                         assert_eq!(c, true);
                     },
@@ -943,7 +995,7 @@ pub mod tests {
                     }
                 }
                 let _ = channels.heating.send_to_relay_manager(InternalCommand::SwitchOn(AquariumDevice::Heater));
-                match channels.heating.receive_from_relay_manager() {
+                match channels.heating.rx_heating_from_relay_manager.blocking_recv() {
                     Ok(c) => {
                         assert_eq!(c, true);
                     },
@@ -953,7 +1005,7 @@ pub mod tests {
                 }
 
                 let _ = channels.signal_handler.tx_signal_handler_to_relay_manager.send(InternalCommand::Quit);
-                channels.signal_handler.rx_signal_handler_from_relay_manager.recv().unwrap();
+                channels.signal_handler.rx_signal_handler_from_relay_manager.blocking_recv().unwrap();
             });
 
             // thread for the test object
@@ -968,7 +1020,11 @@ pub mod tests {
                     permanent_error_result: None,
                 };
 
-                relay_manager.execute(&mut channels.relay_manager, &mut mock_actuator);
+                execute_blocking(
+                    &mut relay_manager,
+                    &mut channels.relay_manager,
+                    &mut mock_actuator,
+                );
 
                 // Test object thread has ended.
                 assert_eq!(mock_actuator.get_execution_count(), 3); //Assertion checks the number of calls to the actuator.
@@ -994,7 +1050,7 @@ pub mod tests {
             // thread for test environment
             scope.spawn(move || {
                 let _ = channels.refill.send_to_relay_manager(InternalCommand::SwitchOn(AquariumDevice::RefillPump));
-                match channels.refill.receive_from_relay_manager() {
+                match channels.refill.rx_refill_from_relay_manager.blocking_recv() {
                     Ok(c) => {
                         assert_eq!(c, true);
                     },
@@ -1004,7 +1060,7 @@ pub mod tests {
                 }
 
                 let _ = channels.signal_handler.tx_signal_handler_to_relay_manager.send(InternalCommand::Quit);
-                channels.signal_handler.rx_signal_handler_from_relay_manager.recv().unwrap();
+                channels.signal_handler.rx_signal_handler_from_relay_manager.blocking_recv().unwrap();
             });
 
             // thread for the test object
@@ -1019,7 +1075,11 @@ pub mod tests {
                     )),
                 };
 
-                relay_manager.execute(&mut channels.relay_manager, &mut mock_actuator);
+                execute_blocking(
+                    &mut relay_manager,
+                    &mut channels.relay_manager,
+                    &mut mock_actuator,
+                );
 
                 // Test object thread has ended.
 

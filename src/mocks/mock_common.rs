@@ -1,6 +1,11 @@
 use crate::launch::channels::{AquaChannelError, AquaReceiver};
 use crate::utilities::channel_content::InternalCommand;
 
+/// Performs the `mock_common_receive_from_signal_handler` operation.
+///
+/// # Arguments
+/// * `rx_common_from_signal_handler` - A parameter representing `rx_common_from_signal_handler`.
+/// * `sourced_from` - A parameter representing `sourced_from`.
 #[allow(unused)]
 pub fn mock_common_receive_from_signal_handler(
     rx_common_from_signal_handler: &mut AquaReceiver<InternalCommand>,

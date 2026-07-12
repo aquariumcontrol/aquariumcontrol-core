@@ -44,7 +44,7 @@ impl HeatFlow {
             filter: IIRFilter::new(
                 &config_heat_flow.heater_filter,
                 Some(config_heat_flow.heater_power),
-                #[cfg(not(test))]
+                #[cfg(not(test))] // only required in real-life execution
                 "heat_flow",
             ),
             config: config_heat_flow,
@@ -166,6 +166,7 @@ pub mod tests {
     use crate::test_server::test_server_config::read_test_server_config_file;
     use assert_float_eq::*;
 
+    /// Performs the `create_heat_flow_model` operation.
     fn create_heat_flow_model() -> HeatFlow {
         let config_heat_flow = read_test_server_config_file(None).heat_flow;
 

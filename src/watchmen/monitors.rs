@@ -55,10 +55,10 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 
 use log::{error, info};
 
-#[cfg(any(feature = "debug_channels", test))]
+#[cfg(feature = "debug_channels")]
 use log::debug;
 
-#[cfg(all(not(test), target_os = "linux"))]
+#[cfg(all(not(test), target_os = "linux"))] // only required in real-life execution
 use nix::unistd::gettid;
 
 use crate::launch::channels::AquaChannelError;
@@ -68,7 +68,6 @@ use crate::utilities::proc_ext_req::ProcessExternalRequestTrait;
 use crate::watchmen::monitors_channels::MonitorsChannels;
 use crate::watchmen::monitors_config::MonitorsConfig;
 use crate::water::refill_monitor_view::RefillMonitorView;
-use spin_sleep::SpinSleeper;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
@@ -195,16 +194,17 @@ impl Monitors {
     /// * `_mutex_device_scheduler_monitors` - (Ignored) A clone of a mutex for device scheduling.
     ///   This argument is part of a common signature but is not used by this module's logic.
     /// * `monitors_channels` - A mutable reference to the struct containing the channels.
-    pub fn execute(
+    /// * `mutex_device_scheduler_monitors` - A parameter representing `mutex_device_scheduler_monitors`.
+    pub async fn execute(
         &mut self,
         _mutex_device_scheduler_monitors: Arc<Mutex<i32>>,
         monitors_channels: &mut MonitorsChannels,
     ) {
-        #[cfg(all(target_os = "linux", not(test)))]
+        #[cfg(all(target_os = "linux", not(test)))] // only required in real-life execution
+        #[cfg(not(tarpaulin_include))]
         info!(target: module_path!(), "Thread started with TID: {}", gettid());
 
         let sleep_duration_hundred_millis = Duration::from_millis(100);
-        let spin_sleeper = SpinSleeper::default();
         let mut quit_command_received: bool;
         let mut start_command_received: bool;
         let mut stop_command_received: bool;
@@ -220,11 +220,6 @@ impl Monitors {
                     self.lock_info_monitors_inhibited = true;
                 } else {
                     self.lock_info_monitors_inhibited = false;
-                    #[cfg(test)]
-                    debug!(
-                        target: module_path!(),
-                        "executing monitors"
-                    );
                 }
 
                 match monitors_channels.rx_monitors_from_refill.try_recv() {
@@ -285,7 +280,7 @@ impl Monitors {
                     }
                 }
             }
-            spin_sleeper.sleep(sleep_duration_hundred_millis);
+            tokio::time::sleep(sleep_duration_hundred_millis).await;
 
             (
                 quit_command_received,
@@ -293,7 +288,7 @@ impl Monitors {
                 stop_command_received,
             ) = self.process_external_request(
                 &mut monitors_channels.rx_monitors_from_signal_handler,
-                monitors_channels.rx_monitors_from_messaging_opt.as_mut(),
+                Some(&mut monitors_channels.rx_monitors_from_messaging),
             );
             if quit_command_received {
                 break;

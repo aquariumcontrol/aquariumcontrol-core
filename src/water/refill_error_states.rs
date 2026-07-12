@@ -56,6 +56,7 @@ pub struct RefillErrorStates {
     pub error_receive_tank_level_switch_position: bool,
     pub error_sql_update_failed: bool,
     pub error_sql_get_historic_data_failed: bool,
+    pub error_join_failed: bool,
 }
 
 impl RefillErrorStates {
@@ -71,6 +72,7 @@ impl RefillErrorStates {
         self.error_receive_tank_level_switch_position = false;
         self.error_sql_update_failed = false;
         self.error_sql_get_historic_data_failed = false;
+        self.error_join_failed = false;
     }
 
     #[cfg(test)]
@@ -82,12 +84,14 @@ impl RefillErrorStates {
     // # Returns
     // `true` if at least one error flag (e.g., `error_switch_stuck_high`, `error_sql_update_failed`)
     // is set to `true`; otherwise, returns `false`.
+    /// Performs the `has_error` operation.
     pub fn has_error(&mut self) -> bool {
         self.error_switch_stuck_high
             || self.error_switch_stuck_low
             || self.error_receive_tank_level_switch_position
             || self.error_sql_update_failed
             || self.error_sql_get_historic_data_failed
+            || self.error_join_failed
     }
 }
 
@@ -108,12 +112,13 @@ impl fmt::Display for RefillErrorStates {
     /// Returns a `fmt::Error` if an I/O error occurs while writing to the formatter.
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f,
-            "error_switch_stuck_high: {}, error_switch_stuck_low: {}, error_receive_tank_level_switch_position: {},  error_sql_update_failed: {}, error_sql_get_historic_data_failed: {}",
+            "error_switch_stuck_high: {}, error_switch_stuck_low: {}, error_receive_tank_level_switch_position: {},  error_sql_update_failed: {}, error_sql_get_historic_data_failed: {}, error_join_failed: {}",
             self.error_switch_stuck_high,
             self.error_switch_stuck_low,
             self.error_receive_tank_level_switch_position,
             self.error_sql_update_failed,
             self.error_sql_get_historic_data_failed,
+            self.error_join_failed,
         )
     }
 }

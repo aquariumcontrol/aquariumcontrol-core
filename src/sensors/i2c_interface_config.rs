@@ -23,7 +23,6 @@ use serde_derive::Deserialize;
 #[derive(Deserialize, Debug)]
 pub struct I2cInterfaceConfig {
     /// indicates if the thread shall be started or not
-    #[cfg(feature = "target_hw")]
     pub execute: bool,
 
     /// maximum number of read attempts

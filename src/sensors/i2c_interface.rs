@@ -60,32 +60,30 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 //!   once on the stack at startup. This buffer is then reused for every transaction,
 //!   avoiding repeated, potentially costly memory allocations within the main loop.
 
-#[cfg(all(target_os = "linux", feature = "target_hw", not(test)))]
+use log::error;
+#[cfg(target_os = "linux")]
 use log::info;
-use spin_sleep::SpinSleeper;
 use std::fmt;
+use std::time::Duration;
 
-#[cfg(all(target_os = "linux", feature = "target_hw"))]
 use crate::launch::channels::AquaChannelError;
-
 use crate::sensors::i2c_error::I2cError;
+use crate::sensors::i2c_interface_channels::I2cInterfaceChannels;
 use crate::sensors::i2c_interface_config::I2cInterfaceConfig;
+use crate::utilities::proc_ext_req::ProcessExternalRequestTrait;
 
 #[cfg(all(target_os = "linux", feature = "target_hw", not(test)))]
+// only required in real-life execution
 use nix::unistd::gettid;
 
 cfg_if::cfg_if! {
     if #[cfg(all(target_os = "linux", feature = "target_hw"))] {
-        use log::error;
         use rppal::i2c::I2c; // required for communication with AtlasScientific sensors
 
         #[cfg(feature = "debug_i2c_interface")]
         use log::debug;
 
-        use std::time::Duration;
-        use crate::utilities::proc_ext_req::ProcessExternalRequestTrait;
         use crate::sensors::i2c_error::I2cError::{InitializationFailure, SetTimeoutError};
-        use crate::sensors::i2c_interface_channels::I2cInterfaceChannels;
     }
 }
 
@@ -138,6 +136,9 @@ impl I2cRequest {
     /// Returns an `I2cError` if the provided command is too large for the buffer:
     /// - `I2cError::CommandTooLong`: If the length of `send_slice` exceeds the
     ///   `MAX_I2C_COMMAND_LENGTH` constant.
+    /// * `i2c_address` - A parameter representing `i2c_address`.
+    /// * `sleep_time_millis` - A parameter representing `sleep_time_millis`.
+    /// * `expected_response_length` - A parameter representing `expected_response_length`.
     pub fn new(
         i2c_address: u16,
         send_slice: &[u8],
@@ -182,6 +183,10 @@ pub struct I2cResponse {
 }
 
 impl fmt::Display for I2cResponse {
+    /// Formats the value using the given formatter.
+    ///
+    /// # Arguments
+    /// * `f` - The formatter to write the formatted string to.
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         // descriptive prefix
         write!(f, "I2cResponse [")?;
@@ -244,6 +249,7 @@ impl I2cResponse {
         }
     }
 
+    /// Performs the `empty` operation.
     pub fn empty() -> I2cResponse {
         let read_buf = [0u8; MAX_I2C_RESPONSE_LENGTH];
         I2cResponse {
@@ -265,9 +271,6 @@ pub struct I2cInterface {
 
     /// configuration for I2C interface
     config: I2cInterfaceConfig,
-
-    /// spin sleeper for waiting response of sensor unit
-    spin_sleeper: SpinSleeper,
 
     #[cfg(all(target_os = "linux", feature = "target_hw"))]
     /// Read buffer
@@ -310,13 +313,17 @@ impl I2cInterface {
 
         Ok(I2cInterface {
             i2c,
-            spin_sleeper: SpinSleeper::default(),
             config,
             read_buffer,
         })
     }
 
-    #[cfg(all(target_os = "linux", feature = "target_hw"))]
+    #[cfg(not(all(target_os = "linux", feature = "target_hw")))]
+    /// Stub function for testing async runtime
+    pub fn new(config: I2cInterfaceConfig) -> Result<I2cInterface, I2cError> {
+        Ok(I2cInterface { config })
+    }
+
     /// Performs a complete I2C write/read transaction with a sensor.
     ///
     /// This function orchestrates a full I2C communication cycle:
@@ -341,70 +348,82 @@ impl I2cInterface {
     /// - `I2cError::InsufficientRead`: If the full response could not be read from the sensor.
     /// - `I2cError::IncorrectResponseLength`: If the number of bytes read does not match
     ///   the `expected_response_length`.
-    pub fn get_response_from_i2c(&mut self, i2c_request: I2cRequest) -> I2cResult {
-        let sleep_duration = Duration::from_millis(i2c_request.sleep_time_millis);
+    pub async fn get_response_from_i2c(
+        &mut self,
+        #[allow(unused)] // not used for async runtime testing
+        i2c_request: I2cRequest,
+    ) -> I2cResult {
+        #[cfg(all(target_os = "linux", feature = "target_hw"))]
+        {
+            let sleep_duration = Duration::from_millis(i2c_request.sleep_time_millis);
 
-        // Check the buffer's capacity against the request's needs.
-        if self.read_buffer.len() < i2c_request.expected_response_length {
-            return Err(I2cError::ProvidedBufferTooSmall {
-                location: module_path!().to_string(),
-                buffer_size: self.read_buffer.len(),
-                expected_size: i2c_request.expected_response_length,
-            });
-        }
+            // Check the buffer's capacity against the request's needs.
+            if self.read_buffer.len() < i2c_request.expected_response_length {
+                return Err(I2cError::ProvidedBufferTooSmall {
+                    location: module_path!().to_string(),
+                    buffer_size: self.read_buffer.len(),
+                    expected_size: i2c_request.expected_response_length,
+                });
+            }
 
-        self.i2c
-            .set_slave_address(i2c_request.i2c_address)
-            .map_err(|e| I2cError::SetAddressError {
-                location: module_path!().to_string(),
-                address: i2c_request.i2c_address,
-                source: e,
-            })?;
+            self.i2c
+                .set_slave_address(i2c_request.i2c_address)
+                .map_err(|e| I2cError::SetAddressError {
+                    location: module_path!().to_string(),
+                    address: i2c_request.i2c_address,
+                    source: e,
+                })?;
 
-        let realized_write_len = self
-            .i2c
-            .write(&i2c_request.send_buf[..i2c_request.send_len])
+            let realized_write_len = tokio::task::block_in_place(|| {
+                self.i2c
+                    .write(&i2c_request.send_buf[..i2c_request.send_len])
+            })
             .map_err(|e| I2cError::WriteFailure {
                 location: module_path!().to_string(),
                 source: e,
             })?;
-        if realized_write_len != i2c_request.send_len {
-            return Err(I2cError::InsufficientWrite(
-                module_path!().to_string(),
-                i2c_request.send_len,
-                realized_write_len,
-            ));
-        }
-
-        // give the I2C bus participant time to process the request
-        self.spin_sleeper.sleep(sleep_duration);
-
-        if i2c_request.expected_response_length > 0 {
-            // Use a sub-slice of the provided buffer for the read operation.
-            let read_slice = &mut self.read_buffer[..i2c_request.expected_response_length];
-
-            let received_message_length =
-                self.i2c
-                    .read(read_slice)
-                    .map_err(|e| I2cError::InsufficientRead {
-                        location: module_path!().to_string(),
-                        source: e,
-                    })?;
-            if received_message_length != i2c_request.expected_response_length {
-                Err(I2cError::IncorrectResponseLength(
+            if realized_write_len != i2c_request.send_len {
+                return Err(I2cError::InsufficientWrite(
                     module_path!().to_string(),
-                    i2c_request.expected_response_length,
-                    received_message_length,
-                ))
-            } else {
-                Ok(I2cResponse::new(read_slice))
+                    i2c_request.send_len,
+                    realized_write_len,
+                ));
             }
-        } else {
+
+            // give the I2C bus participant time to process the request
+            tokio::time::sleep(sleep_duration).await;
+
+            if i2c_request.expected_response_length > 0 {
+                // Use a sub-slice of the provided buffer for the read operation.
+                let read_slice = &mut self.read_buffer[..i2c_request.expected_response_length];
+
+                let received_message_length = tokio::task::block_in_place(|| {
+                    self.i2c.read(read_slice)
+                })
+                .map_err(|e| I2cError::InsufficientRead {
+                    location: module_path!().to_string(),
+                    source: e,
+                })?;
+                if received_message_length != i2c_request.expected_response_length {
+                    Err(I2cError::IncorrectResponseLength(
+                        module_path!().to_string(),
+                        i2c_request.expected_response_length,
+                        received_message_length,
+                    ))
+                } else {
+                    Ok(I2cResponse::new(read_slice))
+                }
+            } else {
+                Ok(I2cResponse::empty())
+            }
+        }
+        #[cfg(not(all(target_os = "linux", feature = "target_hw")))]
+        {
+            // dummy result for testing async runtime
             Ok(I2cResponse::empty())
         }
     }
 
-    #[cfg(all(target_os = "linux", feature = "target_hw"))]
     /// Executes the main loop for the I2C interface thread, acting as a request/response service.
     ///
     /// This function runs indefinitely, processing I2C requests received from other modules.
@@ -419,14 +438,15 @@ impl I2cInterface {
     ///
     /// # Arguments
     /// * `i2c_interface_channels` - A mutable reference to the struct containing the channels.
-    pub fn execute(&mut self, i2c_interface_channels: &mut I2cInterfaceChannels) {
-        #[cfg(not(test))]
+    pub async fn execute(&mut self, i2c_interface_channels: &mut I2cInterfaceChannels) {
+        #[cfg(not(test))] // only required in real-life execution
+        #[cfg(not(tarpaulin_include))]
+        #[cfg(target_os = "linux")]
         info!(target: module_path!(), "Thread started with TID: {}", gettid());
 
         let mut lock_error_receive_atlas_scientific = false;
         let mut lock_error_send_atlas_scientific = false;
         let sleep_time = Duration::from_millis(100);
-        let spin_sleeper = SpinSleeper::default();
 
         loop {
             let (quit_command_received, _, _) = self.process_external_request(
@@ -443,7 +463,7 @@ impl I2cInterface {
             {
                 Ok(request) => {
                     lock_error_receive_atlas_scientific = false;
-                    let response = self.get_response_from_i2c(request);
+                    let response = self.get_response_from_i2c(request).await;
                     match i2c_interface_channels
                         .tx_i2c_interface_to_atlas_scientific
                         .send(response)
@@ -473,7 +493,7 @@ impl I2cInterface {
                     }
                 }
             }
-            spin_sleeper.sleep(sleep_time);
+            tokio::time::sleep(sleep_time).await;
         }
     }
 }

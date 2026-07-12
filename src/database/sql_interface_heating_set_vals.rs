@@ -257,6 +257,10 @@ impl SqlInterfaceHeatingSetVals {
     // Returns `SqlInterfaceError::InsertHeatingSetValuesFailure` if the `INSERT`
     // query fails. This error should be updated to include the source `mysql::Error`
     // for better diagnostics in test failures.
+    /// Performs the `insert_heating_set_values` operation.
+    ///
+    /// # Arguments
+    /// * `heating_set_vals` - A parameter representing `heating_set_vals`.
     pub fn insert_heating_set_values(
         &mut self,
         heating_set_vals: &HeatingSetVals,

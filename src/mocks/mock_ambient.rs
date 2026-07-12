@@ -17,6 +17,14 @@ pub mod tests {
     use spin_sleep::SpinSleeper;
     use std::time::Duration;
 
+    /// Performs the `mock_ambient` operation.
+    ///
+    /// # Arguments
+    /// * `tx_ambient_to_test_object` - A parameter representing `tx_ambient_to_test_object`.
+    /// * `rx_ambient_from_test_object` - A parameter representing `rx_ambient_from_test_object`.
+    /// * `rx_ambient_from_test_environment_opt` - A parameter representing `rx_ambient_from_test_environment_opt`.
+    /// * `initial_stimuli_ambient_temperature` - A parameter representing `initial_stimuli_ambient_temperature`.
+    /// * `initial_stimuli_ambient_humidity` - A parameter representing `initial_stimuli_ambient_humidity`.
     pub fn mock_ambient(
         tx_ambient_to_test_object: &mut AquaSender<f32>,
         rx_ambient_from_test_object: &mut AquaReceiver<InternalCommand>,

@@ -71,6 +71,10 @@ impl RgbLedColor {
 
 #[cfg(all(target_os = "linux", feature = "target_hw"))]
 impl fmt::Display for RgbLedColor {
+    /// Formats the value using the given formatter.
+    ///
+    /// # Arguments
+    /// * `f` - The formatter to write the formatted string to.
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             RgbLedColor::Off => write!(f, "Off"),

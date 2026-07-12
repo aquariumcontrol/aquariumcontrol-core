@@ -66,8 +66,8 @@ pub struct BallingChannels {
     /// receiver part of the channel for communication from the schedule checker
     pub rx_balling_from_schedule_check: AquaReceiver<bool>,
 
-    /// receiver part of the channel communication wrapped in Option from Messaging
-    pub rx_balling_from_messaging_opt: Option<AquaReceiver<InternalCommand>>,
+    /// receiver part of the channel communication from Messaging
+    pub rx_balling_from_messaging: AquaReceiver<InternalCommand>,
 }
 
 impl BallingChannels {
@@ -80,8 +80,8 @@ impl BallingChannels {
     }
 
     /// Receives a response from the relay manager.
-    pub fn receive_from_relay_manager(&mut self) -> Result<bool, AquaChannelError> {
-        self.rx_balling_from_relay_manager.recv()
+    pub async fn receive_from_relay_manager(&mut self) -> Result<bool, AquaChannelError> {
+        self.rx_balling_from_relay_manager.recv().await
     }
 
     /// Sends a command to the schedule checker.
@@ -93,13 +93,17 @@ impl BallingChannels {
     }
 
     /// Receives a response from the schedule checker.
-    pub fn receive_from_schedule_check(&mut self) -> Result<bool, AquaChannelError> {
-        self.rx_balling_from_schedule_check.recv()
+    pub async fn receive_from_schedule_check(&mut self) -> Result<bool, AquaChannelError> {
+        self.rx_balling_from_schedule_check.recv().await
     }
 }
 
 #[cfg(feature = "debug_channels")]
 impl fmt::Display for BallingChannels {
+    /// Formats the value using the given formatter.
+    ///
+    /// # Arguments
+    /// * `f` - The formatter to write the formatted string to.
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         writeln!(f, "=== BallingChannels ===")?;
         writeln!(
@@ -145,6 +149,10 @@ impl fmt::Display for BallingChannels {
 
 #[cfg(not(feature = "debug_channels"))]
 impl fmt::Display for BallingChannels {
+    /// Formats the value using the given formatter.
+    ///
+    /// # Arguments
+    /// * `f` - The formatter to write the formatted string to.
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(
             f,

@@ -15,18 +15,18 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 //! This entire module is conditionally compiled and is only available on `target_os = "linux"`
 //! (or during tests), as it is part of the POSIX-based IPC mechanism.
 
-#[cfg(target_os = "linux")]
 use serde_derive::Deserialize;
 
-#[cfg(target_os = "linux")]
 /// Holds the configuration data for the messaging.
 /// The configuration is loaded from the .toml configuration file.
 /// This struct does not contain any implementation.
 #[derive(Deserialize)]
 pub struct MessagingConfig {
+    #[cfg(target_os = "linux")]
     /// filename used for generating the message queue identifier
     pub mq_filename: String,
 
+    #[cfg(target_os = "linux")]
     /// timeout for receiving messages in milliseconds
     /// after each timeout, the application checks if a shutdown has been requested
     pub timeout_millis: u64,

@@ -20,9 +20,16 @@ macro_rules! update_thermal_set_values {
         $off_temp:expr,
         $on_temp:expr,
         $lock_flag:expr,
-        $location:expr
+        $location:expr,
+        $is_multi_thread:expr
     ) => {
-        if let Err(e) = $updater.update_set_value(&mut $off_temp, &mut $on_temp) {
+        let update_res = if $is_multi_thread {
+            tokio::task::block_in_place(|| $updater.update_set_value(&mut $off_temp, &mut $on_temp))
+        } else {
+            $updater.update_set_value(&mut $off_temp, &mut $on_temp)
+        };
+
+        if let Err(e) = update_res {
             if !$lock_flag {
                 log::error!(
                     target: $location,

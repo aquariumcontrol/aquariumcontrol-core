@@ -99,7 +99,7 @@ impl Sump {
             level_filter: IIRFilter::new(
                 &sump_config.level_filter,
                 None,
-                #[cfg(not(test))]
+                #[cfg(not(test))] // only required in real-life execution
                 "sump level",
             ),
             config: sump_config,
@@ -154,6 +154,7 @@ impl Sump {
     ///
     /// * `water_volume_in_tank` - model of tank geometry of type TankGeometry
     /// * `time_step` - time step in seconds (in case simulation shall run faster than real time)
+    /// * `water_volume` - A parameter representing `water_volume`.
     pub fn calc_refill(&self, water_volume: &mut TankGeometry, time_step: f32) {
         if self.refill_pump.status == PumpStatus::On {
             println!(
@@ -214,7 +215,7 @@ pub mod tests {
                     fallback_initial_value: 0.8,
                 },
                 Some(1.0),
-                #[cfg(not(test))]
+                #[cfg(not(test))] // only required in real-life execution
                 "sump level",
             ),
             config: config.sump,
@@ -261,7 +262,7 @@ pub mod tests {
                     fallback_initial_value: 0.8,
                 },
                 Some(0.8),
-                #[cfg(not(test))]
+                #[cfg(not(test))] // only required in real-life execution
                 "sump level",
             ),
             config: config.sump,

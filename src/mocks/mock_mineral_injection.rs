@@ -32,6 +32,7 @@ pub mod tests {
         //
         // # Returns
         // A new `MockMineralInjection` struct, ready to record simulated dosing events.
+        /// Creates a new instance.
         pub fn new() -> MockMineralInjection {
             MockMineralInjection {
                 pump1_engagement_durations: Vec::new(),
@@ -69,6 +70,12 @@ pub mod tests {
         // # Panics
         // This function will panic if invoked with an `AquariumDevice` that is not
         // one of the peristaltic pumps (e.g., `AquariumDevice::Skimmer`).
+        /// Performs the `inject_mineral` operation.
+        ///
+        /// # Arguments
+        /// * `balling_channels` - A mutable reference to the `BallingChannels` communication interface.
+        /// * `mineral_pump` - A parameter representing `mineral_pump`.
+        /// * `dosing_duration_millis` - A parameter representing `dosing_duration_millis`.
         fn inject_mineral(
             &mut self,
             _balling_channels: &mut BallingChannels,
@@ -117,6 +124,11 @@ pub mod tests {
     // Returns:
     // A `String` detailing the pump's ID and its recorded engagement durations,
     // or a message indicating that the pump was not engaged.
+    /// Performs the `output_vector` operation.
+    ///
+    /// # Arguments
+    /// * `id` - A parameter representing `id`.
+    /// * `v` - A parameter representing `v`.
     fn output_vector(id: u32, v: &Vec<u32>) -> String {
         let mut output: String = "Pump #".into();
         if v.is_empty() {
@@ -145,6 +157,10 @@ pub mod tests {
         //
         // # Returns
         // A `fmt::Result` indicating whether the formatting operation was successful.
+        /// Formats the value using the given formatter.
+        ///
+        /// # Arguments
+        /// * `f` - The formatter to write the formatted string to.
         fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
             write!(
                 f,

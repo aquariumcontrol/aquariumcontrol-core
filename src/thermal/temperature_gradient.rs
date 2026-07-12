@@ -31,7 +31,6 @@ use crate::thermal::temperature_gradient_error::TemperatureGradientError;
 use crate::utilities::acknowledge_signal_handler::AcknowledgeSignalHandlerTrait;
 use crate::utilities::proc_ext_req::ProcessExternalRequestTrait;
 use log::error;
-use spin_sleep::SpinSleeper;
 use std::collections::VecDeque;
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
@@ -95,7 +94,10 @@ impl TemperatureGradient {
     ///
     /// # Arguments
     /// * `sensor_manager_signals` - `Arc<Mutex>` to read temperature data from.
-    pub fn execute(
+    /// * `mutex_sensor_manager_signals` - Shared mutex for consolidated sensor signals.
+    /// * `temperature_gradient_channels` - A parameter representing `temperature_gradient_channels`.
+    /// * `mutex_temperature_gradient` - A parameter representing `mutex_temperature_gradient`.
+    pub async fn execute(
         &mut self,
         mutex_sensor_manager_signals: Arc<Mutex<SensorManagerSignals>>,
         temperature_gradient_channels: &mut TemperatureGradientChannels,
@@ -103,7 +105,6 @@ impl TemperatureGradient {
     ) {
         let sampling_interval = Duration::from_secs(self.config.sampling_interval);
         let sample_size = self.config.sample_size;
-        let spin_sleeper = SpinSleeper::default();
         let cycle_time_duration = Duration::from_millis(CYCLE_TIME_TEMPERATURE_GRADIENT_MILLIS);
         let mut instant_last_sampling = Instant::now();
 
@@ -172,7 +173,7 @@ impl TemperatureGradient {
             }
 
             // wait for a short period before checking the duration again
-            spin_sleeper.sleep(cycle_time_duration);
+            tokio::time::sleep(cycle_time_duration).await;
         }
 
         temperature_gradient_channels.acknowledge_signal_handler();
@@ -188,6 +189,9 @@ fn current_timestamp_as_f64() -> f64 {
 }
 
 /// Least squares gradient calculation.
+///
+/// # Arguments
+/// * `samples` - A parameter representing `samples`.
 fn calculate_least_squares_gradient(samples: &VecDeque<(f64, f64)>) -> f64 {
     if samples.len() < 2 {
         return 0.0; // Cannot calculate gradient with less than 2 points
@@ -229,8 +233,10 @@ mod tests {
     use crate::thermal::temperature_gradient_config::TemperatureGradientConfig;
     use crate::utilities::channel_content::InternalCommand;
     use assert_float_eq::assert_float_absolute_eq;
+    use spin_sleep::SpinSleeper;
     use std::thread;
 
+    /// Performs the `create_default_config` operation.
     fn create_default_config() -> TemperatureGradientConfig {
         TemperatureGradientConfig {
             active: true,
@@ -375,6 +381,35 @@ mod tests {
         assert_eq!(gradient, 0.0);
     }
 
+    /// Synchronously executes the main task loop for testing.
+    ///
+    /// # Arguments
+    /// * `temperature_gradient` - A parameter representing `temperature_gradient`.
+    /// * `mutex_sensor_manager_signals` - Shared mutex for consolidated sensor signals.
+    /// * `temperature_gradient_channels` - A parameter representing `temperature_gradient_channels`.
+    /// * `mutex_temperature_gradient` - A parameter representing `mutex_temperature_gradient`.
+    fn execute_blocking(
+        temperature_gradient: &mut TemperatureGradient,
+        mutex_sensor_manager_signals: Arc<Mutex<SensorManagerSignals>>,
+        temperature_gradient_channels: &mut TemperatureGradientChannels,
+        mutex_temperature_gradient: Arc<Mutex<f64>>,
+    ) {
+        tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+            .unwrap()
+            .block_on(async {
+                // blocking execution used for testing
+                temperature_gradient
+                    .execute(
+                        mutex_sensor_manager_signals,
+                        temperature_gradient_channels,
+                        mutex_temperature_gradient,
+                    )
+                    .await;
+            });
+    }
+
     // Check if the temperature gradient calculation works.
     // Also, implicitly test if the execute function terminates after receiving Quit command.
     #[test]
@@ -473,7 +508,8 @@ mod tests {
         let join_handle_test_object = thread::Builder::new()
             .name("test_object".to_string())
             .spawn(move || {
-                temperature_gradient.execute(
+                execute_blocking(
+                    &mut temperature_gradient,
                     mutexes_sensor_manager.mutex_sensor_manager_signals,
                     &mut channels.temperature_gradient,
                     mutex_temperature_gradient,
@@ -489,7 +525,7 @@ mod tests {
         channels
             .signal_handler
             .rx_signal_handler_from_temperature_gradient
-            .recv()
+            .blocking_recv()
             .unwrap();
 
         join_handle_test_object
@@ -515,9 +551,12 @@ mod tests {
         let sql_interface =
             SqlInterface::new(config.sql_interface).expect("Failed to create SqlInterface.");
 
-        let mut sql_interface_data =
-            SqlInterfaceData::new(sql_interface.get_connection().unwrap(), 0)
-                .expect("Failed to create SqlInterfaceData.");
+        let mut sql_interface_data = SqlInterfaceData::new(
+            sql_interface.get_connection().unwrap(),
+            sql_interface.get_connection().unwrap(),
+            0,
+        )
+        .expect("Failed to create SqlInterfaceData.");
 
         // --- Get Data ---
         let temperature_data = sql_interface_data

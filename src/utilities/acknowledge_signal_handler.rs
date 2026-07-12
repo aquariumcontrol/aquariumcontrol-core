@@ -57,7 +57,6 @@ use crate::watchmen::watchdog_channels::WatchDogChannels;
 use crate::water::refill_channels::RefillChannels;
 use log::error;
 
-#[cfg(target_os = "linux")]
 use crate::dispatch::messaging_channels::MessagingChannels;
 use crate::launch::channels::AquaChannelError;
 use crate::thermal::temperature_gradient_channels::TemperatureGradientChannels;
@@ -101,10 +100,12 @@ macro_rules! impl_acknowledge_signal_handler {
     // The macro takes the struct type, the location string and the channel as arguments.
     ($struct_name:ty, $location_str:expr, $channel:ident) => {
         impl AcknowledgeSignalHandlerTrait for $struct_name {
+            /// Performs the `send_true_to_signal_handler` operation.
             fn send_true_to_signal_handler(&mut self) -> Result<(), AquaChannelError> {
                 self.$channel.send(true)
             }
 
+            /// Performs the `location` operation.
             fn location(&self) -> String {
                 $location_str.to_string()
             }
@@ -165,8 +166,6 @@ impl_acknowledge_signal_handler!(
 impl_acknowledge_signal_handler!(MonitorsChannels, "monitors", tx_monitors_to_signal_handler);
 impl_acknowledge_signal_handler!(WatchDogChannels, "watchdog", tx_watchdog_to_signal_handler);
 impl_acknowledge_signal_handler!(RefillChannels, "refill", tx_refill_to_signal_handler);
-
-#[cfg(target_os = "linux")]
 impl_acknowledge_signal_handler!(
     MessagingChannels,
     "messaging",

@@ -42,6 +42,7 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 use crate::database::sql_interface_data::SqlInterfaceData;
 use crate::recorder::recorder_data_frame::RecorderDataFrame;
 use crate::utilities::logger::log_error_chain;
+use mysql::PooledConn;
 
 /// Trait for the execution of data logging to SQL database
 /// This trait allows running the main control with a mock implementation for testing.
@@ -49,12 +50,8 @@ pub trait DataInjectionTrait {
     /// Transfers the data provided as parameter to SQL database
     /// # Arguments
     /// * `data_frame` - Data to be transferred to SQL database
-    /// * `sql_interface_data` - Interface to SQL database
-    fn inject_data(
-        &mut self,
-        data_frame: RecorderDataFrame,
-        sql_interface_data: &mut SqlInterfaceData,
-    );
+    /// * `conn` - Database connection
+    fn inject_data(&mut self, data_frame: RecorderDataFrame, conn: PooledConn) -> PooledConn;
 }
 
 /// Implements the `DataInjectionTrait` for concrete data logging to an SQL database.
@@ -75,12 +72,9 @@ impl DataInjectionTrait for DataInjection {
     ///   This is passed by value, meaning ownership is transferred to this function.
     /// * `sql_interface_data` - A mutable reference to the `SqlInterfaceData` instance,
     ///   which handles the actual database write operation.
-    fn inject_data(
-        &mut self,
-        data_frame: RecorderDataFrame,
-        sql_interface_data: &mut SqlInterfaceData,
-    ) {
-        match sql_interface_data.write_data_frame_to_database(&data_frame) {
+    /// * `conn` - An active pooled database connection.
+    fn inject_data(&mut self, data_frame: RecorderDataFrame, mut conn: PooledConn) -> PooledConn {
+        match SqlInterfaceData::write_data_frame_to_database(&mut conn, &data_frame) {
             Ok(()) => { /* do nothing */ }
             Err(e) => {
                 log_error_chain(
@@ -90,5 +84,6 @@ impl DataInjectionTrait for DataInjection {
                 );
             }
         };
+        conn
     }
 }

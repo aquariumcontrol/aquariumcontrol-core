@@ -67,7 +67,7 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 use log::debug;
 
 cfg_if::cfg_if! {
-    if #[cfg(all(target_os = "linux", not(test)))] {
+    if #[cfg(all(target_os = "linux", not(test)))] { // only required in real-life execution
         use nix::unistd::gettid;
         use log::info;
     }
@@ -91,7 +91,6 @@ use crate::utilities::logger::log_error_chain;
 use crate::utilities::proc_ext_req::ProcessExternalRequestTrait;
 use crate::utilities::wait_for_termination::WaitForTerminationTrait;
 use log::error;
-use spin_sleep::SpinSleeper;
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 use thiserror::Error;
@@ -165,6 +164,7 @@ pub struct SensorManagerMutexes {
 
 #[cfg(test)]
 impl SensorManagerMutexes {
+    /// Creates a default instance of this type.
     pub fn default() -> SensorManagerMutexes {
         SensorManagerMutexes {
             mutex_ds18b20_ambient_temperature: Arc::new(Mutex::new(Ok(
@@ -207,6 +207,10 @@ pub struct SensorManagerSignals {
 }
 
 impl SensorManagerSignals {
+    /// Creates a new instance.
+    ///
+    /// # Arguments
+    /// * `config` - A parameter representing `config`.
     pub fn new(config: &SensorManagerConfig) -> SensorManagerSignals {
         SensorManagerSignals {
             water_temperature: config.replacement_value_water_temperature,
@@ -218,6 +222,7 @@ impl SensorManagerSignals {
         }
     }
 
+    /// Creates a default instance of this type.
     #[cfg(test)]
     pub fn default() -> SensorManagerSignals {
         SensorManagerSignals {
@@ -434,6 +439,7 @@ impl SensorManager {
     /// This function will **panic** if either `tx_sensor_manager_to_tcp_opt` or `rx_sensor_manager_from_tcp_opt`
     /// are `None`. This case is not possible because the `SensorManager` module performs checks beforehand to ensure
     /// these channels are `Some` when running in simulator mode.
+    /// * `sensor_manager_channels` - A mutable reference to the `SensorManagerChannels` communication interface.
     fn communicate_with_simulator(
         &mut self,
         sensor_manager_channels: &mut SensorManagerChannels,
@@ -448,7 +454,7 @@ impl SensorManager {
             .as_mut()
             .unwrap();
 
-        self.ambient_temperature = Self::get_response_from_simulator(
+        self.ambient_temperature = Self::get_response_from_simulator_blocking(
             module_path!().to_string(),
             tx_sensor_manager_to_simulator,
             rx_sensor_manager_from_simulator,
@@ -459,7 +465,7 @@ impl SensorManager {
             signal: AquariumSignal::AmbientTemperature,
             source: e,
         })?;
-        self.ambient_humidity = Self::get_response_from_simulator(
+        self.ambient_humidity = Self::get_response_from_simulator_blocking(
             module_path!().to_string(),
             tx_sensor_manager_to_simulator,
             rx_sensor_manager_from_simulator,
@@ -470,7 +476,7 @@ impl SensorManager {
             signal: AquariumSignal::AmbientHumidity,
             source: e,
         })?;
-        self.water_temperature = Self::get_response_from_simulator(
+        self.water_temperature = Self::get_response_from_simulator_blocking(
             module_path!().to_string(),
             tx_sensor_manager_to_simulator,
             rx_sensor_manager_from_simulator,
@@ -481,7 +487,7 @@ impl SensorManager {
             signal: AquariumSignal::WaterTemperature,
             source: e,
         })?;
-        self.conductivity = Self::get_response_from_simulator(
+        self.conductivity = Self::get_response_from_simulator_blocking(
             module_path!().to_string(),
             tx_sensor_manager_to_simulator,
             rx_sensor_manager_from_simulator,
@@ -492,7 +498,7 @@ impl SensorManager {
             signal: AquariumSignal::Conductivity,
             source: e,
         })?;
-        self.pH = Self::get_response_from_simulator(
+        self.pH = Self::get_response_from_simulator_blocking(
             module_path!().to_string(),
             tx_sensor_manager_to_simulator,
             rx_sensor_manager_from_simulator,
@@ -530,12 +536,13 @@ impl SensorManager {
     /// # Panics
     /// This function will panic if:
     /// - It's configured to use the simulator but essential TCP communication channels are missing.
-    pub fn execute(
+    pub async fn execute(
         &mut self,
         sensor_manager_channels: &mut SensorManagerChannels,
         mutexes: SensorManagerMutexes,
     ) {
-        #[cfg(all(target_os = "linux", not(test)))]
+        #[cfg(all(target_os = "linux", not(test)))] // only required in real-life execution
+        #[cfg(not(tarpaulin_include))]
         info!(target: module_path!(), "Thread started with TID: {}", gettid());
 
         if (self.config.use_simulator)
@@ -554,7 +561,6 @@ impl SensorManager {
 
         let sleep_duration_hundred_millis = Duration::from_millis(100);
         let sleep_duration_one_millis = Duration::from_millis(1);
-        let spin_sleeper = SpinSleeper::default();
         let mut mutex_poisoned = false;
 
         // initialize signals with replacement values
@@ -582,7 +588,9 @@ impl SensorManager {
             {
                 self.instant_last_measurement = current_instant;
                 if self.config.use_simulator {
-                    let result = self.communicate_with_simulator(sensor_manager_channels);
+                    let result = tokio::task::block_in_place(|| {
+                        self.communicate_with_simulator(sensor_manager_channels)
+                    });
                     if result.is_err() {
                         log_error_chain(
                             module_path!(),
@@ -742,7 +750,7 @@ impl SensorManager {
                     );
                 }
             }
-            spin_sleeper.sleep(sleep_duration_hundred_millis);
+            tokio::time::sleep(sleep_duration_hundred_millis).await;
         }
 
         sensor_manager_channels.acknowledge_signal_handler();
@@ -750,11 +758,12 @@ impl SensorManager {
         // This thread has channel connections to underlying threads.
         // Those threads have to stop receiving commands from this thread.
         // The shutdown sequence is handled by the signal_handler module.
-        self.wait_for_termination(
+        self.wait_for_termination_async(
             &mut sensor_manager_channels.rx_sensor_manager_from_signal_handler,
             sleep_duration_one_millis,
             module_path!(),
-        );
+        )
+        .await;
     }
 }
 
@@ -809,6 +818,11 @@ pub mod tests {
         ));
     }
 
+    /// Performs the `mock_signal_handler_for_sensor_manager` operation.
+    ///
+    /// # Arguments
+    /// * `signal_handler_channels` - A parameter representing `signal_handler_channels`.
+    /// * `mutex_sensor_manager_opt` - A parameter representing `mutex_sensor_manager_opt`.
     fn mock_signal_handler_for_sensor_manager(
         mut signal_handler_channels: SignalHandlerChannels,
         mutex_sensor_manager_opt: Option<Arc<Mutex<SensorManagerSignals>>>,
@@ -838,13 +852,45 @@ pub mod tests {
             .send(InternalCommand::Quit);
         signal_handler_channels
             .rx_signal_handler_from_sensor_manager
-            .recv()
+            .blocking_recv()
             .unwrap();
         let _ = signal_handler_channels
             .tx_signal_handler_to_sensor_manager
             .send(InternalCommand::Terminate);
     }
 
+    /// Helper function to execute the sensor manager task inside a test Tokio runtime.
+    ///
+    /// # Arguments
+    /// * `sensor_manager` - A mutable reference to the `SensorManager` instance.
+    /// * `sensor_manager_channels` - A mutable reference to the `SensorManagerChannels` instance.
+    /// * `mutexes` - Shared mutexes for accessing sensor readings.
+    fn execute_blocking(
+        sensor_manager: &mut SensorManager,
+        sensor_manager_channels: &mut SensorManagerChannels,
+        mutexes: SensorManagerMutexes,
+    ) {
+        tokio::runtime::Builder::new_multi_thread()
+            .enable_all()
+            .build()
+            .unwrap()
+            .block_on(async {
+                // blocking execution used for testing
+                sensor_manager
+                    .execute(sensor_manager_channels, mutexes)
+                    .await;
+            });
+    }
+
+    /// Performs the `execute_and_assert_sensor_manager` operation.
+    ///
+    /// # Arguments
+    /// * `sensor_manager_channels` - A mutable reference to the `SensorManagerChannels` communication interface.
+    /// * `sensor_manager` - A parameter representing `sensor_manager`.
+    /// * `mutexes` - Shared mutexes for accessing sensor readings.
+    /// * `target_value_water_temperature` - A parameter representing `target_value_water_temperature`.
+    /// * `target_value_ambient_temperature` - A parameter representing `target_value_ambient_temperature`.
+    /// * `reference_mutex_access_time_exceeded` - A parameter representing `reference_mutex_access_time_exceeded`.
     fn execute_and_assert_sensor_manager(
         mut sensor_manager_channels: SensorManagerChannels,
         mut sensor_manager: SensorManager,
@@ -856,7 +902,7 @@ pub mod tests {
         let mutexes_clone_for_asserts = mutexes.clone();
 
         // test object
-        sensor_manager.execute(&mut sensor_manager_channels, mutexes);
+        execute_blocking(&mut sensor_manager, &mut sensor_manager_channels, mutexes);
 
         match mutexes_clone_for_asserts
             .mutex_sensor_manager_signals

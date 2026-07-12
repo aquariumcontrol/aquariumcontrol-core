@@ -98,6 +98,9 @@ impl HeatingStatsEntry {
     ///
     /// # Returns
     /// A new `HeatingStatsEntry` struct with default values for the current date.
+    ///
+    /// # Arguments
+    /// * `conn` - An active pooled database connection.
     pub fn new(conn: &mut PooledConn) -> HeatingStatsEntry {
         // Get the current date from the database
         let today: NaiveDate = SqlInterface::get_current_date(conn).unwrap_or_else(|_| {
@@ -133,6 +136,7 @@ impl HeatingStatsEntry {
     /// * `ambient_temperature_opt` - An `Option<f64>` representing the latest ambient air temperature reading.
     ///   If `Some`, it contributes to the average; if `None`, the ambient temperature average remains unchanged.
     /// * `energy_increment` - The amount of energy (in kWh) consumed by the heater since the last update.
+    /// * `control_runtime_increment` - A parameter representing `control_runtime_increment`.
     pub fn update(
         &mut self,
         water_temperature_opt: Option<f64>,
@@ -184,6 +188,7 @@ impl HeatingStatsEntry {
         self.heating_control_runtime += control_runtime_increment;
     }
 
+    /// Creates a default instance of this type.
     #[cfg(test)]
     pub fn default() -> Self {
         Self {
@@ -197,6 +202,7 @@ impl HeatingStatsEntry {
         }
     }
 
+    /// Performs the `increment_date` operation.
     #[cfg(test)]
     pub fn increment_date(&mut self) {
         let tomorrow = self.date.checked_add_days(Days::new(1));

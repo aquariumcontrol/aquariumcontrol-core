@@ -56,7 +56,10 @@ use crate::recorder::recorder_data_frame::RecorderDataFrame;
 /// Contains the configuration and the implementation of the SQL interface for time-based data.
 #[derive(Debug)]
 pub struct SqlInterfaceData {
-    /// Connection to the database
+    /// Connection to the database for retrieving timestamps
+    pub conn_for_timestamp: PooledConn,
+
+    /// Connection to the database for writing data
     pub conn: PooledConn,
 }
 
@@ -68,7 +71,8 @@ impl SqlInterfaceData {
     /// the number of rows in the `data` table does not exceed the configured limit.
     ///
     /// # Arguments
-    /// * `conn` - An active, pooled database connection.
+    /// * `conn_for_timestamp` - An active, pooled database connection for retrieving timestamps.
+    /// * `conn_for_data` - An active, pooled database connection for writing data.
     /// * `max_rows_data` - The maximum allowed number of rows in the `data` table.
     ///   If `0`, the check is skipped.
     ///
@@ -81,15 +85,18 @@ impl SqlInterfaceData {
     /// - The retrieved row count is a negative number, indicating a database issue (`DatabaseDataTableNegativeValue`).
     /// - The number of rows in the `data` table exceeds the configured `max_rows_data` limit (`DatabaseDataTableContainsTooManyRows`).
     pub fn new(
-        mut conn: PooledConn,
+        conn_for_timestamp: PooledConn,
+        mut conn_for_data: PooledConn,
         max_rows_data: u64,
     ) -> Result<SqlInterfaceData, SqlInterfaceError> {
-        let count_rows =
-            SqlInterface::get_single_integer_from_database(&mut conn, SQL_QUERY_CHECK_DATA_COUNT)
-                .map_err(|e| SqlInterfaceError::DatabaseCheckDataFailure {
-                location: module_path!().to_string(),
-                source: Box::new(e),
-            })?;
+        let count_rows = SqlInterface::get_single_integer_from_database(
+            &mut conn_for_data,
+            SQL_QUERY_CHECK_DATA_COUNT,
+        )
+        .map_err(|e| SqlInterfaceError::DatabaseCheckDataFailure {
+            location: module_path!().to_string(),
+            source: Box::new(e),
+        })?;
 
         // check the query results
         if count_rows < 0 {
@@ -109,7 +116,10 @@ impl SqlInterfaceData {
                 ));
             }
         }
-        Ok(SqlInterfaceData { conn })
+        Ok(SqlInterfaceData {
+            conn_for_timestamp,
+            conn: conn_for_data,
+        })
     }
 
     /// Writes a complete `RecorderDataFrame` to the SQL database.
@@ -126,6 +136,7 @@ impl SqlInterfaceData {
     /// `ON DUPLICATE KEY UPDATE` clause).
     ///
     /// # Arguments
+    /// * `conn` - A mutable reference to the database connection.
     /// * `data` - A reference to the `RecorderDataFrame` containing the data to be written.
     ///
     /// # Returns
@@ -137,7 +148,7 @@ impl SqlInterfaceData {
     /// incorrect data types, or a malformed SQL query. The original `mysql::Error` is
     /// included as the source for detailed debugging.
     pub fn write_data_frame_to_database(
-        &mut self,
+        conn: &mut PooledConn,
         data: &RecorderDataFrame,
     ) -> Result<(), SqlInterfaceError> {
         let params = params! {
@@ -159,8 +170,7 @@ impl SqlInterfaceData {
         };
 
         // execute the database query and evaluate the result
-        self.conn
-            .exec_drop::<_, _>(sql_query_strings::SQL_QUERY_WRITE_DATA, params)
+        conn.exec_drop::<_, _>(sql_query_strings::SQL_QUERY_WRITE_DATA, params)
             .map_err(|e| SqlInterfaceError::InsertDataFrameFailure {
                 location: module_path!().to_string(),
                 query: sql_query_strings::SQL_QUERY_WRITE_DATA.to_string(),
@@ -197,8 +207,8 @@ impl SqlInterfaceData {
                     (
                         timestamp as f64,
                         water_temperature as f64,
-                        surface_ventilation_status as u64,
-                        heater_status as u64,
+                        surface_ventilation_status,
+                        heater_status,
                     )
                 },
             )
@@ -247,16 +257,21 @@ pub mod tests {
 
         // Insert one row to have some data
         let mut data_db = SqlInterfaceData {
+            conn_for_timestamp: sql_interface.get_connection().unwrap(),
             conn: sql_interface.get_connection().unwrap(),
         };
         let data_frame = RecorderDataFrame {
             timestamp: chrono::Local::now().naive_local(),
             ..Default::default()
         };
-        data_db.write_data_frame_to_database(&data_frame).unwrap();
+        SqlInterfaceData::write_data_frame_to_database(&mut data_db.conn, &data_frame).unwrap();
 
         // Check: new() should succeed with a generous limit of 10
-        let result = SqlInterfaceData::new(sql_interface.get_connection().unwrap(), 10);
+        let result = SqlInterfaceData::new(
+            sql_interface.get_connection().unwrap(),
+            sql_interface.get_connection().unwrap(),
+            10,
+        );
         assert!(
             result.is_ok(),
             "Expected new() to succeed on happy path, but it failed: {:?}",
@@ -268,16 +283,21 @@ pub mod tests {
         println!("* Testing new() with too many rows in the data table...");
         // Insert a second row
         let mut data_db = SqlInterfaceData {
+            conn_for_timestamp: sql_interface.get_connection().unwrap(),
             conn: sql_interface.get_connection().unwrap(),
         };
         let data_frame_2 = RecorderDataFrame {
             timestamp: (chrono::Local::now() + chrono::Duration::seconds(1)).naive_local(),
             ..Default::default()
         };
-        data_db.write_data_frame_to_database(&data_frame_2).unwrap();
+        SqlInterfaceData::write_data_frame_to_database(&mut data_db.conn, &data_frame_2).unwrap();
 
         // Check: new() should fail with a strict limit of 1
-        let result = SqlInterfaceData::new(sql_interface.get_connection().unwrap(), 1);
+        let result = SqlInterfaceData::new(
+            sql_interface.get_connection().unwrap(),
+            sql_interface.get_connection().unwrap(),
+            1,
+        );
         assert!(
             matches!(
                 result,
@@ -295,7 +315,11 @@ pub mod tests {
         // --- Test Case 3: Deactivated check (limit is 0) ---
         println!("* Testing new() with deactivated row limit check (limit = 0)...");
         // We reuse the state from the previous test (2 rows in the table)
-        let result = SqlInterfaceData::new(sql_interface.get_connection().unwrap(), 0); // Set the limit to 0
+        let result = SqlInterfaceData::new(
+            sql_interface.get_connection().unwrap(),
+            sql_interface.get_connection().unwrap(),
+            0, // Set the limit to 0
+        );
         assert!(
             result.is_ok(),
             "Expected new() to succeed with deactivated check, but it failed: {:?}",
@@ -357,6 +381,11 @@ pub mod tests {
     // - Either query returns zero rows (`SingleDataFrameRequestEmptyResponse`).
     // - Either query returns more than one row (`SingleDataFrameRequestNoSingleResponse`).
     // - The timestamp string retrieved from the database cannot be parsed into a `NaiveDateTime`.
+    /// Retrieves the single dataframe from database.
+    ///
+    /// # Arguments
+    /// * `conn` - An active pooled database connection.
+    /// * `timestamp` - A parameter representing `timestamp`.
     pub fn get_single_dataframe_from_database(
         conn: &mut PooledConn,
         timestamp: NaiveDateTime,
@@ -467,6 +496,11 @@ pub mod tests {
     // # Arguments
     // * `conn` - connection to SQL database
     // * `timestamp` - timestamp data to be inserted into the query
+    /// Checks the database row if all null.
+    ///
+    /// # Arguments
+    /// * `conn` - An active pooled database connection.
+    /// * `timestamp` - A parameter representing `timestamp`.
     pub fn check_database_row_if_all_null(conn: &mut PooledConn, timestamp: NaiveDateTime) {
         let timestamp_string = timestamp.format("%Y-%m-%d %H:%M:%S").to_string();
         // Get a series of NULL values from the database
@@ -506,9 +540,12 @@ pub mod tests {
         let max_rows_data = config.sql_interface.max_rows_data;
         let mut sql_interface: SqlInterface = SqlInterface::new(config.sql_interface)
             .expect("Initialization of SQL interface for test failed.");
-        let mut sql_interface_data =
-            SqlInterfaceData::new(sql_interface.get_connection().unwrap(), max_rows_data).unwrap();
-
+        let mut sql_interface_data = SqlInterfaceData::new(
+            sql_interface.get_connection().unwrap(),
+            sql_interface.get_connection().unwrap(),
+            max_rows_data,
+        )
+        .unwrap();
         // *** insert and load RecorderDataFrame ***************************************************
         match SqlInterface::truncate_table(&mut sql_interface, SQL_TABLE_DATA.to_string()) {
             Ok(_) => {}
@@ -537,14 +574,17 @@ pub mod tests {
             ambient_humidity: Some(60.0),
             heater_status: Some(true),
         };
-        match sql_interface_data.write_data_frame_to_database(&dataframe_reference_1) {
+        match SqlInterfaceData::write_data_frame_to_database(
+            &mut sql_interface_data.conn,
+            &dataframe_reference_1,
+        ) {
             Ok(()) => {}
             Err(e) => {
                 panic!("Could not write dataframe to database: {e:?}");
             }
         }
         let dataframe_test = match get_single_dataframe_from_database(
-            &mut sql_interface_data.conn,
+            &mut sql_interface_data.conn_for_timestamp,
             dataframe_reference_1.timestamp,
         ) {
             Ok(c) => c,
@@ -574,14 +614,17 @@ pub mod tests {
             ambient_humidity: Some(61.0),
             heater_status: Some(false),
         };
-        match sql_interface_data.write_data_frame_to_database(&dataframe_reference_2) {
+        match SqlInterfaceData::write_data_frame_to_database(
+            &mut sql_interface_data.conn,
+            &dataframe_reference_2,
+        ) {
             Ok(()) => {}
             Err(e) => {
                 panic!("Could not write dataframe to database: {e:?}");
             }
         }
         let dataframe_test = match get_single_dataframe_from_database(
-            &mut sql_interface_data.conn,
+            &mut sql_interface_data.conn_for_timestamp,
             dataframe_reference_2.timestamp,
         ) {
             Ok(c) => c,
@@ -621,7 +664,10 @@ pub mod tests {
             ambient_humidity: None,
             heater_status: None,
         };
-        match sql_interface_data.write_data_frame_to_database(&dataframe_reference_3) {
+        match SqlInterfaceData::write_data_frame_to_database(
+            &mut sql_interface_data.conn,
+            &dataframe_reference_3,
+        ) {
             Ok(()) => {}
             Err(e) => {
                 panic!("Could not write dataframe to database: {e:?}");
@@ -649,14 +695,21 @@ pub mod tests {
         dataframe_reference_4.timestamp = current_timestamp;
 
         // insert additional dataframe
-        match sql_interface_data.write_data_frame_to_database(&dataframe_reference_4) {
+        match SqlInterfaceData::write_data_frame_to_database(
+            &mut sql_interface_data.conn,
+            &dataframe_reference_4,
+        ) {
             Ok(()) => {}
             Err(e) => {
                 panic!("Could not write dataframe to database: {e:?}");
             }
         }
 
-        let test_result = SqlInterfaceData::new(sql_interface.get_connection().unwrap(), 1);
+        let test_result = SqlInterfaceData::new(
+            sql_interface.get_connection().unwrap(),
+            sql_interface.get_connection().unwrap(),
+            1,
+        );
         assert!(matches!(
             test_result,
             Err(SqlInterfaceError::DatabaseDataTableContainsTooManyRows(

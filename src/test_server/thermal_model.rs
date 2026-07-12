@@ -213,6 +213,12 @@ pub mod tests {
         }
     }
 
+    /// Performs the `create_warmer_ambient_temperature_time_profile` operation.
+    ///
+    /// # Arguments
+    /// * `temperature_low` - A parameter representing `temperature_low`.
+    /// * `temperature_high` - A parameter representing `temperature_high`.
+    /// * `ambient_temperature_time_profile_config` - A parameter representing `ambient_temperature_time_profile_config`.
     fn create_warmer_ambient_temperature_time_profile(
         temperature_low: f32,
         temperature_high: f32,

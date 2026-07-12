@@ -11,13 +11,17 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 pub mod tests {
     use crate::launch::channels::AquaReceiver;
     use crate::utilities::channel_content::InternalCommand;
+    /// Performs the `mock_message_command_receiver` operation.
+    ///
+    /// # Arguments
+    /// * `rx_message_command` - A parameter representing `rx_message_command`.
     pub fn mock_message_command_receiver(
         mut rx_message_command: AquaReceiver<InternalCommand>,
     ) -> Vec<InternalCommand> {
         let mut commands_received: Vec<InternalCommand> = Vec::new();
 
         loop {
-            match rx_message_command.recv() {
+            match rx_message_command.blocking_recv() {
                 Ok(command) => match command {
                     InternalCommand::Quit => {
                         // println!("{}: received quit command", module_path!());

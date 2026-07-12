@@ -7,7 +7,10 @@ The above copyright notice and this permission notice shall be included in all c
 THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
-use log::{error, info, warn};
+#[cfg(not(test))] // only required in real-life execution
+use log::{info, warn};
+
+use log::error;
 
 #[cfg(any(feature = "debug_main", feature = "debug_channels"))]
 use log::debug;
@@ -16,23 +19,22 @@ use crate::database::database_interface_feed_trait::DatabaseInterfaceFeedTrait;
 use crate::database::sql_interface::SqlInterface;
 use crate::database::sql_interface_balling::SqlInterfaceBalling;
 use crate::database::sql_interface_data::SqlInterfaceData;
+#[cfg(not(test))] // only required in real-life execution
 use crate::database::sql_interface_error::SqlInterfaceError;
 use crate::database::sql_interface_feed::SqlInterfaceFeed;
 use crate::database::sql_interface_heating_set_vals::SqlInterfaceHeatingSetVals;
 use crate::database::sql_interface_heating_stats::SqlInterfaceHeatingStats;
 use crate::database::sql_interface_heating_stats_data_transfer::HeatingStatsDataTransfer;
 use crate::database::sql_interface_midnight::SqlInterfaceMidnightCalculator;
-use crate::database::sql_interface_refill::{
-    DatabaseInterfaceRefillTrait, SqlInterfaceRefill,
-};
+use crate::database::sql_interface_refill::{DatabaseInterfaceRefillTrait, SqlInterfaceRefill};
 use crate::database::sql_interface_schedule::SqlInterfaceSchedule;
 use crate::database::sql_interface_ventilation_set_vals::SqlInterfaceVentilationSetVals;
-#[cfg(target_os = "linux")]
 use crate::dispatch::messaging::Messaging;
 
 use crate::food::feed::Feed;
 use crate::food::food_injection::FoodInjection;
 use crate::launch::channels::Channels;
+#[cfg(all(any(target_os = "linux", target_os = "macos"), not(test)))]
 use crate::launch::privilege_check::is_running_as_root;
 use crate::launch::startup_error::StartupError;
 use crate::mineral::balling::Balling;
@@ -46,21 +48,14 @@ use crate::relays::actuate_controllino::ActuateControllino;
 use crate::relays::actuate_gpio::{ActuateGpio, ActuateGpioConfig};
 use crate::relays::actuate_simulator::ActuateSimulator;
 use crate::relays::relay_manager::RelayManager;
-
-#[cfg(all(feature = "target_hw", target_os = "linux"))]
 use crate::sensors::atlas_scientific::AtlasScientific;
 
 use crate::sensors::atlas_scientific::AtlasScientificResultData;
 
-#[cfg(all(feature = "target_hw", target_os = "linux"))]
-use crate::sensors::dht::Dht;
-
 use crate::launch::execution_config::ExecutionConfig;
-use crate::sensors::dht::DhtResult;
+use crate::sensors::dht::{Dht, DhtResult};
 use crate::sensors::ds18b20::{Ds18b20, Ds18b20ResultData};
-use crate::sensors::sensor_manager::{
-    SensorManager, SensorManagerMutexes, SensorManagerSignals,
-};
+use crate::sensors::sensor_manager::{SensorManager, SensorManagerMutexes, SensorManagerSignals};
 use crate::sensors::tank_level_switch::{TankLevelSwitch, TankLevelSwitchSignals};
 use crate::simulator::tcp_communication::TcpCommunication;
 use crate::thermal::distinct_interval_check::distinct_thermal_control_interval_check;
@@ -76,14 +71,19 @@ use crate::utilities::publish_pid::PublishPid;
 #[cfg(all(feature = "target_hw", target_os = "linux"))]
 use crate::utilities::signal_handler;
 
+#[cfg(not(test))] // only required in real-life execution
 use crate::launch::argument_parser::check_argument_for_valid_config_file_name;
+use crate::sensors::i2c_interface::I2cInterface;
+use crate::spawn_tokio_task;
 use crate::thermal::thermal_control_status::ThermalControlStatus;
 #[cfg(all(feature = "target_hw", target_os = "linux"))]
 use crate::utilities::channel_content::InternalCommand;
 use crate::utilities::signal_handler::handle_signals;
-use crate::utilities::version_information::{
-    VersionInformation, VersionInformationError,
-};
+#[cfg(not(test))] // only required in real-life execution
+use crate::utilities::version_information::VersionInformation;
+#[cfg(not(test))] // only required in real-life execution
+use crate::utilities::version_information::VersionInformationError;
+
 use crate::watchmen::monitors::Monitors;
 use crate::watchmen::petting::Petting;
 use crate::watchmen::watchdog::Watchdog;
@@ -91,31 +91,23 @@ use crate::water::refill::Refill;
 use crate::water::refill_status::RefillStatus;
 use crate::water::water_injection::WaterInjection;
 use spin_sleep::SpinSleeper;
+#[cfg(any(test, not(target_os = "linux"), not(feature = "target_hw")))]
+use std::collections::HashMap;
+#[cfg(not(test))] // only required in real-life execution
+use std::env;
 pub use std::sync::{atomic::AtomicBool, Arc, Mutex};
-use std::{env, panic, thread::scope, time::Duration};
+use std::{panic, time::Duration};
 
 cfg_if::cfg_if! {
     if #[cfg(all(target_os = "linux", feature = "target_hw"))] {
-        use aquarium_control::sensors::gpio_handler::GpioHandler;
-        use aquarium_control::beacon::ws2812b::RgbLedColor;
-        use aquarium_control::beacon::ws2812b::Ws2812B;
-    }
-}
-cfg_if::cfg_if! {
-    if #[cfg(all(feature = "target_hw", target_os = "linux"))] {
-        use aquarium_control::sensors::i2c_interface::I2cInterface;
-    }
-}
-use crate::watchmen::memory::Memory;
-
-cfg_if::cfg_if! {
-    if #[cfg(feature = "jemalloc")] {
-        use tikv_jemallocator::Jemalloc;
-        #[global_allocator]
-        static GLOBAL: Jemalloc = Jemalloc;
+        use crate::sensors::gpio_handler::GpioHandler;
+        use crate::beacon::ws2812b::RgbLedColor;
+        use crate::beacon::ws2812b::Ws2812B;
     }
 }
 
+#[cfg(not(test))] // only required in real-life execution
+#[cfg(not(tarpaulin_include))]
 /// Displays the valid command line parameter combinations
 fn display_usage() {
     println!("aquarium_control requires a configuration file to be specified to enter operation. Alternatively, the following options are available:");
@@ -123,6 +115,8 @@ fn display_usage() {
     println!("-v, --version: Output version information including hash of executable.");
 }
 
+#[cfg(not(test))] // only required in real-life execution
+#[cfg(not(tarpaulin_include))]
 /// Checks if a command-line argument is a recognized command and executes it.
 ///
 /// This function handles special command-line flags that provide information
@@ -174,8 +168,9 @@ fn check_is_command(command: &str) -> Result<bool, VersionInformationError> {
 /// 7.  Initializes all SQL database interfaces and validates database readiness.
 /// 8.  Sets up all inter-thread communication channels (`mpsc`).
 /// 9.  Initializes all application modules (sensors, controls, managers) with their respective configurations and channels/mutexes.
-/// 10. Spawns each module in its own dedicated thread within a `std::thread::scope` for structured concurrency.
-/// 11. Manages the initial data acquisition phase, waiting for sensors to provide first readings before control loops become fully active.
+/// 10. Initializes a multi-threaded Tokio runtime directly on the Main thread (capping worker threads to 1 and blocking threads to 3 to optimize resources). Most application modules are spawned as cooperative asynchronous tasks within this runtime.
+/// 11. Spawns dedicated OS threads via standard builder spawns for timing-critical drivers (e.g., TcpCommunication, DHT GPIO bit-banging) that require blocking or spin-sleep behavior.
+/// 12. Manages the initial data acquisition phase, waiting for sensors to provide first readings before control loops become fully active.
 ///
 /// This function is responsible for the overall lifecycle of the application, including graceful startup and panic handling.
 ///
@@ -195,29 +190,54 @@ fn check_is_command(command: &str) -> Result<bool, VersionInformationError> {
 /// - `StartupError::GpioHandlerSetupFailure`: If the GPIO interface cannot be initialized on the target hardware.
 /// - And various other setup failures for specific modules.
 ///
-/// Global thread communication is as follows:
+/// Global module communication and execution architecture is as follows:
 /// ```mermaid
-/// graph LR
-///     tank_level_switch -.-> refill[Refill]
-///     refill --> relay_manager[Controllino]
+/// flowchart TD
+///     subgraph OS_Threads ["Dedicated OS Threads"]
+///         tcp_communication[TcpCommunication]
+///         dht[Dht]
+///     end
+///
+///     subgraph Tokio_Tasks ["Tokio Async Tasks (Main Thread Runtime)"]
+///         refill[Refill]
+///         relay_manager[Controllino / RelayManager]
+///         sensor_manager[SensorManager]
+///         data_logger[DataLogger]
+///         signal_handler[SignalHandler]
+///         balling[Balling]
+///         feed[Feed]
+///         heating[Heating]
+///         ventilation[Ventilation]
+///         atlas_scientific[AtlasScientific]
+///         tank_level_switch[TankLevelSwitch]
+///         monitors[Monitors]
+///         schedule_check[ScheduleCheck]
+///         messaging[Messaging]
+///         watchdog[Watchdog]
+///         i2c_interface[I2C interface]
+///         temperature_gradient[TemperatureGradient]
+///     end
+///
+///     tank_level_switch -.-> refill
+///     refill --> relay_manager
 ///     relay_manager --> refill
-///     sensor_manager[SensorManager] -.-> data_logger[DataLogger]
+///     sensor_manager -.-> data_logger
 ///     refill -.-> data_logger
-///     signal_handler[SignalHandler] --> refill
+///     signal_handler --> refill
 ///     refill --> signal_handler
 ///     signal_handler --> tank_level_switch
 ///     tank_level_switch --> signal_handler
-///     signal_handler --> tcp_communication[TcpCommunication]
+///     signal_handler --> tcp_communication
 ///     tcp_communication --> signal_handler
 ///     signal_handler --> relay_manager
 ///     relay_manager --> signal_handler
-///     balling[Balling] --> signal_handler
+///     balling --> signal_handler
 ///     signal_handler --> balling
-///     feed[Feed] --> signal_handler
+///     feed --> signal_handler
 ///     signal_handler --> feed
-///     heating[Heating] --> signal_handler
+///     heating --> signal_handler
 ///     signal_handler --> heating
-///     ventilation[Ventilation] --> signal_handler
+///     ventilation --> signal_handler
 ///     signal_handler --> ventilation
 ///     relay_manager --> tcp_communication
 ///     sensor_manager --> tcp_communication
@@ -244,13 +264,13 @@ fn check_is_command(command: &str) -> Result<bool, VersionInformationError> {
 ///     ventilation --> relay_manager
 ///     atlas_scientific -.-> ventilation
 ///     relay_manager --> ventilation
-///     monitors[Monitors] --> relay_manager
+///     monitors --> relay_manager
 ///     relay_manager --> monitors
 ///     monitors --> refill
 ///     refill --> monitors
 ///     monitors --> signal_handler
 ///     signal_handler --> monitors
-///     ventilation --> schedule_check[ScheduleCheck]
+///     ventilation --> schedule_check
 ///     schedule_check --> ventilation
 ///     heating --> schedule_check
 ///     schedule_check --> heating
@@ -260,13 +280,13 @@ fn check_is_command(command: &str) -> Result<bool, VersionInformationError> {
 ///     schedule_check --> balling
 ///     signal_handler --> schedule_check
 ///     schedule_check --> signal_handler
-///     signal_handler --> messaging[Messaging]
+///     signal_handler --> messaging
 ///     signal_handler --> sensor_manager
 ///     signal_handler --> watchdog
 ///     sensor_manager --> signal_handler
 ///     signal_handler --> atlas_scientific
 ///     atlas_scientific --> signal_handler
-///     atlas_scientific --> i2c_interface[I2C interface]
+///     atlas_scientific --> i2c_interface
 ///     i2c_interface --> atlas_scientific
 ///     dht -.-> sensor_manager
 ///     messaging --> refill
@@ -276,22 +296,42 @@ fn check_is_command(command: &str) -> Result<bool, VersionInformationError> {
 ///     messaging --> feed
 ///     messaging --> monitors
 ///     messaging --> watchdog
-///     temperature_gradient[TemperatureGradient] --> signal_handler
+///     temperature_gradient --> signal_handler
 ///     signal_handler --> temperature_gradient
 /// ```
-pub fn run() -> Result<(), StartupError> {
+pub fn run(
+    #[cfg(test)] config_file_name_for_test: String,
+    #[cfg(test)] wait_for_test_shutdown_opt: Option<Duration>,
+) -> Result<(), StartupError> {
+    // setting up grpc so that tokio-console can monitor the tokio runtime
+    #[cfg(feature = "debug_tokio")]
+    console_subscriber::init();
+
     let spin_sleeper = SpinSleeper::default();
 
     #[cfg(all(not(target_os = "linux"), feature = "target_hw"))]
     compile_error!("Target hardware is only available with Linux operating system.");
 
     // get command line parameters from OS
+    #[cfg(not(test))] // only required in real-life execution
+    #[cfg(not(tarpaulin_include))]
     let args: Vec<String> = env::args().collect();
 
-    // initialize with a default configuration file name
-    let mut config_file_name = "/etc/aquarium_control/aquarium_control.toml".to_string();
+    #[allow(unused_mut)]
+    let mut config_file_name: String;
+    #[cfg(test)]
+    {
+        config_file_name = config_file_name_for_test;
+    }
+    #[cfg(not(test))] // only required in real-life execution
+    #[cfg(not(tarpaulin_include))]
+    {
+        config_file_name = "/etc/aquarium_control/aquarium_control.toml".to_string();
+    }
 
     // Check command line parameters
+    #[cfg(not(test))] // only required in real-life execution
+    #[cfg(not(tarpaulin_include))]
     if args.len() > 1 {
         // If the first argument contains a path and file name, then let's use that.
         config_file_name = match check_argument_for_valid_config_file_name(&args[1]) {
@@ -327,20 +367,22 @@ pub fn run() -> Result<(), StartupError> {
     let execution_config_clone_for_schedule_check = execution_config.clone();
     let execution_config_clone_for_relay_manager = execution_config.clone();
     let execution_config_clone_for_tcp_communication = execution_config.clone();
-    #[cfg(target_os = "linux")]
     let execution_config_clone_for_messaging = execution_config.clone();
 
     // setup logging to write to the log output file and stdout
     setup_logger(config.logger).map_err(|e| StartupError::LoggingSetupFailure { source: e })?;
 
     // calculate hash of executable
+    #[cfg(not(test))] // only required in real-life execution
+    #[cfg(not(tarpaulin_include))]
     let version_information = VersionInformation::new()
         .map_err(|e| StartupError::VersionInformationRetrievalFailure { source: e })?;
-    #[cfg(not(test))]
+    #[cfg(not(test))] // only required in real-life execution
+    #[cfg(not(tarpaulin_include))]
     info!(target: module_path!(), "{version_information}");
 
     // check if the user has root privileges - disabled when developing on the Windows platform
-    #[cfg(any(target_os = "linux", target_os = "macos"))]
+    #[cfg(all(any(target_os = "linux", target_os = "macos"), not(test)))]
     if !is_running_as_root() {
         return Err(StartupError::NotRoot);
     }
@@ -446,9 +488,9 @@ pub fn run() -> Result<(), StartupError> {
         max_rows_balling_set_values,
         max_rows_balling_dosing_log,
     )
-        .map_err(|e| StartupError::Database {
-            source: Box::new(e),
-        })?;
+    .map_err(|e| StartupError::Database {
+        source: Box::new(e),
+    })?;
 
     let database_connection_refill =
         sql_interface
@@ -484,9 +526,9 @@ pub fn run() -> Result<(), StartupError> {
         max_rows_heating_stats,
         Box::new(sql_interface_midnight_calculator),
     )
-        .map_err(|e| StartupError::Database {
-            source: Box::new(e),
-        })?;
+    .map_err(|e| StartupError::Database {
+        source: Box::new(e),
+    })?;
 
     let database_connection_feed =
         sql_interface
@@ -501,21 +543,31 @@ pub fn run() -> Result<(), StartupError> {
             max_rows_feed_schedule,
             max_rows_feed_log,
         )
-            .map_err(|e| StartupError::Database {
-                source: Box::new(e),
-            })?,
+        .map_err(|e| StartupError::Database {
+            source: Box::new(e),
+        })?,
     );
 
-    let database_connection_data =
+    let database_connection_data_for_timestamp =
         sql_interface
             .get_connection()
             .map_err(|e| StartupError::Database {
                 source: Box::new(e),
             })?;
-    let sql_interface_data = SqlInterfaceData::new(database_connection_data, max_rows_data)
-        .map_err(|e| StartupError::Database {
-            source: Box::new(e),
-        })?;
+    let database_connection_data_for_data =
+        sql_interface
+            .get_connection()
+            .map_err(|e| StartupError::Database {
+                source: Box::new(e),
+            })?;
+    let sql_interface_data = SqlInterfaceData::new(
+        database_connection_data_for_timestamp,
+        database_connection_data_for_data,
+        max_rows_data,
+    )
+    .map_err(|e| StartupError::Database {
+        source: Box::new(e),
+    })?;
 
     let tables = sql_interface
         .get_tables()
@@ -523,8 +575,12 @@ pub fn run() -> Result<(), StartupError> {
             source: Box::new(e),
         })?;
 
+    #[cfg(not(test))] // only required in real-life execution
+    #[cfg(not(tarpaulin_include))]
     match sql_interface.get_hash_from_database(&version_information) {
         Ok(c) => {
+            #[cfg(not(test))] // only required in real-life execution
+            #[cfg(not(tarpaulin_include))]
             info!(
                 target: module_path!(),
                 "version information including hash of executable found in database: {c}"
@@ -540,6 +596,8 @@ pub fn run() -> Result<(), StartupError> {
                 e,
                 SqlInterfaceError::SingleVersionRequestMultipleResults(_, _, _, _, _)
             ) {
+                #[cfg(not(test))] // only required in real-life execution
+                #[cfg(not(tarpaulin_include))]
                 warn!(
                     target: module_path!(),
                     "main: Found multiple hash values for version in database. Proceed with caution.");
@@ -551,11 +609,15 @@ pub fn run() -> Result<(), StartupError> {
         }
     }
 
+    #[cfg(not(test))] // only required in real-life execution
+    #[cfg(not(tarpaulin_include))]
     let database = sql_interface
         .get_database()
         .map_err(|e| StartupError::Database {
             source: Box::new(e),
         })?;
+    #[cfg(not(test))] // only required in real-life execution
+    #[cfg(not(tarpaulin_include))]
     info!(target: module_path!(), "current database name is {database}");
 
     sql_interface
@@ -563,6 +625,8 @@ pub fn run() -> Result<(), StartupError> {
         .map_err(|e| StartupError::Database {
             source: Box::new(e),
         })?;
+    #[cfg(not(test))] // only required in real-life execution
+    #[cfg(not(tarpaulin_include))]
     info!(target: module_path!(), "required tables are existing in database.");
 
     let mut tables_string: String = "read the following tables from database:".to_string();
@@ -570,6 +634,8 @@ pub fn run() -> Result<(), StartupError> {
         tables_string += " ";
         tables_string += &table;
     }
+    #[cfg(not(test))] // only required in real-life execution
+    #[cfg(not(tarpaulin_include))]
     info!(target: module_path!(), "{tables_string}");
 
     // check if any of the components requires use of the simulator
@@ -578,16 +644,27 @@ pub fn run() -> Result<(), StartupError> {
         | config.sensor_manager.use_simulator
         | config.tank_level_switch.use_simulator;
 
-    let mut channels = Channels::new(
+    let rt = tokio::runtime::Builder::new_multi_thread()
+        .worker_threads(1)
+        .max_blocking_threads(4)
+        .enable_all()
+        .build()
+        .map_err(|e| StartupError::TokioRuntimeSetupFailure { source: e })?;
+
+    let is_multi_thread = matches!(
+        rt.handle().runtime_flavor(),
+        tokio::runtime::RuntimeFlavor::MultiThread
+    );
+
+    let channels = Channels::new(
         config.relay_manager.use_simulator,
         config.sensor_manager.use_simulator,
         config.tank_level_switch.use_simulator,
+        is_multi_thread,
     );
 
-    #[cfg(target_os = "linux")]
     let mut messaging = Messaging::new(config.messaging, execution_config_clone_for_messaging)
         .map_err(|e| StartupError::Messaging { source: e })?;
-
     let mut food_injection = FoodInjection::new(&config.feed);
     let mut mineral_injection = MineralInjection::new();
     let mut water_injection = WaterInjection::new(&config.refill);
@@ -597,10 +674,10 @@ pub fn run() -> Result<(), StartupError> {
 
     // The following structs have a high amount of platform-specific code:
     let mut tank_level_switch: TankLevelSwitch;
+    let mut dht: Dht;
 
     cfg_if::cfg_if! {
         if #[cfg(all(target_os = "linux", feature = "target_hw"))] {
-            let mut dht;
             let gpio_dht22_io = config.gpio_handler.dht22_io;
             let gpio_dht22_vcc = config.gpio_handler.dht22_vcc;
             let mut actuate_gpio_opt: Option<ActuateGpio> = None;
@@ -648,16 +725,17 @@ pub fn run() -> Result<(), StartupError> {
                     actuate_gpio_opt = Some(actuate_gpio);
                 }
             }
-            let mut i2c_interface = I2cInterface::new(config.i2c_interface)
-                .map_err(|e| StartupError::I2cSetupFailure { source: e })?;
         }
         else {
             tank_level_switch = TankLevelSwitch::new(
                 config.tank_level_switch,
                 true,
             ).map_err(|e| StartupError::TankLevelSwitchSetupFailure { source: e })?;
+            dht = Dht::new(config.dht, None, 6, 7); // arbitrary GPIO pins - not used for testing
         }
     }
+    let mut i2c_interface = I2cInterface::new(config.i2c_interface)
+        .map_err(|e| StartupError::I2cSetupFailure { source: e })?;
 
     //**************************************** Mutexes *********************************************
     let mutex_device_scheduler = Arc::new(Mutex::new(0));
@@ -736,10 +814,16 @@ pub fn run() -> Result<(), StartupError> {
     let mutex_temperature_gradient_clone_for_data_logger = mutex_temperature_gradient.clone();
     //**********************************************************************************************
 
-    #[cfg(all(target_os = "linux", feature = "target_hw"))]
+    #[cfg(all(target_os = "linux", feature = "target_hw", not(test)))]
     let atlas_scientific_drivers = AtlasScientific::create_drivers(&config.atlas_scientific)
         .map_err(|e| StartupError::AtlasScientificSetupFailure { source: e })?;
+    #[cfg(any(test, not(target_os = "linux"), not(feature = "target_hw")))]
+    let atlas_scientific_drivers = HashMap::new();
+
     #[cfg(all(target_os = "linux", feature = "target_hw"))]
+    let atlas_scientific =
+        AtlasScientific::new(config.atlas_scientific, atlas_scientific_drivers);
+    #[cfg(not(all(target_os = "linux", feature = "target_hw")))]
     let mut atlas_scientific =
         AtlasScientific::new(config.atlas_scientific, atlas_scientific_drivers);
 
@@ -752,8 +836,8 @@ pub fn run() -> Result<(), StartupError> {
     );
     let mut schedule_check = ScheduleCheck::new(config.schedule_check, database_ping_duration);
 
-    let mut data_injection = DataInjection;
-    let mut data_logger = DataLogger::new(config.data_logger, database_ping_duration)
+    let data_injection = DataInjection;
+    let mut data_logger = DataLogger::new(config.data_logger)
         .map_err(|e| StartupError::DataLoggerSetupFailure { source: e })?;
 
     let mut refill = Refill::new(config.refill, database_ping_duration);
@@ -783,8 +867,8 @@ pub fn run() -> Result<(), StartupError> {
     let mut ventilation_set_value_updater =
         SqlInterfaceVentilationSetVals::new(database_connection_ventilation, &config.ventilation)
             .map_err(|e| StartupError::Database {
-                source: Box::new(e),
-            })?;
+            source: Box::new(e),
+        })?;
 
     let mut ventilation = Ventilation::new(config.ventilation);
     let mut balling = Balling::new(
@@ -792,12 +876,10 @@ pub fn run() -> Result<(), StartupError> {
         database_ping_duration,
         &mut sql_interface_balling,
     )
-        .map_err(|e| StartupError::InvalidBallingConfiguration { source: e })?;
+    .map_err(|e| StartupError::InvalidBallingConfiguration { source: e })?;
     let mut monitors = Monitors::new(config.monitors);
     let mut watchdog = Watchdog::new(config.watchdog)
         .map_err(|e| StartupError::WatchdogSetupFailure { source: e })?;
-    let mut memory =
-        Memory::new(config.memory).map_err(|e| StartupError::InvalidMemoryConfig { source: e })?;
 
     let mut ds18b20 = Ds18b20::new(config.ds18b20)
         .map_err(|e| StartupError::Ds18b20SetupFailure { source: e })?;
@@ -808,403 +890,512 @@ pub fn run() -> Result<(), StartupError> {
             &config.tcp_communication,
             execution_config_clone_for_tcp_communication,
         )
-            .map_err(|e| StartupError::TcpConnection { source: e })?;
+        .map_err(|e| StartupError::TcpConnection { source: e })?;
         tcp_communication_opt = Some(tcp_communication);
     }
 
     let tcp_communication_thread_started = execution_config.tcp_communication;
     let relay_manager_thread_started = execution_config.relay_manager;
-    scope(|scope| {
-        // spawn thread for sensor communication first to allow checks
-        #[cfg(all(target_os = "linux", feature = "target_hw"))]
+
+    #[allow(unused_mut, unused_variables)]
+    let Channels {
+        feed: mut chan_feed,
+        schedule_check: mut chan_schedule_check,
+        actuate_simulator: mut chan_actuate_simulator,
+        relay_manager: mut chan_relay_manager,
+        atlas_scientific: mut chan_atlas_scientific,
+        dht: mut chan_dht,
+        ds18b20: mut chan_ds18b20,
+        balling: mut chan_balling,
+        data_logger: mut chan_data_logger,
+        i2c_interface: mut chan_i2c_interface,
+        tank_level_switch: mut chan_tank_level_switch,
+        tcp_communication: mut chan_tcp_communication,
+        heating: mut chan_heating,
+        ventilation: mut chan_ventilation,
+        signal_handler: mut chan_signal_handler,
+        monitors: mut chan_monitors,
+        watchdog: mut chan_watchdog,
+        refill: mut chan_refill,
+        sensor_manager: mut chan_sensor_manager,
+        temperature_gradient: mut chan_temperature_gradient,
+        messaging: mut chan_messaging,
+    } = channels;
+
+    let mut thread_handles = vec![];
+    // spawn thread for sensor communication first to allow checks
+
+    // open tcp connection only if configuration requires use of simulator instead of HW
+    if use_simulator && tcp_communication_thread_started {
+        let handle = std::thread::Builder::new()
+            .name("TcpCommunication".to_string())
+            .spawn(move || {
+                if let Some(mut tcp_communication) = tcp_communication_opt {
+                    tcp_communication.execute(&mut chan_tcp_communication);
+                }
+                #[cfg(feature = "debug_channels")]
+                debug!(target: module_path!(), "{0}", chan_tcp_communication);
+            })
+            .expect("Failed to spawn TcpCommunication thread");
+        thread_handles.push(handle);
+        #[cfg(feature = "debug_main")]
+        debug!(target: module_path!(), "TcpCommunication terminated.");
+    };
+
+    if execution_config.dht {
+        let handle = std::thread::Builder::new()
+            .name("Dht".to_string())
+            .spawn(move || {
+                dht.execute(mutex_dht, &mut chan_dht);
+                #[cfg(feature = "debug_channels")]
+                debug!(target: module_path!(), "{0}", chan_dht);
+                #[cfg(feature = "debug_main")]
+                debug!(target: module_path!(), "Dht terminated.");
+            })
+            .expect("Failed to spawn Dht thread");
+        thread_handles.push(handle);
+    }
+
+    // give sensor reading components some time so that they can acquire a first data set
+    let duration_one_second = Duration::from_secs(1);
+    #[cfg(not(test))] // only required in real-life execution
+    #[cfg(not(tarpaulin_include))]
+    println!("trying to acquire data before starting control in 3 seconds...");
+    spin_sleeper.sleep(duration_one_second);
+    #[cfg(not(test))] // only required in real-life execution
+    #[cfg(not(tarpaulin_include))]
+    println!("trying to acquire data before starting control in 2 seconds...");
+    spin_sleeper.sleep(duration_one_second);
+    #[cfg(not(test))] // only required in real-life execution
+    #[cfg(not(tarpaulin_include))]
+    println!("trying to acquire data before starting control in 1 second...");
+    spin_sleeper.sleep(duration_one_second);
+    #[cfg(not(test))] // only required in real-life execution
+    #[cfg(not(tarpaulin_include))]
+    println!("starting control...");
+
+    rt.block_on(async {
+        let mut tasks = vec![];
+
+        // 1. Spawn I2cInterface FIRST so it is running and ready to handle commands
         if !use_simulator && execution_config.i2c_interface {
-            scope.spawn(move || {
-                i2c_interface.execute(&mut channels.i2c_interface);
+            let handle = spawn_tokio_task!("i2c_interface", async move {
+                i2c_interface.execute(&mut chan_i2c_interface).await;
                 #[cfg(all(target_os = "linux", feature = "target_hw", feature = "debug_channels"))]
-                debug!(target: module_path!(), "{0}", channels.i2c_interface);
+                debug!(target: module_path!(), "{0}", chan_i2c_interface);
                 #[cfg(feature = "debug_main")]
                 debug!(target: module_path!(), "i2c_interface terminated.");
             });
+            tasks.push(handle);
         }
 
+        // 2. Perform the initialization check synchronously via spawn_blocking
         #[cfg(all(target_os = "linux", feature = "target_hw"))]
-        if !use_simulator && atlas_scientific_active {
-            let result = atlas_scientific.init_devices(&mut channels.atlas_scientific);
-            if let Err(e) = result {
-                // terminate the I2cInterface thread before exiting the application
+        let (mut atlas_scientific, mut chan_atlas_scientific) = if !use_simulator && atlas_scientific_active {
+            let (res, atlas_scientific, chan_atlas_scientific) = tokio::task::spawn_blocking(move || {
+                let res = atlas_scientific.init_devices(&mut chan_atlas_scientific);
+                (res, atlas_scientific, chan_atlas_scientific)
+            })
+            .await
+            .map_err(|e| StartupError::TokioRuntimeSetupFailure { source: e.into() })?;
+
+            if let Err(e) = res {
+                // terminate the I2cInterface task before exiting the application
                 signal_handler::send_command(
                     InternalCommand::Quit,
-                    Some(&mut channels.signal_handler.tx_signal_handler_to_i2c_interface),
+                    Some(&mut chan_signal_handler.tx_signal_handler_to_i2c_interface),
                     None,
                     "i2c_interface",
-                );
+                ).await;
                 return Err(StartupError::AtlasScientificSensorTypeMismatch { source: e });
             }
-        }
-
-        // open tcp connection only if configuration requires use of simulator instead of HW
-        if use_simulator && tcp_communication_thread_started {
-            scope.spawn(move || {
-                if let Some(mut tcp_communication) = tcp_communication_opt {
-                    tcp_communication.execute(&mut channels.tcp_communication);
-                }
-                #[cfg(feature = "debug_channels")]
-                debug!(target: module_path!(), "{0}", channels.tcp_communication);
-            });
-            #[cfg(feature = "debug_main")]
-            debug!(target: module_path!(), "TcpCommunication terminated.");
+            (atlas_scientific, chan_atlas_scientific)
+        } else {
+            (atlas_scientific, chan_atlas_scientific)
         };
 
-        if config.relay_manager.use_simulator && relay_manager_thread_started {
-            scope.spawn(move || {
-                let mut actuate_simulator = ActuateSimulator::new(
-                    &mut channels.actuate_simulator,
-                    config.controllino_relay,
-                );
-                relay_manager.execute(&mut channels.relay_manager, &mut actuate_simulator);
-                #[cfg(feature = "debug_channels")]
-                debug!(target: module_path!(), "{0}", channels.actuate_simulator);
-                #[cfg(feature = "debug_channels")]
-                debug!(target: module_path!(), "{0}", channels.relay_manager);
-                #[cfg(feature = "debug_main")]
-                debug!(target: module_path!(), "Controllino (simulator) terminated.");
-            });
-        } else if relay_manager_thread_started {
-            scope.spawn(move || {
-                if config.relay_manager.use_gpio {
-                    #[cfg(all(feature = "target_hw", target_os = "linux"))]
-                    relay_manager.execute(
-                        &mut channels.relay_manager,
-                        &mut actuate_gpio_opt.expect("Internal error: Illegal configuration (unwrapping of GPIO actuator failed)")
-                    );
-                } else {
-                    relay_manager.execute(&mut channels.relay_manager, &mut actuate_controllino);
-                }
-                #[cfg(feature = "debug_channels")]
-                debug!(target: module_path!(), "{0}", channels.relay_manager);
-                #[cfg(feature = "debug_main")]
-                debug!(target: module_path!(), "Controllino (with hardware) terminated.");
-            });
-        }
-
-        scope.spawn(move || {
-            let term = Arc::new(AtomicBool::new(false));
-
+        let term = Arc::new(AtomicBool::new(false));
+        let signal_handler_config = execution_config_clone_for_signal_handler;
+        let signal_handle = spawn_tokio_task!("signal_handler", async move {
             handle_signals(
                 term,
-                channels.signal_handler,
-                execution_config_clone_for_signal_handler,
-            );
+                chan_signal_handler,
+                signal_handler_config,
+                #[cfg(test)]
+                wait_for_test_shutdown_opt,
+            ).await;
             #[cfg(feature = "debug_main")]
             debug!(target: module_path!(), "Signal handler terminated.");
         });
+        tasks.push(signal_handle);
 
         if execution_config.schedule_check {
-            scope.spawn(move || {
+            let exec_config = execution_config_clone_for_schedule_check;
+            let handle = spawn_tokio_task!("schedule_check", async move {
                 schedule_check.execute(
-                    &mut channels.schedule_check,
-                    execution_config_clone_for_schedule_check,
+                    &mut chan_schedule_check,
+                    exec_config,
                     sql_interface_schedule,
-                );
+                ).await;
                 #[cfg(feature = "debug_channels")]
-                debug!(target: module_path!(), "{0}", channels.schedule_check);
+                debug!(target: module_path!(), "{0}", chan_schedule_check);
                 #[cfg(feature = "debug_main")]
                 debug!(target: module_path!(), "Schedule checker terminated.");
             });
+            tasks.push(handle);
         }
-
-        #[cfg(all(target_os = "linux", feature = "target_hw"))]
-        if !use_simulator && execution_config.atlas_scientific {
-            scope.spawn(move || {
-                atlas_scientific.execute(
-                    &mut channels.atlas_scientific,
-                    mutex_atlas_scientific_temperature,
-                    mutex_atlas_scientific_ph,
-                    mutex_atlas_scientific_conductivity,
-                );
-                #[cfg(feature = "debug_channels")]
-                debug!(target: module_path!(), "{0}", channels.atlas_scientific);
-                #[cfg(feature = "debug_main")]
-                debug!(target: module_path!(), "Atlas Scientific terminated.");
-            });
-        }
-
-        #[cfg(all(target_os = "linux", feature = "target_hw"))]
-        if execution_config.dht {
-            scope.spawn(move || {
-                dht.execute(mutex_dht, &mut channels.dht);
-                #[cfg(feature = "debug_channels")]
-                debug!(target: module_path!(), "{0}", channels.dht);
-                #[cfg(feature = "debug_main")]
-                debug!(target: module_path!(), "Dht terminated.");
-            });
-        }
-
         if execution_config.sensor_manager {
-            scope.spawn(move || {
-                let mutexes_sensor_manager = SensorManagerMutexes {
-                    mutex_ds18b20_ambient_temperature:
-                    mutex_ds18b20_ambient_temperature_clone_for_sensor_manager,
-                    mutex_ds18b20_water_temperature:
-                    mutex_ds18b20_water_temperature_clone_for_sensor_manager,
-                    mutex_dht: mutex_dht_clone_for_sensor_manager,
-                    mutex_atlas_scientific_temperature:
-                    mutex_atlas_scientific_temperature_clone_for_sensor_manager,
-                    mutex_atlas_scientific_ph: mutex_atlas_scientific_ph_clone_for_sensor_manager,
-                    mutex_atlas_scientific_conductivity:
-                    mutex_atlas_scientific_conductivity_clone_for_sensor_manager,
-                    mutex_sensor_manager_signals,
-                };
-
-                sensor_manager.execute(&mut channels.sensor_manager, mutexes_sensor_manager);
+            let mutexes_sensor_manager = SensorManagerMutexes {
+                mutex_ds18b20_ambient_temperature:
+                mutex_ds18b20_ambient_temperature_clone_for_sensor_manager,
+                mutex_ds18b20_water_temperature:
+                mutex_ds18b20_water_temperature_clone_for_sensor_manager,
+                mutex_dht: mutex_dht_clone_for_sensor_manager,
+                mutex_atlas_scientific_temperature:
+                mutex_atlas_scientific_temperature_clone_for_sensor_manager,
+                mutex_atlas_scientific_ph: mutex_atlas_scientific_ph_clone_for_sensor_manager,
+                mutex_atlas_scientific_conductivity:
+                mutex_atlas_scientific_conductivity_clone_for_sensor_manager,
+                mutex_sensor_manager_signals,
+            };
+            let handle = spawn_tokio_task!("sensor_manager", async move {
+                sensor_manager.execute(&mut chan_sensor_manager, mutexes_sensor_manager).await;
                 #[cfg(feature = "debug_channels")]
-                debug!(target: module_path!(), "{0}", channels.sensor_manager);
+                debug!(target: module_path!(), "{0}", chan_sensor_manager);
                 #[cfg(feature = "debug_main")]
                 debug!(target: module_path!(), "SensorManager terminated.");
             });
+            tasks.push(handle);
         }
 
-        // give sensor reading components some time so that they can acquire a first data set
-        let duration_one_second = Duration::from_secs(1);
-        println!("trying to acquire data before starting control in 3 seconds...");
-        spin_sleeper.sleep(duration_one_second);
-        println!("trying to acquire data before starting control in 2 seconds...");
-        spin_sleeper.sleep(duration_one_second);
-        println!("trying to acquire data before starting control in 1 second...");
-        spin_sleeper.sleep(duration_one_second);
-        println!("starting control...");
+        if !use_simulator && execution_config.atlas_scientific {
+            let handle = spawn_tokio_task!("atlas_scientific", async move {
+                atlas_scientific.execute(
+                    &mut chan_atlas_scientific,
+                    mutex_atlas_scientific_temperature,
+                    mutex_atlas_scientific_ph,
+                    mutex_atlas_scientific_conductivity,
+                ).await;
+                #[cfg(feature = "debug_channels")]
+                debug!(target: module_path!(), "{0}", chan_atlas_scientific);
+                #[cfg(feature = "debug_main")]
+                debug!(target: module_path!(), "Atlas Scientific terminated.");
+            });
+            tasks.push(handle);
+        }
+
+        if relay_manager_thread_started {
+            let use_simulator = config.relay_manager.use_simulator;
+            let use_gpio = config.relay_manager.use_gpio;
+            let controllino_relay_config = config.controllino_relay.clone();
+            let handle = spawn_tokio_task!("relay_manager", async move {
+                if use_simulator {
+                    let mut actuate_simulator =
+                        ActuateSimulator::new(&mut chan_actuate_simulator, controllino_relay_config);
+                    relay_manager.execute(&mut chan_relay_manager, &mut actuate_simulator).await;
+                    #[cfg(feature = "debug_channels")]
+                    debug!(target: module_path!(), "{0}", chan_actuate_simulator);
+                    #[cfg(feature = "debug_channels")]
+                    debug!(target: module_path!(), "{0}", chan_relay_manager);
+                    #[cfg(feature = "debug_main")]
+                    debug!(target: module_path!(), "Controllino (simulator) terminated.");
+                } else {
+                    if use_gpio {
+                        #[cfg(all(feature = "target_hw", target_os = "linux"))]
+                        relay_manager.execute(
+                            &mut chan_relay_manager,
+                            &mut actuate_gpio_opt.expect("Internal error: Illegal configuration (unwrapping of GPIO actuator failed)")
+                        ).await;
+                    } else {
+                        relay_manager.execute(&mut chan_relay_manager, &mut actuate_controllino).await;
+                    }
+                    #[cfg(feature = "debug_channels")]
+                    debug!(target: module_path!(), "{0}", chan_relay_manager);
+                    #[cfg(feature = "debug_main")]
+                    debug!(target: module_path!(), "Controllino (with hardware) terminated.");
+                }
+            });
+            tasks.push(handle);
+        }
 
         if execution_config.data_logger {
-            scope.spawn(move || {
-                let data_logger_mutexes = DataLoggerMutexes {
-                    mutex_sensor_manager_signals:
-                    mutex_sensor_manager_signals_clone_for_data_logger,
-                    mutex_tank_level_switch_signals:
-                    mutex_tank_level_switch_signals_clone_for_data_logger,
-                    mutex_heating_status: mutex_heating_status_clone_for_data_logger,
-                    mutex_ventilation_status: mutex_ventilation_status_clone_for_data_logger,
-                    mutex_refill_status: mutex_refill_status_clone_for_data_logger,
-                    mutex_temperature_gradient: mutex_temperature_gradient_clone_for_data_logger,
-                };
-
+            let data_logger_mutexes = DataLoggerMutexes {
+                mutex_sensor_manager_signals:
+                mutex_sensor_manager_signals_clone_for_data_logger,
+                mutex_tank_level_switch_signals:
+                mutex_tank_level_switch_signals_clone_for_data_logger,
+                mutex_heating_status: mutex_heating_status_clone_for_data_logger,
+                mutex_ventilation_status: mutex_ventilation_status_clone_for_data_logger,
+                mutex_refill_status: mutex_refill_status_clone_for_data_logger,
+                mutex_temperature_gradient: mutex_temperature_gradient_clone_for_data_logger,
+            };
+            let handle = spawn_tokio_task!("data_logger", async move {
                 data_logger.execute(
-                    &mut data_injection,
+                    data_injection,
                     sql_interface_data,
-                    &mut channels.data_logger,
+                    &mut chan_data_logger,
                     data_logger_mutexes,
-                );
+                ).await;
                 #[cfg(feature = "debug_channels")]
-                debug!(target: module_path!(), "{0}", channels.data_logger);
+                debug!(target: module_path!(), "{0}", chan_data_logger);
                 #[cfg(feature = "debug_main")]
                 debug!(target: module_path!(), "Data logger terminated.");
             });
+            tasks.push(handle);
         }
 
-        if execution_config.tank_level_switch {
-            scope.spawn(move || {
-                let _ = tank_level_switch.execute(
-                    &mut channels.tank_level_switch,
-                    mutex_tank_level_switch_signals,
-                );
-                #[cfg(feature = "debug_channels")]
-                debug!(target: module_path!(), "{0}", channels.tank_level_switch);
+        if execution_config.temperature_gradient {
+            let handle = spawn_tokio_task!("temperature_gradient", async move {
+                temperature_gradient.execute(
+                    mutex_sensor_manager_signals_clone_for_temp_gradient,
+                    &mut chan_temperature_gradient,
+                    mutex_temperature_gradient,
+                ).await;
                 #[cfg(feature = "debug_main")]
-                debug!(target: module_path!(), "Tank level switch calculation terminated.");
+                debug!(target: module_path!(), "Temperature gradient calculation terminated.");
             });
-        }
-
-        if execution_config.refill {
-            // Refill needs actuation of relay
-            let mutex_device_scheduler_refill = Arc::clone(&mutex_device_scheduler);
-
-            scope.spawn(move || {
-                refill.execute(
-                    mutex_device_scheduler_refill,
-                    &mut channels.refill,
-                    &mut water_injection,
-                    mutex_tank_level_switch_signals_clone_for_refill,
-                    mutex_refill_status,
-                    sql_interface_refill,
-                );
-                #[cfg(feature = "debug_channels")]
-                debug!(target: module_path!(), "{0}", channels.refill);
-                #[cfg(feature = "debug_main")]
-                debug!(target: module_path!(), "Refill terminated.");
-            });
+            tasks.push(handle);
         }
 
         if execution_config.heating {
-            // Heating needs actuation of relay
             let mutex_device_scheduler_heating = Arc::clone(&mutex_device_scheduler);
-
             let mut heating_stats_transfer = HeatingStatsDataTransfer;
-
             let heating_mutexes = HeatingMutexes {
                 mutex_sensor_manager_signals: mutex_sensor_manager_signals_clone_for_heating,
                 mutex_tank_level_switch_signals: mutex_tank_level_switch_signals_clone_for_heating,
                 mutex_heating_status,
                 mutex_temperature_gradient: mutex_temperature_gradient_clone_for_heating,
             };
-
-            scope.spawn(move || {
+            let handle = spawn_tokio_task!("heating", async move {
                 heating.execute(
                     mutex_device_scheduler_heating,
-                    &mut channels.heating,
+                    &mut chan_heating,
                     &mut heating_stats_transfer,
                     &mut heating_set_value_updater,
                     heating_mutexes,
                     sql_interface_heating,
-                );
+                    is_multi_thread
+                ).await;
                 #[cfg(feature = "debug_channels")]
-                debug!(target: module_path!(), "{0}", channels.heating);
+                debug!(target: module_path!(), "{0}", chan_heating);
                 #[cfg(feature = "debug_main")]
                 debug!(target: module_path!(), "Heating terminated.");
             });
+            tasks.push(handle);
         }
 
         if execution_config.ventilation {
-            // Ventilation needs actuation of relay
             let mutex_device_scheduler_ventilation = Arc::clone(&mutex_device_scheduler);
-
-            scope.spawn(move || {
-                let ventilation_mutexes = VentilationMutexes {
-                    mutex_sensor_manager_signals:
-                    mutex_sensor_manager_signals_clone_for_ventilation,
-                    mutex_ventilation_status,
-                    mutex_temperature_gradient: mutex_temperature_gradient_clone_for_ventilation,
-                };
-
+            let ventilation_mutexes = VentilationMutexes {
+                mutex_sensor_manager_signals:
+                mutex_sensor_manager_signals_clone_for_ventilation,
+                mutex_ventilation_status,
+                mutex_temperature_gradient: mutex_temperature_gradient_clone_for_ventilation,
+            };
+            let handle = spawn_tokio_task!("ventilation", async move {
                 ventilation.execute(
                     mutex_device_scheduler_ventilation,
-                    &mut channels.ventilation,
+                    &mut chan_ventilation,
                     &mut ventilation_set_value_updater,
                     ventilation_mutexes,
-                );
+                    is_multi_thread
+                ).await;
                 #[cfg(feature = "debug_channels")]
-                debug!(target: module_path!(), "{0}", channels.ventilation);
+                debug!(target: module_path!(), "{0}", chan_ventilation);
                 #[cfg(feature = "debug_main")]
                 debug!(target: module_path!(), "Ventilation terminated.");
             });
+            tasks.push(handle);
         }
 
         if execution_config.monitors {
-            // Monitors needs communication with the Controllino device
             let mutex_device_scheduler_monitors = Arc::clone(&mutex_device_scheduler);
-
-            scope.spawn(move || {
-                monitors.execute(mutex_device_scheduler_monitors, &mut channels.monitors);
+            let handle = spawn_tokio_task!("monitors", async move {
+                monitors.execute(mutex_device_scheduler_monitors, &mut chan_monitors).await;
                 #[cfg(feature = "debug_channels")]
-                debug!(target: module_path!(), "{0}", channels.monitors);
+                debug!(target: module_path!(), "{0}", chan_monitors);
                 #[cfg(feature = "debug_main")]
                 debug!(target: module_path!(), "Monitors terminated.");
             });
+            tasks.push(handle);
+        }
+
+        if execution_config.refill {
+            let mutex_device_scheduler_refill = Arc::clone(&mutex_device_scheduler);
+            let handle = spawn_tokio_task!("refill", async move {
+                refill.execute(
+                    mutex_device_scheduler_refill,
+                    &mut chan_refill,
+                    &mut water_injection,
+                    mutex_tank_level_switch_signals_clone_for_refill,
+                    mutex_refill_status,
+                    sql_interface_refill,
+                    is_multi_thread
+                ).await;
+                #[cfg(feature = "debug_channels")]
+                debug!(target: module_path!(), "{0}", chan_refill);
+                #[cfg(feature = "debug_main")]
+                debug!(target: module_path!(), "Refill terminated.");
+            });
+            tasks.push(handle);
         }
 
         if execution_config.feed {
-            // Feed needs actuation of relay
             let mutex_device_scheduler_feed = Arc::clone(&mutex_device_scheduler);
-
-            scope.spawn(move || {
+            let handle = spawn_tokio_task!("feed", async move {
                 feed.execute(
                     mutex_device_scheduler_feed,
-                    &mut channels.feed,
+                    &mut chan_feed,
                     &mut food_injection,
                     sql_interface_feed,
-                );
+                    is_multi_thread
+                ).await;
                 #[cfg(feature = "debug_channels")]
-                debug!(target: module_path!(), "{0}", channels.feed);
+                debug!(target: module_path!(), "{0}", chan_feed);
                 #[cfg(feature = "debug_main")]
                 debug!(target: module_path!(), "Feed terminated.");
             });
+            tasks.push(handle);
         }
 
         if execution_config.balling {
-            // Balling dosing needs actuation of relays
             let mutex_device_scheduler_balling = Arc::clone(&mutex_device_scheduler);
-
-            scope.spawn(move || {
+            let handle = spawn_tokio_task!("balling", async move {
                 balling.execute(
                     mutex_device_scheduler_balling,
-                    &mut channels.balling,
+                    &mut chan_balling,
                     &mut mineral_injection,
                     sql_interface_balling,
-                );
+                    is_multi_thread
+                ).await;
                 #[cfg(feature = "debug_channels")]
-                debug!(target: module_path!(), "{0}", channels.balling);
+                debug!(target: module_path!(), "{0}", chan_balling);
                 #[cfg(feature = "debug_main")]
                 debug!(target: module_path!(), "Balling terminated.");
             });
+            tasks.push(handle);
         }
 
-        // IPC via messages
-        scope.spawn(move || {
-            // read/send messages
-            #[cfg(target_os = "linux")]
-            messaging.execute(&mut channels.messaging);
-
-            // remove PID from the file
-            let publish_pid_result = publish_pid.erase_pid();
-            if let Err(e) = publish_pid_result {
-                log_error_chain(
-                    module_path!(),
-                    "Error occurred when trying to reset PID.",
-                    e,
-                );
-            }
-            #[cfg(all(target_os = "linux", feature = "debug_channels"))]
-            debug!(target: module_path!(), "{0}", channels.messaging);
-            #[cfg(feature = "debug_main")]
-            debug!(target: module_path!(), "Messaging terminated.");
-        });
+        if execution_config.tank_level_switch {
+            let handle = spawn_tokio_task!("tank_level_switch", async move {
+                let _ = tank_level_switch
+                    .execute(&mut chan_tank_level_switch, mutex_tank_level_switch_signals).await;
+                #[cfg(feature = "debug_channels")]
+                debug!(target: module_path!(), "{0}", chan_tank_level_switch);
+                #[cfg(feature = "debug_main")]
+                debug!(target: module_path!(), "Tank level switch calculation terminated.");
+            });
+            tasks.push(handle);
+        }
 
         if execution_config.watchdog {
-            // Watchdog communication
-            scope.spawn(move || {
-                watchdog.execute(&mut channels.watchdog, &mut petting);
+            let handle = spawn_tokio_task!("watchdog", async move {
+                watchdog.execute(&mut chan_watchdog, &mut petting).await;
                 #[cfg(all(target_os = "linux", feature = "target_hw", feature = "debug_channels"))]
-                debug!(target: module_path!(), "{0}", channels.watchdog);
+                debug!(target: module_path!(), "{0}", chan_watchdog);
                 #[cfg(feature = "debug_main")]
                 debug!(target: module_path!(), "Watchdog terminated.");
             });
+            tasks.push(handle);
         }
 
-        if execution_config.memory {
-            // Memory utilization monitoring
-            scope.spawn(move || {
-                memory.execute(&mut channels.memory);
-                #[cfg(all(target_os = "linux", feature = "target_hw", feature = "debug_channels"))]
-                debug!(target: module_path!(), "{0}", channels.memory);
-                #[cfg(feature = "debug_main")]
-                debug!(target: module_path!(), "Memory terminated.");
-            });
-        }
 
         if execution_config.ds18b20 {
-            // Ds18b20 communication
-            scope.spawn(move || {
+            let handle = spawn_tokio_task!("ds18b20", async move {
                 ds18b20.execute(
-                    &mut channels.ds18b20,
+                    &mut chan_ds18b20,
                     mutex_ds18b20_water_temperature,
                     mutex_ds18b20_ambient_temperature,
-                );
+                ).await;
                 #[cfg(all(target_os = "linux", feature = "target_hw", feature = "debug_channels"))]
-                debug!(target: module_path!(), "{0}", channels.ds18b20);
+                debug!(target: module_path!(), "{0}", chan_ds18b20);
                 #[cfg(feature = "debug_main")]
                 debug!(target: module_path!(), "Ds18b20 terminated");
             });
+            tasks.push(handle);
         }
 
-        if execution_config.temperature_gradient {
-            scope.spawn(move || {
-                temperature_gradient.execute(
-                    mutex_sensor_manager_signals_clone_for_temp_gradient,
-                    &mut channels.temperature_gradient,
-                    mutex_temperature_gradient,
-                );
-                #[cfg(feature = "debug_main")]
-                debug!(target: module_path!(), "Temperature gradient calculation terminated.");
-            });
+        let handle = spawn_tokio_task!("messaging", async move {
+            messaging.execute(&mut chan_messaging).await;
+            #[cfg(all(target_os = "linux", feature = "debug_channels"))]
+            debug!(target: module_path!(), "{0}", chan_messaging);
+            #[cfg(feature = "debug_main")]
+            debug!(target: module_path!(), "Messaging terminated.");
+        });
+        tasks.push(handle);
+
+        // Wait until all tasks are finished
+        for t in tasks {
+            let _ = t.await;
         }
-        Ok(())
-    })
+        Ok::<(), StartupError>(())
+    })?;
+
+    // Wait for all spawned tasks to finish
+    for handle in thread_handles {
+        let _ = handle.join();
+    }
+
+    // remove PID from the file
+    let publish_pid_result = publish_pid.erase_pid();
+    if let Err(e) = publish_pid_result {
+        log_error_chain(
+            module_path!(),
+            "Error occurred when trying to reset PID.",
+            e,
+        );
+    }
+
+    Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::database::sql_interface::tests::insert_mock_version_information;
+    use crate::database::sql_interface::tests::truncate_all_tables;
+    use crate::database::sql_interface_balling::tests::add_balling_profile;
+    use std::sync::atomic::Ordering;
+    use std::time::Duration;
+
+    #[test]
+    fn test_run_async_runtime_configuration() {
+        // Path of the dedicated config file
+        let config_path = "config/aquarium_control_test_runtime.toml".to_string();
+
+        // Reset the test shutdown trigger flag to false
+        crate::utilities::signal_handler::TEST_SHUTDOWN_TRIGGER.store(false, Ordering::Relaxed);
+
+        // Delete any stale PID file from previous test executions to avoid PidCheckError
+        let _ = std::fs::remove_file("/tmp/aquarium-ctrl-test.pid");
+
+        // Connect to database and prepare the test environment within a scope so the connection is returned to the pool
+        {
+            let config_data = read_config_file(config_path.to_string()).unwrap();
+            let mut sql_interface = SqlInterface::new(config_data.sql_interface).unwrap();
+
+            truncate_all_tables(&mut sql_interface);
+            insert_mock_version_information(&mut sql_interface);
+
+            // Insert default balling set values to satisfy startup configuration checks
+            for pump_id in 1..=4 {
+                add_balling_profile(
+                    &mut sql_interface.conn,
+                    pump_id,
+                    1.0f32,
+                    10.0f32,
+                    format!("Pump {}", pump_id),
+                );
+            }
+        }
+
+        // Run the main application run() function with 50 seconds test shutdown duration
+        let run_result = run(config_path, Some(Duration::from_secs(20)));
+
+        assert!(
+            run_result.is_ok(),
+            "run() failed with error: {:?}",
+            run_result.err()
+        );
+    }
 }

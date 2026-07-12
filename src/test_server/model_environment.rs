@@ -180,13 +180,12 @@ impl ModelEnvironment {
             }
 
             // check termination condition for simulation
-            match max_loop_count_opt {
-                None => {} // no limit provided.
-                Some(max_loop_count) if i > max_loop_count * 1000 => { // provided limit has been exceeded.
+            if let Some(max_loop_count) = max_loop_count_opt {
+                // limit provided. Check if loop shall be aborted.
+                if i > max_loop_count * 1000 {
                     break;
                 }
-                Some(_) => {} // provided limit has not been exceeded - do nothing
-            };
+            }
 
             // process channel every millisecond, because there can be lots of requests
             if self.process_channel(&rx_from_parser, &tx_to_parser.clone(), time_of_day) {
@@ -209,6 +208,7 @@ impl ModelEnvironment {
     ///
     /// * `rx_from_parser` - reference to receiver for communication with other thread
     /// * `tx_to_parser` - reference to sender for communication with other thread
+    /// * `time_of_day` - A parameter representing `time_of_day`.
     fn process_channel(
         &mut self,
         rx_from_parser: &Receiver<TestServerInternalCommand>,
@@ -244,6 +244,7 @@ impl ModelEnvironment {
     /// # Arguments:
     ///
     /// * `internal_command` - enum describing the request and potentially containing a wrapped value
+    /// * `time_of_day` - A parameter representing `time_of_day`.
     fn process_parser_request(
         &mut self,
         internal_command: TestServerInternalCommand,

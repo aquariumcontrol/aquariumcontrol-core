@@ -65,18 +65,16 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 
 #![allow(non_snake_case)]
 use chrono::{Local, NaiveDateTime};
-#[cfg(all(not(test), target_os = "linux"))]
+#[cfg(all(not(test), target_os = "linux"))] // only required in real-life execution
 use log::info;
 use log::{error, warn};
 
 #[cfg(feature = "debug_data_logger")]
 use log::debug;
 
-#[cfg(all(not(test), target_os = "linux"))]
+#[cfg(all(not(test), target_os = "linux"))] // only required in real-life execution
 use nix::unistd::gettid;
 
-use mysql::PooledConn;
-use spin_sleep::SpinSleeper;
 use std::fs;
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
@@ -93,7 +91,6 @@ use crate::sensors::sensor_manager::SensorManagerSignals;
 use crate::sensors::tank_level_switch::TankLevelSwitchSignals;
 use crate::utilities::acknowledge_signal_handler::AcknowledgeSignalHandlerTrait;
 use crate::utilities::channel_content::AquariumSignal;
-use crate::utilities::database_ping_trait::DatabasePingTrait;
 use crate::utilities::iir_filter::IIRFilter;
 use crate::utilities::proc_ext_req::ProcessExternalRequestTrait;
 use crate::utilities::wait_for_termination::WaitForTerminationTrait;
@@ -193,12 +190,6 @@ pub struct DataLogger {
     /// an inhibition flag to avoid flooding the log file with repeated messages about failure to receive termination signal via the channel
     pub lock_error_channel_receive_termination: bool,
 
-    /// recording when the last database ping happened
-    pub last_ping_instant: Instant,
-
-    /// database ping interval
-    pub database_ping_interval: Duration,
-
     /// an inhibition flag to avoid flooding the log file with repeated messages about failure to lock mutex
     lock_error_mutex_signal_manager: bool,
 
@@ -210,6 +201,9 @@ pub struct DataLogger {
 
     /// an inhibition flag to avoid flooding the log file with repeated messages about failure to write the ventilation controller state to disk
     lock_error_output_description_ventilation_controller_state: bool,
+
+    /// an inhibition flag to avoid flooding the log file with repeated messages about failure to execute a task for retrieving date from the database
+    lock_error_task_failure: bool,
 }
 
 impl DataLogger {
@@ -223,7 +217,6 @@ impl DataLogger {
     /// # Arguments
     /// * `config` - Configuration data for the data logger, defining logging intervals,
     ///   filter coefficients, output file paths, and other operational parameters.
-    /// * `database_ping_interval` - A `Duration` instance, providing the interval to ping the database.
     ///
     /// # Returns
     /// A `Result` containing a new, initialized `DataLogger` instance on success.
@@ -233,10 +226,7 @@ impl DataLogger {
     /// - Any of the configured output filenames are empty (`OutputFilenameEmpty`).
     /// - It fails to write to (and thus reset) any of the configured output files,
     ///   which could be due to permission issues or an invalid path (`FileResetFailure`).
-    pub fn new(
-        config: DataLoggerConfig,
-        database_ping_interval: Duration,
-    ) -> Result<DataLogger, DataLoggerError> {
+    pub fn new(config: DataLoggerConfig) -> Result<DataLogger, DataLoggerError> {
         if config.output_to_disk {
             // By defining the files in a collection, we can use iterators to check and
             // initialize them
@@ -403,13 +393,12 @@ impl DataLogger {
             lock_error_output_timestamp: false,
             lock_warn_inapplicable_command_signal_handler: false,
             lock_error_channel_receive_termination: false,
-            last_ping_instant: Instant::now(),
-            database_ping_interval,
             lock_error_mutex_signal_manager: false,
             lock_error_output_description_refill_controller_state: false,
             lock_error_output_description_heating_controller_state: false,
             lock_error_output_state_ventilation_actuator_disabled: false,
             lock_error_output_description_ventilation_controller_state: false,
+            lock_error_task_failure: false,
         })
     }
 
@@ -620,6 +609,10 @@ impl DataLogger {
     /// * `refill_status` - A mutable reference for indicating if the refill is in progress.
     /// * `heater_status` - A mutable reference for indicating the heater state.
     /// * `ventilation_status` - A mutable reference for indicating the ventilation state.
+    /// * `refill_status_live` - Unmodified refill status.
+    /// * `refill_status_for_database` - Refill status adapted for database recording.
+    /// * `refill_reset_for_database` - Refill reset flag adapted for database recording.
+    /// * `data_logger_mutexes` - A parameter representing `data_logger_mutexes`.
     fn update_signals(
         &mut self,
         refill_status_live: &mut bool,
@@ -631,6 +624,8 @@ impl DataLogger {
     ) {
         {
             // internal scope to limit lifetime of mutex lock
+            //#[cfg(feature = "debug_data_logger")]
+            //log::debug!(target: module_path!(), "data_logger: Attempting to lock mutex_refill_status");
             match data_logger_mutexes.mutex_refill_status.lock() {
                 Ok(mut refill_status) => {
                     self.lock_error_output_state_refill_in_progress = self.output_state(
@@ -658,10 +653,14 @@ impl DataLogger {
                     error!(target: module_path!(), "error locking mutex for refill status");
                 }
             };
+            //#[cfg(feature = "debug_data_logger")]
+            //debug!(target: module_path!(), "Releasing lock on mutex_refill_status");
         }
 
         {
             // internal scope to limit lifetime of mutex lock
+            //#[cfg(feature = "debug_data_logger")]
+            //log::debug!(target: module_path!(), "data_logger: Attempting to lock mutex_heating_status");
             *heater_status = match data_logger_mutexes.mutex_heating_status.lock() {
                 Ok(heating_status) => {
                     self.lock_error_output_description_heating_controller_state = self
@@ -701,10 +700,14 @@ impl DataLogger {
                     false
                 }
             };
+            //#[cfg(feature = "debug_data_logger")]
+            //debug!(target: module_path!(), "Releasing lock on heating_status");
         }
 
         {
             // internal scope to limit lifetime of mutex lock
+            //#[cfg(feature = "debug_data_logger")]
+            //log::debug!(target: module_path!(), "data_logger: Attempting to lock mutex_ventilation_status");
             *ventilation_status = match data_logger_mutexes.mutex_ventilation_status.lock() {
                 Ok(ventilation_status) => {
                     self.lock_error_output_description_ventilation_controller_state = self
@@ -747,6 +750,8 @@ impl DataLogger {
                     false
                 }
             };
+            //#[cfg(feature = "debug_data_logger")]
+            //debug!(target: module_path!(), "Releasing lock on ventilation_status");
         }
     }
 
@@ -763,6 +768,8 @@ impl DataLogger {
     /// * `mutex_temperature_gradient` - An `Arc<Mutex<f64>>` holding the latest temperature gradient value.
     fn update_temperature_gradient(&mut self, mutex_temperature_gradient: &Arc<Mutex<f64>>) {
         if !self.lock_error_output_signal_temperature_gradient {
+            #[cfg(feature = "debug_data_logger")]
+            log::debug!(target: module_path!(), "data_logger: Attempting to lock mutex_temperature_gradient");
             match mutex_temperature_gradient.lock() {
                 Ok(temperature_gradient) => {
                     self.lock_error_output_signal_temperature_gradient = self.output_signal(
@@ -779,6 +786,8 @@ impl DataLogger {
                     }
                 }
             }
+            #[cfg(feature = "debug_data_logger")]
+            log::debug!(target: module_path!(), "data_logger: Releasing lock on mutex_temperature_gradient");
         }
     }
 
@@ -813,6 +822,8 @@ impl DataLogger {
         let humidity: f32;
         {
             // internal scope to limit lifetime of mutex lock
+            #[cfg(feature = "debug_data_logger")]
+            log::debug!(target: module_path!(), "data_logger: Attempting to lock mutex_sensor_manager_signals");
             match mutex_sensor_manager_signals.lock() {
                 Ok(c) => {
                     self.lock_error_mutex_signal_manager = false;
@@ -830,6 +841,8 @@ impl DataLogger {
                     return;
                 }
             };
+            //#[cfg(feature = "debug_data_logger")]
+            //debug!(target: module_path!(), "output sequence starting");
             self.lock_error_output_signal_water_temperature = self.output_signal(
                 water_temperature,
                 AquariumSignal::WaterTemperature,
@@ -866,6 +879,8 @@ impl DataLogger {
             *conductivity_opt = Some(conductivity);
             *ambient_temperature_opt = Some(ambient_temperature);
             *humidity_opt = Some(humidity);
+            //#[cfg(feature = "debug_data_logger")]
+            //debug!(target: module_path!(), "output sequence finished");
         }
     }
 
@@ -891,6 +906,8 @@ impl DataLogger {
     ) {
         {
             // internal scope to limit lifetime of mutex lock
+            //#[cfg(feature = "debug_data_logger")]
+            //log::debug!(target: module_path!(), "data_logger: Attempting to lock mutex_tank_level_switch_signals");
             match mutex_tank_level_switch_signals.lock() {
                 Ok(tank_level_switch_signals) => {
                     *tank_level_switch_position_opt =
@@ -933,6 +950,8 @@ impl DataLogger {
                     *tank_level_switch_invalid_opt = None;
                 }
             };
+            //#[cfg(feature = "debug_data_logger")]
+            //log::debug!(target: module_path!(), "data_logger: Releasing lock on mutex_tank_level_switch_signals");
         }
     }
 
@@ -952,6 +971,9 @@ impl DataLogger {
     /// A tuple `(Option<f32>, Option<f32>, Option<f32>)` containing the filtered
     /// water temperature, pH, and conductivity values, respectively. Each value is
     /// `Some` if the corresponding input was valid and filtered, or `None` otherwise.
+    /// * `filter_water_temperature` - filter configuration for water temperature.
+    /// * `filter_pH` - filter configuration for pH.
+    /// * `filter_conductivity` - filter configuration for conductivity.
     fn calculate_filtered_signals(
         &mut self,
         water_temperature: Option<f32>,
@@ -961,6 +983,8 @@ impl DataLogger {
         filter_pH: &mut IIRFilter,
         filter_conductivity: &mut IIRFilter,
     ) -> (Option<f32>, Option<f32>, Option<f32>) {
+        #[cfg(feature = "debug_data_logger")]
+        log::debug!(target: module_path!(), "calculating filtered_signals");
         let water_temperature_filtered = match water_temperature {
             Some(water_temperature_data) => {
                 let filtered_water_temperature =
@@ -1012,46 +1036,6 @@ impl DataLogger {
         )
     }
 
-    /// Retrieves the current timestamp, either from the SQL database or generated locally by the application.
-    ///
-    /// This private helper function determines the timestamp source based on the `use_sql_timestamp`
-    /// configuration setting. If `use_sql_timestamp` is `true`, it attempts to fetch the timestamp
-    /// from the connected SQL database. If that fails, it falls back to using a locally generated
-    /// timestamp and logs an error. If `use_sql_timestamp` is `false`, it always uses a local timestamp.
-    /// The chosen timestamp is also written to a configured file on the disk.
-    ///
-    /// # Arguments
-    /// * `conn` - A mutable reference to an active SQL database connection, used if the SQL timestamp option is enabled.
-    ///
-    /// # Returns
-    /// A `NaiveDateTime` representing the current timestamp, sourced either from the database or the local system.
-    fn update_timestamp(&mut self, conn: &mut PooledConn) -> NaiveDateTime {
-        match self.config.use_sql_timestamp {
-            true => match SqlInterface::get_current_timestamp(conn) {
-                Ok(c) => {
-                    self.lock_error_get_timestamp = false;
-                    self.lock_error_output_timestamp = self.output_timestamp(
-                        c,
-                        &self.config.output_file_name_timestamp,
-                        self.lock_error_output_timestamp,
-                    );
-                    c
-                }
-                Err(e) => {
-                    if !self.lock_error_get_timestamp {
-                        error!(
-                            target: module_path!(),
-                            "could not retrieve timestamp from database: ({e:?}) - using application-generated timestamp."
-                        );
-                        self.lock_error_get_timestamp = true;
-                    }
-                    Local::now().naive_local()
-                }
-            },
-            false => Local::now().naive_local(),
-        }
-    }
-
     /// Confirms the application's readiness to quit and then waits for a specific termination command from the signal handler.
     ///
     /// This function is called when the thread has received the Quit-command from the signal handler.
@@ -1065,10 +1049,12 @@ impl DataLogger {
     /// # Arguments
     ///
     /// * `data_logger_channels` - A mutable reference to the struct that contains the channels.
-    fn confirm_quit_and_wait_for_termination_command(
+    async fn confirm_quit_and_wait_for_termination_command(
         &mut self,
         data_logger_channels: &mut DataLoggerChannels,
     ) {
+        #[cfg(feature = "debug_data_logger")]
+        log::debug!(target: module_path!(), "waiting for final termination command");
         let sleep_duration_hundred_millis = Duration::from_millis(100);
 
         data_logger_channels.acknowledge_signal_handler();
@@ -1076,11 +1062,12 @@ impl DataLogger {
         // This thread has channel connections to underlying threads.
         // Those threads have to stop receiving commands from this thread.
         // The shutdown sequence is handled by the signal_handler module.
-        self.wait_for_termination(
+        self.wait_for_termination_async(
             &mut data_logger_channels.rx_data_logger_from_signal_handler,
             sleep_duration_hundred_millis,
             module_path!(),
-        );
+        )
+        .await;
     }
 
     /// Executes the main control loop for the data logger module.
@@ -1111,20 +1098,20 @@ impl DataLogger {
     /// * `sql_interface_data` - A `SqlInterfaceData` instance, providing the direct interface for writing `RecorderDataFrame`s to the SQL database.
     /// * `data_logger_channels` - A `DataLoggerChannels` struct, containing all the `mpsc` sender and receiver channels necessary for inter-thread communication with other modules and the signal handler.
     /// * `data_logger_mutexes` - A `DataLoggerMutexes` struct, providing access to shared `Arc<Mutex>` protected sensor data and device states.
-    pub fn execute(
+    pub async fn execute<D: DataInjectionTrait + Send + 'static>(
         &mut self,
-        data_injection: &mut impl DataInjectionTrait,
+        data_injection: D,
         mut sql_interface_data: SqlInterfaceData,
         data_logger_channels: &mut DataLoggerChannels,
         data_logger_mutexes: DataLoggerMutexes,
     ) {
-        #[cfg(all(target_os = "linux", not(test)))]
+        #[cfg(all(not(test), target_os = "linux"))] // only required in real-life execution
+        #[cfg(not(tarpaulin_include))]
         info!(target: module_path!(), "Thread started with TID: {}", gettid());
 
         let cycle_time_duration =
             Duration::from_millis(self.config.logging_interval * MILLIS_PER_SEC);
         let sleep_duration_hundred_millis = Duration::from_millis(100);
-        let spin_sleeper = SpinSleeper::default();
         let mut i;
 
         // define and initialize with values which will be overwritten in the first iteration
@@ -1143,6 +1130,11 @@ impl DataLogger {
         let mut quit_command_received = false;
         let mut lock_warn_cycle_time_exceeded = false;
         let mut cycle_time_exceeded: bool; // ensures that signal handler/messaging are polled at least once even if cycle time is exceeded
+        let mut sql_date_request_failed: bool = false;
+        let mut sql_data_injection_failed: bool = false;
+        let mut conn_for_timestamp_opt = Some(sql_interface_data.conn_for_timestamp);
+        let mut conn_for_injection_opt = Some(sql_interface_data.conn);
+        let mut data_injection_opt = Some(data_injection);
 
         // update signals by accessing mutex for Atlas Scientific signals
         self.update_sensor_manager_signals(
@@ -1159,22 +1151,24 @@ impl DataLogger {
         let mut filter_water_temperature = IIRFilter::new(
             &self.config.filter_coefficient_water_temperature,
             water_temperature,
-            #[cfg(not(test))]
+            #[cfg(not(test))] // only required in real-life execution
             "water temperature",
         );
         let mut filter_pH = IIRFilter::new(
             &self.config.filter_coefficient_pH,
             ph,
-            #[cfg(not(test))]
+            #[cfg(not(test))] // only required in real-life execution
             "pH",
         );
 
         let mut filter_conductivity = IIRFilter::new(
             &self.config.filter_coefficient_conductivity,
             conductivity,
-            #[cfg(not(test))]
+            #[cfg(not(test))] // only required in real-life execution
             "conductivity",
         );
+        #[cfg(feature = "debug_data_logger")]
+        debug!(target: module_path!(), "initialized IIR filters");
 
         // wait for a dedicated period of time before starting the main loop
         let initial_sleep_time_start = Instant::now();
@@ -1183,16 +1177,25 @@ impl DataLogger {
             .as_millis()
             < self.config.initial_sleep_time_millis.into()
         {
-            spin_sleeper.sleep(sleep_duration_hundred_millis);
+            tokio::time::sleep(sleep_duration_hundred_millis).await;
+            #[cfg(feature = "debug_data_logger")]
+            debug!(target: module_path!(), "checking external request");
             (quit_command_received, _, _) = self.process_external_request(
                 &mut data_logger_channels.rx_data_logger_from_signal_handler,
                 None,
             );
+            #[cfg(feature = "debug_data_logger")]
+            debug!(target: module_path!(), "checked external request");
             if quit_command_received {
-                self.confirm_quit_and_wait_for_termination_command(data_logger_channels);
+                #[cfg(feature = "debug_data_logger")]
+                debug!(target: module_path!(), "confirming quit and waiting for termination command");
+                self.confirm_quit_and_wait_for_termination_command(data_logger_channels)
+                    .await;
                 return;
             }
         }
+        #[cfg(feature = "debug_data_logger")]
+        debug!(target: module_path!(), "initial waiting time passed");
 
         // Initialize reference for cycle time measurement
         let mut start_time = Instant::now();
@@ -1238,7 +1241,75 @@ impl DataLogger {
                         &mut filter_conductivity,
                     );
 
-                let current_timestamp = self.update_timestamp(&mut sql_interface_data.conn);
+                // Retrieve the current timestamp, either from the SQL database or generated
+                // locally by the application based on the `use_sql_timestamp` configuration
+                // setting. If `use_sql_timestamp` is `true`, it attempts to fetch the timestamp
+                // from the connected SQL database. If that fails, it falls back to using a locally
+                // generated timestamp and logs an error. If `use_sql_timestamp` is `false`,
+                // it always uses a local timestamp.
+                let use_sql_timestamp = self.config.use_sql_timestamp & !sql_date_request_failed;
+                let current_timestamp = if use_sql_timestamp {
+                    if let Some(mut conn_for_timestamp) = conn_for_timestamp_opt.take() {
+                        // database request take significant amount of time, so they must
+                        // run on a dedicated thread
+                        #[cfg(feature = "debug_data_logger")]
+                        log::debug!(target: module_path!(), "data_logger: Spawning database task to get timestamp");
+                        let timestamp_task_result = tokio::task::spawn_blocking(move || {
+                            let res = SqlInterface::get_current_timestamp(&mut conn_for_timestamp);
+                            (res, conn_for_timestamp)
+                        })
+                        .await;
+                        #[cfg(feature = "debug_data_logger")]
+                        log::debug!(target: module_path!(), "data_logger: Database task to get timestamp finished");
+
+                        match timestamp_task_result {
+                            Ok((res, conn_back)) => {
+                                // Success: Put the connection back into the struct
+                                sql_interface_data.conn_for_timestamp = conn_back;
+                                match res {
+                                    Ok(c) => {
+                                        self.lock_error_get_timestamp = false;
+                                        self.lock_error_output_timestamp = self.output_timestamp(
+                                            c,
+                                            &self.config.output_file_name_timestamp,
+                                            self.lock_error_output_timestamp,
+                                        );
+                                        c
+                                    }
+                                    Err(e) => {
+                                        if !self.lock_error_get_timestamp {
+                                            error!(
+                                                target: module_path!(),
+                                                "could not retrieve timestamp from database: ({e:?}) - using application-generated timestamp."
+                                            );
+                                            self.lock_error_get_timestamp = true;
+                                        }
+                                        Local::now().naive_local()
+                                    }
+                                }
+                            }
+                            Err(e) => {
+                                // The task (likely panicked). Use fallback strategy
+                                // and prevent using database in next loop.
+                                sql_date_request_failed = true;
+                                if !self.lock_error_task_failure {
+                                    self.lock_error_task_failure = true;
+                                    error!(
+                                        target: module_path!(),
+                                        "could not execute task for retrieving timestamp from database: ({e:?}) - using application-generated timestamp."
+                                    )
+                                }
+                                Local::now().naive_local()
+                            }
+                        }
+                    } else {
+                        // Defensive fallback just in case use_sql_timestamp was true but the Option was None
+                        sql_date_request_failed = true;
+                        Local::now().naive_local()
+                    }
+                } else {
+                    Local::now().naive_local()
+                };
 
                 // all data received, let's construct a data frame
                 let data_frame = RecorderDataFrame {
@@ -1259,9 +1330,37 @@ impl DataLogger {
                     heater_status: Some(heater_is_on),
                 };
 
-                println!("Constructed DataFrame");
-                data_injection.inject_data(data_frame, &mut sql_interface_data);
-                println!("Data injected");
+                if !sql_data_injection_failed {
+                    if let Some(conn_for_injection) = conn_for_injection_opt.take() {
+                        if let Some(mut data_injection) = data_injection_opt.take() {
+                            #[cfg(feature = "debug_data_logger")]
+                            log::debug!(target: module_path!(), "data_logger: Spawning database task to inject data frame");
+                            let injection_task_result = tokio::task::spawn_blocking(move || {
+                                let conn_for_injection_back =
+                                    data_injection.inject_data(data_frame, conn_for_injection);
+                                (data_injection, conn_for_injection_back)
+                            })
+                            .await;
+                            #[cfg(feature = "debug_data_logger")]
+                            log::debug!(target: module_path!(), "data_logger: Database task to inject data frame finished");
+                            match injection_task_result {
+                                Ok((data_injection_back, conn_for_injection_back)) => {
+                                    // get back ownership
+                                    conn_for_injection_opt = Some(conn_for_injection_back);
+                                    data_injection_opt = Some(data_injection_back);
+                                }
+                                Err(injection_task_error) => {
+                                    error!(
+                                        target: module_path!(),
+                                        "task for data injection failed: {injection_task_error:?}"
+                                    );
+                                    // block any further execution of injection
+                                    sql_data_injection_failed = true;
+                                }
+                            }
+                        }
+                    }
+                }
             }
             let stop_time = Instant::now();
             let execution_duration = stop_time.duration_since(start_time);
@@ -1293,12 +1392,13 @@ impl DataLogger {
                 remaining_sleep_time_millis
             );
 
-            println!("Waiting for next cycle...");
             // wait the remaining time period to complete the target cycle time
+            #[cfg(feature = "debug_data_logger")]
+            log::debug!(target: module_path!(), "data_logger: Entering idle sleep loop for {} ms", remaining_sleep_time_millis);
             i = 0;
             while i < remaining_sleep_time_millis || cycle_time_exceeded {
                 i += 100;
-                spin_sleeper.sleep(sleep_duration_hundred_millis);
+                tokio::time::sleep(sleep_duration_hundred_millis).await;
                 (quit_command_received, _, _) = self.process_external_request(
                     &mut data_logger_channels.rx_data_logger_from_signal_handler,
                     None,
@@ -1355,12 +1455,13 @@ impl DataLogger {
                 "finished idling restarting loop"
             );
 
-            self.check_timing_and_ping_database(&mut sql_interface_data);
-
             start_time = Instant::now(); // start time for the next cycle
         }
 
-        self.confirm_quit_and_wait_for_termination_command(data_logger_channels);
+        #[cfg(feature = "debug_data_logger")]
+        log::debug!(target: module_path!(), "data_logger: Exited main loop, calling confirm_quit_and_wait_for_termination_command");
+        self.confirm_quit_and_wait_for_termination_command(data_logger_channels)
+            .await;
     }
 }
 
@@ -1369,7 +1470,40 @@ pub mod tests {
     // Add these to the top of the `mod tests` block
     use super::*;
     use crate::database::sql_interface_data::SqlInterfaceData;
+
+    /// Helper function to execute the data logger task inside a test Tokio runtime.
+    ///
+    /// # Arguments
+    /// * `data_logger` - A mutable reference to the `DataLogger` instance.
+    /// * `data_injection` - Data injection trait implementation.
+    /// * `sql_interface_data` - Database interface for recording data.
+    /// * `data_logger_channels` - A mutable reference to the `DataLoggerChannels` instance.
+    /// * `data_logger_mutexes` - Shared mutexes for sensor data.
+    fn execute_blocking<D: DataInjectionTrait + Send + 'static>(
+        data_logger: &mut DataLogger,
+        data_injection: D,
+        sql_interface_data: SqlInterfaceData,
+        data_logger_channels: &mut DataLoggerChannels,
+        data_logger_mutexes: DataLoggerMutexes,
+    ) {
+        tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+            .unwrap()
+            .block_on(async {
+                // blocking execution used for testing
+                data_logger
+                    .execute(
+                        data_injection,
+                        sql_interface_data,
+                        data_logger_channels,
+                        data_logger_mutexes,
+                    )
+                    .await;
+            });
+    }
     use crate::launch::channels::Channels;
+    use crate::launch::startup_error::StartupError;
     use crate::mocks::mock_data_injection::tests::MockInjectorWithQuit;
     use crate::thermal::thermal_control_status::ThermalControlStatus;
     use crate::utilities::channel_content::InternalCommand;
@@ -1381,6 +1515,9 @@ pub mod tests {
     use std::io::Read;
 
     /// Prepares all necessary parts for a data logger test.
+    ///
+    /// # Arguments
+    /// * `config` - A parameter representing `config`.
     fn prepare_data_logger_test_rig(
         config: DataLoggerConfig,
     ) -> (
@@ -1390,7 +1527,7 @@ pub mod tests {
         SignalHandlerChannels,
         Arc<Mutex<Option<RecorderDataFrame>>>,
     ) {
-        let data_logger = DataLogger::new(config, Duration::from_secs(60)).unwrap();
+        let data_logger = DataLogger::new(config).unwrap();
 
         let mut heating_status = ThermalControlStatus::default();
         heating_status.actuator_switched_on = true;
@@ -1446,7 +1583,7 @@ pub mod tests {
 
         let output_file_name_water_temperature = config.output_file_name_water_temperature.clone();
         // 2. Execute
-        let result = DataLogger::new(config, Duration::from_secs(60));
+        let result = DataLogger::new(config);
 
         // 3. Assert
         assert!(result.is_ok(), "DataLogger::new should succeed");
@@ -1508,7 +1645,7 @@ pub mod tests {
         };
 
         // 2. Execute
-        let result = DataLogger::new(config, Duration::from_secs(60));
+        let result = DataLogger::new(config);
 
         // 3. Assert
         assert!(result.is_err());
@@ -1539,7 +1676,7 @@ pub mod tests {
             .tx_signal_handler_to_data_logger
             .clone();
 
-        let mut mock_injector = MockInjectorWithQuit {
+        let mock_injector = MockInjectorWithQuit {
             injected_data: captured_data.clone(),
             tx_signal_handler_to_data_logger: signal_handler_channels
                 .tx_signal_handler_to_data_logger,
@@ -1548,9 +1685,27 @@ pub mod tests {
         // 2. Execute
         let logger_thread = std::thread::spawn(move || {
             let sql_interface = SqlInterface::new(global_config.sql_interface).unwrap();
-            let sql_interface_data = SqlInterfaceData::new(sql_interface.conn, 0).unwrap();
-            data_logger.execute(
-                &mut mock_injector,
+            let database_connection_data_for_timestamp = sql_interface
+                .get_connection()
+                .map_err(|e| StartupError::Database {
+                    source: Box::new(e),
+                })
+                .unwrap();
+            let database_connection_data_for_data = sql_interface
+                .get_connection()
+                .map_err(|e| StartupError::Database {
+                    source: Box::new(e),
+                })
+                .unwrap();
+            let sql_interface_data = SqlInterfaceData::new(
+                database_connection_data_for_timestamp,
+                database_connection_data_for_data,
+                0,
+            )
+            .unwrap();
+            execute_blocking(
+                &mut data_logger,
+                mock_injector,
                 sql_interface_data,
                 &mut datalogger_channels,
                 mutexes,
@@ -1560,7 +1715,7 @@ pub mod tests {
         let mock_signal_handler_thread = std::thread::spawn(move || {
             let _ = signal_handler_channels
                 .rx_signal_handler_from_data_logger
-                .recv()
+                .blocking_recv()
                 .unwrap();
             tx_signal_handler_to_data_logger_clone
                 .send(InternalCommand::Terminate)
@@ -1645,7 +1800,24 @@ pub mod tests {
             config.output_file_name_ventilation_controller_state.clone();
 
         let sql_interface = SqlInterface::new(global_config.sql_interface).unwrap();
-        let sql_interface_data = SqlInterfaceData::new(sql_interface.conn, 0).unwrap();
+        let database_connection_data_for_timestamp = sql_interface
+            .get_connection()
+            .map_err(|e| StartupError::Database {
+                source: Box::new(e),
+            })
+            .unwrap();
+        let database_connection_data_for_data = sql_interface
+            .get_connection()
+            .map_err(|e| StartupError::Database {
+                source: Box::new(e),
+            })
+            .unwrap();
+        let sql_interface_data = SqlInterfaceData::new(
+            database_connection_data_for_timestamp,
+            database_connection_data_for_data,
+            0,
+        )
+        .unwrap();
 
         let (
             mut data_logger,
@@ -1659,7 +1831,7 @@ pub mod tests {
             .tx_signal_handler_to_data_logger
             .clone();
 
-        let mut mock_injector = MockInjectorWithQuit {
+        let mock_injector = MockInjectorWithQuit {
             injected_data: captured_data,
             tx_signal_handler_to_data_logger: signal_handler_channels
                 .tx_signal_handler_to_data_logger,
@@ -1668,7 +1840,7 @@ pub mod tests {
         let mock_signal_handler_thread = std::thread::spawn(move || {
             let _ = signal_handler_channels
                 .rx_signal_handler_from_data_logger
-                .recv()
+                .blocking_recv()
                 .unwrap();
             tx_signal_handler_to_data_logger_clone
                 .send(InternalCommand::Terminate)
@@ -1677,8 +1849,9 @@ pub mod tests {
 
         // 2. Execute
         let logger_thread = std::thread::spawn(move || {
-            data_logger.execute(
-                &mut mock_injector,
+            execute_blocking(
+                &mut data_logger,
+                mock_injector,
                 sql_interface_data,
                 &mut data_logger_channels,
                 mutexes,

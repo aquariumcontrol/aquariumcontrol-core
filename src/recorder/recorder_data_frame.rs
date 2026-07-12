@@ -85,11 +85,21 @@ impl fmt::Display for RecorderDataFrame {
     /// A `fmt::Result` indicating whether the formatting operation was successful.
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         // Helper to format any Option<T> where T implements Display.
+        /// Performs the `format_opt` operation.
+        ///
+        /// # Arguments
+        /// * `val` - A parameter representing `val`.
         fn format_opt<T: fmt::Display>(val: Option<T>) -> String {
             val.map_or_else(|| "None".to_string(), |v| v.to_string())
         }
 
         // Helper to format an Option<bool> with custom "true" and "false" text.
+        /// Performs the `format_bool_opt` operation.
+        ///
+        /// # Arguments
+        /// * `val` - A parameter representing `val`.
+        /// * `true_text` - A parameter representing `true_text`.
+        /// * `false_text` - A parameter representing `false_text`.
         fn format_bool_opt(val: Option<bool>, true_text: &str, false_text: &str) -> String {
             val.map_or_else(
                 || "None".to_string(),
