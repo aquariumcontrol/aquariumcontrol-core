@@ -900,8 +900,8 @@ pub mod tests {
             true, true, true, true, false, true, false, true, // Byte 3
             true, true, false, false, false, true, false, false, // Byte 4
         ];
-        for i in 0..40 {
-            println!("stimuli[{}]={}", i, stimuli[i]);
+        for (i, val) in stimuli.iter().enumerate() {
+            println!("stimuli[{}]={}", i, val);
         }
 
         let reference: [u8; dht22_constants::DHT22_DATA_LEN] = [2, 205, 0, 245, 196];

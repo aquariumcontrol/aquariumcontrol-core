@@ -14,6 +14,7 @@ pub mod tests {
     use crate::utilities::channel_content::AquariumDevice;
     use std::fmt;
 
+    #[derive(Default)]
     pub struct MockMineralInjection {
         pub(crate) pump1_engagement_durations: Vec<u32>,
         pub(crate) pump2_engagement_durations: Vec<u32>,

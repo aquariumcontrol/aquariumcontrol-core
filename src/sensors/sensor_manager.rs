@@ -165,21 +165,21 @@ pub struct SensorManagerMutexes {
 #[cfg(test)]
 impl SensorManagerMutexes {
     /// Creates a default instance of this type.
-    pub fn default() -> SensorManagerMutexes {
+    pub fn new_for_test() -> SensorManagerMutexes {
         SensorManagerMutexes {
             mutex_ds18b20_ambient_temperature: Arc::new(Mutex::new(Ok(
-                Ds18b20ResultData::default(),
+                Ds18b20ResultData::new_for_test(),
             ))),
-            mutex_ds18b20_water_temperature: Arc::new(Mutex::new(Ok(Ds18b20ResultData::default()))),
+            mutex_ds18b20_water_temperature: Arc::new(Mutex::new(Ok(Ds18b20ResultData::new_for_test()))),
             mutex_dht: Arc::new(Mutex::new(Ok((0.0, 0.0)))),
             mutex_atlas_scientific_temperature: Arc::new(Mutex::new(
-                AtlasScientificResultData::default(),
+                AtlasScientificResultData::new_for_test(),
             )),
-            mutex_atlas_scientific_ph: Arc::new(Mutex::new(AtlasScientificResultData::default())),
+            mutex_atlas_scientific_ph: Arc::new(Mutex::new(AtlasScientificResultData::new_for_test())),
             mutex_atlas_scientific_conductivity: Arc::new(Mutex::new(
-                AtlasScientificResultData::default(),
+                AtlasScientificResultData::new_for_test(),
             )),
-            mutex_sensor_manager_signals: Arc::new(Mutex::new(SensorManagerSignals::default())),
+            mutex_sensor_manager_signals: Arc::new(Mutex::new(SensorManagerSignals::new_for_test())),
         }
     }
 }
@@ -224,7 +224,7 @@ impl SensorManagerSignals {
 
     /// Creates a default instance of this type.
     #[cfg(test)]
-    pub fn default() -> SensorManagerSignals {
+    pub fn new_for_test() -> SensorManagerSignals {
         SensorManagerSignals {
             water_temperature: 0.0,
             ambient_temperature: 0.0,
@@ -829,11 +829,7 @@ pub mod tests {
     ) {
         let spin_sleeper = SpinSleeper::default();
         // mock signal handler
-        if mutex_sensor_manager_opt.is_none() {
-            let sleep_duration_8_seconds = Duration::from_millis(8000);
-            spin_sleeper.sleep(sleep_duration_8_seconds);
-        } else {
-            let mutex_sensor_manager = mutex_sensor_manager_opt.unwrap();
+        if let Some(mutex_sensor_manager) = mutex_sensor_manager_opt {
             let sleep_duration_1_second = Duration::from_millis(1000);
             for i in 0..8 {
                 if i % 2 > 0 {
@@ -846,6 +842,9 @@ pub mod tests {
                     spin_sleeper.sleep(sleep_duration_1_second);
                 }
             }
+        } else {
+            let sleep_duration_8_seconds = Duration::from_millis(8000);
+            spin_sleeper.sleep(sleep_duration_8_seconds);
         }
         let _ = signal_handler_channels
             .tx_signal_handler_to_sensor_manager

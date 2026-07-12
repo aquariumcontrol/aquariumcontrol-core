@@ -1074,7 +1074,7 @@ pub mod tests {
         let table_name = "test_string_array";
 
         // Create a temporary table for the test
-        conn.query_drop(&format!(
+        conn.query_drop(format!(
             "CREATE TABLE IF NOT EXISTS {} (name VARCHAR(255));",
             table_name
         ))
@@ -1082,7 +1082,7 @@ pub mod tests {
 
         // --- Test Case 1: Empty table ---
         println!("* Testing string array with empty table...");
-        conn.query_drop(&format!("TRUNCATE TABLE {}", table_name))
+        conn.query_drop(format!("TRUNCATE TABLE {}", table_name))
             .unwrap();
 
         let result = SqlInterface::get_string_array_from_database(
@@ -1100,7 +1100,7 @@ pub mod tests {
         println!("* Testing string array with a single entry...");
         let test_string_1 = "Hello";
         conn.exec_drop(
-            &format!("INSERT INTO {} (name) VALUES (:name)", table_name),
+            format!("INSERT INTO {} (name) VALUES (:name)", table_name),
             params! { "name" => test_string_1 },
         )
         .unwrap();
@@ -1118,7 +1118,7 @@ pub mod tests {
         println!("* Testing string array with multiple entries...");
         let test_string_2 = "World";
         conn.exec_drop(
-            &format!("INSERT INTO {} (name) VALUES (:name)", table_name),
+            format!("INSERT INTO {} (name) VALUES (:name)", table_name),
             params! { "name" => test_string_2 },
         )
         .unwrap();
@@ -1135,7 +1135,7 @@ pub mod tests {
         println!("* Succeeded: Table with multiple entries returns a Vec with all elements.");
 
         // Cleanup
-        conn.query_drop(&format!("DROP TABLE {}", table_name))
+        conn.query_drop(format!("DROP TABLE {}", table_name))
             .unwrap();
     }
 
@@ -1159,7 +1159,7 @@ pub mod tests {
         let table_name = "test_optional_timestamp";
 
         // Create a temporary table for the test
-        conn.query_drop(&format!(
+        conn.query_drop(format!(
             "CREATE TABLE IF NOT EXISTS {} (ts TIMESTAMP);",
             table_name
         ))
@@ -1167,7 +1167,7 @@ pub mod tests {
 
         // --- Test Case 1: Empty table ---
         println!("* Testing optional timestamp with empty table...");
-        conn.query_drop(&format!("TRUNCATE TABLE {}", table_name))
+        conn.query_drop(format!("TRUNCATE TABLE {}", table_name))
             .unwrap();
 
         let result = SqlInterface::get_optional_timestamp(
@@ -1181,7 +1181,7 @@ pub mod tests {
         println!("* Testing optional timestamp with a single entry...");
         let test_timestamp = Local::now().naive_local().trunc_subsecs(0);
         conn.exec_drop(
-            &format!("INSERT INTO {} (ts) VALUES (:ts)", table_name),
+            format!("INSERT INTO {} (ts) VALUES (:ts)", table_name),
             params! { "ts" => test_timestamp },
         )
         .unwrap();
@@ -1199,7 +1199,7 @@ pub mod tests {
             .naive_local()
             .trunc_subsecs(0);
         conn.exec_drop(
-            &format!("INSERT INTO {} (ts) VALUES (:ts)", table_name),
+            format!("INSERT INTO {} (ts) VALUES (:ts)", table_name),
             params! { "ts" => another_timestamp },
         )
         .unwrap();
@@ -1212,7 +1212,7 @@ pub mod tests {
         println!("* Succeeded: Table with multiple entries returns Ok(Some(timestamp)).");
 
         // Cleanup
-        conn.query_drop(&format!("DROP TABLE {}", table_name))
+        conn.query_drop(format!("DROP TABLE {}", table_name))
             .unwrap();
     }
 
@@ -1328,7 +1328,7 @@ pub mod tests {
         let table_name = "test_date_table";
 
         // Create a temporary table for the test
-        conn.query_drop(&format!(
+        conn.query_drop(format!(
             "CREATE TABLE IF NOT EXISTS {} (d DATE);",
             table_name
         ))
@@ -1336,7 +1336,7 @@ pub mod tests {
 
         // --- Test Case 1: Empty table (should error) ---
         println!("* Testing get_date with empty table...");
-        conn.query_drop(&format!("TRUNCATE TABLE {}", table_name))
+        conn.query_drop(format!("TRUNCATE TABLE {}", table_name))
             .unwrap();
 
         let result = SqlInterface::get_date(&mut conn, &format!("SELECT d FROM {}", table_name));
@@ -1356,7 +1356,7 @@ pub mod tests {
         println!("* Testing get_date with a single entry...");
         let test_date = NaiveDate::from_ymd_opt(2025, 7, 15).unwrap();
         conn.exec_drop(
-            &format!("INSERT INTO {} (d) VALUES (:d)", table_name),
+            format!("INSERT INTO {} (d) VALUES (:d)", table_name),
             params! { "d" => test_date },
         )
         .unwrap();
@@ -1378,7 +1378,7 @@ pub mod tests {
         println!("* Succeeded: Public wrappers return correct dates.");
 
         // Cleanup
-        conn.query_drop(&format!("DROP TABLE {}", table_name))
+        conn.query_drop(format!("DROP TABLE {}", table_name))
             .unwrap();
     }
 

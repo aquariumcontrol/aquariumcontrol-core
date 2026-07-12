@@ -120,6 +120,7 @@ pub struct FeedPhase {
 
 impl FeedPhase {
     #[cfg(test)]
+    #[allow(clippy::too_many_arguments)]
     // Creates a new `FeedPhase` struct with explicitly provided values.
     //
     // This constructor is intended exclusively for use in test environments.

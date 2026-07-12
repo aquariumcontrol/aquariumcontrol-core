@@ -159,7 +159,7 @@ pub mod tests {
     /// * `pH_low` - A parameter representing `pH_low`.
     /// * `pH_high` - A parameter representing `pH_high`.
     /// * `current_time` - A parameter representing `current_time`.
-    fn create_profile<'a>(
+    fn create_profile(
         high_before_low: bool,
         pH_low: f32,
         pH_high: f32,

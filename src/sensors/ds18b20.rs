@@ -87,7 +87,7 @@ impl Ds18b20ResultData {
 
     /// Creates a default instance of this type.
     #[cfg(test)]
-    pub fn default() -> Self {
+    pub fn new_for_test() -> Self {
         Ds18b20ResultData {
             value: 0.0,
             invalid: false,
@@ -497,11 +497,9 @@ pub mod tests {
                     temperature.value,
                     temperature.measurement_instant.elapsed().as_millis()
                 );
-                assert!(true);
             }
             Err(e) => {
-                println!("Error reading DS18B20: {}", e);
-                assert!(false);
+                panic!("Error reading DS18B20: {}", e);
             }
         }
     }
@@ -599,15 +597,14 @@ pub mod tests {
 
         let ds18b20 = Ds18b20::new(config.ds18b20).unwrap();
 
-        assert_eq!(
+        assert!(
             matches!(
-                ds18b20.read(&invalid_temperature_sensor_id),
+                ds18b20.read(invalid_temperature_sensor_id),
                 Err(Ds18b20Error::SensorIdNotFound(
                     _,
                     _invalid_temperature_sensor_id
                 ))
-            ),
-            true
+            )
         );
     }
 
@@ -627,12 +624,11 @@ pub mod tests {
 
         let ds18b20 = Ds18b20::new(config.ds18b20).unwrap();
 
-        assert_eq!(
+        assert!(
             matches!(
                 ds18b20.read(&valid_temperature_sensor_id),
                 Err(Ds18b20Error::ReadToStringFailure(_))
-            ),
-            true
+            )
         );
     }
 
@@ -652,12 +648,11 @@ pub mod tests {
 
         let ds18b20 = Ds18b20::new(config.ds18b20).unwrap();
 
-        assert_eq!(
+        assert!(
             matches!(
                 ds18b20.read(&valid_temperature_sensor_id),
                 Err(Ds18b20Error::InsufficientLinesInFile(_))
-            ),
-            true
+            )
         );
     }
 
@@ -677,12 +672,11 @@ pub mod tests {
 
         let ds18b20 = Ds18b20::new(config.ds18b20).unwrap();
 
-        assert_eq!(
+        assert!(
             matches!(
                 ds18b20.read(&valid_temperature_sensor_id),
                 Err(Ds18b20Error::Line0NotEndingWithYes(_))
-            ),
-            true
+            )
         );
     }
 
@@ -702,12 +696,11 @@ pub mod tests {
 
         let ds18b20 = Ds18b20::new(config.ds18b20).unwrap();
 
-        assert_eq!(
+        assert!(
             matches!(
                 ds18b20.read(&valid_temperature_sensor_id),
                 Err(Ds18b20Error::TemperatureEntryNotFound(_))
-            ),
-            true
+            )
         );
     }
 
@@ -727,12 +720,11 @@ pub mod tests {
 
         let ds18b20 = Ds18b20::new(config.ds18b20).unwrap();
 
-        assert_eq!(
+        assert!(
             matches!(
                 ds18b20.read(&valid_temperature_sensor_id),
                 Err(Ds18b20Error::TemperatureParseError(_))
-            ),
-            true
+            )
         );
     }
 
@@ -752,12 +744,11 @@ pub mod tests {
 
         let ds18b20 = Ds18b20::new(config.ds18b20).unwrap();
 
-        assert_eq!(
+        assert!(
             matches!(
                 ds18b20.read(&valid_temperature_sensor_id),
                 Err(Ds18b20Error::TemperatureOutOfRange(_))
-            ),
-            true
+            )
         );
     }
 
@@ -777,12 +768,11 @@ pub mod tests {
 
         let ds18b20 = Ds18b20::new(config.ds18b20).unwrap();
 
-        assert_eq!(
+        assert!(
             matches!(
                 ds18b20.read(&valid_temperature_sensor_id),
                 Err(Ds18b20Error::TemperatureOutOfRange(_))
-            ),
-            true
+            )
         );
     }
 
@@ -841,7 +831,7 @@ pub mod tests {
                     mutex_ds18b20_water_temperature,
                     mutex_ds18b20_ambient_temperature,
                 );
-                assert_eq!(ds18b20.mutex_access_duration_exceeded, false);
+                assert!(!ds18b20.mutex_access_duration_exceeded);
             })
             .unwrap();
 
@@ -950,7 +940,7 @@ pub mod tests {
                     mutex_ds18b20_water_temperature,
                     mutex_ds18b20_ambient_temperature,
                 );
-                assert_eq!(ds18b20.mutex_access_duration_exceeded, true);
+                assert!(ds18b20.mutex_access_duration_exceeded);
             })
             .unwrap();
 

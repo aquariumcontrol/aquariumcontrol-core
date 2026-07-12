@@ -941,8 +941,8 @@ pub mod tests {
         let join_handle_test_environment = thread::Builder::new()
             .name("test_environment".to_string())
             .spawn(move || {
-                let sleep_duration_part_1 = Duration::from_secs(duration_test_case_part_1.into());
-                let sleep_duration_part_2 = Duration::from_secs(duration_test_case_part_2.into());
+                let sleep_duration_part_1 = Duration::from_secs(duration_test_case_part_1);
+                let sleep_duration_part_2 = Duration::from_secs(duration_test_case_part_2);
                 let sleep_duration_thread_processing = Duration::from_millis(50);
                 let spin_sleeper = SpinSleeper::default();
                 spin_sleeper.sleep(sleep_duration_part_1);
@@ -1051,8 +1051,8 @@ pub mod tests {
         let join_handle_test_environment = thread::Builder::new()
             .name("test_environment".to_string())
             .spawn(move || {
-                let sleep_duration_part_1 = Duration::from_secs(duration_test_case_part_1.into());
-                let sleep_duration_part_2 = Duration::from_secs(duration_test_case_part_2.into());
+                let sleep_duration_part_1 = Duration::from_secs(duration_test_case_part_1);
+                let sleep_duration_part_2 = Duration::from_secs(duration_test_case_part_2);
                 let sleep_duration_thread_processing = Duration::from_millis(50);
                 let spin_sleeper = SpinSleeper::default();
                 spin_sleeper.sleep(sleep_duration_part_1);
@@ -1160,7 +1160,7 @@ pub mod tests {
         let join_handle_test_environment = thread::Builder::new()
             .name("test_environment".to_string())
             .spawn(move || {
-                let sleep_duration_part = Duration::from_secs(duration_test_case_part.into());
+                let sleep_duration_part = Duration::from_secs(duration_test_case_part);
                 let sleep_duration_thread_processing = Duration::from_millis(50);
                 let spin_sleeper = SpinSleeper::default();
                 for _ in 0..2 {
@@ -1417,8 +1417,8 @@ pub mod tests {
         let join_handle_test_environment = thread::Builder::new()
             .name("test_environment".to_string())
             .spawn(move || {
-                let sleep_duration_part_1 = Duration::from_secs(duration_test_case_part_1.into());
-                let sleep_duration_part_2 = Duration::from_secs(duration_test_case_part_2.into());
+                let sleep_duration_part_1 = Duration::from_secs(duration_test_case_part_1);
+                let sleep_duration_part_2 = Duration::from_secs(duration_test_case_part_2);
                 let sleep_duration_thread_processing = Duration::from_millis(50);
                 let spin_sleeper = SpinSleeper::default();
                 spin_sleeper.sleep(sleep_duration_part_1);
@@ -1475,7 +1475,7 @@ pub mod tests {
                 );
 
                 // check if monitoring recorded excessive mutex blocking time
-                assert_eq!(tank_level_switch.mutex_access_duration_exceeded, true);
+                assert!(tank_level_switch.mutex_access_duration_exceeded);
             })
             .unwrap();
 

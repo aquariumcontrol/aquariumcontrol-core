@@ -192,17 +192,17 @@ pub mod tests {
         let tank = TankGeometry::new(tank_config);
 
         let pump1 = Pump {
-            status: PumpStatus::On.into(),
+            status: PumpStatus::On,
             // delta_pressure: 0.01,
         };
 
         let pump2 = Pump {
-            status: PumpStatus::On.into(),
+            status: PumpStatus::On,
             // delta_pressure: 0.01,
         };
 
         let refill_pump = Pump {
-            status: PumpStatus::Off.into(),
+            status: PumpStatus::Off,
         };
 
         let mut sump = Sump {
@@ -239,17 +239,17 @@ pub mod tests {
         let tank = TankGeometry::new(tank_config);
 
         let pump1 = Pump {
-            status: PumpStatus::Off.into(),
+            status: PumpStatus::Off,
             // delta_pressure: 0.01,
         };
 
         let pump2 = Pump {
-            status: PumpStatus::Off.into(),
+            status: PumpStatus::Off,
             // delta_pressure: 0.01,
         };
 
         let refill_pump = Pump {
-            status: PumpStatus::Off.into(),
+            status: PumpStatus::Off,
         };
 
         let mut sump = Sump {

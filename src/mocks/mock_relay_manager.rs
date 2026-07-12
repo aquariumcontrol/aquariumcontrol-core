@@ -31,6 +31,12 @@ pub mod tests {
         pub ventilation_actuation_state: ActuatorState,
     }
 
+    impl Default for MockActuatorStates {
+        fn default() -> Self {
+            Self::new()
+        }
+    }
+
     impl MockActuatorStates {
         /// Creates a new instance.
         pub fn new() -> MockActuatorStates {

@@ -815,9 +815,8 @@ pub mod tests {
         thread::Builder::new()
             .name("test_environment".to_string())
             .spawn(move || {
-                if mutex_ventilation_status_opt.is_some() {
+                if let Some(mutex_ventilation_status) = mutex_ventilation_status_opt {
                     // caller wants the test environment to intermittently block the mutex
-                    let mutex_ventilation_status = mutex_ventilation_status_opt.unwrap();
                     let sleep_duration_one_second = Duration::from_secs(1);
                     let spin_sleeper = SpinSleeper::default();
                     for i in 0..10 {
@@ -934,7 +933,7 @@ pub mod tests {
                     ventilation_mutexes,
                 );
 
-                assert_eq!(ventilation.mutex_access_duration_exceeded, false);
+                assert!(!ventilation.mutex_access_duration_exceeded);
 
                 // send Quit signal to mock threads because the test object has terminated
                 let _ = tx_ventilation_to_schedule_check_for_test_case_finish
@@ -2295,7 +2294,7 @@ pub mod tests {
                     ventilation_mutexes,
                 );
 
-                assert_eq!(ventilation.mutex_access_duration_exceeded, true);
+                assert!(ventilation.mutex_access_duration_exceeded);
 
                 // send Quit signal to mock threads because the test object has terminated
                 let _ = tx_ventilation_to_schedule_check_for_test_case_finish

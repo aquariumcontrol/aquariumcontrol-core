@@ -1529,15 +1529,19 @@ pub mod tests {
     ) {
         let data_logger = DataLogger::new(config).unwrap();
 
-        let mut heating_status = ThermalControlStatus::default();
-        heating_status.actuator_switched_on = true;
-        heating_status.actuator_ineffective = false;
-        heating_status.actuator_disabled = false;
+        let heating_status = ThermalControlStatus {
+            actuator_switched_on: true,
+            actuator_ineffective: false,
+            actuator_disabled: false,
+            ..Default::default()
+        };
 
-        let mut ventilation_status = ThermalControlStatus::default();
-        ventilation_status.actuator_switched_on = false;
-        ventilation_status.actuator_ineffective = true;
-        ventilation_status.actuator_disabled = true;
+        let ventilation_status = ThermalControlStatus {
+            actuator_switched_on: false,
+            actuator_ineffective: true,
+            actuator_disabled: true,
+            ..Default::default()
+        };
 
         let mutexes = DataLoggerMutexes {
             mutex_sensor_manager_signals: Arc::new(Mutex::new(SensorManagerSignals {
@@ -1887,18 +1891,22 @@ pub mod tests {
         let content = fs::read_to_string(output_file_name_temperature_gradient).unwrap();
         assert_eq!(content, "0.123");
 
-        let mut heating_status = ThermalControlStatus::default();
-        heating_status.actuator_switched_on = true;
-        heating_status.actuator_ineffective = false;
-        heating_status.actuator_disabled = false;
+        let heating_status = ThermalControlStatus {
+            actuator_switched_on: true,
+            actuator_ineffective: false,
+            actuator_disabled: false,
+            ..Default::default()
+        };
 
         let content = fs::read_to_string(output_file_name_heating_controller_state).unwrap();
         assert_eq!(content, heating_status.description());
 
-        let mut ventilation_status = ThermalControlStatus::default();
-        ventilation_status.actuator_switched_on = false;
-        ventilation_status.actuator_ineffective = true;
-        ventilation_status.actuator_disabled = true;
+        let ventilation_status = ThermalControlStatus {
+            actuator_switched_on: false,
+            actuator_ineffective: true,
+            actuator_disabled: true,
+            ..Default::default()
+        };
 
         let content = fs::read_to_string(output_file_name_ventilation_controller_state).unwrap();
         assert_eq!(content, ventilation_status.description());

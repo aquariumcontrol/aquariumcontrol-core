@@ -2186,7 +2186,7 @@ pub mod tests {
             .get_single_heating_stats_from_database()
             .unwrap_or_else(|_| {
                 println!("Database responded with empty response - using default value");
-                HeatingStatsEntry::default()
+                HeatingStatsEntry::new_for_test()
             });
 
         // thread for mock schedule check
@@ -3411,7 +3411,7 @@ pub mod tests {
                 let _ =
                     tx_heating_to_relay_manager_for_test_case_finish.send(InternalCommand::Quit);
 
-                assert_eq!(heating.mutex_access_duration_exceeded, true);
+                assert!(heating.mutex_access_duration_exceeded);
 
                 println!("* [Heating] checking reaction to low temperature with mutex blocked succeeded.");
             })

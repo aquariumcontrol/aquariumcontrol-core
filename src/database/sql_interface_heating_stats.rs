@@ -190,7 +190,7 @@ impl HeatingStatsEntry {
 
     /// Creates a default instance of this type.
     #[cfg(test)]
-    pub fn default() -> Self {
+    pub fn new_for_test() -> Self {
         Self {
             date: Local::now().date_naive(),
             energy: 0.0,
@@ -534,7 +534,7 @@ pub mod tests {
             .expect("Test setup failed: Could not truncate table.");
         let conn = sql_interface.get_connection().unwrap();
 
-        let mut heating_stats_entry = HeatingStatsEntry::default();
+        let mut heating_stats_entry = HeatingStatsEntry::new_for_test();
         let mut sql_interface_heating_stats_for_test_setup = result_happy_case.unwrap();
         _ = sql_interface_heating_stats_for_test_setup
             .insert_heating_stats_entry(&heating_stats_entry);
@@ -623,7 +623,7 @@ pub mod tests {
                 Err(_) => panic!("Could not get current date."),
             };
         let mut heating_stats_entry = HeatingStatsEntry {
-            date: today.into(),
+            date: today,
             energy: 0.9,
             ambient_temperature_average_value: 22.0,
             ambient_temperature_average_counter: 72000,
@@ -641,7 +641,7 @@ pub mod tests {
         // *** retrieve stats **********************************************************************
         match sql_interface_heating.get_single_heating_stats_from_database() {
             Ok(c) => {
-                assert_eq!(c.date, today.into());
+                assert_eq!(c.date, today);
                 assert_eq!(c.energy, 0.9);
                 assert_eq!(c.ambient_temperature_average_value, 22.0);
                 assert_eq!(c.ambient_temperature_average_counter, 72000);
@@ -669,7 +669,7 @@ pub mod tests {
         ));
         match sql_interface_heating.get_single_heating_stats_from_database() {
             Ok(c) => {
-                assert_eq!(c.date, today.into());
+                assert_eq!(c.date, today);
                 assert_eq!(c.energy, 1.0);
                 assert_eq!(c.ambient_temperature_average_value, 22.1);
                 assert_eq!(c.ambient_temperature_average_counter, 72001);

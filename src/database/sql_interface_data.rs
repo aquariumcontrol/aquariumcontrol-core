@@ -450,7 +450,7 @@ pub mod tests {
         };
 
         // check the error case if there is no response
-        if (data_frame_1_array.len() == 0) || (data_frame_2_array.len() == 0) {
+        if (data_frame_1_array.is_empty()) || (data_frame_2_array.is_empty()) {
             return Err(SqlInterfaceError::SingleDataFrameRequestEmptyResponse(
                 module_path!().to_string(),
                 sql_query_string_1,

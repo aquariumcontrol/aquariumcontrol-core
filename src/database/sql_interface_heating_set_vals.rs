@@ -448,7 +448,7 @@ pub mod tests {
         // check if reading an empty table returns None
         match sql_interface_heating_setvals.get_heating_set_values() {
             Ok(c) => {
-                assert_eq!(c.is_some(), false);
+                assert!(c.is_none());
             }
             Err(_) => {
                 panic!("Call to get_heating_set_values failed.");
@@ -471,7 +471,7 @@ pub mod tests {
 
         match sql_interface_heating_setvals.get_heating_set_values() {
             Ok(c) => {
-                assert_eq!(c.is_some(), true);
+                assert!(c.is_some());
                 let heating_set_vals = c.unwrap();
                 assert_eq!(
                     heating_set_vals.heating_switch_off_temperature,

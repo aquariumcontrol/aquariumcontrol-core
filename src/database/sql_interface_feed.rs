@@ -787,134 +787,134 @@ pub mod tests {
                 assert_eq!(c.profile_id, 1);
                 assert_eq!(c.profile_name, "test".to_string());
                 assert_eq!(c.feedphases[0].pause_duration, 0);
-                assert_eq!(c.feedphases[0].pause_skimmer, true);
-                assert_eq!(c.feedphases[0].pause_main_pump_1, false);
-                assert_eq!(c.feedphases[0].pause_main_pump_2, false);
-                assert_eq!(c.feedphases[0].pause_aux_pump_1, false);
-                assert_eq!(c.feedphases[0].pause_aux_pump_2, false);
+                assert!(c.feedphases[0].pause_skimmer);
+                assert!(!c.feedphases[0].pause_main_pump_1);
+                assert!(!c.feedphases[0].pause_main_pump_2);
+                assert!(!c.feedphases[0].pause_aux_pump_1);
+                assert!(!c.feedphases[0].pause_aux_pump_2);
                 assert_eq!(c.feedphases[0].feed_duration, 1);
-                assert_eq!(c.feedphases[0].feed_skimmer, false);
-                assert_eq!(c.feedphases[0].feed_main_pump_1, true);
-                assert_eq!(c.feedphases[0].feed_main_pump_2, false);
-                assert_eq!(c.feedphases[0].feed_aux_pump_1, false);
-                assert_eq!(c.feedphases[0].feed_aux_pump_2, false);
+                assert!(!c.feedphases[0].feed_skimmer);
+                assert!(c.feedphases[0].feed_main_pump_1);
+                assert!(!c.feedphases[0].feed_main_pump_2);
+                assert!(!c.feedphases[0].feed_aux_pump_1);
+                assert!(!c.feedphases[0].feed_aux_pump_2);
 
                 assert_eq!(c.feedphases[1].pause_duration, 2);
-                assert_eq!(c.feedphases[1].pause_skimmer, false);
-                assert_eq!(c.feedphases[1].pause_main_pump_1, false);
-                assert_eq!(c.feedphases[1].pause_main_pump_2, true);
-                assert_eq!(c.feedphases[1].pause_aux_pump_1, false);
-                assert_eq!(c.feedphases[1].pause_aux_pump_2, false);
+                assert!(!c.feedphases[1].pause_skimmer);
+                assert!(!c.feedphases[1].pause_main_pump_1);
+                assert!(c.feedphases[1].pause_main_pump_2);
+                assert!(!c.feedphases[1].pause_aux_pump_1);
+                assert!(!c.feedphases[1].pause_aux_pump_2);
                 assert_eq!(c.feedphases[1].feed_duration, 3);
-                assert_eq!(c.feedphases[1].feed_skimmer, false);
-                assert_eq!(c.feedphases[1].feed_main_pump_1, false);
-                assert_eq!(c.feedphases[1].feed_main_pump_2, false);
-                assert_eq!(c.feedphases[1].feed_aux_pump_1, true);
-                assert_eq!(c.feedphases[1].feed_aux_pump_2, false);
+                assert!(!c.feedphases[1].feed_skimmer);
+                assert!(!c.feedphases[1].feed_main_pump_1);
+                assert!(!c.feedphases[1].feed_main_pump_2);
+                assert!(c.feedphases[1].feed_aux_pump_1);
+                assert!(!c.feedphases[1].feed_aux_pump_2);
 
                 assert_eq!(c.feedphases[2].pause_duration, 4);
-                assert_eq!(c.feedphases[2].pause_skimmer, false);
-                assert_eq!(c.feedphases[2].pause_main_pump_1, false);
-                assert_eq!(c.feedphases[2].pause_main_pump_2, false);
-                assert_eq!(c.feedphases[2].pause_aux_pump_1, false);
-                assert_eq!(c.feedphases[2].pause_aux_pump_2, true);
+                assert!(!c.feedphases[2].pause_skimmer);
+                assert!(!c.feedphases[2].pause_main_pump_1);
+                assert!(!c.feedphases[2].pause_main_pump_2);
+                assert!(!c.feedphases[2].pause_aux_pump_1);
+                assert!(c.feedphases[2].pause_aux_pump_2);
                 assert_eq!(c.feedphases[2].feed_duration, 5);
-                assert_eq!(c.feedphases[2].feed_skimmer, true);
-                assert_eq!(c.feedphases[2].feed_main_pump_1, true);
-                assert_eq!(c.feedphases[2].feed_main_pump_2, false);
-                assert_eq!(c.feedphases[2].feed_aux_pump_1, false);
-                assert_eq!(c.feedphases[2].feed_aux_pump_2, false);
+                assert!(c.feedphases[2].feed_skimmer);
+                assert!(c.feedphases[2].feed_main_pump_1);
+                assert!(!c.feedphases[2].feed_main_pump_2);
+                assert!(!c.feedphases[2].feed_aux_pump_1);
+                assert!(!c.feedphases[2].feed_aux_pump_2);
 
                 assert_eq!(c.feedphases[3].pause_duration, 6);
-                assert_eq!(c.feedphases[3].pause_skimmer, true);
-                assert_eq!(c.feedphases[3].pause_main_pump_1, false);
-                assert_eq!(c.feedphases[3].pause_main_pump_2, true);
-                assert_eq!(c.feedphases[3].pause_aux_pump_1, false);
-                assert_eq!(c.feedphases[3].pause_aux_pump_2, false);
+                assert!(c.feedphases[3].pause_skimmer);
+                assert!(!c.feedphases[3].pause_main_pump_1);
+                assert!(c.feedphases[3].pause_main_pump_2);
+                assert!(!c.feedphases[3].pause_aux_pump_1);
+                assert!(!c.feedphases[3].pause_aux_pump_2);
                 assert_eq!(c.feedphases[3].feed_duration, 7);
-                assert_eq!(c.feedphases[3].feed_skimmer, true);
-                assert_eq!(c.feedphases[3].feed_main_pump_1, false);
-                assert_eq!(c.feedphases[3].feed_main_pump_2, false);
-                assert_eq!(c.feedphases[3].feed_aux_pump_1, true);
-                assert_eq!(c.feedphases[3].feed_aux_pump_2, false);
+                assert!(c.feedphases[3].feed_skimmer);
+                assert!(!c.feedphases[3].feed_main_pump_1);
+                assert!(!c.feedphases[3].feed_main_pump_2);
+                assert!(c.feedphases[3].feed_aux_pump_1);
+                assert!(!c.feedphases[3].feed_aux_pump_2);
 
                 assert_eq!(c.feedphases[4].pause_duration, 8);
-                assert_eq!(c.feedphases[4].pause_skimmer, true);
-                assert_eq!(c.feedphases[4].pause_main_pump_1, false);
-                assert_eq!(c.feedphases[4].pause_main_pump_2, false);
-                assert_eq!(c.feedphases[4].pause_aux_pump_1, false);
-                assert_eq!(c.feedphases[4].pause_aux_pump_2, true);
+                assert!(c.feedphases[4].pause_skimmer);
+                assert!(!c.feedphases[4].pause_main_pump_1);
+                assert!(!c.feedphases[4].pause_main_pump_2);
+                assert!(!c.feedphases[4].pause_aux_pump_1);
+                assert!(c.feedphases[4].pause_aux_pump_2);
                 assert_eq!(c.feedphases[4].feed_duration, 9);
-                assert_eq!(c.feedphases[4].feed_skimmer, true);
-                assert_eq!(c.feedphases[4].feed_main_pump_1, true);
-                assert_eq!(c.feedphases[4].feed_main_pump_2, true);
-                assert_eq!(c.feedphases[4].feed_aux_pump_1, false);
-                assert_eq!(c.feedphases[4].feed_aux_pump_2, false);
+                assert!(c.feedphases[4].feed_skimmer);
+                assert!(c.feedphases[4].feed_main_pump_1);
+                assert!(c.feedphases[4].feed_main_pump_2);
+                assert!(!c.feedphases[4].feed_aux_pump_1);
+                assert!(!c.feedphases[4].feed_aux_pump_2);
 
                 assert_eq!(c.feedphases[5].pause_duration, 10);
-                assert_eq!(c.feedphases[5].pause_skimmer, true);
-                assert_eq!(c.feedphases[5].pause_main_pump_1, true);
-                assert_eq!(c.feedphases[5].pause_main_pump_2, true);
-                assert_eq!(c.feedphases[5].pause_aux_pump_1, false);
-                assert_eq!(c.feedphases[5].pause_aux_pump_2, false);
+                assert!(c.feedphases[5].pause_skimmer);
+                assert!(c.feedphases[5].pause_main_pump_1);
+                assert!(c.feedphases[5].pause_main_pump_2);
+                assert!(!c.feedphases[5].pause_aux_pump_1);
+                assert!(!c.feedphases[5].pause_aux_pump_2);
                 assert_eq!(c.feedphases[5].feed_duration, 11);
-                assert_eq!(c.feedphases[5].feed_skimmer, true);
-                assert_eq!(c.feedphases[5].feed_main_pump_1, true);
-                assert_eq!(c.feedphases[5].feed_main_pump_2, false);
-                assert_eq!(c.feedphases[5].feed_aux_pump_1, false);
-                assert_eq!(c.feedphases[5].feed_aux_pump_2, true);
+                assert!(c.feedphases[5].feed_skimmer);
+                assert!(c.feedphases[5].feed_main_pump_1);
+                assert!(!c.feedphases[5].feed_main_pump_2);
+                assert!(!c.feedphases[5].feed_aux_pump_1);
+                assert!(c.feedphases[5].feed_aux_pump_2);
 
                 assert_eq!(c.feedphases[6].pause_duration, 12);
-                assert_eq!(c.feedphases[6].pause_skimmer, true);
-                assert_eq!(c.feedphases[6].pause_main_pump_1, true);
-                assert_eq!(c.feedphases[6].pause_main_pump_2, true);
-                assert_eq!(c.feedphases[6].pause_aux_pump_1, true);
-                assert_eq!(c.feedphases[6].pause_aux_pump_2, false);
+                assert!(c.feedphases[6].pause_skimmer);
+                assert!(c.feedphases[6].pause_main_pump_1);
+                assert!(c.feedphases[6].pause_main_pump_2);
+                assert!(c.feedphases[6].pause_aux_pump_1);
+                assert!(!c.feedphases[6].pause_aux_pump_2);
                 assert_eq!(c.feedphases[6].feed_duration, 13);
-                assert_eq!(c.feedphases[6].feed_skimmer, true);
-                assert_eq!(c.feedphases[6].feed_main_pump_1, true);
-                assert_eq!(c.feedphases[6].feed_main_pump_2, true);
-                assert_eq!(c.feedphases[6].feed_aux_pump_1, false);
-                assert_eq!(c.feedphases[6].feed_aux_pump_2, true);
+                assert!(c.feedphases[6].feed_skimmer);
+                assert!(c.feedphases[6].feed_main_pump_1);
+                assert!(c.feedphases[6].feed_main_pump_2);
+                assert!(!c.feedphases[6].feed_aux_pump_1);
+                assert!(c.feedphases[6].feed_aux_pump_2);
 
                 assert_eq!(c.feedphases[7].pause_duration, 14);
-                assert_eq!(c.feedphases[7].pause_skimmer, true);
-                assert_eq!(c.feedphases[7].pause_main_pump_1, true);
-                assert_eq!(c.feedphases[7].pause_main_pump_2, true);
-                assert_eq!(c.feedphases[7].pause_aux_pump_1, true);
-                assert_eq!(c.feedphases[7].pause_aux_pump_2, true);
+                assert!(c.feedphases[7].pause_skimmer);
+                assert!(c.feedphases[7].pause_main_pump_1);
+                assert!(c.feedphases[7].pause_main_pump_2);
+                assert!(c.feedphases[7].pause_aux_pump_1);
+                assert!(c.feedphases[7].pause_aux_pump_2);
                 assert_eq!(c.feedphases[7].feed_duration, 15);
-                assert_eq!(c.feedphases[7].feed_skimmer, true);
-                assert_eq!(c.feedphases[7].feed_main_pump_1, true);
-                assert_eq!(c.feedphases[7].feed_main_pump_2, true);
-                assert_eq!(c.feedphases[7].feed_aux_pump_1, true);
-                assert_eq!(c.feedphases[7].feed_aux_pump_2, false);
+                assert!(c.feedphases[7].feed_skimmer);
+                assert!(c.feedphases[7].feed_main_pump_1);
+                assert!(c.feedphases[7].feed_main_pump_2);
+                assert!(c.feedphases[7].feed_aux_pump_1);
+                assert!(!c.feedphases[7].feed_aux_pump_2);
 
                 assert_eq!(c.feedphases[8].pause_duration, 16);
-                assert_eq!(c.feedphases[8].pause_skimmer, true);
-                assert_eq!(c.feedphases[8].pause_main_pump_1, true);
-                assert_eq!(c.feedphases[8].pause_main_pump_2, true);
-                assert_eq!(c.feedphases[8].pause_aux_pump_1, false);
-                assert_eq!(c.feedphases[8].pause_aux_pump_2, false);
+                assert!(c.feedphases[8].pause_skimmer);
+                assert!(c.feedphases[8].pause_main_pump_1);
+                assert!(c.feedphases[8].pause_main_pump_2);
+                assert!(!c.feedphases[8].pause_aux_pump_1);
+                assert!(!c.feedphases[8].pause_aux_pump_2);
                 assert_eq!(c.feedphases[8].feed_duration, 17);
-                assert_eq!(c.feedphases[8].feed_skimmer, true);
-                assert_eq!(c.feedphases[8].feed_main_pump_1, true);
-                assert_eq!(c.feedphases[8].feed_main_pump_2, false);
-                assert_eq!(c.feedphases[8].feed_aux_pump_1, false);
-                assert_eq!(c.feedphases[8].feed_aux_pump_2, false);
+                assert!(c.feedphases[8].feed_skimmer);
+                assert!(c.feedphases[8].feed_main_pump_1);
+                assert!(!c.feedphases[8].feed_main_pump_2);
+                assert!(!c.feedphases[8].feed_aux_pump_1);
+                assert!(!c.feedphases[8].feed_aux_pump_2);
 
                 assert_eq!(c.feedphases[9].pause_duration, 18);
-                assert_eq!(c.feedphases[9].pause_skimmer, true);
-                assert_eq!(c.feedphases[9].pause_main_pump_1, false);
-                assert_eq!(c.feedphases[9].pause_main_pump_2, false);
-                assert_eq!(c.feedphases[9].pause_aux_pump_1, false);
-                assert_eq!(c.feedphases[9].pause_aux_pump_2, false);
+                assert!(c.feedphases[9].pause_skimmer);
+                assert!(!c.feedphases[9].pause_main_pump_1);
+                assert!(!c.feedphases[9].pause_main_pump_2);
+                assert!(!c.feedphases[9].pause_aux_pump_1);
+                assert!(!c.feedphases[9].pause_aux_pump_2);
                 assert_eq!(c.feedphases[9].feed_duration, 19);
-                assert_eq!(c.feedphases[9].feed_skimmer, false);
-                assert_eq!(c.feedphases[9].feed_main_pump_1, false);
-                assert_eq!(c.feedphases[9].feed_main_pump_2, false);
-                assert_eq!(c.feedphases[9].feed_aux_pump_1, false);
-                assert_eq!(c.feedphases[9].feed_aux_pump_2, false);
+                assert!(!c.feedphases[9].feed_skimmer);
+                assert!(!c.feedphases[9].feed_main_pump_1);
+                assert!(!c.feedphases[9].feed_main_pump_2);
+                assert!(!c.feedphases[9].feed_aux_pump_1);
+                assert!(!c.feedphases[9].feed_aux_pump_2);
             }
             Err(e) => {
                 panic!("Call to get_single_feed_profile_from_database has failed: {e:?}.");
@@ -1104,7 +1104,7 @@ pub mod tests {
                             feed_schedule_entry_vector.len()
                         )
                     }
-                    let feed_schedule_entry = feed_schedule_entry_vector.get(0).cloned().unwrap();
+                    let feed_schedule_entry = feed_schedule_entry_vector.first().cloned().unwrap();
                     assert_eq!(
                         feed_schedule_entry.timestamp,
                         NaiveDateTime::parse_from_str(timestamp_reference, "%Y-%m-%d %H:%M:%S")
@@ -1283,8 +1283,7 @@ pub mod tests {
         );
         let reference_timestamp1_tomorrow_same_time = NaiveDateTime::new(
             local_date_tomorrow,
-            feed_schedule_entries_before_update
-                .get(0)
+            feed_schedule_entries_before_update.first()
                 .unwrap()
                 .timestamp
                 .time(),
@@ -1304,11 +1303,11 @@ pub mod tests {
                 Some(d) => {
                     assert_eq!(d.len(), 2);
                     assert_eq!(
-                        d.get(0).unwrap().timestamp,
+                        d.first().unwrap().timestamp,
                         reference_timestamp0_tomorrow_same_time
                     );
-                    assert_eq!(d.get(0).unwrap().profile_id, profile_id_0);
-                    assert_eq!(d.get(0).unwrap().repeat_daily, repeat_daily_0);
+                    assert_eq!(d.first().unwrap().profile_id, profile_id_0);
+                    assert_eq!(d.first().unwrap().repeat_daily, repeat_daily_0);
                     assert_eq!(
                         d.get(1).unwrap().timestamp,
                         reference_timestamp1_tomorrow_same_time

@@ -74,14 +74,14 @@ pub mod tests {
                     };
                     match tx_tcp_to_test_object.send(Ok(response_value)) {
                         Ok(()) => {
-                            if command_received.is_some() && signal_received.is_some() {
+                            if let (Some(cmd), Some(sig)) = (command_received, signal_received) {
                                 println!(
                                     "mock_tcp_for_tank_level_switch: test object sent command {}, \
                                     requesting signal {}, \
                                     sent mock data {} to test object, \
                                     mock position = {}, mock invalid = {}",
-                                    command_received.unwrap(),
-                                    signal_received.unwrap(),
+                                    cmd,
+                                    sig,
                                     response_value,
                                     mock_value_position,
                                     mock_value_invalid

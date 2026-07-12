@@ -1213,6 +1213,7 @@ pub mod tests {
 
     // This function executes the test object and test environment in separate threads.
     // The test case depends on the configuration and reference values provided for the asserts.
+    #[allow(clippy::too_many_arguments)]
     pub fn test_balling_dosing(
         test_db_number: u32,
         schedule_allows: bool,

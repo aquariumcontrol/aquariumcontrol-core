@@ -131,117 +131,111 @@ impl IIRFilter {
 #[cfg(test)]
 pub mod tests {
     use assert_float_eq::*;
+    use crate::utilities::iir_filter::{IIRFilter, IIRFilterConfig};
 
-    use crate::utilities::iir_filter::IIRFilter;
-    #[cfg(test)]
-    pub mod tests {
-        use crate::utilities::iir_filter::{IIRFilter, IIRFilterConfig};
-        use assert_float_eq::*;
-
-        /// Helper to create a default config for tests.
-        fn prepare_filter_config() -> IIRFilterConfig {
-            IIRFilterConfig {
-                filter_coefficient: 0.5,
-                fallback_initial_value: 100.0,
-            }
+    /// Helper to create a default config for tests.
+    fn prepare_filter_config() -> IIRFilterConfig {
+        IIRFilterConfig {
+            filter_coefficient: 0.5,
+            fallback_initial_value: 100.0,
         }
+    }
 
-        #[test]
-        /// Verifies the `new` constructor correctly initializes the filter's starting value.
-        fn test_new_constructor_initialization() {
-            let config = prepare_filter_config();
+    #[test]
+    /// Verifies the `new` constructor correctly initializes the filter's starting value.
+    fn test_new_constructor_initialization() {
+        let config = prepare_filter_config();
+        #[cfg(not(test))] // only required in real-life execution
+        #[cfg(not(tarpaulin_include))]
+        let signal_name = "test_signal";
+
+        // Scenario 1: An explicit initial value is provided via Some(10.0).
+        // The filter's `old_value` should be 10.0.
+        let filter_with_some = IIRFilter::new(
+            &config,
+            Some(10.0),
             #[cfg(not(test))] // only required in real-life execution
-            #[cfg(not(tarpaulin_include))]
-            let signal_name = "test_signal";
+            signal_name,
+        );
+        assert_float_absolute_eq!(filter_with_some.old_value, 10.0, 0.001);
 
-            // Scenario 1: An explicit initial value is provided via Some(10.0).
-            // The filter's `old_value` should be 10.0.
-            let filter_with_some = IIRFilter::new(
-                &config,
-                Some(10.0),
-                #[cfg(not(test))] // only required in real-life execution
-                signal_name,
-            );
-            assert_float_absolute_eq!(filter_with_some.old_value, 10.0, 0.001);
-
-            // Scenario 2: The initial value is None.
-            // The filter should use the `fallback_initial_value` from the config (100.0).
-            let filter_with_none = IIRFilter::new(
-                &config,
-                None,
-                #[cfg(not(test))] // only required in real-life execution
-                signal_name,
-            );
-            assert_float_absolute_eq!(
-                filter_with_none.old_value,
-                config.fallback_initial_value,
-                0.001
-            );
-        }
-
-        #[test]
-        /// Verifies the constructor sanitizes invalid coefficients from the config file.
-        fn test_new_constructor_sanitizes_config_coefficient() {
+        // Scenario 2: The initial value is None.
+        // The filter should use the `fallback_initial_value` from the config (100.0).
+        let filter_with_none = IIRFilter::new(
+            &config,
+            None,
             #[cfg(not(test))] // only required in real-life execution
-            #[cfg(not(tarpaulin_include))]
-            let signal_name = "test_signal";
+            signal_name,
+        );
+        assert_float_absolute_eq!(
+            filter_with_none.old_value,
+            config.fallback_initial_value,
+            0.001
+        );
+    }
 
-            // Scenario 1: Coefficient is > 1.0
-            let config_high = IIRFilterConfig {
-                filter_coefficient: 1.5,
-                fallback_initial_value: 0.0,
-            };
-            let filter_high = IIRFilter::new(
-                &config_high,
-                Some(0.0),
-                #[cfg(not(test))] // only required in real-life execution
-                signal_name,
-            );
+    #[test]
+    /// Verifies the constructor sanitizes invalid coefficients from the config file.
+    fn test_new_constructor_sanitizes_config_coefficient() {
+        #[cfg(not(test))] // only required in real-life execution
+        #[cfg(not(tarpaulin_include))]
+        let signal_name = "test_signal";
 
-            // It should be clamped to 1.0
-            assert_float_absolute_eq!(filter_high.filter_coefficient, 1.0, 0.001);
+        // Scenario 1: Coefficient is > 1.0
+        let config_high = IIRFilterConfig {
+            filter_coefficient: 1.5,
+            fallback_initial_value: 0.0,
+        };
+        let filter_high = IIRFilter::new(
+            &config_high,
+            Some(0.0),
+            #[cfg(not(test))] // only required in real-life execution
+            signal_name,
+        );
 
-            // Scenario 2: Coefficient is < 0.0
-            let config_low = IIRFilterConfig {
-                filter_coefficient: -0.5,
-                fallback_initial_value: 0.0,
-            };
-            let filter_low = IIRFilter::new(
-                &config_low,
-                Some(0.0),
-                #[cfg(not(test))] // only required in real-life execution
-                signal_name,
-            );
-            // It should be clamped to 0.0
-            assert_float_absolute_eq!(filter_low.filter_coefficient, 0.0, 0.001);
-        }
+        // It should be clamped to 1.0
+        assert_float_absolute_eq!(filter_high.filter_coefficient, 1.0, 0.001);
 
-        #[test]
-        /// Verifies filter behavior when the coefficient is 0.0 (strongest filtering).
-        fn test_filter_with_coefficient_zero() {
-            let mut filter = IIRFilter {
-                filter_coefficient: 0.0,
-                old_value: 50.0,
-            };
-            // With a zero coefficient, the output should never change from its initial value,
-            // regardless of the new input.
-            assert_float_absolute_eq!(filter.get_filtered_value(10.0), 50.0, 0.001);
-            assert_float_absolute_eq!(filter.get_filtered_value(-20.0), 50.0, 0.001);
-            assert_float_absolute_eq!(filter.get_filtered_value(100.0), 50.0, 0.001);
-        }
+        // Scenario 2: Coefficient is < 0.0
+        let config_low = IIRFilterConfig {
+            filter_coefficient: -0.5,
+            fallback_initial_value: 0.0,
+        };
+        let filter_low = IIRFilter::new(
+            &config_low,
+            Some(0.0),
+            #[cfg(not(test))] // only required in real-life execution
+            signal_name,
+        );
+        // It should be clamped to 0.0
+        assert_float_absolute_eq!(filter_low.filter_coefficient, 0.0, 0.001);
+    }
 
-        #[test]
-        /// Verifies filter behavior when the coefficient is 1.0 (no filtering).
-        fn test_filter_with_coefficient_one() {
-            let mut filter = IIRFilter {
-                filter_coefficient: 1.0,
-                old_value: 50.0,
-            };
-            // With a coefficient of one, the output should always be exactly the new input value.
-            assert_float_absolute_eq!(filter.get_filtered_value(10.0), 10.0, 0.001);
-            assert_float_absolute_eq!(filter.get_filtered_value(-20.0), -20.0, 0.001);
-            assert_float_absolute_eq!(filter.get_filtered_value(100.0), 100.0, 0.001);
-        }
+    #[test]
+    /// Verifies filter behavior when the coefficient is 0.0 (strongest filtering).
+    fn test_filter_with_coefficient_zero() {
+        let mut filter = IIRFilter {
+            filter_coefficient: 0.0,
+            old_value: 50.0,
+        };
+        // With a zero coefficient, the output should never change from its initial value,
+        // regardless of the new input.
+        assert_float_absolute_eq!(filter.get_filtered_value(10.0), 50.0, 0.001);
+        assert_float_absolute_eq!(filter.get_filtered_value(-20.0), 50.0, 0.001);
+        assert_float_absolute_eq!(filter.get_filtered_value(100.0), 50.0, 0.001);
+    }
+
+    #[test]
+    /// Verifies filter behavior when the coefficient is 1.0 (no filtering).
+    fn test_filter_with_coefficient_one() {
+        let mut filter = IIRFilter {
+            filter_coefficient: 1.0,
+            old_value: 50.0,
+        };
+        // With a coefficient of one, the output should always be exactly the new input value.
+        assert_float_absolute_eq!(filter.get_filtered_value(10.0), 10.0, 0.001);
+        assert_float_absolute_eq!(filter.get_filtered_value(-20.0), -20.0, 0.001);
+        assert_float_absolute_eq!(filter.get_filtered_value(100.0), 100.0, 0.001);
     }
 
     #[test]

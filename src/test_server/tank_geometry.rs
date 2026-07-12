@@ -114,7 +114,7 @@ pub mod tests {
             length: 1.0,
             water_volume_max: 900.0,
             water_volume_min: 700.0,
-            initial_water_volume: 800.0.into(),
+            initial_water_volume: 800.0,
         };
 
         let geometry = TankGeometry::new(geometry_config);
@@ -128,7 +128,7 @@ pub mod tests {
             length: 1.0,
             water_volume_max: 900.0,
             water_volume_min: 700.0,
-            initial_water_volume: 800.0.into(),
+            initial_water_volume: 800.0,
         };
 
         let mut geometry = TankGeometry::new(geometry_config);

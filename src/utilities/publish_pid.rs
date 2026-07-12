@@ -213,7 +213,7 @@ pub mod tests {
         let config: ConfigData =
             read_config_file("/config/aquarium_control_test_generic.toml".to_string()).unwrap();
         let pid_filename = config.publish_pid.pid_filename.clone();
-        fs::write(pid_filename.clone(), "0".to_string())
+        fs::write(pid_filename.clone(), "0")
             .expect("test_publish_PID: Could not erase PID.");
 
         // create the test object and run code to be tested

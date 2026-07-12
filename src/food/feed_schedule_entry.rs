@@ -191,8 +191,8 @@ mod tests {
         // --- Assertions ---
         assert!(result.is_ok(), "Expected Ok, but got Err: {:?}", result);
         let entry = result.unwrap();
-        assert_eq!(
-            entry.repeat_daily, false,
+        assert!(
+            !entry.repeat_daily,
             "repeat_daily should be false when the input is 0"
         );
         assert_eq!(entry.profile_id, 101);
@@ -212,8 +212,8 @@ mod tests {
         // --- Assertions ---
         assert!(result.is_ok(), "Expected Ok, but got Err: {:?}", result);
         let entry = result.unwrap();
-        assert_eq!(
-            entry.repeat_daily, true,
+        assert!(
+            entry.repeat_daily,
             "repeat_daily should be true when the input is 1"
         );
         println!("* Succeeded: Correctly created entry with repeat_daily=true.");

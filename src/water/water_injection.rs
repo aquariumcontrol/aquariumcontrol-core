@@ -898,9 +898,9 @@ pub mod tests {
                     &mutex_tank_level_switch_signals,
                     &mutex_device_scheduler_refill,
                 );
-                assert_eq!(result, false);
-                assert_eq!(refill.refill_errors.has_error(), true);
-                assert_eq!(refill.refill_errors.error_switch_stuck_low, true);
+                assert!(!result);
+                assert!(refill.refill_errors.has_error());
+                assert!(refill.refill_errors.error_switch_stuck_low);
             })
             .unwrap();
 
@@ -992,8 +992,8 @@ pub mod tests {
                     &mutex_tank_level_switch_signals,
                     &mutex_device_scheduler_refill,
                 );
-                assert_eq!(result, true);
-                assert_eq!(refill.refill_errors.has_error(), false);
+                assert!(result);
+                assert!(!refill.refill_errors.has_error());
             })
             .unwrap();
 

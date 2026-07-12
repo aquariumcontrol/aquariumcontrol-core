@@ -208,17 +208,17 @@ pub mod tests {
             heating_switch_off_temperature: &mut f32,
             heating_switch_on_temperature: &mut f32,
         ) -> Result<(), SqlInterfaceError> {
-            if self.active
-                && self.delay_duration.is_some()
-                && self.new_set_value_heating_switch_off_temperature.is_some()
-                && self.new_set_value_heating_switch_on_temperature.is_some()
-            {
-                // manipulate the test data when enabled and after the delay has passed.
-                if Instant::now().duration_since(self.start_time) > self.delay_duration.unwrap() {
-                    *heating_switch_off_temperature =
-                        self.new_set_value_heating_switch_off_temperature.unwrap();
-                    *heating_switch_on_temperature =
-                        self.new_set_value_heating_switch_on_temperature.unwrap();
+            if self.active {
+                if let (Some(delay), Some(off_temp), Some(on_temp)) = (
+                    self.delay_duration,
+                    self.new_set_value_heating_switch_off_temperature,
+                    self.new_set_value_heating_switch_on_temperature,
+                ) {
+                    // manipulate the test data when enabled and after the delay has passed.
+                    if Instant::now().duration_since(self.start_time) > delay {
+                        *heating_switch_off_temperature = off_temp;
+                        *heating_switch_on_temperature = on_temp;
+                    }
                 }
             }
             Ok(())

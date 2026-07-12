@@ -12,6 +12,7 @@ use crate::food::food_injection::FoodInjectionTrait;
 use crate::food::food_injection_error::FoodInjectionError;
 use std::fmt;
 
+#[derive(Default)]
 pub struct MockFoodInjection {
     pub profile_ids_executed: Vec<i32>,
 }

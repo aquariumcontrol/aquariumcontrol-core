@@ -21,6 +21,7 @@ pub mod tests {
     const MOCK_MONITORS_MAX_VEC_LEN: usize = 4096;
 
     // Simplified version of Monitors for testing refill
+    #[derive(Default)]
     pub struct MockMonitors {
         // storage of refill monitor views
         pub refill_monitor_views: Vec<(Instant, RefillMonitorView)>,

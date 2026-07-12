@@ -14,6 +14,7 @@ pub mod tests {
 
     use crate::watchmen::petting::PettingTrait;
 
+    #[derive(Default)]
     pub struct MockPetting {
         pub petting_recorder: Vec<Instant>,
         pub signal_recorder: Vec<String>,

@@ -127,7 +127,7 @@ impl AtlasScientificResultData {
 
     /// Creates a default instance of this type.
     #[cfg(test)]
-    pub fn default() -> Self {
+    pub fn new_for_test() -> Self {
         AtlasScientificResultData {
             value: 0.0,
             invalid: false,
@@ -779,12 +779,12 @@ pub mod tests {
         let mut stimuli_array_temperature = [0u8; 64];
         let message_temperature: [u8; atlas_scientific_ezo_constants::MESSAGE_SIZE] = [
             atlas_scientific_ezo_constants::MESSAGE_START_MAGIC,
-            '2' as u8,
-            '3' as u8,
+            b'2',
+            b'3',
             atlas_scientific_ezo_constants::DECIMAL_POINT,
-            '1' as u8,
-            '0' as u8,
-            '0' as u8,
+            b'1',
+            b'0',
+            b'0',
             atlas_scientific_ezo_constants::MESSAGE_FINISH_MAGIC,
         ];
         stimuli_array_temperature[..message_temperature.len()]
@@ -797,12 +797,12 @@ pub mod tests {
         let mut stimuli_array_conductivity = [0u8; 64];
         let message_conductivity: [u8; atlas_scientific_ezo_constants::MESSAGE_SIZE] = [
             atlas_scientific_ezo_constants::MESSAGE_START_MAGIC,
-            '4' as u8,
-            '8' as u8,
-            '0' as u8,
-            '0' as u8,
-            '0' as u8,
-            '0' as u8,
+            b'4',
+            b'8',
+            b'0',
+            b'0',
+            b'0',
+            b'0',
             atlas_scientific_ezo_constants::MESSAGE_FINISH_MAGIC,
         ];
         stimuli_array_conductivity[..message_conductivity.len()]
@@ -815,12 +815,12 @@ pub mod tests {
         let mut stimuli_array_ph = [0u8; 64];
         let message_ph: [u8; atlas_scientific_ezo_constants::MESSAGE_SIZE] = [
             atlas_scientific_ezo_constants::MESSAGE_START_MAGIC,
-            '7' as u8,
+            b'7',
             atlas_scientific_ezo_constants::DECIMAL_POINT,
-            '2' as u8,
-            '0' as u8,
-            '0' as u8,
-            '0' as u8,
+            b'2',
+            b'0',
+            b'0',
+            b'0',
             atlas_scientific_ezo_constants::MESSAGE_FINISH_MAGIC,
         ];
         stimuli_array_ph[..message_ph.len()].copy_from_slice(&message_ph);
@@ -1008,19 +1008,16 @@ pub mod tests {
                     .drivers
                     .get(&AquariumSignal::Conductivity)
                     .unwrap();
-                assert_eq!(
+                assert!(
                     driver_temperature
-                        .get_mutex_access_duration_exceeded(&AquariumSignal::WaterTemperature),
-                    true
+                        .get_mutex_access_duration_exceeded(&AquariumSignal::WaterTemperature)
                 );
-                assert_eq!(
-                    driver_ph.get_mutex_access_duration_exceeded(&AquariumSignal::pH),
-                    true
+                assert!(
+                    driver_ph.get_mutex_access_duration_exceeded(&AquariumSignal::pH)
                 );
-                assert_eq!(
+                assert!(
                     driver_conductivity
-                        .get_mutex_access_duration_exceeded(&AquariumSignal::Conductivity),
-                    true
+                        .get_mutex_access_duration_exceeded(&AquariumSignal::Conductivity)
                 );
             })
             .unwrap();

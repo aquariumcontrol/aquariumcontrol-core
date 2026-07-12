@@ -432,7 +432,7 @@ mod tests {
         let mut channels = Channels::new_for_test();
 
         // Mutexes needed for water temperature and temperature gradient
-        let mutexes_sensor_manager = SensorManagerMutexes::default();
+        let mutexes_sensor_manager = SensorManagerMutexes::new_for_test();
         let mutex_sensor_manager_signals_clone_for_test_environment =
             mutexes_sensor_manager.mutex_sensor_manager_signals.clone();
         let mutex_temperature_gradient = Arc::new(Mutex::new(0.0));

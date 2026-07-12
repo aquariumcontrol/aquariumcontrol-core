@@ -873,17 +873,7 @@ pub mod tests {
                     200, true, true, true, true, true, 200, false, false, false, false, false,
                 );
                 // Each phase will trigger switching on 6 devices and switching off 6 devices
-                let mut feedphases: Vec<FeedPhase> = Vec::new();
-                feedphases.push(feedphase.clone());
-                feedphases.push(feedphase.clone());
-                feedphases.push(feedphase.clone());
-                feedphases.push(feedphase.clone());
-                feedphases.push(feedphase.clone());
-                feedphases.push(feedphase.clone());
-                feedphases.push(feedphase.clone());
-                feedphases.push(feedphase.clone());
-                feedphases.push(feedphase.clone());
-                feedphases.push(feedphase.clone());
+                let feedphases = vec![feedphase.clone(); 10];
 
                 // After all phases are executed, the feeder will be switched off
                 // and 5 devices will be switched on
@@ -906,7 +896,7 @@ pub mod tests {
                 );
 
                 let (interrupted, result) = result_tuple;
-                assert_eq!(interrupted, false);
+                assert!(!interrupted);
                 assert!(result.is_ok());
 
                 assert_ge!(execution_duration.as_millis(), 22500);
@@ -997,17 +987,7 @@ pub mod tests {
                     200, true, true, true, true, true, 200, false, false, false, false, false,
                 );
                 // Each phase will trigger switching on 6 devices and switching off 6 devices
-                let mut feedphases: Vec<FeedPhase> = Vec::new();
-                feedphases.push(feedphase.clone());
-                feedphases.push(feedphase.clone());
-                feedphases.push(feedphase.clone());
-                feedphases.push(feedphase.clone());
-                feedphases.push(feedphase.clone());
-                feedphases.push(feedphase.clone());
-                feedphases.push(feedphase.clone());
-                feedphases.push(feedphase.clone());
-                feedphases.push(feedphase.clone());
-                feedphases.push(feedphase.clone());
+                let feedphases = vec![feedphase.clone(); 10];
 
                 // After all phases are executed, the feeder will be switched off
                 // and 5 devices will be switched on
@@ -1036,7 +1016,7 @@ pub mod tests {
                     }
                 }
 
-                assert_eq!(interrupted, true);
+                assert!(interrupted);
                 assert!(result.is_ok());
                 assert_ge!(execution_duration.as_millis(), 850);
                 assert_le!(execution_duration.as_millis(), 1085);

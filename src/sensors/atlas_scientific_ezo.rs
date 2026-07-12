@@ -494,12 +494,12 @@ pub mod tests {
     pub fn test_atlas_scientific_ezo_check_response_valid_ph() {
         let stimuli: [u8; atlas_scientific_ezo_constants::MESSAGE_SIZE] = [
             atlas_scientific_ezo_constants::MESSAGE_START_MAGIC,
-            '8' as u8,
+            b'8',
             atlas_scientific_ezo_constants::DECIMAL_POINT,
-            '0' as u8,
-            '0' as u8,
-            '0' as u8,
-            '0' as u8,
+            b'0',
+            b'0',
+            b'0',
+            b'0',
             atlas_scientific_ezo_constants::MESSAGE_FINISH_MAGIC,
         ];
         let result = AtlasScientificEzo::check_response(stimuli, true);
@@ -517,16 +517,16 @@ pub mod tests {
     // evaluating response from pH sensor unit
     // checking if negative values are correctly identified
     pub fn test_atlas_scientific_ezo_check_response_invalid_ph_negative() {
-        let sign = '-' as u8;
+        let sign = b'-';
 
         let stimuli: [u8; atlas_scientific_ezo_constants::MESSAGE_SIZE] = [
             atlas_scientific_ezo_constants::MESSAGE_START_MAGIC,
             sign,
-            '8' as u8,
+            b'8',
             atlas_scientific_ezo_constants::DECIMAL_POINT,
-            '0' as u8,
-            '0' as u8,
-            '0' as u8,
+            b'0',
+            b'0',
+            b'0',
             atlas_scientific_ezo_constants::MESSAGE_FINISH_MAGIC,
         ];
 
@@ -545,12 +545,12 @@ pub mod tests {
     pub fn test_atlas_scientific_ezo_check_response_valid_conductivity() {
         let stimuli: [u8; atlas_scientific_ezo_constants::MESSAGE_SIZE] = [
             atlas_scientific_ezo_constants::MESSAGE_START_MAGIC,
-            '5' as u8,
-            '0' as u8,
-            '0' as u8,
-            '0' as u8,
-            '0' as u8,
-            '0' as u8,
+            b'5',
+            b'0',
+            b'0',
+            b'0',
+            b'0',
+            b'0',
             atlas_scientific_ezo_constants::MESSAGE_FINISH_MAGIC,
         ];
         let result = AtlasScientificEzo::check_response(stimuli, false);
@@ -570,12 +570,12 @@ pub mod tests {
     pub fn test_atlas_scientific_ezo_check_response_valid_temperature() {
         let stimuli: [u8; atlas_scientific_ezo_constants::MESSAGE_SIZE] = [
             atlas_scientific_ezo_constants::MESSAGE_START_MAGIC,
-            '2' as u8,
-            '5' as u8,
+            b'2',
+            b'5',
             atlas_scientific_ezo_constants::DECIMAL_POINT,
-            '0' as u8,
-            '0' as u8,
-            '0' as u8,
+            b'0',
+            b'0',
+            b'0',
             atlas_scientific_ezo_constants::MESSAGE_FINISH_MAGIC,
         ];
         let result = AtlasScientificEzo::check_response(stimuli, false);
@@ -598,12 +598,12 @@ pub mod tests {
 
         let stimuli: [u8; atlas_scientific_ezo_constants::MESSAGE_SIZE] = [
             incorrect_magic_front,
-            '2' as u8,
-            '5' as u8,
+            b'2',
+            b'5',
             atlas_scientific_ezo_constants::DECIMAL_POINT,
-            '0' as u8,
-            '0' as u8,
-            '0' as u8,
+            b'0',
+            b'0',
+            b'0',
             atlas_scientific_ezo_constants::MESSAGE_FINISH_MAGIC,
         ];
 
@@ -628,12 +628,12 @@ pub mod tests {
 
         let stimuli: [u8; atlas_scientific_ezo_constants::MESSAGE_SIZE] = [
             atlas_scientific_ezo_constants::MESSAGE_START_MAGIC,
-            '2' as u8,
-            '5' as u8,
+            b'2',
+            b'5',
             atlas_scientific_ezo_constants::DECIMAL_POINT,
-            '0' as u8,
-            '0' as u8,
-            '0' as u8,
+            b'0',
+            b'0',
+            b'0',
             incorrect_magic_rear,
         ];
 
@@ -656,12 +656,12 @@ pub mod tests {
     pub fn test_atlas_scientific_ezo_check_response_invalid_conversion() {
         let stimuli: [u8; atlas_scientific_ezo_constants::MESSAGE_SIZE] = [
             atlas_scientific_ezo_constants::MESSAGE_START_MAGIC,
-            '2' as u8,
-            '5' as u8,
+            b'2',
+            b'5',
             atlas_scientific_ezo_constants::NEGATIVE_SIGN,
-            '0' as u8,
-            '0' as u8,
-            '0' as u8,
+            b'0',
+            b'0',
+            b'0',
             atlas_scientific_ezo_constants::MESSAGE_FINISH_MAGIC,
         ];
         assert!(matches!(
@@ -704,12 +704,12 @@ pub mod tests {
 
         let message_temperature: [u8; atlas_scientific_ezo_constants::MESSAGE_SIZE] = [
             atlas_scientific_ezo_constants::MESSAGE_START_MAGIC,
-            '2' as u8,
-            '3' as u8,
+            b'2',
+            b'3',
             atlas_scientific_ezo_constants::DECIMAL_POINT,
-            '1' as u8,
-            '0' as u8,
-            '0' as u8,
+            b'1',
+            b'0',
+            b'0',
             atlas_scientific_ezo_constants::MESSAGE_FINISH_MAGIC,
         ];
         stimuli_array_temperature[..message_temperature.len()]
@@ -742,12 +742,12 @@ pub mod tests {
         let mut stimuli_array_ph = [0u8; 64];
         let message_ph: [u8; atlas_scientific_ezo_constants::MESSAGE_SIZE] = [
             atlas_scientific_ezo_constants::MESSAGE_START_MAGIC,
-            '7' as u8,
+            b'7',
             atlas_scientific_ezo_constants::DECIMAL_POINT,
-            '2' as u8,
-            '0' as u8,
-            '0' as u8,
-            '0' as u8,
+            b'2',
+            b'0',
+            b'0',
+            b'0',
             atlas_scientific_ezo_constants::MESSAGE_FINISH_MAGIC,
         ];
         stimuli_array_ph[..message_ph.len()].copy_from_slice(&message_ph);
@@ -1122,6 +1122,7 @@ pub mod tests {
     }
 
     /// Helper function to set up a standard test environment for receive tests.
+    #[allow(clippy::type_complexity)]
     fn setup_receive_test() -> (
         HashMap<AquariumSignal, AtlasScientificEzo>,
         AtlasScientificChannels,
@@ -1291,7 +1292,7 @@ pub mod tests {
             location: module_path!().to_string(),
         };
 
-        let _ = tx_i2c_interface_to_atlas_scientific
+        tx_i2c_interface_to_atlas_scientific
             .send(Err(mock_error))
             .unwrap();
 

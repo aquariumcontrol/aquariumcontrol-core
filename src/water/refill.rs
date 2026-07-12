@@ -1357,9 +1357,9 @@ pub mod tests {
                 Some(&mut rx_refill_from_messaging),
             );
 
-        assert_eq!(quit_command_received, false);
-        assert_eq!(start_command_received, false);
-        assert_eq!(stop_command_received, false);
+        assert!(!quit_command_received);
+        assert!(!start_command_received);
+        assert!(!stop_command_received);
     }
 
     #[test]
@@ -2032,7 +2032,7 @@ pub mod tests {
                 );
 
                 // check if there was no water injection
-                assert_eq!(mock_water_injection.injection_recorder.is_empty(), false);
+                assert!(!mock_water_injection.injection_recorder.is_empty());
 
                 // send Quit signal to mock threads because the test object has terminated
                 let _ =
@@ -2195,7 +2195,7 @@ pub mod tests {
                 );
 
                 // check if there was no water injection
-                assert_eq!(mock_water_injection.injection_recorder.is_empty(), true);
+                assert!(mock_water_injection.injection_recorder.is_empty());
 
                 // send Quit signal to mock threads because the test object has terminated
                 let _ =
@@ -2350,7 +2350,7 @@ pub mod tests {
                 let spin_sleeper = SpinSleeper::default();
 
                 // check if errors have been set
-                assert_eq!(refill.refill_errors.has_error(), true);
+                assert!(refill.refill_errors.has_error());
 
                 let mut tx_refill_to_schedule_check_for_test_case_finish =
                     channels.refill.tx_refill_to_schedule_check.clone();
@@ -2372,7 +2372,7 @@ pub mod tests {
                 println!("{}", refill.refill_errors);
 
                 // check if errors have been reset
-                assert_eq!(refill.refill_errors.has_error(), false);
+                assert!(!refill.refill_errors.has_error());
 
                 spin_sleeper.sleep(sleep_duration_two_millis);
             })
@@ -2528,7 +2528,7 @@ pub mod tests {
                 );
 
                 // check if there was no water injection
-                assert_eq!(mock_water_injection.injection_recorder.is_empty(), true);
+                assert!(mock_water_injection.injection_recorder.is_empty());
 
                 // send Quit signal to mock threads because the test object has terminated
                 let _ =
@@ -2896,7 +2896,7 @@ pub mod tests {
                 );
 
                 // check if there was no water injection
-                assert_eq!(mock_water_injection.injection_recorder.is_empty(), true);
+                assert!(mock_water_injection.injection_recorder.is_empty());
 
                 // send Quit signal to mock threads because the test object has terminated
                 let _ =
@@ -2971,23 +2971,22 @@ pub mod tests {
         // this test case does not use the SQL database, so no conflict arises
         // when concurrently executing other test cases on the same DB.
 
-        let mut sql_refill_stats_data = RefillStatsData::default();
-        sql_refill_stats_data.duration_since_last_refill =
-            config.refill.min_interval_last_refill + 1;
+        let mut sql_refill_stats_data = RefillStatsData {
+            duration_since_last_refill: config.refill.min_interval_last_refill + 1,
+            ..Default::default()
+        };
 
         // first execution without any errors
-        assert_eq!(
-            refill.check_volume_count_time_limits(&sql_refill_stats_data, &mut channels.refill),
-            false
+        assert!(
+            !refill.check_volume_count_time_limits(&sql_refill_stats_data, &mut channels.refill)
         );
         spin_sleeper.sleep(sleep_duration_200_millis);
 
         // induce errors before executing again
         sql_refill_stats_data.refill_count_last_24h = config.refill.max_refill_count_24h + 1;
 
-        assert_eq!(
-            refill.check_volume_count_time_limits(&sql_refill_stats_data, &mut channels.refill),
-            true
+        assert!(
+            refill.check_volume_count_time_limits(&sql_refill_stats_data, &mut channels.refill)
         );
         spin_sleeper.sleep(sleep_duration_200_millis);
 
@@ -2995,9 +2994,8 @@ pub mod tests {
         sql_refill_stats_data.refill_count_last_24h = 0;
         sql_refill_stats_data.refill_count_last_hour = config.refill.max_refill_count_hour + 1;
 
-        assert_eq!(
-            refill.check_volume_count_time_limits(&sql_refill_stats_data, &mut channels.refill),
-            true
+        assert!(
+            refill.check_volume_count_time_limits(&sql_refill_stats_data, &mut channels.refill)
         );
         spin_sleeper.sleep(sleep_duration_200_millis);
 
@@ -3005,9 +3003,8 @@ pub mod tests {
         sql_refill_stats_data.refill_count_last_hour = 0;
         sql_refill_stats_data.refill_volume_last_24h = config.refill.max_refill_volume_24h + 1.0;
 
-        assert_eq!(
-            refill.check_volume_count_time_limits(&sql_refill_stats_data, &mut channels.refill),
-            true
+        assert!(
+            refill.check_volume_count_time_limits(&sql_refill_stats_data, &mut channels.refill)
         );
         spin_sleeper.sleep(sleep_duration_200_millis);
 
@@ -3015,9 +3012,8 @@ pub mod tests {
         sql_refill_stats_data.refill_volume_last_24h = 0.0;
         sql_refill_stats_data.refill_volume_last_hour = config.refill.max_refill_volume_hour + 1.0;
 
-        assert_eq!(
-            refill.check_volume_count_time_limits(&sql_refill_stats_data, &mut channels.refill),
-            true
+        assert!(
+            refill.check_volume_count_time_limits(&sql_refill_stats_data, &mut channels.refill)
         );
         spin_sleeper.sleep(sleep_duration_200_millis);
 
@@ -3026,18 +3022,16 @@ pub mod tests {
         sql_refill_stats_data.duration_since_last_refill =
             config.refill.min_interval_last_refill - 1;
 
-        assert_eq!(
-            refill.check_volume_count_time_limits(&sql_refill_stats_data, &mut channels.refill),
-            true
+        assert!(
+            refill.check_volume_count_time_limits(&sql_refill_stats_data, &mut channels.refill)
         );
         spin_sleeper.sleep(sleep_duration_200_millis);
 
         // reset the previous error and do not induce any further error
         sql_refill_stats_data.duration_since_last_refill =
             config.refill.min_interval_last_refill + 1;
-        assert_eq!(
-            refill.check_volume_count_time_limits(&sql_refill_stats_data, &mut channels.refill),
-            false
+        assert!(
+            !refill.check_volume_count_time_limits(&sql_refill_stats_data, &mut channels.refill)
         );
         spin_sleeper.sleep(sleep_duration_200_millis);
 

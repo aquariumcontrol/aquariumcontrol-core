@@ -678,10 +678,7 @@ pub mod tests {
             Ok(_) => {}
             Err(e) => panic!("Could not insert Balling dosing event into database: {e:?}"),
         };
-        assert!(matches!(
-            sql_interface_balling.get_last_balling_dosing_timestamp(pump_id),
-            Ok(_)
-        ));
+        assert!(sql_interface_balling.get_last_balling_dosing_timestamp(pump_id).is_ok());
         println!("* checking timestamp of last Balling dosing succeeded.");
         // *****************************************************************************************
 

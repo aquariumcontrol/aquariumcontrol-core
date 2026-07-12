@@ -1247,29 +1247,12 @@ pub mod tests {
             .expect("Test object thread did not finish.");
     }
 
-    // Helper function that creates an array of feed schedule entries
-    // with data from the past.
-    /// Performs the `create_mock_feed_schedule_entries` operation.
     fn create_mock_feed_schedule_entries() -> Vec<FeedScheduleEntry> {
-        let mut feed_schedule_entries: Vec<FeedScheduleEntry> = Vec::new();
-
-        feed_schedule_entries.push(FeedScheduleEntry::new_for_test(
-            "2024-10-24 10:00:00",
-            77,
-            true,
-        ));
-        feed_schedule_entries.push(FeedScheduleEntry::new_for_test(
-            "2024-10-24 11:00:00",
-            78,
-            true,
-        ));
-        feed_schedule_entries.push(FeedScheduleEntry::new_for_test(
-            "2024-10-24 12:00:00",
-            79,
-            true,
-        ));
-
-        feed_schedule_entries
+        vec![
+            FeedScheduleEntry::new_for_test("2024-10-24 10:00:00", 77, true),
+            FeedScheduleEntry::new_for_test("2024-10-24 11:00:00", 78, true),
+            FeedScheduleEntry::new_for_test("2024-10-24 12:00:00", 79, true),
+        ]
     }
 
     #[test]
@@ -1627,8 +1610,8 @@ pub mod tests {
         println!("* Succeeded: Config and ping interval are stored correctly.");
 
         // 2. Check the initial state of command/request flags.
-        assert_eq!(
-            feed.execute_command_received, false,
+        assert!(
+            !feed.execute_command_received,
             "execute_command_received should be initialized to false."
         );
         assert_eq!(
@@ -1638,20 +1621,20 @@ pub mod tests {
         println!("* Succeeded: Command flags are initialized correctly.");
 
         // 3. Check the initial state of all blocking and locking flags.
-        assert_eq!(
-            feed.execution_blocked, false,
+        assert!(
+            !feed.execution_blocked,
             "execution_blocked should be initialized to false."
         );
-        assert_eq!(
-            feed.lock_error_get_feed_schedule_entry, false,
+        assert!(
+            !feed.lock_error_get_feed_schedule_entry,
             "lock_error_get_feedschedule_entry should be initialized to false."
         );
-        assert_eq!(
-            feed.lock_warn_inapplicable_command_signal_handler, false,
+        assert!(
+            !feed.lock_warn_inapplicable_command_signal_handler,
             "lock_warn_inapplicable_command_signal_handler should be initialized to false."
         );
-        assert_eq!(
-            feed.lock_error_channel_receive_termination, false,
+        assert!(
+            !feed.lock_error_channel_receive_termination,
             "lock_error_channel_receive_termination should be initialized to false."
         );
         println!("* Succeeded: State and lock flags are initialized to false.");

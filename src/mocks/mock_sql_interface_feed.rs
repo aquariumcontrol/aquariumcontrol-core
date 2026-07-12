@@ -19,6 +19,7 @@ pub mod tests {
 
     /// Contains the configuration and the implementation of the mock SQL interface for Feed.
     /// This mock version only returns errors instead of any data.
+    #[derive(Default)]
     pub struct MockSqlInterfaceFeed {}
 
     impl MockSqlInterfaceFeed {

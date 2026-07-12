@@ -574,7 +574,7 @@ pub mod tests {
                 panic!("Could not prepare test case: {e:?}")
             }
         }
-        assert!(matches!(sql_interface_refill.check_empty(), Ok(_)));
+        assert!(sql_interface_refill.check_empty().is_ok());
         assert!(matches!(
             sql_interface_refill.get_last_refill_timestamp(),
             Err(SqlInterfaceError::TimestampRequestFailure {
@@ -598,10 +598,7 @@ pub mod tests {
             Err(e) => panic!("Could not insert refill event into database: {e:?}"),
         };
         assert!(matches!(sql_interface_refill.check_empty(), Ok(1)));
-        assert!(matches!(
-            sql_interface_refill.get_last_refill_timestamp(),
-            Ok(_)
-        ));
+        assert!(sql_interface_refill.get_last_refill_timestamp().is_ok());
         println!("* checking timestamp of last refill succeeded.");
         //**************************************************************************************
 

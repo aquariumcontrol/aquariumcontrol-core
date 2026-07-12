@@ -399,7 +399,7 @@ pub mod tests {
                         AquariumDevice::PeristalticPump1,
                         target_dosing_duration_millis,
                     );
-                assert_eq!(quit_command_received, false);
+                assert!(!quit_command_received);
                 assert_ge!(
                     actual_dosing_duration_millis,
                     target_dosing_duration_millis - 5
@@ -456,7 +456,7 @@ pub mod tests {
 
                 assert_ge!(actual_dosing_duration_millis, lower_bound);
                 assert_le!(actual_dosing_duration_millis, sleep_interval_millis + 15);
-                assert_eq!(quit_command_received, true);
+                assert!(quit_command_received);
             });
         });
     }

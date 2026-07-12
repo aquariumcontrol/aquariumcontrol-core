@@ -631,7 +631,7 @@ pub mod tests {
     /// * `signal` - A parameter representing `signal`.
     fn send_signal(pid: u32, signal: i32) {
         Command::new("kill")
-            .args(&[pid.to_string().as_str()])
+            .args([pid.to_string().as_str()])
             .output()
             .expect("Failed to send signal");
         println!("Sent signal {} to {}", signal, pid);

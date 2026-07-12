@@ -474,7 +474,7 @@ pub mod tests {
         let (_command_tx, command_rx) = mpsc::channel();
         let (model_tx, _model_rx) = mpsc::channel();
 
-        let sender_loggers = SenderLoggerTuple::new(&"/tmp/aquarium_test_server__tests__model_environment__test_model_environment_execution.log", _command_tx, model_tx).unwrap();
+        let sender_loggers = SenderLoggerTuple::new("/tmp/aquarium_test_server__tests__model_environment__test_model_environment_execution.log", _command_tx, model_tx).unwrap();
         let (_command_tx, model_tx) = sender_loggers.sender_loggers();
 
         model_environment.execute_models(Some(3), command_rx, model_tx, time_of_day); // execute 3 iterations

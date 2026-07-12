@@ -165,13 +165,13 @@ mod tests {
 
         // Assert: Verify each byte in the resulting data array.
         let mut expected_data = [0u8; 8];
-        expected_data[0] = 'S' as u8; // 83
+        expected_data[0] = b'S'; // 83
         expected_data[1] = 5;
         expected_data[2] = 0;
         expected_data[3] = expected_data[0] ^ expected_data[1] ^ expected_data[2]; // Checksum 1
         expected_data[4] = 0; // Payload high byte
         expected_data[5] = 0; // Payload low byte
-        expected_data[6] = '0' as u8; // 48
+        expected_data[6] = b'0'; // 48
         expected_data[7] = expected_data[4] ^ expected_data[5] ^ expected_data[6]; // Checksum 2
 
         assert_eq!(
@@ -193,13 +193,13 @@ mod tests {
 
         // Assert: Verify each byte, especially the split payload and checksums.
         let mut expected_data = [0u8; 8];
-        expected_data[0] = 'P' as u8; // 80
+        expected_data[0] = b'P'; // 80
         expected_data[1] = 9;
         expected_data[2] = 0;
         expected_data[3] = expected_data[0] ^ expected_data[1] ^ expected_data[2]; // Checksum 1
         expected_data[4] = 5; // High byte of 1500 (0x05)
         expected_data[5] = 220; // Low byte of 1500 (0xDC)
-        expected_data[6] = '0' as u8; // 48
+        expected_data[6] = b'0'; // 48
         expected_data[7] = expected_data[4] ^ expected_data[5] ^ expected_data[6]; // Checksum 2
 
         assert_eq!(
@@ -221,13 +221,13 @@ mod tests {
 
         // Assert: Verify checksums with zeroed inputs.
         let mut expected_data = [0u8; 8];
-        expected_data[0] = 'H' as u8; // 72
+        expected_data[0] = b'H'; // 72
         expected_data[1] = 0;
         expected_data[2] = 0;
         expected_data[3] = expected_data[0]; // Checksum 1 is just the command byte
         expected_data[4] = 0;
         expected_data[5] = 0;
-        expected_data[6] = '0' as u8; // 48
+        expected_data[6] = b'0'; // 48
         expected_data[7] = expected_data[6]; // Checksum 2 is just the reserved byte
 
         assert_eq!(
@@ -249,13 +249,13 @@ mod tests {
 
         // Assert: Verify correct handling of max values and checksum logic.
         let mut expected_data = [0u8; 8];
-        expected_data[0] = 'X' as u8; // 88
+        expected_data[0] = b'X'; // 88
         expected_data[1] = 255;
         expected_data[2] = 0;
         expected_data[3] = expected_data[0] ^ expected_data[1] ^ expected_data[2]; // Checksum 1
         expected_data[4] = 255; // High byte of 0xFFFF
         expected_data[5] = 255; // Low byte of 0xFFFF
-        expected_data[6] = '0' as u8; // 48
+        expected_data[6] = b'0'; // 48
         expected_data[7] = expected_data[4] ^ expected_data[5] ^ expected_data[6]; // 255 ^ 255 ^ 48 = 48
 
         assert_eq!(

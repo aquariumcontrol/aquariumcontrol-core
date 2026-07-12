@@ -516,6 +516,7 @@ mod tests {
     use std::collections::HashMap;
 
     /// Helper function to set up a standard test environment for receive tests.
+    #[allow(clippy::type_complexity)]
     fn setup_receive_test() -> (
         HashMap<AquariumSignal, AtlasScientificOem>,
         AtlasScientificChannels,

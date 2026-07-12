@@ -107,17 +107,17 @@ pub mod tests {
         let mut tank = TankGeometry::new(tank_geometry_config);
 
         let pump1 = Pump {
-            status: PumpStatus::Off.into(),
+            status: PumpStatus::Off,
             // delta_pressure: 0.01,
         };
 
         let pump2 = Pump {
-            status: PumpStatus::Off.into(),
+            status: PumpStatus::Off,
             // delta_pressure: 0.01,
         };
 
         let refill_pump = Pump {
-            status: PumpStatus::Off.into(),
+            status: PumpStatus::Off,
         };
 
         let sump = Sump {
@@ -143,23 +143,20 @@ pub mod tests {
 
         let mut tank_level_switch = TankLevelPosition::new(tank_level_switch_config, sump);
 
-        assert_eq!(
-            tank_level_switch.update_and_get_switch_position(&tank),
-            false
+        assert!(
+            !tank_level_switch.update_and_get_switch_position(&tank)
         );
 
         tank.increase_water_volume(75.0);
 
-        assert_eq!(
-            tank_level_switch.update_and_get_switch_position(&tank),
-            true
+        assert!(
+            tank_level_switch.update_and_get_switch_position(&tank)
         );
 
         tank.reduce_water_volume(100.0);
 
-        assert_eq!(
-            tank_level_switch.update_and_get_switch_position(&tank),
-            false
+        assert!(
+            !tank_level_switch.update_and_get_switch_position(&tank)
         );
     }
 }

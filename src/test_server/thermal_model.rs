@@ -180,15 +180,15 @@ pub mod tests {
 
         let mut tank_temperature_model = TankTemperatureModel {
             heat_flow: HeatFlow::new(config.heat_flow, 1.0),
-            temperature_water: 25.0.into(),
+            temperature_water: 25.0,
             light_intensity_time_profile: light_intensity,
             ambient_temperature_time_profile: AmbientTemperatureTimeProfile {
                 config: config.ambient_temperature_time_profile,
             },
             evaporation_model: evaporation,
             config: config.tank_temperature_model,
-            heater_is_on: true.into(),
-            surface_ventilation_is_on: false.into(),
+            heater_is_on: true,
+            surface_ventilation_is_on: false,
         };
 
         let time_of_day_opt = NaiveTime::from_hms_opt(13, 0, 0);
@@ -260,13 +260,13 @@ pub mod tests {
 
         let mut tank_temperature_model = TankTemperatureModel {
             heat_flow: HeatFlow::new(config.heat_flow, 1.0),
-            temperature_water: 25.0.into(),
+            temperature_water: 25.0,
             light_intensity_time_profile: light_intensity,
             ambient_temperature_time_profile: warmer_ambient_temperature_time_profile,
             evaporation_model: evaporation,
             config: config.tank_temperature_model,
-            heater_is_on: false.into(),
-            surface_ventilation_is_on: true.into(),
+            heater_is_on: false,
+            surface_ventilation_is_on: true,
         };
 
         let time_of_day_opt = NaiveTime::from_hms_opt(13, 0, 0);
