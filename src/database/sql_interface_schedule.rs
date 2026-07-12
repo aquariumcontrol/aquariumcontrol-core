@@ -89,11 +89,12 @@ impl FromStr for ScheduleType {
     /// Returns an empty `Err(())` if the input string does not match any of the known
     /// `ScheduleType` variants.
     fn from_str(input: &str) -> Result<ScheduleType, Self::Err> {
-        match input {
-            "Balling" => Ok(ScheduleType::Balling),
-            "Refill" => Ok(ScheduleType::Refill),
-            "Ventilation" => Ok(ScheduleType::Ventilation),
-            "Heating" => Ok(ScheduleType::Heating),
+        let lowercase_input = input.to_lowercase();
+        match lowercase_input.as_str() {
+            "balling" => Ok(ScheduleType::Balling),
+            "refill" => Ok(ScheduleType::Refill),
+            "ventilation" => Ok(ScheduleType::Ventilation),
+            "heating" => Ok(ScheduleType::Heating),
             _ => Err(()),
         }
     }
