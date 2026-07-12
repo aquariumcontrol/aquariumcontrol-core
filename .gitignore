@@ -4,3 +4,6 @@ Cargo.lock
 aquarium.sql
 *.profraw
 *.log
+.idea/dictionaries/
+.idea/inspectionProfiles/
+.gitignore
