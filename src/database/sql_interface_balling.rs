@@ -55,9 +55,9 @@ use crate::database::sql_query_strings::{
     SQL_QUERY_CHECK_BALLING_LOG_COUNT, SQL_QUERY_CHECK_BALLING_SET_VALS_COUNT,
     SQL_QUERY_CHECK_BALLING_SET_VALS_NULL,
 };
-use crate::database::{
-    sql_interface::SqlInterface, sql_interface_error::SqlInterfaceError, sql_query_strings,
-};
+use crate::database::{sql_interface::SqlInterface, sql_interface_error::SqlInterfaceError, sql_query_strings};
+#[cfg(test)]
+use crate::database::sql_test_query_strings;
 
 /// Contains the configuration and the implementation of the SQL interface for Balling.
 #[derive(Debug)]
@@ -306,7 +306,7 @@ impl SqlInterfaceBalling {
     ) -> Result<(), SqlInterfaceError> {
         self.conn
             .exec_drop(
-                sql_query_strings::SQL_QUERY_WRITE_BALLING_EVENT_WITH_TIMESTAMP.to_owned(),
+                sql_test_query_strings::SQL_QUERY_WRITE_BALLING_EVENT_WITH_TIMESTAMP.to_owned(),
                 params! {
                     "timestamp" => timestamp,
                     "pump_id" => pump_id,
@@ -455,7 +455,7 @@ impl SqlInterfaceBalling {
         dosing_volume: f32,
         label: String,
     ) -> Result<(), SqlInterfaceError> {
-        let sql_query_string = sql_query_strings::SQL_QUERY_WRITE_PUMP_CONFIGURATION.to_owned();
+        let sql_query_string = sql_test_query_strings::SQL_QUERY_WRITE_PUMP_CONFIGURATION.to_owned();
         let sql_query_string_for_error = sql_query_string.clone();
         match self.conn.exec_drop::<_, _>(
             sql_query_string,
@@ -484,9 +484,7 @@ impl SqlInterfaceBalling {
 #[cfg(test)]
 pub mod tests {
     use crate::database::sql_interface_balling::SqlInterfaceBalling;
-    use crate::database::{
-        sql_interface::SqlInterface, sql_interface_error::SqlInterfaceError, sql_query_strings,
-    };
+    use crate::database::{sql_interface::SqlInterface, sql_interface_error::SqlInterfaceError, sql_test_query_strings};
     use crate::utilities::config::{read_config_file_with_test_database, ConfigData};
     use all_asserts::assert_le;
     use assert_float_eq::assert_float_absolute_eq;
@@ -517,7 +515,7 @@ pub mod tests {
         label: String,
     ) {
         conn.exec_drop(
-            sql_query_strings::SQL_QUERY_WRITE_BALLING_SET_VALS,
+            sql_test_query_strings::SQL_QUERY_WRITE_BALLING_SET_VALS,
             params! {
                 "pump_id" => pump_id,
                 "dosing_speed" => dosing_speed,
@@ -550,12 +548,12 @@ pub mod tests {
         println!("* Testing new() with valid data (Happy Path)...");
         SqlInterface::truncate_table(
             &mut sql_interface,
-            sql_query_strings::SQL_TABLE_BALLING_SET_VALS.to_string(),
+            sql_test_query_strings::SQL_TABLE_BALLING_SET_VALS.to_string(),
         )
         .unwrap();
         SqlInterface::truncate_table(
             &mut sql_interface,
-            sql_query_strings::SQL_TABLE_BALLING_DOSING_LOG.to_string(),
+            sql_test_query_strings::SQL_TABLE_BALLING_DOSING_LOG.to_string(),
         )
         .unwrap();
 
@@ -563,7 +561,7 @@ pub mod tests {
         let mut conn = sql_interface.get_connection().unwrap();
         add_balling_profile(&mut conn, 1, 1.0, 1.0, "valid".to_string());
         conn.exec_drop(
-            sql_query_strings::SQL_QUERY_WRITE_BALLING_EVENT_WITH_TIMESTAMP,
+            sql_test_query_strings::SQL_QUERY_WRITE_BALLING_EVENT_WITH_TIMESTAMP,
             params! { "timestamp" => Local::now().naive_local(), "pump_id" => 1, "dosing_volume" => 1.0 },
         ).unwrap();
 
@@ -579,7 +577,7 @@ pub mod tests {
         println!("* Testing new() with too many rows in ballingsetvals...");
         SqlInterface::truncate_table(
             &mut sql_interface,
-            sql_query_strings::SQL_TABLE_BALLING_SET_VALS.to_string(),
+            sql_test_query_strings::SQL_TABLE_BALLING_SET_VALS.to_string(),
         )
         .unwrap();
         let mut conn = sql_interface.get_connection().unwrap();
@@ -602,13 +600,13 @@ pub mod tests {
         let spin_sleeper = SpinSleeper::default();
         SqlInterface::truncate_table(
             &mut sql_interface,
-            sql_query_strings::SQL_TABLE_BALLING_DOSING_LOG.to_string(),
+            sql_test_query_strings::SQL_TABLE_BALLING_DOSING_LOG.to_string(),
         )
         .unwrap();
         let mut conn = sql_interface.get_connection().unwrap();
-        conn.exec_drop(sql_query_strings::SQL_QUERY_WRITE_BALLING_EVENT_WITH_TIMESTAMP, params! { "timestamp" => Local::now().naive_local(), "pump_id" => 1, "dosing_volume" => 1.0 }).unwrap();
+        conn.exec_drop(sql_test_query_strings::SQL_QUERY_WRITE_BALLING_EVENT_WITH_TIMESTAMP, params! { "timestamp" => Local::now().naive_local(), "pump_id" => 1, "dosing_volume" => 1.0 }).unwrap();
         spin_sleeper.sleep(Duration::from_millis(500));
-        conn.exec_drop(sql_query_strings::SQL_QUERY_WRITE_BALLING_EVENT_WITH_TIMESTAMP, params! { "timestamp" => Local::now().naive_local(), "pump_id" => 2, "dosing_volume" => 1.0 }).unwrap();
+        conn.exec_drop(sql_test_query_strings::SQL_QUERY_WRITE_BALLING_EVENT_WITH_TIMESTAMP, params! { "timestamp" => Local::now().naive_local(), "pump_id" => 2, "dosing_volume" => 1.0 }).unwrap();
 
         let result = SqlInterfaceBalling::new(conn, 10, 1); // Set the limit to 1
         assert!(
@@ -659,7 +657,7 @@ pub mod tests {
         // *** check the timestamp of last Balling dosing ******************************************
         match SqlInterface::truncate_table(
             &mut sql_interface,
-            sql_query_strings::SQL_TABLE_BALLING_DOSING_LOG.to_string(),
+            sql_test_query_strings::SQL_TABLE_BALLING_DOSING_LOG.to_string(),
         ) {
             Ok(_) => {}
             Err(e) => panic!("Could not prepare test case: {e:?}"),
@@ -685,7 +683,7 @@ pub mod tests {
         // *** check the content of last Balling dosing ********************************************
         // Read back Balling dosing event entry from the database
         let single_balling_event_entry_array = match sql_interface_balling.conn.query_map(
-            sql_query_strings::SQL_QUERY_READ_BALLING_EVENT,
+            sql_test_query_strings::SQL_QUERY_READ_BALLING_EVENT,
             |(timestamp, pump_id, dosing_volume)| SqlBallingEvent {
                 timestamp,
                 pump_id,
@@ -760,7 +758,7 @@ pub mod tests {
         // *** read balling set vals from empty table **********************************************
         match SqlInterface::truncate_table(
             &mut sql_interface,
-            sql_query_strings::SQL_TABLE_BALLING_SET_VALS.to_string(),
+            sql_test_query_strings::SQL_TABLE_BALLING_SET_VALS.to_string(),
         ) {
             Ok(_) => {}
             Err(e) => panic!("Could not prepare test case: {e:?}"),
@@ -847,7 +845,7 @@ pub mod tests {
         // Clear the dosing log table
         match SqlInterface::truncate_table(
             &mut sql_interface,
-            sql_query_strings::SQL_TABLE_BALLING_DOSING_LOG.to_string(),
+            sql_test_query_strings::SQL_TABLE_BALLING_DOSING_LOG.to_string(),
         ) {
             Ok(_) => {}
             Err(e) => panic!("Could not prepare test case: {e:?}"),
@@ -861,7 +859,7 @@ pub mod tests {
 
         // Read back the event to verify
         let single_balling_event_entry_array = match sql_interface_balling.conn.query_map(
-            sql_query_strings::SQL_QUERY_READ_BALLING_EVENT,
+            sql_test_query_strings::SQL_QUERY_READ_BALLING_EVENT,
             |(timestamp, pump_id, dosing_volume)| SqlBallingEvent {
                 timestamp,
                 pump_id,

@@ -47,9 +47,7 @@ use chrono::NaiveDateTime;
 use mysql::prelude::*;
 use mysql::*;
 
-use crate::database::{
-    sql_interface::SqlInterface, sql_interface_error::SqlInterfaceError, sql_query_strings,
-};
+use crate::database::{sql_interface::SqlInterface, sql_interface_error::SqlInterfaceError, sql_query_strings, sql_test_query_strings};
 use crate::food::feed_schedule_entry::FeedScheduleEntry;
 
 #[derive(Clone)]
@@ -191,7 +189,7 @@ impl SqlInterfaceFeed {
         )
         .map_err(|e| SqlInterfaceError::DatabaseCheckFeedSetValsFailure {
             location: module_path!().to_string(),
-            table_name: sql_query_strings::SQL_TABLE_FEED_LOG.to_string(),
+            table_name: sql_test_query_strings::SQL_TABLE_FEED_LOG.to_string(),
             source: Box::new(e),
         })?;
 
@@ -215,7 +213,7 @@ impl SqlInterfaceFeed {
         if count_rows_feedlog < 0 {
             return Err(SqlInterfaceError::DatabaseFeedTableNegativeValue(
                 module_path!().to_string(),
-                sql_query_strings::SQL_TABLE_FEED_LOG.to_string(),
+                sql_test_query_strings::SQL_TABLE_FEED_LOG.to_string(),
                 -1,
                 count_rows_feedlog,
             ));
@@ -266,7 +264,7 @@ impl SqlInterfaceFeed {
             if count_rows_feedlog as u64 > max_rows_feed_log {
                 return Err(SqlInterfaceError::DatabaseFeedTableContainsTooManyRows(
                     module_path!().to_string(),
-                    sql_query_strings::SQL_TABLE_FEED_LOG.to_string(),
+                    sql_test_query_strings::SQL_TABLE_FEED_LOG.to_string(),
                     count_rows_feedlog as u64,
                     max_rows_feed_log,
                 ));
@@ -363,7 +361,7 @@ impl SqlInterfaceFeed {
         &mut self,
     ) -> Result<Option<FeedScheduleEntry>, SqlInterfaceError> {
         let entries_opt = self.get_feed_schedule_entries_from_database(
-            sql_query_strings::SQL_QUERY_READ_FUTURE_FEED_SCHEDULE_ENTRY,
+            sql_test_query_strings::SQL_QUERY_READ_FUTURE_FEED_SCHEDULE_ENTRY,
         )?;
         Ok(entries_opt.and_then(|mut vec| vec.pop()))
     }
@@ -386,7 +384,7 @@ impl SqlInterfaceFeed {
         &mut self,
     ) -> Result<Option<Vec<FeedScheduleEntry>>, SqlInterfaceError> {
         self.get_feed_schedule_entries_from_database(
-            sql_query_strings::SQL_QUERY_READ_FUTURE_FEED_SCHEDULE_ENTRY,
+            sql_test_query_strings::SQL_QUERY_READ_FUTURE_FEED_SCHEDULE_ENTRY,
         )
     }
 
@@ -561,10 +559,11 @@ pub mod tests {
 
     use crate::database::database_interface_feed_trait::DatabaseInterfaceFeedTrait;
     use crate::database::sql_interface_feed::{FeedScheduleEntry, SqlInterfaceFeed};
-    use crate::database::sql_query_strings;
+    use crate::database::{sql_query_strings, sql_test_query_strings};
     use crate::database::sql_query_strings::{
-        SQL_TABLE_FEED_LOG, SQL_TABLE_FEED_PROFILES, SQL_TABLE_FEED_SCHEDULE,
+        SQL_TABLE_FEED_PROFILES, SQL_TABLE_FEED_SCHEDULE,
     };
+    use crate::database::sql_test_query_strings::{SQL_TABLE_FEED_LOG};
     use crate::database::{sql_interface::SqlInterface, sql_interface_error::SqlInterfaceError};
     use crate::utilities::config::{read_config_file_with_test_database, ConfigData};
 
@@ -603,7 +602,7 @@ pub mod tests {
             Err(e) => panic!("Could not prepare test case: {e:?}"),
         }
         // insert test feed profile #1
-        let sql_query_string = sql_query_strings::SQL_QUERY_WRITE_FEED_PROFILE_TEST.to_string();
+        let sql_query_string = sql_test_query_strings::SQL_QUERY_WRITE_FEED_PROFILE_TEST.to_string();
         match sql_interface_feed.conn.exec_drop::<_, _>(
             sql_query_string,
             params! {
@@ -616,7 +615,7 @@ pub mod tests {
             }
         };
         // insert test feed profile #2
-        let sql_query_string = sql_query_strings::SQL_QUERY_WRITE_FEED_PROFILE_TEST2.to_string();
+        let sql_query_string = sql_test_query_strings::SQL_QUERY_WRITE_FEED_PROFILE_TEST2.to_string();
         match sql_interface_feed.conn.exec_drop::<_, _>(
             sql_query_string,
             params! {
@@ -658,12 +657,12 @@ pub mod tests {
         // Insert one valid row into each table
         let mut conn = sql_interface.get_connection().unwrap();
         conn.exec_drop(
-            sql_query_strings::SQL_QUERY_WRITE_FEED_PROFILE_TEST,
+            sql_test_query_strings::SQL_QUERY_WRITE_FEED_PROFILE_TEST,
             params! { "profile_id" => 1, "profile_name" => "test_profile1" },
         )
         .unwrap();
         conn.exec_drop(
-            sql_query_strings::SQL_QUERY_WRITE_FEED_SCHEDULE_ENTRY,
+            sql_test_query_strings::SQL_QUERY_WRITE_FEED_SCHEDULE_ENTRY,
             params! { "timestamp" => "2024-01-01 12:00:00", "profile_id" => 1, "is_weekly" => false, "is_daily" => true },
         ).unwrap();
         conn.exec_drop(
@@ -685,12 +684,12 @@ pub mod tests {
             .unwrap();
         let mut conn = sql_interface.get_connection().unwrap();
         conn.exec_drop(
-            sql_query_strings::SQL_QUERY_WRITE_FEED_PROFILE_TEST,
+            sql_test_query_strings::SQL_QUERY_WRITE_FEED_PROFILE_TEST,
             params! { "profile_id" => 1, "profile_name" => "row1" },
         )
         .unwrap();
         conn.exec_drop(
-            sql_query_strings::SQL_QUERY_WRITE_FEED_PROFILE_TEST,
+            sql_test_query_strings::SQL_QUERY_WRITE_FEED_PROFILE_TEST,
             params! { "profile_id" => 2, "profile_name" => "row2" },
         )
         .unwrap();
@@ -770,7 +769,7 @@ pub mod tests {
 
         // *** check retrieving of existing feed profile ****************************************
         // prepare database: insert feed profile
-        let sql_query_string = sql_query_strings::SQL_QUERY_WRITE_FEED_PROFILE_TEST.to_string();
+        let sql_query_string = sql_test_query_strings::SQL_QUERY_WRITE_FEED_PROFILE_TEST.to_string();
         match sql_interface_feed.conn.exec_drop::<_, _>(
             sql_query_string.clone(),
             params! {
@@ -984,7 +983,7 @@ pub mod tests {
         }
         // Read back feed log entry from the database
         let single_feed_event_entry_array = match sql_interface_feed.conn.query_map(
-            sql_query_strings::SQL_QUERY_READ_LAST_FEED_EVENT,
+            sql_test_query_strings::SQL_QUERY_READ_LAST_FEED_EVENT,
             |(timestamp, feeder_run_time, feed_profile_id)| SqlFeedEvent {
                 timestamp,
                 feeder_run_time,
@@ -1076,7 +1075,7 @@ pub mod tests {
         let profile_id_reference = 1;
         let repeat_daily_reference = true;
 
-        let sql_query_string = sql_query_strings::SQL_QUERY_WRITE_FEED_SCHEDULE_ENTRY.to_string();
+        let sql_query_string = sql_test_query_strings::SQL_QUERY_WRITE_FEED_SCHEDULE_ENTRY.to_string();
         match sql_interface_feed.conn.exec_drop::<_, _>(
             sql_query_string,
             params! {
@@ -1220,7 +1219,7 @@ pub mod tests {
         let profile_id_0 = 0;
         let repeat_daily_0 = true;
 
-        let sql_query_string = sql_query_strings::SQL_QUERY_WRITE_FEED_SCHEDULE_ENTRY.to_string();
+        let sql_query_string = sql_test_query_strings::SQL_QUERY_WRITE_FEED_SCHEDULE_ENTRY.to_string();
         match sql_interface_feed.conn.exec_drop::<_, _>(
             sql_query_string,
             params! {
@@ -1240,7 +1239,7 @@ pub mod tests {
         let profile_id_1 = 1;
         let repeat_daily_1 = true;
 
-        let sql_query_string = sql_query_strings::SQL_QUERY_WRITE_FEED_SCHEDULE_ENTRY.to_string();
+        let sql_query_string = sql_test_query_strings::SQL_QUERY_WRITE_FEED_SCHEDULE_ENTRY.to_string();
         match sql_interface_feed.conn.exec_drop::<_, _>(
             sql_query_string,
             params! {

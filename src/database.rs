@@ -34,7 +34,7 @@ pub mod sql_interface_error;
 // Contains functions for execution of all queries relevant for calculating the time until midnight
 pub mod sql_interface_midnight;
 
-// Contains all SQL queries as constants with placeholders
+// Contains all SQL queries used in implementation as constants with placeholders
 pub mod sql_query_strings;
 
 // Contains functions for execution of all queries relevant for heating set values (thermal)
@@ -57,3 +57,9 @@ pub mod database_interface_feed_trait;
 
 // Trait for updating of set values for either heating or ventilation control
 pub mod thermal_set_value_updater_trait;
+
+// Contains helper functions for testing
+pub mod sql_interface_test_utils;
+
+// Contains all SQL queries used in testing as constants with placeholders
+pub mod sql_test_query_strings;

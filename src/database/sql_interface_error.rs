@@ -669,7 +669,7 @@ pub enum SqlInterfaceError {
     #[error("[{0}] Feed set value table {1} may be inconsistent - database responded with negative value(s) ({2}, {3}).")]
     DatabaseFeedTableNegativeValue(String, String, i64, i64),
 
-    #[cfg(test)]
+    //#[cfg(test)]
     #[error(
         "[{location}] Error when inserting heating set values into database using query: {query}"
     )]
@@ -681,7 +681,7 @@ pub enum SqlInterfaceError {
         source: MySqlError,
     },
 
-    #[cfg(test)]
+    //#[cfg(test)]
     #[error("[{location}] Error when inserting ventilation set values into database using query: {query}")]
     InsertVentilationSetValuesFailure {
         location: String,
@@ -691,29 +691,29 @@ pub enum SqlInterfaceError {
         source: MySqlError,
     },
 
-    #[cfg(test)]
+    //#[cfg(test)]
     #[error("[{0}] Error occurred when trying to truncate table {1} of database.")]
     TruncateTableFailure(String, String),
 
-    #[cfg(test)]
+    //#[cfg(test)]
     #[error("[{0}] This is a mock error generated for testing purposes.")]
     MockError(String),
 
-    #[cfg(test)]
+    //#[cfg(test)]
     #[error(
         "[{0}] Error when inserting Balling pump configuration into database using query: {1}"
     )]
     InsertBallingPumpConfigurationFailure(String, String),
 
-    #[cfg(test)]
+    //#[cfg(test)]
     #[error("[{0}] Database responded with empty response to queries: {1} {2}")]
     SingleDataFrameRequestEmptyResponse(String, String, String),
 
-    #[cfg(test)]
+    //#[cfg(test)]
     #[error("[{0}] Database responded with multiple responses to queries: {1} {2}")]
     SingleDataFrameRequestNoSingleResponse(String, String, String),
 
-    #[cfg(test)]
+    //#[cfg(test)]
     #[error("Mock error for testing read_refill_stats")]
     ReadRefillStatsError,
 }

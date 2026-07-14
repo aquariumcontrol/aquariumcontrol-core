@@ -650,7 +650,7 @@ impl Balling {
     ///   `MineralInjectionTrait`, responsible for the physical control of the dosing pumps.
     /// * `sql_interface_balling` - A `SqlInterfaceBalling` instance, providing the
     ///   specific SQL interface for Balling dosing operations.
-    /// * `is_multi_thread` - A boolean indicating if the tokio runtime is running in multi-threaded mode.
+    /// * `is_multi_thread` - A boolean indicating if the tokio runtime is running in multithreaded mode.
     pub async fn execute(
         &mut self,
         mutex_device_scheduler_balling: Arc<Mutex<i32>>,
@@ -844,7 +844,7 @@ pub mod tests {
     use crate::database::sql_interface::SqlInterface;
     use crate::database::sql_interface_balling::{BallingSetVal, SqlInterfaceBalling};
     use crate::database::sql_interface_error::SqlInterfaceError;
-    use crate::database::sql_query_strings::{
+    use crate::database::sql_test_query_strings::{
         SQL_TABLE_BALLING_DOSING_LOG, SQL_TABLE_BALLING_SET_VALS,
     };
     use crate::launch::channels::Channels;

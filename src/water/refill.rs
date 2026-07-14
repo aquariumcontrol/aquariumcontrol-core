@@ -1117,7 +1117,7 @@ impl std::error::Error for ThreadJoinError {}
 #[cfg(test)]
 pub mod tests {
     use crate::database::sql_interface_error::SqlInterfaceError;
-    use crate::database::sql_query_strings::SQL_TABLE_REFILL;
+    use crate::database::sql_test_query_strings::SQL_TABLE_REFILL;
     use crate::database::{sql_interface::SqlInterface, sql_interface_refill::SqlInterfaceRefill};
     use crate::launch::channels::{channel, AquaChannelError, AquaReceiver, AquaSender, Channels};
     use crate::mocks::mock_monitors::tests::MockMonitors;

@@ -223,10 +223,8 @@ impl SqlInterfaceData {
 #[cfg(test)]
 pub mod tests {
     use crate::database::sql_interface_data::SqlInterfaceData;
-    use crate::database::sql_query_strings::SQL_TABLE_DATA;
-    use crate::database::{
-        sql_interface::SqlInterface, sql_interface_error::SqlInterfaceError, sql_query_strings,
-    };
+    use crate::database::sql_test_query_strings::SQL_TABLE_DATA;
+    use crate::database::{sql_interface::SqlInterface, sql_interface_error::SqlInterfaceError, sql_test_query_strings};
     use crate::recorder::recorder_data_frame::RecorderDataFrame;
     use crate::utilities::config::{read_config_file_with_test_database, ConfigData};
     use chrono::NaiveDateTime;
@@ -357,35 +355,30 @@ pub mod tests {
         pub heater_status: bool,
     }
 
-    // Retrieves a single `RecorderDataFrame` from the 'data' table in the database.
-    //
-    // This function executes two separate SQL queries to fetch all components of a
-    // `RecorderDataFrame` for a specific timestamp. It strictly expects exactly one
-    // matching row for each part.
-    //
-    // Note: Due to limitations of the underlying SQL library, this function **cannot**
-    // properly handle database entries where values are `NULL`. It expects all fields
-    // to contain concrete data.
-    //
-    // Arguments:
-    // * `conn`: A mutable reference to an active database connection.
-    // * `timestamp`: The `NaiveDateTime` to identify the specific data frame to retrieve.
-    //
-    // # Returns
-    // A `Result` containing the reconstructed `RecorderDataFrame` if both queries succeed
-    // and return exactly one row with non-NULL data.
-    //
-    // # Errors
-    // This function will return an error if:
-    // - Either of the underlying database queries fail.
-    // - Either query returns zero rows (`SingleDataFrameRequestEmptyResponse`).
-    // - Either query returns more than one row (`SingleDataFrameRequestNoSingleResponse`).
-    // - The timestamp string retrieved from the database cannot be parsed into a `NaiveDateTime`.
-    /// Retrieves the single dataframe from database.
+    /// Retrieves a single `RecorderDataFrame` from the 'data' table in the database.
     ///
-    /// # Arguments
-    /// * `conn` - An active pooled database connection.
-    /// * `timestamp` - A parameter representing `timestamp`.
+    /// This function executes two separate SQL queries to fetch all components of a
+    /// `RecorderDataFrame` for a specific timestamp. It strictly expects exactly one
+    /// matching row for each part.
+    ///
+    /// Note: Due to limitations of the underlying SQL library, this function **cannot**
+    /// properly handle database entries where values are `NULL`. It expects all fields
+    /// to contain concrete data.
+    ///
+    /// Arguments:
+    /// * `conn`: A mutable reference to an active database connection.
+    /// * `timestamp`: The `NaiveDateTime` to identify the specific data frame to retrieve.
+    ///
+    /// # Returns
+    /// A `Result` containing the reconstructed `RecorderDataFrame` if both queries succeed
+    /// and return exactly one row with non-NULL data.
+    ///
+    /// # Errors
+    /// This function will return an error if:
+    /// - Either of the underlying database queries fail.
+    /// - Either query returns zero rows (`SingleDataFrameRequestEmptyResponse`).
+    /// - Either query returns more than one row (`SingleDataFrameRequestNoSingleResponse`).
+    /// - The timestamp string retrieved from the database cannot be parsed into a `NaiveDateTime`.
     pub fn get_single_dataframe_from_database(
         conn: &mut PooledConn,
         timestamp: NaiveDateTime,
@@ -393,7 +386,7 @@ pub mod tests {
         let timestamp_string = timestamp.format("%Y-%m-%d %H:%M:%S").to_string();
         // Get data frame part 1 from the database
         let sql_query_string_1 = str::replace(
-            sql_query_strings::SQL_QUERY_READ_DATA_FRAME_1,
+            sql_test_query_strings::SQL_QUERY_READ_DATA_FRAME_1,
             "#timestamp",
             &timestamp_string,
         );
@@ -417,7 +410,7 @@ pub mod tests {
             }
         };
         let sql_query_string_2 = str::replace(
-            sql_query_strings::SQL_QUERY_READ_DATA_FRAME_2,
+            sql_test_query_strings::SQL_QUERY_READ_DATA_FRAME_2,
             "#timestamp",
             &timestamp_string,
         );
@@ -505,7 +498,7 @@ pub mod tests {
         let timestamp_string = timestamp.format("%Y-%m-%d %H:%M:%S").to_string();
         // Get a series of NULL values from the database
         let sql_query_string = str::replace(
-            sql_query_strings::SQL_QUERY_READ_NULL_DATA_FRAME,
+            sql_test_query_strings::SQL_QUERY_READ_NULL_DATA_FRAME,
             "#timestamp",
             &timestamp_string,
         );

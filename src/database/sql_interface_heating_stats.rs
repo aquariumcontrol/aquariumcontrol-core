@@ -485,7 +485,7 @@ pub mod tests {
         HeatingStatsEntry, SqlInterfaceHeatingStats,
     };
     use crate::database::sql_interface_midnight::SqlInterfaceMidnightCalculator;
-    use crate::database::sql_query_strings::SQL_TABLE_HEATING_STATS;
+    use crate::database::sql_test_query_strings::SQL_TABLE_HEATING_STATS;
     use crate::database::{sql_interface::SqlInterface, sql_interface_error::SqlInterfaceError};
     use crate::utilities::config::{read_config_file_with_test_database, ConfigData};
     use all_asserts::{assert_ge, assert_le};

@@ -58,6 +58,8 @@ use mysql::params;
 use crate::database::sql_interface::SqlInterface;
 use crate::database::sql_interface_error::SqlInterfaceError;
 use crate::database::sql_query_strings;
+#[cfg(test)]
+use crate::database::sql_test_query_strings;
 use crate::database::sql_query_strings::{
     SQL_QUERY_CHECK_VENTILATION_SET_VALS_COUNT, SQL_QUERY_CHECK_VENTILATION_SET_VALS_NULL,
 };
@@ -280,7 +282,7 @@ impl SqlInterfaceVentilationSetVals {
         ventilation_set_vals: &VentilationSetVals,
     ) -> Result<(), SqlInterfaceError> {
         match self.conn.exec_drop::<_, _>(
-            sql_query_strings::SQL_QUERY_WRITE_VENTILATION_SET_VALS, params!{
+            sql_test_query_strings::SQL_QUERY_WRITE_VENTILATION_SET_VALS, params!{
                 "ventilation_switch_off_temp" => ventilation_set_vals.ventilation_switch_off_temperature,
                 "ventilation_switch_on_temp" => ventilation_set_vals.ventilation_switch_on_temperature,
              },
@@ -290,7 +292,7 @@ impl SqlInterfaceVentilationSetVals {
                 println!("{e:?}");
                 Err(SqlInterfaceError::InsertVentilationSetValuesFailure {
                     location: module_path!().to_string(),
-                    query: sql_query_strings::SQL_QUERY_WRITE_VENTILATION_SET_VALS.to_string(),
+                    query: sql_test_query_strings::SQL_QUERY_WRITE_VENTILATION_SET_VALS.to_string(),
                     source: e,
                 })
             }
@@ -356,9 +358,7 @@ pub mod tests {
     use crate::database::sql_interface_ventilation_set_vals::{
         SqlInterfaceVentilationSetVals, VentilationSetVals,
     };
-    use crate::database::{
-        sql_interface::SqlInterface, sql_interface_error::SqlInterfaceError, sql_query_strings,
-    };
+    use crate::database::{sql_interface::SqlInterface, sql_interface_error::SqlInterfaceError, sql_test_query_strings};
     use crate::utilities::config::{read_config_file_with_test_database, ConfigData};
 
     #[test]
@@ -381,7 +381,7 @@ pub mod tests {
         println!("* Testing new() with an empty table (Happy Path)...");
         SqlInterface::truncate_table(
             &mut sql_interface,
-            sql_query_strings::SQL_TABLE_VENTILATION_SET_VALS.to_string(),
+            sql_test_query_strings::SQL_TABLE_VENTILATION_SET_VALS.to_string(),
         )
         .expect("Test setup failed: Could not truncate table.");
 
@@ -400,7 +400,7 @@ pub mod tests {
         println!("* Testing new() with more than one row in the table...");
         SqlInterface::truncate_table(
             &mut sql_interface,
-            sql_query_strings::SQL_TABLE_VENTILATION_SET_VALS.to_string(),
+            sql_test_query_strings::SQL_TABLE_VENTILATION_SET_VALS.to_string(),
         )
         .expect("Test setup failed: Could not truncate table.");
         let conn = sql_interface.get_connection().unwrap();
@@ -449,7 +449,7 @@ pub mod tests {
             .expect("Initialization of SQL interface for test failed.");
         match SqlInterface::truncate_table(
             &mut sql_interface,
-            sql_query_strings::SQL_TABLE_VENTILATION_SET_VALS.to_string(),
+            sql_test_query_strings::SQL_TABLE_VENTILATION_SET_VALS.to_string(),
         ) {
             Ok(_) => {}
             Err(e) => panic!("Could not prepare test case: {e:?}"),
@@ -508,7 +508,7 @@ pub mod tests {
 
         match SqlInterface::truncate_table(
             &mut sql_interface,
-            sql_query_strings::SQL_TABLE_VENTILATION_SET_VALS.to_string(),
+            sql_test_query_strings::SQL_TABLE_VENTILATION_SET_VALS.to_string(),
         ) {
             Ok(_) => {}
             Err(e) => panic!("Could not prepare test case: {e:?}"),
@@ -538,7 +538,7 @@ pub mod tests {
         // test if too many rows are detected
         match SqlInterface::truncate_table(
             &mut sql_interface,
-            sql_query_strings::SQL_TABLE_VENTILATION_SET_VALS.to_string(),
+            sql_test_query_strings::SQL_TABLE_VENTILATION_SET_VALS.to_string(),
         ) {
             Ok(_) => {}
             Err(e) => panic!("Could not prepare test case: {e:?}"),

@@ -439,8 +439,8 @@ pub mod tests {
     use crate::database::sql_interface_schedule::{
         ScheduleEntry, ScheduleType, SqlInterfaceSchedule, SqlScheduleEntry,
     };
-    use crate::database::sql_query_strings;
-    use crate::database::sql_query_strings::SQL_TABLE_SCHEDULE;
+    use crate::database::sql_test_query_strings;
+    use crate::database::sql_test_query_strings::SQL_TABLE_SCHEDULE;
     use crate::utilities::config::{read_config_file_with_test_database, ConfigData};
     use mysql::params;
     use mysql::prelude::Queryable;
@@ -481,12 +481,12 @@ pub mod tests {
             .expect("Test setup failed: Could not truncate table.");
         let mut conn = sql_interface.get_connection().unwrap();
         conn.exec_drop(
-            sql_query_strings::SQL_QUERY_WRITE_SCHEDULE_TEST_DATA,
+            sql_test_query_strings::SQL_QUERY_WRITE_SCHEDULE_TEST_DATA,
             params! { "schedule_name" => "Balling", "start_time" => "01:00:00", "stop_time" => "02:00:00" },
         )
             .unwrap();
         conn.exec_drop(
-            sql_query_strings::SQL_QUERY_WRITE_SCHEDULE_TEST_DATA,
+            sql_test_query_strings::SQL_QUERY_WRITE_SCHEDULE_TEST_DATA,
             params! { "schedule_name" => "Refill", "start_time" => "03:00:00", "stop_time" => "04:00:00" },
         )
             .unwrap();
@@ -513,7 +513,7 @@ pub mod tests {
             .expect("Test setup failed: Could not truncate table.");
         let mut conn = sql_interface.get_connection().unwrap();
         conn.exec_drop(
-            sql_query_strings::SQL_QUERY_WRITE_SCHEDULE_TEST_DATA,
+            sql_test_query_strings::SQL_QUERY_WRITE_SCHEDULE_TEST_DATA,
             params! { "schedule_name" => "InvalidType", "start_time" => "01:00:00", "stop_time" => "02:00:00" },
         )
             .unwrap();
@@ -541,13 +541,13 @@ pub mod tests {
         let mut conn = sql_interface.get_connection().unwrap();
         // Insert one valid row
         conn.exec_drop(
-            sql_query_strings::SQL_QUERY_WRITE_SCHEDULE_TEST_DATA,
+            sql_test_query_strings::SQL_QUERY_WRITE_SCHEDULE_TEST_DATA,
             params! { "schedule_name" => "Balling", "start_time" => "01:00:00", "stop_time" => "02:00:00" },
         )
             .unwrap();
         // Insert one invalid row
         conn.exec_drop(
-            sql_query_strings::SQL_QUERY_WRITE_SCHEDULE_TEST_DATA,
+            sql_test_query_strings::SQL_QUERY_WRITE_SCHEDULE_TEST_DATA,
             params! { "schedule_name" => "AnotherInvalidType", "start_time" => "03:00:00", "stop_time" => "04:00:00" },
         )
             .unwrap();
@@ -599,7 +599,7 @@ pub mod tests {
             sql_interface
                 .conn
                 .exec_drop(
-                    sql_query_strings::SQL_QUERY_WRITE_SCHEDULE_TEST_DATA,
+                    sql_test_query_strings::SQL_QUERY_WRITE_SCHEDULE_TEST_DATA,
                     params! {
                         "schedule_name" => *name,
                         "start_time" => *start,
@@ -684,7 +684,7 @@ pub mod tests {
             sql_interface
                 .conn
                 .exec_drop(
-                    sql_query_strings::SQL_QUERY_WRITE_SCHEDULE_TEST_DATA,
+                    sql_test_query_strings::SQL_QUERY_WRITE_SCHEDULE_TEST_DATA,
                     params! {
                         "schedule_name" => *name,
                         "start_time" => *start,

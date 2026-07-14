@@ -193,14 +193,14 @@ impl Feed {
     /// Logs the recently executed feed profile to the database using feed-specific interface
     ///
     /// # Arguments
-    /// * `feed_profile` - The feed profile to executed.
+    /// * `feed_profile` - The feed profile to be executed.
     /// * `sql_interface_feed` - A boxed trait object representing the interface
     ///   to the SQL database for feed-specific operations. This allows for
     ///   dependency injection and mock implementations during testing.
     ///
     /// # Returns
     /// An empty Ok() or Err() depending on result of the logging operation.
-    /// * `is_multi_thread` - A boolean flag indicating if the Tokio runtime is running in multi-threaded mode.
+    /// * `is_multi_thread` - A boolean flag indicating if the Tokio runtime is running in multithreaded mode.
     fn log_feed_operation(
         &mut self,
         feed_profile: FeedProfile,
@@ -365,7 +365,7 @@ impl Feed {
     /// * `sql_interface_feed` - A boxed trait object representing the interface
     ///   to the SQL database for feed-specific operations. This allows for
     ///   dependency injection and mock implementations during testing.
-    /// * `is_multi_thread` - A boolean indicating if the tokio runtime is running in multi-threaded mode.
+    /// * `is_multi_thread` - A boolean indicating if the tokio runtime is running in multithreaded mode.
     pub async fn execute(
         &mut self,
         mutex_device_scheduler_feed: Arc<Mutex<i32>>,
@@ -766,7 +766,8 @@ pub mod tests {
     use crate::utilities::logger_config::LoggerConfig;
 
     use crate::database::sql_interface_feed::tests::insert_feed_profiles;
-    use crate::database::sql_query_strings::{SQL_TABLE_FEED_LOG, SQL_TABLE_FEED_SCHEDULE};
+    use crate::database::sql_query_strings::SQL_TABLE_FEED_SCHEDULE;
+    use crate::database::sql_test_query_strings::SQL_TABLE_FEED_LOG;
     use crate::launch::channels::{AquaReceiver, AquaSender, Channels};
     use crate::mocks::mock_food_injection::MockFoodInjection;
     use crate::mocks::mock_sql_interface_feed::tests::MockSqlInterfaceFeed;

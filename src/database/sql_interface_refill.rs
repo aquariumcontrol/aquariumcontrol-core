@@ -55,7 +55,7 @@ use mysql::prelude::*;
 use mysql::*;
 
 use crate::database::pingable::Pingable;
-use crate::database::sql_query_strings::SQL_QUERY_CHECK_REFILL_COUNT;
+use crate::database::sql_test_query_strings::SQL_QUERY_CHECK_REFILL_COUNT;
 use crate::database::{
     sql_interface::SqlInterface, sql_interface_error::SqlInterfaceError, sql_query_strings,
 };
@@ -431,10 +431,8 @@ pub mod tests {
     use crate::database::sql_interface_refill::{
         DatabaseInterfaceRefillTrait, DatabaseRefillErrorCode, SqlInterfaceRefill,
     };
-    use crate::database::sql_query_strings::SQL_TABLE_REFILL;
-    use crate::database::{
-        sql_interface::SqlInterface, sql_interface_error::SqlInterfaceError, sql_query_strings,
-    };
+    use crate::database::sql_test_query_strings::SQL_TABLE_REFILL;
+    use crate::database::{sql_interface::SqlInterface, sql_interface_error::SqlInterfaceError, sql_test_query_strings};
     use crate::utilities::config::{read_config_file_with_test_database, ConfigData};
 
     pub struct SqlRefillEvent {
@@ -727,7 +725,7 @@ pub mod tests {
         // *** check the content of last refill event - ********************************************
         // Read back refill event entry from the database
         let single_refill_event_entry_array = match sql_interface_refill.conn.query_map(
-            sql_query_strings::SQL_QUERY_READ_REFILL_EVENT,
+            sql_test_query_strings::SQL_QUERY_READ_REFILL_EVENT,
             |(timestamp, duration, volume, error_code)| SqlRefillEvent {
                 timestamp,
                 duration,

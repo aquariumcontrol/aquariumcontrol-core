@@ -975,7 +975,7 @@ pub mod tests {
     use std::thread;
     use std::time::{Duration, Instant};
 
-    use crate::database::sql_query_strings::SQL_TABLE_HEATING_STATS;
+    use crate::database::sql_test_query_strings::SQL_TABLE_HEATING_STATS;
     use crate::thermal::thermal_control_status::ThermalControlStatus;
 
     // Prepares a `Heating` control instance with a mock midnight calculator and a clean test database.
