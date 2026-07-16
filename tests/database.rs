@@ -15,4 +15,5 @@ mod database {
     mod test_sql_interface_heating_stats;
     mod test_sql_interface_refill;
     mod test_sql_interface_schedule;
+    mod test_sql_interface_ventilation_set_vals;
 }
