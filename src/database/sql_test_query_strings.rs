@@ -192,7 +192,6 @@ pub const SQL_QUERY_WRITE_PUMP_CONFIGURATION: &str = concat!(
     "values(:pump_id, :dosing_speed, :dosing_volume, :label);"
 );
 
-#[cfg(test)]
 /// Provides the feed schedule entries which lie in the future in ascending order
 pub const SQL_QUERY_READ_FUTURE_FEED_SCHEDULE_ENTRY: &str = concat!(
     "SELECT timestamp, profile_id, is_daily FROM feed_schedule ",

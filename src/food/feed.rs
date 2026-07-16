@@ -755,7 +755,7 @@ pub mod tests {
 
     use crate::database::database_interface_feed_trait::DatabaseInterfaceFeedTrait;
     use crate::database::sql_interface::SqlInterface;
-    use crate::database::sql_interface_feed::SqlInterfaceFeed;
+    use crate::database::sql_interface_feed::{insert_feed_profiles, SqlInterfaceFeed};
     use crate::food::feed::Feed;
     use crate::food::feed_schedule_entry::FeedScheduleEntry;
     use crate::utilities::channel_content::InternalCommand;
@@ -765,7 +765,6 @@ pub mod tests {
     use crate::utilities::logger::setup_logger;
     use crate::utilities::logger_config::LoggerConfig;
 
-    use crate::database::sql_interface_feed::tests::insert_feed_profiles;
     use crate::database::sql_query_strings::SQL_TABLE_FEED_SCHEDULE;
     use crate::database::sql_test_query_strings::SQL_TABLE_FEED_LOG;
     use crate::launch::channels::{AquaReceiver, AquaSender, Channels};
