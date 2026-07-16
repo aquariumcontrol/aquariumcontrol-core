@@ -13,4 +13,5 @@ mod database {
     mod test_sql_interface_feed;
     mod test_sql_interface_heating_set_vals;
     mod test_sql_interface_heating_stats;
+    mod test_sql_interface_refill;
 }

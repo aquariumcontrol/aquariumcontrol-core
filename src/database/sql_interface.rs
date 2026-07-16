@@ -894,8 +894,7 @@ impl SqlInterface {
             }
         }
     }
-
-    #[cfg(test)]
+    
     /// This test-only function calculates a `NaiveDateTime` that is a specific duration
     /// in the past relative to the current local time. This function is used for setting up
     /// historical data scenarios in tests across different crates.

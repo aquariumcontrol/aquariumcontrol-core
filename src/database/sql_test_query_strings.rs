@@ -173,7 +173,6 @@ pub const SQL_TABLE_VENTILATION_SET_VALS: &str = "ventilation_set_vals";
 /// Definition of table name for feed log
 pub const SQL_TABLE_FEED_LOG: &str = "feed_log";
 
-#[cfg(test)]
 /// Definition of table name for refill log
 pub const SQL_TABLE_REFILL: &str = "refill_log";
 
