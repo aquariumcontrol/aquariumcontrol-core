@@ -156,7 +156,6 @@ pub const SQL_TABLE_BALLING_SET_VALS: &str = "balling_set_vals";
 /// Definition of table name for Balling dosing log
 pub const SQL_TABLE_BALLING_DOSING_LOG: &str = "balling_log";
 
-#[cfg(test)]
 /// Definition of table name for schedule
 pub const SQL_TABLE_SCHEDULE: &str = "schedule";
 
@@ -166,7 +165,6 @@ pub const SQL_TABLE_HEATING_SET_VALS: &str = "heating_set_vals";
 /// Definition of table name for heating statistics
 pub const SQL_TABLE_HEATING_STATS: &str = "heating_stats";
 
-#[cfg(test)]
 /// Definition of table name for ventilation set values
 pub const SQL_TABLE_VENTILATION_SET_VALS: &str = "ventilation_set_vals";
 
