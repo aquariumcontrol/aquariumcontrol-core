@@ -915,7 +915,6 @@ impl SqlInterface {
         timestamp_from_past.naive_local()
     }
 
-    #[cfg(test)]
     /// This test-only function calculates the time difference in seconds between a
     /// provided `NaiveDateTime` (expected to be in the past) and the current local time.
     ///

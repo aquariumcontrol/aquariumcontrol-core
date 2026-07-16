@@ -163,7 +163,6 @@ pub const SQL_TABLE_SCHEDULE: &str = "schedule";
 /// Definition of table name for heating set values
 pub const SQL_TABLE_HEATING_SET_VALS: &str = "heating_set_vals";
 
-#[cfg(test)]
 /// Definition of table name for heating statistics
 pub const SQL_TABLE_HEATING_STATS: &str = "heating_stats";
 
