@@ -151,11 +151,9 @@ pub const SQL_QUERY_WRITE_VERSION_INFORMATION: &str =
 /// Definition of table name for Data recorder
 pub const SQL_TABLE_DATA: &str = "data";
 
-#[cfg(test)]
 /// Definition of table name for Balling set values
 pub const SQL_TABLE_BALLING_SET_VALS: &str = "balling_set_vals";
 
-#[cfg(test)]
 /// Definition of table name for Balling dosing log
 pub const SQL_TABLE_BALLING_DOSING_LOG: &str = "balling_log";
 
@@ -183,7 +181,6 @@ pub const SQL_TABLE_FEED_LOG: &str = "feed_log";
 pub const SQL_TABLE_REFILL: &str = "refill_log";
 
 // Writes a Balling dosing event to the database using given timestamp
-#[cfg(test)]
 pub const SQL_QUERY_WRITE_BALLING_EVENT_WITH_TIMESTAMP: &str = concat!(
     "INSERT into balling_log(timestamp, pump_id, dosing_volume) ",
     "values(:timestamp, :pump_id, :dosing_volume);"

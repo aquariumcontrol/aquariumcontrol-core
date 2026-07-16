@@ -260,7 +260,6 @@ pub fn read_config_file(filename: String) -> Result<ConfigData, ConfigError> {
     Ok(result)
 }
 
-#[cfg(test)]
 /// Loads configuration data from a `.toml` file and overrides the database name for testing.
 ///
 /// This helper function is exclusively used in test environments. It reads the

@@ -7,67 +7,16 @@ The above copyright notice and this permission notice shall be included in all c
 THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
-//! Provides the core SQL database interface and connection management for the tests of the application.
+//! Testing of cor SQL database interface.
 
-use chrono::{DateTime, Local, NaiveDate, NaiveDateTime, SubsecRound, TimeZone};
-use mysql::{params, PooledConn};
+use chrono::{DateTime, Local, NaiveDate, SubsecRound, TimeZone};
+use mysql::params;
 use mysql::prelude::Queryable;
 
 use aquarium_control::database::sql_interface::{SqlInterface, SqlInterfaceError};
-use aquarium_control::utilities::config::{read_config_file, ConfigData};
+use aquarium_control::database::sql_test_query_strings::SQL_QUERY_WRITE_VERSION_INFORMATION;
+use aquarium_control::utilities::config::{read_config_file_with_test_database, ConfigData};
 use aquarium_control::utilities::version_information::VersionInformation;
-use aquarium_control::database::sql_test_query_strings;
-
-// @todo: move this function to helper file
-pub fn truncate_table(
-    sql_interface: &mut SqlInterface,
-    sql_table_name: String,
-) -> mysql::Result<(), SqlInterfaceError> {
-    let sql_query_string = str::replace(
-        sql_test_query_strings::SQL_QUERY_TRUNCATE_TABLE,
-        "#table",
-        &sql_table_name,
-    );
-    match sql_interface.conn.query_drop(sql_query_string) {
-        Ok(_) => Ok(()),
-        Err(e) => {
-            println!("{e:?}");
-            Err(SqlInterfaceError::TruncateTableFailure(
-                module_path!().to_string(),
-                sql_table_name,
-            ))
-        }
-    }
-}
-
-// @todo: replace this constant with import
-pub const SQL_QUERY_WRITE_VERSION_INFORMATION: &str =
-    "INSERT into version(major, minor, build, hash) values(:major, :minor, :build, :hash);";
-
-// @todo: replace this function with import
-pub fn read_config_file_with_test_database(
-    relative_path: String,
-    test_db_number: u32,
-) -> ConfigData {
-    if test_db_number == 0 || test_db_number > 99 {
-        panic!(
-            "{}: number for test database ({}) is out of bounds.",
-            module_path!(),
-            test_db_number
-        )
-    }
-
-    // assemble the test database name with prefix and index.
-    let test_db_name: String = "aquarium_test_".to_string() + &format!("{:02}", test_db_number);
-
-    let mut config = read_config_file(relative_path).unwrap();
-
-    // replace the database name from the configuration file with the test database name
-    // required by the test case
-    config.sql_interface.db_name = test_db_name;
-
-    config
-}
 
 // Helper function to insert mock version information into database
 pub fn insert_mock_version_information(sql_interface: &mut SqlInterface) {
@@ -92,31 +41,6 @@ pub fn insert_mock_version_information(sql_interface: &mut SqlInterface) {
             panic!("Error when inserting version information into database: {e:?}");
         }
     };
-}
-
-// Helper function to truncate all tables (used in testing of run.rs)
-pub fn truncate_all_tables(sql_interface: &mut SqlInterface) {
-    // List of all tables to truncate
-    let tables = [
-        "balling_log",
-        "balling_set_vals",
-        "data",
-        "feed_log",
-        "feed_profiles",
-        "feed_schedule",
-        "heating_stats",
-        "refill_log",
-        "schedule",
-        "users",
-        "ventilation_set_vals",
-        "heating_set_vals",
-        "version",
-    ];
-
-    // Truncate all tables in the test database
-    for table in &tables {
-        let _ = SqlInterface::truncate_table(sql_interface, table.to_string());
-    }
 }
 
 #[test]
