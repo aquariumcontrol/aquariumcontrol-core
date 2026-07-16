@@ -10,4 +10,5 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 mod database {
     mod test_sql_interface;
     mod test_sql_interface_balling;
+    mod test_sql_interface_data;
 }

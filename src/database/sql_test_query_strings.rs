@@ -147,7 +147,6 @@ pub const SQL_QUERY_WRITE_BALLING_SET_VALS: &str = concat!(
 pub const SQL_QUERY_WRITE_VERSION_INFORMATION: &str =
     "INSERT into version(major, minor, build, hash) values(:major, :minor, :build, :hash);";
 
-#[cfg(test)]
 /// Definition of table name for Data recorder
 pub const SQL_TABLE_DATA: &str = "data";
 
