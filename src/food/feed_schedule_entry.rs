@@ -99,7 +99,6 @@ impl FeedScheduleEntry {
         })
     }
 
-    #[cfg(test)]
     /// Creates a new `FeedScheduleEntry` for use in test environments.
     ///
     /// This test-only helper function simplifies the creation of `FeedScheduleEntry`

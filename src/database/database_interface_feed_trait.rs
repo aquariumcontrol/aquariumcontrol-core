@@ -34,19 +34,17 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 //! is slow, brittle, and requires significant setup. By using a trait object,
 //! we can inject a mock database during testing.
 
-#[cfg(test)]
-use log::error;
-
 use crate::database::pingable::Pingable;
 use crate::database::sql_interface::SqlInterface;
 use crate::database::sql_interface_error::SqlInterfaceError;
 use crate::database::sql_interface_feed::SqlInterfaceFeed;
 use crate::database::sql_query_strings;
-#[cfg(test)]
 use crate::database::sql_test_query_strings;
 use crate::food::feed_profile::{FeedPhase, FeedProfile};
 use crate::food::feed_schedule_entry::FeedScheduleEntry;
+
 use chrono::NaiveDateTime;
+use log::error;
 use mysql::params;
 use mysql::prelude::Queryable;
 
@@ -100,7 +98,6 @@ pub trait DatabaseInterfaceFeedTrait: Pingable {
     /// * `profile_id` - A parameter representing `profile_id`.
     /// * `is_weekly` - A parameter representing `is_weekly`.
     /// * `is_daily` - A parameter representing `is_daily`.
-    #[cfg(test)]
     fn insert_feed_schedule_entry(
         &mut self,
         timestamp: NaiveDateTime,
@@ -320,25 +317,23 @@ impl DatabaseInterfaceFeedTrait for SqlInterfaceFeed {
         result
     }
 
-    #[cfg(test)]
-    // Inserts a single feed schedule entry into the database.
-    //
-    // This helper function is exclusively used in test environments to
-    // programmatically set up specific feed schedule configurations.
-    //
-    // # Arguments
-    // * `timestamp` - The `NaiveDateTime` when the feed event is scheduled to occur.
-    // * `profile_id` - The unique identifier of the feed profile associated with this schedule.
-    // * `profile_name` - The name of the feed profile associated with this schedule.
-    // * `is_weekly` - A boolean flag indicating if this schedule entry should repeat weekly.
-    // * `is_daily` - A boolean flag indicating if this schedule entry should repeat daily.
-    //
-    // # Returns
-    // An empty `Result` (`Ok(())`) if operation was successful.
-    //
-    // # Errors
-    // This function will return an `InsertFeedEventFailure` if the database operation fails.
-    #[cfg(test)]
+    /// Inserts a single feed schedule entry into the database.
+    ///
+    /// This helper function is exclusively used in test environments to
+    /// programmatically set up specific feed schedule configurations.
+    ///
+    /// # Arguments
+    /// * `timestamp` - The `NaiveDateTime` when the feed event is scheduled to occur.
+    /// * `profile_id` - The unique identifier of the feed profile associated with this schedule.
+    /// * `profile_name` - The name of the feed profile associated with this schedule.
+    /// * `is_weekly` - A boolean flag indicating if this schedule entry should repeat weekly.
+    /// * `is_daily` - A boolean flag indicating if this schedule entry should repeat daily.
+    ///
+    /// # Returns
+    /// An empty `Result` (`Ok(())`) if operation was successful.
+    ///
+    /// # Errors
+    /// This function will return an `InsertFeedEventFailure` if the database operation fails.
     fn insert_feed_schedule_entry(
         &mut self,
         timestamp: NaiveDateTime,

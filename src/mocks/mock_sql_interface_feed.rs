@@ -7,7 +7,6 @@ The above copyright notice and this permission notice shall be included in all c
 THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
-#[cfg(test)]
 pub mod tests {
     use chrono::NaiveDateTime;
 
@@ -93,7 +92,6 @@ pub mod tests {
         /// * `profile_id` - A parameter representing `profile_id`.
         /// * `is_weekly` - A parameter representing `is_weekly`.
         /// * `is_daily` - A parameter representing `is_daily`.
-        #[cfg(test)]
         fn insert_feed_schedule_entry(
             &mut self,
             _timestamp: NaiveDateTime,

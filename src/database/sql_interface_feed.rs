@@ -550,7 +550,6 @@ impl SqlInterfaceFeed {
     }
 }
 
-#[cfg(test)]
 /// This helper function prepares the database for feed-related test cases.
 /// It truncates the 'feed_profiles' table to ensure a clean state and then
 /// inserts two predefined test feed profiles.
