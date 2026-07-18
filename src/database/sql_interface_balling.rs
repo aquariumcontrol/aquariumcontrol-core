@@ -43,9 +43,7 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 //!   rules at startup, preventing runtime errors caused by misconfigured or
 //!   overgrown database tables.
 
-#[cfg(test)]
 use log::error;
-
 use chrono::NaiveDateTime;
 use mysql::prelude::*;
 use mysql::*;
@@ -55,9 +53,7 @@ use crate::database::sql_query_strings::{
     SQL_QUERY_CHECK_BALLING_LOG_COUNT, SQL_QUERY_CHECK_BALLING_SET_VALS_COUNT,
     SQL_QUERY_CHECK_BALLING_SET_VALS_NULL,
 };
-#[cfg(test)]
-use crate::database::sql_test_query_strings;
-use crate::database::sql_test_query_strings::SQL_QUERY_WRITE_BALLING_EVENT_WITH_TIMESTAMP;
+use crate::database::sql_test_query_strings::{SQL_QUERY_WRITE_BALLING_EVENT_WITH_TIMESTAMP, SQL_QUERY_WRITE_PUMP_CONFIGURATION};
 use crate::database::{
     sql_interface::SqlInterface, sql_interface_error::SqlInterfaceError, sql_query_strings,
 };
@@ -417,33 +413,26 @@ impl SqlInterfaceBalling {
         Ok(single_balling_setval_array.remove(0))
     }
 
-    #[cfg(test)]
-    // Inserts a pump configuration dataset into the database.
-    //
-    // This helper function is used exclusively in test environments to
-    // pre-populate the database with specific pump configuration data,
-    // allowing for consistent and isolated testing of related functionalities.
-    //
-    // # Arguments
-    // * `pump_id` - The unique identifier for the pump.
-    // * `dosing_speed` - The flow rate of the pump in milliliters per second.
-    // * `dosing_volume` - The volume (in milliliters) intended to be dosed in a single event.
-    // * `label` - A descriptive label for the fluid being dispensed by the pump.
-    //
-    // # Returns
-    // An empty `Result` (`Ok(())`) if the configuration was successfully inserted.
-    //
-    // # Errors
-    // Returns `SqlInterfaceError::InsertBallingPumpConfigurationFailure` if the
-    // `INSERT` query fails. This error should be updated to include the source
-    // `mysql::Error` for better diagnostics in test failures.
-    /// Performs the `insert_pump_configuration` operation.
+
+    /// Inserts a pump configuration dataset into the database.
+    ///
+    /// This helper function is used exclusively in test environments to
+    /// pre-populate the database with specific pump configuration data,
+    /// allowing for consistent and isolated testing of related functionalities.
     ///
     /// # Arguments
-    /// * `pump_id` - A parameter representing `pump_id`.
-    /// * `dosing_speed` - A parameter representing `dosing_speed`.
-    /// * `dosing_volume` - A parameter representing `dosing_volume`.
-    /// * `label` - A parameter representing `label`.
+    /// * `pump_id` - The unique identifier for the pump.
+    /// * `dosing_speed` - The flow rate of the pump in milliliters per second.
+    /// * `dosing_volume` - The volume (in milliliters) intended to be dosed in a single event.
+    /// * `label` - A descriptive label for the fluid being dispensed by the pump.
+    ///
+    /// # Returns
+    /// An empty `Result` (`Ok(())`) if the configuration was successfully inserted.
+    ///
+    /// # Errors
+    /// Returns `SqlInterfaceError::InsertBallingPumpConfigurationFailure` if the
+    /// `INSERT` query fails. This error should be updated to include the source
+    /// `mysql::Error` for better diagnostics in test failures.
     pub fn insert_pump_configuration(
         &mut self,
         pump_id: i64,
@@ -452,7 +441,7 @@ impl SqlInterfaceBalling {
         label: String,
     ) -> Result<(), SqlInterfaceError> {
         let sql_query_string =
-            sql_test_query_strings::SQL_QUERY_WRITE_PUMP_CONFIGURATION.to_owned();
+            SQL_QUERY_WRITE_PUMP_CONFIGURATION.to_owned();
         let sql_query_string_for_error = sql_query_string.clone();
         match self.conn.exec_drop::<_, _>(
             sql_query_string,

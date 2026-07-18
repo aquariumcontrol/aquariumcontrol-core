@@ -113,7 +113,7 @@ cfg_if::cfg_if! {
         fn create_test_environment(
             msg_commands: Vec<Message>,
             mut tx_environment_to_object: AquaSender<InternalCommand>,
-            signal_handler_channels: SignalHandlerChannels,
+            mut signal_handler_channels: SignalHandlerChannels,
             mq_filename: String,
         ) -> thread::JoinHandle<()> {
             thread::Builder::new()

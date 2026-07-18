@@ -179,7 +179,6 @@ pub const SQL_QUERY_WRITE_BALLING_EVENT_WITH_TIMESTAMP: &str = concat!(
     "values(:timestamp, :pump_id, :dosing_volume);"
 );
 
-#[cfg(test)]
 /// Inserts a Balling pump configuration to the database.
 pub const SQL_QUERY_WRITE_PUMP_CONFIGURATION: &str = concat!(
     "INSERT into balling_set_vals(pump_id, dosing_speed, dosing_volume, label) ",

@@ -106,7 +106,7 @@ impl From<i32> for MessagingDomain {
     }
 }
 
-#[cfg(all(target_os = "linux", test))]
+#[cfg(all(target_os = "linux", any(test, feature = "test-utils")))]
 impl From<MessagingDomain> for i32 {
     /// Performs the `from` operation.
     ///

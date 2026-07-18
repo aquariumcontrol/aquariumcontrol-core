@@ -7,7 +7,6 @@ The above copyright notice and this permission notice shall be included in all c
 THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
-#[cfg(test)]
 pub mod tests {
     use crate::mineral::balling_channels::BallingChannels;
     use crate::mineral::mineral_injection::MineralInjectionTrait;
@@ -16,11 +15,11 @@ pub mod tests {
 
     #[derive(Default)]
     pub struct MockMineralInjection {
-        pub(crate) pump1_engagement_durations: Vec<u32>,
-        pub(crate) pump2_engagement_durations: Vec<u32>,
-        pub(crate) pump3_engagement_durations: Vec<u32>,
-        pub(crate) pump4_engagement_durations: Vec<u32>,
-        pub(crate) pump_protocol: Vec<AquariumDevice>,
+        pub pump1_engagement_durations: Vec<u32>,
+        pub pump2_engagement_durations: Vec<u32>,
+        pub pump3_engagement_durations: Vec<u32>,
+        pub pump4_engagement_durations: Vec<u32>,
+        pub pump_protocol: Vec<AquariumDevice>,
     }
 
     impl MockMineralInjection {

@@ -271,7 +271,7 @@ impl InternalCommand {
     }
 
     /// Provides numeric representation of `InternalCommand`.
-    #[cfg(test)]
+    #[cfg(any(test, feature = "test-utils"))]
     pub fn to_numeric(&self) -> i32 {
         match self {
             InternalCommand::ResetAllErrors => command_values::RESET,
