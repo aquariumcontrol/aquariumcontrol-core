@@ -1266,14 +1266,10 @@ impl DataLogger {
                             Ok((res, conn_back)) => {
                                 // Success: Put the connection back into the struct
                                 sql_interface_data.conn_for_timestamp = conn_back;
+                                conn_for_timestamp_opt = Some(sql_interface_data.conn_for_timestamp);
                                 match res {
                                     Ok(c) => {
                                         self.lock_error_get_timestamp = false;
-                                        self.lock_error_output_timestamp = self.output_timestamp(
-                                            c,
-                                            &self.config.output_file_name_timestamp,
-                                            self.lock_error_output_timestamp,
-                                        );
                                         c
                                     }
                                     Err(e) => {
@@ -1310,6 +1306,12 @@ impl DataLogger {
                 } else {
                     Local::now().naive_local()
                 };
+
+                self.lock_error_output_timestamp = self.output_timestamp(
+                    current_timestamp,
+                    &self.config.output_file_name_timestamp,
+                    self.lock_error_output_timestamp,
+                );
 
                 // all data received, let's construct a data frame
                 let data_frame = RecorderDataFrame {
