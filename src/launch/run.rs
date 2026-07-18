@@ -34,8 +34,6 @@ use crate::dispatch::messaging::Messaging;
 use crate::food::feed::Feed;
 use crate::food::food_injection::FoodInjection;
 use crate::launch::channels::Channels;
-#[cfg(all(any(target_os = "linux", target_os = "macos"), not(test)))]
-use crate::launch::privilege_check::is_running_as_root;
 use crate::launch::startup_error::StartupError;
 use crate::mineral::balling::Balling;
 use crate::mineral::mineral_injection::MineralInjection;
@@ -71,8 +69,6 @@ use crate::utilities::publish_pid::PublishPid;
 #[cfg(all(feature = "target_hw", target_os = "linux"))]
 use crate::utilities::signal_handler;
 
-#[cfg(not(test))] // only required in real-life execution
-use crate::launch::argument_parser::check_argument_for_valid_config_file_name;
 use crate::sensors::i2c_interface::I2cInterface;
 use crate::spawn_tokio_task;
 use crate::thermal::thermal_control_status::ThermalControlStatus;
@@ -90,6 +86,10 @@ use crate::watchmen::watchdog::Watchdog;
 use crate::water::refill::Refill;
 use crate::water::refill_status::RefillStatus;
 use crate::water::water_injection::WaterInjection;
+#[cfg(not(any(test, feature = "test-utils")))]
+use crate::launch::argument_parser::check_argument_for_valid_config_file_name;
+#[cfg(all(any(target_os = "linux", target_os = "macos"), not(any(test, feature = "test-utils"))))]
+use crate::launch::privilege_check::is_running_as_root;
 use spin_sleep::SpinSleeper;
 #[cfg(any(test, not(target_os = "linux"), not(feature = "target_hw")))]
 use std::collections::HashMap;

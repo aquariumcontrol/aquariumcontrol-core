@@ -770,7 +770,7 @@ impl Dht {
     /// * `mutex_dht` - Mutex to store the result of the measurement
     /// * `dht_channels` - Mutable reference to the struct containing the channel
     pub fn execute(&mut self, mutex_dht: Arc<Mutex<DhtResult>>, dht_channels: &mut DhtChannels) {
-        #[cfg(all(target_os = "linux", not(test)))] // only required in real-life execution
+        #[cfg(all(target_os = "linux", not(test), not(feature = "test-utils")))] // only required in real-life execution
         #[cfg(not(tarpaulin_include))]
         info!(target: module_path!(), "Thread started with TID: {}", gettid());
 
