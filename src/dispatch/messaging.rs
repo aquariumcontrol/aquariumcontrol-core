@@ -539,33 +539,26 @@ pub mod tests {
             .unwrap()
     }
 
-    // Creates a new thread to simulate external stimuli and commands for the `Messaging` module.
-    //
-    // This helper function is used in test environments on Linux. It simulates an
-    // external process sending commands to the `Messaging` module via a POSIX message queue
-    // and also sends shutdown commands to the `Messaging` module and a mock control object
-    // through internal channels.
-    //
-    // # Arguments
-    // * `msg_commands` - A vector of `Message` structs to be sent as stimuli to the `Messaging` module.
-    // * `tx_environment_to_object` - The sender channel for this test environment to send commands to a mock control object.
-    // * `tx_signal_handler_to_messaging` - The sender channel for this test environment to send commands to the `Messaging` module, simulating the signal handler.
-    // * `rx_signal_handler_from_messaging` - The receiver channel for this test environment to receive acknowledgments from the `Messaging` module.
-    // * `mq_filename` - The name of the POSIX message queue used for sending stimuli.
-    //
-    // # Returns
-    // A `thread::JoinHandle<()>` which can be used to wait for the spawned thread to complete.
-    //
-    // # Panics
-    // This function will panic if:
-    // - The new thread cannot be spawned.
-    /// Performs the `create_test_environment` operation.
+    /// Creates a new thread to simulate external stimuli and commands for the `Messaging` module.
+    ///
+    /// This helper function is used in test environments on Linux. It simulates an
+    /// external process sending commands to the `Messaging` module via a POSIX message queue
+    /// and also sends shutdown commands to the `Messaging` module and a mock control object
+    /// through internal channels.
     ///
     /// # Arguments
-    /// * `msg_commands` - A parameter representing `msg_commands`.
-    /// * `tx_environment_to_object` - A parameter representing `tx_environment_to_object`.
-    /// * `signal_handler_channels` - A parameter representing `signal_handler_channels`.
-    /// * `mq_filename` - A parameter representing `mq_filename`.
+    /// * `msg_commands` - A vector of `Message` structs to be sent as stimuli to the `Messaging` module.
+    /// * `tx_environment_to_object` - The sender channel for this test environment to send commands to a mock control object.
+    /// * `tx_signal_handler_to_messaging` - The sender channel for this test environment to send commands to the `Messaging` module, simulating the signal handler.
+    /// * `rx_signal_handler_from_messaging` - The receiver channel for this test environment to receive acknowledgments from the `Messaging` module.
+    /// * `mq_filename` - The name of the POSIX message queue used for sending stimuli.
+    ///
+    /// # Returns
+    /// A `thread::JoinHandle<()>` which can be used to wait for the spawned thread to complete.
+    ///
+    /// # Panics
+    /// This function will panic if:
+    /// - The new thread cannot be spawned.
     fn create_test_environment(
         msg_commands: Vec<Message>,
         mut tx_environment_to_object: AquaSender<InternalCommand>,
@@ -592,13 +585,6 @@ pub mod tests {
                 // requesting mock control to quit
                 let _ = tx_environment_to_object.send(InternalCommand::Quit);
 
-                let mut tx_signal_handler_to_messaging = signal_handler_channels
-                    .tx_signal_handler_to_messaging_opt
-                    .unwrap();
-                let mut rx_signal_handler_from_messaging = signal_handler_channels
-                    .rx_signal_handler_from_messaging_opt
-                    .unwrap();
-
                 // requesting messaging to quit
                 let _ = tx_signal_handler_to_messaging.send(InternalCommand::Quit);
 
@@ -610,26 +596,22 @@ pub mod tests {
             .unwrap()
     }
 
-    // Asserts that a specific sequence of "Stop" then "Start" commands was received.
-    //
-    // This helper function is used in test environments on Linux to validate the order
-    // and content of commands received by a test mock. It specifically checks that:
-    // 1. Exactly two commands were received.
-    // 2. The first command received was `InternalCommand::Stop`.
-    // 3. The second command received was `InternalCommand::Start`.
-    //
-    // # Arguments
-    // * `commands_received` - A `Vec<InternalCommand>` containing the commands that were
-    //   captured by a mock object in the order they were received. This vector is consumed.
-    //
-    // # Panics
-    // This function will panic if:
-    // - The `commands_received` vector does not contain exactly two elements.
-    // - The commands are not `InternalCommand::Stop` followed by `InternalCommand::Start` in that order.
-    /// Performs the `assert_stop_start_sequence` operation.
+    /// Asserts that a specific sequence of "Stop" then "Start" commands was received.
+    ///
+    /// This helper function is used in test environments on Linux to validate the order
+    /// and content of commands received by a test mock. It specifically checks that:
+    /// 1. Exactly two commands were received.
+    /// 2. The first command received was `InternalCommand::Stop`.
+    /// 3. The second command received was `InternalCommand::Start`.
     ///
     /// # Arguments
-    /// * `commands_received` - A parameter representing `commands_received`.
+    /// * `commands_received` - A `Vec<InternalCommand>` containing the commands that were
+    ///   captured by a mock object in the order they were received. This vector is consumed.
+    ///
+    /// # Panics
+    /// This function will panic if:
+    /// - The `commands_received` vector does not contain exactly two elements.
+    /// - The commands are not `InternalCommand::Stop` followed by `InternalCommand::Start` in that order.
     fn assert_stop_start_sequence(mut commands_received: Vec<InternalCommand>) {
         let spin_sleeper = SpinSleeper::default();
         spin_sleeper.sleep(Duration::from_millis(100));
@@ -676,7 +658,7 @@ pub mod tests {
                 assert_stop_start_sequence(mock_message_command_receiver(
                     channels
                         .ventilation
-                        .rx_ventilation_from_messaging_opt
+                        .rx_ventilation_from_messaging
                         .unwrap(),
                 ));
             })
@@ -730,7 +712,7 @@ pub mod tests {
             .name("mock_heating".to_string())
             .spawn(move || {
                 assert_stop_start_sequence(mock_message_command_receiver(
-                    channels.heating.rx_heating_from_messaging_opt.unwrap(),
+                    channels.heating.rx_heating_from_messaging,
                 ));
             })
             .unwrap();
@@ -787,7 +769,7 @@ pub mod tests {
             .name("mock_refill".to_string())
             .spawn(move || {
                 let mut commands_received = mock_message_command_receiver(
-                    channels.refill.rx_refill_from_messaging_opt.unwrap(),
+                    channels.refill.rx_refill_from_messaging,
                 );
 
                 // assert the number of commands sent/received are identical
@@ -861,7 +843,7 @@ pub mod tests {
             .name("mock_feed".to_string())
             .spawn(move || {
                 let mut commands_received = mock_message_command_receiver(
-                    channels.feed.rx_feed_from_messaging_opt.unwrap(),
+                    channels.feed.rx_feed_from_messaging,
                 );
 
                 // assert the number of commands sent/received are identical
@@ -931,7 +913,7 @@ pub mod tests {
             .name("mock_balling".to_string())
             .spawn(move || {
                 assert_stop_start_sequence(mock_message_command_receiver(
-                    channels.balling.rx_balling_from_messaging_opt.unwrap(),
+                    channels.balling.rx_balling_from_messaging,
                 ));
             })
             .unwrap();
@@ -984,7 +966,7 @@ pub mod tests {
             .name("mock_watchdog".to_string())
             .spawn(move || {
                 assert_stop_start_sequence(mock_message_command_receiver(
-                    channels.watchdog.rx_watchdog_from_messaging_opt.unwrap(),
+                    channels.watchdog.rx_watchdog_from_messaging,
                 ));
             })
             .unwrap();
