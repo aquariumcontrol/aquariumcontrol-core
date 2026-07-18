@@ -87,7 +87,7 @@ pub struct WaterInjection {
 
     /// A flag used for testing purposes to record if the mutex access time was ever exceeded.
     /// Unlike the lock flag, this is not reset.
-    #[cfg(test)]
+    #[cfg(any(test, feature = "test-utils"))]
     pub mutex_access_duration_exceeded: bool,
 
     /// The maximum permissible duration for a mutex lock to be held before a warning is issued.
@@ -122,7 +122,7 @@ impl WaterInjection {
             sleep_duration_hundred_milli_sec: Duration::from_millis(sleep_interval_millis),
             sleep_interval_seconds,
             lock_warn_max_mutex_access_duration: false,
-            #[cfg(test)]
+            #[cfg(any(test, feature = "test-utils"))]
             mutex_access_duration_exceeded: false,
             max_mutex_access_duration: Duration::from_millis(MAX_MUTEX_ACCESS_DURATION_MILLIS),
         }

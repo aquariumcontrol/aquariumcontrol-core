@@ -282,7 +282,6 @@ impl Channels {
     }
 
     /// Creates a new set of channels with all simulators enabled for comprehensive unit testing.
-    #[cfg(test)]
     pub fn new_for_test() -> Channels {
         Self::build(true, true, true, false)
     }

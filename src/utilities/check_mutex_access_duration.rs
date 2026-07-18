@@ -81,7 +81,7 @@ pub trait CheckMutexAccessDurationTrait {
     ///
     /// # Arguments
     /// * `key_opt` - An optional configuration key.
-    #[cfg(test)]
+    #[cfg(any(test, feature = "test-utils"))]
     fn record_access_duration_violation(&mut self, key_opt: &Option<&AquariumSignal>);
 
     /// Provides the maximum permissible access duration
@@ -120,7 +120,7 @@ pub trait CheckMutexAccessDurationTrait {
 
                 // record for testing purposes only
                 cfg_if::cfg_if! {
-                    if #[cfg(test)] {
+                    if #[cfg(any(test, feature = "test-utils"))] {
                         println!(
                             "*** Access to mutex took too long. Allowed={}ms, Measured={}ms ***",
                             self.get_max_mutex_access_duration().as_millis(),
@@ -156,7 +156,7 @@ impl CheckMutexAccessDurationTrait for TankLevelSwitch {
         self.lock_warn_max_mutex_access_duration = value;
     }
 
-    #[cfg(test)]
+    #[cfg(any(test, feature = "test-utils"))]
     /// Method connects the default trait implementation with the specific implementation
     /// for recording access duration violation
     ///
@@ -199,7 +199,7 @@ impl CheckMutexAccessDurationTrait for Heating {
         self.lock_warn_max_mutex_access_duration = value;
     }
 
-    #[cfg(test)]
+    #[cfg(any(test, feature = "test-utils"))]
     /// Method connects the default trait implementation with the specific implementation
     /// for recording access duration violation
     ///
@@ -242,7 +242,7 @@ impl CheckMutexAccessDurationTrait for Ventilation {
         self.lock_warn_max_mutex_access_duration = value;
     }
 
-    #[cfg(test)]
+    #[cfg(any(test, feature = "test-utils"))]
     /// Method connects the default trait implementation with the specific implementation
     /// for recording access duration violation
     ///
@@ -285,7 +285,7 @@ impl CheckMutexAccessDurationTrait for Dht {
         self.lock_warn_max_mutex_access_duration = value;
     }
 
-    #[cfg(test)]
+    #[cfg(any(test, feature = "test-utils"))]
     /// Method connects the default trait implementation with the specific implementation
     /// for recording access duration violation
     ///
@@ -328,7 +328,7 @@ impl CheckMutexAccessDurationTrait for SensorManager {
         self.lock_warn_max_mutex_access_duration = value;
     }
 
-    #[cfg(test)]
+    #[cfg(any(test, feature = "test-utils"))]
     /// Method connects the default trait implementation with the specific implementation
     /// for recording access duration violation
     ///
@@ -371,7 +371,7 @@ impl CheckMutexAccessDurationTrait for WaterInjection {
         self.lock_warn_max_mutex_access_duration = value;
     }
 
-    #[cfg(test)]
+    #[cfg(any(test, feature = "test-utils"))]
     /// Method connects the default trait implementation with the specific implementation
     /// for recording access duration violation
     ///
@@ -414,7 +414,7 @@ impl CheckMutexAccessDurationTrait for Ds18b20 {
         self.lock_warn_max_mutex_access_duration = value;
     }
 
-    #[cfg(test)]
+    #[cfg(any(test, feature = "test-utils"))]
     /// Method connects the default trait implementation with the specific implementation
     /// for recording access duration violation
     ///
@@ -479,7 +479,7 @@ impl CheckMutexAccessDurationTrait for AtlasScientificEzo {
         }
     }
 
-    #[cfg(test)]
+    #[cfg(any(test, feature = "test-utils"))]
     /// Method connects the default trait implementation with the specific implementation
     /// for recording access duration violation
     ///
@@ -562,7 +562,7 @@ impl CheckMutexAccessDurationTrait for AtlasScientificOem {
     ///
     /// # Arguments
     /// * `key_opt` - An optional configuration key.
-    #[cfg(test)]
+    #[cfg(any(test, feature = "test-utils"))]
     fn record_access_duration_violation(&mut self, key_opt: &Option<&AquariumSignal>) {
         if let Some(key) = key_opt {
             match key {

@@ -106,11 +106,11 @@ pub struct AtlasScientificEzo {
     pub lock_warn_max_mutex_access_duration_conductivity: bool,
 
     // for testing purposes: record when mutex access time is exceeded without resetting it
-    #[cfg(test)]
+    #[cfg(any(test, feature = "test-utils"))]
     pub mutex_temperature_access_duration_exceeded: bool,
-    #[cfg(test)]
+    #[cfg(any(test, feature = "test-utils"))]
     pub mutex_ph_access_duration_exceeded: bool,
-    #[cfg(test)]
+    #[cfg(any(test, feature = "test-utils"))]
     pub mutex_conductivity_access_duration_exceeded: bool,
 
     pub max_mutex_access_duration: Duration,
@@ -135,11 +135,11 @@ impl AtlasScientificEzo {
             lock_warn_max_mutex_access_duration_temperature: false,
             lock_warn_max_mutex_access_duration_ph: false,
             lock_warn_max_mutex_access_duration_conductivity: false,
-            #[cfg(test)]
+            #[cfg(any(test, feature = "test-utils"))]
             mutex_temperature_access_duration_exceeded: false,
-            #[cfg(test)]
+            #[cfg(any(test, feature = "test-utils"))]
             mutex_ph_access_duration_exceeded: false,
-            #[cfg(test)]
+            #[cfg(any(test, feature = "test-utils"))]
             mutex_conductivity_access_duration_exceeded: false,
             max_mutex_access_duration: Duration::from_millis(max_mutex_access_duration_millis),
         }

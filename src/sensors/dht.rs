@@ -233,7 +233,7 @@ pub struct Dht {
     lock_error_failed_after_retries: bool,
 
     // for testing purposes: record when mutex access time is exceeded without resetting it
-    #[cfg(test)]
+    #[cfg(any(test, feature = "test-utils"))]
     pub mutex_access_duration_exceeded: bool,
 
     /// Maximum permissible access duration for Mutex
@@ -277,7 +277,7 @@ impl Dht {
             lock_warn_max_mutex_access_duration: false,
             lock_error_failed_after_retries: false,
 
-            #[cfg(test)]
+            #[cfg(any(test, feature = "test-utils"))]
             mutex_access_duration_exceeded: false,
             max_mutex_access_duration: Duration::from_millis(MAX_MUTEX_ACCESS_DURATION_MILLIS),
             measurement_interval,

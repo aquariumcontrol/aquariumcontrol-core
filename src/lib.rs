@@ -9,7 +9,6 @@ pub mod dispatch;
 pub mod food;
 /// This container module features all the functionality to execute the Balling mineral dosing.
 pub mod mineral;
-#[cfg(test)]
 /// This container module features a set of mock functionality used by test cases.
 pub mod mocks;
 /// The container module contains the schedule checker.

@@ -7,7 +7,6 @@ The above copyright notice and this permission notice shall be included in all c
 THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
-#[cfg(test)]
 pub mod tests {
     use crate::database::sql_interface_error::SqlInterfaceError;
     use crate::database::thermal_set_value_updater_trait::ThermalSetValueUpdaterTrait;
@@ -111,26 +110,19 @@ pub mod tests {
     }
 
     impl MockSqlInterfaceVentilationSetVals {
-        // Creates a new `MockSqlInterfaceVentilationSetVals` instance which will either actively
-        // manipulate test data or behave neutrally depending on the parameters.
-        //
-        // # Arguments
-        // * `active` - determine if test data shall be manipulated with the call to update_set_value
-        // * `new_set_value_ventilation_switch_off_temperature` - new set value for switch off temperature
-        //   to be applied to the mutable reference provided in update_set_value
-        // * `new_set_value_ventilation_switch_on_temperature` - new set value for switch on temperature
-        //   to be applied to the mutable reference provided in update_set_value
-        // * `delay_duration` - duration of time which shall pass before manipulating test data
-        //
-        // # Returns
-        // A new `VentilationSetValueMockUpdater` struct.
-        /// Creates a new instance.
+        /// Creates a new `MockSqlInterfaceVentilationSetVals` instance which will either actively
+        /// manipulate test data or behave neutrally depending on the parameters.
         ///
         /// # Arguments
-        /// * `active` - A parameter representing `active`.
-        /// * `new_set_value_ventilation_switch_off_temperature` - A parameter representing `new_set_value_ventilation_switch_off_temperature`.
-        /// * `new_set_value_ventilation_switch_on_temperature` - A parameter representing `new_set_value_ventilation_switch_on_temperature`.
-        /// * `delay_duration` - A parameter representing `delay_duration`.
+        /// * `active` - determine if test data shall be manipulated with the call to update_set_value
+        /// * `new_set_value_ventilation_switch_off_temperature` - new set value for switch off temperature
+        ///   to be applied to the mutable reference provided in update_set_value
+        /// * `new_set_value_ventilation_switch_on_temperature` - new set value for switch on temperature
+        ///   to be applied to the mutable reference provided in update_set_value
+        /// * `delay_duration` - duration of time which shall pass before manipulating test data
+        ///
+        /// # Returns
+        /// A new `VentilationSetValueMockUpdater` struct.
         pub fn new(
             active: bool,
             new_set_value_ventilation_switch_off_temperature: Option<f32>,

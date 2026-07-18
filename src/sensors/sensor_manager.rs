@@ -323,7 +323,7 @@ pub struct SensorManager {
     pub lock_warn_max_mutex_access_duration: bool,
 
     // for testing purposes: record when mutex access time is exceeded without resetting it
-    #[cfg(test)]
+    #[cfg(any(test, feature = "test-utils"))]
     pub mutex_access_duration_exceeded: bool,
 
     /// Maximum permissible duration for accessing the mutex
@@ -407,7 +407,7 @@ impl SensorManager {
             lock_error_ds18b20_water_temperature_mutex: false,
             lock_error_ds18b20_ambient_temperature_mutex: false,
             lock_warn_max_mutex_access_duration: false,
-            #[cfg(test)]
+            #[cfg(any(test, feature = "test-utils"))]
             mutex_access_duration_exceeded: false,
             max_mutex_access_duration: Duration::from_millis(
                 sensor_manager_constants::MAX_MUTEX_ACCESS_DURATION_MILLIS,

@@ -50,6 +50,7 @@ all_asserts = "2.3.4"
 
 [features]
 default = []
+test-utils = []
 target_hw = []
 controllino_hw = []
 debug_schedule_check = []

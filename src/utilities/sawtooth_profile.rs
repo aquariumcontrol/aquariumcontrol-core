@@ -72,28 +72,20 @@ pub struct SawToothProfileConfig {
 }
 
 impl SawToothProfileConfig {
-    #[cfg(test)]
-    // Creates a new `SawToothProfileConfig` with specified phase lengths.
-    //
-    // This constructor is exclusively for use in test environments to quickly
-    // define and set up a sawtooth profile configuration without needing to
-    // load from a file or use default deserialization.
-    //
-    // # Arguments
-    // * `phase1_length` - The length of the first phase (ramp up from 0 to 1).
-    // * `phase2_length` - The length of the second phase (constant value of 1).
-    // * `phase3_length` - The length of the third phase (ramp down from 1 to 0).
-    // * `phase4_length` - The length of the fourth phase (constant value of 0).
-    //
-    // # Returns
-    // A new `SawToothProfileConfig` instance initialized with the given phase lengths.
-    /// Creates a new instance.
+    /// Creates a new `SawToothProfileConfig` with specified phase lengths.
+    ///
+    /// This constructor is exclusively for use in test environments to quickly
+    /// define and set up a sawtooth profile configuration without needing to
+    /// load from a file or use default deserialization.
     ///
     /// # Arguments
-    /// * `phase1_length` - A parameter representing `phase1_length`.
-    /// * `phase2_length` - A parameter representing `phase2_length`.
-    /// * `phase3_length` - A parameter representing `phase3_length`.
-    /// * `phase4_length` - A parameter representing `phase4_length`.
+    /// * `phase1_length` - The length of the first phase (ramp up from 0 to 1).
+    /// * `phase2_length` - The length of the second phase (constant value of 1).
+    /// * `phase3_length` - The length of the third phase (ramp down from 1 to 0).
+    /// * `phase4_length` - The length of the fourth phase (constant value of 0).
+    //
+    /// # Returns
+    /// A new `SawToothProfileConfig` instance initialized with the given phase lengths.
     pub fn new(
         phase1_length: u32,
         phase2_length: u32,

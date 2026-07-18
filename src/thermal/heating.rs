@@ -140,7 +140,7 @@ pub struct Heating {
     lock_error_heating_set_value_read_failure: bool,
 
     // for testing purposes: record when mutex access time is exceeded without resetting it
-    #[cfg(test)]
+    #[cfg(any(test, feature = "test-utils"))]
     pub mutex_access_duration_exceeded: bool,
 
     /// Inhibition flag to avoid flooding the log with warning about having received inapplicable command from the signal handler
@@ -208,7 +208,7 @@ impl Heating {
             database_ping_interval,
             lock_warn_max_mutex_access_duration: false,
             lock_error_heating_set_value_read_failure: false,
-            #[cfg(test)]
+            #[cfg(any(test, feature = "test-utils"))]
             mutex_access_duration_exceeded: false,
             lock_warn_inapplicable_command_signal_handler: false,
             lock_error_channel_receive_termination: false,

@@ -235,7 +235,7 @@ pub struct TankLevelSwitch {
     lock_error_mutex_poisoned: bool,
 
     // for testing purposes: record when mutex access time is exceeded without resetting it
-    #[cfg(test)]
+    #[cfg(any(test, feature = "test-utils"))]
     pub mutex_access_duration_exceeded: bool,
 
     /// inhibition flag to avoid flooding the log file with repeated messages about not having received an input pin
@@ -297,7 +297,7 @@ impl TankLevelSwitch {
             lock_error_channel_receive_termination: false,
             lock_warn_max_mutex_access_duration: false,
             lock_error_mutex_poisoned: false,
-            #[cfg(test)]
+            #[cfg(any(test, feature = "test-utils"))]
             mutex_access_duration_exceeded: false,
             lock_error_input_pin_none: false,
             lock_error_simulator_communication: false,
@@ -366,7 +366,7 @@ impl TankLevelSwitch {
             lock_error_channel_receive_termination: false,
             lock_warn_max_mutex_access_duration: false,
             lock_error_mutex_poisoned: false,
-            #[cfg(test)]
+            #[cfg(any(test, feature = "test-utils"))]
             mutex_access_duration_exceeded: false,
             lock_error_input_pin_none: false,
             input_pin_opt,

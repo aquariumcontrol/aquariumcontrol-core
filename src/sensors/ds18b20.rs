@@ -130,7 +130,7 @@ pub struct Ds18b20 {
     /// inhibition flag to avoid flooding the log file with repeated messages about excessive access time to mutex
     pub lock_warn_max_mutex_access_duration: bool,
 
-    #[cfg(test)]
+    #[cfg(any(test, feature = "test-utils"))]
     // for testing purposes: record when mutex access time is exceeded without resetting it
     pub mutex_access_duration_exceeded: bool,
 
@@ -199,7 +199,7 @@ impl Ds18b20 {
         Ok(Ds18b20 {
             config,
             lock_warn_max_mutex_access_duration: false,
-            #[cfg(test)]
+            #[cfg(any(test, feature = "test-utils"))]
             mutex_access_duration_exceeded: false,
             max_mutex_access_duration: Duration::from_millis(
                 ds18b20_constants::MAX_MUTEX_ACCESS_DURATION_MILLIS,
