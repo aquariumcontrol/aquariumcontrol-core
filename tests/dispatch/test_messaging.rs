@@ -90,33 +90,26 @@ cfg_if::cfg_if! {
                 .unwrap()
         }
 
-        // Creates a new thread to simulate external stimuli and commands for the `Messaging` module.
-        //
-        // This helper function is used in test environments on Linux. It simulates an
-        // external process sending commands to the `Messaging` module via a POSIX message queue
-        // and also sends shutdown commands to the `Messaging` module and a mock control object
-        // through internal channels.
-        //
-        // # Arguments
-        // * `msg_commands` - A vector of `Message` structs to be sent as stimuli to the `Messaging` module.
-        // * `tx_environment_to_object` - The sender channel for this test environment to send commands to a mock control object.
-        // * `tx_signal_handler_to_messaging` - The sender channel for this test environment to send commands to the `Messaging` module, simulating the signal handler.
-        // * `rx_signal_handler_from_messaging` - The receiver channel for this test environment to receive acknowledgments from the `Messaging` module.
-        // * `mq_filename` - The name of the POSIX message queue used for sending stimuli.
-        //
-        // # Returns
-        // A `thread::JoinHandle<()>` which can be used to wait for the spawned thread to complete.
-        //
-        // # Panics
-        // This function will panic if:
-        // - The new thread cannot be spawned.
-        /// Performs the `create_test_environment` operation.
+        /// Creates a new thread to simulate external stimuli and commands for the `Messaging` module.
+        ///
+        /// This helper function is used in test environments on Linux. It simulates an
+        /// external process sending commands to the `Messaging` module via a POSIX message queue
+        /// and also sends shutdown commands to the `Messaging` module and a mock control object
+        /// through internal channels.
         ///
         /// # Arguments
-        /// * `msg_commands` - A parameter representing `msg_commands`.
-        /// * `tx_environment_to_object` - A parameter representing `tx_environment_to_object`.
-        /// * `signal_handler_channels` - A parameter representing `signal_handler_channels`.
-        /// * `mq_filename` - A parameter representing `mq_filename`.
+        /// * `msg_commands` - A vector of `Message` structs to be sent as stimuli to the `Messaging` module.
+        /// * `tx_environment_to_object` - The sender channel for this test environment to send commands to a mock control object.
+        /// * `tx_signal_handler_to_messaging` - The sender channel for this test environment to send commands to the `Messaging` module, simulating the signal handler.
+        /// * `rx_signal_handler_from_messaging` - The receiver channel for this test environment to receive acknowledgments from the `Messaging` module.
+        /// * `mq_filename` - The name of the POSIX message queue used for sending stimuli.
+        ///
+        /// # Returns
+        /// A `thread::JoinHandle<()>` which can be used to wait for the spawned thread to complete.
+        ///
+        /// # Panics
+        /// This function will panic if:
+        /// - The new thread cannot be spawned.
         fn create_test_environment(
             msg_commands: Vec<Message>,
             mut tx_environment_to_object: AquaSender<InternalCommand>,
