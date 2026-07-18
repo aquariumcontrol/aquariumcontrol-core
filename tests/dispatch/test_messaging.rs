@@ -136,20 +136,13 @@ cfg_if::cfg_if! {
                     // requesting mock control to quit
                     let _ = tx_environment_to_object.send(InternalCommand::Quit);
 
-                    let mut tx_signal_handler_to_messaging = signal_handler_channels
-                        .tx_signal_handler_to_messaging_opt
-                        .unwrap();
-                    let mut rx_signal_handler_from_messaging = signal_handler_channels
-                        .rx_signal_handler_from_messaging_opt
-                        .unwrap();
-
                     // requesting messaging to quit
-                    let _ = tx_signal_handler_to_messaging.send(InternalCommand::Quit);
+                    let _ = signal_handler_channels.tx_signal_handler_to_messaging.send(InternalCommand::Quit);
 
                     // waiting for confirmation from messaging
-                    let _ = rx_signal_handler_from_messaging.blocking_recv();
+                    let _ = signal_handler_channels.rx_signal_handler_from_messaging.blocking_recv();
 
-                    let _ = tx_signal_handler_to_messaging.send(InternalCommand::Terminate);
+                    let _ = signal_handler_channels.tx_signal_handler_to_messaging.send(InternalCommand::Terminate);
                 })
                 .unwrap()
         }
@@ -214,10 +207,7 @@ cfg_if::cfg_if! {
                 .name("mock_ventilation".to_string())
                 .spawn(move || {
                     assert_stop_start_sequence(mock_message_command_receiver(
-                        channels
-                            .ventilation
-                            .rx_ventilation_from_messaging_opt
-                            .unwrap(),
+                        channels.ventilation.rx_ventilation_from_messaging
                     ));
                 })
                 .unwrap();
@@ -270,7 +260,7 @@ cfg_if::cfg_if! {
                 .name("mock_heating".to_string())
                 .spawn(move || {
                     assert_stop_start_sequence(mock_message_command_receiver(
-                        channels.heating.rx_heating_from_messaging_opt.unwrap(),
+                        channels.heating.rx_heating_from_messaging,
                     ));
                 })
                 .unwrap();
@@ -327,7 +317,7 @@ cfg_if::cfg_if! {
                 .name("mock_refill".to_string())
                 .spawn(move || {
                     let mut commands_received = mock_message_command_receiver(
-                        channels.refill.rx_refill_from_messaging_opt.unwrap(),
+                        channels.refill.rx_refill_from_messaging,
                     );
 
                     // assert the number of commands sent/received are identical
@@ -401,7 +391,7 @@ cfg_if::cfg_if! {
                 .name("mock_feed".to_string())
                 .spawn(move || {
                     let mut commands_received = mock_message_command_receiver(
-                        channels.feed.rx_feed_from_messaging_opt.unwrap(),
+                        channels.feed.rx_feed_from_messaging,
                     );
 
                     // assert the number of commands sent/received are identical
@@ -471,7 +461,7 @@ cfg_if::cfg_if! {
                 .name("mock_balling".to_string())
                 .spawn(move || {
                     assert_stop_start_sequence(mock_message_command_receiver(
-                        channels.balling.rx_balling_from_messaging_opt.unwrap(),
+                        channels.balling.rx_balling_from_messaging,
                     ));
                 })
                 .unwrap();
@@ -524,7 +514,7 @@ cfg_if::cfg_if! {
                 .name("mock_watchdog".to_string())
                 .spawn(move || {
                     assert_stop_start_sequence(mock_message_command_receiver(
-                        channels.watchdog.rx_watchdog_from_messaging_opt.unwrap(),
+                        channels.watchdog.rx_watchdog_from_messaging,
                     ));
                 })
                 .unwrap();
