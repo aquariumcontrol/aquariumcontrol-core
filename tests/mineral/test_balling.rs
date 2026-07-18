@@ -71,7 +71,7 @@ fn execute_blocking(
 }
 /// Performs the `read_balling_config` operation.
 fn read_balling_config() -> ConfigData {
-    read_config_file("/config/aquarium_control_test_generic.toml".to_string()).unwrap()
+    read_config_file("config/aquarium_control_test_generic.toml".to_string()).unwrap()
 }
 
 /// Performs the `read_balling_config_with_database` operation.
@@ -80,7 +80,7 @@ fn read_balling_config() -> ConfigData {
 /// * `db_number` - A parameter representing `db_number`.
 fn read_balling_config_with_database(db_number: u32) -> ConfigData {
     read_config_file_with_test_database(
-        "/config/aquarium_control_test_generic.toml".to_string(),
+        "config/aquarium_control_test_generic.toml".to_string(),
         db_number,
     )
 }
