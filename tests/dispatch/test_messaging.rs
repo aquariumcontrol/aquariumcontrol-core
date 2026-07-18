@@ -22,7 +22,7 @@ cfg_if::cfg_if! {
         use aquarium_control::launch::channels::AquaSender;
         use aquarium_control::launch::channels::Channels;
         use aquarium_control::launch::execution_config::ExecutionConfig;
-        use aquarium_control::mocks::mock_message_command_receiver::tests::mock_message_command_receiver;
+        use aquarium_control::mocks::mock_message_command_receiver::mock_message_command_receiver;
         use aquarium_control::utilities::channel_content::InternalCommand;
         use aquarium_control::utilities::config::{read_config_file, ConfigData};
         use aquarium_control::utilities::signal_handler_channels::SignalHandlerChannels;
