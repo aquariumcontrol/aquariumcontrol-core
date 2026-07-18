@@ -9,26 +9,30 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 
 //! Tests for the aquarium's heating system.
 use aquarium_control::database::sql_interface::SqlInterface;
-use aquarium_control::database::sql_interface_heating_stats::{HeatingStatsEntry, SqlInterfaceHeatingStats};
+use aquarium_control::database::sql_interface_heating_stats::{
+    HeatingStatsEntry, SqlInterfaceHeatingStats,
+};
+use aquarium_control::database::sql_test_query_strings::SQL_TABLE_HEATING_STATS;
+use aquarium_control::database::thermal_set_value_updater_trait::ThermalSetValueUpdaterTrait;
 use aquarium_control::launch::channels::Channels;
 use aquarium_control::mocks::mock_heating::tests::MockSqlInterfaceHeatingSetVals;
+use aquarium_control::mocks::mock_heating_stats::tests::{
+    HeatingStatsMockDataTransfer, SqlInterfaceHeatingMockMidnightCalculator,
+};
 use aquarium_control::mocks::mock_relay_manager::tests::mock_relay_manager;
 use aquarium_control::mocks::mock_schedule_check::tests::mock_schedule_check;
 use aquarium_control::sensors::sensor_manager::SensorManagerSignals;
 use aquarium_control::sensors::tank_level_switch::TankLevelSwitchSignals;
 use aquarium_control::thermal::heating::{Heating, CYCLE_TIME_HEATING_MILLIS};
+use aquarium_control::thermal::heating_channels::HeatingChannels;
 use aquarium_control::thermal::heating_mutexes::HeatingMutexes;
-use aquarium_control::utilities::channel_content::{ActuatorState, AquariumDevice, InternalCommand};
+use aquarium_control::thermal::heating_stats_data_transfer_trait::HeatingStatsDataTransferTrait;
+use aquarium_control::thermal::thermal_control_status::ThermalControlStatus;
+use aquarium_control::utilities::channel_content::{
+    ActuatorState, AquariumDevice, InternalCommand,
+};
 use aquarium_control::utilities::config::{read_config_file_with_test_database, ConfigData};
 use aquarium_control::utilities::sawtooth_profile::SawToothProfileConfig;
-use aquarium_control::mocks::mock_heating_stats::tests::{
-    HeatingStatsMockDataTransfer, SqlInterfaceHeatingMockMidnightCalculator,
-};
-use aquarium_control::database::sql_test_query_strings::SQL_TABLE_HEATING_STATS;
-use aquarium_control::thermal::thermal_control_status::ThermalControlStatus;
-use aquarium_control::database::thermal_set_value_updater_trait::ThermalSetValueUpdaterTrait;
-use aquarium_control::thermal::heating_channels::HeatingChannels;
-use aquarium_control::thermal::heating_stats_data_transfer_trait::HeatingStatsDataTransferTrait;
 
 use all_asserts::{assert_ge, assert_le};
 use assert_float_eq::assert_float_absolute_eq;
