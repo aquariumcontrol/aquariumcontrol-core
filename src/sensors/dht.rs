@@ -97,7 +97,11 @@ cfg_if::cfg_if! {
         use log::info;
     }
 }
-
+cfg_if::cfg_if! {
+    if #[cfg(all(target_os = "linux", not(test)))] { // only required in real-life execution
+        use log::info;
+    }
+}
 cfg_if::cfg_if! {
     if #[cfg(all(target_os = "linux", feature = "target_hw"))] {
         use rppal::gpio::{Gpio, Level, Trigger};

@@ -72,8 +72,10 @@ use crate::sensors::i2c_interface_channels::I2cInterfaceChannels;
 use crate::sensors::i2c_interface_config::I2cInterfaceConfig;
 use crate::utilities::proc_ext_req::ProcessExternalRequestTrait;
 
-#[cfg(all(target_os = "linux", feature = "target_hw", not(test)))]
-// only required in real-life execution
+#[cfg(all(target_os = "linux", feature = "target_hw", not(test)))]  // only required in real-life execution
+use nix::unistd::gettid;
+
+#[cfg(all(not(test), target_os = "linux"))] // only required in real-life execution
 use nix::unistd::gettid;
 
 cfg_if::cfg_if! {
@@ -439,9 +441,8 @@ impl I2cInterface {
     /// # Arguments
     /// * `i2c_interface_channels` - A mutable reference to the struct containing the channels.
     pub async fn execute(&mut self, i2c_interface_channels: &mut I2cInterfaceChannels) {
-        #[cfg(not(test))] // only required in real-life execution
+        #[cfg(all(not(test), target_os = "linux"))] // only required in real-life execution
         #[cfg(not(tarpaulin_include))]
-        #[cfg(target_os = "linux")]
         info!(target: module_path!(), "Thread started with TID: {}", gettid());
 
         let mut lock_error_receive_atlas_scientific = false;

@@ -25,6 +25,7 @@ use chrono::NaiveDateTime;
 use mysql::{params, prelude::Queryable};
 use spin_sleep::SpinSleeper;
 use std::time::Duration;
+use crate::database::common::add_balling_profile;
 
 pub struct SqlBallingEvent {
     timestamp: String,
@@ -36,26 +37,6 @@ pub struct BallingEvent {
     timestamp: NaiveDateTime,
     pump_id: i32,
     dosing_volume: f32,
-}
-
-// Helper function to create mock dosing profile
-pub fn add_balling_profile(
-    conn: &mut mysql::PooledConn,
-    pump_id: i32,
-    dosing_speed: f32,
-    dosing_volume: f32,
-    label: String,
-) {
-    conn.exec_drop(
-        sql_test_query_strings::SQL_QUERY_WRITE_BALLING_SET_VALS,
-        params! {
-            "pump_id" => pump_id,
-            "dosing_speed" => dosing_speed,
-            "dosing_volume" => dosing_volume,
-            "label" => label
-        },
-    )
-    .unwrap();
 }
 
 #[test]

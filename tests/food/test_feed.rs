@@ -489,7 +489,7 @@ pub fn test_feed_schedule_execution_past_entries_select_youngest() {
     let mut mock_food_injection = MockFoodInjection::new();
 
     let config: ConfigData = read_config_file_with_test_database(
-        "/config/aquarium_control_test_generic.toml".to_string(),
+        "config/aquarium_control_test_generic.toml".to_string(),
         9,
     );
 
@@ -601,7 +601,7 @@ pub fn test_feed_schedule_execution_past_entries_select_oldest() {
     let mut mock_food_injection = MockFoodInjection::new();
 
     let mut config: ConfigData = read_config_file_with_test_database(
-        "/config/aquarium_control_test_generic.toml".to_string(),
+        "config/aquarium_control_test_generic.toml".to_string(),
         10,
     );
 

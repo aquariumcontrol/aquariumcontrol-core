@@ -79,7 +79,6 @@ pub use crate::utilities::signal_handler_channels::SignalHandlerChannels;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::{sync::Arc, time::Duration};
 
-#[cfg(test)]
 pub static TEST_SHUTDOWN_TRIGGER: AtomicBool = AtomicBool::new(false);
 
 /// Sends a specified `InternalCommand` to a target thread's channel and optionally waits for an acknowledgment.
@@ -211,7 +210,7 @@ pub async fn handle_signals(
     term: Arc<AtomicBool>,
     mut signal_handler_channels: SignalHandlerChannels,
     execution_config: ExecutionConfig,
-    #[cfg(test)] wait_for_test_shutdown_opt: Option<Duration>,
+    #[cfg(any(test, feature = "test-utils"))] wait_for_test_shutdown_opt: Option<Duration>,
 ) {
     #[cfg(all(target_os = "linux", not(test)))] // only required in real-life execution
     #[cfg(not(tarpaulin_include))]
@@ -257,10 +256,10 @@ pub async fn handle_signals(
         target: module_path!(),
         "Waiting for shutdown signal",
     );
-    #[cfg(test)]
+    #[cfg(any(test, feature = "test-utils"))]
     let start_instant = std::time::Instant::now();
     while !term.load(Ordering::Relaxed) {
-        #[cfg(test)]
+        #[cfg(any(test, feature = "test-utils"))]
         if let Some(wait_duration) = wait_for_test_shutdown_opt {
             if start_instant.elapsed() >= wait_duration {
                 term.store(true, Ordering::Relaxed);
@@ -271,7 +270,7 @@ pub async fn handle_signals(
                 );
             }
         }
-        #[cfg(test)]
+        #[cfg(any(test, feature = "test-utils"))]
         if TEST_SHUTDOWN_TRIGGER.load(Ordering::Relaxed) {
             term.store(true, Ordering::Relaxed);
             #[cfg(feature = "debug_signal_handler")]

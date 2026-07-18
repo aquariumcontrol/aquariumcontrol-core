@@ -143,7 +143,7 @@ fn update_actuator_states(
 // this test case executes the food injection without interruption from the signal handler
 pub fn test_food_injection_uninterrupted() {
     let config: ConfigData =
-        read_config_file("/config/aquarium_control_test_generic.toml".to_string()).unwrap();
+        read_config_file("config/aquarium_control_test_generic.toml".to_string()).unwrap();
     let mut food_injection = FoodInjection::new(&config.feed);
 
     let mut channels = Channels::new_for_test();
@@ -234,7 +234,7 @@ pub fn test_food_injection_uninterrupted() {
 // this test case executes the food injection with interruption from the signal handler
 pub fn test_food_injection_interrupted() {
     let config: ConfigData =
-        read_config_file("/config/aquarium_control_test_generic.toml".to_string()).unwrap();
+        read_config_file("config/aquarium_control_test_generic.toml".to_string()).unwrap();
     let mut food_injection = FoodInjection::new(&config.feed);
 
     let mut channels = Channels::new_for_test();

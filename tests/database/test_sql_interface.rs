@@ -17,31 +17,7 @@ use aquarium_control::database::sql_interface::{SqlInterface, SqlInterfaceError}
 use aquarium_control::database::sql_test_query_strings::SQL_QUERY_WRITE_VERSION_INFORMATION;
 use aquarium_control::utilities::config::{read_config_file_with_test_database, ConfigData};
 use aquarium_control::utilities::version_information::VersionInformation;
-
-// Helper function to insert mock version information into database
-pub fn insert_mock_version_information(sql_interface: &mut SqlInterface) {
-    let unknown_version_information = VersionInformation {
-        major: -1,
-        minor: -1,
-        build: -1,
-        hash: "void".to_string(),
-    };
-    let sql_query_string = SQL_QUERY_WRITE_VERSION_INFORMATION.to_string();
-    match sql_interface.conn.exec_drop::<_, _>(
-        sql_query_string,
-        params! {
-        "major" => unknown_version_information.major,
-        "minor" => unknown_version_information.minor,
-        "build" => unknown_version_information.build,
-        "hash" => unknown_version_information.hash.clone(),
-        },
-    ) {
-        Ok(_) => {}
-        Err(e) => {
-            panic!("Error when inserting version information into database: {e:?}");
-        }
-    };
-}
+use crate::database::common::insert_mock_version_information;
 
 #[test]
 // This test case checks the functionality of get_string_array_from_database.

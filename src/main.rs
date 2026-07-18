@@ -30,7 +30,9 @@ fn main() {
         return;
     }
 
-    if let Err(e) = run() {
+    let run_res = run(None, None);
+
+    if let Err(e) = run_res {
         log_error_chain(module_path!(), "Application failed to start.", e);
         std::process::exit(1);
     }

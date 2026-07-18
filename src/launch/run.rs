@@ -168,7 +168,7 @@ fn check_is_command(command: &str) -> Result<bool, VersionInformationError> {
 /// 7.  Initializes all SQL database interfaces and validates database readiness.
 /// 8.  Sets up all inter-thread communication channels (`mpsc`).
 /// 9.  Initializes all application modules (sensors, controls, managers) with their respective configurations and channels/mutexes.
-/// 10. Initializes a multi-threaded Tokio runtime directly on the Main thread (capping worker threads to 1 and blocking threads to 3 to optimize resources). Most application modules are spawned as cooperative asynchronous tasks within this runtime.
+/// 10. Initializes a multithreaded Tokio runtime directly on the Main thread (capping worker threads to 1 and blocking threads to 3 to optimize resources). Most application modules are spawned as cooperative asynchronous tasks within this runtime.
 /// 11. Spawns dedicated OS threads via standard builder spawns for timing-critical drivers (e.g., TcpCommunication, DHT GPIO bit-banging) that require blocking or spin-sleep behavior.
 /// 12. Manages the initial data acquisition phase, waiting for sensors to provide first readings before control loops become fully active.
 ///
@@ -300,8 +300,8 @@ fn check_is_command(command: &str) -> Result<bool, VersionInformationError> {
 ///     signal_handler --> temperature_gradient
 /// ```
 pub fn run(
-    #[cfg(test)] config_file_name_for_test: String,
-    #[cfg(test)] wait_for_test_shutdown_opt: Option<Duration>,
+    _config_file_name_for_test_opt: Option<String>,
+    _wait_for_test_shutdown_opt: Option<Duration>,
 ) -> Result<(), StartupError> {
     // setting up grpc so that tokio-console can monitor the tokio runtime
     #[cfg(feature = "debug_tokio")]
@@ -313,24 +313,24 @@ pub fn run(
     compile_error!("Target hardware is only available with Linux operating system.");
 
     // get command line parameters from OS
-    #[cfg(not(test))] // only required in real-life execution
+    #[cfg(not(any(test, feature = "test-utils")))] // only required in real-life execution
     #[cfg(not(tarpaulin_include))]
     let args: Vec<String> = env::args().collect();
 
     #[allow(unused_mut)]
     let mut config_file_name: String;
-    #[cfg(test)]
+    #[cfg(any(test, feature = "test-utils"))]
     {
-        config_file_name = config_file_name_for_test;
+        config_file_name = _config_file_name_for_test_opt.unwrap_or_default();
     }
-    #[cfg(not(test))] // only required in real-life execution
+    #[cfg(not(any(test, feature = "test-utils")))] // only required in real-life execution
     #[cfg(not(tarpaulin_include))]
     {
         config_file_name = "/etc/aquarium_control/aquarium_control.toml".to_string();
     }
 
     // Check command line parameters
-    #[cfg(not(test))] // only required in real-life execution
+    #[cfg(not(any(test, feature = "test-utils")))] // only required in real-life execution
     #[cfg(not(tarpaulin_include))]
     if args.len() > 1 {
         // If the first argument contains a path and file name, then let's use that.
@@ -382,7 +382,7 @@ pub fn run(
     info!(target: module_path!(), "{version_information}");
 
     // check if the user has root privileges - disabled when developing on the Windows platform
-    #[cfg(all(any(target_os = "linux", target_os = "macos"), not(test)))]
+    #[cfg(all(any(target_os = "linux", target_os = "macos"), not(any(test, feature = "test-utils"))))]
     if !is_running_as_root() {
         return Err(StartupError::NotRoot);
     }
@@ -1020,8 +1020,8 @@ pub fn run(
                 term,
                 chan_signal_handler,
                 signal_handler_config,
-                #[cfg(test)]
-                wait_for_test_shutdown_opt,
+                #[cfg(any(test, feature = "test-utils"))]
+                _wait_for_test_shutdown_opt,
             ).await;
             #[cfg(feature = "debug_main")]
             debug!(target: module_path!(), "Signal handler terminated.");
@@ -1347,55 +1347,3 @@ pub fn run(
 
     Ok(())
 }
-/*
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::database::sql_interface::tests::insert_mock_version_information;
-    use crate::database::sql_interface::tests::truncate_all_tables;
-    use crate::database::sql_interface_balling::tests::add_balling_profile;
-    use std::sync::atomic::Ordering;
-    use std::time::Duration;
-
-    #[test]
-    fn test_run_async_runtime_configuration() {
-        // Path of the dedicated config file
-        let config_path = "config/aquarium_control_test_runtime.toml".to_string();
-
-        // Reset the test shutdown trigger flag to false
-        crate::utilities::signal_handler::TEST_SHUTDOWN_TRIGGER.store(false, Ordering::Relaxed);
-
-        // Delete any stale PID file from previous test executions to avoid PidCheckError
-        let _ = std::fs::remove_file("/tmp/aquarium-ctrl-test.pid");
-
-        // Connect to database and prepare the test environment within a scope so the connection is returned to the pool
-        {
-            let config_data = read_config_file(config_path.to_string()).unwrap();
-            let mut sql_interface = SqlInterface::new(config_data.sql_interface).unwrap();
-
-            truncate_all_tables(&mut sql_interface);
-            insert_mock_version_information(&mut sql_interface);
-
-            // Insert default balling set values to satisfy startup configuration checks
-            for pump_id in 1..=4 {
-                add_balling_profile(
-                    &mut sql_interface.conn,
-                    pump_id,
-                    1.0f32,
-                    10.0f32,
-                    format!("Pump {}", pump_id),
-                );
-            }
-        }
-
-        // Run the main application run() function with 50 seconds test shutdown duration
-        let run_result = run(config_path, Some(Duration::from_secs(20)));
-
-        assert!(
-            run_result.is_ok(),
-            "run() failed with error: {:?}",
-            run_result.err()
-        );
-    }
-}
-*/
