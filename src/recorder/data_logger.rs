@@ -1266,7 +1266,8 @@ impl DataLogger {
                             Ok((res, conn_back)) => {
                                 // Success: Put the connection back into the struct
                                 sql_interface_data.conn_for_timestamp = conn_back;
-                                conn_for_timestamp_opt = Some(sql_interface_data.conn_for_timestamp);
+                                conn_for_timestamp_opt =
+                                    Some(sql_interface_data.conn_for_timestamp);
                                 match res {
                                     Ok(c) => {
                                         self.lock_error_get_timestamp = false;
