@@ -86,7 +86,7 @@ use crate::utilities::check_mutex_access_duration::CheckMutexAccessDurationTrait
 use crate::utilities::logger::log_error_chain;
 use crate::utilities::wait_for_termination::WaitForTerminationTrait;
 use crate::{perform_schedule_check, update_thermal_set_values};
-#[cfg(all(not(test), target_os = "linux"))] // only required in real-life execution
+#[cfg(all(not(test), not(feature = "test-utils"), target_os = "linux"))] // only required in real-life execution
 use nix::unistd::gettid;
 
 const CYCLE_TIME_VENTILATION_MILLIS: u64 = 500;
@@ -407,7 +407,7 @@ impl Ventilation {
         ventilation_mutexes: VentilationMutexes,
         is_multi_thread: bool,
     ) {
-        #[cfg(all(target_os = "linux", not(test)))] // only required in real-life execution
+        #[cfg(all(target_os = "linux", not(test), not(feature = "test-utils")))] // only required in real-life execution
         #[cfg(not(tarpaulin_include))]
         info!(target: module_path!(), "Thread started with TID: {}", gettid());
 

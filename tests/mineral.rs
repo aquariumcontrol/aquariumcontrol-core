@@ -9,4 +9,5 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 
 mod mineral {
     mod test_balling;
+    mod test_mineral_injection;
 }
