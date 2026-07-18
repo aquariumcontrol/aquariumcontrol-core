@@ -61,7 +61,7 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 //!   avoiding repeated, potentially costly memory allocations within the main loop.
 
 use log::error;
-#[cfg(target_os = "linux")]
+#[cfg(all(not(test), not(feature = "test-utils"), target_os = "linux"))]
 use log::info;
 use std::fmt;
 use std::time::Duration;
@@ -441,7 +441,7 @@ impl I2cInterface {
     /// # Arguments
     /// * `i2c_interface_channels` - A mutable reference to the struct containing the channels.
     pub async fn execute(&mut self, i2c_interface_channels: &mut I2cInterfaceChannels) {
-        #[cfg(all(not(test), target_os = "linux"))] // only required in real-life execution
+        #[cfg(all(not(test), not(feature = "test-utils"), target_os = "linux"))] // only required in real-life execution
         #[cfg(not(tarpaulin_include))]
         info!(target: module_path!(), "Thread started with TID: {}", gettid());
 

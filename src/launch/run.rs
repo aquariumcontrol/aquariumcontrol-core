@@ -77,7 +77,7 @@ use crate::utilities::channel_content::InternalCommand;
 use crate::utilities::signal_handler::handle_signals;
 #[cfg(not(test))] // only required in real-life execution
 use crate::utilities::version_information::VersionInformation;
-#[cfg(not(test))] // only required in real-life execution
+#[cfg(all(not(test), not(feature = "test-utils")))] // only required in real-life execution
 use crate::utilities::version_information::VersionInformationError;
 
 use crate::watchmen::monitors::Monitors;
