@@ -130,8 +130,8 @@ impl IIRFilter {
 
 #[cfg(test)]
 pub mod tests {
-    use assert_float_eq::*;
     use crate::utilities::iir_filter::{IIRFilter, IIRFilterConfig};
+    use assert_float_eq::*;
 
     /// Helper to create a default config for tests.
     fn prepare_filter_config() -> IIRFilterConfig {

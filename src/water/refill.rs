@@ -2985,36 +2985,28 @@ pub mod tests {
         // induce errors before executing again
         sql_refill_stats_data.refill_count_last_24h = config.refill.max_refill_count_24h + 1;
 
-        assert!(
-            refill.check_volume_count_time_limits(&sql_refill_stats_data, &mut channels.refill)
-        );
+        assert!(refill.check_volume_count_time_limits(&sql_refill_stats_data, &mut channels.refill));
         spin_sleeper.sleep(sleep_duration_200_millis);
 
         // reset the previous error and induce other error before executing again
         sql_refill_stats_data.refill_count_last_24h = 0;
         sql_refill_stats_data.refill_count_last_hour = config.refill.max_refill_count_hour + 1;
 
-        assert!(
-            refill.check_volume_count_time_limits(&sql_refill_stats_data, &mut channels.refill)
-        );
+        assert!(refill.check_volume_count_time_limits(&sql_refill_stats_data, &mut channels.refill));
         spin_sleeper.sleep(sleep_duration_200_millis);
 
         // reset the previous error and induce other error before executing again
         sql_refill_stats_data.refill_count_last_hour = 0;
         sql_refill_stats_data.refill_volume_last_24h = config.refill.max_refill_volume_24h + 1.0;
 
-        assert!(
-            refill.check_volume_count_time_limits(&sql_refill_stats_data, &mut channels.refill)
-        );
+        assert!(refill.check_volume_count_time_limits(&sql_refill_stats_data, &mut channels.refill));
         spin_sleeper.sleep(sleep_duration_200_millis);
 
         // reset the previous error and induce other error before executing again
         sql_refill_stats_data.refill_volume_last_24h = 0.0;
         sql_refill_stats_data.refill_volume_last_hour = config.refill.max_refill_volume_hour + 1.0;
 
-        assert!(
-            refill.check_volume_count_time_limits(&sql_refill_stats_data, &mut channels.refill)
-        );
+        assert!(refill.check_volume_count_time_limits(&sql_refill_stats_data, &mut channels.refill));
         spin_sleeper.sleep(sleep_duration_200_millis);
 
         // reset the previous error and induce other error before executing again
@@ -3022,9 +3014,7 @@ pub mod tests {
         sql_refill_stats_data.duration_since_last_refill =
             config.refill.min_interval_last_refill - 1;
 
-        assert!(
-            refill.check_volume_count_time_limits(&sql_refill_stats_data, &mut channels.refill)
-        );
+        assert!(refill.check_volume_count_time_limits(&sql_refill_stats_data, &mut channels.refill));
         spin_sleeper.sleep(sleep_duration_200_millis);
 
         // reset the previous error and do not induce any further error

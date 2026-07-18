@@ -14,12 +14,14 @@ use mysql::{params, prelude::Queryable};
 
 use aquarium_control::database::database_interface_feed_trait::DatabaseInterfaceFeedTrait;
 use aquarium_control::database::sql_interface_feed::SqlInterfaceFeed;
-use aquarium_control::database::{sql_query_strings, sql_test_query_strings};
 use aquarium_control::database::sql_query_strings::{
     SQL_TABLE_FEED_PROFILES, SQL_TABLE_FEED_SCHEDULE,
 };
-use aquarium_control::database::sql_test_query_strings::{SQL_TABLE_FEED_LOG};
-use aquarium_control::database::{sql_interface::SqlInterface, sql_interface_error::SqlInterfaceError};
+use aquarium_control::database::sql_test_query_strings::SQL_TABLE_FEED_LOG;
+use aquarium_control::database::{
+    sql_interface::SqlInterface, sql_interface_error::SqlInterfaceError,
+};
+use aquarium_control::database::{sql_query_strings, sql_test_query_strings};
 use aquarium_control::food::feed_schedule_entry::FeedScheduleEntry;
 use aquarium_control::utilities::config::{read_config_file_with_test_database, ConfigData};
 
@@ -54,10 +56,8 @@ fn test_sql_interface_feed_new() {
 
     // --- Test Case 1: Happy Path ---
     println!("* Testing new() with valid data (Happy Path)...");
-    SqlInterface::truncate_table(&mut sql_interface, SQL_TABLE_FEED_PROFILES.to_string())
-        .unwrap();
-    SqlInterface::truncate_table(&mut sql_interface, SQL_TABLE_FEED_SCHEDULE.to_string())
-        .unwrap();
+    SqlInterface::truncate_table(&mut sql_interface, SQL_TABLE_FEED_PROFILES.to_string()).unwrap();
+    SqlInterface::truncate_table(&mut sql_interface, SQL_TABLE_FEED_SCHEDULE.to_string()).unwrap();
     SqlInterface::truncate_table(&mut sql_interface, SQL_TABLE_FEED_LOG.to_string()).unwrap();
 
     // Insert one valid row into each table
@@ -66,7 +66,7 @@ fn test_sql_interface_feed_new() {
         sql_test_query_strings::SQL_QUERY_WRITE_FEED_PROFILE_TEST,
         params! { "profile_id" => 1, "profile_name" => "test_profile1" },
     )
-        .unwrap();
+    .unwrap();
     conn.exec_drop(
         sql_test_query_strings::SQL_QUERY_WRITE_FEED_SCHEDULE_ENTRY,
         params! { "timestamp" => "2024-01-01 12:00:00", "profile_id" => 1, "is_weekly" => false, "is_daily" => true },
@@ -86,32 +86,31 @@ fn test_sql_interface_feed_new() {
 
     // --- Test Case 2: Failure on feed profiles row limit ---
     println!("* Testing new() with too many rows in feed profiles table...");
-    SqlInterface::truncate_table(&mut sql_interface, SQL_TABLE_FEED_PROFILES.to_string())
-        .unwrap();
+    SqlInterface::truncate_table(&mut sql_interface, SQL_TABLE_FEED_PROFILES.to_string()).unwrap();
     let mut conn = sql_interface.get_connection().unwrap();
     conn.exec_drop(
         sql_test_query_strings::SQL_QUERY_WRITE_FEED_PROFILE_TEST,
         params! { "profile_id" => 1, "profile_name" => "row1" },
     )
-        .unwrap();
+    .unwrap();
     conn.exec_drop(
         sql_test_query_strings::SQL_QUERY_WRITE_FEED_PROFILE_TEST,
         params! { "profile_id" => 2, "profile_name" => "row2" },
     )
-        .unwrap();
+    .unwrap();
 
     // Set the limit to 1
     let result = SqlInterfaceFeed::new(conn, 1, 10, 10);
     assert!(
         matches!(
-                result,
-                Err(SqlInterfaceError::DatabaseFeedTableContainsTooManyRows(
-                    _,
-                    _,
-                    _,
-                    _
-                ))
-            ),
+            result,
+            Err(SqlInterfaceError::DatabaseFeedTableContainsTooManyRows(
+                _,
+                _,
+                _,
+                _
+            ))
+        ),
         "Expected row limit error for feed_profiles, but got {:?}",
         result
     );
@@ -151,11 +150,10 @@ pub fn test_sql_interface_feed_profiles() {
         max_rows_feed_schedule,
         max_rows_feed_log,
     )
-        .unwrap();
+    .unwrap();
 
     //*** check retrieving of the feed profile from empty table *********************************
-    match SqlInterface::truncate_table(&mut sql_interface, SQL_TABLE_FEED_PROFILES.to_string())
-    {
+    match SqlInterface::truncate_table(&mut sql_interface, SQL_TABLE_FEED_PROFILES.to_string()) {
         Ok(_) => {}
         Err(e) => panic!("Could not prepare test case: {e:?}"),
     }
@@ -165,9 +163,9 @@ pub fn test_sql_interface_feed_profiles() {
         }
         Err(e) => {
             assert!(matches!(
-                    e,
-                    SqlInterfaceError::SingleFeedProfileRequestEmptyResponse(_, _, _)
-                ));
+                e,
+                SqlInterfaceError::SingleFeedProfileRequestEmptyResponse(_, _, _)
+            ));
         }
     }
     println!("* checking retrieving of Feed profile (FAIL) succeeded.");
@@ -179,8 +177,8 @@ pub fn test_sql_interface_feed_profiles() {
     match sql_interface_feed.conn.exec_drop::<_, _>(
         sql_query_string.clone(),
         params! {
-            "profile_id" => 1, "profile_name" => "test",
-            },
+        "profile_id" => 1, "profile_name" => "test",
+        },
     ) {
         Ok(_) => {}
         Err(e) => {
@@ -330,8 +328,8 @@ pub fn test_sql_interface_feed_profiles() {
     match sql_interface_feed.conn.exec_drop::<_, _>(
         sql_query_string,
         params! {
-            "profile_id" => 2, "profile_name" => "test2"
-            },
+        "profile_id" => 2, "profile_name" => "test2"
+        },
     ) {
         Ok(_) => {}
         Err(e) => {
@@ -341,14 +339,14 @@ pub fn test_sql_interface_feed_profiles() {
     let test_result: Result<SqlInterfaceFeed, SqlInterfaceError> =
         SqlInterfaceFeed::new(sql_interface.get_connection().unwrap(), 1, 100, 0);
     assert!(matches!(
-            test_result,
-            Err(SqlInterfaceError::DatabaseFeedTableContainsTooManyRows(
-                _,
-                _,
-                2,
-                1
-            ))
-        ));
+        test_result,
+        Err(SqlInterfaceError::DatabaseFeedTableContainsTooManyRows(
+            _,
+            _,
+            2,
+            1
+        ))
+    ));
     println!("* checking of feed profile max rows limitation succeeded.");
 
     // *****************************************************************************************
@@ -374,7 +372,7 @@ pub fn test_sql_interface_feedlog() {
         max_rows_feed_schedule,
         max_rows_feed_log,
     )
-        .unwrap();
+    .unwrap();
 
     //*** check inserting of feed event into empty table ***************************************
     match SqlInterface::truncate_table(&mut sql_interface, SQL_TABLE_FEED_LOG.to_string()) {
@@ -409,7 +407,7 @@ pub fn test_sql_interface_feedlog() {
             single_feed_event_entry_array[0].timestamp.as_str(),
             "%Y-%m-%d %H:%M:%S",
         )
-            .expect("conversion of timestamp to NaiveDate failed."),
+        .expect("conversion of timestamp to NaiveDate failed."),
         feeder_run_time: single_feed_event_entry_array[0].feeder_run_time,
         feed_profile_id: single_feed_event_entry_array[0].feed_profile_id,
     };
@@ -428,14 +426,14 @@ pub fn test_sql_interface_feedlog() {
     }
     let test_result = SqlInterfaceFeed::new(sql_interface.get_connection().unwrap(), 0, 0, 1);
     assert!(matches!(
-            test_result,
-            Err(SqlInterfaceError::DatabaseFeedTableContainsTooManyRows(
-                _,
-                _,
-                _,
-                _
-            ))
-        ));
+        test_result,
+        Err(SqlInterfaceError::DatabaseFeedTableContainsTooManyRows(
+            _,
+            _,
+            _,
+            _
+        ))
+    ));
 }
 
 #[test]
@@ -458,10 +456,9 @@ pub fn test_sql_interface_feed_schedule() {
         max_rows_feed_schedule,
         max_rows_feed_log,
     )
-        .unwrap();
+    .unwrap();
     // *** check trying to load feed schedule entry when table is empty *********************
-    match SqlInterface::truncate_table(&mut sql_interface, SQL_TABLE_FEED_SCHEDULE.to_string())
-    {
+    match SqlInterface::truncate_table(&mut sql_interface, SQL_TABLE_FEED_SCHEDULE.to_string()) {
         Ok(_) => {}
         Err(e) => panic!("Could not prepare test case: {e:?}"),
     }
@@ -485,11 +482,11 @@ pub fn test_sql_interface_feed_schedule() {
     match sql_interface_feed.conn.exec_drop::<_, _>(
         sql_query_string,
         params! {
-            "timestamp" => timestamp_reference,
-            "profile_id" => profile_id_reference,
-            "is_weekly" => false,
-            "is_daily" => repeat_daily_reference,
-            },
+        "timestamp" => timestamp_reference,
+        "profile_id" => profile_id_reference,
+        "is_weekly" => false,
+        "is_daily" => repeat_daily_reference,
+        },
     ) {
         Ok(_) => {}
         Err(e) => {
@@ -501,32 +498,34 @@ pub fn test_sql_interface_feed_schedule() {
     let feed_schedule_entry_before_update = match sql_interface_feed
         .get_past_feed_schedule_entries_from_database()
     {
-        Ok(feed_schedule_entry_vector_opt) => match feed_schedule_entry_vector_opt {
-            Some(feed_schedule_entry_vector) => {
-                if feed_schedule_entry_vector.len() != 1 {
-                    panic!(
-                        "expected to find one feed schedule entry in data base, found {}",
-                        feed_schedule_entry_vector.len()
-                    )
+        Ok(feed_schedule_entry_vector_opt) => {
+            match feed_schedule_entry_vector_opt {
+                Some(feed_schedule_entry_vector) => {
+                    if feed_schedule_entry_vector.len() != 1 {
+                        panic!(
+                            "expected to find one feed schedule entry in data base, found {}",
+                            feed_schedule_entry_vector.len()
+                        )
+                    }
+                    let feed_schedule_entry = feed_schedule_entry_vector.first().cloned().unwrap();
+                    assert_eq!(
+                        feed_schedule_entry.timestamp,
+                        NaiveDateTime::parse_from_str(timestamp_reference, "%Y-%m-%d %H:%M:%S")
+                            .unwrap()
+                    );
+                    println!(
+                        "timestamp read from the database: {}",
+                        feed_schedule_entry.timestamp
+                    );
+                    assert_eq!(feed_schedule_entry.profile_id, profile_id_reference);
+                    assert_eq!(feed_schedule_entry.repeat_daily, repeat_daily_reference);
+                    feed_schedule_entry
                 }
-                let feed_schedule_entry = feed_schedule_entry_vector.first().cloned().unwrap();
-                assert_eq!(
-                    feed_schedule_entry.timestamp,
-                    NaiveDateTime::parse_from_str(timestamp_reference, "%Y-%m-%d %H:%M:%S")
-                        .unwrap()
-                );
-                println!(
-                    "timestamp read from the database: {}",
-                    feed_schedule_entry.timestamp
-                );
-                assert_eq!(feed_schedule_entry.profile_id, profile_id_reference);
-                assert_eq!(feed_schedule_entry.repeat_daily, repeat_daily_reference);
-                feed_schedule_entry
+                None => {
+                    panic!("SQL database returned empty result although feed schedule entry was inserted.");
+                }
             }
-            None => {
-                panic!("SQL database returned empty result although feed schedule entry was inserted.");
-            }
-        },
+        }
         Err(_) => {
             panic!("Error occurred when trying to load feed schedule entry.");
         }
@@ -541,8 +540,7 @@ pub fn test_sql_interface_feed_schedule() {
     );
 
     // calculate dynamic reference
-    let local_date_tomorrow: NaiveDate =
-        (Local::now().naive_local() + Duration::days(1)).into();
+    let local_date_tomorrow: NaiveDate = (Local::now().naive_local() + Duration::days(1)).into();
     let reference_timestamp_tomorrow_same_time = NaiveDateTime::new(
         local_date_tomorrow,
         feed_schedule_entry_before_update.timestamp.time(),
@@ -565,17 +563,19 @@ pub fn test_sql_interface_feed_schedule() {
     let mut feed_schedule_entry_after_update = match sql_interface_feed
         .get_future_feed_schedule_entry_from_database()
     {
-        Ok(c) => match c {
-            Some(d) => {
-                assert_eq!(d.timestamp, reference_timestamp_tomorrow_same_time);
-                assert_eq!(d.profile_id, profile_id_reference);
-                assert_eq!(d.repeat_daily, repeat_daily_reference);
-                d
+        Ok(c) => {
+            match c {
+                Some(d) => {
+                    assert_eq!(d.timestamp, reference_timestamp_tomorrow_same_time);
+                    assert_eq!(d.profile_id, profile_id_reference);
+                    assert_eq!(d.repeat_daily, repeat_daily_reference);
+                    d
+                }
+                None => {
+                    panic!("SQL database returned empty result although feed schedule entry was inserted.");
+                }
             }
-            None => {
-                panic!("SQL database returned empty result although feed schedule entry was inserted.");
-            }
-        },
+        }
         Err(_) => {
             panic!("Error occurred when trying to load feed schedule entry.");
         }
@@ -615,8 +615,7 @@ pub fn test_sql_interface_feed_schedule() {
 
     // *** check updating multiple feed schedule entries with repetition ***********************
     // calculate dynamic reference
-    match SqlInterface::truncate_table(&mut sql_interface, SQL_TABLE_FEED_SCHEDULE.to_string())
-    {
+    match SqlInterface::truncate_table(&mut sql_interface, SQL_TABLE_FEED_SCHEDULE.to_string()) {
         Ok(_) => {}
         Err(e) => panic!("Could not prepare test case: {e:?}"),
     }
@@ -629,11 +628,11 @@ pub fn test_sql_interface_feed_schedule() {
     match sql_interface_feed.conn.exec_drop::<_, _>(
         sql_query_string,
         params! {
-                "timestamp" => timestamp_0,
-                "profile_id" => profile_id_0,
-                "is_weekly" => false,
-                "is_daily" => repeat_daily_0,
-            },
+            "timestamp" => timestamp_0,
+            "profile_id" => profile_id_0,
+            "is_weekly" => false,
+            "is_daily" => repeat_daily_0,
+        },
     ) {
         Ok(_) => {}
         Err(e) => {
@@ -649,11 +648,11 @@ pub fn test_sql_interface_feed_schedule() {
     match sql_interface_feed.conn.exec_drop::<_, _>(
         sql_query_string,
         params! {
-                "timestamp" => timestamp_1,
-                "profile_id" => profile_id_1,
-                "is_weekly" => false,
-                "is_daily" => repeat_daily_1,
-            },
+            "timestamp" => timestamp_1,
+            "profile_id" => profile_id_1,
+            "is_weekly" => false,
+            "is_daily" => repeat_daily_1,
+        },
     ) {
         Ok(_) => {}
         Err(e) => {
@@ -675,8 +674,7 @@ pub fn test_sql_interface_feed_schedule() {
         }
     };
 
-    let local_date_tomorrow: NaiveDate =
-        (Local::now().naive_local() + Duration::days(1)).into();
+    let local_date_tomorrow: NaiveDate = (Local::now().naive_local() + Duration::days(1)).into();
 
     let reference_timestamp0_tomorrow_same_time = NaiveDateTime::new(
         local_date_tomorrow,
@@ -688,7 +686,8 @@ pub fn test_sql_interface_feed_schedule() {
     );
     let reference_timestamp1_tomorrow_same_time = NaiveDateTime::new(
         local_date_tomorrow,
-        feed_schedule_entries_before_update.first()
+        feed_schedule_entries_before_update
+            .first()
             .unwrap()
             .timestamp
             .time(),
@@ -704,26 +703,28 @@ pub fn test_sql_interface_feed_schedule() {
     }
 
     match sql_interface_feed.get_future_feed_schedule_entries_from_database() {
-        Ok(c) => match c {
-            Some(d) => {
-                assert_eq!(d.len(), 2);
-                assert_eq!(
-                    d.first().unwrap().timestamp,
-                    reference_timestamp0_tomorrow_same_time
-                );
-                assert_eq!(d.first().unwrap().profile_id, profile_id_0);
-                assert_eq!(d.first().unwrap().repeat_daily, repeat_daily_0);
-                assert_eq!(
-                    d.get(1).unwrap().timestamp,
-                    reference_timestamp1_tomorrow_same_time
-                );
-                assert_eq!(d.get(1).unwrap().profile_id, profile_id_1);
-                assert_eq!(d.get(1).unwrap().repeat_daily, repeat_daily_1);
+        Ok(c) => {
+            match c {
+                Some(d) => {
+                    assert_eq!(d.len(), 2);
+                    assert_eq!(
+                        d.first().unwrap().timestamp,
+                        reference_timestamp0_tomorrow_same_time
+                    );
+                    assert_eq!(d.first().unwrap().profile_id, profile_id_0);
+                    assert_eq!(d.first().unwrap().repeat_daily, repeat_daily_0);
+                    assert_eq!(
+                        d.get(1).unwrap().timestamp,
+                        reference_timestamp1_tomorrow_same_time
+                    );
+                    assert_eq!(d.get(1).unwrap().profile_id, profile_id_1);
+                    assert_eq!(d.get(1).unwrap().repeat_daily, repeat_daily_1);
+                }
+                None => {
+                    panic!("SQL database returned empty result although feed schedule entry was inserted.");
+                }
             }
-            None => {
-                panic!("SQL database returned empty result although feed schedule entry was inserted.");
-            }
-        },
+        }
         Err(_) => {
             panic!("Error occurred when trying to load feed schedule entry.");
         }
@@ -734,13 +735,13 @@ pub fn test_sql_interface_feed_schedule() {
     let test_result: Result<SqlInterfaceFeed, SqlInterfaceError> =
         SqlInterfaceFeed::new(sql_interface.get_connection().unwrap(), 100, 1, 0);
     assert!(matches!(
-            test_result,
-            Err(SqlInterfaceError::DatabaseFeedTableContainsTooManyRows(
-                _,
-                _,
-                2,
-                1
-            ))
-        ));
+        test_result,
+        Err(SqlInterfaceError::DatabaseFeedTableContainsTooManyRows(
+            _,
+            _,
+            2,
+            1
+        ))
+    ));
     println!("* checking of feed schedule max rows limitation succeeded.");
 }

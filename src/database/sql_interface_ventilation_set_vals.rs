@@ -49,8 +49,8 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 //!   in `get_ventilation_set_values` enforce data integrity rules, preventing runtime
 //!   errors caused by invalid database states.
 
+use mysql::{params, PooledConn};
 use std::time::{Duration, Instant};
-use mysql::{PooledConn, params};
 
 use crate::database::sql_interface::SqlInterface;
 use crate::database::sql_interface_error::SqlInterfaceError;
@@ -58,10 +58,10 @@ use crate::database::sql_query_strings;
 use crate::database::sql_query_strings::{
     SQL_QUERY_CHECK_VENTILATION_SET_VALS_COUNT, SQL_QUERY_CHECK_VENTILATION_SET_VALS_NULL,
 };
+use crate::database::sql_test_query_strings::SQL_QUERY_WRITE_VENTILATION_SET_VALS;
 use crate::database::thermal_set_value_updater_trait::ThermalSetValueUpdaterTrait;
 use crate::thermal::ventilation_config::VentilationConfig;
 use mysql::prelude::Queryable;
-use crate::database::sql_test_query_strings::SQL_QUERY_WRITE_VENTILATION_SET_VALS;
 
 /// Contains the ventilation set values which can be set by the user.
 #[derive(PartialEq, Debug)]

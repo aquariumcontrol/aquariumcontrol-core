@@ -11,8 +11,10 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 use aquarium_control::database::sql_interface_heating_set_vals::{
     HeatingSetVals, SqlInterfaceHeatingSetVals,
 };
-use aquarium_control::database::{sql_interface::SqlInterface, sql_interface_error::SqlInterfaceError};
 use aquarium_control::database::sql_test_query_strings::SQL_TABLE_HEATING_SET_VALS;
+use aquarium_control::database::{
+    sql_interface::SqlInterface, sql_interface_error::SqlInterfaceError,
+};
 use aquarium_control::utilities::config::{read_config_file_with_test_database, ConfigData};
 
 #[test]
@@ -33,16 +35,11 @@ fn test_sql_interface_heating_set_vals_new() {
 
     // --- Test Case 1: Happy Path (empty table) ---
     println!("* Testing new() with an empty table (Happy Path)...");
-    SqlInterface::truncate_table(
-        &mut sql_interface,
-        SQL_TABLE_HEATING_SET_VALS.to_string(),
-    )
+    SqlInterface::truncate_table(&mut sql_interface, SQL_TABLE_HEATING_SET_VALS.to_string())
         .expect("Test setup failed: Could not truncate table.");
 
-    let result = SqlInterfaceHeatingSetVals::new(
-        sql_interface.get_connection().unwrap(),
-        &config.heating,
-    );
+    let result =
+        SqlInterfaceHeatingSetVals::new(sql_interface.get_connection().unwrap(), &config.heating);
     assert!(
         result.is_ok(),
         "Expected new() to succeed with an empty table, but it failed: {:?}",
@@ -52,10 +49,7 @@ fn test_sql_interface_heating_set_vals_new() {
 
     // --- Test Case 2: Failure on too many rows ---
     println!("* Testing new() with more than one row in the table...");
-    SqlInterface::truncate_table(
-        &mut sql_interface,
-        SQL_TABLE_HEATING_SET_VALS.to_string(),
-    )
+    SqlInterface::truncate_table(&mut sql_interface, SQL_TABLE_HEATING_SET_VALS.to_string())
         .expect("Test setup failed: Could not truncate table.");
     let conn = sql_interface.get_connection().unwrap();
     let valid_vals = HeatingSetVals {
@@ -74,15 +68,13 @@ fn test_sql_interface_heating_set_vals_new() {
         .insert_heating_set_values(&valid_vals)
         .expect("Test setup failed: Could not insert second row.");
 
-    let result = SqlInterfaceHeatingSetVals::new(
-        sql_interface.get_connection().unwrap(),
-        &config.heating,
-    );
+    let result =
+        SqlInterfaceHeatingSetVals::new(sql_interface.get_connection().unwrap(), &config.heating);
     assert!(
         matches!(
-                result,
-                Err(SqlInterfaceError::DatabaseHeatingSetValTableContainsTooManyRows(_, _))
-            ),
+            result,
+            Err(SqlInterfaceError::DatabaseHeatingSetValTableContainsTooManyRows(_, _))
+        ),
         "Expected row limit error, but got {:?}",
         result
     );
@@ -101,20 +93,15 @@ pub fn test_sql_interface_heating_set_vals() {
     // *** test reading heating set values **************************************************
     let mut sql_interface: SqlInterface = SqlInterface::new(config.sql_interface.clone())
         .expect("Initialization of SQL interface for test failed.");
-    match SqlInterface::truncate_table(
-        &mut sql_interface,
-        SQL_TABLE_HEATING_SET_VALS.to_string(),
-    ) {
+    match SqlInterface::truncate_table(&mut sql_interface, SQL_TABLE_HEATING_SET_VALS.to_string()) {
         Ok(_) => {}
         Err(e) => panic!("Could not prepare test case: {e:?}"),
     }
 
     // instantiation of the test object
-    let mut sql_interface_heating_setvals = SqlInterfaceHeatingSetVals::new(
-        sql_interface.get_connection().unwrap(),
-        &config.heating,
-    )
-        .unwrap();
+    let mut sql_interface_heating_setvals =
+        SqlInterfaceHeatingSetVals::new(sql_interface.get_connection().unwrap(), &config.heating)
+            .unwrap();
 
     // check if reading an empty table returns None
     match sql_interface_heating_setvals.get_heating_set_values() {
@@ -135,9 +122,9 @@ pub fn test_sql_interface_heating_set_vals() {
 
     // insert valid values
     assert!(matches!(
-            sql_interface_heating_setvals.insert_heating_set_values(&valid_heating_set_vals),
-            Ok(())
-        ));
+        sql_interface_heating_setvals.insert_heating_set_values(&valid_heating_set_vals),
+        Ok(())
+    ));
     println!("* inserting valid heating set values as precondition succeeded.");
 
     match sql_interface_heating_setvals.get_heating_set_values() {
@@ -159,10 +146,7 @@ pub fn test_sql_interface_heating_set_vals() {
     }
     println!("* reading valid heating set values succeeded.");
 
-    match SqlInterface::truncate_table(
-        &mut sql_interface,
-        SQL_TABLE_HEATING_SET_VALS.to_string(),
-    ) {
+    match SqlInterface::truncate_table(&mut sql_interface, SQL_TABLE_HEATING_SET_VALS.to_string()) {
         Ok(_) => {}
         Err(e) => panic!("Could not prepare test case: {e:?}"),
     }
@@ -175,42 +159,37 @@ pub fn test_sql_interface_heating_set_vals() {
 
     // insert invalid values
     assert!(matches!(
-            sql_interface_heating_setvals.insert_heating_set_values(&invalid_heating_set_vals),
-            Ok(())
-        ));
+        sql_interface_heating_setvals.insert_heating_set_values(&invalid_heating_set_vals),
+        Ok(())
+    ));
     println!("* inserting invalid heating set values as precondition succeeded.");
 
     // check if reading an invalid value combination returns an error
     assert!(matches!(
-            sql_interface_heating_setvals.get_heating_set_values(),
-            Err(SqlInterfaceError::HeatingSetValsInvalid(_, _, _))
-        ));
+        sql_interface_heating_setvals.get_heating_set_values(),
+        Err(SqlInterfaceError::HeatingSetValsInvalid(_, _, _))
+    ));
     println!("* reading invalid heating set values succeeded.");
 
     // test if too many rows are detected
-    match SqlInterface::truncate_table(
-        &mut sql_interface,
-        SQL_TABLE_HEATING_SET_VALS.to_string(),
-    ) {
+    match SqlInterface::truncate_table(&mut sql_interface, SQL_TABLE_HEATING_SET_VALS.to_string()) {
         Ok(_) => {}
         Err(e) => panic!("Could not prepare test case: {e:?}"),
     }
     assert!(matches!(
-            sql_interface_heating_setvals.insert_heating_set_values(&valid_heating_set_vals),
-            Ok(())
-        ));
+        sql_interface_heating_setvals.insert_heating_set_values(&valid_heating_set_vals),
+        Ok(())
+    ));
     assert!(matches!(
-            sql_interface_heating_setvals.insert_heating_set_values(&valid_heating_set_vals),
-            Ok(())
-        ));
-    let test_result = SqlInterfaceHeatingSetVals::new(
-        sql_interface.get_connection().unwrap(),
-        &config.heating,
-    );
+        sql_interface_heating_setvals.insert_heating_set_values(&valid_heating_set_vals),
+        Ok(())
+    ));
+    let test_result =
+        SqlInterfaceHeatingSetVals::new(sql_interface.get_connection().unwrap(), &config.heating);
     assert!(matches!(
-            test_result,
-            Err(SqlInterfaceError::DatabaseHeatingSetValTableContainsTooManyRows(_, _))
-        ));
+        test_result,
+        Err(SqlInterfaceError::DatabaseHeatingSetValTableContainsTooManyRows(_, _))
+    ));
     println!("* detecting too many rows succeeded.");
 
     //***************************************************************************************

@@ -9,10 +9,10 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 
 pub mod tests {
     use crate::launch::channels::{AquaReceiver, AquaSender};
+    use crate::mocks::mock_actuation_event::tests::MockActuationEvent;
     use crate::utilities::channel_content::{ActuatorState, AquariumDevice, InternalCommand};
     use spin_sleep::SpinSleeper;
     use std::time::Duration;
-    use crate::mocks::mock_actuation_event::tests::MockActuationEvent;
 
     pub struct MockActuatorStates {
         pub peristaltic_pump1_actuation_state: ActuatorState,

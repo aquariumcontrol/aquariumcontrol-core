@@ -143,20 +143,14 @@ pub mod tests {
 
         let mut tank_level_switch = TankLevelPosition::new(tank_level_switch_config, sump);
 
-        assert!(
-            !tank_level_switch.update_and_get_switch_position(&tank)
-        );
+        assert!(!tank_level_switch.update_and_get_switch_position(&tank));
 
         tank.increase_water_volume(75.0);
 
-        assert!(
-            tank_level_switch.update_and_get_switch_position(&tank)
-        );
+        assert!(tank_level_switch.update_and_get_switch_position(&tank));
 
         tank.reduce_water_volume(100.0);
 
-        assert!(
-            !tank_level_switch.update_and_get_switch_position(&tank)
-        );
+        assert!(!tank_level_switch.update_and_get_switch_position(&tank));
     }
 }

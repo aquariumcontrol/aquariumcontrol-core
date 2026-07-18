@@ -47,9 +47,12 @@ use chrono::NaiveDateTime;
 use mysql::prelude::*;
 use mysql::*;
 
-use crate::database::{sql_interface::SqlInterface, sql_interface_error::SqlInterfaceError, sql_query_strings, sql_test_query_strings};
 use crate::database::sql_query_strings::SQL_TABLE_FEED_PROFILES;
 use crate::database::sql_test_query_strings::SQL_QUERY_READ_FUTURE_FEED_SCHEDULE_ENTRY;
+use crate::database::{
+    sql_interface::SqlInterface, sql_interface_error::SqlInterfaceError, sql_query_strings,
+    sql_test_query_strings,
+};
 use crate::food::feed_schedule_entry::FeedScheduleEntry;
 
 #[derive(Clone)]
@@ -360,9 +363,8 @@ impl SqlInterfaceFeed {
     pub fn get_future_feed_schedule_entry_from_database(
         &mut self,
     ) -> Result<Option<FeedScheduleEntry>, SqlInterfaceError> {
-        let entries_opt = self.get_feed_schedule_entries_from_database(
-            SQL_QUERY_READ_FUTURE_FEED_SCHEDULE_ENTRY,
-        )?;
+        let entries_opt = self
+            .get_feed_schedule_entries_from_database(SQL_QUERY_READ_FUTURE_FEED_SCHEDULE_ENTRY)?;
         Ok(entries_opt.and_then(|mut vec| vec.pop()))
     }
 
@@ -381,9 +383,7 @@ impl SqlInterfaceFeed {
     pub fn get_future_feed_schedule_entries_from_database(
         &mut self,
     ) -> Result<Option<Vec<FeedScheduleEntry>>, SqlInterfaceError> {
-        self.get_feed_schedule_entries_from_database(
-            SQL_QUERY_READ_FUTURE_FEED_SCHEDULE_ENTRY,
-        )
+        self.get_feed_schedule_entries_from_database(SQL_QUERY_READ_FUTURE_FEED_SCHEDULE_ENTRY)
     }
 
     /// Retrieves the header (basic information) of a specific feed profile from the database.
@@ -572,8 +572,8 @@ pub fn insert_feed_profiles(
     match sql_interface_feed.conn.exec_drop::<_, _>(
         sql_query_string,
         params! {
-            "profile_id" => 1, "profile_name" => "test"
-            },
+        "profile_id" => 1, "profile_name" => "test"
+        },
     ) {
         Ok(_) => {}
         Err(e) => {
@@ -585,8 +585,8 @@ pub fn insert_feed_profiles(
     match sql_interface_feed.conn.exec_drop::<_, _>(
         sql_query_string,
         params! {
-            "profile_id" => 2,
-            },
+        "profile_id" => 2,
+        },
     ) {
         Ok(_) => {}
         Err(e) => {

@@ -170,16 +170,22 @@ impl SensorManagerMutexes {
             mutex_ds18b20_ambient_temperature: Arc::new(Mutex::new(Ok(
                 Ds18b20ResultData::new_for_test(),
             ))),
-            mutex_ds18b20_water_temperature: Arc::new(Mutex::new(Ok(Ds18b20ResultData::new_for_test()))),
+            mutex_ds18b20_water_temperature: Arc::new(Mutex::new(Ok(
+                Ds18b20ResultData::new_for_test(),
+            ))),
             mutex_dht: Arc::new(Mutex::new(Ok((0.0, 0.0)))),
             mutex_atlas_scientific_temperature: Arc::new(Mutex::new(
                 AtlasScientificResultData::new_for_test(),
             )),
-            mutex_atlas_scientific_ph: Arc::new(Mutex::new(AtlasScientificResultData::new_for_test())),
+            mutex_atlas_scientific_ph: Arc::new(Mutex::new(
+                AtlasScientificResultData::new_for_test(),
+            )),
             mutex_atlas_scientific_conductivity: Arc::new(Mutex::new(
                 AtlasScientificResultData::new_for_test(),
             )),
-            mutex_sensor_manager_signals: Arc::new(Mutex::new(SensorManagerSignals::new_for_test())),
+            mutex_sensor_manager_signals: Arc::new(
+                Mutex::new(SensorManagerSignals::new_for_test()),
+            ),
         }
     }
 }

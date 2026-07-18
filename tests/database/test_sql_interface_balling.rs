@@ -9,17 +9,22 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 
 //! Tests all database interactions for the Balling dosing system.
 
-use aquarium_control::database::sql_interface_balling::SqlInterfaceBalling;
-use aquarium_control::database::{sql_interface::SqlInterface, sql_interface_error::SqlInterfaceError, sql_test_query_strings};
-use aquarium_control::utilities::config::{read_config_file_with_test_database, ConfigData};
 use all_asserts::assert_le;
+use aquarium_control::database::sql_interface_balling::SqlInterfaceBalling;
+use aquarium_control::database::sql_test_query_strings::{
+    SQL_QUERY_WRITE_BALLING_EVENT_WITH_TIMESTAMP, SQL_TABLE_BALLING_DOSING_LOG,
+    SQL_TABLE_BALLING_SET_VALS,
+};
+use aquarium_control::database::{
+    sql_interface::SqlInterface, sql_interface_error::SqlInterfaceError, sql_test_query_strings,
+};
+use aquarium_control::utilities::config::{read_config_file_with_test_database, ConfigData};
 use assert_float_eq::assert_float_absolute_eq;
 use chrono::Local;
 use chrono::NaiveDateTime;
 use mysql::{params, prelude::Queryable};
 use spin_sleep::SpinSleeper;
 use std::time::Duration;
-use aquarium_control::database::sql_test_query_strings::{SQL_QUERY_WRITE_BALLING_EVENT_WITH_TIMESTAMP, SQL_TABLE_BALLING_DOSING_LOG, SQL_TABLE_BALLING_SET_VALS};
 
 pub struct SqlBallingEvent {
     timestamp: String,
@@ -44,13 +49,13 @@ pub fn add_balling_profile(
     conn.exec_drop(
         sql_test_query_strings::SQL_QUERY_WRITE_BALLING_SET_VALS,
         params! {
-                "pump_id" => pump_id,
-                "dosing_speed" => dosing_speed,
-                "dosing_volume" => dosing_volume,
-                "label" => label
-            },
+            "pump_id" => pump_id,
+            "dosing_speed" => dosing_speed,
+            "dosing_volume" => dosing_volume,
+            "label" => label
+        },
     )
-        .unwrap();
+    .unwrap();
 }
 
 #[test]
@@ -73,14 +78,10 @@ fn test_sql_interface_balling_new() {
 
     // --- Test Case 1: Happy Path ---
     println!("* Testing new() with valid data (Happy Path)...");
-    SqlInterface::truncate_table(
-        &mut sql_interface,
-        SQL_TABLE_BALLING_SET_VALS.to_string(),
-    ).unwrap();
-    SqlInterface::truncate_table(
-        &mut sql_interface,
-        SQL_TABLE_BALLING_DOSING_LOG.to_string(),
-    ).unwrap();
+    SqlInterface::truncate_table(&mut sql_interface, SQL_TABLE_BALLING_SET_VALS.to_string())
+        .unwrap();
+    SqlInterface::truncate_table(&mut sql_interface, SQL_TABLE_BALLING_DOSING_LOG.to_string())
+        .unwrap();
 
     // Insert one valid row into each table
     let mut conn = sql_interface.get_connection().unwrap();
@@ -100,10 +101,7 @@ fn test_sql_interface_balling_new() {
 
     // --- Test Case 2: Failure on ballingsetvals row limit exceeded ---
     println!("* Testing new() with too many rows in ballingsetvals...");
-    SqlInterface::truncate_table(
-        &mut sql_interface,
-        SQL_TABLE_BALLING_SET_VALS.to_string(),
-    )
+    SqlInterface::truncate_table(&mut sql_interface, SQL_TABLE_BALLING_SET_VALS.to_string())
         .unwrap();
     let mut conn = sql_interface.get_connection().unwrap();
     add_balling_profile(&mut conn, 1, 1.0, 1.0, "row1".to_string());
@@ -112,9 +110,9 @@ fn test_sql_interface_balling_new() {
     let result = SqlInterfaceBalling::new(conn, 1, 10); // Set the limit to 1
     assert!(
         matches!(
-                result,
-                Err(SqlInterfaceError::DatabaseBallingSetValTableContainsTooManyRows(_, _, _))
-            ),
+            result,
+            Err(SqlInterfaceError::DatabaseBallingSetValTableContainsTooManyRows(_, _, _))
+        ),
         "Expected row limit error for setvals, but got {:?}",
         result
     );
@@ -123,10 +121,7 @@ fn test_sql_interface_balling_new() {
     // --- Test Case 3: Failure on ballingdosinglog row limit exceeded ---
     println!("* Testing new() with too many rows in ballingdosinglog...");
     let spin_sleeper = SpinSleeper::default();
-    SqlInterface::truncate_table(
-        &mut sql_interface,
-        SQL_TABLE_BALLING_DOSING_LOG.to_string(),
-    )
+    SqlInterface::truncate_table(&mut sql_interface, SQL_TABLE_BALLING_DOSING_LOG.to_string())
         .unwrap();
     let mut conn = sql_interface.get_connection().unwrap();
     conn.exec_drop(SQL_QUERY_WRITE_BALLING_EVENT_WITH_TIMESTAMP, params! { "timestamp" => Local::now().naive_local(), "pump_id" => 1, "dosing_volume" => 1.0 }).unwrap();
@@ -136,9 +131,9 @@ fn test_sql_interface_balling_new() {
     let result = SqlInterfaceBalling::new(conn, 10, 1); // Set the limit to 1
     assert!(
         matches!(
-                result,
-                Err(SqlInterfaceError::DatabaseBallingDosingLogTableContainsTooManyRows(_, _, _))
-            ),
+            result,
+            Err(SqlInterfaceError::DatabaseBallingDosingLogTableContainsTooManyRows(_, _, _))
+        ),
         "Expected row limit error for the dosing log, but got {:?}",
         result
     );
@@ -177,20 +172,18 @@ pub fn test_sql_interface_balling_events() {
         max_rows_balling_set_values,
         max_rows_balling_dosing_log,
     )
-        .unwrap();
+    .unwrap();
 
     // *** check the timestamp of last Balling dosing ******************************************
-    match SqlInterface::truncate_table(
-        &mut sql_interface,
-        SQL_TABLE_BALLING_DOSING_LOG.to_string(),
-    ) {
+    match SqlInterface::truncate_table(&mut sql_interface, SQL_TABLE_BALLING_DOSING_LOG.to_string())
+    {
         Ok(_) => {}
         Err(e) => panic!("Could not prepare test case: {e:?}"),
     }
     assert!(matches!(
-            sql_interface_balling.get_last_balling_dosing_timestamp(pump_id),
-            Ok(None)
-        ));
+        sql_interface_balling.get_last_balling_dosing_timestamp(pump_id),
+        Ok(None)
+    ));
     println!("* checking timestamp of last Balling dosing log succeeded.");
     // *****************************************************************************************
 
@@ -201,7 +194,9 @@ pub fn test_sql_interface_balling_events() {
         Ok(_) => {}
         Err(e) => panic!("Could not insert Balling dosing event into database: {e:?}"),
     };
-    assert!(sql_interface_balling.get_last_balling_dosing_timestamp(pump_id).is_ok());
+    assert!(sql_interface_balling
+        .get_last_balling_dosing_timestamp(pump_id)
+        .is_ok());
     println!("* checking timestamp of last Balling dosing succeeded.");
     // *****************************************************************************************
 
@@ -228,7 +223,7 @@ pub fn test_sql_interface_balling_events() {
             single_balling_event_entry_array[0].timestamp.as_str(),
             "%Y-%m-%d %H:%M:%S",
         )
-            .expect("conversion of timestamp to NaiveDate failed."),
+        .expect("conversion of timestamp to NaiveDate failed."),
         pump_id: single_balling_event_entry_array[0].pump_id,
         dosing_volume: single_balling_event_entry_array[0].dosing_volume,
     };
@@ -243,13 +238,12 @@ pub fn test_sql_interface_balling_events() {
             Ok(c) => c,
             Err(e) => panic!("Could not calculate duration since last Balling dosing: {e:?}"),
         }
-            .unwrap();
+        .unwrap();
 
     // Reference calculation uses the database clock to avoid timezone and DST issues
     let db_now = SqlInterface::get_current_timestamp(&mut sql_interface_balling.conn)
         .expect("Failed to get current timestamp from DB for reference calculation.");
-    let reference_duration_since_last_balling_dosing =
-        (db_now - balling_timestamp).num_seconds();
+    let reference_duration_since_last_balling_dosing = (db_now - balling_timestamp).num_seconds();
 
     let duration_delta_seconds = duration_since_last_balling_dosing
         .as_secs()
@@ -278,13 +272,10 @@ pub fn test_sql_interface_balling_set_vals() {
         max_rows_balling_set_values,
         max_rows_balling_dosing_log,
     )
-        .unwrap();
+    .unwrap();
 
     // *** read balling set vals from empty table **********************************************
-    match SqlInterface::truncate_table(
-        &mut sql_interface,
-        SQL_TABLE_BALLING_SET_VALS.to_string(),
-    ) {
+    match SqlInterface::truncate_table(&mut sql_interface, SQL_TABLE_BALLING_SET_VALS.to_string()) {
         Ok(_) => {}
         Err(e) => panic!("Could not prepare test case: {e:?}"),
     }
@@ -294,9 +285,9 @@ pub fn test_sql_interface_balling_set_vals() {
         }
         Err(e) => {
             assert!(matches!(
-                    e,
-                    SqlInterfaceError::SingleBallingSetValEmptyResponse(_, _, _)
-                ));
+                e,
+                SqlInterfaceError::SingleBallingSetValEmptyResponse(_, _, _)
+            ));
         }
     }
     println!("* checking reading from empty Balling dosing set value table succeeded.");
@@ -336,9 +327,9 @@ pub fn test_sql_interface_balling_set_vals() {
     );
     let test_result = SqlInterfaceBalling::new(sql_interface.get_connection().unwrap(), 1, 0);
     assert!(matches!(
-            test_result,
-            Err(SqlInterfaceError::DatabaseBallingSetValTableContainsTooManyRows(_, _, _))
-        ));
+        test_result,
+        Err(SqlInterfaceError::DatabaseBallingSetValTableContainsTooManyRows(_, _, _))
+    ));
 
     // **************************************************************************************
 }
@@ -365,13 +356,11 @@ fn test_insert_balling_event() {
         max_rows_balling_set_values,
         max_rows_balling_dosing_log,
     )
-        .unwrap();
+    .unwrap();
 
     // Clear the dosing log table
-    match SqlInterface::truncate_table(
-        &mut sql_interface,
-        SQL_TABLE_BALLING_DOSING_LOG.to_string(),
-    ) {
+    match SqlInterface::truncate_table(&mut sql_interface, SQL_TABLE_BALLING_DOSING_LOG.to_string())
+    {
         Ok(_) => {}
         Err(e) => panic!("Could not prepare test case: {e:?}"),
     }

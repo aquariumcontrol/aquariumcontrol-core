@@ -12,7 +12,9 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 use aquarium_control::database::sql_interface_ventilation_set_vals::{
     SqlInterfaceVentilationSetVals, VentilationSetVals,
 };
-use aquarium_control::database::{sql_interface::SqlInterface, sql_interface_error::SqlInterfaceError, sql_test_query_strings};
+use aquarium_control::database::{
+    sql_interface::SqlInterface, sql_interface_error::SqlInterfaceError, sql_test_query_strings,
+};
 use aquarium_control::utilities::config::{read_config_file_with_test_database, ConfigData};
 
 #[test]
@@ -37,7 +39,7 @@ fn test_sql_interface_ventilation_set_vals_new() {
         &mut sql_interface,
         sql_test_query_strings::SQL_TABLE_VENTILATION_SET_VALS.to_string(),
     )
-        .expect("Test setup failed: Could not truncate table.");
+    .expect("Test setup failed: Could not truncate table.");
 
     let result = SqlInterfaceVentilationSetVals::new(
         sql_interface.get_connection().unwrap(),
@@ -56,7 +58,7 @@ fn test_sql_interface_ventilation_set_vals_new() {
         &mut sql_interface,
         sql_test_query_strings::SQL_TABLE_VENTILATION_SET_VALS.to_string(),
     )
-        .expect("Test setup failed: Could not truncate table.");
+    .expect("Test setup failed: Could not truncate table.");
     let conn = sql_interface.get_connection().unwrap();
     let valid_vals = VentilationSetVals {
         ventilation_switch_off_temperature: 25.0,
@@ -80,9 +82,9 @@ fn test_sql_interface_ventilation_set_vals_new() {
     );
     assert!(
         matches!(
-                result,
-                Err(SqlInterfaceError::DatabaseVentilationSetValTableContainsTooManyRows(_, _))
-            ),
+            result,
+            Err(SqlInterfaceError::DatabaseVentilationSetValTableContainsTooManyRows(_, _))
+        ),
         "Expected row limit error, but got {:?}",
         result
     );
@@ -114,7 +116,7 @@ pub fn test_sql_interface_ventilation_set_vals() {
         sql_interface.get_connection().unwrap(),
         &config.ventilation,
     )
-        .unwrap();
+    .unwrap();
 
     // check if reading an empty table returns None
     match sql_interface_ventilation_set_vals.get_ventilation_set_values() {
@@ -135,10 +137,10 @@ pub fn test_sql_interface_ventilation_set_vals() {
 
     // insert valid values
     assert!(matches!(
-            sql_interface_ventilation_set_vals
-                .insert_ventilation_set_values(&valid_ventilation_set_vals),
-            Ok(())
-        ));
+        sql_interface_ventilation_set_vals
+            .insert_ventilation_set_values(&valid_ventilation_set_vals),
+        Ok(())
+    ));
     println!("* inserting valid ventilation set values as precondition succeeded.");
 
     match sql_interface_ventilation_set_vals.get_ventilation_set_values() {
@@ -176,17 +178,17 @@ pub fn test_sql_interface_ventilation_set_vals() {
 
     // insert invalid values
     assert!(matches!(
-            sql_interface_ventilation_set_vals
-                .insert_ventilation_set_values(&invalid_ventilation_set_vals),
-            Ok(())
-        ));
+        sql_interface_ventilation_set_vals
+            .insert_ventilation_set_values(&invalid_ventilation_set_vals),
+        Ok(())
+    ));
     println!("* inserting invalid ventilation set values as precondition succeeded.");
 
     // check if reading an invalid value combination returns an error
     assert!(matches!(
-            sql_interface_ventilation_set_vals.get_ventilation_set_values(),
-            Err(SqlInterfaceError::VentilationSetValsInvalid(_, _, _))
-        ));
+        sql_interface_ventilation_set_vals.get_ventilation_set_values(),
+        Err(SqlInterfaceError::VentilationSetValsInvalid(_, _, _))
+    ));
     println!("* reading  invalid ventilation set values succeeded.");
 
     // test if too many rows are detected
@@ -198,23 +200,23 @@ pub fn test_sql_interface_ventilation_set_vals() {
         Err(e) => panic!("Could not prepare test case: {e:?}"),
     }
     assert!(matches!(
-            sql_interface_ventilation_set_vals
-                .insert_ventilation_set_values(&valid_ventilation_set_vals),
-            Ok(())
-        ));
+        sql_interface_ventilation_set_vals
+            .insert_ventilation_set_values(&valid_ventilation_set_vals),
+        Ok(())
+    ));
     assert!(matches!(
-            sql_interface_ventilation_set_vals
-                .insert_ventilation_set_values(&valid_ventilation_set_vals),
-            Ok(())
-        ));
+        sql_interface_ventilation_set_vals
+            .insert_ventilation_set_values(&valid_ventilation_set_vals),
+        Ok(())
+    ));
     let test_result = SqlInterfaceVentilationSetVals::new(
         sql_interface.get_connection().unwrap(),
         &config.ventilation,
     );
     assert!(matches!(
-            test_result,
-            Err(SqlInterfaceError::DatabaseVentilationSetValTableContainsTooManyRows(_, _))
-        ));
+        test_result,
+        Err(SqlInterfaceError::DatabaseVentilationSetValTableContainsTooManyRows(_, _))
+    ));
     println!("* detecting too many rows succeeded.");
 
     //***************************************************************************************

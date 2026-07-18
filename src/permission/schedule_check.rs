@@ -588,10 +588,7 @@ mod tests {
             .rx_heating_from_schedule_check
             .blocking_recv()
             .unwrap();
-        assert!(
-            result,
-            "Should be disallowed by the inactive schedule"
-        );
+        assert!(result, "Should be disallowed by the inactive schedule");
     }
 
     #[test]
@@ -655,10 +652,7 @@ mod tests {
             .rx_heating_from_schedule_check
             .blocking_recv()
             .unwrap();
-        assert!(
-            !result,
-            "Should be disallowed by the fallback strategy"
-        );
+        assert!(!result, "Should be disallowed by the fallback strategy");
     }
 
     #[test]

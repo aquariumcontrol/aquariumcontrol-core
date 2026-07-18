@@ -1008,17 +1008,11 @@ pub mod tests {
                     .drivers
                     .get(&AquariumSignal::Conductivity)
                     .unwrap();
-                assert!(
-                    driver_temperature
-                        .get_mutex_access_duration_exceeded(&AquariumSignal::WaterTemperature)
-                );
-                assert!(
-                    driver_ph.get_mutex_access_duration_exceeded(&AquariumSignal::pH)
-                );
-                assert!(
-                    driver_conductivity
-                        .get_mutex_access_duration_exceeded(&AquariumSignal::Conductivity)
-                );
+                assert!(driver_temperature
+                    .get_mutex_access_duration_exceeded(&AquariumSignal::WaterTemperature));
+                assert!(driver_ph.get_mutex_access_duration_exceeded(&AquariumSignal::pH));
+                assert!(driver_conductivity
+                    .get_mutex_access_duration_exceeded(&AquariumSignal::Conductivity));
             })
             .unwrap();
 

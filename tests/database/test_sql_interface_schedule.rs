@@ -70,13 +70,13 @@ fn test_sql_interface_schedule_new_and_read() {
     let result = SqlInterfaceSchedule::new(conn, 1);
     assert!(
         matches!(
-                result,
-                Err(SqlInterfaceError::DatabaseScheduleTableContainsTooManyRows(
-                    _,
-                    _,
-                    _
-                ))
-            ),
+            result,
+            Err(SqlInterfaceError::DatabaseScheduleTableContainsTooManyRows(
+                _,
+                _,
+                _
+            ))
+        ),
         "Expected row limit error, but got {:?}",
         result
     );
@@ -103,9 +103,9 @@ fn test_sql_interface_schedule_new_and_read() {
 
     if let Err(errors) = read_result {
         assert!(matches!(
-                errors[0],
-                SqlInterfaceError::ScheduleProcessingFailure { .. }
-            ));
+            errors[0],
+            SqlInterfaceError::ScheduleProcessingFailure { .. }
+        ));
         println!("* Succeeded: read_schedule correctly fails on invalid data.");
     }
 
@@ -176,10 +176,10 @@ pub fn test_sql_interface_schedule() {
             .exec_drop(
                 sql_test_query_strings::SQL_QUERY_WRITE_SCHEDULE_TEST_DATA,
                 params! {
-                        "schedule_name" => *name,
-                        "start_time" => *start,
-                        "stop_time" => *stop,
-                    },
+                    "schedule_name" => *name,
+                    "start_time" => *start,
+                    "stop_time" => *stop,
+                },
             )
             .unwrap();
     }
@@ -206,7 +206,7 @@ pub fn test_sql_interface_schedule() {
                 stop_time: stop.to_string().parse().unwrap(),
                 is_active: 1,
             })
-                .unwrap();
+            .unwrap();
             (name.to_string(), entry)
         })
         .collect();
@@ -224,13 +224,13 @@ pub fn test_sql_interface_schedule() {
     // *** check if row limitation is active ***
     let test_result = SqlInterfaceSchedule::new(sql_interface.conn, 1);
     assert!(matches!(
-            test_result,
-            Err(SqlInterfaceError::DatabaseScheduleTableContainsTooManyRows(
-                _,
-                _,
-                _
-            ))
-        ));
+        test_result,
+        Err(SqlInterfaceError::DatabaseScheduleTableContainsTooManyRows(
+            _,
+            _,
+            _
+        ))
+    ));
 }
 
 #[test]
@@ -261,10 +261,10 @@ pub fn test_sql_interface_schedule_not_found() {
             .exec_drop(
                 sql_test_query_strings::SQL_QUERY_WRITE_SCHEDULE_TEST_DATA,
                 params! {
-                        "schedule_name" => *name,
-                        "start_time" => *start,
-                        "stop_time" => *stop,
-                    },
+                    "schedule_name" => *name,
+                    "start_time" => *start,
+                    "stop_time" => *stop,
+                },
             )
             .unwrap();
     }
@@ -273,7 +273,7 @@ pub fn test_sql_interface_schedule_not_found() {
         sql_interface.get_connection().unwrap(),
         config.sql_interface.max_rows_schedule,
     )
-        .unwrap();
+    .unwrap();
 
     sql_interface_schedule
         .read_schedule()
@@ -285,20 +285,20 @@ pub fn test_sql_interface_schedule_not_found() {
 
     // Assert that we get the correct error variant
     assert!(matches!(
-            find_result,
-            Err(SqlInterfaceError::ScheduleTypeNotFoundOtherEntriesExisting(
-                _,
-                _,
-                _
-            ))
-        ));
+        find_result,
+        Err(SqlInterfaceError::ScheduleTypeNotFoundOtherEntriesExisting(
+            _,
+            _,
+            _
+        ))
+    ));
 
     // For more robust testing, also verify the content of the error message.
     if let Err(SqlInterfaceError::ScheduleTypeNotFoundOtherEntriesExisting(
-                   _,
-                   requested,
-                   available,
-               )) = find_result
+        _,
+        requested,
+        available,
+    )) = find_result
     {
         assert_eq!(requested, "Balling");
         assert!(available.contains("Heating") && available.contains("Ventilation"));
@@ -308,4 +308,3 @@ pub fn test_sql_interface_schedule_not_found() {
         );
     }
 }
-

@@ -67,7 +67,7 @@ fn test_get_string_array_from_database() {
         "CREATE TABLE IF NOT EXISTS {} (name VARCHAR(255));",
         table_name
     ))
-        .unwrap();
+    .unwrap();
 
     // --- Test Case 1: Empty table ---
     println!("* Testing string array with empty table...");
@@ -92,7 +92,7 @@ fn test_get_string_array_from_database() {
         format!("INSERT INTO {} (name) VALUES (:name)", table_name),
         params! { "name" => test_string_1 },
     )
-        .unwrap();
+    .unwrap();
 
     let result = SqlInterface::get_string_array_from_database(
         &mut conn,
@@ -110,7 +110,7 @@ fn test_get_string_array_from_database() {
         format!("INSERT INTO {} (name) VALUES (:name)", table_name),
         params! { "name" => test_string_2 },
     )
-        .unwrap();
+    .unwrap();
 
     // Use ORDER BY to ensure a predictable order for assertions
     let result = SqlInterface::get_string_array_from_database(
@@ -152,17 +152,15 @@ fn test_get_optional_timestamp() {
         "CREATE TABLE IF NOT EXISTS {} (ts TIMESTAMP);",
         table_name
     ))
-        .unwrap();
+    .unwrap();
 
     // --- Test Case 1: Empty table ---
     println!("* Testing optional timestamp with empty table...");
     conn.query_drop(format!("TRUNCATE TABLE {}", table_name))
         .unwrap();
 
-    let result = SqlInterface::get_optional_timestamp(
-        &mut conn,
-        &format!("SELECT ts FROM {}", table_name),
-    );
+    let result =
+        SqlInterface::get_optional_timestamp(&mut conn, &format!("SELECT ts FROM {}", table_name));
     assert_eq!(result.unwrap(), None);
     println!("* Succeeded: Empty table returns Ok(None).");
 
@@ -173,12 +171,10 @@ fn test_get_optional_timestamp() {
         format!("INSERT INTO {} (ts) VALUES (:ts)", table_name),
         params! { "ts" => test_timestamp },
     )
-        .unwrap();
+    .unwrap();
 
-    let result = SqlInterface::get_optional_timestamp(
-        &mut conn,
-        &format!("SELECT ts FROM {}", table_name),
-    );
+    let result =
+        SqlInterface::get_optional_timestamp(&mut conn, &format!("SELECT ts FROM {}", table_name));
     assert_eq!(result.unwrap(), Some(test_timestamp));
     println!("* Succeeded: Table with one entry returns Ok(Some(timestamp)).");
 
@@ -191,12 +187,10 @@ fn test_get_optional_timestamp() {
         format!("INSERT INTO {} (ts) VALUES (:ts)", table_name),
         params! { "ts" => another_timestamp },
     )
-        .unwrap();
+    .unwrap();
 
-    let result = SqlInterface::get_optional_timestamp(
-        &mut conn,
-        &format!("SELECT ts FROM {}", table_name),
-    );
+    let result =
+        SqlInterface::get_optional_timestamp(&mut conn, &format!("SELECT ts FROM {}", table_name));
     assert_eq!(result.unwrap(), Some(test_timestamp));
     println!("* Succeeded: Table with multiple entries returns Ok(Some(timestamp)).");
 
@@ -265,8 +259,7 @@ fn test_get_current_timestamp_offset_seconds() {
     println!("* Testing timestamp with negative offset...");
     let offset_past: i64 = -1800; // 30 minutes in the past
     let result_past =
-        SqlInterface::get_current_timestamp_offset_seconds(&mut conn, offset_past as i32)
-            .unwrap();
+        SqlInterface::get_current_timestamp_offset_seconds(&mut conn, offset_past as i32).unwrap();
     let expected_past = Local::now().naive_local() + chrono::Duration::seconds(offset_past);
     let diff_past = (expected_past - result_past).num_seconds().abs();
     assert!(
@@ -282,8 +275,7 @@ fn test_get_current_timestamp_offset_seconds() {
     println!("* Testing timestamp with zero offset...");
     let offset_zero: i64 = 0;
     let result_zero =
-        SqlInterface::get_current_timestamp_offset_seconds(&mut conn, offset_zero as i32)
-            .unwrap();
+        SqlInterface::get_current_timestamp_offset_seconds(&mut conn, offset_zero as i32).unwrap();
     let expected_now = Local::now().naive_local();
     let diff_now = (expected_now - result_zero).num_seconds().abs();
     assert!(
@@ -321,7 +313,7 @@ fn test_get_date() {
         "CREATE TABLE IF NOT EXISTS {} (d DATE);",
         table_name
     ))
-        .unwrap();
+    .unwrap();
 
     // --- Test Case 1: Empty table (should error) ---
     println!("* Testing get_date with empty table...");
@@ -348,7 +340,7 @@ fn test_get_date() {
         format!("INSERT INTO {} (d) VALUES (:d)", table_name),
         params! { "d" => test_date },
     )
-        .unwrap();
+    .unwrap();
 
     let result = SqlInterface::get_date(&mut conn, &format!("SELECT d FROM {}", table_name));
     assert_eq!(result.unwrap(), test_date);

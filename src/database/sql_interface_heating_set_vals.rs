@@ -49,10 +49,10 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 //!   in `get_heating_set_values` enforce data integrity rules, preventing runtime
 //!   errors caused by invalid database states.
 
-use mysql::PooledConn;
-use std::time::{Duration, Instant};
 use mysql::params;
 use mysql::prelude::Queryable;
+use mysql::PooledConn;
+use std::time::{Duration, Instant};
 
 use crate::database::sql_interface::SqlInterface;
 use crate::database::sql_interface_error::SqlInterfaceError;
@@ -60,9 +60,9 @@ use crate::database::sql_query_strings;
 use crate::database::sql_query_strings::{
     SQL_QUERY_CHECK_HEATING_SET_VALS_COUNT, SQL_QUERY_CHECK_HEATING_SET_VALS_NULL,
 };
+use crate::database::sql_test_query_strings::SQL_QUERY_WRITE_HEATING_SET_VALS;
 use crate::database::thermal_set_value_updater_trait::ThermalSetValueUpdaterTrait;
 use crate::thermal::heating_config::HeatingConfig;
-use crate::database::sql_test_query_strings::SQL_QUERY_WRITE_HEATING_SET_VALS;
 
 /// Contains the heating set values which can be set by the user.
 #[derive(PartialEq, Debug)]

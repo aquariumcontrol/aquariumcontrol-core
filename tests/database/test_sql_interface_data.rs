@@ -10,10 +10,12 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 //! Tests all database interactions for time-series sensor and state data.
 
 use aquarium_control::database::sql_interface_data::SqlInterfaceData;
-use aquarium_control::database::{sql_interface::SqlInterface, sql_interface_error::SqlInterfaceError, sql_test_query_strings};
+use aquarium_control::database::sql_test_query_strings::SQL_TABLE_DATA;
+use aquarium_control::database::{
+    sql_interface::SqlInterface, sql_interface_error::SqlInterfaceError, sql_test_query_strings,
+};
 use aquarium_control::recorder::recorder_data_frame::RecorderDataFrame;
 use aquarium_control::utilities::config::{read_config_file_with_test_database, ConfigData};
-use aquarium_control::database::sql_test_query_strings::SQL_TABLE_DATA;
 use chrono::NaiveDateTime;
 use mysql::{prelude::Queryable, PooledConn, Row, Value};
 use spin_sleep::SpinSleeper;
@@ -85,13 +87,13 @@ fn test_sql_interface_data_new() {
     );
     assert!(
         matches!(
-                result,
-                Err(SqlInterfaceError::DatabaseDataTableContainsTooManyRows(
-                    _,
-                    _,
-                    _
-                ))
-            ),
+            result,
+            Err(SqlInterfaceError::DatabaseDataTableContainsTooManyRows(
+                _,
+                _,
+                _
+            ))
+        ),
         "Expected row limit error, but got {:?}",
         result
     );
@@ -194,7 +196,10 @@ pub fn get_single_dataframe_from_database(
     ) {
         Ok(c) => c,
         Err(e) => {
-            panic!("Could not get data frame part 1 from SQL database: {e:?} using query string {}", sql_query_string_1);
+            panic!(
+                "Could not get data frame part 1 from SQL database: {e:?} using query string {}",
+                sql_query_string_1
+            );
         }
     };
     let sql_query_string_2 = str::replace(
@@ -205,15 +210,15 @@ pub fn get_single_dataframe_from_database(
     let data_frame_2_array: Vec<SqlDataFrame2> = match conn.query_map(
         sql_query_string_2.clone(),
         |(
-             refill_in_progress,
-             tank_level_switch_position,
-             tank_level_switch_invalid,
-             tank_level_switch_position_stabilized,
-             surface_ventilation_status,
-             ambient_temperature,
-             ambient_humidity,
-             heater_status,
-         )| SqlDataFrame2 {
+            refill_in_progress,
+            tank_level_switch_position,
+            tank_level_switch_invalid,
+            tank_level_switch_position_stabilized,
+            surface_ventilation_status,
+            ambient_temperature,
+            ambient_humidity,
+            heater_status,
+        )| SqlDataFrame2 {
             refill_in_progress,
             tank_level_switch_position,
             tank_level_switch_invalid,
@@ -226,7 +231,10 @@ pub fn get_single_dataframe_from_database(
     ) {
         Ok(c) => c,
         Err(e) => {
-            panic!("Could not get data frame part 2 from SQL database: {e:?} using query string {}", sql_query_string_2);
+            panic!(
+                "Could not get data frame part 2 from SQL database: {e:?} using query string {}",
+                sql_query_string_2
+            );
         }
     };
 
@@ -326,7 +334,7 @@ pub fn test_sql_interface_data_write_data_frame() {
         sql_interface.get_connection().unwrap(),
         max_rows_data,
     )
-        .unwrap();
+    .unwrap();
     // *** insert and load RecorderDataFrame ***************************************************
     match SqlInterface::truncate_table(&mut sql_interface, SQL_TABLE_DATA.to_string()) {
         Ok(_) => {}
@@ -492,12 +500,12 @@ pub fn test_sql_interface_data_write_data_frame() {
         1,
     );
     assert!(matches!(
-            test_result,
-            Err(SqlInterfaceError::DatabaseDataTableContainsTooManyRows(
-                _,
-                _,
-                _
-            ))
-        ));
+        test_result,
+        Err(SqlInterfaceError::DatabaseDataTableContainsTooManyRows(
+            _,
+            _,
+            _
+        ))
+    ));
     // *****************************************************************************************
 }

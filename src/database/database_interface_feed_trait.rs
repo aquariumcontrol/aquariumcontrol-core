@@ -41,6 +41,7 @@ use crate::database::pingable::Pingable;
 use crate::database::sql_interface::SqlInterface;
 use crate::database::sql_interface_error::SqlInterfaceError;
 use crate::database::sql_interface_feed::SqlInterfaceFeed;
+use crate::database::sql_query_strings;
 #[cfg(test)]
 use crate::database::sql_test_query_strings;
 use crate::food::feed_profile::{FeedPhase, FeedProfile};
@@ -48,7 +49,6 @@ use crate::food::feed_schedule_entry::FeedScheduleEntry;
 use chrono::NaiveDateTime;
 use mysql::params;
 use mysql::prelude::Queryable;
-use crate::database::sql_query_strings;
 
 pub const NUM_FEEDPHASES: i32 = 10;
 
@@ -346,7 +346,8 @@ impl DatabaseInterfaceFeedTrait for SqlInterfaceFeed {
         is_weekly: bool,
         is_daily: bool,
     ) -> mysql::Result<(), SqlInterfaceError> {
-        let sql_query_string = sql_test_query_strings::SQL_QUERY_WRITE_FEED_SCHEDULE_ENTRY.to_owned();
+        let sql_query_string =
+            sql_test_query_strings::SQL_QUERY_WRITE_FEED_SCHEDULE_ENTRY.to_owned();
         match self.conn.exec_drop::<_, _>(
             sql_query_string,
             params! {

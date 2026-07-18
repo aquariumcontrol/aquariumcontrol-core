@@ -55,10 +55,12 @@ use crate::database::sql_query_strings::{
     SQL_QUERY_CHECK_BALLING_LOG_COUNT, SQL_QUERY_CHECK_BALLING_SET_VALS_COUNT,
     SQL_QUERY_CHECK_BALLING_SET_VALS_NULL,
 };
-use crate::database::{sql_interface::SqlInterface, sql_interface_error::SqlInterfaceError, sql_query_strings};
 #[cfg(test)]
 use crate::database::sql_test_query_strings;
 use crate::database::sql_test_query_strings::SQL_QUERY_WRITE_BALLING_EVENT_WITH_TIMESTAMP;
+use crate::database::{
+    sql_interface::SqlInterface, sql_interface_error::SqlInterfaceError, sql_query_strings,
+};
 
 /// Contains the configuration and the implementation of the SQL interface for Balling.
 #[derive(Debug)]
@@ -449,7 +451,8 @@ impl SqlInterfaceBalling {
         dosing_volume: f32,
         label: String,
     ) -> Result<(), SqlInterfaceError> {
-        let sql_query_string = sql_test_query_strings::SQL_QUERY_WRITE_PUMP_CONFIGURATION.to_owned();
+        let sql_query_string =
+            sql_test_query_strings::SQL_QUERY_WRITE_PUMP_CONFIGURATION.to_owned();
         let sql_query_string_for_error = sql_query_string.clone();
         match self.conn.exec_drop::<_, _>(
             sql_query_string,

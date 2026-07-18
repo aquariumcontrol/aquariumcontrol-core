@@ -597,15 +597,13 @@ pub mod tests {
 
         let ds18b20 = Ds18b20::new(config.ds18b20).unwrap();
 
-        assert!(
-            matches!(
-                ds18b20.read(invalid_temperature_sensor_id),
-                Err(Ds18b20Error::SensorIdNotFound(
-                    _,
-                    _invalid_temperature_sensor_id
-                ))
-            )
-        );
+        assert!(matches!(
+            ds18b20.read(invalid_temperature_sensor_id),
+            Err(Ds18b20Error::SensorIdNotFound(
+                _,
+                _invalid_temperature_sensor_id
+            ))
+        ));
     }
 
     #[test]
@@ -624,12 +622,10 @@ pub mod tests {
 
         let ds18b20 = Ds18b20::new(config.ds18b20).unwrap();
 
-        assert!(
-            matches!(
-                ds18b20.read(&valid_temperature_sensor_id),
-                Err(Ds18b20Error::ReadToStringFailure(_))
-            )
-        );
+        assert!(matches!(
+            ds18b20.read(&valid_temperature_sensor_id),
+            Err(Ds18b20Error::ReadToStringFailure(_))
+        ));
     }
 
     #[test]
@@ -648,12 +644,10 @@ pub mod tests {
 
         let ds18b20 = Ds18b20::new(config.ds18b20).unwrap();
 
-        assert!(
-            matches!(
-                ds18b20.read(&valid_temperature_sensor_id),
-                Err(Ds18b20Error::InsufficientLinesInFile(_))
-            )
-        );
+        assert!(matches!(
+            ds18b20.read(&valid_temperature_sensor_id),
+            Err(Ds18b20Error::InsufficientLinesInFile(_))
+        ));
     }
 
     #[test]
@@ -672,12 +666,10 @@ pub mod tests {
 
         let ds18b20 = Ds18b20::new(config.ds18b20).unwrap();
 
-        assert!(
-            matches!(
-                ds18b20.read(&valid_temperature_sensor_id),
-                Err(Ds18b20Error::Line0NotEndingWithYes(_))
-            )
-        );
+        assert!(matches!(
+            ds18b20.read(&valid_temperature_sensor_id),
+            Err(Ds18b20Error::Line0NotEndingWithYes(_))
+        ));
     }
 
     #[test]
@@ -696,12 +688,10 @@ pub mod tests {
 
         let ds18b20 = Ds18b20::new(config.ds18b20).unwrap();
 
-        assert!(
-            matches!(
-                ds18b20.read(&valid_temperature_sensor_id),
-                Err(Ds18b20Error::TemperatureEntryNotFound(_))
-            )
-        );
+        assert!(matches!(
+            ds18b20.read(&valid_temperature_sensor_id),
+            Err(Ds18b20Error::TemperatureEntryNotFound(_))
+        ));
     }
 
     #[test]
@@ -720,12 +710,10 @@ pub mod tests {
 
         let ds18b20 = Ds18b20::new(config.ds18b20).unwrap();
 
-        assert!(
-            matches!(
-                ds18b20.read(&valid_temperature_sensor_id),
-                Err(Ds18b20Error::TemperatureParseError(_))
-            )
-        );
+        assert!(matches!(
+            ds18b20.read(&valid_temperature_sensor_id),
+            Err(Ds18b20Error::TemperatureParseError(_))
+        ));
     }
 
     #[test]
@@ -744,12 +732,10 @@ pub mod tests {
 
         let ds18b20 = Ds18b20::new(config.ds18b20).unwrap();
 
-        assert!(
-            matches!(
-                ds18b20.read(&valid_temperature_sensor_id),
-                Err(Ds18b20Error::TemperatureOutOfRange(_))
-            )
-        );
+        assert!(matches!(
+            ds18b20.read(&valid_temperature_sensor_id),
+            Err(Ds18b20Error::TemperatureOutOfRange(_))
+        ));
     }
 
     #[test]
@@ -768,12 +754,10 @@ pub mod tests {
 
         let ds18b20 = Ds18b20::new(config.ds18b20).unwrap();
 
-        assert!(
-            matches!(
-                ds18b20.read(&valid_temperature_sensor_id),
-                Err(Ds18b20Error::TemperatureOutOfRange(_))
-            )
-        );
+        assert!(matches!(
+            ds18b20.read(&valid_temperature_sensor_id),
+            Err(Ds18b20Error::TemperatureOutOfRange(_))
+        ));
     }
 
     #[test]

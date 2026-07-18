@@ -9,15 +9,17 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 
 //! Test the aggregation and persistence of daily heating statistics.
 
+use all_asserts::{assert_ge, assert_le};
 use aquarium_control::database::sql_interface_heating_stats::{
     HeatingStatsEntry, SqlInterfaceHeatingStats,
 };
 use aquarium_control::database::sql_interface_midnight::SqlInterfaceMidnightCalculator;
-use aquarium_control::database::{sql_interface::SqlInterface, sql_interface_error::SqlInterfaceError};
-use aquarium_control::utilities::config::{read_config_file_with_test_database, ConfigData};
-use all_asserts::{assert_ge, assert_le};
-use chrono::{Datelike, Local, NaiveDate, NaiveDateTime};
 use aquarium_control::database::sql_test_query_strings::SQL_TABLE_HEATING_STATS;
+use aquarium_control::database::{
+    sql_interface::SqlInterface, sql_interface_error::SqlInterfaceError,
+};
+use aquarium_control::utilities::config::{read_config_file_with_test_database, ConfigData};
+use chrono::{Datelike, Local, NaiveDate, NaiveDateTime};
 
 #[test]
 // This test case verifies the validation logic within the `SqlInterfaceHeatingStats::new()` constructor.
@@ -44,11 +46,8 @@ fn test_sql_interface_heating_stats_new() {
     let midnight_calc = Box::new(SqlInterfaceMidnightCalculator::new(
         sql_interface.get_connection().unwrap(),
     ));
-    let result_happy_case = SqlInterfaceHeatingStats::new(
-        sql_interface.get_connection().unwrap(),
-        10,
-        midnight_calc,
-    );
+    let result_happy_case =
+        SqlInterfaceHeatingStats::new(sql_interface.get_connection().unwrap(), 10, midnight_calc);
     assert!(
         result_happy_case.is_ok(),
         "Expected new() to succeed with an empty table, but it failed: {:?}",
@@ -64,11 +63,9 @@ fn test_sql_interface_heating_stats_new() {
 
     let mut heating_stats_entry = HeatingStatsEntry::new_for_test();
     let mut sql_interface_heating_stats_for_test_setup = result_happy_case.unwrap();
-    _ = sql_interface_heating_stats_for_test_setup
-        .insert_heating_stats_entry(&heating_stats_entry);
+    _ = sql_interface_heating_stats_for_test_setup.insert_heating_stats_entry(&heating_stats_entry);
     heating_stats_entry.increment_date();
-    _ = sql_interface_heating_stats_for_test_setup
-        .insert_heating_stats_entry(&heating_stats_entry);
+    _ = sql_interface_heating_stats_for_test_setup.insert_heating_stats_entry(&heating_stats_entry);
 
     let midnight_calc = Box::new(SqlInterfaceMidnightCalculator::new(
         sql_interface.get_connection().unwrap(),
@@ -76,9 +73,9 @@ fn test_sql_interface_heating_stats_new() {
     // Set the limit to 1
     let result = SqlInterfaceHeatingStats::new(conn, 1, midnight_calc);
     assert!(matches!(
-            result,
-            Err(SqlInterfaceError::DatabaseHeatingStatsTableContainsTooManyRows(_, _, _))
-        ));
+        result,
+        Err(SqlInterfaceError::DatabaseHeatingStatsTableContainsTooManyRows(_, _, _))
+    ));
     println!("* Succeeded: Initialization fails if table exceeds row limit.");
 
     // --- Test Case 3: Deactivated check (limit is 0) ---
@@ -88,11 +85,8 @@ fn test_sql_interface_heating_stats_new() {
         sql_interface.get_connection().unwrap(),
     ));
     // Set the limit to 0
-    let result = SqlInterfaceHeatingStats::new(
-        sql_interface.get_connection().unwrap(),
-        0,
-        midnight_calc,
-    );
+    let result =
+        SqlInterfaceHeatingStats::new(sql_interface.get_connection().unwrap(), 0, midnight_calc);
     assert!(
         result.is_ok(),
         "Expected new() to succeed with deactivated check, but it failed: {:?}",
@@ -113,19 +107,18 @@ pub fn test_sql_interface_heating() {
     let max_rows_heating_stats = config.sql_interface.max_rows_heating_stats;
     let mut sql_interface: SqlInterface = SqlInterface::new(config.sql_interface)
         .expect("Initialization of SQL interface for test failed.");
-    let sql_interface_heating_midnight_calculator = Box::new(
-        SqlInterfaceMidnightCalculator::new(sql_interface.get_connection().unwrap()),
-    );
+    let sql_interface_heating_midnight_calculator = Box::new(SqlInterfaceMidnightCalculator::new(
+        sql_interface.get_connection().unwrap(),
+    ));
     let mut sql_interface_heating = SqlInterfaceHeatingStats::new(
         sql_interface.get_connection().unwrap(),
         max_rows_heating_stats,
         sql_interface_heating_midnight_calculator,
     )
-        .unwrap();
+    .unwrap();
 
     // *** retrieve heating stats - ************************************************************
-    match SqlInterface::truncate_table(&mut sql_interface, SQL_TABLE_HEATING_STATS.to_string())
-    {
+    match SqlInterface::truncate_table(&mut sql_interface, SQL_TABLE_HEATING_STATS.to_string()) {
         Ok(_) => {}
         Err(e) => panic!("Could not prepare test case: {e:?}"),
     }
@@ -135,9 +128,9 @@ pub fn test_sql_interface_heating() {
         }
         Err(e) => {
             assert!(matches!(
-                    e,
-                    SqlInterfaceError::SingleHeatingStatsRequestEmptyResponse(_, _)
-                ));
+                e,
+                SqlInterfaceError::SingleHeatingStatsRequestEmptyResponse(_, _)
+            ));
         }
     }
     println!("* checking reading from empty heating stat table succeeded.");
@@ -145,11 +138,10 @@ pub fn test_sql_interface_heating() {
 
     // *** insert heating stats ****************************************************************
     // prepare data for inserting into the database
-    let today =
-        match SqlInterface::get_current_date(&mut sql_interface.get_connection().unwrap()) {
-            Ok(c) => c,
-            Err(_) => panic!("Could not get current date."),
-        };
+    let today = match SqlInterface::get_current_date(&mut sql_interface.get_connection().unwrap()) {
+        Ok(c) => c,
+        Err(_) => panic!("Could not get current date."),
+    };
     let mut heating_stats_entry = HeatingStatsEntry {
         date: today,
         energy: 0.9,
@@ -160,9 +152,9 @@ pub fn test_sql_interface_heating() {
         heating_control_runtime: 64000.0,
     };
     assert!(matches!(
-            sql_interface_heating.insert_heating_stats_entry(&heating_stats_entry),
-            Ok(())
-        ));
+        sql_interface_heating.insert_heating_stats_entry(&heating_stats_entry),
+        Ok(())
+    ));
     println!("* checking inserting heating stats succeeded.");
     // *****************************************************************************************
 
@@ -192,9 +184,9 @@ pub fn test_sql_interface_heating() {
     heating_stats_entry.water_temperature_average_counter += 1;
     heating_stats_entry.heating_control_runtime += 1.0;
     assert!(matches!(
-            sql_interface_heating.insert_heating_stats_entry(&heating_stats_entry),
-            Ok(())
-        ));
+        sql_interface_heating.insert_heating_stats_entry(&heating_stats_entry),
+        Ok(())
+    ));
     match sql_interface_heating.get_single_heating_stats_from_database() {
         Ok(c) => {
             assert_eq!(c.date, today);
@@ -229,8 +221,8 @@ pub fn test_sql_interface_heating() {
     // Calculate the difference
     let duration_until_midnight = 24 * 3600
         - SqlInterface::get_duration_from_naive_timestamp_to_local_now(midnight)
-        .unwrap()
-        .num_seconds();
+            .unwrap()
+            .num_seconds();
     match sql_interface_heating.get_duration_until_midnight() {
         Ok(c) => {
             assert_eq!(c, duration_until_midnight);
@@ -246,20 +238,20 @@ pub fn test_sql_interface_heating() {
     heating_stats_entry.date =
         SqlInterface::get_tomorrow_date(&mut sql_interface.get_connection().unwrap()).unwrap();
     assert!(matches!(
-            sql_interface_heating.insert_heating_stats_entry(&heating_stats_entry),
-            Ok(())
-        ));
-    let sql_interface_heating_midnight_calculator = Box::new(
-        SqlInterfaceMidnightCalculator::new(sql_interface.get_connection().unwrap()),
-    );
+        sql_interface_heating.insert_heating_stats_entry(&heating_stats_entry),
+        Ok(())
+    ));
+    let sql_interface_heating_midnight_calculator = Box::new(SqlInterfaceMidnightCalculator::new(
+        sql_interface.get_connection().unwrap(),
+    ));
     let test_result = SqlInterfaceHeatingStats::new(
         sql_interface.get_connection().unwrap(),
         1,
         sql_interface_heating_midnight_calculator,
     );
     assert!(matches!(
-            test_result,
-            Err(SqlInterfaceError::DatabaseHeatingStatsTableContainsTooManyRows(_, _, _))
-        ));
+        test_result,
+        Err(SqlInterfaceError::DatabaseHeatingStatsTableContainsTooManyRows(_, _, _))
+    ));
     // *****************************************************************************************
 }

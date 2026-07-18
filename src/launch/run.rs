@@ -300,10 +300,8 @@ fn check_is_command(command: &str) -> Result<bool, VersionInformationError> {
 ///     signal_handler --> temperature_gradient
 /// ```
 pub fn run(
-    #[cfg(test)]
-    config_file_name_for_test: String,
-    #[cfg(test)]
-    wait_for_test_shutdown_opt: Option<Duration>,
+    #[cfg(test)] config_file_name_for_test: String,
+    #[cfg(test)] wait_for_test_shutdown_opt: Option<Duration>,
 ) -> Result<(), StartupError> {
     // setting up grpc so that tokio-console can monitor the tokio runtime
     #[cfg(feature = "debug_tokio")]
@@ -823,8 +821,7 @@ pub fn run(
     let atlas_scientific_drivers = HashMap::new();
 
     #[cfg(all(target_os = "linux", feature = "target_hw"))]
-    let atlas_scientific =
-        AtlasScientific::new(config.atlas_scientific, atlas_scientific_drivers);
+    let atlas_scientific = AtlasScientific::new(config.atlas_scientific, atlas_scientific_drivers);
     #[cfg(not(all(target_os = "linux", feature = "target_hw")))]
     let mut atlas_scientific =
         AtlasScientific::new(config.atlas_scientific, atlas_scientific_drivers);

@@ -52,7 +52,6 @@ pub const SQL_QUERY_WRITE_FEED_EVENT: &str = concat!(
     "values(:timestamp, :feeder_run_time, :profile_id)"
 );
 
-
 /// Definition of table name for feed profiles
 pub const SQL_TABLE_FEED_PROFILES: &str = "feed_profiles";
 
@@ -84,7 +83,6 @@ pub const SQL_QUERY_READ_LAST_BALLING_DOSING_TIMESTAMP: &str = concat!(
     "SELECT timestamp from balling_log as LSTTSTMP ",
     "WHERE pump_id=#pump_id ORDER BY timestamp DESC LIMIT 1;"
 );
-
 
 /// Writes a Balling dosing event to the database using current timestamp from database
 pub const SQL_QUERY_WRITE_BALLING_EVENT: &str = concat!(
@@ -434,4 +432,3 @@ pub const SQL_QUERY_READ_TIMEOUT: &str = concat!(
 
 /// Minimal request to the database to avoid timeouts
 pub const SQL_QUERY_PING: &str = "SELECT 1 LIMIT 1;";
-

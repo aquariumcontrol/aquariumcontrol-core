@@ -9,21 +9,23 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 
 //! Tests for the aquarium's ventilation system.
 
-use aquarium_control::launch::channels::{AquaReceiver, AquaSender, Channels};
-use aquarium_control::sensors::sensor_manager::SensorManagerSignals;
-use aquarium_control::thermal::thermal_control_status::ThermalControlStatus;
-use aquarium_control::thermal::ventilation::Ventilation;
-use aquarium_control::thermal::ventilation_mutexes::VentilationMutexes;
-use aquarium_control::utilities::channel_content::{ActuatorState, AquariumDevice, InternalCommand};
-use aquarium_control::utilities::config::{read_config_file, ConfigData};
-use aquarium_control::utilities::sawtooth_profile::SawToothProfileConfig;
-use aquarium_control::utilities::signal_handler::SignalHandlerChannels;
+use all_asserts::{assert_ge, assert_le};
 use aquarium_control::database::thermal_set_value_updater_trait::ThermalSetValueUpdaterTrait;
-use aquarium_control::thermal::ventilation_channels::VentilationChannels;
+use aquarium_control::launch::channels::{AquaReceiver, AquaSender, Channels};
 use aquarium_control::mocks::mock_relay_manager::tests::mock_relay_manager;
 use aquarium_control::mocks::mock_schedule_check::tests::mock_schedule_check;
 use aquarium_control::mocks::mock_ventilation::tests::MockSqlInterfaceVentilationSetVals;
-use all_asserts::{assert_ge, assert_le};
+use aquarium_control::sensors::sensor_manager::SensorManagerSignals;
+use aquarium_control::thermal::thermal_control_status::ThermalControlStatus;
+use aquarium_control::thermal::ventilation::Ventilation;
+use aquarium_control::thermal::ventilation_channels::VentilationChannels;
+use aquarium_control::thermal::ventilation_mutexes::VentilationMutexes;
+use aquarium_control::utilities::channel_content::{
+    ActuatorState, AquariumDevice, InternalCommand,
+};
+use aquarium_control::utilities::config::{read_config_file, ConfigData};
+use aquarium_control::utilities::sawtooth_profile::SawToothProfileConfig;
+use aquarium_control::utilities::signal_handler::SignalHandlerChannels;
 use spin_sleep::SpinSleeper;
 use std::sync::{Arc, Mutex};
 use std::thread;
@@ -53,9 +55,9 @@ fn execute_blocking(
             let is_multi_thread_test = tokio::runtime::Handle::try_current()
                 .map(|h| {
                     matches!(
-                            h.runtime_flavor(),
-                            tokio::runtime::RuntimeFlavor::MultiThread
-                        )
+                        h.runtime_flavor(),
+                        tokio::runtime::RuntimeFlavor::MultiThread
+                    )
                 })
                 .unwrap_or(false);
 
@@ -79,7 +81,7 @@ fn execute_blocking(
 ///
 /// # Arguments
 /// * `saw_tooth_profile_config_opt` - A parameter representing `saw_tooth_profile_config_opt`.
-/// 
+///
 /// # Returns
 /// A freshly initialized `Ventilation` struct, ready for testing.
 /// Performs the `prepare_ventilation_tests` operation.
@@ -250,10 +252,10 @@ pub fn test_ventilation_with_measured_temperature_high_without_blocking_mutex() 
             assert!(!ventilation.mutex_access_duration_exceeded);
 
             // send Quit signal to mock threads because the test object has terminated
-            let _ = tx_ventilation_to_schedule_check_for_test_case_finish
-                .send(InternalCommand::Quit);
-            let _ = tx_ventilation_to_relay_manager_for_test_case_finish
-                .send(InternalCommand::Quit);
+            let _ =
+                tx_ventilation_to_schedule_check_for_test_case_finish.send(InternalCommand::Quit);
+            let _ =
+                tx_ventilation_to_relay_manager_for_test_case_finish.send(InternalCommand::Quit);
             println!("* [Ventilation] checking reaction to high temperature succeeded.");
         })
         .unwrap();
@@ -405,10 +407,10 @@ pub fn test_ventilation_with_measured_temperature_low() {
             );
 
             // send Quit signal to mock threads because the test object has terminated
-            let _ = tx_ventilation_to_schedule_check_for_test_case_finish
-                .send(InternalCommand::Quit);
-            let _ = tx_ventilation_to_relay_manager_for_test_case_finish
-                .send(InternalCommand::Quit);
+            let _ =
+                tx_ventilation_to_schedule_check_for_test_case_finish.send(InternalCommand::Quit);
+            let _ =
+                tx_ventilation_to_relay_manager_for_test_case_finish.send(InternalCommand::Quit);
             println!("* [Ventilation] checking reaction to low temperature.");
         })
         .unwrap();
@@ -624,10 +626,10 @@ pub fn test_ventilation_with_measured_temperature_50_percent() {
             );
 
             // send Quit signal to mock threads because the test object has terminated
-            let _ = tx_ventilation_to_schedule_check_for_test_case_finish
-                .send(InternalCommand::Quit);
-            let _ = tx_ventilation_to_relay_manager_for_test_case_finish
-                .send(InternalCommand::Quit);
+            let _ =
+                tx_ventilation_to_schedule_check_for_test_case_finish.send(InternalCommand::Quit);
+            let _ =
+                tx_ventilation_to_relay_manager_for_test_case_finish.send(InternalCommand::Quit);
             println!("* [Ventilation] checking reaction to medium temperature succeeded.");
         })
         .unwrap();
@@ -816,10 +818,10 @@ pub fn test_ventilation_with_measured_temperature_high_within_interval() {
             );
 
             // send Quit signal to mock threads because the test object has terminated
-            let _ = tx_ventilation_to_schedule_check_for_test_case_finish
-                .send(InternalCommand::Quit);
-            let _ = tx_ventilation_to_relay_manager_for_test_case_finish
-                .send(InternalCommand::Quit);
+            let _ =
+                tx_ventilation_to_schedule_check_for_test_case_finish.send(InternalCommand::Quit);
+            let _ =
+                tx_ventilation_to_relay_manager_for_test_case_finish.send(InternalCommand::Quit);
             println!("* [Ventilation] checking reaction to medium temperature succeeded.");
         })
         .unwrap();
@@ -1009,10 +1011,10 @@ pub fn test_ventilation_with_measured_temperature_low_within_interval() {
             );
 
             // send Quit signal to mock threads because the test object has terminated
-            let _ = tx_ventilation_to_schedule_check_for_test_case_finish
-                .send(InternalCommand::Quit);
-            let _ = tx_ventilation_to_relay_manager_for_test_case_finish
-                .send(InternalCommand::Quit);
+            let _ =
+                tx_ventilation_to_schedule_check_for_test_case_finish.send(InternalCommand::Quit);
+            let _ =
+                tx_ventilation_to_relay_manager_for_test_case_finish.send(InternalCommand::Quit);
             println!("* [Ventilation] checking reaction to medium temperature succeeded.");
         })
         .unwrap();
@@ -1109,10 +1111,10 @@ pub fn test_ventilation_block_by_schedule() {
             );
 
             // send Quit signal to mock threads because the test object has terminated
-            let _ = tx_ventilation_to_schedule_check_for_test_case_finish
-                .send(InternalCommand::Quit);
-            let _ = tx_ventilation_to_relay_manager_for_test_case_finish
-                .send(InternalCommand::Quit);
+            let _ =
+                tx_ventilation_to_schedule_check_for_test_case_finish.send(InternalCommand::Quit);
+            let _ =
+                tx_ventilation_to_relay_manager_for_test_case_finish.send(InternalCommand::Quit);
 
             let actuation_count = *mutex_device_scheduler_ventilation.lock().unwrap();
 
@@ -1346,10 +1348,10 @@ pub fn test_messaging_stops_starts_ventilation() {
             );
 
             // send Quit signal to mock threads because the test object has terminated
-            let _ = tx_ventilation_to_schedule_check_for_test_case_finish
-                .send(InternalCommand::Quit);
-            let _ = tx_ventilation_to_relay_manager_for_test_case_finish
-                .send(InternalCommand::Quit);
+            let _ =
+                tx_ventilation_to_schedule_check_for_test_case_finish.send(InternalCommand::Quit);
+            let _ =
+                tx_ventilation_to_relay_manager_for_test_case_finish.send(InternalCommand::Quit);
 
             println!("* [Ventilation] checking if messaging can block and restart actuation.");
         })
@@ -1477,10 +1479,10 @@ pub fn test_ventilation_with_decreased_set_values() {
             );
 
             // send Quit signal to mock threads because the test object has terminated
-            let _ = tx_ventilation_to_schedule_check_for_test_case_finish
-                .send(InternalCommand::Quit);
-            let _ = tx_ventilation_to_relay_manager_for_test_case_finish
-                .send(InternalCommand::Quit);
+            let _ =
+                tx_ventilation_to_schedule_check_for_test_case_finish.send(InternalCommand::Quit);
+            let _ =
+                tx_ventilation_to_relay_manager_for_test_case_finish.send(InternalCommand::Quit);
             println!("* [Ventilation] checking reaction to high temperature succeeded.");
         })
         .unwrap();
@@ -1611,10 +1613,10 @@ pub fn test_ventilation_with_measured_temperature_high_with_blocking_mutex() {
             assert!(ventilation.mutex_access_duration_exceeded);
 
             // send Quit signal to mock threads because the test object has terminated
-            let _ = tx_ventilation_to_schedule_check_for_test_case_finish
-                .send(InternalCommand::Quit);
-            let _ = tx_ventilation_to_relay_manager_for_test_case_finish
-                .send(InternalCommand::Quit);
+            let _ =
+                tx_ventilation_to_schedule_check_for_test_case_finish.send(InternalCommand::Quit);
+            let _ =
+                tx_ventilation_to_relay_manager_for_test_case_finish.send(InternalCommand::Quit);
             println!("* [Ventilation] checking reaction to high temperature succeeded.");
         })
         .unwrap();
@@ -1782,10 +1784,10 @@ pub fn test_ventilation_gradient_monitoring_disables_actuator() {
             );
 
             // send Quit signal to mock threads
-            let _ = tx_ventilation_to_schedule_check_for_test_case_finish
-                .send(InternalCommand::Quit);
-            let _ = tx_ventilation_to_relay_manager_for_test_case_finish
-                .send(InternalCommand::Quit);
+            let _ =
+                tx_ventilation_to_schedule_check_for_test_case_finish.send(InternalCommand::Quit);
+            let _ =
+                tx_ventilation_to_relay_manager_for_test_case_finish.send(InternalCommand::Quit);
             println!("* [Ventilation] checking gradient monitoring succeeded.");
         })
         .unwrap();
@@ -1957,10 +1959,10 @@ pub fn test_ventilation_reset_errors_enables_actuator() {
             spin_sleeper.sleep(Duration::from_millis(100));
 
             // send Quit signal to mock threads
-            let _ = tx_ventilation_to_schedule_check_for_test_case_finish
-                .send(InternalCommand::Quit);
-            let _ = tx_ventilation_to_relay_manager_for_test_case_finish
-                .send(InternalCommand::Quit);
+            let _ =
+                tx_ventilation_to_schedule_check_for_test_case_finish.send(InternalCommand::Quit);
+            let _ =
+                tx_ventilation_to_relay_manager_for_test_case_finish.send(InternalCommand::Quit);
             println!("* [Ventilation] checking reset errors enables actuator succeeded.");
         })
         .unwrap();

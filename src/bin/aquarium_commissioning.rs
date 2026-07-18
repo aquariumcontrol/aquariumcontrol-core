@@ -517,7 +517,9 @@ fn main() -> Result<(), Box<dyn Error>> {
                 .init_devices(&mut atlas_channels)
                 .expect("Atlas init failed");
             thread::spawn(move || {
-                atlas.execute(&mut atlas_channels, m_temp, m_ph, m_cond).await;
+                atlas
+                    .execute(&mut atlas_channels, m_temp, m_ph, m_cond)
+                    .await;
             });
         }
     }

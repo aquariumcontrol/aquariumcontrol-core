@@ -8,6 +8,6 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 */
 
 mod thermal {
-    mod test_ventilation;
     mod test_heating;
+    mod test_ventilation;
 }

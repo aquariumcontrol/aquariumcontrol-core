@@ -60,8 +60,8 @@ use mysql::*;
 
 use crate::database::sql_interface_config::SqlInterfaceConfig;
 use crate::database::sql_query_strings::{SQL_QUERY_PING, SQL_QUERY_READ_TIMEOUT};
-pub use crate::database::{sql_interface_error::SqlInterfaceError, sql_query_strings};
 use crate::database::sql_test_query_strings;
+pub use crate::database::{sql_interface_error::SqlInterfaceError, sql_query_strings};
 use crate::utilities::version_information::VersionInformation;
 
 /// Struct is used to retrieve a single integer value from the SQL database.
@@ -894,7 +894,7 @@ impl SqlInterface {
             }
         }
     }
-    
+
     /// This test-only function calculates a `NaiveDateTime` that is a specific duration
     /// in the past relative to the current local time. This function is used for setting up
     /// historical data scenarios in tests across different crates.

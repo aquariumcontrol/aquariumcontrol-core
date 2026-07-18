@@ -17,7 +17,9 @@ use aquarium_control::database::sql_interface_refill::{
     DatabaseInterfaceRefillTrait, DatabaseRefillErrorCode, SqlInterfaceRefill,
 };
 use aquarium_control::database::sql_test_query_strings::SQL_TABLE_REFILL;
-use aquarium_control::database::{sql_interface::SqlInterface, sql_interface_error::SqlInterfaceError, sql_test_query_strings};
+use aquarium_control::database::{
+    sql_interface::SqlInterface, sql_interface_error::SqlInterfaceError, sql_test_query_strings,
+};
 use aquarium_control::utilities::config::{read_config_file_with_test_database, ConfigData};
 
 pub struct SqlRefillEvent {
@@ -97,13 +99,13 @@ fn test_sql_interface_refill_new() {
     let result = SqlInterfaceRefill::new(sql_interface.get_connection().unwrap(), 1);
     assert!(
         matches!(
-                result,
-                Err(SqlInterfaceError::DatabaseRefillTableContainsTooManyRows(
-                    _,
-                    _,
-                    _
-                ))
-            ),
+            result,
+            Err(SqlInterfaceError::DatabaseRefillTableContainsTooManyRows(
+                _,
+                _,
+                _
+            ))
+        ),
         "Expected row limit error, but got {:?}",
         result
     );
@@ -147,8 +149,7 @@ pub fn test_sql_interface_refill() {
     let mut sql_interface: SqlInterface = SqlInterface::new(config.sql_interface)
         .expect("Initialization of SQL interface for test failed.");
     let mut sql_interface_refill =
-        SqlInterfaceRefill::new(sql_interface.get_connection().unwrap(), max_rows_refill)
-            .unwrap();
+        SqlInterfaceRefill::new(sql_interface.get_connection().unwrap(), max_rows_refill).unwrap();
 
     // *** check timestamp of last refill *************************************************
     match SqlInterface::truncate_table(&mut sql_interface, SQL_TABLE_REFILL.to_string()) {
@@ -159,12 +160,12 @@ pub fn test_sql_interface_refill() {
     }
     assert!(sql_interface_refill.check_empty().is_ok());
     assert!(matches!(
-            sql_interface_refill.get_last_refill_timestamp(),
-            Err(SqlInterfaceError::TimestampRequestFailure {
-                location: _,
-                query: _
-            })
-        ));
+        sql_interface_refill.get_last_refill_timestamp(),
+        Err(SqlInterfaceError::TimestampRequestFailure {
+            location: _,
+            query: _
+        })
+    ));
     println!("* checking timestamp of last refill (FAIL) succeeded.");
     // **************************************************************************************
 
@@ -186,8 +187,7 @@ pub fn test_sql_interface_refill() {
     //**************************************************************************************
 
     //*** check duration since last refill - **************************************************
-    let duration_since_last_refill = match sql_interface_refill.get_duration_since_last_refill()
-    {
+    let duration_since_last_refill = match sql_interface_refill.get_duration_since_last_refill() {
         Ok(c) => c,
         Err(e) => panic!("Could not calculate duration since last refill: {e:?}"),
     };
@@ -204,31 +204,30 @@ pub fn test_sql_interface_refill() {
     //**************************************************************************************
 
     // *** check refill count of last 24h (zero) - *********************************************
-    let refill_count_of_last_24h_zero =
-        match sql_interface_refill.get_refill_count_of_last_24h() {
-            Ok(c) => c,
-            Err(e) => panic!("Could not get refill count from last 24h (target=0): {e:?}"),
-        };
+    let refill_count_of_last_24h_zero = match sql_interface_refill.get_refill_count_of_last_24h() {
+        Ok(c) => c,
+        Err(e) => panic!("Could not get refill count from last 24h (target=0): {e:?}"),
+    };
     assert_eq!(refill_count_of_last_24h_zero, 0);
     println!("* checking refill count of last 24h (target zero) succeeded.");
     // **************************************************************************************
 
     // *** check refill count of last hour (zero) - ********************************************
-    let refill_count_of_last_hour_zero =
-        match sql_interface_refill.get_refill_count_of_last_hour() {
-            Ok(c) => c,
-            Err(e) => panic!("Could not get refill count from last hour (target=0): {e:?}"),
-        };
+    let refill_count_of_last_hour_zero = match sql_interface_refill.get_refill_count_of_last_hour()
+    {
+        Ok(c) => c,
+        Err(e) => panic!("Could not get refill count from last hour (target=0): {e:?}"),
+    };
     assert_eq!(refill_count_of_last_hour_zero, 0);
     println!("* checking refill count of last hour (target zero) succeeded.");
     // **************************************************************************************
 
     //*** check refill volume of last 24h (zero) - *********************************************
-    let refill_volume_of_last_24h_zero =
-        match sql_interface_refill.get_refill_volume_of_last_24h() {
-            Ok(c) => c,
-            Err(e) => panic!("Could not get refill volume from last 24h (target=0): {e:?}"),
-        };
+    let refill_volume_of_last_24h_zero = match sql_interface_refill.get_refill_volume_of_last_24h()
+    {
+        Ok(c) => c,
+        Err(e) => panic!("Could not get refill volume from last 24h (target=0): {e:?}"),
+    };
     assert_eq!(refill_volume_of_last_24h_zero, 0.0);
     println!("* checking refill volume of last 24h (target zero) succeeded.");
     // **************************************************************************************
@@ -256,8 +255,7 @@ pub fn test_sql_interface_refill() {
             panic!("Could not insert refill event in data base for test preparation: {e:?}")
         }
     }
-    let refill_count_of_last_24h_one = match sql_interface_refill.get_refill_count_of_last_24h()
-    {
+    let refill_count_of_last_24h_one = match sql_interface_refill.get_refill_count_of_last_24h() {
         Ok(c) => c,
         Err(e) => panic!("Could not get refill count from last 24h (target=1): {e:?}"),
     };
@@ -266,11 +264,10 @@ pub fn test_sql_interface_refill() {
     // **************************************************************************************
 
     // *** check refill volume of last 24h (one) - *********************************************
-    let refill_volume_of_last_24h_one =
-        match sql_interface_refill.get_refill_volume_of_last_24h() {
-            Ok(c) => c,
-            Err(e) => panic!("Could not get refill volume from last 24h (target=0.25): {e:?}"),
-        };
+    let refill_volume_of_last_24h_one = match sql_interface_refill.get_refill_volume_of_last_24h() {
+        Ok(c) => c,
+        Err(e) => panic!("Could not get refill volume from last 24h (target=0.25): {e:?}"),
+    };
     assert_eq!(refill_volume_of_last_24h_one, 0.25);
     println!("* checking refill volume (target non-zero) succeeded.");
     // **************************************************************************************
@@ -288,21 +285,20 @@ pub fn test_sql_interface_refill() {
             panic!("Could not insert refill event in data base for test preparation: {e:?}")
         }
     }
-    let refill_count_of_last_hour_one =
-        match sql_interface_refill.get_refill_count_of_last_hour() {
-            Ok(c) => c,
-            Err(e) => panic!("Could not get refill count from last hour (target=1): {e:?}"),
-        };
+    let refill_count_of_last_hour_one = match sql_interface_refill.get_refill_count_of_last_hour() {
+        Ok(c) => c,
+        Err(e) => panic!("Could not get refill count from last hour (target=1): {e:?}"),
+    };
     assert_eq!(refill_count_of_last_hour_one, 1);
     println!("* checking refill count of last hour (target non-zero) succeeded.");
     // **************************************************************************************
 
     // *** check refill volume of last hour (one) - *********************************************
-    let refill_volume_of_last_hour_one =
-        match sql_interface_refill.get_refill_volume_of_last_hour() {
-            Ok(c) => c,
-            Err(e) => panic!("Could not get refill volume from last hour (target=0.25): {e:?}"),
-        };
+    let refill_volume_of_last_hour_one = match sql_interface_refill.get_refill_volume_of_last_hour()
+    {
+        Ok(c) => c,
+        Err(e) => panic!("Could not get refill volume from last hour (target=0.25): {e:?}"),
+    };
     assert_eq!(refill_volume_of_last_hour_one, 0.25);
     println!("* checking refill volume (target non-zero) succeeded.");
     // **************************************************************************************
@@ -331,7 +327,7 @@ pub fn test_sql_interface_refill() {
             single_refill_event_entry_array[0].timestamp.as_str(),
             "%Y-%m-%d %H:%M:%S",
         )
-            .expect("conversion of timestamp to NaiveDate failed."),
+        .expect("conversion of timestamp to NaiveDate failed."),
         duration: single_refill_event_entry_array[0].duration,
         volume: single_refill_event_entry_array[0].volume,
         error_code: single_refill_event_entry_array[0].error_code,
@@ -348,12 +344,12 @@ pub fn test_sql_interface_refill() {
     // refill table already has three rows at this point.
     let test_result = SqlInterfaceRefill::new(sql_interface.get_connection().unwrap(), 1);
     assert!(matches!(
-            test_result,
-            Err(SqlInterfaceError::DatabaseRefillTableContainsTooManyRows(
-                _,
-                _,
-                _
-            ))
-        ));
+        test_result,
+        Err(SqlInterfaceError::DatabaseRefillTableContainsTooManyRows(
+            _,
+            _,
+            _
+        ))
+    ));
     // **************************************************************************************
 }
