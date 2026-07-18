@@ -66,7 +66,7 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 //!   pre-configured parameters from a TOML file, and dynamic setpoints fetched from
 //!   a database.
 
-#[cfg(not(test))] // only required in real-life execution
+#[cfg(all(not(test), not(feature = "test-utils")))] // only required in real-life execution
 use log::{info, warn};
 
 use crate::database::thermal_set_value_updater_trait::ThermalSetValueUpdaterTrait;
@@ -434,7 +434,7 @@ impl Ventilation {
                 break;
             }
             if stop_command_received {
-                #[cfg(not(test))] // only required in real-life execution
+                #[cfg(all(not(test), not(feature = "test-utils")))] // only required in real-life execution
                 #[cfg(not(tarpaulin_include))]
                 info!(
                     target: module_path!(),
@@ -443,7 +443,7 @@ impl Ventilation {
                 ventilation_inhibited = true;
             }
             if start_command_received {
-                #[cfg(not(test))] // only required in real-life execution
+                #[cfg(all(not(test), not(feature = "test-utils")))] // only required in real-life execution
                 #[cfg(not(tarpaulin_include))]
                 info!(
                     target: module_path!(),
@@ -505,7 +505,7 @@ impl Ventilation {
                     );
                     ventilation_state = ActuatorState::Off;
                     self.actuator_disabled = true;
-                    #[cfg(not(test))] // only required in real-life execution
+                    #[cfg(all(not(test), not(feature = "test-utils")))] // only required in real-life execution
                     #[cfg(not(tarpaulin_include))]
                     warn!("[{}]: Disabled ventilation because temperature gradient monitor indicates ineffectiveness.", module_path!());
                 }
@@ -629,7 +629,7 @@ impl Ventilation {
 
             if execution_duration > cycle_time_duration {
                 if !lock_warn_cycle_time_exceeded && !actuation_mutex_was_blocked_during_actuation {
-                    #[cfg(not(test))] // only required in real-life execution
+                    #[cfg(all(not(test), not(feature = "test-utils")))] // only required in real-life execution
                     #[cfg(not(tarpaulin_include))]
                     warn!(target: module_path!(),
                         "execution duration of {} milliseconds exceeds cycle time of {}",

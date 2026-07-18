@@ -52,7 +52,7 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 
 use log::{error, warn};
 
-#[cfg(not(test))] // only required in real-life execution
+#[cfg(all(not(test), not(feature = "test-utils")))] // only required in real-life execution
 use log::info;
 
 use crate::food::{feed::Feed, food_injection::FoodInjection};
@@ -147,7 +147,7 @@ pub trait ProcessExternalRequestTrait {
                         InternalCommand::Start => (true, false),
                         InternalCommand::Stop => (false, true),
                         _ => {
-                            #[cfg(not(test))] // only required in real-life execution
+                            #[cfg(all(not(test), not(feature = "test-utils")))] // only required in real-life execution
                             #[cfg(not(tarpaulin_include))]
                             warn!(
                                 target: module_path!(),
@@ -162,7 +162,7 @@ pub trait ProcessExternalRequestTrait {
                             AquaChannelError::Full => { /* Not applicable. Do nothing */ }
                             AquaChannelError::Empty => { /* empty buffer - no action required */ }
                             AquaChannelError::Disconnected => {
-                                #[cfg(not(test))] // only required in real-life execution
+                                #[cfg(all(not(test), not(feature = "test-utils")))] // only required in real-life execution
                                 #[cfg(not(tarpaulin_include))]
                                 error!(
                                     target: module_path!(),
@@ -228,7 +228,7 @@ impl ProcessExternalRequestTrait for Refill {
                     AquaChannelError::Full => { /* Not applicable. Do nothing */ }
                     AquaChannelError::Empty => { /* empty buffer - no action required */ }
                     AquaChannelError::Disconnected => {
-                        #[cfg(not(test))] // only required in real-life execution
+                        #[cfg(all(not(test), not(feature = "test-utils")))] // only required in real-life execution
                         #[cfg(not(tarpaulin_include))]
                         error!(
                             target: module_path!(),
@@ -247,7 +247,7 @@ impl ProcessExternalRequestTrait for Refill {
                         InternalCommand::Start => (true, false),
                         InternalCommand::Stop => (false, true),
                         InternalCommand::ResetAllErrors => {
-                            #[cfg(not(test))] // only required in real-life execution
+                            #[cfg(all(not(test), not(feature = "test-utils")))] // only required in real-life execution
                             #[cfg(not(tarpaulin_include))]
                             info!(
                                 target: module_path!(),
@@ -257,7 +257,7 @@ impl ProcessExternalRequestTrait for Refill {
                             (false, false)
                         }
                         _ => {
-                            #[cfg(not(test))] // only required in real-life execution
+                            #[cfg(all(not(test), not(feature = "test-utils")))] // only required in real-life execution
                             #[cfg(not(tarpaulin_include))]
                             warn!(
                                 target: module_path!(),
@@ -272,7 +272,7 @@ impl ProcessExternalRequestTrait for Refill {
                             AquaChannelError::Full => { /* Not applicable. Do nothing */ }
                             AquaChannelError::Empty => { /* empty buffer - no action required */ }
                             AquaChannelError::Disconnected => {
-                                #[cfg(not(test))] // only required in real-life execution
+                                #[cfg(all(not(test), not(feature = "test-utils")))] // only required in real-life execution
                                 #[cfg(not(tarpaulin_include))]
                                 error!(
                                     target: module_path!(),
@@ -382,7 +382,7 @@ fn process_standard_request(rx_from_signal_handler: &mut AquaReceiver<InternalCo
                 AquaChannelError::Full => { /* Not applicable. Do nothing */ }
                 AquaChannelError::Empty => { /* empty buffer - no action required */ }
                 AquaChannelError::Disconnected => {
-                    #[cfg(not(test))] // only required in real-life execution
+                    #[cfg(all(not(test), not(feature = "test-utils")))] // only required in real-life execution
                     #[cfg(not(tarpaulin_include))]
                     error!(
                         target: module_path!(),
@@ -432,7 +432,7 @@ impl ProcessExternalRequestTrait for Feed {
                             InternalCommand::Start => (true, false, false, 0),
                             InternalCommand::Stop => (false, true, false, 0),
                             InternalCommand::ResetAllErrors => {
-                                #[cfg(not(test))] // only required in real-life execution
+                                #[cfg(all(not(test), not(feature = "test-utils")))] // only required in real-life execution
                                 #[cfg(not(tarpaulin_include))]
                                 info!(
                                     target: module_path!(),
@@ -443,7 +443,7 @@ impl ProcessExternalRequestTrait for Feed {
                             }
                             InternalCommand::Execute(c) => (false, false, true, c),
                             _ => {
-                                #[cfg(not(test))] // only required in real-life execution
+                                #[cfg(all(not(test), not(feature = "test-utils")))] // only required in real-life execution
                                 #[cfg(not(tarpaulin_include))]
                                 warn!(
                                     target: module_path!(),
@@ -459,7 +459,7 @@ impl ProcessExternalRequestTrait for Feed {
                                 AquaChannelError::Empty => { /* empty buffer - no action required */
                                 }
                                 AquaChannelError::Disconnected => {
-                                    #[cfg(not(test))] // only required in real-life execution
+                                    #[cfg(all(not(test), not(feature = "test-utils")))] // only required in real-life execution
                                     #[cfg(not(tarpaulin_include))]
                                     error!(
                                         target: module_path!(),
@@ -523,7 +523,7 @@ impl ProcessExternalRequestTrait for Balling {
                             InternalCommand::Stop => (false, true, false, 0),
                             InternalCommand::Execute(c) => (false, false, true, c),
                             _ => {
-                                #[cfg(not(test))] // only required in real-life execution
+                                #[cfg(all(not(test), not(feature = "test-utils")))] // only required in real-life execution
                                 #[cfg(not(tarpaulin_include))]
                                 warn!(
                                     target: module_path!(),
@@ -539,7 +539,7 @@ impl ProcessExternalRequestTrait for Balling {
                                 AquaChannelError::Empty => { /* empty buffer - no action required */
                                 }
                                 AquaChannelError::Disconnected => {
-                                    #[cfg(not(test))] // only required in real-life execution
+                                    #[cfg(all(not(test), not(feature = "test-utils")))] // only required in real-life execution
                                     #[cfg(not(tarpaulin_include))]
                                     error!(
                                         target: module_path!(),
@@ -598,7 +598,7 @@ impl ProcessExternalRequestTrait for Watchdog {
                         InternalCommand::Start => (true, false),
                         InternalCommand::Stop => (false, true),
                         _ => {
-                            #[cfg(not(test))] // only required in real-life execution
+                            #[cfg(all(not(test), not(feature = "test-utils")))] // only required in real-life execution
                             #[cfg(not(tarpaulin_include))]
                             warn!(
                                 target: module_path!(),
@@ -613,7 +613,7 @@ impl ProcessExternalRequestTrait for Watchdog {
                             AquaChannelError::Full => { /* Not applicable. Do nothing */ }
                             AquaChannelError::Empty => { /* empty buffer - no action required */ }
                             AquaChannelError::Disconnected => {
-                                #[cfg(not(test))] // only required in real-life execution
+                                #[cfg(all(not(test), not(feature = "test-utils")))] // only required in real-life execution
                                 #[cfg(not(tarpaulin_include))]
                                 error!(
                                     target: module_path!(),
@@ -700,7 +700,7 @@ macro_rules! impl_process_request_with_reset_errors {
                                 AquaChannelError::Full => { /* Not applicable. Do nothing */ }
                                 AquaChannelError::Empty => { /* empty buffer - no action required */ }
                                 AquaChannelError::Disconnected => {
-                                    #[cfg(not(test))] // only required in real-life execution
+                                    #[cfg(all(not(test), not(feature = "test-utils")))] // only required in real-life execution
                                     #[cfg(not(tarpaulin_include))]
                                     error!(
                                         target: module_path!(),
@@ -719,7 +719,7 @@ macro_rules! impl_process_request_with_reset_errors {
                                     InternalCommand::Start => (true, false),
                                     InternalCommand::Stop => (false, true),
                                     InternalCommand::ResetAllErrors => {
-                                        #[cfg(not(test))] // only required in real-life execution
+                                        #[cfg(all(not(test), not(feature = "test-utils")))] // only required in real-life execution
                                         #[cfg(not(tarpaulin_include))]
                                         info!(
                                             target: module_path!(),
@@ -730,7 +730,7 @@ macro_rules! impl_process_request_with_reset_errors {
                                         (false, false)
                                     }
                                     _ => {
-                                        #[cfg(not(test))] // only required in real-life execution
+                                        #[cfg(all(not(test), not(feature = "test-utils")))] // only required in real-life execution
                                         #[cfg(not(tarpaulin_include))]
                                         warn!(
                                             target: module_path!(),
@@ -745,7 +745,7 @@ macro_rules! impl_process_request_with_reset_errors {
                                         AquaChannelError::Full => { /* Not applicable. Do nothing */ }
                                         AquaChannelError::Empty => { /* empty buffer - no action required */ }
                                         AquaChannelError::Disconnected => {
-                                            #[cfg(not(test))] // only required in real-life execution
+                                            #[cfg(all(not(test), not(feature = "test-utils")))] // only required in real-life execution
                                             #[cfg(not(tarpaulin_include))]
                                             error!(
                                                 target: module_path!(),

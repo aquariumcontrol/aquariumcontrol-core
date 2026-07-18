@@ -59,12 +59,12 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 //!   (like the Controllino), the `RelayManager` automatically sends a heartbeat at the
 //!   configured interval to maintain the connection.
 
-#[cfg(not(test))] // only required in real-life execution
+#[cfg(all(not(test), not(feature = "test-utils")))] // only required in real-life execution
 use log::error;
 #[cfg(all(not(test), target_os = "linux"))] // only required in real-life execution
 use log::info;
 
-#[cfg(not(test))] // only required in real-life execution
+#[cfg(all(not(test), not(feature = "test-utils")))] // only required in real-life execution
 use log::warn;
 
 #[cfg(feature = "debug_relay_manager")]
@@ -276,7 +276,7 @@ impl RelayManager {
             match actuate_result {
                 Ok(()) => {
                     if attempts > 0 {
-                        #[cfg(not(test))] // only required in real-life execution
+                        #[cfg(all(not(test), not(feature = "test-utils")))] // only required in real-life execution
                         #[cfg(not(tarpaulin_include))]
                         warn!(
                             target: module_path!(),
@@ -504,7 +504,7 @@ impl RelayManager {
             .tx_relay_manager_to_signal_handler
             .send(true)
         {
-            #[cfg(not(test))] // only required in real-life execution
+            #[cfg(all(not(test), not(feature = "test-utils")))] // only required in real-life execution
             #[cfg(not(tarpaulin_include))]
             error!(target: module_path!(), "Sending confirmation to signal handler failed. ({_e:?})");
         };
@@ -557,7 +557,7 @@ impl RelayManager {
                         )
                         .await
                     {
-                        #[cfg(not(test))] // only required in real-life execution
+                        #[cfg(all(not(test), not(feature = "test-utils")))] // only required in real-life execution
                         #[cfg(not(tarpaulin_include))]
                         log_error_chain(
                             module_path!(),
@@ -568,7 +568,7 @@ impl RelayManager {
                 }
                 if let Err(_e) = tx.send(true) {
                     if !lock_send {
-                        #[cfg(not(test))] // only required in real-life execution
+                        #[cfg(all(not(test), not(feature = "test-utils")))] // only required in real-life execution
                         #[cfg(not(tarpaulin_include))]
                         error!(
                             target: module_path!(),
@@ -588,7 +588,7 @@ impl RelayManager {
                 }
                 AquaChannelError::Disconnected => {
                     if !lock_receive {
-                        #[cfg(not(test))] // only required in real-life execution
+                        #[cfg(all(not(test), not(feature = "test-utils")))] // only required in real-life execution
                         #[cfg(not(tarpaulin_include))]
                         error!(
                             "{}: error when trying to receive command from {actuation_name} control ({e:?})",

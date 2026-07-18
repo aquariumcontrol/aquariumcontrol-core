@@ -7,7 +7,7 @@ The above copyright notice and this permission notice shall be included in all c
 THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
-#[cfg(not(test))] // only required in real-life execution
+#[cfg(all(not(test), not(feature = "test-utils")))] // only required in real-life execution
 use log::{info, warn};
 
 use log::error;
@@ -19,7 +19,7 @@ use crate::database::database_interface_feed_trait::DatabaseInterfaceFeedTrait;
 use crate::database::sql_interface::SqlInterface;
 use crate::database::sql_interface_balling::SqlInterfaceBalling;
 use crate::database::sql_interface_data::SqlInterfaceData;
-#[cfg(not(test))] // only required in real-life execution
+#[cfg(all(not(test), not(feature = "test-utils")))] // only required in real-life execution
 use crate::database::sql_interface_error::SqlInterfaceError;
 use crate::database::sql_interface_feed::SqlInterfaceFeed;
 use crate::database::sql_interface_heating_set_vals::SqlInterfaceHeatingSetVals;
@@ -75,7 +75,7 @@ use crate::thermal::thermal_control_status::ThermalControlStatus;
 #[cfg(all(feature = "target_hw", target_os = "linux"))]
 use crate::utilities::channel_content::InternalCommand;
 use crate::utilities::signal_handler::handle_signals;
-#[cfg(not(test))] // only required in real-life execution
+#[cfg(all(not(test), not(feature = "test-utils")))] // only required in real-life execution
 use crate::utilities::version_information::VersionInformation;
 #[cfg(all(not(test), not(feature = "test-utils")))] // only required in real-life execution
 use crate::utilities::version_information::VersionInformationError;
@@ -373,11 +373,11 @@ pub fn run(
     setup_logger(config.logger).map_err(|e| StartupError::LoggingSetupFailure { source: e })?;
 
     // calculate hash of executable
-    #[cfg(not(test))] // only required in real-life execution
+    #[cfg(all(not(test), not(feature = "test-utils")))] // only required in real-life execution
     #[cfg(not(tarpaulin_include))]
     let version_information = VersionInformation::new()
         .map_err(|e| StartupError::VersionInformationRetrievalFailure { source: e })?;
-    #[cfg(not(test))] // only required in real-life execution
+    #[cfg(all(not(test), not(feature = "test-utils")))] // only required in real-life execution
     #[cfg(not(tarpaulin_include))]
     info!(target: module_path!(), "{version_information}");
 
@@ -575,11 +575,11 @@ pub fn run(
             source: Box::new(e),
         })?;
 
-    #[cfg(not(test))] // only required in real-life execution
+    #[cfg(all(not(test), not(feature = "test-utils")))] // only required in real-life execution
     #[cfg(not(tarpaulin_include))]
     match sql_interface.get_hash_from_database(&version_information) {
         Ok(c) => {
-            #[cfg(not(test))] // only required in real-life execution
+            #[cfg(all(not(test), not(feature = "test-utils")))] // only required in real-life execution
             #[cfg(not(tarpaulin_include))]
             info!(
                 target: module_path!(),
@@ -596,7 +596,7 @@ pub fn run(
                 e,
                 SqlInterfaceError::SingleVersionRequestMultipleResults(_, _, _, _, _)
             ) {
-                #[cfg(not(test))] // only required in real-life execution
+                #[cfg(all(not(test), not(feature = "test-utils")))] // only required in real-life execution
                 #[cfg(not(tarpaulin_include))]
                 warn!(
                     target: module_path!(),
@@ -609,14 +609,14 @@ pub fn run(
         }
     }
 
-    #[cfg(not(test))] // only required in real-life execution
+    #[cfg(all(not(test), not(feature = "test-utils")))] // only required in real-life execution
     #[cfg(not(tarpaulin_include))]
     let database = sql_interface
         .get_database()
         .map_err(|e| StartupError::Database {
             source: Box::new(e),
         })?;
-    #[cfg(not(test))] // only required in real-life execution
+    #[cfg(all(not(test), not(feature = "test-utils")))] // only required in real-life execution
     #[cfg(not(tarpaulin_include))]
     info!(target: module_path!(), "current database name is {database}");
 
@@ -625,7 +625,7 @@ pub fn run(
         .map_err(|e| StartupError::Database {
             source: Box::new(e),
         })?;
-    #[cfg(not(test))] // only required in real-life execution
+    #[cfg(all(not(test), not(feature = "test-utils")))] // only required in real-life execution
     #[cfg(not(tarpaulin_include))]
     info!(target: module_path!(), "required tables are existing in database.");
 
@@ -634,7 +634,7 @@ pub fn run(
         tables_string += " ";
         tables_string += &table;
     }
-    #[cfg(not(test))] // only required in real-life execution
+    #[cfg(all(not(test), not(feature = "test-utils")))] // only required in real-life execution
     #[cfg(not(tarpaulin_include))]
     info!(target: module_path!(), "{tables_string}");
 
@@ -957,19 +957,19 @@ pub fn run(
 
     // give sensor reading components some time so that they can acquire a first data set
     let duration_one_second = Duration::from_secs(1);
-    #[cfg(not(test))] // only required in real-life execution
+    #[cfg(all(not(test), not(feature = "test-utils")))] // only required in real-life execution
     #[cfg(not(tarpaulin_include))]
     println!("trying to acquire data before starting control in 3 seconds...");
     spin_sleeper.sleep(duration_one_second);
-    #[cfg(not(test))] // only required in real-life execution
+    #[cfg(all(not(test), not(feature = "test-utils")))] // only required in real-life execution
     #[cfg(not(tarpaulin_include))]
     println!("trying to acquire data before starting control in 2 seconds...");
     spin_sleeper.sleep(duration_one_second);
-    #[cfg(not(test))] // only required in real-life execution
+    #[cfg(all(not(test), not(feature = "test-utils")))] // only required in real-life execution
     #[cfg(not(tarpaulin_include))]
     println!("trying to acquire data before starting control in 1 second...");
     spin_sleeper.sleep(duration_one_second);
-    #[cfg(not(test))] // only required in real-life execution
+    #[cfg(all(not(test), not(feature = "test-utils")))] // only required in real-life execution
     #[cfg(not(tarpaulin_include))]
     println!("starting control...");
 

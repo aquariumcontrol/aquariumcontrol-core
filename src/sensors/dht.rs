@@ -706,7 +706,7 @@ impl Dht {
     /// # Arguments
     /// * `reset_sensor` - A parameter representing `reset_sensor`.
     pub fn read(&self, _reset_sensor: bool) -> DhtResult {
-        if cfg!(test) {
+        if cfg!(test) || cfg!(feature = "test-utils") {
             Ok((0.0, 0.0))
         } else {
             Err(DhtError::IncorrectPlatform(module_path!().to_string()))

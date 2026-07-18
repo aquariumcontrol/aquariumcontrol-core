@@ -63,9 +63,9 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 use log::debug;
 use log::error;
 #[cfg(any(
-    all(target_os = "linux", not(test)), // only required in real-life execution
+    all(target_os = "linux", not(test), not(feature = "test-utils")), // only required in real-life execution
     feature = "debug_signal_handler",
-    not(test) // only required in real-life execution
+    all(not(test), not(feature = "test-utils")), // only required in real-life execution
 ))]
 use log::info;
 
@@ -212,7 +212,7 @@ pub async fn handle_signals(
     execution_config: ExecutionConfig,
     #[cfg(any(test, feature = "test-utils"))] wait_for_test_shutdown_opt: Option<Duration>,
 ) {
-    #[cfg(all(target_os = "linux", not(test)))] // only required in real-life execution
+    #[cfg(all(target_os = "linux", not(test), not(feature = "test-utils")))] // only required in real-life execution
     #[cfg(not(tarpaulin_include))]
     info!(target: module_path!(), "Thread started with TID: {}", gettid());
 
@@ -281,7 +281,7 @@ pub async fn handle_signals(
         }
         tokio::time::sleep(sleep_duration_hundred_milli_sec).await;
     }
-    #[cfg(not(test))] // only required in real-life execution
+    #[cfg(all(not(test), not(feature = "test-utils")))] // only required in real-life execution
     #[cfg(not(tarpaulin_include))]
     info!(
         target: module_path!(),
