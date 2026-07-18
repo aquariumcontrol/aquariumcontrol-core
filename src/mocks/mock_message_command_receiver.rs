@@ -6,41 +6,37 @@ The above copyright notice and this permission notice shall be included in all c
 
 THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
-#[cfg(test)]
-#[cfg(target_os = "linux")]
-pub mod tests {
-    use crate::launch::channels::AquaReceiver;
-    use crate::utilities::channel_content::InternalCommand;
-    /// Performs the `mock_message_command_receiver` operation.
-    ///
-    /// # Arguments
-    /// * `rx_message_command` - A parameter representing `rx_message_command`.
-    pub fn mock_message_command_receiver(
-        mut rx_message_command: AquaReceiver<InternalCommand>,
-    ) -> Vec<InternalCommand> {
-        let mut commands_received: Vec<InternalCommand> = Vec::new();
+#![cfg(target_os = "linux")]
 
-        loop {
-            match rx_message_command.blocking_recv() {
-                Ok(command) => match command {
-                    InternalCommand::Quit => {
-                        // println!("{}: received quit command", module_path!());
-                        break;
-                    }
-                    _ => {
-                        // println!("{}: received command {}", module_path!(), command);
-                        commands_received.push(command);
-                    }
-                },
-                Err(e) => {
-                    panic!(
-                        "{}: error occurred when receiving message from message thread via channel ({e:?}).",
-                        module_path!()
-                    );
+use crate::launch::channels::AquaReceiver;
+use crate::utilities::channel_content::InternalCommand;
+
+pub fn mock_message_command_receiver(
+    mut rx_message_command: AquaReceiver<InternalCommand>,
+) -> Vec<InternalCommand> {
+    let mut commands_received: Vec<InternalCommand> = Vec::new();
+
+    loop {
+        match rx_message_command.blocking_recv() {
+            Ok(command) => match command {
+                InternalCommand::Quit => {
+                    // println!("{}: received quit command", module_path!());
+                    break;
                 }
+                _ => {
+                    // println!("{}: received command {}", module_path!(), command);
+                    commands_received.push(command);
+                }
+            },
+            Err(e) => {
+                panic!(
+                    "{}: error occurred when receiving message from message thread via channel ({e:?}).",
+                    module_path!()
+                );
             }
         }
-
-        commands_received
     }
+
+    commands_received
 }
+
