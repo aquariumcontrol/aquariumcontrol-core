@@ -93,7 +93,7 @@ use crate::launch::privilege_check::is_running_as_root;
 use spin_sleep::SpinSleeper;
 #[cfg(any(test, not(target_os = "linux"), not(feature = "target_hw")))]
 use std::collections::HashMap;
-#[cfg(not(test))] // only required in real-life execution
+#[cfg(not(any(test, feature = "test-utils")))] // only required in real-life execution
 use std::env;
 pub use std::sync::{atomic::AtomicBool, Arc, Mutex};
 use std::{panic, time::Duration};
@@ -106,7 +106,7 @@ cfg_if::cfg_if! {
     }
 }
 
-#[cfg(not(test))] // only required in real-life execution
+#[cfg(all(not(test), not(feature = "test-utils")))] // only required in real-life execution
 #[cfg(not(tarpaulin_include))]
 /// Displays the valid command line parameter combinations
 fn display_usage() {
@@ -115,7 +115,7 @@ fn display_usage() {
     println!("-v, --version: Output version information including hash of executable.");
 }
 
-#[cfg(not(test))] // only required in real-life execution
+#[cfg(all(not(test), not(feature = "test-utils")))] // only required in real-life execution
 #[cfg(not(tarpaulin_include))]
 /// Checks if a command-line argument is a recognized command and executes it.
 ///

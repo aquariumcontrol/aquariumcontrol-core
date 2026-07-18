@@ -98,7 +98,7 @@ cfg_if::cfg_if! {
     }
 }
 cfg_if::cfg_if! {
-    if #[cfg(all(target_os = "linux", not(test)))] { // only required in real-life execution
+    if #[cfg(all(target_os = "linux", not(test), not(feature = "test-utils")))] { // only required in real-life execution
         use log::info;
     }
 }
