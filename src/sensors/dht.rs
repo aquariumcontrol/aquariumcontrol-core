@@ -92,13 +92,8 @@ use std::time::{Duration, Instant};
 use crate::utilities::logger::log_error_chain;
 
 cfg_if::cfg_if! {
-    if #[cfg(all(not(test), target_os = "linux", feature = "target_hw"))] { // only required in real-life execution
-        use nix::unistd::gettid;
-        use log::info;
-    }
-}
-cfg_if::cfg_if! {
     if #[cfg(all(target_os = "linux", not(test), not(feature = "test-utils")))] { // only required in real-life execution
+        use nix::unistd::gettid;
         use log::info;
     }
 }
@@ -109,8 +104,6 @@ cfg_if::cfg_if! {
 
         #[cfg(feature = "debug_dht")]
         use log::debug;
-    }
-    else {
     }
 }
 
