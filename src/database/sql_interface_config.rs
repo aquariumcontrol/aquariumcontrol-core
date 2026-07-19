@@ -65,7 +65,7 @@ pub struct SqlInterfaceConfig {
     /// array of required tables
     pub db_tables: Vec<String>,
 
-    /// minimum wait timout - application checks server variable before execution
+    /// minimum wait timeout - application checks server variable before execution
     pub db_min_wait_timeout: u64,
 
     /// the database-ping interval in seconds

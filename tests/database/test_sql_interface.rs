@@ -451,7 +451,8 @@ pub fn test_sql_interface_min_wait_timeout_check() {
         "config/aquarium_control_test_generic.toml".to_string(),
         28,
     );
-    config.sql_interface.db_min_wait_timeout = 1000000;
+    // set an extraordinary high value so that implementation returns with error
+    config.sql_interface.db_min_wait_timeout = 100_000_000;
     println!("Testing with database {}", config.sql_interface.db_name);
     let result = SqlInterface::new(config.sql_interface);
 
