@@ -13,4 +13,5 @@ mod sensors {
     mod test_atlas_scientific_oem;
     mod test_dht;
     mod test_ds18b20;
+    mod test_gpio_handler;
 }
