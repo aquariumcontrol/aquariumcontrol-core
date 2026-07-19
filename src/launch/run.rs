@@ -80,16 +80,19 @@ use crate::utilities::version_information::VersionInformation;
 #[cfg(all(not(test), not(feature = "test-utils")))] // only required in real-life execution
 use crate::utilities::version_information::VersionInformationError;
 
+#[cfg(not(any(test, feature = "test-utils")))]
+use crate::launch::argument_parser::check_argument_for_valid_config_file_name;
+#[cfg(all(
+    any(target_os = "linux", target_os = "macos"),
+    not(any(test, feature = "test-utils"))
+))]
+use crate::launch::privilege_check::is_running_as_root;
 use crate::watchmen::monitors::Monitors;
 use crate::watchmen::petting::Petting;
 use crate::watchmen::watchdog::Watchdog;
 use crate::water::refill::Refill;
 use crate::water::refill_status::RefillStatus;
 use crate::water::water_injection::WaterInjection;
-#[cfg(not(any(test, feature = "test-utils")))]
-use crate::launch::argument_parser::check_argument_for_valid_config_file_name;
-#[cfg(all(any(target_os = "linux", target_os = "macos"), not(any(test, feature = "test-utils"))))]
-use crate::launch::privilege_check::is_running_as_root;
 use spin_sleep::SpinSleeper;
 #[cfg(any(test, not(target_os = "linux"), not(feature = "target_hw")))]
 use std::collections::HashMap;
@@ -382,7 +385,10 @@ pub fn run(
     info!(target: module_path!(), "{version_information}");
 
     // check if the user has root privileges - disabled when developing on the Windows platform
-    #[cfg(all(any(target_os = "linux", target_os = "macos"), not(any(test, feature = "test-utils"))))]
+    #[cfg(all(
+        any(target_os = "linux", target_os = "macos"),
+        not(any(test, feature = "test-utils"))
+    ))]
     if !is_running_as_root() {
         return Err(StartupError::NotRoot);
     }

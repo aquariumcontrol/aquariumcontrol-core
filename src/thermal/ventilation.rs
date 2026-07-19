@@ -86,7 +86,8 @@ use crate::utilities::check_mutex_access_duration::CheckMutexAccessDurationTrait
 use crate::utilities::logger::log_error_chain;
 use crate::utilities::wait_for_termination::WaitForTerminationTrait;
 use crate::{perform_schedule_check, update_thermal_set_values};
-#[cfg(all(not(test), not(feature = "test-utils"), target_os = "linux"))] // only required in real-life execution
+#[cfg(all(not(test), not(feature = "test-utils"), target_os = "linux"))]
+// only required in real-life execution
 use nix::unistd::gettid;
 
 const CYCLE_TIME_VENTILATION_MILLIS: u64 = 500;

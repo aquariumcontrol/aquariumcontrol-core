@@ -72,7 +72,8 @@ use crate::sensors::i2c_interface_channels::I2cInterfaceChannels;
 use crate::sensors::i2c_interface_config::I2cInterfaceConfig;
 use crate::utilities::proc_ext_req::ProcessExternalRequestTrait;
 
-#[cfg(all(not(test), not(feature = "test-utils"), target_os = "linux"))] // only required in real-life execution
+#[cfg(all(not(test), not(feature = "test-utils"), target_os = "linux"))]
+// only required in real-life execution
 use nix::unistd::gettid;
 
 cfg_if::cfg_if! {

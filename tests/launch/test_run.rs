@@ -7,18 +7,18 @@ The above copyright notice and this permission notice shall be included in all c
 THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
+use aquarium_control::database::sql_interface::SqlInterface;
 /// The test of the main entry point of the Aquarium Control application.
 use aquarium_control::launch::run::run;
+use aquarium_control::utilities::config::read_config_file;
 use aquarium_control::utilities::signal_handler::TEST_SHUTDOWN_TRIGGER;
 use std::sync::atomic::Ordering;
 use std::time::Duration;
-use aquarium_control::database::sql_interface::SqlInterface;
-use aquarium_control::utilities::config::read_config_file;
 
 #[path = "../database/common.rs"]
 mod common;
 
-use common::{truncate_all_tables, insert_current_version_information, add_balling_profile};
+use common::{add_balling_profile, insert_current_version_information, truncate_all_tables};
 
 #[test]
 fn test_run_async_runtime_configuration() {
@@ -37,15 +37,24 @@ fn test_run_async_runtime_configuration() {
         let mut sql_interface = SqlInterface::new(config_data.sql_interface).unwrap();
 
         truncate_all_tables(&mut sql_interface);
-        
+
         // Also clean up other settings tables to prevent row limits issues
         use aquarium_control::database::sql_test_query_strings::{
             SQL_TABLE_BALLING_SET_VALS, SQL_TABLE_HEATING_SET_VALS, SQL_TABLE_SCHEDULE,
             SQL_TABLE_VENTILATION_SET_VALS,
         };
-        let _ = SqlInterface::truncate_table(&mut sql_interface, SQL_TABLE_BALLING_SET_VALS.to_string());
-        let _ = SqlInterface::truncate_table(&mut sql_interface, SQL_TABLE_HEATING_SET_VALS.to_string());
-        let _ = SqlInterface::truncate_table(&mut sql_interface, SQL_TABLE_VENTILATION_SET_VALS.to_string());
+        let _ = SqlInterface::truncate_table(
+            &mut sql_interface,
+            SQL_TABLE_BALLING_SET_VALS.to_string(),
+        );
+        let _ = SqlInterface::truncate_table(
+            &mut sql_interface,
+            SQL_TABLE_HEATING_SET_VALS.to_string(),
+        );
+        let _ = SqlInterface::truncate_table(
+            &mut sql_interface,
+            SQL_TABLE_VENTILATION_SET_VALS.to_string(),
+        );
         let _ = SqlInterface::truncate_table(&mut sql_interface, SQL_TABLE_SCHEDULE.to_string());
         let _ = SqlInterface::truncate_table(&mut sql_interface, "version".to_string());
 
@@ -64,10 +73,7 @@ fn test_run_async_runtime_configuration() {
     }
 
     // Run the main application run() function with 50 seconds test shutdown duration
-    let run_result = run(
-        Some(config_path),
-        Some(Duration::from_secs(20))
-    );
+    let run_result = run(Some(config_path), Some(Duration::from_secs(20)));
 
     assert!(
         run_result.is_ok(),

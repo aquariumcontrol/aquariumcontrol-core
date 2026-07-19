@@ -13,11 +13,11 @@ use chrono::{DateTime, Local, NaiveDate, SubsecRound, TimeZone};
 use mysql::params;
 use mysql::prelude::Queryable;
 
+use crate::database::common::insert_mock_version_information;
 use aquarium_control::database::sql_interface::{SqlInterface, SqlInterfaceError};
 use aquarium_control::database::sql_test_query_strings::SQL_QUERY_WRITE_VERSION_INFORMATION;
 use aquarium_control::utilities::config::{read_config_file_with_test_database, ConfigData};
 use aquarium_control::utilities::version_information::VersionInformation;
-use crate::database::common::insert_mock_version_information;
 
 #[test]
 // This test case checks the functionality of get_string_array_from_database.

@@ -39,4 +39,3 @@ pub fn mock_message_command_receiver(
 
     commands_received
 }
-

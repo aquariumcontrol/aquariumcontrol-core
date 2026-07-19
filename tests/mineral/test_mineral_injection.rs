@@ -9,10 +9,12 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 
 //! Tests the physical actuation of a single mineral dosing pump.
 
+use all_asserts::{assert_ge, assert_le};
 use aquarium_control::launch::channels::{AquaReceiver, AquaSender, Channels};
 use aquarium_control::mineral::mineral_injection::{MineralInjection, MineralInjectionTrait};
-use aquarium_control::utilities::channel_content::{ActuatorState, AquariumDevice, InternalCommand};
-use all_asserts::{assert_ge, assert_le};
+use aquarium_control::utilities::channel_content::{
+    ActuatorState, AquariumDevice, InternalCommand,
+};
 use spin_sleep::SpinSleeper;
 use std::thread::scope;
 use std::time::Duration;
@@ -187,13 +189,13 @@ pub fn test_mineral_dosing_happy_case() {
                 );
             assert!(!quit_command_received);
             assert_ge!(
-                    actual_dosing_duration_millis,
-                    target_dosing_duration_millis - 5
-                );
+                actual_dosing_duration_millis,
+                target_dosing_duration_millis - 5
+            );
             assert_le!(
-                    actual_dosing_duration_millis,
-                    target_dosing_duration_millis + 5
-                );
+                actual_dosing_duration_millis,
+                target_dosing_duration_millis + 5
+            );
         });
     });
 }

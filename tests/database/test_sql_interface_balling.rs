@@ -9,6 +9,7 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 
 //! Tests all database interactions for the Balling dosing system.
 
+use crate::database::common::add_balling_profile;
 use all_asserts::assert_le;
 use aquarium_control::database::sql_interface_balling::SqlInterfaceBalling;
 use aquarium_control::database::sql_test_query_strings::{
@@ -25,7 +26,6 @@ use chrono::NaiveDateTime;
 use mysql::{params, prelude::Queryable};
 use spin_sleep::SpinSleeper;
 use std::time::Duration;
-use crate::database::common::add_balling_profile;
 
 pub struct SqlBallingEvent {
     timestamp: String,

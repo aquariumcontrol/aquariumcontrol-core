@@ -9,14 +9,12 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 
 //! Tests the main control logic for automated Balling mineral dosing.
 
-use std::sync::{Arc, Mutex};
-use std::thread::scope;
-use std::time::{Duration, Instant};
-use spin_sleep::SpinSleeper;
 use aquarium_control::database::sql_interface::SqlInterface;
 use aquarium_control::database::sql_interface_balling::SqlInterfaceBalling;
 use aquarium_control::database::sql_interface_error::SqlInterfaceError;
-use aquarium_control::database::sql_test_query_strings::{SQL_TABLE_BALLING_DOSING_LOG, SQL_TABLE_BALLING_SET_VALS};
+use aquarium_control::database::sql_test_query_strings::{
+    SQL_TABLE_BALLING_DOSING_LOG, SQL_TABLE_BALLING_SET_VALS,
+};
 use aquarium_control::launch::channels::Channels;
 use aquarium_control::mineral::balling::Balling;
 use aquarium_control::mineral::balling_channels::BallingChannels;
@@ -24,9 +22,17 @@ use aquarium_control::mineral::balling_error::BallingError;
 use aquarium_control::mineral::mineral_injection::MineralInjectionTrait;
 use aquarium_control::mocks::mock_mineral_injection::tests::MockMineralInjection;
 use aquarium_control::mocks::mock_schedule_check::tests::mock_schedule_check;
-use aquarium_control::utilities::channel_content::AquariumDevice::{PeristalticPump1, PeristalticPump2, PeristalticPump3, PeristalticPump4};
+use aquarium_control::utilities::channel_content::AquariumDevice::{
+    PeristalticPump1, PeristalticPump2, PeristalticPump3, PeristalticPump4,
+};
 use aquarium_control::utilities::channel_content::InternalCommand;
-use aquarium_control::utilities::config::{read_config_file, read_config_file_with_test_database, ConfigData};
+use aquarium_control::utilities::config::{
+    read_config_file, read_config_file_with_test_database, ConfigData,
+};
+use spin_sleep::SpinSleeper;
+use std::sync::{Arc, Mutex};
+use std::thread::scope;
+use std::time::{Duration, Instant};
 
 /// Helper function to execute the balling task inside a test Tokio runtime.
 ///
@@ -52,9 +58,9 @@ fn execute_blocking(
             let is_multi_thread_test = tokio::runtime::Handle::try_current()
                 .map(|h| {
                     matches!(
-                            h.runtime_flavor(),
-                            tokio::runtime::RuntimeFlavor::MultiThread
-                        )
+                        h.runtime_flavor(),
+                        tokio::runtime::RuntimeFlavor::MultiThread
+                    )
                 })
                 .unwrap_or(false);
 
@@ -107,8 +113,7 @@ fn insert_past_dosing_events(
     sql_interface_balling: &mut SqlInterfaceBalling,
 ) {
     // empty the Balling dosing log table
-    match SqlInterface::truncate_table(sql_interface, SQL_TABLE_BALLING_DOSING_LOG.to_string())
-    {
+    match SqlInterface::truncate_table(sql_interface, SQL_TABLE_BALLING_DOSING_LOG.to_string()) {
         Ok(_) => {}
         Err(e) => {
             panic!("Could not prepare test case: {e:?}")
@@ -169,8 +174,7 @@ fn insert_pump_configurations(
         }
     }
     if pump1 {
-        match sql_interface_balling.insert_pump_configuration(1, 4.0, 1.0, "pump1".to_string())
-        {
+        match sql_interface_balling.insert_pump_configuration(1, 4.0, 1.0, "pump1".to_string()) {
             Ok(()) => { /* do nothing */ }
             Err(e) => {
                 panic!(
@@ -181,8 +185,7 @@ fn insert_pump_configurations(
         }
     }
     if pump2 {
-        match sql_interface_balling.insert_pump_configuration(2, 4.0, 1.0, "pump2".to_string())
-        {
+        match sql_interface_balling.insert_pump_configuration(2, 4.0, 1.0, "pump2".to_string()) {
             Ok(()) => { /* do nothing */ }
             Err(e) => {
                 panic!(
@@ -193,8 +196,7 @@ fn insert_pump_configurations(
         }
     }
     if pump3 {
-        match sql_interface_balling.insert_pump_configuration(3, 4.0, 1.0, "pump3".to_string())
-        {
+        match sql_interface_balling.insert_pump_configuration(3, 4.0, 1.0, "pump3".to_string()) {
             Ok(()) => { /* do nothing */ }
             Err(e) => {
                 panic!(
@@ -205,8 +207,7 @@ fn insert_pump_configurations(
         }
     }
     if pump4 {
-        match sql_interface_balling.insert_pump_configuration(4, 4.0, 1.0, "pump4".to_string())
-        {
+        match sql_interface_balling.insert_pump_configuration(4, 4.0, 1.0, "pump4".to_string()) {
             Ok(()) => { /* do nothing */ }
             Err(e) => {
                 panic!(
@@ -243,7 +244,7 @@ pub fn test_balling_initialization_invalid_intervals() {
         max_rows_balling_set_values,
         max_rows_balling_dosing_log,
     )
-        .unwrap();
+    .unwrap();
 
     // create the test object
     let test_result = Balling::new(
@@ -286,7 +287,7 @@ pub fn test_balling_initialization_empty_dosing_log() {
         max_rows_balling_set_values,
         max_rows_balling_dosing_log,
     )
-        .unwrap();
+    .unwrap();
 
     // empty the Balling dosing log table
     SqlInterface::truncate_table(&mut sql_interface, SQL_TABLE_BALLING_DOSING_LOG.to_string())
@@ -308,7 +309,7 @@ pub fn test_balling_initialization_empty_dosing_log() {
         Duration::from_millis(100),
         &mut sql_interface_balling,
     )
-        .unwrap();
+    .unwrap();
 
     // check if the countdown calculation was correct
     assert_eq!(balling.durations_until_next_dosing[0].as_secs(), 0);
@@ -339,7 +340,7 @@ pub fn test_balling_initialization_full_dosing_log() {
         max_rows_balling_set_values,
         max_rows_balling_dosing_log,
     )
-        .unwrap();
+    .unwrap();
 
     insert_pump_configurations(
         &mut sql_interface,
@@ -357,7 +358,7 @@ pub fn test_balling_initialization_full_dosing_log() {
         Duration::from_millis(100),
         &mut sql_interface_balling,
     )
-        .unwrap();
+    .unwrap();
 
     // check if the countdown calculation was correct:
     // the countdown depends on the pump-specific dosing interval and the timing of the last dosing event.
@@ -369,9 +370,9 @@ pub fn test_balling_initialization_full_dosing_log() {
     // dosing log has four entries
     let test_result = SqlInterfaceBalling::new(sql_interface.get_connection().unwrap(), 0, 1);
     assert!(matches!(
-            test_result,
-            Err(SqlInterfaceError::DatabaseBallingDosingLogTableContainsTooManyRows(_, _, _))
-        ));
+        test_result,
+        Err(SqlInterfaceError::DatabaseBallingDosingLogTableContainsTooManyRows(_, _, _))
+    ));
 }
 
 #[test]
@@ -394,10 +395,8 @@ pub fn test_balling_initialization_invalid_dosing_check_interval() {
             panic!("Could not connect to SQL database: {e:?}");
         }
     };
-    match SqlInterface::truncate_table(
-        &mut sql_interface,
-        SQL_TABLE_BALLING_DOSING_LOG.to_string(),
-    ) {
+    match SqlInterface::truncate_table(&mut sql_interface, SQL_TABLE_BALLING_DOSING_LOG.to_string())
+    {
         Ok(_) => {}
         Err(e) => {
             panic!("Could not prepare test case: {e:?}")
@@ -408,7 +407,7 @@ pub fn test_balling_initialization_invalid_dosing_check_interval() {
         max_rows_balling_set_values,
         max_rows_balling_dosing_log,
     )
-        .unwrap();
+    .unwrap();
 
     // create the test object
     let test_result = Balling::new(
@@ -426,9 +425,9 @@ pub fn test_balling_initialization_invalid_dosing_check_interval() {
         Err(e) => {
             println!("Balling initialization correctly returned error: {e:?}. Checking if error type is correct...");
             assert!(matches!(
-                    e,
-                    BallingError::DosingIntervalShorterThanCheckInterval(_, _, _, _)
-                ));
+                e,
+                BallingError::DosingIntervalShorterThanCheckInterval(_, _, _, _)
+            ));
         }
     }
 }
@@ -443,10 +442,8 @@ pub fn test_balling_initialization_zero_check_interval() {
     let max_rows_balling_set_values = config.sql_interface.max_rows_balling_set_values;
     let max_rows_balling_dosing_log = config.sql_interface.max_rows_balling_dosing_log;
     let mut sql_interface = SqlInterface::new(config.sql_interface).unwrap();
-    match SqlInterface::truncate_table(
-        &mut sql_interface,
-        SQL_TABLE_BALLING_DOSING_LOG.to_string(),
-    ) {
+    match SqlInterface::truncate_table(&mut sql_interface, SQL_TABLE_BALLING_DOSING_LOG.to_string())
+    {
         Ok(_) => {}
         Err(e) => {
             panic!("Could not prepare test case: {e:?}")
@@ -457,7 +454,7 @@ pub fn test_balling_initialization_zero_check_interval() {
         max_rows_balling_set_values,
         max_rows_balling_dosing_log,
     )
-        .unwrap();
+    .unwrap();
 
     // create the test object
     let test_result = Balling::new(
@@ -507,11 +504,11 @@ pub fn test_balling_dosing(
 
     match dosing_intervals {
         Some((
-                 dosing_interval_pump1,
-                 dosing_interval_pump2,
-                 dosing_interval_pump3,
-                 dosing_interval_pump4,
-             )) => {
+            dosing_interval_pump1,
+            dosing_interval_pump2,
+            dosing_interval_pump3,
+            dosing_interval_pump4,
+        )) => {
             config.balling.dosing_interval_pump1 = dosing_interval_pump1;
             config.balling.dosing_interval_pump2 = dosing_interval_pump2;
             config.balling.dosing_interval_pump3 = dosing_interval_pump3;
@@ -539,7 +536,7 @@ pub fn test_balling_dosing(
         max_rows_balling_set_values,
         max_rows_balling_dosing_log,
     )
-        .unwrap();
+    .unwrap();
 
     insert_pump_configurations(
         &mut sql_interface,
@@ -562,7 +559,7 @@ pub fn test_balling_dosing(
         Duration::from_millis(100),
         &mut sql_interface_balling,
     )
-        .unwrap();
+    .unwrap();
 
     let mut mock_mineral_injection = MockMineralInjection::new();
 
@@ -622,8 +619,7 @@ pub fn test_balling_dosing(
                 sql_interface_balling,
             );
 
-            let _ =
-                tx_balling_to_schedule_check_for_test_case_finish.send(InternalCommand::Quit);
+            let _ = tx_balling_to_schedule_check_for_test_case_finish.send(InternalCommand::Quit);
 
             println!("{}", mock_mineral_injection);
 
@@ -674,10 +670,8 @@ pub fn test_messaging_stops_starts_balling_dosing() {
             panic!("Could not connect to SQL database: {e:?}");
         }
     };
-    match SqlInterface::truncate_table(
-        &mut sql_interface,
-        SQL_TABLE_BALLING_DOSING_LOG.to_string(),
-    ) {
+    match SqlInterface::truncate_table(&mut sql_interface, SQL_TABLE_BALLING_DOSING_LOG.to_string())
+    {
         Ok(_) => {}
         Err(e) => {
             panic!("Could not prepare test case: {e:?}")
@@ -689,13 +683,11 @@ pub fn test_messaging_stops_starts_balling_dosing() {
         max_rows_balling_set_values,
         max_rows_balling_dosing_log,
     )
-        .unwrap();
+    .unwrap();
 
     // empty the Balling dosing log table
-    match SqlInterface::truncate_table(
-        &mut sql_interface,
-        SQL_TABLE_BALLING_DOSING_LOG.to_string(),
-    ) {
+    match SqlInterface::truncate_table(&mut sql_interface, SQL_TABLE_BALLING_DOSING_LOG.to_string())
+    {
         Ok(_) => {}
         Err(e) => {
             panic!("Could not prepare test case: {e:?}")
@@ -718,7 +710,7 @@ pub fn test_messaging_stops_starts_balling_dosing() {
         Duration::from_millis(100),
         &mut sql_interface_balling,
     )
-        .unwrap();
+    .unwrap();
 
     let mut channels = Channels::new_for_test();
 
@@ -874,8 +866,7 @@ pub fn test_messaging_stops_starts_balling_dosing() {
                 250
             );
 
-            let _ =
-                tx_balling_to_schedule_check_for_test_case_finish.send(InternalCommand::Quit);
+            let _ = tx_balling_to_schedule_check_for_test_case_finish.send(InternalCommand::Quit);
         });
 
         println!(
@@ -904,10 +895,8 @@ pub fn test_check_database_vs_config() {
             panic!("Could not connect to SQL database: {e:?}");
         }
     };
-    match SqlInterface::truncate_table(
-        &mut sql_interface,
-        SQL_TABLE_BALLING_DOSING_LOG.to_string(),
-    ) {
+    match SqlInterface::truncate_table(&mut sql_interface, SQL_TABLE_BALLING_DOSING_LOG.to_string())
+    {
         Ok(_) => {}
         Err(e) => {
             panic!("Could not prepare test case: {e:?}")
@@ -918,7 +907,7 @@ pub fn test_check_database_vs_config() {
         max_rows_balling_set_values,
         max_rows_balling_dosing_log,
     )
-        .unwrap();
+    .unwrap();
 
     // insert a valid pump configuration for pump #1
     insert_pump_configurations(
@@ -937,13 +926,13 @@ pub fn test_check_database_vs_config() {
         &mut sql_interface_balling,
     );
     assert!(matches!(
-            result,
-            Err(BallingError::SetValueRetrievalError {
-                location: _,
-                pump_id: _,
-                source: _
-            })
-        ));
+        result,
+        Err(BallingError::SetValueRetrievalError {
+            location: _,
+            pump_id: _,
+            source: _
+        })
+    ));
 }
 
 #[test]
@@ -976,10 +965,8 @@ pub fn test_balling_dosing_external_requests() {
             panic!("Could not connect to SQL database: {e:?}");
         }
     };
-    match SqlInterface::truncate_table(
-        &mut sql_interface,
-        SQL_TABLE_BALLING_DOSING_LOG.to_string(),
-    ) {
+    match SqlInterface::truncate_table(&mut sql_interface, SQL_TABLE_BALLING_DOSING_LOG.to_string())
+    {
         Ok(_) => {}
         Err(e) => {
             panic!("Could not prepare test case: {e:?}")
@@ -990,7 +977,7 @@ pub fn test_balling_dosing_external_requests() {
         max_rows_balling_set_values,
         max_rows_balling_dosing_log,
     )
-        .unwrap();
+    .unwrap();
 
     insert_pump_configurations(
         &mut sql_interface,
@@ -1013,7 +1000,7 @@ pub fn test_balling_dosing_external_requests() {
         Duration::from_secs(1000),
         &mut sql_interface_balling,
     )
-        .unwrap();
+    .unwrap();
 
     let mut mock_mineral_injection = MockMineralInjection::new();
 
@@ -1102,8 +1089,7 @@ pub fn test_balling_dosing_external_requests() {
                 sql_interface_balling,
             );
 
-            let _ =
-                tx_balling_to_schedule_check_for_test_case_finish.send(InternalCommand::Quit);
+            let _ = tx_balling_to_schedule_check_for_test_case_finish.send(InternalCommand::Quit);
 
             println!("{}", mock_mineral_injection);
 
@@ -1182,9 +1168,3 @@ pub fn test_balling_dosing_schedule_allows_multiple_dosings() {
         Some((3, 5, 7, 9)), // dosing intervals
     );
 }
-
-
-
-
-
-

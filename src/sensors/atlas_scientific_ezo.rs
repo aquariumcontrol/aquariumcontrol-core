@@ -45,7 +45,7 @@ use std::time::{Duration, Instant};
 
 #[allow(dead_code)]
 /// numeric values used in communication with Atlas Scientific sensor units
-pub(crate) mod atlas_scientific_ezo_constants {
+pub mod atlas_scientific_ezo_constants {
     /// command sent to sensor unit for initiating response
     pub const COMMAND_READ: u8 = b'R';
 
@@ -123,7 +123,6 @@ impl AtlasScientificEzo {
     /// * `i2c_address` - The I2C address of the EZO circuit.
     /// * `sleep_time_millis` - The time to wait between sending the read command and reading the response.
     /// * `max_mutex_access_duration_millis` - Threshold for logging mutex contention warnings.
-    #[cfg(any(all(feature = "target_hw", target_os = "linux"), test))]
     pub fn new(
         i2c_address: u16,
         sleep_time_millis: u64,
@@ -436,7 +435,6 @@ impl AtlasScientificDriver for AtlasScientificEzo {
     /// # Arguments
     /// * `atlas_scientific_channels`: MPSC channel pair - not used.
     /// * `signal`: sensor type to be initialized - not used.
-    #[cfg(any(all(target_os = "linux", feature = "target_hw"), test))]
     fn device_init(
         &self,
         _atlas_scientific_channels: &mut AtlasScientificChannels,
@@ -450,7 +448,7 @@ impl AtlasScientificDriver for AtlasScientificEzo {
     ///
     /// # Arguments
     /// * `signal` - sensor type.
-    #[cfg(test)]
+    #[cfg(any(test, feature = "test-utils"))]
     fn get_mutex_access_duration_exceeded(&self, signal: &AquariumSignal) -> bool {
         match signal {
             AquariumSignal::WaterTemperature => self.mutex_temperature_access_duration_exceeded,

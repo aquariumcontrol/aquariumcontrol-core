@@ -11,20 +11,20 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 
 use aquarium_control::database::sql_interface::SqlInterface;
 use aquarium_control::database::sql_interface_data::SqlInterfaceData;
+use aquarium_control::launch::channels::Channels;
 use aquarium_control::launch::startup_error::StartupError;
 use aquarium_control::mocks::mock_data_injection::tests::MockInjectorWithQuit;
-use aquarium_control::recorder::data_logger::DataLogger;
-use aquarium_control::thermal::thermal_control_status::ThermalControlStatus;
-use aquarium_control::utilities::channel_content::InternalCommand;
-use aquarium_control::utilities::config::read_config_file;
-use aquarium_control::launch::channels::Channels;
 use aquarium_control::recorder::data_injection::DataInjectionTrait;
+use aquarium_control::recorder::data_logger::DataLogger;
 use aquarium_control::recorder::data_logger_channels::DataLoggerChannels;
 use aquarium_control::recorder::data_logger_config::DataLoggerConfig;
 use aquarium_control::recorder::data_logger_mutexes::DataLoggerMutexes;
 use aquarium_control::recorder::recorder_data_frame::RecorderDataFrame;
 use aquarium_control::sensors::sensor_manager::SensorManagerSignals;
 use aquarium_control::sensors::tank_level_switch::TankLevelSwitchSignals;
+use aquarium_control::thermal::thermal_control_status::ThermalControlStatus;
+use aquarium_control::utilities::channel_content::InternalCommand;
+use aquarium_control::utilities::config::read_config_file;
 use aquarium_control::utilities::signal_handler_channels::SignalHandlerChannels;
 use aquarium_control::water::refill_status::RefillStatus;
 use assert_float_eq::assert_float_absolute_eq;
@@ -172,8 +172,7 @@ fn test_execute_data_aggregation_and_injection() {
 
     let mock_injector = MockInjectorWithQuit {
         injected_data: captured_data.clone(),
-        tx_signal_handler_to_data_logger: signal_handler_channels
-            .tx_signal_handler_to_data_logger,
+        tx_signal_handler_to_data_logger: signal_handler_channels.tx_signal_handler_to_data_logger,
     };
 
     // 2. Execute
@@ -196,7 +195,7 @@ fn test_execute_data_aggregation_and_injection() {
             database_connection_data_for_data,
             0,
         )
-            .unwrap();
+        .unwrap();
         execute_blocking(
             &mut data_logger,
             mock_injector,
@@ -311,7 +310,7 @@ fn test_execute_file_output() {
         database_connection_data_for_data,
         0,
     )
-        .unwrap();
+    .unwrap();
 
     let (
         mut data_logger,
@@ -327,8 +326,7 @@ fn test_execute_file_output() {
 
     let mock_injector = MockInjectorWithQuit {
         injected_data: captured_data,
-        tx_signal_handler_to_data_logger: signal_handler_channels
-            .tx_signal_handler_to_data_logger,
+        tx_signal_handler_to_data_logger: signal_handler_channels.tx_signal_handler_to_data_logger,
     };
 
     let mock_signal_handler_thread = std::thread::spawn(move || {
@@ -371,8 +369,7 @@ fn test_execute_file_output() {
     let content = fs::read_to_string(output_file_name_heating_actuator_disabled).unwrap();
     assert_eq!(content, "FALSE");
 
-    let content =
-        fs::read_to_string(output_file_name_ventilation_actuator_ineffective).unwrap();
+    let content = fs::read_to_string(output_file_name_ventilation_actuator_ineffective).unwrap();
     assert_eq!(content, "TRUE");
 
     let content = fs::read_to_string(output_file_name_ventilation_actuator_disabled).unwrap();

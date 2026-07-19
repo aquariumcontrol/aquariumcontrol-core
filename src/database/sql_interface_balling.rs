@@ -43,8 +43,8 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 //!   rules at startup, preventing runtime errors caused by misconfigured or
 //!   overgrown database tables.
 
-use log::error;
 use chrono::NaiveDateTime;
+use log::error;
 use mysql::prelude::*;
 use mysql::*;
 use std::time::Duration;
@@ -53,7 +53,9 @@ use crate::database::sql_query_strings::{
     SQL_QUERY_CHECK_BALLING_LOG_COUNT, SQL_QUERY_CHECK_BALLING_SET_VALS_COUNT,
     SQL_QUERY_CHECK_BALLING_SET_VALS_NULL,
 };
-use crate::database::sql_test_query_strings::{SQL_QUERY_WRITE_BALLING_EVENT_WITH_TIMESTAMP, SQL_QUERY_WRITE_PUMP_CONFIGURATION};
+use crate::database::sql_test_query_strings::{
+    SQL_QUERY_WRITE_BALLING_EVENT_WITH_TIMESTAMP, SQL_QUERY_WRITE_PUMP_CONFIGURATION,
+};
 use crate::database::{
     sql_interface::SqlInterface, sql_interface_error::SqlInterfaceError, sql_query_strings,
 };
@@ -413,7 +415,6 @@ impl SqlInterfaceBalling {
         Ok(single_balling_setval_array.remove(0))
     }
 
-
     /// Inserts a pump configuration dataset into the database.
     ///
     /// This helper function is used exclusively in test environments to
@@ -440,8 +441,7 @@ impl SqlInterfaceBalling {
         dosing_volume: f32,
         label: String,
     ) -> Result<(), SqlInterfaceError> {
-        let sql_query_string =
-            SQL_QUERY_WRITE_PUMP_CONFIGURATION.to_owned();
+        let sql_query_string = SQL_QUERY_WRITE_PUMP_CONFIGURATION.to_owned();
         let sql_query_string_for_error = sql_query_string.clone();
         match self.conn.exec_drop::<_, _>(
             sql_query_string,

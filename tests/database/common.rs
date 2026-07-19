@@ -8,13 +8,19 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 */
 #![allow(unused)] // functions in this crate are used by outside test functions
 
+use aquarium_control::database::sql_interface::SqlInterface;
+use aquarium_control::database::sql_query_strings::{
+    SQL_TABLE_FEED_PROFILES, SQL_TABLE_FEED_SCHEDULE,
+};
+use aquarium_control::database::sql_test_query_strings;
+use aquarium_control::database::sql_test_query_strings::{
+    SQL_QUERY_WRITE_VERSION_INFORMATION, SQL_TABLE_BALLING_DOSING_LOG, SQL_TABLE_BALLING_SET_VALS,
+    SQL_TABLE_DATA, SQL_TABLE_FEED_LOG, SQL_TABLE_HEATING_SET_VALS, SQL_TABLE_HEATING_STATS,
+    SQL_TABLE_REFILL, SQL_TABLE_SCHEDULE, SQL_TABLE_VENTILATION_SET_VALS,
+};
+use aquarium_control::utilities::version_information::VersionInformation;
 use mysql::params;
 use mysql::prelude::Queryable;
-use aquarium_control::database::sql_interface::SqlInterface;
-use aquarium_control::database::sql_query_strings::{SQL_TABLE_FEED_PROFILES, SQL_TABLE_FEED_SCHEDULE};
-use aquarium_control::database::sql_test_query_strings;
-use aquarium_control::database::sql_test_query_strings::{SQL_QUERY_WRITE_VERSION_INFORMATION, SQL_TABLE_BALLING_DOSING_LOG, SQL_TABLE_BALLING_SET_VALS, SQL_TABLE_DATA, SQL_TABLE_FEED_LOG, SQL_TABLE_HEATING_SET_VALS, SQL_TABLE_HEATING_STATS, SQL_TABLE_REFILL, SQL_TABLE_SCHEDULE, SQL_TABLE_VENTILATION_SET_VALS};
-use aquarium_control::utilities::version_information::VersionInformation;
 
 // Helper function to create mock dosing profile
 pub fn add_balling_profile(
@@ -33,7 +39,7 @@ pub fn add_balling_profile(
             "label" => label
         },
     )
-        .unwrap();
+    .unwrap();
 }
 
 // Helper function to insert mock version information into database
@@ -71,7 +77,8 @@ pub fn truncate_all_tables(sql_interface: &mut SqlInterface) {
     SqlInterface::truncate_table(sql_interface, SQL_TABLE_DATA.to_string()).unwrap();
     SqlInterface::truncate_table(sql_interface, SQL_TABLE_HEATING_SET_VALS.to_string()).unwrap();
     SqlInterface::truncate_table(sql_interface, SQL_TABLE_HEATING_STATS.to_string()).unwrap();
-    SqlInterface::truncate_table(sql_interface, SQL_TABLE_VENTILATION_SET_VALS.to_string()).unwrap();
+    SqlInterface::truncate_table(sql_interface, SQL_TABLE_VENTILATION_SET_VALS.to_string())
+        .unwrap();
     SqlInterface::truncate_table(sql_interface, SQL_TABLE_REFILL.to_string()).unwrap();
     SqlInterface::truncate_table(sql_interface, SQL_TABLE_SCHEDULE.to_string()).unwrap();
 }

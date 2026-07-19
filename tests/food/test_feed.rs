@@ -12,16 +12,18 @@ use aquarium_control::database::sql_interface_feed::{insert_feed_profiles, SqlIn
 use aquarium_control::database::sql_query_strings::SQL_TABLE_FEED_SCHEDULE;
 use aquarium_control::database::sql_test_query_strings::SQL_TABLE_FEED_LOG;
 use aquarium_control::food::feed::Feed;
-use aquarium_control::launch::channels::Channels;
-use aquarium_control::mocks::mock_food_injection::MockFoodInjection;
-use aquarium_control::mocks::mock_sql_interface_feed::tests::MockSqlInterfaceFeed;
-use aquarium_control::utilities::channel_content::InternalCommand;
-use aquarium_control::utilities::config::{read_config_file, read_config_file_with_test_database, ConfigData};
-use aquarium_control::utilities::logger::setup_logger;
-use aquarium_control::utilities::logger_config::LoggerConfig;
 use aquarium_control::food::feed_channels::FeedChannels;
 use aquarium_control::food::food_injection::FoodInjectionTrait;
+use aquarium_control::launch::channels::Channels;
+use aquarium_control::mocks::mock_food_injection::MockFoodInjection;
 use aquarium_control::mocks::mock_signal_handler::create_mock_signal_handler;
+use aquarium_control::mocks::mock_sql_interface_feed::tests::MockSqlInterfaceFeed;
+use aquarium_control::utilities::channel_content::InternalCommand;
+use aquarium_control::utilities::config::{
+    read_config_file, read_config_file_with_test_database, ConfigData,
+};
+use aquarium_control::utilities::logger::setup_logger;
+use aquarium_control::utilities::logger_config::LoggerConfig;
 use spin_sleep::SpinSleeper;
 use std::sync::{Arc, Mutex};
 use std::thread;
@@ -52,9 +54,9 @@ fn execute_blocking(
             let is_multi_thread_test = tokio::runtime::Handle::try_current()
                 .map(|h| {
                     matches!(
-                            h.runtime_flavor(),
-                            tokio::runtime::RuntimeFlavor::MultiThread
-                        )
+                        h.runtime_flavor(),
+                        tokio::runtime::RuntimeFlavor::MultiThread
+                    )
                 })
                 .unwrap_or(false);
 
@@ -65,7 +67,7 @@ fn execute_blocking(
                 sql_interface_feed,
                 is_multi_thread_test,
             )
-                .await;
+            .await;
         });
 }
 
@@ -506,7 +508,7 @@ pub fn test_feed_schedule_execution_past_entries_select_youngest() {
         config.sql_interface.max_rows_feed_schedule,
         config.sql_interface.max_rows_feed_log,
     )
-        .unwrap();
+    .unwrap();
 
     insert_feed_profiles(&mut sql_interface, &mut sql_interface_feed_unboxed);
 
@@ -514,8 +516,7 @@ pub fn test_feed_schedule_execution_past_entries_select_youngest() {
         Box::new(sql_interface_feed_unboxed);
 
     // empty the feed schedule table
-    match SqlInterface::truncate_table(&mut sql_interface, SQL_TABLE_FEED_SCHEDULE.to_string())
-    {
+    match SqlInterface::truncate_table(&mut sql_interface, SQL_TABLE_FEED_SCHEDULE.to_string()) {
         Ok(_) => {}
         Err(e) => {
             panic!("Could not prepare test case: {e:?}")
@@ -620,7 +621,7 @@ pub fn test_feed_schedule_execution_past_entries_select_oldest() {
         config.sql_interface.max_rows_feed_schedule,
         config.sql_interface.max_rows_feed_log,
     )
-        .unwrap();
+    .unwrap();
 
     insert_feed_profiles(&mut sql_interface, &mut sql_interface_feed_unboxed);
 
@@ -628,8 +629,7 @@ pub fn test_feed_schedule_execution_past_entries_select_oldest() {
         Box::new(sql_interface_feed_unboxed);
 
     // empty the feed schedule table
-    match SqlInterface::truncate_table(&mut sql_interface, SQL_TABLE_FEED_SCHEDULE.to_string())
-    {
+    match SqlInterface::truncate_table(&mut sql_interface, SQL_TABLE_FEED_SCHEDULE.to_string()) {
         Ok(_) => {}
         Err(e) => {
             panic!("Could not prepare test case: {e:?}")

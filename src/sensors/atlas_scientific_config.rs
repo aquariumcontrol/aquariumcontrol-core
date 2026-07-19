@@ -23,72 +23,56 @@ use serde_derive::Deserialize;
 #[derive(Deserialize, Debug)]
 pub struct AtlasScientificConfig {
     /// allows deactivation of the data acquisition
-    #[allow(unused)] // used in conditionally compiled code
     pub active: bool,
 
     /// indicates if the thread shall be started or not
     pub execute: bool,
 
     /// I2C address of Atlas Scientific pH sensor unit
-    #[allow(unused)]
     pub address_atlas_scientific_ph: u16,
 
     /// I2C address of Atlas Scientific conductivity sensor unit
-    #[allow(unused)]
     pub address_atlas_scientific_conductivity: u16,
 
     /// I2C address of Atlas Scientific temperature sensor unit    
-    #[allow(unused)]
     pub address_atlas_scientific_temperature: u16,
 
     /// sleep time in milliseconds before after writing before reading from the pH sensor unit
-    #[allow(unused)]
     pub sleep_time_millis_ph: u64,
 
     /// sleep time in milliseconds before after writing before reading from the conductivity sensor unit
-    #[allow(unused)]
     pub sleep_time_millis_conductivity: u64,
 
     /// sleep time in milliseconds before after writing before reading from the temperature sensor unit
-    #[allow(unused)]
     pub sleep_time_millis_temperature: u64,
 
     /// maximum allowed value for pH used to assess if the temperature sensor reading is valid
-    #[allow(unused)]
     pub max_val_atlas_scientific_ph: f32,
 
     /// minimum allowed value for pH used to assess if the temperature sensor reading is valid
-    #[allow(unused)]
     pub min_val_atlas_scientific_ph: f32,
 
     /// maximum allowed value for temperature used to assess if the temperature sensor reading is valid
-    #[allow(unused)]
     pub max_val_atlas_scientific_temperature: f32,
 
     /// minimum allowed value for temperature used to assess if the temperature sensor reading is valid
-    #[allow(unused)]
     pub min_val_atlas_scientific_temperature: f32,
 
     /// maximum allowed value for conductivity used to assess if the conductivity sensor reading is valid
-    #[allow(unused)]
     pub max_val_atlas_scientific_conductivity: f32,
 
     /// minimum allowed value for conductivity used to assess if the conductivity sensor reading is valid
-    #[allow(unused)]
     pub min_val_atlas_scientific_conductivity: f32,
 
     /// measurement interval in milliseconds
     pub measurement_interval_millis: u64,
 
     /// sensor type (oem or ezo) for temperature
-    #[cfg(any(all(feature = "target_hw", target_os = "linux"), test))]
     pub sensor_type_temperature: String,
 
     /// sensor type (oem or ezo) for pH
-    #[cfg(any(all(feature = "target_hw", target_os = "linux"), test))]
     pub sensor_type_ph: String,
 
     /// sensor type (oem or ezo) for conductivity
-    #[cfg(any(all(feature = "target_hw", target_os = "linux"), test))]
     pub sensor_type_conductivity: String,
 }

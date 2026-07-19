@@ -474,9 +474,7 @@ pub fn test_relay_manager_repeat() {
                 heartbeat_counter: 0,
                 flush_counter: 0,
                 onetime_error_result: None,
-                permanent_error_result: Some(RelayError::WriteError(
-                    module_path!().to_string(),
-                )),
+                permanent_error_result: Some(RelayError::WriteError(module_path!().to_string())),
             };
 
             execute_blocking(

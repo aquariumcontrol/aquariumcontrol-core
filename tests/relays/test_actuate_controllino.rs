@@ -11,18 +11,18 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 
 // feature-specific imports
 cfg_if::cfg_if! {
-        if #[cfg(feature = "controllino_hw")] {
-            use spin_sleep::SpinSleeper;
-            use std::time::Duration;
+    if #[cfg(feature = "controllino_hw")] {
+        use spin_sleep::SpinSleeper;
+        use std::time::Duration;
 
-            use crate::relays::relay_manager::RelayActuationTrait;
-            use crate::relays::actuate_controllino::ActuateControllinoConfig;
-        }
+        use crate::relays::relay_manager::RelayActuationTrait;
+        use crate::relays::actuate_controllino::ActuateControllinoConfig;
     }
+}
 
 use aquarium_control::utilities::channel_content::AquariumDevice::{
-    AuxPump1, AuxPump2, Feeder, Heater, MainPump1, MainPump2, PeristalticPump1,
-    PeristalticPump2, PeristalticPump3, PeristalticPump4, Skimmer, Ventilation,
+    AuxPump1, AuxPump2, Feeder, Heater, MainPump1, MainPump2, PeristalticPump1, PeristalticPump2,
+    PeristalticPump3, PeristalticPump4, Skimmer, Ventilation,
 };
 
 use aquarium_control::relays::actuate_controllino::{
@@ -42,9 +42,9 @@ pub fn test_invalid_relay_id_config_high() {
 
     let test_result = ActuateControllino::new(config.controllino_relay);
     assert!(matches!(
-            test_result,
-            Err(ActuateControllinoError::RelayIdOutsideRange(_, _, _))
-        ));
+        test_result,
+        Err(ActuateControllinoError::RelayIdOutsideRange(_, _, _))
+    ));
 }
 
 #[test]
@@ -57,9 +57,9 @@ pub fn test_invalid_relay_config_duplicate() {
 
     let test_result = ActuateControllino::new(config.controllino_relay);
     assert!(matches!(
-            test_result,
-            Err(ActuateControllinoError::RelayIdDuplicate(_))
-        ));
+        test_result,
+        Err(ActuateControllinoError::RelayIdDuplicate(_))
+    ));
 }
 
 /// Retrieves the platform specific controllino configuration.
@@ -246,12 +246,12 @@ pub fn test_create_message_invalid_command() {
         create_command_message(InternalCommand::ResetAllErrors, &config.controllino_relay);
 
     assert!(matches!(
-            test_result,
-            Err(RelayError::IrrelevantCommand(
-                _,
-                InternalCommand::ResetAllErrors
-            )),
-        ));
+        test_result,
+        Err(RelayError::IrrelevantCommand(
+            _,
+            InternalCommand::ResetAllErrors
+        )),
+    ));
 }
 
 #[test]
@@ -267,7 +267,7 @@ pub fn test_controllino_create_message_switch_on_with_set_relay_switch_off_with_
         InternalCommand::SwitchOn(Skimmer),
         &config.controllino_relay,
     )
-        .unwrap();
+    .unwrap();
     assert_eq!(
         message.data[0],
         controllino_constants::COMMAND_SET_RELAY as u8
@@ -278,16 +278,15 @@ pub fn test_controllino_create_message_switch_on_with_set_relay_switch_off_with_
         InternalCommand::SwitchOn(Ventilation),
         &config.controllino_relay,
     )
-        .unwrap();
+    .unwrap();
     assert_eq!(
         message.data[0],
         controllino_constants::COMMAND_SET_RELAY as u8
     );
     assert_eq!(message.data[1], config.controllino_relay.ventilation_id);
 
-    message =
-        create_command_message(InternalCommand::SwitchOn(Heater), &config.controllino_relay)
-            .unwrap();
+    message = create_command_message(InternalCommand::SwitchOn(Heater), &config.controllino_relay)
+        .unwrap();
     assert_eq!(
         message.data[0],
         controllino_constants::COMMAND_SET_RELAY as u8
@@ -298,7 +297,7 @@ pub fn test_controllino_create_message_switch_on_with_set_relay_switch_off_with_
         InternalCommand::SwitchOn(MainPump1),
         &config.controllino_relay,
     )
-        .unwrap();
+    .unwrap();
     assert_eq!(
         message.data[0],
         controllino_constants::COMMAND_SET_RELAY as u8
@@ -309,7 +308,7 @@ pub fn test_controllino_create_message_switch_on_with_set_relay_switch_off_with_
         InternalCommand::SwitchOn(MainPump2),
         &config.controllino_relay,
     )
-        .unwrap();
+    .unwrap();
     assert_eq!(
         message.data[0],
         controllino_constants::COMMAND_SET_RELAY as u8
@@ -320,7 +319,7 @@ pub fn test_controllino_create_message_switch_on_with_set_relay_switch_off_with_
         InternalCommand::SwitchOn(AuxPump1),
         &config.controllino_relay,
     )
-        .unwrap();
+    .unwrap();
     assert_eq!(
         message.data[0],
         controllino_constants::COMMAND_SET_RELAY as u8
@@ -331,7 +330,7 @@ pub fn test_controllino_create_message_switch_on_with_set_relay_switch_off_with_
         InternalCommand::SwitchOn(AuxPump2),
         &config.controllino_relay,
     )
-        .unwrap();
+    .unwrap();
     assert_eq!(
         message.data[0],
         controllino_constants::COMMAND_SET_RELAY as u8
@@ -342,7 +341,7 @@ pub fn test_controllino_create_message_switch_on_with_set_relay_switch_off_with_
         InternalCommand::SwitchOn(PeristalticPump1),
         &config.controllino_relay,
     )
-        .unwrap();
+    .unwrap();
     assert_eq!(
         message.data[0],
         controllino_constants::COMMAND_SET_RELAY as u8
@@ -356,7 +355,7 @@ pub fn test_controllino_create_message_switch_on_with_set_relay_switch_off_with_
         InternalCommand::SwitchOn(PeristalticPump2),
         &config.controllino_relay,
     )
-        .unwrap();
+    .unwrap();
     assert_eq!(
         message.data[0],
         controllino_constants::COMMAND_SET_RELAY as u8
@@ -370,7 +369,7 @@ pub fn test_controllino_create_message_switch_on_with_set_relay_switch_off_with_
         InternalCommand::SwitchOn(PeristalticPump3),
         &config.controllino_relay,
     )
-        .unwrap();
+    .unwrap();
     assert_eq!(
         message.data[0],
         controllino_constants::COMMAND_SET_RELAY as u8
@@ -384,7 +383,7 @@ pub fn test_controllino_create_message_switch_on_with_set_relay_switch_off_with_
         InternalCommand::SwitchOn(PeristalticPump4),
         &config.controllino_relay,
     )
-        .unwrap();
+    .unwrap();
     assert_eq!(
         message.data[0],
         controllino_constants::COMMAND_SET_RELAY as u8
@@ -394,9 +393,8 @@ pub fn test_controllino_create_message_switch_on_with_set_relay_switch_off_with_
         config.controllino_relay.peristaltic_pump4_id
     );
 
-    message =
-        create_command_message(InternalCommand::SwitchOn(Feeder), &config.controllino_relay)
-            .unwrap();
+    message = create_command_message(InternalCommand::SwitchOn(Feeder), &config.controllino_relay)
+        .unwrap();
     assert_eq!(
         message.data[0],
         controllino_constants::COMMAND_SET_RELAY as u8
@@ -408,7 +406,7 @@ pub fn test_controllino_create_message_switch_on_with_set_relay_switch_off_with_
         InternalCommand::SwitchOff(Skimmer),
         &config.controllino_relay,
     )
-        .unwrap();
+    .unwrap();
     assert_eq!(
         message.data[0],
         controllino_constants::COMMAND_UNSET_RELAY as u8
@@ -419,7 +417,7 @@ pub fn test_controllino_create_message_switch_on_with_set_relay_switch_off_with_
         InternalCommand::SwitchOff(Ventilation),
         &config.controllino_relay,
     )
-        .unwrap();
+    .unwrap();
     assert_eq!(
         message.data[0],
         controllino_constants::COMMAND_UNSET_RELAY as u8
@@ -430,7 +428,7 @@ pub fn test_controllino_create_message_switch_on_with_set_relay_switch_off_with_
         InternalCommand::SwitchOff(Heater),
         &config.controllino_relay,
     )
-        .unwrap();
+    .unwrap();
     assert_eq!(
         message.data[0],
         controllino_constants::COMMAND_UNSET_RELAY as u8
@@ -441,7 +439,7 @@ pub fn test_controllino_create_message_switch_on_with_set_relay_switch_off_with_
         InternalCommand::SwitchOff(MainPump1),
         &config.controllino_relay,
     )
-        .unwrap();
+    .unwrap();
     assert_eq!(
         message.data[0],
         controllino_constants::COMMAND_UNSET_RELAY as u8
@@ -452,7 +450,7 @@ pub fn test_controllino_create_message_switch_on_with_set_relay_switch_off_with_
         InternalCommand::SwitchOff(MainPump2),
         &config.controllino_relay,
     )
-        .unwrap();
+    .unwrap();
     assert_eq!(
         message.data[0],
         controllino_constants::COMMAND_UNSET_RELAY as u8
@@ -463,7 +461,7 @@ pub fn test_controllino_create_message_switch_on_with_set_relay_switch_off_with_
         InternalCommand::SwitchOff(AuxPump1),
         &config.controllino_relay,
     )
-        .unwrap();
+    .unwrap();
     assert_eq!(
         message.data[0],
         controllino_constants::COMMAND_UNSET_RELAY as u8
@@ -474,7 +472,7 @@ pub fn test_controllino_create_message_switch_on_with_set_relay_switch_off_with_
         InternalCommand::SwitchOff(AuxPump2),
         &config.controllino_relay,
     )
-        .unwrap();
+    .unwrap();
     assert_eq!(
         message.data[0],
         controllino_constants::COMMAND_UNSET_RELAY as u8
@@ -485,7 +483,7 @@ pub fn test_controllino_create_message_switch_on_with_set_relay_switch_off_with_
         InternalCommand::SwitchOff(PeristalticPump1),
         &config.controllino_relay,
     )
-        .unwrap();
+    .unwrap();
     assert_eq!(
         message.data[0],
         controllino_constants::COMMAND_UNSET_RELAY as u8
@@ -499,7 +497,7 @@ pub fn test_controllino_create_message_switch_on_with_set_relay_switch_off_with_
         InternalCommand::SwitchOff(PeristalticPump2),
         &config.controllino_relay,
     )
-        .unwrap();
+    .unwrap();
     assert_eq!(
         message.data[0],
         controllino_constants::COMMAND_UNSET_RELAY as u8
@@ -513,7 +511,7 @@ pub fn test_controllino_create_message_switch_on_with_set_relay_switch_off_with_
         InternalCommand::SwitchOff(PeristalticPump3),
         &config.controllino_relay,
     )
-        .unwrap();
+    .unwrap();
     assert_eq!(
         message.data[0],
         controllino_constants::COMMAND_UNSET_RELAY as u8
@@ -527,7 +525,7 @@ pub fn test_controllino_create_message_switch_on_with_set_relay_switch_off_with_
         InternalCommand::SwitchOff(PeristalticPump4),
         &config.controllino_relay,
     )
-        .unwrap();
+    .unwrap();
     assert_eq!(
         message.data[0],
         controllino_constants::COMMAND_UNSET_RELAY as u8
@@ -541,7 +539,7 @@ pub fn test_controllino_create_message_switch_on_with_set_relay_switch_off_with_
         InternalCommand::SwitchOff(Feeder),
         &config.controllino_relay,
     )
-        .unwrap();
+    .unwrap();
     assert_eq!(
         message.data[0],
         controllino_constants::COMMAND_UNSET_RELAY as u8
@@ -561,69 +559,69 @@ pub fn test_create_message_pulse() {
         &config.controllino_relay,
     );
     assert!(matches!(
-            error_message,
-            Err(RelayError::PulseNotAllowedForDevice(_, Skimmer))
-        ));
+        error_message,
+        Err(RelayError::PulseNotAllowedForDevice(_, Skimmer))
+    ));
 
     error_message = create_command_message(
         InternalCommand::Pulse(Ventilation, 1000),
         &config.controllino_relay,
     );
     assert!(matches!(
-            error_message,
-            Err(RelayError::PulseNotAllowedForDevice(_, Ventilation))
-        ));
+        error_message,
+        Err(RelayError::PulseNotAllowedForDevice(_, Ventilation))
+    ));
 
     error_message = create_command_message(
         InternalCommand::Pulse(Heater, 1000),
         &config.controllino_relay,
     );
     assert!(matches!(
-            error_message,
-            Err(RelayError::PulseNotAllowedForDevice(_, Heater))
-        ));
+        error_message,
+        Err(RelayError::PulseNotAllowedForDevice(_, Heater))
+    ));
 
     error_message = create_command_message(
         InternalCommand::Pulse(MainPump1, 1000),
         &config.controllino_relay,
     );
     assert!(matches!(
-            error_message,
-            Err(RelayError::PulseNotAllowedForDevice(_, MainPump1))
-        ));
+        error_message,
+        Err(RelayError::PulseNotAllowedForDevice(_, MainPump1))
+    ));
 
     error_message = create_command_message(
         InternalCommand::Pulse(MainPump2, 1000),
         &config.controllino_relay,
     );
     assert!(matches!(
-            error_message,
-            Err(RelayError::PulseNotAllowedForDevice(_, MainPump2))
-        ));
+        error_message,
+        Err(RelayError::PulseNotAllowedForDevice(_, MainPump2))
+    ));
 
     error_message = create_command_message(
         InternalCommand::Pulse(AuxPump1, 1000),
         &config.controllino_relay,
     );
     assert!(matches!(
-            error_message,
-            Err(RelayError::PulseNotAllowedForDevice(_, AuxPump1))
-        ));
+        error_message,
+        Err(RelayError::PulseNotAllowedForDevice(_, AuxPump1))
+    ));
 
     error_message = create_command_message(
         InternalCommand::Pulse(AuxPump2, 1000),
         &config.controllino_relay,
     );
     assert!(matches!(
-            error_message,
-            Err(RelayError::PulseNotAllowedForDevice(_, AuxPump2))
-        ));
+        error_message,
+        Err(RelayError::PulseNotAllowedForDevice(_, AuxPump2))
+    ));
 
     let mut message = create_command_message(
         InternalCommand::Pulse(PeristalticPump1, 1000),
         &config.controllino_relay,
     )
-        .unwrap();
+    .unwrap();
 
     assert_eq!(
         message.data[0],
@@ -638,7 +636,7 @@ pub fn test_create_message_pulse() {
         InternalCommand::Pulse(PeristalticPump2, 1000),
         &config.controllino_relay,
     )
-        .unwrap();
+    .unwrap();
     assert_eq!(
         message.data[0],
         controllino_constants::COMMAND_PULSE_RELAY as u8
@@ -652,7 +650,7 @@ pub fn test_create_message_pulse() {
         InternalCommand::Pulse(PeristalticPump3, 1000),
         &config.controllino_relay,
     )
-        .unwrap();
+    .unwrap();
     assert_eq!(
         message.data[0],
         controllino_constants::COMMAND_PULSE_RELAY as u8
@@ -666,7 +664,7 @@ pub fn test_create_message_pulse() {
         InternalCommand::Pulse(PeristalticPump4, 1000),
         &config.controllino_relay,
     )
-        .unwrap();
+    .unwrap();
     assert_eq!(
         message.data[0],
         controllino_constants::COMMAND_PULSE_RELAY as u8
@@ -681,9 +679,9 @@ pub fn test_create_message_pulse() {
         &config.controllino_relay,
     );
     assert!(matches!(
-            error_message,
-            Err(RelayError::PulseNotAllowedForDevice(_, Feeder))
-        ));
+        error_message,
+        Err(RelayError::PulseNotAllowedForDevice(_, Feeder))
+    ));
 }
 
 #[cfg(feature = "controllino_hw")]

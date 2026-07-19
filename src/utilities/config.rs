@@ -93,7 +93,6 @@ pub struct ConfigData {
     pub data_logger: DataLoggerConfig,
 
     /// configuration for AtlasScientific
-    #[allow(unused)] // used in conditionally compiled code
     pub atlas_scientific: AtlasScientificConfig,
 
     /// configuration for Ambient

@@ -69,7 +69,8 @@ use log::error;
 ))]
 use log::info;
 
-#[cfg(all(target_os = "linux", not(test), not(feature = "test-utils")))] // only required in real-life execution
+#[cfg(all(target_os = "linux", not(test), not(feature = "test-utils")))]
+// only required in real-life execution
 use nix::unistd::gettid;
 
 use crate::launch::channels::{AquaReceiver, AquaSender};

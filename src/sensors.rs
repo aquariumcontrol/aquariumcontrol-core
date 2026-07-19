@@ -83,10 +83,10 @@ pub mod gpio_handler_config;
 pub mod atlas_scientific_driver;
 
 // Trait implementation for EZO type sensor
-pub(crate) mod atlas_scientific_ezo;
+pub mod atlas_scientific_ezo;
 
 // Trait implementation for OEM type sensor
-pub(crate) mod atlas_scientific_oem;
+pub mod atlas_scientific_oem;
 
 // Monitor view for Atlas Scientific sensors
 pub mod atlas_scientific_monitor_view;

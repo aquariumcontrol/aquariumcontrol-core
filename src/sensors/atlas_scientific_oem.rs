@@ -35,26 +35,22 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 //!     connected hardware matches the configuration (e.g., ensuring a pH sensor
 //!     is not connected to the address configured for a conductivity sensor).
 
-cfg_if::cfg_if! {
-    if #[cfg(any(all(feature = "target_hw", target_os = "linux"), test))] {
-        use crate::launch::channels::AquaChannelError;
-        use crate::sensors::atlas_scientific::AtlasScientific;
-        use crate::sensors::atlas_scientific::{AtlasScientificResult, AtlasScientificResultData};
-        use crate::sensors::atlas_scientific_channels::AtlasScientificChannels;
-        use crate::sensors::atlas_scientific_driver::AtlasScientificDriver;
-        use crate::sensors::atlas_scientific_error::AtlasScientificError;
-        use crate::sensors::i2c_interface::I2cRequest;
-        use crate::utilities::channel_content::AquariumSignal;
-        use crate::utilities::check_mutex_access_duration::CheckMutexAccessDurationTrait;
-        use std::sync::{Arc, Mutex};
-        use std::time::Duration;
-        use std::time::Instant;
-    }
-}
+use crate::launch::channels::AquaChannelError;
+use crate::sensors::atlas_scientific::AtlasScientific;
+use crate::sensors::atlas_scientific::{AtlasScientificResult, AtlasScientificResultData};
+use crate::sensors::atlas_scientific_channels::AtlasScientificChannels;
+use crate::sensors::atlas_scientific_driver::AtlasScientificDriver;
+use crate::sensors::atlas_scientific_error::AtlasScientificError;
+use crate::sensors::i2c_interface::I2cRequest;
+use crate::utilities::channel_content::AquariumSignal;
+use crate::utilities::check_mutex_access_duration::CheckMutexAccessDurationTrait;
+use std::sync::{Arc, Mutex};
+use std::time::Duration;
+use std::time::Instant;
 
 #[allow(dead_code)]
 /// numeric values used in communication with Atlas Scientific sensor units
-pub(crate) mod atlas_scientific_oem_constants {
+pub mod atlas_scientific_oem_constants {
     /// Register for the device type (identical across all types)
     pub const REG_DEVICE_TYPE: u8 = 0x00;
 
@@ -104,13 +100,11 @@ pub(crate) mod atlas_scientific_oem_constants {
     pub const SCALE_FACTOR_CONDUCTIVITY: f32 = 100.0;
 }
 
-#[cfg(any(all(feature = "target_hw", target_os = "linux"), test))]
 #[derive(Debug)]
 pub struct AtlasScientificOem {
     /// I2C address of the device
     pub i2c_address: u16,
 
-    #[cfg(any(all(feature = "target_hw", target_os = "linux"), test))]
     /// The expected device type code (e.g., 0x05 for Temperature).
     /// Used during initialization to verify the connected hardware.
     pub device_type: u8,
@@ -147,7 +141,6 @@ pub struct AtlasScientificOem {
     pub max_mutex_access_duration: Duration,
 }
 
-#[cfg(any(all(target_os = "linux", feature = "target_hw"), test))]
 impl AtlasScientificOem {
     /// Creates a new instance of the OEM driver.
     ///
@@ -162,7 +155,7 @@ impl AtlasScientificOem {
     /// * `response_length` - The number of bytes to read for a measurement (typically 4).
     pub fn new(
         i2c_address: u16,
-        #[cfg(any(all(feature = "target_hw", target_os = "linux"), test))] device_type: u8,
+        device_type: u8,
         sleep_time_millis: u64,
         max_mutex_access_duration_millis: u64,
         register_data_msb: u8,
@@ -171,7 +164,6 @@ impl AtlasScientificOem {
     ) -> Self {
         AtlasScientificOem {
             i2c_address,
-            #[cfg(any(all(feature = "target_hw", target_os = "linux"), test))]
             device_type,
             sleep_time_millis,
             register_data_msb,
@@ -228,7 +220,6 @@ impl AtlasScientificOem {
     }
 }
 
-#[cfg(any(all(feature = "target_hw", target_os = "linux"), test))]
 impl AtlasScientificDriver for AtlasScientificOem {
     /// Constructs and sends a measurement request to the I2C interface thread.
     ///
@@ -353,7 +344,6 @@ impl AtlasScientificDriver for AtlasScientificOem {
         }
     }
 
-    #[cfg(any(all(target_os = "linux", feature = "target_hw"), test))]
     /// Performs hardware initialization for the OEM sensor.
     ///
     /// This process involves:
@@ -488,7 +478,7 @@ impl AtlasScientificDriver for AtlasScientificOem {
     ///
     /// # Arguments
     /// * `signal` - sensor type
-    #[cfg(test)]
+    #[cfg(any(test, feature = "test-utils"))]
     fn get_mutex_access_duration_exceeded(&self, signal: &AquariumSignal) -> bool {
         match signal {
             AquariumSignal::WaterTemperature => self.mutex_temperature_access_duration_exceeded,

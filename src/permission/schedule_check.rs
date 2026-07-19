@@ -311,7 +311,8 @@ impl ScheduleCheck {
                         Some(c)
                     }
                     Err(_e) => {
-                        #[cfg(all(not(test), not(feature = "test-utils")))] // only required in real-life execution
+                        #[cfg(all(not(test), not(feature = "test-utils")))]
+                        // only required in real-life execution
                         if !locks.find_schedule {
                             let context = format!("could not find schedule for {module_name}");
                             log_error_chain(module_path!(), &context, _e);
