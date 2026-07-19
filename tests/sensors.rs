@@ -14,4 +14,5 @@ mod sensors {
     mod test_dht;
     mod test_ds18b20;
     mod test_gpio_handler;
-}
+    mod test_sensor_manager;
+    mod test_tank_level_switch;}
