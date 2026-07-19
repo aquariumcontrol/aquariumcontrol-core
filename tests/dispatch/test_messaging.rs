@@ -184,7 +184,7 @@ cfg_if::cfg_if! {
         #[test]
         pub fn test_messaging_ventilation() {
             let mut config: ConfigData =
-                read_config_file("/config/aquarium_control_test_generic.toml".to_string()).unwrap();
+                read_config_file("config/aquarium_control_test_generic.toml".to_string()).unwrap();
             config.messaging.mq_filename = "/aquarium_control.5UXp".to_string();
             let mq_filename_for_test_environment = config.messaging.mq_filename.clone();
 
@@ -238,7 +238,7 @@ cfg_if::cfg_if! {
         #[test]
         pub fn test_messaging_heating() {
             let mut config: ConfigData =
-                read_config_file("/config/aquarium_control_test_generic.toml".to_string()).unwrap();
+                read_config_file("config/aquarium_control_test_generic.toml".to_string()).unwrap();
             config.messaging.mq_filename = "/aquarium_control.6UXp".to_string();
             let mq_filename_for_test_environment = config.messaging.mq_filename.clone();
 
@@ -291,7 +291,7 @@ cfg_if::cfg_if! {
         #[test]
         pub fn test_messaging_refill() {
             let mut config: ConfigData =
-                read_config_file("/config/aquarium_control_test_generic.toml".to_string()).unwrap();
+                read_config_file("config/aquarium_control_test_generic.toml".to_string()).unwrap();
             config.messaging.mq_filename = "/aquarium_control.7UXp".to_string();
             let mq_file_name_for_test_environment = config.messaging.mq_filename.clone();
 
@@ -364,7 +364,7 @@ cfg_if::cfg_if! {
         #[test]
         pub fn test_messaging_feed() {
             let mut config: ConfigData =
-                read_config_file("/config/aquarium_control_test_generic.toml".to_string()).unwrap();
+                read_config_file("config/aquarium_control_test_generic.toml".to_string()).unwrap();
             config.messaging.mq_filename = "/aquarium_control.8UXp".to_string();
             let mq_filename_for_test_environment = config.messaging.mq_filename.clone();
 
@@ -437,7 +437,7 @@ cfg_if::cfg_if! {
         #[test]
         pub fn test_messaging_balling() {
             let mut config: ConfigData =
-                read_config_file("/config/aquarium_control_test_generic.toml".to_string()).unwrap();
+                read_config_file("config/aquarium_control_test_generic.toml".to_string()).unwrap();
             config.messaging.mq_filename = "/aquarium_control.9UXp".to_string();
             let mq_filename_for_test_environment = config.messaging.mq_filename.clone();
 
@@ -492,7 +492,7 @@ cfg_if::cfg_if! {
         #[test]
         pub fn test_messaging_watchdog() {
             let mut config: ConfigData =
-                read_config_file("/config/aquarium_control_test_generic.toml".to_string()).unwrap();
+                read_config_file("config/aquarium_control_test_generic.toml".to_string()).unwrap();
             config.messaging.mq_filename = "/aquarium_control.9UXp".to_string();
             let mq_filename_for_test_environment = config.messaging.mq_filename.clone();
 
