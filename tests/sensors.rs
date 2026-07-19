@@ -9,4 +9,6 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 
 mod sensors {
     mod test_atlas_scientific;
+    mod test_atlas_scientific_ezo;
+    mod test_atlas_scientific_oem;
 }
