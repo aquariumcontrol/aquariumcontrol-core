@@ -12,4 +12,5 @@ mod sensors {
     mod test_atlas_scientific_ezo;
     mod test_atlas_scientific_oem;
     mod test_dht;
+    mod test_ds18b20;
 }
