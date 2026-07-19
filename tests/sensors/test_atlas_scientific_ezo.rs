@@ -9,19 +9,23 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 
 //! Tests the driver for Atlas Scientific EZO sensors.
 
-use std::collections::HashMap;
-use std::sync::{Arc, Mutex};
-use assert_float_eq::assert_float_absolute_eq;
 use aquarium_control::launch::channels::{channel, AquaReceiver, AquaSender, Channels};
-use aquarium_control::sensors::atlas_scientific::{atlas_scientific_constants, AtlasScientificResultData};
+use aquarium_control::sensors::atlas_scientific::{
+    atlas_scientific_constants, AtlasScientificResultData,
+};
 use aquarium_control::sensors::atlas_scientific_channels::AtlasScientificChannels;
 use aquarium_control::sensors::atlas_scientific_driver::AtlasScientificDriver;
 use aquarium_control::sensors::atlas_scientific_error::AtlasScientificError;
-use aquarium_control::sensors::atlas_scientific_ezo::{atlas_scientific_ezo_constants, AtlasScientificEzo};
+use aquarium_control::sensors::atlas_scientific_ezo::{
+    atlas_scientific_ezo_constants, AtlasScientificEzo,
+};
 use aquarium_control::sensors::atlas_scientific_monitor_view::AtlasScientificMonitorView;
 use aquarium_control::sensors::i2c_interface::{I2cRequest, I2cResponse, I2cResult};
 use aquarium_control::utilities::channel_content::{AquariumSignal, InternalCommand};
 use aquarium_control::utilities::config::{read_config_file, ConfigData};
+use assert_float_eq::assert_float_absolute_eq;
+use std::collections::HashMap;
+use std::sync::{Arc, Mutex};
 
 cfg_if::cfg_if! {
     if #[cfg(feature = "test-utils")] {
@@ -120,8 +124,7 @@ pub fn test_receive_response_from_i2c_interface() {
         b'0',
         atlas_scientific_ezo_constants::MESSAGE_FINISH_MAGIC,
     ];
-    stimuli_array_temperature[..message_temperature.len()]
-        .copy_from_slice(&message_temperature);
+    stimuli_array_temperature[..message_temperature.len()].copy_from_slice(&message_temperature);
     let stimuli_i2c_response_temperature = I2cResponse {
         read_buf: stimuli_array_temperature,
         length: atlas_scientific_ezo_constants::MESSAGE_SIZE,
@@ -140,8 +143,7 @@ pub fn test_receive_response_from_i2c_interface() {
     ];
     // Copy the 8-byte message into the beginning of the 64-byte buffer.
     // The rest of the buffer will remain filled with zeros.
-    stimuli_array_conductivity[..message_conductivity.len()]
-        .copy_from_slice(&message_conductivity);
+    stimuli_array_conductivity[..message_conductivity.len()].copy_from_slice(&message_conductivity);
     let stimuli_i2c_response_conductivity = I2cResponse {
         read_buf: stimuli_array_conductivity,
         length: atlas_scientific_ezo_constants::MESSAGE_SIZE,
@@ -188,18 +190,17 @@ pub fn test_receive_response_from_i2c_interface() {
     let mut channels = Channels::new_for_test();
 
     // Mutexes for Atlas Scientific signals
-    let mutex_atlas_scientific_temperature =
-        Arc::new(Mutex::new(AtlasScientificResultData::new(
-            config.sensor_manager.replacement_value_water_temperature,
-        )));
+    let mutex_atlas_scientific_temperature = Arc::new(Mutex::new(AtlasScientificResultData::new(
+        config.sensor_manager.replacement_value_water_temperature,
+    )));
 
     let mutex_atlas_scientific_ph = Arc::new(Mutex::new(AtlasScientificResultData::new(
         config.sensor_manager.replacement_value_ph,
     )));
 
-    let mutex_atlas_scientific_conductivity = Arc::new(Mutex::new(
-        AtlasScientificResultData::new(config.sensor_manager.replacement_value_conductivity),
-    ));
+    let mutex_atlas_scientific_conductivity = Arc::new(Mutex::new(AtlasScientificResultData::new(
+        config.sensor_manager.replacement_value_conductivity,
+    )));
 
     // Sending stimuli for water temperature before triggering try_recv from the test object
     _ = channels
@@ -586,9 +587,9 @@ fn test_receive_response_i2c_failure() {
 
     assert!(result.is_err());
     assert!(matches!(
-            result,
-            Err(AtlasScientificError::I2cCommunicationFailure { .. })
-        ));
+        result,
+        Err(AtlasScientificError::I2cCommunicationFailure { .. })
+    ));
 }
 
 #[test]
@@ -614,9 +615,9 @@ fn test_receive_response_channel_empty() {
     );
 
     assert!(matches!(
-            result,
-            Err(AtlasScientificError::ChannelIsEmpty(_))
-        ));
+        result,
+        Err(AtlasScientificError::ChannelIsEmpty(_))
+    ));
 }
 
 #[test]
@@ -643,9 +644,9 @@ fn test_receive_response_channel_disconnected() {
     );
 
     assert!(matches!(
-            result,
-            Err(AtlasScientificError::ChannelIsDisconnected { .. })
-        ));
+        result,
+        Err(AtlasScientificError::ChannelIsDisconnected { .. })
+    ));
 }
 
 #[cfg(feature = "test-utils")]
@@ -729,14 +730,14 @@ pub fn test_atlas_scientific_ezo_read_sensors() {
         config.atlas_scientific.sleep_time_millis_ph,
         atlas_scientific_ezo_constants::MESSAGE_SIZE,
     )
-        .unwrap();
+    .unwrap();
     let request_temperature = I2cRequest::new(
         config.atlas_scientific.address_atlas_scientific_temperature,
         &send_buf,
         config.atlas_scientific.sleep_time_millis_temperature,
         atlas_scientific_ezo_constants::MESSAGE_SIZE,
     )
-        .unwrap();
+    .unwrap();
     let request_conductivity = I2cRequest::new(
         config
             .atlas_scientific
@@ -745,7 +746,7 @@ pub fn test_atlas_scientific_ezo_read_sensors() {
         config.atlas_scientific.sleep_time_millis_conductivity,
         atlas_scientific_ezo_constants::MESSAGE_SIZE,
     )
-        .unwrap();
+    .unwrap();
 
     match i2c_interface.get_response_from_i2c(request_ph) {
         Ok(response_ph) => {
@@ -756,7 +757,7 @@ pub fn test_atlas_scientific_ezo_read_sensors() {
                     .unwrap(),
                 true,
             )
-                .unwrap();
+            .unwrap();
             println!("pH={}", ph);
         }
         Err(err_response_ph) => {
@@ -776,7 +777,7 @@ pub fn test_atlas_scientific_ezo_read_sensors() {
                     .unwrap(),
                 true,
             )
-                .unwrap();
+            .unwrap();
             println!("temperature={}", temperature);
         }
         Err(err_response_temperature) => {
@@ -799,7 +800,7 @@ pub fn test_atlas_scientific_ezo_read_sensors() {
                     .unwrap(),
                 true,
             )
-                .unwrap();
+            .unwrap();
             println!("conductivity={}", conductivity);
         }
         Err(err_response_conductivity) => {

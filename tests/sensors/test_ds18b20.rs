@@ -9,10 +9,10 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 
 //! Tests temperature reading from DS18B20 1-Wire digital thermometers.
 
-use std::env;
 use aquarium_control::sensors::ds18b20::Ds18b20;
 use aquarium_control::sensors::ds18b20_error::Ds18b20Error;
 use aquarium_control::utilities::config::read_config_file;
+use std::env;
 
 cfg_if::cfg_if! {
     if #[cfg(feature = "test-utils")] {
@@ -64,8 +64,7 @@ fn execute_blocking(
 // For this test case to succeed, the DS18B20 sensor needs to be connected,
 // and the 1-wire interface needs to be enabled (see rasp-config)
 fn test_read_ds18b20() {
-    let config =
-        read_config_file("config/aquarium_control_test_generic.toml".to_string()).unwrap();
+    let config = read_config_file("config/aquarium_control_test_generic.toml".to_string()).unwrap();
 
     let water_temperature_sensor_id = config.ds18b20.water_temperature_sensor_id.clone();
 
@@ -121,9 +120,9 @@ fn test_dsb18b20_init_with_invalid_system_driver_base_path() {
     config.ds18b20.system_driver_base_path = "".to_string();
     let result = Ds18b20::new(config.ds18b20);
     assert!(matches!(
-            result,
-            Err(Ds18b20Error::SystemDriverBasePathEmpty(_))
-        ));
+        result,
+        Err(Ds18b20Error::SystemDriverBasePathEmpty(_))
+    ));
 }
 
 #[test]
@@ -134,9 +133,9 @@ fn test_dsb18b20_init_with_invalid_system_driver_sensor_path_prefix() {
     config.ds18b20.system_driver_sensor_path_prefix = "".to_string();
     let result = Ds18b20::new(config.ds18b20);
     assert!(matches!(
-            result,
-            Err(Ds18b20Error::SystemDriverSensorPathEmpty(_))
-        ));
+        result,
+        Err(Ds18b20Error::SystemDriverSensorPathEmpty(_))
+    ));
 }
 
 #[test]
@@ -147,9 +146,9 @@ fn test_dsb18b20_init_with_invalid_system_driver_file_name() {
     config.ds18b20.system_driver_file_name = "".to_string();
     let result = Ds18b20::new(config.ds18b20);
     assert!(matches!(
-            result,
-            Err(Ds18b20Error::SystemDriverFileNameEmpty(_))
-        ));
+        result,
+        Err(Ds18b20Error::SystemDriverFileNameEmpty(_))
+    ));
 }
 
 #[test]
@@ -181,12 +180,12 @@ fn test_dsb18b20_read_from_invalid_sensor_id() {
     let ds18b20 = Ds18b20::new(config.ds18b20).unwrap();
 
     assert!(matches!(
-            ds18b20.read(invalid_temperature_sensor_id),
-            Err(Ds18b20Error::SensorIdNotFound(
-                _,
-                _invalid_temperature_sensor_id
-            ))
-        ));
+        ds18b20.read(invalid_temperature_sensor_id),
+        Err(Ds18b20Error::SensorIdNotFound(
+            _,
+            _invalid_temperature_sensor_id
+        ))
+    ));
 }
 
 #[test]
@@ -206,9 +205,9 @@ fn test_dsb18b20_read_from_file_failed() {
     let ds18b20 = Ds18b20::new(config.ds18b20).unwrap();
 
     assert!(matches!(
-            ds18b20.read(&valid_temperature_sensor_id),
-            Err(Ds18b20Error::ReadToStringFailure(_))
-        ));
+        ds18b20.read(&valid_temperature_sensor_id),
+        Err(Ds18b20Error::ReadToStringFailure(_))
+    ));
 }
 
 #[test]
@@ -228,9 +227,9 @@ fn test_dsb18b20_file_with_one_line_only() {
     let ds18b20 = Ds18b20::new(config.ds18b20).unwrap();
 
     assert!(matches!(
-            ds18b20.read(&valid_temperature_sensor_id),
-            Err(Ds18b20Error::InsufficientLinesInFile(_))
-        ));
+        ds18b20.read(&valid_temperature_sensor_id),
+        Err(Ds18b20Error::InsufficientLinesInFile(_))
+    ));
 }
 
 #[test]
@@ -250,9 +249,9 @@ fn test_dsb18b20_file_with_line_not_ending_with_yes() {
     let ds18b20 = Ds18b20::new(config.ds18b20).unwrap();
 
     assert!(matches!(
-            ds18b20.read(&valid_temperature_sensor_id),
-            Err(Ds18b20Error::Line0NotEndingWithYes(_))
-        ));
+        ds18b20.read(&valid_temperature_sensor_id),
+        Err(Ds18b20Error::Line0NotEndingWithYes(_))
+    ));
 }
 
 #[test]
@@ -272,9 +271,9 @@ fn test_dsb18b20_file_without_temperature() {
     let ds18b20 = Ds18b20::new(config.ds18b20).unwrap();
 
     assert!(matches!(
-            ds18b20.read(&valid_temperature_sensor_id),
-            Err(Ds18b20Error::TemperatureEntryNotFound(_))
-        ));
+        ds18b20.read(&valid_temperature_sensor_id),
+        Err(Ds18b20Error::TemperatureEntryNotFound(_))
+    ));
 }
 
 #[test]
@@ -294,9 +293,9 @@ fn test_dsb18b20_unparsable() {
     let ds18b20 = Ds18b20::new(config.ds18b20).unwrap();
 
     assert!(matches!(
-            ds18b20.read(&valid_temperature_sensor_id),
-            Err(Ds18b20Error::TemperatureParseError(_))
-        ));
+        ds18b20.read(&valid_temperature_sensor_id),
+        Err(Ds18b20Error::TemperatureParseError(_))
+    ));
 }
 
 #[test]
@@ -316,9 +315,9 @@ fn test_dsb18b20_temperature_too_hot() {
     let ds18b20 = Ds18b20::new(config.ds18b20).unwrap();
 
     assert!(matches!(
-            ds18b20.read(&valid_temperature_sensor_id),
-            Err(Ds18b20Error::TemperatureOutOfRange(_))
-        ));
+        ds18b20.read(&valid_temperature_sensor_id),
+        Err(Ds18b20Error::TemperatureOutOfRange(_))
+    ));
 }
 
 #[test]
@@ -338,9 +337,9 @@ fn test_dsb18b20_temperature_too_cold() {
     let ds18b20 = Ds18b20::new(config.ds18b20).unwrap();
 
     assert!(matches!(
-            ds18b20.read(&valid_temperature_sensor_id),
-            Err(Ds18b20Error::TemperatureOutOfRange(_))
-        ));
+        ds18b20.read(&valid_temperature_sensor_id),
+        Err(Ds18b20Error::TemperatureOutOfRange(_))
+    ));
 }
 
 #[cfg(feature = "test-utils")]
@@ -360,12 +359,10 @@ fn test_dsb18b20_channel_mutexes_without_locking_mutexes() {
     let mutex_ds18b20_water_temperature: Arc<Mutex<Ds18b20Result>> = Arc::new(Mutex::new(Ok(
         Ds18b20ResultData::new(config.sensor_manager.replacement_value_water_temperature),
     )));
-    let mutex_ds18b20_ambient_temperature: Arc<Mutex<Ds18b20Result>> =
-        Arc::new(Mutex::new(Ok(Ds18b20ResultData::new(
-            config.sensor_manager.replacement_value_ambient_temperature,
-        ))));
-    let mutex_ds18b20_water_temperature_clone_for_asserts =
-        mutex_ds18b20_water_temperature.clone();
+    let mutex_ds18b20_ambient_temperature: Arc<Mutex<Ds18b20Result>> = Arc::new(Mutex::new(Ok(
+        Ds18b20ResultData::new(config.sensor_manager.replacement_value_ambient_temperature),
+    )));
+    let mutex_ds18b20_water_temperature_clone_for_asserts = mutex_ds18b20_water_temperature.clone();
     let mutex_ds18b20_ambient_temperature_clone_for_asserts =
         mutex_ds18b20_ambient_temperature.clone();
 
@@ -448,14 +445,12 @@ fn test_dsb18b20_channel_mutexes_with_locking_mutexes() {
     let mutex_ds18b20_water_temperature: Arc<Mutex<Ds18b20Result>> = Arc::new(Mutex::new(Ok(
         Ds18b20ResultData::new(config.sensor_manager.replacement_value_water_temperature),
     )));
-    let mutex_ds18b20_ambient_temperature: Arc<Mutex<Ds18b20Result>> =
-        Arc::new(Mutex::new(Ok(Ds18b20ResultData::new(
-            config.sensor_manager.replacement_value_ambient_temperature,
-        ))));
+    let mutex_ds18b20_ambient_temperature: Arc<Mutex<Ds18b20Result>> = Arc::new(Mutex::new(Ok(
+        Ds18b20ResultData::new(config.sensor_manager.replacement_value_ambient_temperature),
+    )));
     let mutex_ds18b20_water_temperature_clone_for_test_environment =
         mutex_ds18b20_water_temperature.clone();
-    let mutex_ds18b20_water_temperature_clone_for_asserts =
-        mutex_ds18b20_water_temperature.clone();
+    let mutex_ds18b20_water_temperature_clone_for_asserts = mutex_ds18b20_water_temperature.clone();
     let mutex_ds18b20_ambient_temperature_clone_for_asserts =
         mutex_ds18b20_ambient_temperature.clone();
 

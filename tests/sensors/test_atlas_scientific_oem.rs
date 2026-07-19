@@ -10,21 +10,25 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 //! Tests the driver for Atlas Scientific OEM sensors.
 
 use aquarium_control::launch::channels::Channels;
-use aquarium_control::sensors::atlas_scientific::{atlas_scientific_constants, AtlasScientificResultData};
+use aquarium_control::sensors::atlas_scientific::{
+    atlas_scientific_constants, AtlasScientificResultData,
+};
+use aquarium_control::sensors::atlas_scientific_channels::AtlasScientificChannels;
+use aquarium_control::sensors::atlas_scientific_driver::AtlasScientificDriver;
+use aquarium_control::sensors::atlas_scientific_error::AtlasScientificError;
+use aquarium_control::sensors::atlas_scientific_oem::{
+    atlas_scientific_oem_constants, AtlasScientificOem,
+};
 #[cfg(any(all(target_os = "linux", feature = "target_hw"), test))]
 use aquarium_control::sensors::i2c_interface::I2cResponse;
 #[cfg(any(all(target_os = "linux", feature = "target_hw"), test))]
 use aquarium_control::sensors::i2c_interface_channels::I2cInterfaceChannels;
+use aquarium_control::utilities::channel_content::AquariumSignal;
 use aquarium_control::utilities::config::{read_config_file, ConfigData};
 #[cfg(any(all(target_os = "linux", feature = "target_hw"), test))]
 use aquarium_control::utilities::signal_handler_channels::SignalHandlerChannels;
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
-use aquarium_control::sensors::atlas_scientific_channels::AtlasScientificChannels;
-use aquarium_control::sensors::atlas_scientific_driver::AtlasScientificDriver;
-use aquarium_control::sensors::atlas_scientific_error::AtlasScientificError;
-use aquarium_control::sensors::atlas_scientific_oem::{atlas_scientific_oem_constants, AtlasScientificOem};
-use aquarium_control::utilities::channel_content::AquariumSignal;
 
 cfg_if::cfg_if! {
     if #[cfg(feature = "test-utils")] {
@@ -287,15 +291,14 @@ fn test_short_response_error() {
         }
         Err(e) => {
             matches!(
-                    e,
-                    AtlasScientificError::ResponseTooShort {
-                        location: _,
-                        expected_length:
-                            atlas_scientific_oem_constants::RESPONSE_LENGTH_TEMPERATURE,
-                        actual_length: 3,
-                        signal: AquariumSignal::WaterTemperature
-                    }
-                );
+                e,
+                AtlasScientificError::ResponseTooShort {
+                    location: _,
+                    expected_length: atlas_scientific_oem_constants::RESPONSE_LENGTH_TEMPERATURE,
+                    actual_length: 3,
+                    signal: AquariumSignal::WaterTemperature
+                }
+            );
         }
     }
 }
@@ -673,16 +676,16 @@ fn test_device_init_response_too_short() {
 
     match result {
         Err(AtlasScientificError::ResponseTooShort {
-                expected_length,
-                actual_length,
-                ..
-            }) => {
+            expected_length,
+            actual_length,
+            ..
+        }) => {
             assert_eq!(expected_length, 1); // Code checks < DEVICE_TYPE_RESPONSE_LENGTH (2) but error says expected 1?
-            // Wait, let's check the code:
-            // if i2c_response.length < atlas_scientific_oem_constants::DEVICE_TYPE_RESPONSE_LENGTH {
-            //    return Err(AtlasScientificError::ResponseTooShort { expected_length: 1, ... });
-            // }
-            // Yes, the code hardcodes expected_length: 1 in the error creation.
+                                            // Wait, let's check the code:
+                                            // if i2c_response.length < atlas_scientific_oem_constants::DEVICE_TYPE_RESPONSE_LENGTH {
+                                            //    return Err(AtlasScientificError::ResponseTooShort { expected_length: 1, ... });
+                                            // }
+                                            // Yes, the code hardcodes expected_length: 1 in the error creation.
             assert_eq!(actual_length, 1);
         }
         _ => panic!("Expected ResponseTooShort error, got {:?}", result),
@@ -721,10 +724,10 @@ fn test_device_init_response_too_long() {
 
     match result {
         Err(AtlasScientificError::ResponseTooLong {
-                expected_length,
-                actual_length,
-                ..
-            }) => {
+            expected_length,
+            actual_length,
+            ..
+        }) => {
             assert_eq!(expected_length, 1); // Code likely uses 1 here too
             assert_eq!(actual_length, 3);
         }
@@ -927,8 +930,8 @@ pub fn test_atlas_scientific_oem_read() {
         Ok(_) => {
             println!("Conductivity sensor: INITIALIZED");
             // Continue with reading measurement value from the conductivity device
-            let _ = driver_conductivity
-                .send_request_to_i2c_interface(&mut atlas_scientific_channels);
+            let _ =
+                driver_conductivity.send_request_to_i2c_interface(&mut atlas_scientific_channels);
             let result = driver_conductivity.receive_response_from_i2c_interface(
                 &AquariumSignal::Conductivity,
                 &mut atlas_scientific_channels,

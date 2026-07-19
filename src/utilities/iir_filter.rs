@@ -43,7 +43,7 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 //!   sampling environments.
 //!
 
-#[cfg(not(test))] // only required in real-life execution
+#[cfg(all(not(test), not(feature = "test-utils")))] // only required in real-life execution
 use log::warn;
 use serde_derive::Deserialize;
 
@@ -86,10 +86,10 @@ impl IIRFilter {
     pub fn new(
         filter_config: &IIRFilterConfig,
         initial_value_opt: Option<f32>,
-        #[cfg(not(test))] signal_name: &str, // only required in real-life execution
+        #[cfg(all(not(test), not(feature = "test-utils")))] signal_name: &str, // only required in real-life execution
     ) -> Self {
         let safe_filter_coefficient = filter_config.filter_coefficient.clamp(0.0, 1.0);
-        #[cfg(not(test))] // only required in real-life execution
+        #[cfg(all(not(test), not(feature = "test-utils")))]// only required in real-life execution
         #[cfg(not(tarpaulin_include))]
         if safe_filter_coefficient != filter_config.filter_coefficient {
             warn!(

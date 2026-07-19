@@ -99,7 +99,7 @@ impl Sump {
             level_filter: IIRFilter::new(
                 &sump_config.level_filter,
                 None,
-                #[cfg(not(test))] // only required in real-life execution
+                #[cfg(all(not(test), not(feature = "test-utils")))] // only required in real-life execution
                 "sump level",
             ),
             config: sump_config,
@@ -163,121 +163,5 @@ impl Sump {
             );
             water_volume.increase_water_volume(self.config.refill_pump_flow_rate * time_step);
         }
-    }
-}
-
-#[cfg(test)]
-pub mod tests {
-    use crate::test_server::sump::Pump;
-    use crate::test_server::sump::PumpStatus;
-    use crate::test_server::sump::Sump;
-    use crate::test_server::tank_geometry::TankGeometry;
-    use crate::test_server::tank_geometry::TankGeometryConfig;
-    use crate::test_server::test_server_config::read_test_server_config_file;
-    use crate::utilities::iir_filter::{IIRFilter, IIRFilterConfig};
-    use assert_float_eq::*;
-
-    #[test]
-    fn test_static_sump_water_level() {
-        let config = read_test_server_config_file(None);
-
-        let tank_config = TankGeometryConfig {
-            width: 1.0,
-            length: 1.0,
-            water_volume_min: 700.0,
-            water_volume_max: 900.0,
-            initial_water_volume: 800.0,
-        };
-
-        let tank = TankGeometry::new(tank_config);
-
-        let pump1 = Pump {
-            status: PumpStatus::On,
-            // delta_pressure: 0.01,
-        };
-
-        let pump2 = Pump {
-            status: PumpStatus::On,
-            // delta_pressure: 0.01,
-        };
-
-        let refill_pump = Pump {
-            status: PumpStatus::Off,
-        };
-
-        let mut sump = Sump {
-            main_pump_1: pump1,
-            main_pump_2: pump2,
-            refill_pump,
-            level_filter: IIRFilter::new(
-                &IIRFilterConfig {
-                    filter_coefficient: 1.0,
-                    fallback_initial_value: 0.8,
-                },
-                Some(1.0),
-                #[cfg(not(test))] // only required in real-life execution
-                "sump level",
-            ),
-            config: config.sump,
-        };
-
-        assert_float_absolute_eq!(sump.get_water_level(&tank), 0.780, 0.001);
-    }
-
-    #[test]
-    fn test_dynamic_sump_water_level() {
-        let config = read_test_server_config_file(None);
-
-        let tank_config = TankGeometryConfig {
-            width: 1.0,
-            length: 1.0,
-            water_volume_min: 700.0,
-            water_volume_max: 900.0,
-            initial_water_volume: 800.0,
-        };
-
-        let tank = TankGeometry::new(tank_config);
-
-        let pump1 = Pump {
-            status: PumpStatus::Off,
-            // delta_pressure: 0.01,
-        };
-
-        let pump2 = Pump {
-            status: PumpStatus::Off,
-            // delta_pressure: 0.01,
-        };
-
-        let refill_pump = Pump {
-            status: PumpStatus::Off,
-        };
-
-        let mut sump = Sump {
-            main_pump_1: pump1,
-            main_pump_2: pump2,
-            refill_pump,
-            level_filter: IIRFilter::new(
-                &IIRFilterConfig {
-                    filter_coefficient: 0.5,
-                    fallback_initial_value: 0.8,
-                },
-                Some(0.8),
-                #[cfg(not(test))] // only required in real-life execution
-                "sump level",
-            ),
-            config: config.sump,
-        };
-
-        let initial_sump_level = sump.get_water_level(&tank);
-
-        assert_float_absolute_eq!(initial_sump_level, 0.8, 0.001);
-
-        // sump.switch_on_pumps();
-        sump.main_pump_1.status = PumpStatus::On;
-        sump.main_pump_2.status = PumpStatus::On;
-
-        assert_float_absolute_eq!(sump.get_water_level(&tank), 0.790, 0.001);
-        assert_float_absolute_eq!(sump.get_water_level(&tank), 0.785, 0.001);
-        assert_float_absolute_eq!(sump.get_water_level(&tank), 0.782, 0.001);
     }
 }

@@ -13,7 +13,9 @@ use aquarium_control::launch::channels::{channel, Channels};
 use aquarium_control::mocks::mock_signal::tests::MockSignal;
 use aquarium_control::mocks::mock_tcp::tests::mock_tcp_for_tank_level_switch;
 use aquarium_control::mocks::test_command::tests::TestCommand;
-use aquarium_control::sensors::tank_level_switch::{TankLevelSwitch, TankLevelSwitchError, TankLevelSwitchSignals};
+use aquarium_control::sensors::tank_level_switch::{
+    TankLevelSwitch, TankLevelSwitchError, TankLevelSwitchSignals,
+};
 use aquarium_control::utilities::channel_content::InternalCommand;
 use aquarium_control::utilities::config::{read_config_file, ConfigData};
 use spin_sleep::SpinSleeper;
@@ -50,7 +52,7 @@ pub fn test_refill_calc_tank_level_switch_position_stabilized_false_when_invalid
         None,
         config.gpio_handler.tank_level_switch,
     )
-        .unwrap();
+    .unwrap();
     #[cfg(any(not(target_os = "linux"), not(feature = "target_hw")))]
     let mut tank_level_switch = TankLevelSwitch::new(config.tank_level_switch, true).unwrap();
 
@@ -115,16 +117,14 @@ pub fn test_refill_calc_tank_level_switch_position_stabilized_false_when_invalid
             );
 
             // Get the final state after execution.
-            let signals_after_test_run =
-                mutex_tank_level_switch_signals_for_assert.lock().unwrap();
+            let signals_after_test_run = mutex_tank_level_switch_signals_for_assert.lock().unwrap();
             // Assert that the stabilized position is forced to true (safe state) due to invalidity.
             assert!(signals_after_test_run.tank_level_switch_position_stabilized);
             // Confirm invalid-flag remained true
             assert!(signals_after_test_run.tank_level_switch_invalid);
 
             // send Quit signal to mock threads because the test object has terminated
-            let _ =
-                tx_tank_level_switch_to_tcp_for_test_case_finish.send(InternalCommand::Quit);
+            let _ = tx_tank_level_switch_to_tcp_for_test_case_finish.send(InternalCommand::Quit);
         })
         .unwrap();
 
@@ -210,7 +210,7 @@ pub fn test_refill_calc_tank_level_switch_position_stabilized_false_true() {
         None,
         config.gpio_handler.tank_level_switch,
     )
-        .unwrap();
+    .unwrap();
     #[cfg(any(not(target_os = "linux"), not(feature = "target_hw")))]
     let tank_level_switch = TankLevelSwitch::new(config.tank_level_switch, false).unwrap();
     let mutex_tank_level_switch_signals =
@@ -320,7 +320,7 @@ pub fn test_refill_calc_tank_level_switch_position_stabilized_true_false() {
         None,
         config.gpio_handler.tank_level_switch,
     )
-        .unwrap();
+    .unwrap();
     #[cfg(any(not(target_os = "linux"), not(feature = "target_hw")))]
     let tank_level_switch = TankLevelSwitch::new(config.tank_level_switch, true).unwrap();
     let mutex_tank_level_switch_signals =
@@ -429,7 +429,7 @@ pub fn test_refill_calc_tank_level_switch_position_stabilized_is_true_with_toggl
         None,
         config.gpio_handler.tank_level_switch,
     )
-        .unwrap();
+    .unwrap();
     #[cfg(any(not(target_os = "linux"), not(feature = "target_hw")))]
     let tank_level_switch = TankLevelSwitch::new(config.tank_level_switch, true).unwrap();
     let mutex_tank_level_switch_signals =
@@ -578,8 +578,7 @@ pub fn test_tank_level_switch_position_on_hardware() {
     let gpio_lib_handle = gpio_handler.gpio_lib_handle_opt.clone().unwrap();
 
     let mut stimuli_pin =
-        actuate_gpio::get_output_pin(&gpio_lib_handle, 21, "Tank level switch stimuli")
-            .unwrap();
+        actuate_gpio::get_output_pin(&gpio_lib_handle, 21, "Tank level switch stimuli").unwrap();
 
     let mut tank_level_switch = TankLevelSwitch::new(
         config.tank_level_switch,
@@ -587,7 +586,7 @@ pub fn test_tank_level_switch_position_on_hardware() {
         Some(gpio_handler.gpio_lib_handle_opt.unwrap()),
         tank_level_switch_pin,
     )
-        .unwrap();
+    .unwrap();
 
     let mut mutex_tank_level_switch_signals =
         Arc::new(Mutex::new(TankLevelSwitchSignals::new(true, true, false)));
@@ -686,7 +685,7 @@ pub fn test_refill_calc_tank_level_switch_position_stabilized_false_true_with_mu
         None,
         config.gpio_handler.tank_level_switch,
     )
-        .unwrap();
+    .unwrap();
     #[cfg(any(not(target_os = "linux"), not(feature = "target_hw")))]
     let mut tank_level_switch = TankLevelSwitch::new(config.tank_level_switch, false).unwrap();
     let mutex_tank_level_switch_signals =

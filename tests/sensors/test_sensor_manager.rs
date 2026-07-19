@@ -32,14 +32,14 @@ pub fn test_sensor_manager_error_water_temperature_source_is_invalid() {
     config.sensor_manager.source_water_temperature = "invalid".to_string();
     let test_result = SensorManager::new(config.sensor_manager);
     assert!(matches!(
-            test_result,
-            Err(SensorManagerError::InvalidWaterTemperatureConfiguration(
-                _,
-                _,
-                _,
-                _
-            ))
-        ));
+        test_result,
+        Err(SensorManagerError::InvalidWaterTemperatureConfiguration(
+            _,
+            _,
+            _,
+            _
+        ))
+    ));
 }
 
 #[test]
@@ -49,14 +49,14 @@ pub fn test_sensor_manager_error_ambient_temperature_source_is_invalid() {
     config.sensor_manager.source_ambient_temperature = "invalid".to_string();
     let test_result = SensorManager::new(config.sensor_manager);
     assert!(matches!(
-            test_result,
-            Err(SensorManagerError::InvalidAmbientTemperatureConfiguration(
-                _,
-                _,
-                _,
-                _
-            ))
-        ));
+        test_result,
+        Err(SensorManagerError::InvalidAmbientTemperatureConfiguration(
+            _,
+            _,
+            _,
+            _
+        ))
+    ));
 }
 
 /// Performs the `mock_signal_handler_for_sensor_manager` operation.
@@ -169,7 +169,6 @@ fn execute_and_assert_sensor_manager(
     );
 }
 
-
 #[test]
 // Test case verifies if the test object is processing the interfaces correctly using input
 // from Ds18b20 sensors.
@@ -182,8 +181,7 @@ pub fn test_sensor_manager_interfaces_using_ds18b20_as_input_without_mutex_block
     config.sensor_manager.source_ambient_temperature = "ds18b20".to_string();
     config.sensor_manager.source_water_temperature = "ds18b20".to_string();
 
-    let target_value_water_temperature =
-        config.sensor_manager.replacement_value_water_temperature;
+    let target_value_water_temperature = config.sensor_manager.replacement_value_water_temperature;
     let target_value_ambient_temperature =
         config.sensor_manager.replacement_value_ambient_temperature;
 
@@ -193,12 +191,12 @@ pub fn test_sensor_manager_interfaces_using_ds18b20_as_input_without_mutex_block
     let mutex_ds18b20_ambient_temperature = Arc::new(Mutex::new(Ok(Ds18b20ResultData::new(
         target_value_ambient_temperature,
     ))));
-    let mutex_atlas_scientific_temperature = Arc::new(Mutex::new(
-        AtlasScientificResultData::new(target_value_water_temperature + 1.0),
-    ));
-    let mutex_atlas_scientific_conductivity = Arc::new(Mutex::new(
-        AtlasScientificResultData::new(config.sensor_manager.replacement_value_conductivity),
-    ));
+    let mutex_atlas_scientific_temperature = Arc::new(Mutex::new(AtlasScientificResultData::new(
+        target_value_water_temperature + 1.0,
+    )));
+    let mutex_atlas_scientific_conductivity = Arc::new(Mutex::new(AtlasScientificResultData::new(
+        config.sensor_manager.replacement_value_conductivity,
+    )));
     let mutex_atlas_scientific_ph = Arc::new(Mutex::new(AtlasScientificResultData::new(
         config.sensor_manager.replacement_value_ph,
     )));
@@ -250,8 +248,7 @@ pub fn test_sensor_manager_interfaces_using_atlas_scientific_and_dht_as_input() 
     config.sensor_manager.source_ambient_temperature = "dht".to_string();
     config.sensor_manager.source_water_temperature = "atlas_scientific".to_string();
 
-    let target_value_water_temperature =
-        config.sensor_manager.replacement_value_water_temperature;
+    let target_value_water_temperature = config.sensor_manager.replacement_value_water_temperature;
     let target_value_ambient_temperature =
         config.sensor_manager.replacement_value_ambient_temperature;
 
@@ -261,12 +258,12 @@ pub fn test_sensor_manager_interfaces_using_atlas_scientific_and_dht_as_input() 
     let mutex_ds18b20_ambient_temperature = Arc::new(Mutex::new(Ok(Ds18b20ResultData::new(
         target_value_ambient_temperature + 1.0,
     ))));
-    let mutex_atlas_scientific_temperature = Arc::new(Mutex::new(
-        AtlasScientificResultData::new(target_value_water_temperature),
-    ));
-    let mutex_atlas_scientific_conductivity = Arc::new(Mutex::new(
-        AtlasScientificResultData::new(config.sensor_manager.replacement_value_conductivity),
-    ));
+    let mutex_atlas_scientific_temperature = Arc::new(Mutex::new(AtlasScientificResultData::new(
+        target_value_water_temperature,
+    )));
+    let mutex_atlas_scientific_conductivity = Arc::new(Mutex::new(AtlasScientificResultData::new(
+        config.sensor_manager.replacement_value_conductivity,
+    )));
     let mutex_atlas_scientific_ph = Arc::new(Mutex::new(AtlasScientificResultData::new(
         config.sensor_manager.replacement_value_ph,
     )));
@@ -318,8 +315,7 @@ pub fn test_sensor_manager_interfaces_using_ds18b20_as_input_with_mutex_blocked(
     config.sensor_manager.source_ambient_temperature = "ds18b20".to_string();
     config.sensor_manager.source_water_temperature = "ds18b20".to_string();
 
-    let target_value_water_temperature =
-        config.sensor_manager.replacement_value_water_temperature;
+    let target_value_water_temperature = config.sensor_manager.replacement_value_water_temperature;
     let target_value_ambient_temperature =
         config.sensor_manager.replacement_value_ambient_temperature;
 
@@ -329,12 +325,12 @@ pub fn test_sensor_manager_interfaces_using_ds18b20_as_input_with_mutex_blocked(
     let mutex_ds18b20_ambient_temperature = Arc::new(Mutex::new(Ok(Ds18b20ResultData::new(
         target_value_ambient_temperature,
     ))));
-    let mutex_atlas_scientific_temperature = Arc::new(Mutex::new(
-        AtlasScientificResultData::new(target_value_water_temperature + 1.0),
-    ));
-    let mutex_atlas_scientific_conductivity = Arc::new(Mutex::new(
-        AtlasScientificResultData::new(config.sensor_manager.replacement_value_conductivity),
-    ));
+    let mutex_atlas_scientific_temperature = Arc::new(Mutex::new(AtlasScientificResultData::new(
+        target_value_water_temperature + 1.0,
+    )));
+    let mutex_atlas_scientific_conductivity = Arc::new(Mutex::new(AtlasScientificResultData::new(
+        config.sensor_manager.replacement_value_conductivity,
+    )));
     let mutex_atlas_scientific_ph = Arc::new(Mutex::new(AtlasScientificResultData::new(
         config.sensor_manager.replacement_value_ph,
     )));

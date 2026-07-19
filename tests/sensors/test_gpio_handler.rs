@@ -45,9 +45,9 @@ pub fn test_invalid_gpio_config_duplicate() {
     let result = GpioHandler::new(config.gpio_handler);
     assert!(result.is_err());
     assert!(matches!(
-            result,
-            Err(GpioHandlerError::PinDuplicateValue(_))
-        ));
+        result,
+        Err(GpioHandlerError::PinDuplicateValue(_))
+    ));
 }
 
 #[test]
@@ -65,15 +65,15 @@ pub fn test_invalid_gpio_config_high() {
 
 mod commissioning_prep {
     cfg_if::cfg_if! {
-            if #[cfg(all(feature = "commissioning_prep", feature = "target_hw", target_os = "linux", test))] {
-                use crate::config::ConfigData;
-                use crate::read_config_file;
-                use crate::GpioHandler;
+        if #[cfg(all(feature = "commissioning_prep", feature = "target_hw", target_os = "linux", test))] {
+            use crate::config::ConfigData;
+            use crate::read_config_file;
+            use crate::GpioHandler;
 
-                use spin_sleep::SpinSleeper;
-                use std::time::Duration;
-            }
+            use spin_sleep::SpinSleeper;
+            use std::time::Duration;
         }
+    }
 
     #[test]
     #[cfg(all(

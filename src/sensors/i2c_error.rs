@@ -67,7 +67,11 @@ pub enum I2cError {
         source: rppal::i2c::Error,
     },
 
-    #[cfg(any(test, feature = "test-utils", all(target_os = "linux", feature = "target_hw")))]
+    #[cfg(any(
+        test,
+        feature = "test-utils",
+        all(target_os = "linux", feature = "target_hw")
+    ))]
     /// The message could not be sent.
     #[error("[{location}] I2C write operation failed.")]
     WriteFailure {

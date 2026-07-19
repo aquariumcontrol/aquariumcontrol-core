@@ -9,14 +9,14 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 
 //! Tests the sensor management thread for a DHT22 temperature and humidity sensor.
 
-use std::sync::{Arc, Mutex};
-use std::thread;
-use std::time::Duration;
 use aquarium_control::launch::channels::{channel, AquaSender};
 use aquarium_control::sensors::dht::{Dht, DhtResult};
 use aquarium_control::sensors::dht_channels::DhtChannels;
 use aquarium_control::sensors::dht_config::DhtConfig;
 use aquarium_control::utilities::channel_content::InternalCommand;
+use std::sync::{Arc, Mutex};
+use std::thread;
+use std::time::Duration;
 
 cfg_if::cfg_if! {
     if #[cfg(all(feature = "target_hw", target_os = "linux"))] {

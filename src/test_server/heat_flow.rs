@@ -44,7 +44,7 @@ impl HeatFlow {
             filter: IIRFilter::new(
                 &config_heat_flow.heater_filter,
                 Some(config_heat_flow.heater_power),
-                #[cfg(not(test))] // only required in real-life execution
+                #[cfg(all(not(test), not(feature = "test-utils")))] // only required in real-life execution
                 "heat_flow",
             ),
             config: config_heat_flow,
@@ -157,118 +157,5 @@ impl HeatFlow {
         } else {
             0.0
         }
-    }
-}
-
-#[cfg(test)]
-pub mod tests {
-    use crate::test_server::heat_flow::HeatFlow;
-    use crate::test_server::test_server_config::read_test_server_config_file;
-    use assert_float_eq::*;
-
-    /// Performs the `create_heat_flow_model` operation.
-    fn create_heat_flow_model() -> HeatFlow {
-        let config_heat_flow = read_test_server_config_file(None).heat_flow;
-
-        HeatFlow::new(config_heat_flow, 1.0)
-    }
-
-    #[test]
-    fn test_heat_flow_to_environment() {
-        let heat_flow_model = create_heat_flow_model();
-        assert_float_absolute_eq!(
-            heat_flow_model.heat_flow_environment(25.0, 24.0),
-            -50.0,
-            0.001
-        )
-    }
-
-    #[test]
-    fn test_heat_flow_from_environment() {
-        let heat_flow_model = create_heat_flow_model();
-        assert_float_absolute_eq!(
-            heat_flow_model.heat_flow_environment(24.0, 25.0),
-            50.0,
-            0.001
-        )
-    }
-
-    #[test]
-    fn test_no_heat_flow_to_or_from_environment() {
-        let heat_flow_model = create_heat_flow_model();
-        assert_float_absolute_eq!(
-            heat_flow_model.heat_flow_environment(25.0, 25.0),
-            0.0,
-            0.001
-        )
-    }
-
-    #[test]
-    fn test_heat_flow_from_heater_when_heater_is_on() {
-        let mut heat_flow_model = create_heat_flow_model();
-
-        assert_float_absolute_eq!(heat_flow_model.heat_flow_heater(true), 220.0, 0.001);
-    }
-
-    #[test]
-    fn test_heat_flow_from_heater_when_heater_is_off() {
-        let mut heat_flow_model = create_heat_flow_model();
-
-        assert_float_absolute_eq!(heat_flow_model.heat_flow_heater(false), 110.0, 0.001);
-    }
-
-    #[test]
-    fn test_heat_flow_evaporation() {
-        let heat_flow_model = create_heat_flow_model();
-        assert_float_absolute_eq!(
-            heat_flow_model.heat_flow_evaporation(1.0, 25.0),
-            -0.5588436,
-            0.00001
-        )
-    }
-
-    #[test]
-    fn test_no_heat_flow_evaporation() {
-        let heat_flow_model = create_heat_flow_model();
-        assert_float_absolute_eq!(heat_flow_model.heat_flow_evaporation(0.0, 25.0), 0.0, 0.001)
-    }
-
-    #[test]
-    fn test_no_heat_flow_evaporation_with_negative_evaporation() {
-        let heat_flow_model = create_heat_flow_model();
-        assert_float_absolute_eq!(
-            heat_flow_model.heat_flow_evaporation(-1.0, 25.0),
-            0.0,
-            0.001
-        )
-    }
-
-    #[test]
-    fn test_heat_flow_lights() {
-        let heat_flow_model = create_heat_flow_model();
-        assert_float_absolute_eq!(heat_flow_model.heat_flow_lights(1.0), 1.8, 0.001)
-    }
-
-    #[test]
-    fn test_no_heat_flow_lights() {
-        let heat_flow_model = create_heat_flow_model();
-        assert_float_absolute_eq!(heat_flow_model.heat_flow_lights(0.0), 0.0, 0.001)
-    }
-
-    #[test]
-    fn test_no_heat_flow_lights_with_negative_intensity() {
-        let heat_flow_model = create_heat_flow_model();
-        assert_float_absolute_eq!(heat_flow_model.heat_flow_lights(-1.0), 0.0, 0.001)
-    }
-
-    #[test]
-    fn test_heat_flow_total() {
-        let mut heat_flow_model = create_heat_flow_model();
-
-        assert_float_absolute_eq!(
-            heat_flow_model.heat_flow_total(100.0, 25.5, 22.0, 1.0, true),
-            224.441,
-            0.001
-        );
     }
 }
