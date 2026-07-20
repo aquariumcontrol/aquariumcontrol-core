@@ -64,11 +64,15 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 
 #[cfg(feature = "debug_balling")]
 use log::debug;
-use log::{error, info};
+use log::error;
+
+#[cfg(all(not(test), not(feature = "test-utils")))]
+use log::info;
+
 use std::error;
 use std::fmt;
 
-#[cfg(all(not(test), target_os = "linux"))] // only required in real-life execution
+#[cfg(all(not(feature = "test-utils"), not(test), target_os = "linux"))] // only required in real-life execution
 use nix::unistd::gettid;
 
 use std::sync::{Arc, Mutex};
@@ -659,7 +663,7 @@ impl Balling {
         mut sql_interface_balling: SqlInterfaceBalling,
         is_multi_thread: bool,
     ) {
-        #[cfg(all(target_os = "linux", not(test)))] // only required in real-life execution
+        #[cfg(all(target_os = "linux", not(test), not(feature = "test-utils")))] // only required in real-life execution
         #[cfg(not(tarpaulin_include))]
         info!(target: module_path!(), "Thread started with TID: {}", gettid());
 
@@ -749,35 +753,34 @@ impl Balling {
             );
             if self.execute_command_received && self.config.active && !self.execution_blocked {
                 let pump_device_opt = Self::get_pump_from_id(self.pump_id_requested);
-                match pump_device_opt {
-                    Some((pump_id, pump_device)) => {
-                        // reduce terminal output when testing
-                        #[cfg(all(not(test), not(feature = "test-utils")))] // only required in real-life execution
-                        #[cfg(not(tarpaulin_include))]
-                        info!(
-                            target: module_path!(),
-                            "executing external request for actuation of pump #{}",
-                            self.pump_id_requested
-                        );
-                        quit_command_received = self
-                            .execute_dosing(
-                                pump_id,
-                                pump_device,
-                                mineral_injection,
-                                balling_channels,
-                                &mut sql_interface_balling,
-                                &mutex_device_scheduler_balling,
-                                is_multi_thread,
-                            )
-                            .await;
-                    }
-                    None => {
-                        info!(
-                            target: module_path!(),
-                            "ignoring external request for actuation of pump #{}",
-                            self.pump_id_requested
-                        );
-                    }
+                if let Some((pump_id, pump_device)) = pump_device_opt {
+                    // reduce terminal output when testing
+                    #[cfg(all(not(test), not(feature = "test-utils")))] // only required in real-life execution
+                    #[cfg(not(tarpaulin_include))]
+                    info!(
+                        target: module_path!(),
+                        "executing external request for actuation of pump #{}",
+                        self.pump_id_requested
+                    );
+                    quit_command_received = self
+                        .execute_dosing(
+                            pump_id,
+                            pump_device,
+                            mineral_injection,
+                            balling_channels,
+                            &mut sql_interface_balling,
+                            &mutex_device_scheduler_balling,
+                            is_multi_thread,
+                        )
+                        .await;
+                }
+                else {
+                    #[cfg(all(not(test), not(feature = "test-utils")))]
+                    info!(
+                        target: module_path!(),
+                        "ignoring external request for actuation of pump #{}",
+                        self.pump_id_requested
+                    );
                 }
             }
 

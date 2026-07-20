@@ -60,10 +60,10 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 #[cfg(feature = "debug_schedule_check")]
 use log::debug;
 
-#[cfg(all(not(test), target_os = "linux"))] // only required in real-life execution
+#[cfg(all(not(test), not(feature = "test-utils"), target_os = "linux"))] // only required in real-life execution
 use log::info;
 
-#[cfg(all(target_os = "linux", not(test)))] // only required in real-life execution
+#[cfg(all(target_os = "linux", not(test), not(feature = "test-utils")))] // only required in real-life execution
 use nix::unistd::gettid;
 
 #[cfg(all(not(test), not(feature = "test-utils")))] // only required in real-life execution
@@ -361,7 +361,7 @@ impl ScheduleCheck {
         execution_config: ExecutionConfig,
         mut sql_interface_schedule: SqlInterfaceSchedule,
     ) {
-        #[cfg(all(target_os = "linux", not(test)))] // only required in real-life execution
+        #[cfg(all(target_os = "linux", not(test), not(feature = "test-utils")))] // only required in real-life execution
         #[cfg(not(tarpaulin_include))]
         info!(target: module_path!(), "Thread started with TID: {}", gettid());
 

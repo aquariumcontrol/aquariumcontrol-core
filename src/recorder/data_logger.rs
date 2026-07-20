@@ -65,14 +65,14 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 
 #![allow(non_snake_case)]
 use chrono::{Local, NaiveDateTime};
-#[cfg(all(not(test), target_os = "linux"))] // only required in real-life execution
+#[cfg(all(not(feature = "test-utils"), not(test), target_os = "linux"))] // only required in real-life execution
 use log::info;
 use log::{error, warn};
 
 #[cfg(feature = "debug_data_logger")]
 use log::debug;
 
-#[cfg(all(not(test), target_os = "linux"))] // only required in real-life execution
+#[cfg(all(not(feature = "test-utils"), not(test), target_os = "linux"))] // only required in real-life execution
 use nix::unistd::gettid;
 
 use std::fs;
@@ -1105,7 +1105,7 @@ impl DataLogger {
         data_logger_channels: &mut DataLoggerChannels,
         data_logger_mutexes: DataLoggerMutexes,
     ) {
-        #[cfg(all(not(test), target_os = "linux"))] // only required in real-life execution
+        #[cfg(all(not(feature = "test-utils"), not(test), target_os = "linux"))] // only required in real-life execution
         #[cfg(not(tarpaulin_include))]
         info!(target: module_path!(), "Thread started with TID: {}", gettid());
 

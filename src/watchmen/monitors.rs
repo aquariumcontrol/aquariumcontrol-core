@@ -53,12 +53,15 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 //!   encapsulates all the `mpsc` channels required for the `Monitors` thread to
 //!   communicate with other parts of the application.
 
-use log::{error, info};
+use log::error;
+
+#[cfg(all(not(test), not(feature = "test-utils")))]
+use log::info;
 
 #[cfg(feature = "debug_channels")]
 use log::debug;
 
-#[cfg(all(not(test), target_os = "linux"))] // only required in real-life execution
+#[cfg(all(not(feature = "test-utils"), not(test), target_os = "linux"))] // only required in real-life execution
 use nix::unistd::gettid;
 
 use crate::launch::channels::AquaChannelError;
@@ -200,7 +203,7 @@ impl Monitors {
         _mutex_device_scheduler_monitors: Arc<Mutex<i32>>,
         monitors_channels: &mut MonitorsChannels,
     ) {
-        #[cfg(all(target_os = "linux", not(test)))] // only required in real-life execution
+        #[cfg(all(target_os = "linux", not(feature = "test-utils"), not(test)))] // only required in real-life execution
         #[cfg(not(tarpaulin_include))]
         info!(target: module_path!(), "Thread started with TID: {}", gettid());
 
@@ -213,7 +216,9 @@ impl Monitors {
 
         loop {
             if self.config.active {
+                #[allow(clippy::needless_bool_assign)]
                 if monitors_inhibited && !self.lock_info_monitors_inhibited {
+                    #[cfg(all(not(test), not(feature = "test-utils")))]
                     info!(
                         target: module_path!(),
                         "monitors are inhibited after receiving stop command via message.");
@@ -294,6 +299,7 @@ impl Monitors {
                 break;
             }
             if stop_command_received {
+                #[cfg(all(not(test), not(feature = "test-utils")))]
                 info!(
                     target: module_path!(),
                     "received Stop command. Inhibiting monitoring."
@@ -301,6 +307,7 @@ impl Monitors {
                 monitors_inhibited = true;
             }
             if start_command_received {
+                #[cfg(all(not(test), not(feature = "test-utils")))]
                 info!(
                     target: module_path!(),
                     "received Start command. Restarting monitoring."
