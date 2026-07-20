@@ -72,7 +72,7 @@ use log::warn;
 #[cfg(all(not(test), not(feature = "test-utils")))] // only required in real-life execution
 use log::info;
 
-#[cfg(all(not(test), target_os = "linux"))] // only required in real-life execution
+#[cfg(all(not(test), target_os = "linux", not(feature = "test-utils")))] // only required in real-life execution
 use nix::unistd::gettid;
 
 use std::sync::{Arc, Mutex};
