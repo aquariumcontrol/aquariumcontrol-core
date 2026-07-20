@@ -746,7 +746,7 @@ impl Refill {
         mut sql_interface_refill: Box<dyn DatabaseInterfaceRefillTrait + Sync + Send>,
         is_multi_thread: bool,
     ) {
-        #[cfg(all(target_os = "linux", not(test)))] // only required in real-life execution
+        #[cfg(all(target_os = "linux", not(test), not(feature = "test-utils")))] // only required in real-life execution
         #[cfg(not(tarpaulin_include))]
         info!(target: module_path!(), "Thread started with TID: {}", gettid());
 
