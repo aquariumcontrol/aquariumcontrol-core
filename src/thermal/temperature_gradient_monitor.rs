@@ -10,7 +10,7 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 //! Provides a trait for monitoring the effect of thermal actuators on the temperature gradient.
 
 use log::error;
-#[cfg(not(test))] // only required in real-life execution
+#[cfg(all(not(test), not(feature = "test-utils")))] // only required in real-life execution
 use log::info;
 use std::sync::{Arc, Mutex};
 use std::time::Instant;
@@ -40,7 +40,7 @@ pub trait TemperatureGradientMonitorTrait {
         mutex_temperature_gradient: &Arc<Mutex<f64>>,
         actuator_status: bool,
         expected_gradient_is_positive: bool,
-        #[cfg(not(test))] component_name: &str, // only required in real-life execution
+        #[cfg(all(not(test), not(feature = "test-utils")))] component_name: &str, // only required in real-life execution
     ) -> bool {
         let max_time = self.max_time_actuator_effect_monitor();
         if max_time == 0 {
@@ -65,7 +65,7 @@ pub trait TemperatureGradientMonitorTrait {
 
                         if !gradient_sign_correct {
                             if !*log_inhibition {
-                                #[cfg(not(test))] // only required in real-life execution
+                                #[cfg(all(not(test), not(feature = "test-utils")))] // only required in real-life execution
                                 #[cfg(not(tarpaulin_include))]
                                 info!(
                                     target: module_path!(),
@@ -146,7 +146,7 @@ mod tests {
             &gradient,
             true,
             true,
-            #[cfg(not(test))] // only required in real-life execution
+            #[cfg(all(not(test), not(feature = "test-utils")))] // only required in real-life execution
             "TestComponent",
         );
 
@@ -168,7 +168,7 @@ mod tests {
             &gradient,
             false,
             true,
-            #[cfg(not(test))] // only required in real-life execution
+            #[cfg(all(not(test), not(feature = "test-utils")))] // only required in real-life execution
             "TestComponent",
         );
 
@@ -192,7 +192,7 @@ mod tests {
             &gradient,
             true,
             true,
-            #[cfg(not(test))] // only required in real-life execution
+            #[cfg(all(not(test), not(feature = "test-utils")))] // only required in real-life execution
             "TestComponent",
         );
 
@@ -215,7 +215,7 @@ mod tests {
             &gradient,
             true,
             true,
-            #[cfg(not(test))] // only required in real-life execution
+            #[cfg(all(not(test), not(feature = "test-utils")))] // only required in real-life execution
             "TestComponent",
         );
 
@@ -238,7 +238,7 @@ mod tests {
             &gradient,
             true,
             false,
-            #[cfg(not(test))] // only required in real-life execution
+            #[cfg(all(not(test), not(feature = "test-utils")))] // only required in real-life execution
             "TestComponent",
         );
 
@@ -261,7 +261,7 @@ mod tests {
             &gradient,
             true,
             true,
-            #[cfg(not(test))] // only required in real-life execution
+            #[cfg(all(not(test), not(feature = "test-utils")))] // only required in real-life execution
             "TestComponent",
         );
 
@@ -284,7 +284,7 @@ mod tests {
             &gradient,
             true,
             false,
-            #[cfg(not(test))] // only required in real-life execution
+            #[cfg(all(not(test), not(feature = "test-utils")))] // only required in real-life execution
             "TestComponent",
         );
 
@@ -308,7 +308,7 @@ mod tests {
             &gradient,
             true,
             true,
-            #[cfg(not(test))] // only required in real-life execution
+            #[cfg(all(not(test), not(feature = "test-utils")))] // only required in real-life execution
             "TestComponent",
         );
 
@@ -330,7 +330,7 @@ mod tests {
             &gradient,
             true,
             true,
-            #[cfg(not(test))] // only required in real-life execution
+            #[cfg(all(not(test), not(feature = "test-utils")))] // only required in real-life execution
             "TestComponent",
         );
 

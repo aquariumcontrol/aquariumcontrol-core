@@ -27,7 +27,7 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 //!   practice for creating robust error types.
 //!
 //! - **Conditional Compilation**: The module uses `#[cfg(test)]` and
-//!   `#[cfg(not(test))]` attributes to provide different error variants for
+//!   `#[cfg(all(not(test), not(feature = "test-utils")))]` attributes to provide different error variants for
 //!   production and test builds.
 //!   - In **production**, it defines errors for file I/O and TOML parsing,
 //!     allowing the main application to catch these and exit gracefully.
@@ -50,15 +50,15 @@ use thiserror::Error;
 
 #[derive(Error, Debug)]
 pub enum ConfigError {
-    #[cfg(not(test))] // only required in real-life execution
+    #[cfg(all(not(test), not(feature = "test-utils")))] // only required in real-life execution
     #[error("Could not read configuration file '{0}'")]
     FileRead(String, #[source] std::io::Error),
 
-    #[cfg(not(test))] // only required in real-life execution
+    #[cfg(all(not(test), not(feature = "test-utils")))] // only required in real-life execution
     #[error("Failed to parse TOML in configuration file '{0}'")]
     TomlParse(String, #[source] toml::de::Error),
 
-    #[cfg(test)]
+    #[cfg(any(test, feature = "test-utils"))]
     #[error("Could not read environment variable CARGO_MANIFEST_DIR.")]
     CargoManifestDir,
 }

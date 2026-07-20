@@ -72,12 +72,12 @@ use std::time::Duration;
 
 cfg_if::cfg_if! {
     if #[cfg(target_os = "linux")] {
-        #[cfg(not(test))] // only required in real-life execution
+        #[cfg(all(not(test), not(feature = "test-utils")))] // only required in real-life execution
         use log::info;
 
         use log::{error, warn};
         use posixmq::PosixMq;
-        #[cfg(not(test))] // only required in real-life execution
+        #[cfg(all(not(test), not(feature = "test-utils")))] // only required in real-life execution
         use nix::unistd::gettid;
 
         use crate::dispatch::messaging_domain::MessagingDomain;
@@ -208,7 +208,7 @@ impl Messaging {
     /// - It encounters a fatal error while receiving from the POSIX message queue (other than a timeout).
     /// - It fails to receive the `Terminate` command from the signal handler during shutdown.
     pub async fn execute(&mut self, messaging_channels: &mut MessagingChannels) {
-        #[cfg(not(test))] // only required in real-life execution
+        #[cfg(all(not(test), not(feature = "test-utils")))] // only required in real-life execution
         #[cfg(not(tarpaulin_include))]
         info!(target: module_path!(), "Thread started with TID: {}", gettid());
 
@@ -250,7 +250,7 @@ impl Messaging {
                                         Ok((_r1, _r2)) => {
                                             if !msgbuf.is_empty() {
                                                 if let Ok(msg) = Message::from_bytes(&msgbuf) {
-                                                    #[cfg(not(test))] // only required in real-life execution
+                                                    #[cfg(all(not(test), not(feature = "test-utils")))] // only required in real-life execution
                                                     #[cfg(not(tarpaulin_include))]
                                                     info!(
                                                         target: module_path!(),
@@ -286,7 +286,7 @@ impl Messaging {
                                                         && (command != InternalCommand::Unknown)
                                                         && (domain.is_domain_thread_executed(&self.execution_config))
                                                     {
-                                                        #[cfg(not(test))] // only required in real-life execution
+                                                        #[cfg(all(not(test), not(feature = "test-utils")))] // only required in real-life execution
                                                         #[cfg(not(tarpaulin_include))]
                                                         info!(
                                                             target: module_path!(),

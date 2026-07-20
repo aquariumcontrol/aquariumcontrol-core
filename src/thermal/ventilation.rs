@@ -491,7 +491,7 @@ impl Ventilation {
                     &ventilation_mutexes.mutex_temperature_gradient,
                     ventilation_state == ActuatorState::On,
                     false, // ventilation expects a negative gradient
-                    #[cfg(not(test))] // only required in real-life execution
+                    #[cfg(all(not(test), not(feature = "test-utils")))] // only required in real-life execution
                     "Ventilation",
                 );
                 if actuator_ineffective

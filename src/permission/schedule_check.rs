@@ -66,7 +66,7 @@ use log::info;
 #[cfg(all(target_os = "linux", not(test)))] // only required in real-life execution
 use nix::unistd::gettid;
 
-#[cfg(not(test))] // only required in real-life execution
+#[cfg(all(not(test), not(feature = "test-utils")))] // only required in real-life execution
 use log::warn;
 
 use crate::database::pingable::Pingable;
@@ -215,9 +215,9 @@ impl ScheduleCheck {
                     }
                     AquaChannelError::Disconnected => {
                         if !locks.channel_receive {
-                            #[cfg(not(test))] // only required in real-life execution
+                            #[cfg(all(not(test), not(feature = "test-utils")))] // only required in real-life execution
                             let context = format!("receiving command from {_module_name} failed.");
-                            #[cfg(not(test))] // only required in real-life execution
+                            #[cfg(all(not(test), not(feature = "test-utils")))] // only required in real-life execution
                             log_error_chain(module_path!(), &context, e);
                             locks.channel_receive = true;
                         }
@@ -238,7 +238,7 @@ impl ScheduleCheck {
             }
             _c => {
                 if !locks.inapplicable_command {
-                    #[cfg(not(test))] // only required in real-life execution
+                    #[cfg(all(not(test), not(feature = "test-utils")))] // only required in real-life execution
                     #[cfg(not(tarpaulin_include))]
                     warn!(
                         target: module_path!(),
@@ -257,7 +257,7 @@ impl ScheduleCheck {
             }
             Err(_e) => {
                 if !locks.channel_send {
-                    #[cfg(not(test))] // only required in real-life execution
+                    #[cfg(all(not(test), not(feature = "test-utils")))] // only required in real-life execution
                     #[cfg(not(tarpaulin_include))]
                     {
                         let context = format!("sending back message to {_module_name} failed");

@@ -145,7 +145,7 @@ pub mod tests {
     /// Verifies the `new` constructor correctly initializes the filter's starting value.
     fn test_new_constructor_initialization() {
         let config = prepare_filter_config();
-        #[cfg(not(test))] // only required in real-life execution
+        #[cfg(all(not(test), not(feature = "test-utils")))] // only required in real-life execution
         #[cfg(not(tarpaulin_include))]
         let signal_name = "test_signal";
 
@@ -154,7 +154,7 @@ pub mod tests {
         let filter_with_some = IIRFilter::new(
             &config,
             Some(10.0),
-            #[cfg(not(test))] // only required in real-life execution
+            #[cfg(all(not(test), not(feature = "test-utils")))] // only required in real-life execution
             signal_name,
         );
         assert_float_absolute_eq!(filter_with_some.old_value, 10.0, 0.001);
@@ -164,7 +164,7 @@ pub mod tests {
         let filter_with_none = IIRFilter::new(
             &config,
             None,
-            #[cfg(not(test))] // only required in real-life execution
+            #[cfg(all(not(test), not(feature = "test-utils")))] // only required in real-life execution
             signal_name,
         );
         assert_float_absolute_eq!(
@@ -177,7 +177,7 @@ pub mod tests {
     #[test]
     /// Verifies the constructor sanitizes invalid coefficients from the config file.
     fn test_new_constructor_sanitizes_config_coefficient() {
-        #[cfg(not(test))] // only required in real-life execution
+        #[cfg(all(not(test), not(feature = "test-utils")))] // only required in real-life execution
         #[cfg(not(tarpaulin_include))]
         let signal_name = "test_signal";
 
@@ -189,7 +189,7 @@ pub mod tests {
         let filter_high = IIRFilter::new(
             &config_high,
             Some(0.0),
-            #[cfg(not(test))] // only required in real-life execution
+            #[cfg(all(not(test), not(feature = "test-utils")))] // only required in real-life execution
             signal_name,
         );
 
@@ -204,7 +204,7 @@ pub mod tests {
         let filter_low = IIRFilter::new(
             &config_low,
             Some(0.0),
-            #[cfg(not(test))] // only required in real-life execution
+            #[cfg(all(not(test), not(feature = "test-utils")))] // only required in real-life execution
             signal_name,
         );
         // It should be clamped to 0.0

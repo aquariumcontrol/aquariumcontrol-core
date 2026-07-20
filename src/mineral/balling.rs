@@ -752,7 +752,7 @@ impl Balling {
                 match pump_device_opt {
                     Some((pump_id, pump_device)) => {
                         // reduce terminal output when testing
-                        #[cfg(not(test))] // only required in real-life execution
+                        #[cfg(all(not(test), not(feature = "test-utils")))] // only required in real-life execution
                         #[cfg(not(tarpaulin_include))]
                         info!(
                             target: module_path!(),

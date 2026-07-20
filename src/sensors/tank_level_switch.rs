@@ -74,7 +74,7 @@ use log::error;
 #[cfg(all(target_os = "linux", not(test)))] // only required in real-life execution
 use log::info;
 
-#[cfg(not(test))] // only required in real-life execution
+#[cfg(all(not(test), not(feature = "test-utils")))] // only required in real-life execution
 use log::warn;
 
 use crate::launch::channels::{AquaReceiver, AquaSender};
@@ -547,7 +547,7 @@ impl TankLevelSwitch {
         tank_level_switch_channels: &mut TankLevelSwitchChannels,
         mutex_tank_level_switch_signals: Arc<Mutex<TankLevelSwitchSignals>>,
     ) -> Result<(), TankLevelSwitchError> {
-        #[cfg(all(target_os = "linux", not(test)))] // only required in real-life execution
+        #[cfg(all(target_os = "linux", not(test), not(feature = "test-utils")))] // only required in real-life execution
         #[cfg(not(tarpaulin_include))]
         info!(target: module_path!(), "Thread started with TID: {}", gettid());
 
@@ -673,7 +673,7 @@ impl TankLevelSwitch {
                         > PERMISSIBLE_CYCLE_TIME_DEVIATION_TANK_LEVEL_SWITCH_MILLIS
                     && !lock_warn_cycle_time_exceeded
                 {
-                    #[cfg(not(test))] // only required in real-life execution
+                    #[cfg(all(not(test), not(feature = "test-utils")))] // only required in real-life execution
                     #[cfg(not(tarpaulin_include))]
                     warn!(target: module_path!(),
                         "execution duration of {} milliseconds exceeds cycle time of {} (delta duration={})",

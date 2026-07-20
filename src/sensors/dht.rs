@@ -88,7 +88,7 @@ use spin_sleep::SpinSleeper;
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
-#[cfg(not(test))] // only required in real-life execution
+#[cfg(all(not(test), not(feature = "test-utils")))] // only required in real-life execution
 use crate::utilities::logger::log_error_chain;
 
 cfg_if::cfg_if! {
@@ -806,7 +806,7 @@ impl Dht {
                         ) {
                             if !self.lock_error_failed_after_retries {
                                 // avoid log flooding
-                                #[cfg(not(test))] // only required in real-life execution
+                                #[cfg(all(not(test), not(feature = "test-utils")))] // only required in real-life execution
                                 #[cfg(not(tarpaulin_include))]
                                 log_error_chain(
                                     module_path!(),
@@ -818,7 +818,7 @@ impl Dht {
                         } else {
                             self.lock_error_failed_after_retries = false;
                             // report directly
-                            #[cfg(not(test))] // only required in real-life execution
+                            #[cfg(all(not(test), not(feature = "test-utils")))] // only required in real-life execution
                             #[cfg(not(tarpaulin_include))]
                             log_error_chain(
                                 module_path!(),

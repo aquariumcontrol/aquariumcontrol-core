@@ -60,7 +60,7 @@ fn test_change_low_to_high_to_low() {
                 fallback_initial_value: 0.0,
             },
             Some(1.0),
-            #[cfg(not(test))] // only required in real-life execution
+            #[cfg(all(not(test), not(feature = "test-utils")))] // only required in real-life execution
             "sump level",
         ),
         config: config.sump,

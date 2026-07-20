@@ -66,7 +66,7 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 //!   a database.
 
 use log::error;
-#[cfg(not(test))] // only required in real-life execution
+#[cfg(all(not(test), not(feature = "test-utils")))] // only required in real-life execution
 use log::{info, warn};
 
 use std::sync::{Arc, Mutex};
@@ -535,7 +535,7 @@ impl Heating {
                 break;
             }
             if stop_command_received {
-                #[cfg(not(test))] // only required in real-life execution
+                #[cfg(all(not(test), not(feature = "test-utils")))] // only required in real-life execution
                 #[cfg(not(tarpaulin_include))]
                 info!(
                     target: module_path!(),
@@ -545,7 +545,7 @@ impl Heating {
                 heating_inhibited = true;
             }
             if start_command_received {
-                #[cfg(not(test))] // only required in real-life execution
+                #[cfg(all(not(test), not(feature = "test-utils")))] // only required in real-life execution
                 #[cfg(not(tarpaulin_include))]
                 info!(
                     target: module_path!(),
@@ -616,7 +616,7 @@ impl Heating {
                     &heating_mutexes.mutex_temperature_gradient,
                     heater_state == ActuatorState::On,
                     true, // heating expects a positive gradient
-                    #[cfg(not(test))] // only required in real-life execution
+                    #[cfg(all(not(test), not(feature = "test-utils")))] // only required in real-life execution
                     "Heating",
                 );
                 if actuator_ineffective
@@ -631,7 +631,7 @@ impl Heating {
                     );
                     heater_state = ActuatorState::Off;
                     self.actuator_disabled = true;
-                    #[cfg(not(test))] // only required in real-life execution
+                    #[cfg(all(not(test), not(feature = "test-utils")))] // only required in real-life execution
                     #[cfg(not(tarpaulin_include))]
                     warn!("[{}]: Disabled heater because temperature gradient monitor indicates ineffectiveness.", module_path!());
                 }
@@ -835,7 +835,7 @@ impl Heating {
 
             if execution_duration > cycle_time_duration {
                 if !lock_warn_cycle_time_exceeded && !actuation_mutex_was_blocked_during_actuation {
-                    #[cfg(not(test))] // only required in real-life execution
+                    #[cfg(all(not(test), not(feature = "test-utils")))] // only required in real-life execution
                     #[cfg(not(tarpaulin_include))]
                     warn!(target: module_path!(),
                         "execution duration of {} milliseconds exceeds cycle time of {}",

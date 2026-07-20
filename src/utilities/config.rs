@@ -40,7 +40,7 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 //! enabled features (`feature = "target_hw"`). This allows the application to have a single
 //! configuration file format while only compiling the necessary fields for a given build target.
 
-#[cfg(not(test))] // only required in real-life execution
+#[cfg(all(not(test), not(feature = "test-utils")))] // only required in real-life execution
 use log::info;
 
 use serde_derive::Deserialize;
@@ -60,7 +60,7 @@ use crate::sensors::dht_config::DhtConfig;
 use crate::sensors::gpio_handler_config::GpioHandlerConfig;
 use crate::sensors::sensor_manager_config::SensorManagerConfig;
 use crate::thermal::heating_config::HeatingConfig;
-#[cfg(test)]
+#[cfg(any(test, feature = "test-utils"))]
 use std::env;
 
 use crate::database::sql_interface_config::SqlInterfaceConfig;
@@ -160,7 +160,7 @@ pub struct ConfigData {
     pub logger: LoggerConfig,
 }
 
-#[cfg(not(test))] // only required in real-life execution
+#[cfg(all(not(test), not(feature = "test-utils")))] // only required in real-life execution
 #[cfg(not(tarpaulin_include))]
 /// Loads configuration data from a specified `.toml` file into a `ConfigData` struct.
 ///
@@ -183,7 +183,7 @@ pub struct ConfigData {
 /// - `ConfigError::TomlParse`: If the file's content is not valid TOML, or if its
 ///   structure does not match the `ConfigData` struct, preventing deserialization.
 pub fn read_config_file(filename: String) -> Result<ConfigData, ConfigError> {
-    #[cfg(not(test))] // only required in real-life execution
+    #[cfg(all(not(test), not(feature = "test-utils")))] // only required in real-life execution
     info!(target: module_path!(), "reading configuration from {filename}");
 
     // Read the contents of the file and return error in case of failure.
@@ -196,30 +196,26 @@ pub fn read_config_file(filename: String) -> Result<ConfigData, ConfigError> {
     Ok(data)
 }
 
-#[cfg(test)]
-// Loads configuration data from a specified `.toml` file into a `ConfigData` struct for testing.
-//
-// This version of the function is specifically designed for test environments (`#[cfg(test)]`).
-// It constructs the full file path by prepending the `CARGO_MANIFEST_DIR`
-// environment variable (which points to the root of the current Cargo package)
-// to the provided `filename`. It then reads and attempts to parse the TOML content.
-//
-// # Arguments
-// * `filename` - The relative path to the configuration file, expected to be located
-//   within a subfolder of the Cargo base directory.
-//
-// # Returns
-// A `ConfigData` struct containing the parsed configuration if successful.
-//
-// # Panics
-// This function will panic in the following scenarios:
-// - If the `CARGO_MANIFEST_DIR` environment variable is not set.
-// - If the specified file cannot be read (e.g., the file is not found, permissions issues).
-// - If the file content is not valid TOML or cannot be deserialized into `ConfigData`.
-/// Performs the `read_config_file` operation.
+#[cfg(any(test, feature = "test-utils"))]
+/// Loads configuration data from a specified `.toml` file into a `ConfigData` struct for testing.
+///
+/// This version of the function is specifically designed for test environments (`#[cfg(test)]`).
+/// It constructs the full file path by prepending the `CARGO_MANIFEST_DIR`
+/// environment variable (which points to the root of the current Cargo package)
+/// to the provided `filename`. It then reads and attempts to parse the TOML content.
 ///
 /// # Arguments
-/// * `filename` - A parameter representing `filename`.
+/// * `filename` - The relative path to the configuration file, expected to be located
+///   within a subfolder of the Cargo base directory.
+///
+/// # Returns
+/// A `ConfigData` struct containing the parsed configuration if successful.
+///
+/// # Panics
+/// This function will panic in the following scenarios:
+/// - If the `CARGO_MANIFEST_DIR` environment variable is not set.
+/// - If the specified file cannot be read (e.g., the file is not found, permissions issues).
+/// - If the file content is not valid TOML or cannot be deserialized into `ConfigData`.
 pub fn read_config_file(filename: String) -> Result<ConfigData, ConfigError> {
     let pathname_test =
         env::var("CARGO_MANIFEST_DIR").map_err(|_| ConfigError::CargoManifestDir)?;

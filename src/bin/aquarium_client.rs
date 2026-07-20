@@ -135,7 +135,7 @@ pub fn read_config_file(user_specified_file: Option<String>) -> ConfigData {
         out_dir + "/aquarium_control.toml"
     };
 
-    #[cfg(not(test))] // only required in real-life execution
+    #[cfg(all(not(test), not(feature = "test-utils")))] // only required in real-life execution
     #[cfg(not(tarpaulin_include))]
     println!("aquarium_client: reading configuration from {}", filename);
 
