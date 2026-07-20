@@ -86,7 +86,6 @@ impl Ds18b20ResultData {
     }
 
     /// Creates a default instance of this type.
-    #[cfg(test)]
     pub fn new_for_test() -> Self {
         Ds18b20ResultData {
             value: 0.0,

@@ -76,8 +76,6 @@ cfg_if::cfg_if! {
 use crate::sensors::atlas_scientific::AtlasScientificResultData;
 use crate::sensors::dht::DhtResult;
 use crate::sensors::ds18b20::Ds18b20Result;
-
-#[cfg(test)]
 use crate::sensors::ds18b20::Ds18b20ResultData;
 
 pub use crate::sensors::sensor_manager_channels::SensorManagerChannels;
@@ -146,7 +144,7 @@ pub struct SensorManagerMutexes {
     /// Mutex for water temperature from Ds18b20 sensor
     pub mutex_ds18b20_water_temperature: Arc<Mutex<Ds18b20Result>>,
 
-    /// Mutex for ambient temperature and humidity fron DHT sensor
+    /// Mutex for ambient temperature and humidity from DHT sensor
     pub mutex_dht: Arc<Mutex<DhtResult>>,
 
     /// Mutex for temperature from Atlas Scientific sensor unit
@@ -162,7 +160,6 @@ pub struct SensorManagerMutexes {
     pub mutex_sensor_manager_signals: Arc<Mutex<SensorManagerSignals>>,
 }
 
-#[cfg(test)]
 impl SensorManagerMutexes {
     /// Creates a default instance of this type.
     pub fn new_for_test() -> SensorManagerMutexes {
@@ -229,7 +226,6 @@ impl SensorManagerSignals {
     }
 
     /// Creates a default instance of this type.
-    #[cfg(test)]
     pub fn new_for_test() -> SensorManagerSignals {
         SensorManagerSignals {
             water_temperature: 0.0,

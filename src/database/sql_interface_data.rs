@@ -178,7 +178,6 @@ impl SqlInterfaceData {
             })
     }
 
-    #[cfg(test)]
     /// Retrieves all water temperature readings from the last 24 hours.
     ///
     /// This function queries the `data` table for all records within the last

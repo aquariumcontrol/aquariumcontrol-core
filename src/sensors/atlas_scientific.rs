@@ -123,7 +123,6 @@ impl AtlasScientificResultData {
     }
 
     /// Creates a default instance of this type.
-    #[cfg(test)]
     pub fn new_for_test() -> Self {
         AtlasScientificResultData {
             value: 0.0,
