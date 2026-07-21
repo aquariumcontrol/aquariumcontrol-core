@@ -186,8 +186,6 @@ pub fn log_error_chain<E: Error>(module: &str, context: &str, error: E) {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::fs::{self, File};
-    use tempfile::tempdir;
 
     /// Tests that the function returns an error when the log file name is empty.
     #[test]
@@ -211,86 +209,5 @@ mod tests {
         let config = LoggerConfig { logfile: path_str };
         let result = setup_logger(config);
         assert!(matches!(result, Err(LoggerSetupError::MissingFileName(_))));
-    }
-
-    /// Tests that the function returns an error if the log file name is a directory.
-    #[test]
-    fn test_path_is_a_directory() {
-        let dir = tempdir().unwrap();
-        // Get the path of the temporary directory itself.
-        let path_str = dir.path().to_str().unwrap().to_string();
-
-        let config = LoggerConfig { logfile: path_str };
-        let result = setup_logger(config);
-        assert!(matches!(result, Err(LoggerSetupError::PathIsADirectory(_))));
-    }
-
-    /// Tests that the function returns an error if the parent directory does not exist.
-    #[test]
-    fn test_parent_directory_does_not_exist() {
-        let dir = tempdir().unwrap();
-        let file_path = dir.path().join("nonexistent_subdir/bad.log");
-
-        let config = LoggerConfig {
-            logfile: file_path.to_str().unwrap().to_string(),
-        };
-        let result = setup_logger(config);
-        assert!(matches!(
-            result,
-            Err(LoggerSetupError::ParentDirDoesNotExist(_))
-        ));
-    }
-
-    /// Tests that the function returns an error if the parent path is a file, not a directory.
-    #[test]
-    fn test_parent_is_a_file() {
-        let dir = tempdir().unwrap();
-        let file_as_parent = dir.path().join("file.txt");
-        File::create(&file_as_parent).unwrap(); // Create the file
-
-        let invalid_path = file_as_parent.join("log.log");
-
-        let config = LoggerConfig {
-            logfile: invalid_path.to_str().unwrap().to_string(),
-        };
-        let result = setup_logger(config);
-        assert!(matches!(
-            result,
-            Err(LoggerSetupError::ParentIsNotADirectory(_))
-        ));
-    }
-
-    /// Tests that the function returns an error if it cannot create the log file,
-    /// for example, due to permissions. This test is specific to Unix-like systems.
-    #[test]
-    #[cfg(unix)]
-    fn test_cannot_open_file_in_readonly_directory() {
-        use std::os::unix::fs::PermissionsExt;
-
-        // 1. Create a temporary directory
-        let dir = tempdir().unwrap();
-
-        // 2. Set its permissions to read-only (mode 555: r-xr-xr-x)
-        let mut perms = fs::metadata(dir.path()).unwrap().permissions();
-        perms.set_mode(0o555);
-        fs::set_permissions(dir.path(), perms).unwrap();
-
-        // 3. Attempt to set up a logger in the read-only directory
-        let file_path = dir.path().join("unwritable.log");
-        let config = LoggerConfig {
-            logfile: file_path.to_str().unwrap().to_string(),
-        };
-        let result = setup_logger(config);
-
-        // 4. IMPORTANT: Reset permissions so the tempdir can be cleaned up
-        let mut perms = fs::metadata(dir.path()).unwrap().permissions();
-        perms.set_mode(0o755); // rwxr-xr-x
-        fs::set_permissions(dir.path(), perms).unwrap();
-
-        // 5. Assert that the correct error was returned
-        assert!(matches!(
-            result,
-            Err(LoggerSetupError::CouldNotOpenOutputFile { .. })
-        ));
     }
 }

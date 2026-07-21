@@ -287,7 +287,6 @@ impl Channels {
     }
 
     /// Creates a new set of channels with all simulators disabled for unit testing of signal handler.
-    #[cfg(test)]
     pub fn new_for_test_for_signal_handler() -> Channels {
         Self::build(false, false, false, false)
     }

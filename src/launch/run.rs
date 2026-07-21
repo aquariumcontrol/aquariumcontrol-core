@@ -1026,7 +1026,6 @@ pub fn run(
                 term,
                 chan_signal_handler,
                 signal_handler_config,
-                #[cfg(any(test, feature = "test-utils"))]
                 _wait_for_test_shutdown_opt,
             ).await;
             #[cfg(feature = "debug_main")]
