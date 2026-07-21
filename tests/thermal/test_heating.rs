@@ -2861,6 +2861,7 @@ fn test_update_heating_stats_with_none_stats_opt() {
 }
 
 #[test]
+// Verifies that heating gradient monitoring disables actuator.
 pub fn test_heating_gradient_monitoring_disables_actuator() {
     let sleep_duration_100_millis = Duration::from_millis(100);
     let spin_sleeper = SpinSleeper::default();
@@ -3034,6 +3035,7 @@ pub fn test_heating_gradient_monitoring_disables_actuator() {
 }
 
 #[test]
+// Verifies that heating reset errors enables actuator.
 pub fn test_heating_reset_errors_enables_actuator() {
     let sleep_duration_100_millis = Duration::from_millis(100);
     let spin_sleeper = SpinSleeper::default();

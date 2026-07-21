@@ -34,6 +34,7 @@ fn send_signal(pid: u32, signal: i32) {
 /// test if the signal handler sends shutdown requests to all threads in the right order.
 #[cfg(any(test, feature = "test-utils"))]
 #[test]
+// Verifies that signal handling.
 fn test_signal_handling() {
     let term = Arc::new(AtomicBool::new(false));
     let term_clone = Arc::clone(&term);

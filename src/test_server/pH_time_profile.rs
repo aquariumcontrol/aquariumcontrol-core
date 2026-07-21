@@ -201,6 +201,7 @@ pub mod tests {
     }
 
     #[test]
+    // Verifies that ph low before high ramp down 1.
     fn test_pH_low_before_high_ramp_down_1() {
         let time_ramp_down_1 = NaiveTime::from_hms_opt(3, 0, 0).unwrap();
         let mut profile = create_profile(false, 0.0, 1.0, time_ramp_down_1);
@@ -208,6 +209,7 @@ pub mod tests {
     }
 
     #[test]
+    // Verifies that ph low before high ramp up.
     fn test_pH_low_before_high_ramp_up() {
         let time_ramp_up = NaiveTime::from_hms_opt(9, 0, 0).unwrap();
         let mut profile = create_profile(false, 0.0, 1.0, time_ramp_up);
@@ -215,6 +217,7 @@ pub mod tests {
     }
 
     #[test]
+    // Verifies that ph low before high ramp down 2.
     fn test_pH_low_before_high_ramp_down_2() {
         let time_ramp_down_2 = NaiveTime::from_hms_opt(18, 0, 0).unwrap();
         let mut profile = create_profile(false, 0.0, 1.0, time_ramp_down_2);
@@ -222,6 +225,7 @@ pub mod tests {
     }
 
     #[test]
+    // Verifies that ph high before low ramp up 1.
     fn test_pH_high_before_low_ramp_up_1() {
         let time_ramp_up_1 = NaiveTime::from_hms_opt(3, 0, 0).unwrap();
         let mut profile = create_profile(true, 0.0, 1.0, time_ramp_up_1);
@@ -229,6 +233,7 @@ pub mod tests {
     }
 
     #[test]
+    // Verifies that ph high before low ramp down.
     fn test_pH_high_before_low_ramp_down() {
         let time_ramp_down = NaiveTime::from_hms_opt(10, 0, 0).unwrap();
         let mut profile = create_profile(true, 0.0, 1.0, time_ramp_down);
@@ -236,6 +241,7 @@ pub mod tests {
     }
 
     #[test]
+    // Verifies that ph high before low ramp up 2.
     fn test_pH_high_before_low_ramp_up_2() {
         let time_ramp_up_2 = NaiveTime::from_hms_opt(20, 0, 0).unwrap();
         let mut profile = create_profile(true, 0.0, 1.0, time_ramp_up_2);

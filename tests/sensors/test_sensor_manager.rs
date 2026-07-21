@@ -26,6 +26,7 @@ use std::thread::scope;
 use std::time::Duration;
 
 #[test]
+// Verifies that sensor manager error water temperature source is invalid.
 pub fn test_sensor_manager_error_water_temperature_source_is_invalid() {
     let mut config: ConfigData =
         read_config_file("config/aquarium_control_test_generic.toml".to_string()).unwrap();
@@ -43,6 +44,7 @@ pub fn test_sensor_manager_error_water_temperature_source_is_invalid() {
 }
 
 #[test]
+// Verifies that sensor manager error ambient temperature source is invalid.
 pub fn test_sensor_manager_error_ambient_temperature_source_is_invalid() {
     let mut config: ConfigData =
         read_config_file("config/aquarium_control_test_generic.toml".to_string()).unwrap();

@@ -48,6 +48,7 @@ impl TemperatureGradientMonitorTrait for MockMonitor {
 }
 
 #[test]
+// Verifies that monitor deactivated.
 fn test_monitor_deactivated() {
     let mut monitor = MockMonitor::new(0);
     let gradient = Arc::new(Mutex::new(-1.0)); // Incorrect gradient
@@ -71,6 +72,7 @@ fn test_monitor_deactivated() {
 }
 
 #[test]
+// Verifies that actuator off resets state.
 fn test_actuator_off_resets_state() {
     let mut monitor = MockMonitor::new(10);
     monitor.last_actuator_on_time = Some(Instant::now());
@@ -94,6 +96,7 @@ fn test_actuator_off_resets_state() {
 }
 
 #[test]
+// Verifies that duration short no action.
 fn test_duration_short_no_action() {
     let mut monitor = MockMonitor::new(10);
     let gradient = Arc::new(Mutex::new(-1.0)); // Incorrect gradient
@@ -117,6 +120,7 @@ fn test_duration_short_no_action() {
 }
 
 #[test]
+// Verifies that gradient correct positive.
 fn test_gradient_correct_positive() {
     let mut monitor = MockMonitor::new(10);
     let gradient = Arc::new(Mutex::new(0.5)); // Correct positive gradient
@@ -140,6 +144,7 @@ fn test_gradient_correct_positive() {
 }
 
 #[test]
+// Verifies that gradient correct negative.
 fn test_gradient_correct_negative() {
     let mut monitor = MockMonitor::new(10);
     let gradient = Arc::new(Mutex::new(-0.5)); // Correct negative gradient
@@ -163,6 +168,7 @@ fn test_gradient_correct_negative() {
 }
 
 #[test]
+// Verifies that gradient incorrect positive expected.
 fn test_gradient_incorrect_positive_expected() {
     let mut monitor = MockMonitor::new(10);
     let gradient = Arc::new(Mutex::new(-0.5)); // Incorrect (negative instead of positive)
@@ -186,6 +192,7 @@ fn test_gradient_incorrect_positive_expected() {
 }
 
 #[test]
+// Verifies that gradient incorrect negative expected.
 fn test_gradient_incorrect_negative_expected() {
     let mut monitor = MockMonitor::new(10);
     let gradient = Arc::new(Mutex::new(0.5)); // Incorrect (positive instead of negative)
@@ -209,6 +216,7 @@ fn test_gradient_incorrect_negative_expected() {
 }
 
 #[test]
+// Verifies that recovery resets inhibition.
 fn test_recovery_resets_inhibition() {
     let mut monitor = MockMonitor::new(10);
     let gradient = Arc::new(Mutex::new(0.5)); // Now correct
@@ -233,6 +241,7 @@ fn test_recovery_resets_inhibition() {
 }
 
 #[test]
+// Verifies that initial start time set.
 fn test_initial_start_time_set() {
     let mut monitor = MockMonitor::new(10);
     let gradient = Arc::new(Mutex::new(0.0));

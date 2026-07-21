@@ -16,6 +16,7 @@ use aquarium_control::utilities::config::{read_config_file, ConfigData};
 use aquarium_control::utilities::publish_pid::{PublishPid, PublishPidError};
 
 #[test]
+// Verifies that publish pid.
 pub fn test_publish_pid() {
     let config: ConfigData =
         read_config_file("/config/aquarium_control_test_generic.toml".to_string()).unwrap();
@@ -40,6 +41,7 @@ pub fn test_publish_pid() {
 }
 
 #[test]
+// Verifies that publish pid invalid content pid file.
 pub fn test_publish_pid_invalid_content_pid_file() {
     let mut config: ConfigData =
         read_config_file("/config/aquarium_control_test_generic.toml".to_string()).unwrap();
@@ -53,6 +55,7 @@ pub fn test_publish_pid_invalid_content_pid_file() {
 }
 
 #[test]
+// Verifies that publish pid file already contains pid.
 pub fn test_publish_pid_file_already_contains_pid() {
     let mut config: ConfigData =
         read_config_file("/config/aquarium_control_test_generic.toml".to_string()).unwrap();

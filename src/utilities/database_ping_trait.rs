@@ -159,6 +159,7 @@ mod tests {
     }
 
     #[test]
+    // Verifies that ping not needed when interval not elapsed.
     fn test_ping_not_needed_when_interval_not_elapsed() {
         // Arrange: Set up a pinger with a long interval and a recent last_ping time.
         let mut pinger = MockPinger {
@@ -178,6 +179,7 @@ mod tests {
     }
 
     #[test]
+    // Verifies that ping is needed when interval has elapsed.
     fn test_ping_is_needed_when_interval_has_elapsed() {
         // Arrange: Set up a pinger with a short interval and a last_ping time in the past.
         let interval = Duration::from_millis(10);
@@ -198,6 +200,7 @@ mod tests {
     }
 
     #[test]
+    // Verifies that ping timer is reset after pinging.
     fn test_ping_timer_is_reset_after_pinging() {
         // Arrange: Set up a pinger where the interval has elapsed.
         let interval = Duration::from_millis(10);

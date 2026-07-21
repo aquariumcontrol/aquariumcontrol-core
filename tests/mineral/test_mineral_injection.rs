@@ -163,6 +163,7 @@ fn mineral_injection_test_environment(
 
 // This test case executes the mineral injection without interruption from the signal handler.
 #[test]
+// Verifies that mineral dosing happy case.
 pub fn test_mineral_dosing_happy_case() {
     let mut channels = Channels::new_for_test();
 
@@ -202,6 +203,7 @@ pub fn test_mineral_dosing_happy_case() {
 
 // This test case executes the mineral injection with interruption from the signal handler.
 #[test]
+// Verifies that mineral dosing interrupted.
 pub fn test_mineral_dosing_interrupted() {
     let mut channels = Channels::new_for_test();
 

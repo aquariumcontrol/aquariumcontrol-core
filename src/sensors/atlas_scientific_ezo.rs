@@ -550,6 +550,7 @@ pub mod tests {
 
     // happy case for evaluating the response from the temperature sensor unit
     #[test]
+    // Verifies that atlas scientific ezo check response valid temperature.
     pub fn test_atlas_scientific_ezo_check_response_valid_temperature() {
         let stimuli: [u8; atlas_scientific_ezo_constants::MESSAGE_SIZE] = [
             atlas_scientific_ezo_constants::MESSAGE_START_MAGIC,

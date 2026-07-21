@@ -19,6 +19,7 @@ fn create_heat_flow_model() -> HeatFlow {
 }
 
 #[test]
+// Verifies that heat flow to environment.
 fn test_heat_flow_to_environment() {
     let heat_flow_model = create_heat_flow_model();
     assert_float_absolute_eq!(
@@ -29,6 +30,7 @@ fn test_heat_flow_to_environment() {
 }
 
 #[test]
+// Verifies that heat flow from environment.
 fn test_heat_flow_from_environment() {
     let heat_flow_model = create_heat_flow_model();
     assert_float_absolute_eq!(
@@ -39,6 +41,7 @@ fn test_heat_flow_from_environment() {
 }
 
 #[test]
+// Verifies that no heat flow to or from environment.
 fn test_no_heat_flow_to_or_from_environment() {
     let heat_flow_model = create_heat_flow_model();
     assert_float_absolute_eq!(
@@ -49,6 +52,7 @@ fn test_no_heat_flow_to_or_from_environment() {
 }
 
 #[test]
+// Verifies that heat flow from heater when heater is on.
 fn test_heat_flow_from_heater_when_heater_is_on() {
     let mut heat_flow_model = create_heat_flow_model();
 
@@ -56,6 +60,7 @@ fn test_heat_flow_from_heater_when_heater_is_on() {
 }
 
 #[test]
+// Verifies that heat flow from heater when heater is off.
 fn test_heat_flow_from_heater_when_heater_is_off() {
     let mut heat_flow_model = create_heat_flow_model();
 
@@ -63,6 +68,7 @@ fn test_heat_flow_from_heater_when_heater_is_off() {
 }
 
 #[test]
+// Verifies that heat flow evaporation.
 fn test_heat_flow_evaporation() {
     let heat_flow_model = create_heat_flow_model();
     assert_float_absolute_eq!(
@@ -73,12 +79,14 @@ fn test_heat_flow_evaporation() {
 }
 
 #[test]
+// Verifies that no heat flow evaporation.
 fn test_no_heat_flow_evaporation() {
     let heat_flow_model = create_heat_flow_model();
     assert_float_absolute_eq!(heat_flow_model.heat_flow_evaporation(0.0, 25.0), 0.0, 0.001)
 }
 
 #[test]
+// Verifies that no heat flow evaporation with negative evaporation.
 fn test_no_heat_flow_evaporation_with_negative_evaporation() {
     let heat_flow_model = create_heat_flow_model();
     assert_float_absolute_eq!(
@@ -89,24 +97,28 @@ fn test_no_heat_flow_evaporation_with_negative_evaporation() {
 }
 
 #[test]
+// Verifies that heat flow lights.
 fn test_heat_flow_lights() {
     let heat_flow_model = create_heat_flow_model();
     assert_float_absolute_eq!(heat_flow_model.heat_flow_lights(1.0), 1.8, 0.001)
 }
 
 #[test]
+// Verifies that no heat flow lights.
 fn test_no_heat_flow_lights() {
     let heat_flow_model = create_heat_flow_model();
     assert_float_absolute_eq!(heat_flow_model.heat_flow_lights(0.0), 0.0, 0.001)
 }
 
 #[test]
+// Verifies that no heat flow lights with negative intensity.
 fn test_no_heat_flow_lights_with_negative_intensity() {
     let heat_flow_model = create_heat_flow_model();
     assert_float_absolute_eq!(heat_flow_model.heat_flow_lights(-1.0), 0.0, 0.001)
 }
 
 #[test]
+// Verifies that heat flow total.
 fn test_heat_flow_total() {
     let mut heat_flow_model = create_heat_flow_model();
 

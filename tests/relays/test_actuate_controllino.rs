@@ -34,6 +34,7 @@ use aquarium_control::utilities::channel_content::InternalCommand;
 use aquarium_control::utilities::config::{read_config_file, ConfigData};
 
 #[test]
+// Verifies that invalid relay id config high.
 pub fn test_invalid_relay_id_config_high() {
     let mut config: ConfigData =
         read_config_file("config/aquarium_control_test_generic.toml".to_string()).unwrap();
@@ -48,6 +49,7 @@ pub fn test_invalid_relay_id_config_high() {
 }
 
 #[test]
+// Verifies that invalid relay config duplicate.
 pub fn test_invalid_relay_config_duplicate() {
     let mut config: ConfigData =
         read_config_file("config/aquarium_control_test_generic.toml".to_string()).unwrap();

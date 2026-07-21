@@ -21,6 +21,7 @@ mod common;
 use common::{add_balling_profile, insert_current_version_information, truncate_all_tables};
 
 #[test]
+// Verifies that run async runtime configuration.
 fn test_run_async_runtime_configuration() {
     // Path of the dedicated config file
     let config_path = "config/aquarium_control_test_runtime.toml".to_string();

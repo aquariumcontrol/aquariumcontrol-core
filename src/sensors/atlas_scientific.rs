@@ -934,6 +934,7 @@ pub mod tests {
     }
 
     #[test]
+    // Verifies that get next atlas scientific signal.
     fn test_get_next_atlas_scientific_signal() {
         // Test WaterTemperature branch
         let (next, complete) = AquariumSignal::WaterTemperature.get_next_atlas_scientific_signal();

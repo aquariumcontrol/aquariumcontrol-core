@@ -14,6 +14,7 @@ use aquarium_control::sensors::gpio_handler::{GpioHandler, GpioHandlerError};
 use aquarium_control::utilities::config::{read_config_file, ConfigData};
 
 #[test]
+// Verifies that valid gpio config.
 pub fn test_valid_gpio_config() {
     let config: ConfigData =
         read_config_file("config/aquarium_control_test_generic.toml".to_string()).unwrap();
@@ -22,6 +23,7 @@ pub fn test_valid_gpio_config() {
 }
 
 #[test]
+// Verifies that invalid gpio config low.
 pub fn test_invalid_gpio_config_low() {
     let mut config: ConfigData =
         read_config_file("config/aquarium_control_test_generic.toml".to_string()).unwrap();
@@ -34,6 +36,7 @@ pub fn test_invalid_gpio_config_low() {
     assert!(matches!(result, Err(GpioHandlerError::PinOutsideRange(_))));
 }
 #[test]
+// Verifies that invalid gpio config duplicate.
 pub fn test_invalid_gpio_config_duplicate() {
     let mut config: ConfigData =
         read_config_file("config/aquarium_control_test_generic.toml".to_string()).unwrap();

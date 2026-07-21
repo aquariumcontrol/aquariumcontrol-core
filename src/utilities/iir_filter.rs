@@ -239,6 +239,7 @@ pub mod tests {
     }
 
     #[test]
+    // Verifies that zero to one with coefficient 0 5.
     fn test_zero_to_one_with_coefficient_0_5() {
         let mut filter = IIRFilter {
             filter_coefficient: 0.5,

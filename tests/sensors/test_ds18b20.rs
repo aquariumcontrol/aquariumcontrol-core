@@ -344,6 +344,7 @@ fn test_dsb18b20_temperature_too_cold() {
 
 #[cfg(feature = "test-utils")]
 #[test]
+// Verifies that dsb18b20 channel mutexes without locking mutexes.
 fn test_dsb18b20_channel_mutexes_without_locking_mutexes() {
     let mut config =
         read_config_file("config/aquarium_control_test_generic.toml".to_string()).unwrap();
@@ -429,6 +430,7 @@ fn test_dsb18b20_channel_mutexes_without_locking_mutexes() {
 
 #[cfg(feature = "test-utils")]
 #[test]
+// Verifies that dsb18b20 channel mutexes with locking mutexes.
 fn test_dsb18b20_channel_mutexes_with_locking_mutexes() {
     let mut config =
         read_config_file("config/aquarium_control_test_generic.toml".to_string()).unwrap();

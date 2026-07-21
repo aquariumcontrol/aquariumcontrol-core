@@ -197,6 +197,7 @@ pub mod tests {
 
     #[test]
     #[ignore]
+    // Verifies that ws2821b set colors.
     pub fn test_ws2821b_set_colors() {
         let config: ConfigData =
             read_config_file("/config/aquarium_control_test_generic.toml".to_string())

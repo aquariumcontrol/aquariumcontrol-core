@@ -21,6 +21,7 @@ use aquarium_control::test_server::test_server_config::read_test_server_config_f
 use aquarium_control::test_server::thermal_model::TankTemperatureModel;
 
 #[test]
+// Verifies that temperature stabilization with heater switched on.
 fn test_temperature_stabilization_with_heater_switched_on() {
     let config = read_test_server_config_file(None);
 
@@ -94,6 +95,7 @@ fn create_warmer_ambient_temperature_time_profile(
 }
 
 #[test]
+// Verifies that temperature stabilization with ventilation switched on.
 fn test_temperature_stabilization_with_ventilation_switched_on() {
     let config = read_test_server_config_file(None);
 

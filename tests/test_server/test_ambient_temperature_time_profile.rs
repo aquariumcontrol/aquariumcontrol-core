@@ -22,6 +22,7 @@ fn create_profile() -> AmbientTemperatureTimeProfile {
 }
 
 #[test]
+// Verifies that ambient temperature before ramp up.
 fn test_ambient_temperature_before_ramp_up() {
     let profile = create_profile();
     let time_before_ramp_up = NaiveTime::from_hms_opt(5, 0, 0).unwrap();
@@ -29,6 +30,7 @@ fn test_ambient_temperature_before_ramp_up() {
 }
 
 #[test]
+// Verifies that ambient temperature ramp up.
 fn test_ambient_temperature_ramp_up() {
     let profile = create_profile();
     let time_ramp_up = NaiveTime::from_hms_opt(9, 0, 0).unwrap();
@@ -36,6 +38,7 @@ fn test_ambient_temperature_ramp_up() {
 }
 
 #[test]
+// Verifies that ambient temperature constant high.
 fn test_ambient_temperature_constant_high() {
     let profile = create_profile();
     let time_constant_high = NaiveTime::from_hms_opt(12, 30, 0).unwrap();
@@ -43,6 +46,7 @@ fn test_ambient_temperature_constant_high() {
 }
 
 #[test]
+// Verifies that ambient temperature ramp down.
 fn test_ambient_temperature_ramp_down() {
     let profile = create_profile();
     let time_ramp_down = NaiveTime::from_hms_opt(15, 30, 0).unwrap();
@@ -50,6 +54,7 @@ fn test_ambient_temperature_ramp_down() {
 }
 
 #[test]
+// Verifies that ambient temperature after ramp down.
 fn test_ambient_temperature_after_ramp_down() {
     let profile = create_profile();
     let time_after_ramp_down = NaiveTime::from_hms_opt(20, 00, 0).unwrap();

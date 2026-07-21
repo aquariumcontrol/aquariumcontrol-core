@@ -179,6 +179,7 @@ mod tests {
 
     /// Tests the successful creation of a `FeedScheduleEntry` when `repeat_daily` is 0.
     #[test]
+    // Verifies that new with repeat daily zero.
     fn test_new_with_repeat_daily_zero() {
         println!("* Testing FeedScheduleEntry::new with repeat_daily = 0...");
         // --- Setup ---
@@ -200,6 +201,7 @@ mod tests {
 
     /// Tests the successful creation of a `FeedScheduleEntry` when `repeat_daily` is 1.
     #[test]
+    // Verifies that new with repeat daily one.
     fn test_new_with_repeat_daily_one() {
         println!("* Testing FeedScheduleEntry::new with repeat_daily = 1...");
         // --- Setup ---
@@ -220,6 +222,7 @@ mod tests {
 
     /// Tests that `new` returns an error when `repeat_daily` is greater than 1.
     #[test]
+    // Verifies that new with repeat daily out of range positive.
     fn test_new_with_repeat_daily_out_of_range_positive() {
         println!("* Testing FeedScheduleEntry::new with repeat_daily > 1...");
         // --- Setup ---
@@ -247,6 +250,7 @@ mod tests {
 
     /// Tests that `new` returns an error when `repeat_daily` is less than 0.
     #[test]
+    // Verifies that new with repeat daily out of range negative.
     fn test_new_with_repeat_daily_out_of_range_negative() {
         println!("* Testing FeedScheduleEntry::new with repeat_daily < 0...");
         // --- Setup ---

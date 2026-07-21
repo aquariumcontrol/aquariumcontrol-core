@@ -11,6 +11,7 @@ use aquarium_control::test_server::conductivity_reverse_compensation::Conductivi
 use aquarium_control::test_server::test_server_config::read_test_server_config_file;
 
 #[test]
+// Verifies that no compensation.
 fn test_no_compensation() {
     let config = read_test_server_config_file(None);
     let conductivity_compensation = ConductivityReverseCompensation {
@@ -23,6 +24,7 @@ fn test_no_compensation() {
 }
 
 #[test]
+// Verifies that high temperature.
 fn test_high_temperature() {
     let config = read_test_server_config_file(None);
     let conductivity_compensation = ConductivityReverseCompensation {
@@ -35,6 +37,7 @@ fn test_high_temperature() {
 }
 
 #[test]
+// Verifies that low temperature.
 fn test_low_temperature() {
     let config = read_test_server_config_file(None);
     let conductivity_compensation = ConductivityReverseCompensation {

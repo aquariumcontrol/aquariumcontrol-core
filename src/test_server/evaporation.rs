@@ -84,6 +84,7 @@ pub mod tests {
     use crate::test_server::evaporation::{Evaporation, EvaporationConfig};
 
     #[test]
+    // Verifies that evaporation without ventilation.
     fn test_evaporation_without_ventilation() {
         let evaporation_config = EvaporationConfig {
             constant1: 1.0,
@@ -102,6 +103,7 @@ pub mod tests {
     }
 
     #[test]
+    // Verifies that evaporation with ventilation.
     fn test_evaporation_with_ventilation() {
         let evaporation_config = EvaporationConfig {
             constant1: 1.0,

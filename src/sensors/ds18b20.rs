@@ -410,6 +410,7 @@ pub mod tests {
     use crate::sensors::ds18b20::{Ds18b20, Ds18b20Config, Ds18b20Error};
 
     #[test]
+    // Verifies that new fails with identical sensor ids.
     fn test_new_fails_with_identical_sensor_ids() {
         // Arrange: Create a configuration where both water and ambient sensors
         // are assigned the exact same ID.

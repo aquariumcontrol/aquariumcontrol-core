@@ -23,6 +23,7 @@ cfg_if::cfg_if! {
 
 #[cfg(feature = "test-utils")]
 #[test]
+// Verifies that change low to high to low.
 fn test_change_low_to_high_to_low() {
     let config = read_test_server_config_file(None);
 

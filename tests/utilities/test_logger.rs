@@ -17,6 +17,7 @@ use aquarium_control::utilities::logger_config::LoggerConfig;
 
 /// Tests that the function returns an error if the log file name is a directory.
 #[test]
+// Verifies that path is a directory.
 fn test_path_is_a_directory() {
     let dir = tempdir().unwrap();
     // Get the path of the temporary directory itself.
@@ -29,6 +30,7 @@ fn test_path_is_a_directory() {
 
 /// Tests that the function returns an error if the parent directory does not exist.
 #[test]
+// Verifies that parent directory does not exist.
 fn test_parent_directory_does_not_exist() {
     let dir = tempdir().unwrap();
     let file_path = dir.path().join("nonexistent_subdir/bad.log");
@@ -45,6 +47,7 @@ fn test_parent_directory_does_not_exist() {
 
 /// Tests that the function returns an error if the parent path is a file, not a directory.
 #[test]
+// Verifies that parent is a file.
 fn test_parent_is_a_file() {
     let dir = tempdir().unwrap();
     let file_as_parent = dir.path().join("file.txt");
@@ -66,6 +69,7 @@ fn test_parent_is_a_file() {
 /// for example, due to permissions. This test is specific to Unix-like systems.
 #[test]
 #[cfg(unix)]
+// Verifies that cannot open file in readonly directory.
 fn test_cannot_open_file_in_readonly_directory() {
     use std::os::unix::fs::PermissionsExt;
 

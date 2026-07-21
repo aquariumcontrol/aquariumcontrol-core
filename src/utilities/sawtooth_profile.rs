@@ -247,6 +247,7 @@ pub mod tests {
     // - beginning/end of each phase
     // - middle of each phase
     #[test]
+    // Verifies that saw tooth profile.
     pub fn test_saw_tooth_profile() {
         let saw_tooth_profile_config = SawToothProfileConfig {
             phase1_length: 10,

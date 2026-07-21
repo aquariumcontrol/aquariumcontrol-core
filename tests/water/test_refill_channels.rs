@@ -35,6 +35,7 @@ fn setup_channels() -> (
 }
 
 #[test]
+// Verifies that send to schedule check sends command and increments counter.
 fn test_send_to_schedule_check_sends_command_and_increments_counter() {
     // Arrange
     let (mut channels, mut rx_schedule_test, _, _) = setup_channels();
@@ -61,6 +62,7 @@ fn test_send_to_schedule_check_sends_command_and_increments_counter() {
 }
 
 #[test]
+// Verifies that receive from schedule check receives response and increments counter.
 fn test_receive_from_schedule_check_receives_response_and_increments_counter() {
     // Arrange
     let (mut channels, _, mut tx_schedule_resp_test, _) = setup_channels();
@@ -88,6 +90,7 @@ fn test_receive_from_schedule_check_receives_response_and_increments_counter() {
 }
 
 #[test]
+// Verifies that send to monitor sends view and increments counter.
 fn test_send_to_monitor_sends_view_and_increments_counter() {
     // Arrange
     let (mut channels, _, _, mut rx_monitor_test) = setup_channels();

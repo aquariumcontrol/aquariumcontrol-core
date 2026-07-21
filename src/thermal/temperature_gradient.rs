@@ -241,6 +241,7 @@ mod tests {
     }
 
     #[test]
+    // Verifies that new invalid sampling interval.
     fn test_new_invalid_sampling_interval() {
         let mut config = create_default_config();
         config.sampling_interval = 0;
@@ -260,6 +261,7 @@ mod tests {
     }
 
     #[test]
+    // Verifies that new invalid sample size too small.
     fn test_new_invalid_sample_size_too_small() {
         let mut config = create_default_config();
         config.sample_size = 1;
@@ -279,6 +281,7 @@ mod tests {
     }
 
     #[test]
+    // Verifies that new invalid sample size too large.
     fn test_new_invalid_sample_size_too_large() {
         let mut config = create_default_config();
         config.sample_size = 101;
@@ -298,6 +301,7 @@ mod tests {
     }
 
     #[test]
+    // Verifies that new valid config.
     fn test_new_valid_config() {
         let config = create_default_config();
         let result = TemperatureGradient::new(config);
@@ -305,6 +309,7 @@ mod tests {
     }
 
     #[test]
+    // Verifies that calculate least squares gradient less than two samples.
     fn test_calculate_least_squares_gradient_less_than_two_samples() {
         let mut samples = VecDeque::new();
         samples.push_back((1.0, 10.0));
@@ -313,6 +318,7 @@ mod tests {
     }
 
     #[test]
+    // Verifies that calculate least squares gradient zero gradient.
     fn test_calculate_least_squares_gradient_zero_gradient() {
         let mut samples = VecDeque::new();
         let now = current_timestamp_as_f64();
@@ -324,6 +330,7 @@ mod tests {
     }
 
     #[test]
+    // Verifies that calculate least squares gradient positive gradient one.
     fn test_calculate_least_squares_gradient_positive_gradient_one() {
         let mut samples = VecDeque::new();
         let now = current_timestamp_as_f64();
@@ -335,6 +342,7 @@ mod tests {
     }
 
     #[test]
+    // Verifies that calculate least squares gradient negative gradient one.
     fn test_calculate_least_squares_gradient_negative_gradient_one() {
         let mut samples = VecDeque::new();
         let now = current_timestamp_as_f64();
@@ -346,6 +354,7 @@ mod tests {
     }
 
     #[test]
+    // Verifies that calculate least squares gradient very high positive gradient.
     fn test_calculate_least_squares_gradient_very_high_positive_gradient() {
         let mut samples = VecDeque::new();
         samples.push_back((1.0, 1.0));
@@ -356,6 +365,7 @@ mod tests {
     }
 
     #[test]
+    // Verifies that calculate least squares gradient very high negative gradient.
     fn test_calculate_least_squares_gradient_very_high_negative_gradient() {
         let mut samples = VecDeque::new();
         samples.push_back((1.0, 1000.0));
@@ -366,6 +376,7 @@ mod tests {
     }
 
     #[test]
+    // Verifies that calculate least squares gradient x values are the same.
     fn test_calculate_least_squares_gradient_x_values_are_the_same() {
         let mut samples = VecDeque::new();
         samples.push_back((1.0, 10.0));

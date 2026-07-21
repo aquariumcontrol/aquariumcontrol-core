@@ -20,6 +20,7 @@ fn create_light_intensity_profile() -> LightIntensityTimeProfile {
 }
 
 #[test]
+// Verifies that light intensity before sunrise.
 fn test_light_intensity_before_sunrise() {
     let profile = create_light_intensity_profile();
     let time_before_sunrise = NaiveTime::from_hms_opt(5, 0, 0).unwrap();
@@ -27,6 +28,7 @@ fn test_light_intensity_before_sunrise() {
 }
 
 #[test]
+// Verifies that light intensity rising sun.
 fn test_light_intensity_rising_sun() {
     let profile = create_light_intensity_profile();
     let time_rising_sun = NaiveTime::from_hms_opt(9, 0, 0).unwrap();
@@ -34,6 +36,7 @@ fn test_light_intensity_rising_sun() {
 }
 
 #[test]
+// Verifies that light intensity full sun.
 fn test_light_intensity_full_sun() {
     let profile = create_light_intensity_profile();
     let time_full_sun = NaiveTime::from_hms_opt(12, 30, 0).unwrap();
@@ -41,6 +44,7 @@ fn test_light_intensity_full_sun() {
 }
 
 #[test]
+// Verifies that light intensity setting sun.
 fn test_light_intensity_setting_sun() {
     let profile = create_light_intensity_profile();
     let time_setting_sun = NaiveTime::from_hms_opt(15, 30, 0).unwrap();
@@ -48,6 +52,7 @@ fn test_light_intensity_setting_sun() {
 }
 
 #[test]
+// Verifies that light intensity after sunset.
 fn test_light_intensity_after_sunset() {
     let profile = create_light_intensity_profile();
     let time_after_sunset = NaiveTime::from_hms_opt(20, 00, 0).unwrap();
