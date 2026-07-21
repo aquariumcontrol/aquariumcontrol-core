@@ -80,7 +80,7 @@ impl RefillMonitorView {
             || self.refill_check_interval_last_refill
     }
 }
-#[cfg(test)]
+
 impl RefillMonitorView {
     // Helper function to assert the state of a RefillMonitorView
     /// Performs the `assert_refill_monitor_view` operation.

@@ -75,16 +75,14 @@ impl RefillErrorStates {
         self.error_join_failed = false;
     }
 
-    #[cfg(test)]
-    // Checks if any error flag within the struct is currently set to `true`.
-    //
-    // This helper function is used exclusively in test environments to quickly
-    // determine if the `Refill` module has encountered any error conditions.
-    //
-    // # Returns
-    // `true` if at least one error flag (e.g., `error_switch_stuck_high`, `error_sql_update_failed`)
-    // is set to `true`; otherwise, returns `false`.
-    /// Performs the `has_error` operation.
+    /// Checks if any error flag within the struct is currently set to `true`.
+    ///
+    /// This helper function is used exclusively in test environments to quickly
+    /// determine if the `Refill` module has encountered any error conditions.
+    ///
+    /// # Returns
+    /// `true` if at least one error flag (e.g., `error_switch_stuck_high`, `error_sql_update_failed`)
+    /// is set to `true`; otherwise, returns `false`.
     pub fn has_error(&mut self) -> bool {
         self.error_switch_stuck_high
             || self.error_switch_stuck_low
