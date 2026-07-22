@@ -1,4 +1,4 @@
-# Fresh water Refill
+# Water
 ### [sys_req~water1~1]
 The control system shall read the tank level switch position.
 
@@ -22,6 +22,9 @@ The control system shall allow the user to start the refill controller remotely.
 
 ### [sys_req~water8~1]
 The control system shall allow the user to stop the refill controller remotely.
+
+### [sys_req~water9~1]
+The control system shall protect against faulty tank level switch sensor causing excessive fresh water refill.
 
 # Food
 ### [sys_req~food1~1]
@@ -49,7 +52,7 @@ The control system shall allow the user to restart all feed operations.
 ### [sys_req~food7~1]
 The control system shall log any feed operation in the database.
 
-# Balling mineral dosing
+# Mineral
 ### [sys_req~mineral1~1]
 The control system shall repeatedly read the balling pump profiles from the database.
 
@@ -111,44 +114,64 @@ The control system read from the following sensors:
 - DS18B20 temperature sensor for ambient temperature
 - Tank level switch
 
-# Ventilation
-### [sys-req~ventilation1~1]
+# Thermal
+### [sys-req~thermal1~1]
 The control system shall reduce the water temperature by actuating ventilation fans depending on the actual water temperature.
 
-### [sys-req~ventilation2~1]
+### [sys-req~thermal2~1]
 The control system shall repeatedly read the target temperature window for the ventilation control from the database.
 
-### [sys-req~ventilation3~1]
+### [sys-req~thermal3~1]
 The control system shall allow the user to stop the ventilation control.
 
-### [sys-req~ventilation4~1]
+### [sys-req~thermal4~1]
 The control system shall allow the user to re-start the ventilation control.
 
-# Heating
-### [sys-req~heating1~1]
+### [sys-req~thermal5~1]
 The control system shall increase the water temperature by actuating a heater depending on the actual water temperature.
 
-### [sys-req~heating2~1]
+### [sys-req~thermal6~1]
 The control system shall repeatedly read the target temperature window for the heating control from the database.
 
-### [sys-req~heating3~1]
+### [sys-req~thermal7~1]
 The control system shall allow the user to stop the heating control.
 
-### [sys-req~heating4~1]
+### [sys-req~thermal8~1]
 The control system shall allow the user to re-start the heating control.
 
-# Monitors
-### [sys-req~monitors~1]
+### [sys_req~thermal9~1]
+The control system shall inhibit the heater if the tank level switch reports a low water level for an extended time period.
+
+# Watchmen
+### [sys-req~watchmen~1]
 The control system shall monitor itself.
+
+### [sys_req~watchmen2~1]
+The control system shall pet the hardware watchdog at regular intervals to verify process liveness.
+
+### [sys_req~watchmen3~1]
+The control system shall detect execution stalls or component failures and signal the watchdog to trigger a safe system reboot.
 
 # Recorder
 ### [sys-req~recorder~1]
 The control system shall regularly record measurement signals in the database.
 
-# Signal handler
-### [sys-req~signal_handler~1]
+### [sys_req~recorder2~1]
+The control system shall filter raw sensor readings using an infinite impulse response (IIR) filter to eliminate measurement noise.
+
+# Utilities
+### [sys-req~utilities1~1]
 The control system shall receive signals from the operating system and react accordingly.
 
-# Messaging
+### [sys_req~utilities2~1]
+The control system shall read all configuration parameters from a local configuration file on startup.
+
+### [sys_req~utilities3~1]
+The control system shall verify that its internal version information and hash are compatible with the database schema on startup.
+
+### [sys_req~utilities4~1]
+The control system shall publish its process ID (PID) to a file on startup to prevent duplicate running instances.
+
+# Dispatch
 ### [sys-req~messaging~1]
 The control system shall receive POSIX messages from the operating system and react accordingly.
