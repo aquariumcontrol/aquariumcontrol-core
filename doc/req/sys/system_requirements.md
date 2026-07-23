@@ -9,7 +9,7 @@ Needs: sw_req~water_determine_refill~1
 
 ### [sys_req~water3~1]
 The control system shall actuate the fresh water pump to refill the main tank.
-Needs: sw_req~water_actuate_pump~1
+Needs: sw_req~water_actuate_pump~1, sw_req~water_hysteresis~1
 
 ### [sys_req~water4~1]
 The control system shall log each fresh water refill operation in the database.
@@ -17,23 +17,23 @@ Needs: sw_req~water_log_database~1
 
 ### [sys_req~water5~1]
 The control system shall recognize error states of sensor, actuator or main tank.
-Needs: sw_req~water_error_detection~1
+Needs: sw_req~water_error_detection~1, sw_req~water_startup_data_recovery~1, sw_req~water_log_flood_protection~1
 
 ### [sys_req~water6~1]
 The control system shall allow the user to reset the error remotely.
-Needs: sw_req~water_remote_reset~1
+Needs: sw_req~water_remote_reset~1, sw_req~water_channel_communication~1
 
 ### [sys_req~water7~1]
 The control system shall allow the user to start the refill controller remotely.
-Needs: sw_req~water_remote_start~1
+Needs: sw_req~water_remote_start~1, sw_req~water_channel_communication~1
 
 ### [sys_req~water8~1]
 The control system shall allow the user to stop the refill controller remotely.
-Needs: sw_req~water_remote_stop~1
+Needs: sw_req~water_remote_stop~1, sw_req~water_shutdown_sequence~1, sw_req~water_channel_communication~1
 
 ### [sys_req~water9~1]
 The control system shall protect against faulty tank level switch sensor causing excessive fresh water refill.
-Needs: sw_req~water_faulty_switch_protection~1
+Needs: sw_req~water_faulty_switch_protection~1, sw_req~water_calibration_parameters~1
 
 # Food
 ### [sys_req~food1~1]
@@ -142,7 +142,7 @@ The control system read from the following sensors:
 - DS18B20 temperature sensor for water temperature
 - DS18B20 temperature sensor for ambient temperature
 - Tank level switch
-Needs: sw_req~sensors_read_data~1
+Needs: sw_req~sensors_read_data~1, sw_req~sensors_tank_level_switch_preprocessing~1
 
 # Thermal
 ### [sys-req~thermal1~1]
