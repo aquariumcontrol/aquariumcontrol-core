@@ -3255,7 +3255,7 @@ pub fn test_heating_actuation_with_device_scheduler_mutex_blocked() {
                 &mut channels.relay_manager.tx_relay_manager_to_heating,
                 &mut channels.relay_manager.rx_relay_manager_from_heating,
             );
-            assert!(actuation_events.len() >= 1);
+            assert!(!actuation_events.is_empty());
             mock_actuator_states.check_terminal_condition_heating();
         })
         .unwrap();
