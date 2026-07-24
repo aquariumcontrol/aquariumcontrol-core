@@ -1,4 +1,4 @@
-# Water Software Requirements
+## Water Software Requirements
 
 ### Read Pre-Processed Level Switch Position
 `sw_req~water_read_level_switch~1`
@@ -14,6 +14,22 @@ Needs: impl, utest
 The controller shall initiate a fresh water refill if the stabilized switch position is LOW, the sensor status is valid, and no active error states or schedule inhibitions are present.
 
 Covers: sys_req~water2~1
+Needs: impl, utest
+
+### Database Failure Inhibition
+`sw_req~water_db_failure_inhibition~1`
+
+The refill controller shall inhibit and lock out further fresh water refill operations if a database communication failure occurs (such as failing to read historical statistics or failing to write logs).
+
+Covers: sys_req~water5~1
+Needs: impl, utest
+
+### Observe Operational Time Window
+`sw_req~water_observe_schedule~1`
+
+The refill controller shall monitor the schedule check inhibition status and prevent or suspend refill pump operations if the current daytime is outside of the configured allowed operational window.
+
+Covers: sys_req~schedule2~1
 Needs: impl, utest
 
 ### Mutex Actuation Protection
