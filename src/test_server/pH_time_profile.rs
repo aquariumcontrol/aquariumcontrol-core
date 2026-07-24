@@ -61,7 +61,8 @@ impl pHTimeProfile {
             filter: IIRFilter::new(
                 &config.filter,
                 Some(Self::pH_unfiltered(&config, time_of_day)),
-                #[cfg(all(not(test), not(feature = "test-utils")))] // only required in real-life execution
+                #[cfg(all(not(test), not(feature = "test-utils")))]
+                // only required in real-life execution
                 "pH",
             ),
             config,

@@ -743,8 +743,8 @@ pub fn test_messaging_stops_starts_balling_dosing() {
             let mut actuation_count_0: i32;
             loop {
                 spin_sleeper.sleep(sleep_duration_100_millis);
-                actuation_count_0 = *mutex_device_scheduler_balling_test_environment
-                    .blocking_lock();
+                actuation_count_0 =
+                    *mutex_device_scheduler_balling_test_environment.blocking_lock();
                 if actuation_count_0 >= 1 || start_initial.elapsed() > timeout_initial {
                     break;
                 }
@@ -772,8 +772,8 @@ pub fn test_messaging_stops_starts_balling_dosing() {
             // then dosings will happen in this period.
             spin_sleeper.sleep(sleep_duration_7_secs);
 
-            let actuation_count_1 = *mutex_device_scheduler_balling_test_environment
-                .blocking_lock();
+            let actuation_count_1 =
+                *mutex_device_scheduler_balling_test_environment.blocking_lock();
             // check the amount of actuation (after stop request)
             assert_eq!(actuation_count_1, 1);
 
@@ -799,8 +799,8 @@ pub fn test_messaging_stops_starts_balling_dosing() {
             let mut actuation_count_2: i32;
             loop {
                 spin_sleeper.sleep(sleep_duration_100_millis);
-                actuation_count_2 = *mutex_device_scheduler_balling_test_environment
-                    .blocking_lock();
+                actuation_count_2 =
+                    *mutex_device_scheduler_balling_test_environment.blocking_lock();
                 if actuation_count_2 >= 3 || start_resume.elapsed() > timeout_resume {
                     break;
                 }
@@ -819,8 +819,8 @@ pub fn test_messaging_stops_starts_balling_dosing() {
                 .blocking_recv()
                 .unwrap();
 
-            let actuation_count_3 = *mutex_device_scheduler_balling_test_environment
-                .blocking_lock();
+            let actuation_count_3 =
+                *mutex_device_scheduler_balling_test_environment.blocking_lock();
             // check the amount of actuation (after Quit command)
             assert_eq!(actuation_count_3, 3);
             let _ = channels
@@ -1190,8 +1190,10 @@ pub fn test_balling_dosing_with_mutex_blocked() {
         Ok(c) => c,
         Err(e) => panic!("Could not connect to SQL database: {e:?}"),
     };
-    SqlInterface::truncate_table(&mut sql_interface, SQL_TABLE_BALLING_SET_VALS.to_string()).unwrap();
-    SqlInterface::truncate_table(&mut sql_interface, SQL_TABLE_BALLING_DOSING_LOG.to_string()).unwrap();
+    SqlInterface::truncate_table(&mut sql_interface, SQL_TABLE_BALLING_SET_VALS.to_string())
+        .unwrap();
+    SqlInterface::truncate_table(&mut sql_interface, SQL_TABLE_BALLING_DOSING_LOG.to_string())
+        .unwrap();
 
     let mut sql_interface_balling = SqlInterfaceBalling::new(
         sql_interface.get_connection().unwrap(),

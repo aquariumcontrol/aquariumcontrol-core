@@ -8,7 +8,7 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 */
 
 mod utilities {
-    mod test_signal_handler;
-    mod test_publish_pid;
     mod test_logger;
+    mod test_publish_pid;
+    mod test_signal_handler;
 }

@@ -67,11 +67,13 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 use log::debug;
 use std::sync::{Arc, Mutex};
 
-#[cfg(all(target_os = "linux", not(test), not(feature = "test-utils")))] // only required in real-life execution
+#[cfg(all(target_os = "linux", not(test), not(feature = "test-utils")))]
+// only required in real-life execution
 use nix::unistd::gettid;
 
 use log::error;
-#[cfg(all(target_os = "linux", not(test), not(feature = "test-utils")))] // only required in real-life execution
+#[cfg(all(target_os = "linux", not(test), not(feature = "test-utils")))]
+// only required in real-life execution
 use log::info;
 
 #[cfg(all(not(test), not(feature = "test-utils")))] // only required in real-life execution

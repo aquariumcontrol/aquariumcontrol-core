@@ -72,7 +72,8 @@ use log::{info, warn};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
-#[cfg(all(target_os = "linux", not(test), not(feature = "test-utils")))] // only required in real-life execution
+#[cfg(all(target_os = "linux", not(test), not(feature = "test-utils")))]
+// only required in real-life execution
 use nix::unistd::gettid;
 
 use crate::database::sql_interface_heating_stats::{HeatingStatsEntry, SqlInterfaceHeatingStats};
@@ -616,7 +617,8 @@ impl Heating {
                     &heating_mutexes.mutex_temperature_gradient,
                     heater_state == ActuatorState::On,
                     true, // heating expects a positive gradient
-                    #[cfg(all(not(test), not(feature = "test-utils")))] // only required in real-life execution
+                    #[cfg(all(not(test), not(feature = "test-utils")))]
+                    // only required in real-life execution
                     "Heating",
                 );
                 if actuator_ineffective
@@ -628,7 +630,8 @@ impl Heating {
                         &mut actuation_mutex_was_blocked_during_actuation,
                         heating_channels,
                         is_multi_thread,
-                    ).await;
+                    )
+                    .await;
                     heater_state = ActuatorState::Off;
                     self.actuator_disabled = true;
                     #[cfg(all(not(test), not(feature = "test-utils")))] // only required in real-life execution
@@ -647,7 +650,8 @@ impl Heating {
                             &mut actuation_mutex_was_blocked_during_actuation,
                             heating_channels,
                             is_multi_thread,
-                        ).await;
+                        )
+                        .await;
                         heater_state = ActuatorState::Off;
                     }
                 } else {
@@ -671,7 +675,8 @@ impl Heating {
                                         &mut actuation_mutex_was_blocked_during_actuation,
                                         heating_channels,
                                         is_multi_thread,
-                                    ).await;
+                                    )
+                                    .await;
                                     heater_state = ActuatorState::On;
                                 }
                             } else {
@@ -682,7 +687,8 @@ impl Heating {
                                         &mut actuation_mutex_was_blocked_during_actuation,
                                         heating_channels,
                                         is_multi_thread,
-                                    ).await;
+                                    )
+                                    .await;
                                     heater_state = ActuatorState::Off;
                                 }
                             }
@@ -696,7 +702,8 @@ impl Heating {
                                         &mut actuation_mutex_was_blocked_during_actuation,
                                         heating_channels,
                                         is_multi_thread,
-                                    ).await;
+                                    )
+                                    .await;
                                     heater_state = ActuatorState::Off;
                                 }
                             }
@@ -708,7 +715,8 @@ impl Heating {
                                         &mut actuation_mutex_was_blocked_during_actuation,
                                         heating_channels,
                                         is_multi_thread,
-                                    ).await;
+                                    )
+                                    .await;
                                     heater_state = ActuatorState::On;
                                 }
                             }
@@ -724,7 +732,8 @@ impl Heating {
                                         &mut actuation_mutex_was_blocked_during_actuation,
                                         heating_channels,
                                         is_multi_thread,
-                                    ).await;
+                                    )
+                                    .await;
                                     heater_state = ActuatorState::On;
                                 }
                             }
@@ -736,7 +745,8 @@ impl Heating {
                                         &mut actuation_mutex_was_blocked_during_actuation,
                                         heating_channels,
                                         is_multi_thread,
-                                    ).await;
+                                    )
+                                    .await;
                                     heater_state = ActuatorState::Off;
                                 }
                             }
@@ -752,7 +762,8 @@ impl Heating {
                                         &mut actuation_mutex_was_blocked_during_actuation,
                                         heating_channels,
                                         is_multi_thread,
-                                    ).await;
+                                    )
+                                    .await;
                                     heater_state = ActuatorState::On;
                                 }
                             }
@@ -764,7 +775,8 @@ impl Heating {
                                         &mut actuation_mutex_was_blocked_during_actuation,
                                         heating_channels,
                                         is_multi_thread,
-                                    ).await;
+                                    )
+                                    .await;
                                     heater_state = ActuatorState::Off;
                                 }
                             }
@@ -865,7 +877,8 @@ impl Heating {
                 &mut actuation_mutex_was_blocked_during_actuation,
                 heating_channels,
                 is_multi_thread,
-            ).await;
+            )
+            .await;
         }
 
         // update the database with the heating stats data recorded

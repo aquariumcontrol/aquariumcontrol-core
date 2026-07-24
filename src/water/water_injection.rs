@@ -248,10 +248,8 @@ impl WaterInjectionTrait for WaterInjection {
             if tank_level_switch_position {
                 additional_refill_volume_executed += self.refill_increment;
             }
-            (quit_command_received, _, _) = self.process_external_request(
-                &mut refill_channels.rx_refill_from_signal_handler,
-                None,
-            );
+            (quit_command_received, _, _) = self
+                .process_external_request(&mut refill_channels.rx_refill_from_signal_handler, None);
             if quit_command_received {
                 break;
             }

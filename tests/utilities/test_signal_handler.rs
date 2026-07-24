@@ -56,7 +56,8 @@ fn test_signal_handling() {
                         channels.signal_handler,
                         ExecutionConfig::default(),
                         None,
-                    ).await;
+                    )
+                    .await;
                 });
         })
         .unwrap();

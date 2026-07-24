@@ -11,9 +11,9 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 
 #![cfg(all(not(test), not(feature = "test-utils")))]
 
+use aquarium_control::thermal::temperature_gradient_monitor::TemperatureGradientMonitorTrait;
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
-use aquarium_control::thermal::temperature_gradient_monitor::TemperatureGradientMonitorTrait;
 
 struct MockMonitor {
     max_time: u64,

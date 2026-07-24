@@ -89,7 +89,7 @@ impl IIRFilter {
         #[cfg(all(not(test), not(feature = "test-utils")))] signal_name: &str, // only required in real-life execution
     ) -> Self {
         let safe_filter_coefficient = filter_config.filter_coefficient.clamp(0.0, 1.0);
-        #[cfg(all(not(test), not(feature = "test-utils")))]// only required in real-life execution
+        #[cfg(all(not(test), not(feature = "test-utils")))] // only required in real-life execution
         #[cfg(not(tarpaulin_include))]
         if safe_filter_coefficient != filter_config.filter_coefficient {
             warn!(
@@ -154,7 +154,8 @@ pub mod tests {
         let filter_with_some = IIRFilter::new(
             &config,
             Some(10.0),
-            #[cfg(all(not(test), not(feature = "test-utils")))] // only required in real-life execution
+            #[cfg(all(not(test), not(feature = "test-utils")))]
+            // only required in real-life execution
             signal_name,
         );
         assert_float_absolute_eq!(filter_with_some.old_value, 10.0, 0.001);
@@ -164,7 +165,8 @@ pub mod tests {
         let filter_with_none = IIRFilter::new(
             &config,
             None,
-            #[cfg(all(not(test), not(feature = "test-utils")))] // only required in real-life execution
+            #[cfg(all(not(test), not(feature = "test-utils")))]
+            // only required in real-life execution
             signal_name,
         );
         assert_float_absolute_eq!(
@@ -189,7 +191,8 @@ pub mod tests {
         let filter_high = IIRFilter::new(
             &config_high,
             Some(0.0),
-            #[cfg(all(not(test), not(feature = "test-utils")))] // only required in real-life execution
+            #[cfg(all(not(test), not(feature = "test-utils")))]
+            // only required in real-life execution
             signal_name,
         );
 
@@ -204,7 +207,8 @@ pub mod tests {
         let filter_low = IIRFilter::new(
             &config_low,
             Some(0.0),
-            #[cfg(all(not(test), not(feature = "test-utils")))] // only required in real-life execution
+            #[cfg(all(not(test), not(feature = "test-utils")))]
+            // only required in real-life execution
             signal_name,
         );
         // It should be clamped to 0.0

@@ -99,7 +99,8 @@ impl Sump {
             level_filter: IIRFilter::new(
                 &sump_config.level_filter,
                 None,
-                #[cfg(all(not(test), not(feature = "test-utils")))] // only required in real-life execution
+                #[cfg(all(not(test), not(feature = "test-utils")))]
+                // only required in real-life execution
                 "sump level",
             ),
             config: sump_config,

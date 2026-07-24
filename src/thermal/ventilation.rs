@@ -150,7 +150,8 @@ async fn switch_on_ventilation(
         mutex_blocked_during_actuation,
         ventilation_channels,
         is_multi_thread,
-    ).await;
+    )
+    .await;
 }
 
 /// The function commands the relay manager to switch off the ventilation device.
@@ -166,7 +167,8 @@ async fn switch_off_ventilation(
         mutex_blocked_during_actuation,
         ventilation_channels,
         is_multi_thread,
-    ).await;
+    )
+    .await;
 }
 
 #[cfg_attr(doc, aquamarine::aquamarine)]
@@ -328,7 +330,8 @@ impl Ventilation {
                         mutex_was_blocked_during_actuation,
                         ventilation_channels,
                         is_multi_thread,
-                    ).await;
+                    )
+                    .await;
                     *ventilation_state = ActuatorState::On;
                 }
             }
@@ -340,7 +343,8 @@ impl Ventilation {
                         mutex_was_blocked_during_actuation,
                         ventilation_channels,
                         is_multi_thread,
-                    ).await;
+                    )
+                    .await;
                     *ventilation_state = ActuatorState::Off;
                 }
             }
@@ -464,7 +468,8 @@ impl Ventilation {
                     &ventilation_mutexes.mutex_temperature_gradient,
                     ventilation_state == ActuatorState::On,
                     false, // ventilation expects a negative gradient
-                    #[cfg(all(not(test), not(feature = "test-utils")))] // only required in real-life execution
+                    #[cfg(all(not(test), not(feature = "test-utils")))]
+                    // only required in real-life execution
                     "Ventilation",
                 );
                 if actuator_ineffective
@@ -476,7 +481,8 @@ impl Ventilation {
                         &mut actuation_mutex_was_blocked_during_actuation,
                         ventilation_channels,
                         is_multi_thread,
-                    ).await;
+                    )
+                    .await;
                     ventilation_state = ActuatorState::Off;
                     self.actuator_disabled = true;
                     #[cfg(all(not(test), not(feature = "test-utils")))] // only required in real-life execution
@@ -501,7 +507,8 @@ impl Ventilation {
                                     &mut actuation_mutex_was_blocked_during_actuation,
                                     ventilation_channels,
                                     is_multi_thread,
-                                ).await;
+                                )
+                                .await;
                                 ventilation_state = ActuatorState::On;
                             }
                         } else {
@@ -512,7 +519,8 @@ impl Ventilation {
                                     &mut actuation_mutex_was_blocked_during_actuation,
                                     ventilation_channels,
                                     is_multi_thread,
-                                ).await;
+                                )
+                                .await;
                                 ventilation_state = ActuatorState::Off;
                             }
                         }
@@ -526,7 +534,8 @@ impl Ventilation {
                                     &mut actuation_mutex_was_blocked_during_actuation,
                                     ventilation_channels,
                                     is_multi_thread,
-                                ).await;
+                                )
+                                .await;
                                 ventilation_state = ActuatorState::On;
                             }
                         }
@@ -538,7 +547,8 @@ impl Ventilation {
                                     &mut actuation_mutex_was_blocked_during_actuation,
                                     ventilation_channels,
                                     is_multi_thread,
-                                ).await;
+                                )
+                                .await;
                                 ventilation_state = ActuatorState::Off;
                             }
                         }
@@ -552,7 +562,8 @@ impl Ventilation {
                         ventilation_channels,
                         &mut actuation_mutex_was_blocked_during_actuation,
                         is_multi_thread,
-                    ).await;
+                    )
+                    .await;
                 } else {
                     // schedule check requires stop of ventilation control
                     Self::conditional_ventilation_switch(
@@ -562,7 +573,8 @@ impl Ventilation {
                         ventilation_channels,
                         &mut actuation_mutex_was_blocked_during_actuation,
                         is_multi_thread,
-                    ).await;
+                    )
+                    .await;
                 }
             }
 
@@ -632,7 +644,8 @@ impl Ventilation {
                     &mut actuation_mutex_was_blocked_during_actuation,
                     ventilation_channels,
                     is_multi_thread,
-                ).await;
+                )
+                .await;
             }
         } else {
             // switch off ventilation if not already off
@@ -642,7 +655,8 @@ impl Ventilation {
                     &mut actuation_mutex_was_blocked_during_actuation,
                     ventilation_channels,
                     is_multi_thread,
-                ).await;
+                )
+                .await;
             }
         }
 

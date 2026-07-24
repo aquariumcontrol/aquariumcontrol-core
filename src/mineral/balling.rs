@@ -71,7 +71,8 @@ use log::info;
 
 use std::fmt;
 
-#[cfg(all(not(feature = "test-utils"), not(test), target_os = "linux"))] // only required in real-life execution
+#[cfg(all(not(feature = "test-utils"), not(test), target_os = "linux"))]
+// only required in real-life execution
 use nix::unistd::gettid;
 
 use std::sync::Arc;
@@ -535,11 +536,7 @@ impl Balling {
                 if dosing_duration_millis > 0 {
                     let mut mutex_data = mutex_device_scheduler_balling.lock().await;
                     let (q, actual_dur) = mineral_injection
-                        .inject_mineral(
-                            balling_channels,
-                            pump_device,
-                            dosing_duration_millis,
-                        )
+                        .inject_mineral(balling_channels, pump_device, dosing_duration_millis)
                         .await;
                     *mutex_data = mutex_data.saturating_add(1);
                     quit_command_received = q;
@@ -742,8 +739,7 @@ impl Balling {
                             is_multi_thread,
                         )
                         .await;
-                }
-                else {
+                } else {
                     #[cfg(all(not(test), not(feature = "test-utils")))]
                     info!(
                         target: module_path!(),
@@ -795,8 +791,6 @@ impl Balling {
         .await;
     }
 }
-
-
 
 #[cfg(test)]
 pub mod tests {

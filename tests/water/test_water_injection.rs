@@ -9,16 +9,18 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 
 //! Tests the fresh water filling operation.
 
+use all_asserts::{assert_ge, assert_le};
 use aquarium_control::database::sql_interface_refill::SqlInterfaceRefill;
 use aquarium_control::launch::channels::{AquaReceiver, AquaSender, Channels};
 use aquarium_control::mocks::mock_relay_manager::tests::mock_relay_manager;
 use aquarium_control::sensors::tank_level_switch::TankLevelSwitchSignals;
-use aquarium_control::utilities::channel_content::{ActuatorState, AquariumDevice, InternalCommand};
+use aquarium_control::utilities::channel_content::{
+    ActuatorState, AquariumDevice, InternalCommand,
+};
+use aquarium_control::water::refill::prepare_refill_tests;
 use aquarium_control::water::refill::Refill;
 use aquarium_control::water::refill_channels::RefillChannels;
 use aquarium_control::water::water_injection::{WaterInjection, WaterInjectionTrait};
-use aquarium_control::water::refill::prepare_refill_tests;
-use all_asserts::{assert_ge, assert_le};
 use spin_sleep::SpinSleeper;
 use std::sync::{Arc, Mutex};
 use std::{thread, time::Duration};
@@ -67,13 +69,14 @@ fn create_assert_test_object(
     thread::Builder::new()
         .name("test_object".to_string())
         .spawn(move || {
-            let mutex_device_scheduler_refill: Arc<tokio::sync::Mutex<i32>> = Arc::new(tokio::sync::Mutex::new(0));
+            let mutex_device_scheduler_refill: Arc<tokio::sync::Mutex<i32>> =
+                Arc::new(tokio::sync::Mutex::new(0));
             let mut water_injection = WaterInjection::new(&refill.config);
 
             let mut boxed_sql_interface_refill: Box<
                 dyn aquarium_control::database::sql_interface_refill::DatabaseInterfaceRefillTrait
-                + Sync
-                + Send,
+                    + Sync
+                    + Send,
             > = Box::new(sql_interface_refill);
 
             let result = tokio::runtime::Builder::new_current_thread()
@@ -103,8 +106,7 @@ pub fn test_water_injection_immediate_switch_high_no_quit_signal() {
 
     let mut channels = Channels::new_for_test();
 
-    let mut tx_signal_handler_to_relay_manager =
-        channels.refill.tx_refill_to_relay_manager.clone();
+    let mut tx_signal_handler_to_relay_manager = channels.refill.tx_refill_to_relay_manager.clone();
 
     let mutex_tank_level_switch_signals =
         Arc::new(Mutex::new(TankLevelSwitchSignals::new(true, true, false)));
@@ -525,8 +527,7 @@ pub fn test_water_injection_switch_stuck_low() {
 
     let mut channels = Channels::new_for_test();
 
-    let mut tx_signal_handler_to_relay_manager =
-        channels.refill.tx_refill_to_relay_manager.clone();
+    let mut tx_signal_handler_to_relay_manager = channels.refill.tx_refill_to_relay_manager.clone();
 
     let mutex_tank_level_switch_signals =
         Arc::new(Mutex::new(TankLevelSwitchSignals::new(false, false, false)));
@@ -583,11 +584,12 @@ pub fn test_water_injection_switch_stuck_low() {
     let join_handle_test_object = thread::Builder::new()
         .name("test_object".to_string())
         .spawn(move || {
-            let mutex_device_scheduler_refill: Arc<tokio::sync::Mutex<i32>> = Arc::new(tokio::sync::Mutex::new(0));
+            let mutex_device_scheduler_refill: Arc<tokio::sync::Mutex<i32>> =
+                Arc::new(tokio::sync::Mutex::new(0));
             let mut boxed_sql_interface_refill: Box<
                 dyn aquarium_control::database::sql_interface_refill::DatabaseInterfaceRefillTrait
-                + Sync
-                + Send,
+                    + Sync
+                    + Send,
             > = Box::new(sql_interface_refill);
 
             let result = tokio::runtime::Builder::new_current_thread()
@@ -681,11 +683,12 @@ pub fn test_water_injection_quit_signal() {
     let join_handle_test_object = thread::Builder::new()
         .name("test_object".to_string())
         .spawn(move || {
-            let mutex_device_scheduler_refill: Arc<tokio::sync::Mutex<i32>> = Arc::new(tokio::sync::Mutex::new(0));
+            let mutex_device_scheduler_refill: Arc<tokio::sync::Mutex<i32>> =
+                Arc::new(tokio::sync::Mutex::new(0));
             let mut boxed_sql_interface_refill: Box<
                 dyn aquarium_control::database::sql_interface_refill::DatabaseInterfaceRefillTrait
-                + Sync
-                + Send,
+                    + Sync
+                    + Send,
             > = Box::new(sql_interface_refill);
             let result = tokio::runtime::Builder::new_current_thread()
                 .build()

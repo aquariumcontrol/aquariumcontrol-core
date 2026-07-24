@@ -9,11 +9,11 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 
 //! Tests the setup and configuration of the application's global logger.
 
+use aquarium_control::utilities::logger::{setup_logger, LoggerSetupError};
+use aquarium_control::utilities::logger_config::LoggerConfig;
 use std::fs;
 use std::fs::File;
 use tempfile::tempdir;
-use aquarium_control::utilities::logger::{setup_logger, LoggerSetupError};
-use aquarium_control::utilities::logger_config::LoggerConfig;
 
 /// Tests that the function returns an error if the log file name is a directory.
 #[test]
@@ -40,9 +40,9 @@ fn test_parent_directory_does_not_exist() {
     };
     let result = setup_logger(config);
     assert!(matches!(
-            result,
-            Err(LoggerSetupError::ParentDirDoesNotExist(_))
-        ));
+        result,
+        Err(LoggerSetupError::ParentDirDoesNotExist(_))
+    ));
 }
 
 /// Tests that the function returns an error if the parent path is a file, not a directory.
@@ -60,9 +60,9 @@ fn test_parent_is_a_file() {
     };
     let result = setup_logger(config);
     assert!(matches!(
-            result,
-            Err(LoggerSetupError::ParentIsNotADirectory(_))
-        ));
+        result,
+        Err(LoggerSetupError::ParentIsNotADirectory(_))
+    ));
 }
 
 /// Tests that the function returns an error if it cannot create the log file,
@@ -95,7 +95,7 @@ fn test_cannot_open_file_in_readonly_directory() {
 
     // 5. Assert that the correct error was returned
     assert!(matches!(
-            result,
-            Err(LoggerSetupError::CouldNotOpenOutputFile { .. })
-        ));
+        result,
+        Err(LoggerSetupError::CouldNotOpenOutputFile { .. })
+    ));
 }

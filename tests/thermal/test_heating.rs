@@ -3336,7 +3336,9 @@ pub fn test_heating_actuation_with_device_scheduler_mutex_blocked() {
             let _ = tx_heating_to_relay_manager_for_test_case_finish.send(InternalCommand::Quit);
 
             assert!(*mutex_device_scheduler_heating.blocking_lock() >= 1);
-            println!("* [Heating] checking actuation with device scheduler mutex blocked succeeded.");
+            println!(
+                "* [Heating] checking actuation with device scheduler mutex blocked succeeded."
+            );
         })
         .unwrap();
 

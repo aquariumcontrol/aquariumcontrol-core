@@ -70,14 +70,20 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 #[cfg(all(not(test), not(feature = "test-utils")))] // only required in real-life execution
 use log::info;
 
-#[cfg(all(feature = "debug_feed", not(test), not(feature = "test-utils")))] // only required in real-life execution
-use log::debug;
-
-#[cfg(all(feature = "debug_signal_handler", not(test), not(feature = "test-utils")))]
+#[cfg(all(feature = "debug_feed", not(test), not(feature = "test-utils")))]
 // only required in real-life execution
 use log::debug;
 
-#[cfg(all(target_os = "linux", not(test), not(feature = "test-utils")))] // only required in real-life execution
+#[cfg(all(
+    feature = "debug_signal_handler",
+    not(test),
+    not(feature = "test-utils")
+))]
+// only required in real-life execution
+use log::debug;
+
+#[cfg(all(target_os = "linux", not(test), not(feature = "test-utils")))]
+// only required in real-life execution
 use nix::unistd::gettid;
 
 use crate::check_quit_increment_counter_ping_database;
@@ -282,8 +288,9 @@ impl Feed {
         // *** Execute the feed profile and destructure the returned tuple ***
         // 1. `quit_during_injection`: A bool indicating if a quit command was received.
         // 2. `injection_result`: A Result indicating if the injection itself succeeded.
-        let (quit_during_injection, injection_result) =
-            food_injection.inject_food(feed_channels, &feed_profile).await;
+        let (quit_during_injection, injection_result) = food_injection
+            .inject_food(feed_channels, &feed_profile)
+            .await;
         // *** Handle the Result part of the tuple independently ***
         // If errors occurred during injection, log each one.
         if let Err(errors) = &injection_result {
@@ -409,7 +416,11 @@ impl Feed {
                 match get_past_res {
                     Ok(feed_schedule_entries_opt) => {
                         if let Some(mut feed_schedule_entries) = feed_schedule_entries_opt {
-                            #[cfg(all(feature = "debug_feed", not(test), not(feature = "test-utils")))] // only required in real-life execution
+                            #[cfg(all(
+                                feature = "debug_feed",
+                                not(test),
+                                not(feature = "test-utils")
+                            ))] // only required in real-life execution
                             #[cfg(not(tarpaulin_include))]
                             debug!(
                                 target: module_path!(),
@@ -421,7 +432,11 @@ impl Feed {
                                 .select_feed_schedule_entry_for_execution(&feed_schedule_entries);
 
                             if let Some(feed_schedule_entry) = feed_schedule_entry_opt {
-                                #[cfg(all(feature = "debug_feed", not(test), not(feature = "test-utils")))] // only required in real-life execution
+                                #[cfg(all(
+                                    feature = "debug_feed",
+                                    not(test),
+                                    not(feature = "test-utils")
+                                ))] // only required in real-life execution
                                 #[cfg(not(tarpaulin_include))]
                                 debug!(
                                     target: module_path!(),
@@ -536,7 +551,7 @@ impl Feed {
                             );
                             self.lock_error_get_feed_schedule_entry = true;
                         }
-                        #[cfg(any(test, feature="test-utils"))]
+                        #[cfg(any(test, feature = "test-utils"))]
                         let _e = e; // Explicitly declare and "use" with an underscore
                         self.lock_error_get_feed_schedule_entry = true;
                     }
@@ -630,17 +645,9 @@ impl Feed {
 
                 if let Some(feed_profile) = feed_profile_opt {
                     let feed_profile_clone = feed_profile.clone();
-                    let mut mutex_data =
-                        mutex_device_scheduler_feed.lock().await;
-                    let (
-                        injection_result,
-                        quit_command_received_during_requested_feed,
-                    ) = self
-                        .execute_feed(
-                            feed_profile_clone.clone(),
-                            food_injection,
-                            feed_channels,
-                        )
+                    let mut mutex_data = mutex_device_scheduler_feed.lock().await;
+                    let (injection_result, quit_command_received_during_requested_feed) = self
+                        .execute_feed(feed_profile_clone.clone(), food_injection, feed_channels)
                         .await;
 
                     *mutex_data = mutex_data.saturating_add(1);
@@ -669,7 +676,11 @@ impl Feed {
 
         // The application received request to terminate. That is why the loop was left.
         // Answer to the thread which sent the request for termination, so that shutdown can proceed further.
-        #[cfg(all(feature = "debug_signal_handler", not(test), not(feature = "test-utils")))] // only required in real-life execution
+        #[cfg(all(
+            feature = "debug_signal_handler",
+            not(test),
+            not(feature = "test-utils")
+        ))] // only required in real-life execution
         #[cfg(not(tarpaulin_include))]
         debug!(
             target: module_path!(),
@@ -689,8 +700,6 @@ impl Feed {
         .await;
     }
 }
-
-
 
 #[cfg(test)]
 pub mod tests {

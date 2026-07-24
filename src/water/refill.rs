@@ -72,7 +72,8 @@ use log::warn;
 #[cfg(all(not(test), not(feature = "test-utils")))] // only required in real-life execution
 use log::info;
 
-#[cfg(all(not(test), target_os = "linux", not(feature = "test-utils")))] // only required in real-life execution
+#[cfg(all(not(test), target_os = "linux", not(feature = "test-utils")))]
+// only required in real-life execution
 use nix::unistd::gettid;
 
 use crate::database::sql_interface::SqlInterface;
@@ -317,7 +318,7 @@ impl Refill {
         stats_value: &mut T,
         lock_flag: &mut bool,
         #[cfg(all(not(test), not(feature = "test-utils")))] check_type: &str, // only required in real-life execution
-        #[cfg(all(not(test), not(feature = "test-utils")))] duration: &str,   // only required in real-life execution
+        #[cfg(all(not(test), not(feature = "test-utils")))] duration: &str, // only required in real-life execution
     ) -> bool {
         match database_result {
             Ok(value) => {
@@ -409,9 +410,11 @@ impl Refill {
                 sql_interface_refill.get_refill_volume_of_last_24h(),
                 &mut refill_stats_data.refill_volume_last_24h,
                 &mut self.locks_error_read.volume_last_24h,
-                #[cfg(all(not(test), not(feature = "test-utils")))] // only required in real-life execution
+                #[cfg(all(not(test), not(feature = "test-utils")))]
+                // only required in real-life execution
                 "volume",
-                #[cfg(all(not(test), not(feature = "test-utils")))] // only required in real-life execution
+                #[cfg(all(not(test), not(feature = "test-utils")))]
+                // only required in real-life execution
                 "24h",
             );
 
@@ -419,9 +422,11 @@ impl Refill {
                 sql_interface_refill.get_refill_count_of_last_24h(),
                 &mut refill_stats_data.refill_count_last_24h,
                 &mut self.locks_error_read.count_last_24h,
-                #[cfg(all(not(test), not(feature = "test-utils")))] // only required in real-life execution
+                #[cfg(all(not(test), not(feature = "test-utils")))]
+                // only required in real-life execution
                 "count",
-                #[cfg(all(not(test), not(feature = "test-utils")))] // only required in real-life execution
+                #[cfg(all(not(test), not(feature = "test-utils")))]
+                // only required in real-life execution
                 "24h",
             );
 
@@ -429,9 +434,11 @@ impl Refill {
                 sql_interface_refill.get_refill_volume_of_last_hour(),
                 &mut refill_stats_data.refill_volume_last_hour,
                 &mut self.locks_error_read.volume_last_hour,
-                #[cfg(all(not(test), not(feature = "test-utils")))] // only required in real-life execution
+                #[cfg(all(not(test), not(feature = "test-utils")))]
+                // only required in real-life execution
                 "volume",
-                #[cfg(all(not(test), not(feature = "test-utils")))] // only required in real-life execution
+                #[cfg(all(not(test), not(feature = "test-utils")))]
+                // only required in real-life execution
                 "hour",
             );
 
@@ -439,9 +446,11 @@ impl Refill {
                 sql_interface_refill.get_refill_count_of_last_hour(),
                 &mut refill_stats_data.refill_count_last_hour,
                 &mut self.locks_error_read.count_last_hour,
-                #[cfg(all(not(test), not(feature = "test-utils")))] // only required in real-life execution
+                #[cfg(all(not(test), not(feature = "test-utils")))]
+                // only required in real-life execution
                 "count",
-                #[cfg(all(not(test), not(feature = "test-utils")))] // only required in real-life execution
+                #[cfg(all(not(test), not(feature = "test-utils")))]
+                // only required in real-life execution
                 "hour",
             );
         };
@@ -556,7 +565,7 @@ impl Refill {
         max_value: T,
         lock_flag: &mut bool,
         #[cfg(all(not(test), not(feature = "test-utils")))] check_type: &str, // only required in real-life execution
-        #[cfg(all(not(test), not(feature = "test-utils")))] duration: &str,   // only required in real-life execution
+        #[cfg(all(not(test), not(feature = "test-utils")))] duration: &str, // only required in real-life execution
     ) -> bool {
         if actual_value > max_value {
             if !*lock_flag {
@@ -613,9 +622,11 @@ impl Refill {
             sql_refill_data.refill_volume_last_24h,
             self.config.max_refill_volume_24h,
             &mut self.locks_info_check.volume_last_24h,
-            #[cfg(all(not(test), not(feature = "test-utils")))] // only required in real-life execution
+            #[cfg(all(not(test), not(feature = "test-utils")))]
+            // only required in real-life execution
             "volume",
-            #[cfg(all(not(test), not(feature = "test-utils")))] // only required in real-life execution
+            #[cfg(all(not(test), not(feature = "test-utils")))]
+            // only required in real-life execution
             "24h",
         );
 
@@ -623,9 +634,11 @@ impl Refill {
             sql_refill_data.refill_count_last_24h,
             self.config.max_refill_count_24h,
             &mut self.locks_info_check.count_last_24h,
-            #[cfg(all(not(test), not(feature = "test-utils")))] // only required in real-life execution
+            #[cfg(all(not(test), not(feature = "test-utils")))]
+            // only required in real-life execution
             "count",
-            #[cfg(all(not(test), not(feature = "test-utils")))] // only required in real-life execution
+            #[cfg(all(not(test), not(feature = "test-utils")))]
+            // only required in real-life execution
             "24h",
         );
 
@@ -633,9 +646,11 @@ impl Refill {
             sql_refill_data.refill_volume_last_hour,
             self.config.max_refill_volume_hour,
             &mut self.locks_info_check.volume_last_hour,
-            #[cfg(all(not(test), not(feature = "test-utils")))] // only required in real-life execution
+            #[cfg(all(not(test), not(feature = "test-utils")))]
+            // only required in real-life execution
             "volume",
-            #[cfg(all(not(test), not(feature = "test-utils")))] // only required in real-life execution
+            #[cfg(all(not(test), not(feature = "test-utils")))]
+            // only required in real-life execution
             "hour",
         );
 
@@ -643,9 +658,11 @@ impl Refill {
             sql_refill_data.refill_count_last_hour,
             self.config.max_refill_count_hour,
             &mut self.locks_info_check.count_last_hour,
-            #[cfg(all(not(test), not(feature = "test-utils")))] // only required in real-life execution
+            #[cfg(all(not(test), not(feature = "test-utils")))]
+            // only required in real-life execution
             "count",
-            #[cfg(all(not(test), not(feature = "test-utils")))] // only required in real-life execution
+            #[cfg(all(not(test), not(feature = "test-utils")))]
+            // only required in real-life execution
             "hour",
         );
 
@@ -1068,8 +1085,6 @@ impl Refill {
     }
 }
 
-
-
 /// Prepares and returns a configured `Refill` control instance along with its associated interfaces for testing.
 ///
 /// This helper function is designed exclusively for testing the `Refill` module. It sets up
@@ -1128,8 +1143,7 @@ pub fn prepare_refill_tests(
         }
     };
     let sql_interface_refill =
-        SqlInterfaceRefill::new(sql_interface.get_connection().unwrap(), max_rows_refill)
-            .unwrap();
+        SqlInterfaceRefill::new(sql_interface.get_connection().unwrap(), max_rows_refill).unwrap();
     let refill_config = config.refill.clone();
     (
         config,
@@ -1160,9 +1174,11 @@ pub mod tests {
             db_result_ok_u64,
             &mut stats_value_u64,
             &mut lock_flag_u64,
-            #[cfg(all(not(test), not(feature = "test-utils")))] // only required in real-life execution
+            #[cfg(all(not(test), not(feature = "test-utils")))]
+            // only required in real-life execution
             "dummy_value_type_not_used",
-            #[cfg(all(not(test), not(feature = "test-utils")))] // only required in real-life execution
+            #[cfg(all(not(test), not(feature = "test-utils")))]
+            // only required in real-life execution
             "dummy_duration_not_used",
         );
 
@@ -1186,9 +1202,11 @@ pub mod tests {
             db_result_ok_f32,
             &mut stats_value_f32,
             &mut lock_flag_f32,
-            #[cfg(all(not(test), not(feature = "test-utils")))] // only required in real-life execution
+            #[cfg(all(not(test), not(feature = "test-utils")))]
+            // only required in real-life execution
             "dummy_value_type_not_used",
-            #[cfg(all(not(test), not(feature = "test-utils")))] // only required in real-life execution
+            #[cfg(all(not(test), not(feature = "test-utils")))]
+            // only required in real-life execution
             "dummy_duration_not_used",
         );
 
@@ -1213,9 +1231,11 @@ pub mod tests {
             db_result_err,
             &mut stats_value_fail,
             &mut lock_flag_fail,
-            #[cfg(all(not(test), not(feature = "test-utils")))] // only required in real-life execution
+            #[cfg(all(not(test), not(feature = "test-utils")))]
+            // only required in real-life execution
             "dummy_value_type_not_used",
-            #[cfg(all(not(test), not(feature = "test-utils")))] // only required in real-life execution
+            #[cfg(all(not(test), not(feature = "test-utils")))]
+            // only required in real-life execution
             "dummy_duration_not_used",
         );
 
@@ -1243,9 +1263,11 @@ pub mod tests {
             50u64,
             100u64,
             &mut lock_flag,
-            #[cfg(all(not(test), not(feature = "test-utils")))] // only required in real-life execution
+            #[cfg(all(not(test), not(feature = "test-utils")))]
+            // only required in real-life execution
             "dummy_value_type_not_used",
-            #[cfg(all(not(test), not(feature = "test-utils")))] // only required in real-life execution
+            #[cfg(all(not(test), not(feature = "test-utils")))]
+            // only required in real-life execution
             "dummy_duration_not_used",
         );
         assert!(!result, "Should return false when value is below limit");
@@ -1258,9 +1280,11 @@ pub mod tests {
             100u64,
             100u64,
             &mut lock_flag,
-            #[cfg(all(not(test), not(feature = "test-utils")))] // only required in real-life execution
+            #[cfg(all(not(test), not(feature = "test-utils")))]
+            // only required in real-life execution
             "dummy_value_type_not_used",
-            #[cfg(all(not(test), not(feature = "test-utils")))] // only required in real-life execution
+            #[cfg(all(not(test), not(feature = "test-utils")))]
+            // only required in real-life execution
             "dummy_duration_not_used",
         );
         assert!(!result, "Should return false when value is equal to limit");
@@ -1273,9 +1297,11 @@ pub mod tests {
             101u64,
             100u64,
             &mut lock_flag,
-            #[cfg(all(not(test), not(feature = "test-utils")))] // only required in real-life execution
+            #[cfg(all(not(test), not(feature = "test-utils")))]
+            // only required in real-life execution
             "dummy_value_type_not_used",
-            #[cfg(all(not(test), not(feature = "test-utils")))] // only required in real-life execution
+            #[cfg(all(not(test), not(feature = "test-utils")))]
+            // only required in real-life execution
             "dummy_duration_not_used",
         );
         assert!(result, "Should return true when value exceeds limit");
@@ -1292,9 +1318,11 @@ pub mod tests {
             102u64,
             100u64,
             &mut lock_flag,
-            #[cfg(all(not(test), not(feature = "test-utils")))] // only required in real-life execution
+            #[cfg(all(not(test), not(feature = "test-utils")))]
+            // only required in real-life execution
             "dummy_value_type_not_used",
-            #[cfg(all(not(test), not(feature = "test-utils")))] // only required in real-life execution
+            #[cfg(all(not(test), not(feature = "test-utils")))]
+            // only required in real-life execution
             "dummy_duration_not_used",
         );
         assert!(result, "Should return true on subsequent exceedance");
@@ -1308,9 +1336,11 @@ pub mod tests {
             99u64,
             100u64,
             &mut lock_flag,
-            #[cfg(all(not(test), not(feature = "test-utils")))] // only required in real-life execution
+            #[cfg(all(not(test), not(feature = "test-utils")))]
+            // only required in real-life execution
             "dummy_value_type_not_used",
-            #[cfg(all(not(test), not(feature = "test-utils")))] // only required in real-life execution
+            #[cfg(all(not(test), not(feature = "test-utils")))]
+            // only required in real-life execution
             "dummy_duration_not_used",
         );
         assert!(!result, "Should return false when value is back to normal");
@@ -1326,9 +1356,11 @@ pub mod tests {
             100.1f32,
             100.0f32,
             &mut lock_flag_f32,
-            #[cfg(all(not(test), not(feature = "test-utils")))] // only required in real-life execution
+            #[cfg(all(not(test), not(feature = "test-utils")))]
+            // only required in real-life execution
             "dummy_value_type_not_used",
-            #[cfg(all(not(test), not(feature = "test-utils")))] // only required in real-life execution
+            #[cfg(all(not(test), not(feature = "test-utils")))]
+            // only required in real-life execution
             "dummy_duration_not_used",
         );
         assert!(
@@ -1342,9 +1374,11 @@ pub mod tests {
             99.9f32,
             100.0f32,
             &mut lock_flag_f32_reset,
-            #[cfg(all(not(test), not(feature = "test-utils")))] // only required in real-life execution
+            #[cfg(all(not(test), not(feature = "test-utils")))]
+            // only required in real-life execution
             "dummy_value_type_not_used",
-            #[cfg(all(not(test), not(feature = "test-utils")))] // only required in real-life execution
+            #[cfg(all(not(test), not(feature = "test-utils")))]
+            // only required in real-life execution
             "dummy_duration_not_used",
         );
         assert!(

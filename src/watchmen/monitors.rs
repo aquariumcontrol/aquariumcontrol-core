@@ -61,7 +61,8 @@ use log::info;
 #[cfg(feature = "debug_channels")]
 use log::debug;
 
-#[cfg(all(not(feature = "test-utils"), not(test), target_os = "linux"))] // only required in real-life execution
+#[cfg(all(not(feature = "test-utils"), not(test), target_os = "linux"))]
+// only required in real-life execution
 use nix::unistd::gettid;
 
 use crate::launch::channels::AquaChannelError;

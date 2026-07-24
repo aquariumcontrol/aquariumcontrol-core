@@ -60,10 +60,12 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 #[cfg(feature = "debug_schedule_check")]
 use log::debug;
 
-#[cfg(all(not(test), not(feature = "test-utils"), target_os = "linux"))] // only required in real-life execution
+#[cfg(all(not(test), not(feature = "test-utils"), target_os = "linux"))]
+// only required in real-life execution
 use log::info;
 
-#[cfg(all(target_os = "linux", not(test), not(feature = "test-utils")))] // only required in real-life execution
+#[cfg(all(target_os = "linux", not(test), not(feature = "test-utils")))]
+// only required in real-life execution
 use nix::unistd::gettid;
 
 #[cfg(all(not(test), not(feature = "test-utils")))] // only required in real-life execution
@@ -215,9 +217,11 @@ impl ScheduleCheck {
                     }
                     AquaChannelError::Disconnected => {
                         if !locks.channel_receive {
-                            #[cfg(all(not(test), not(feature = "test-utils")))] // only required in real-life execution
+                            #[cfg(all(not(test), not(feature = "test-utils")))]
+                            // only required in real-life execution
                             let context = format!("receiving command from {_module_name} failed.");
-                            #[cfg(all(not(test), not(feature = "test-utils")))] // only required in real-life execution
+                            #[cfg(all(not(test), not(feature = "test-utils")))]
+                            // only required in real-life execution
                             log_error_chain(module_path!(), &context, e);
                             locks.channel_receive = true;
                         }

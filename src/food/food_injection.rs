@@ -232,8 +232,7 @@ impl FoodInjection {
                             device: device.clone(),
                             source: e,
                         });
-                    } else if let Err(e) = feed_channels.receive_from_relay_manager().await
-                    {
+                    } else if let Err(e) = feed_channels.receive_from_relay_manager().await {
                         println!(
                             "Encountered error when receiving command to relay manager: {e:?}"
                         );
@@ -281,8 +280,7 @@ impl FoodInjection {
                             device: device.clone(),
                             source: e,
                         });
-                    } else if let Err(e) = feed_channels.receive_from_relay_manager().await
-                    {
+                    } else if let Err(e) = feed_channels.receive_from_relay_manager().await {
                         errors.push(FoodInjectionError::RelayManagerReceive {
                             location: module_path!().to_string(),
                             device: device.clone(),
@@ -327,8 +325,7 @@ impl FoodInjection {
                             device: device.clone(),
                             source: e,
                         });
-                    } else if let Err(e) = feed_channels.receive_from_relay_manager().await
-                    {
+                    } else if let Err(e) = feed_channels.receive_from_relay_manager().await {
                         errors.push(FoodInjectionError::RelayManagerReceive {
                             location: module_path!().to_string(),
                             device: device.clone(),
@@ -373,8 +370,7 @@ impl FoodInjection {
                             device: device.clone(),
                             source: e,
                         });
-                    } else if let Err(e) = feed_channels.receive_from_relay_manager().await
-                    {
+                    } else if let Err(e) = feed_channels.receive_from_relay_manager().await {
                         errors.push(FoodInjectionError::RelayManagerReceive {
                             location: module_path!().to_string(),
                             device: device.clone(),
@@ -419,8 +415,7 @@ impl FoodInjection {
                             device: device.clone(),
                             source: e,
                         });
-                    } else if let Err(e) = feed_channels.receive_from_relay_manager().await
-                    {
+                    } else if let Err(e) = feed_channels.receive_from_relay_manager().await {
                         errors.push(FoodInjectionError::RelayManagerReceive {
                             location: module_path!().to_string(),
                             device: device.clone(),
@@ -465,8 +460,7 @@ impl FoodInjection {
                             device: device.clone(),
                             source: e,
                         });
-                    } else if let Err(e) = feed_channels.receive_from_relay_manager().await
-                    {
+                    } else if let Err(e) = feed_channels.receive_from_relay_manager().await {
                         errors.push(FoodInjectionError::RelayManagerReceive {
                             location: module_path!().to_string(),
                             device: device.clone(),
@@ -574,8 +568,9 @@ impl FoodInjectionTrait for FoodInjection {
                     target_aux_pump2_state,
                     target_feeder_state: ActuatorState::Off,
                 };
-                if let Err(collected_errors) =
-                    self.switch_skimmer_pumps_feeder(target_actuator_states, feed_channels).await
+                if let Err(collected_errors) = self
+                    .switch_skimmer_pumps_feeder(target_actuator_states, feed_channels)
+                    .await
                 {
                     collected_errors_cumulated.extend(collected_errors);
                     break; // if any error occurs, abort the feed sequence
@@ -629,8 +624,9 @@ impl FoodInjectionTrait for FoodInjection {
                     target_aux_pump2_state,
                     target_feeder_state: ActuatorState::On,
                 };
-                if let Err(collected_errors) =
-                    self.switch_skimmer_pumps_feeder(target_actuator_states, feed_channels).await
+                if let Err(collected_errors) = self
+                    .switch_skimmer_pumps_feeder(target_actuator_states, feed_channels)
+                    .await
                 {
                     collected_errors_cumulated.extend(collected_errors);
                     break; // if any error occurs, abort the feed sequence
@@ -657,17 +653,20 @@ impl FoodInjectionTrait for FoodInjection {
 
         // The feed sequence has finished or has been aborted.
         // Switch on all pumps. Switch off feeder.
-        if let Err(collected_errors) = self.switch_skimmer_pumps_feeder(
-            FoodInjectionTargetActuatorStates {
-                target_skimmer_state: ActuatorState::On,
-                target_main_pump1_state: ActuatorState::On,
-                target_main_pump2_state: ActuatorState::On,
-                target_aux_pump1_state: ActuatorState::On,
-                target_aux_pump2_state: ActuatorState::On,
-                target_feeder_state: ActuatorState::Off,
-            },
-            feed_channels,
-        ).await {
+        if let Err(collected_errors) = self
+            .switch_skimmer_pumps_feeder(
+                FoodInjectionTargetActuatorStates {
+                    target_skimmer_state: ActuatorState::On,
+                    target_main_pump1_state: ActuatorState::On,
+                    target_main_pump2_state: ActuatorState::On,
+                    target_aux_pump1_state: ActuatorState::On,
+                    target_aux_pump2_state: ActuatorState::On,
+                    target_feeder_state: ActuatorState::Off,
+                },
+                feed_channels,
+            )
+            .await
+        {
             collected_errors_cumulated.extend(collected_errors);
         }
 

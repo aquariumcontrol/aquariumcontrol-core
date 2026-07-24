@@ -9,9 +9,12 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 
 //! Tests the automated freshwater refill system for the aquarium.
 
+use all_asserts::{assert_ge, assert_le};
+use aquarium_control::database::sql_interface::SqlInterface;
 use aquarium_control::database::sql_test_query_strings::SQL_TABLE_REFILL;
-use aquarium_control::database::{sql_interface::SqlInterface};
-use aquarium_control::launch::channels::{channel, AquaChannelError, AquaReceiver, AquaSender, Channels};
+use aquarium_control::launch::channels::{
+    channel, AquaChannelError, AquaReceiver, AquaSender, Channels,
+};
 use aquarium_control::mocks::mock_monitors::tests::MockMonitors;
 use aquarium_control::mocks::mock_schedule_check::tests::mock_schedule_check;
 use aquarium_control::mocks::mock_sql_interface_refill::tests::MockSqlInterfaceRefill;
@@ -19,14 +22,11 @@ use aquarium_control::mocks::mock_water_injection::tests::MockWaterInjection;
 use aquarium_control::mocks::test_command::tests::TestCommand;
 use aquarium_control::sensors::tank_level_switch::TankLevelSwitchSignals;
 use aquarium_control::utilities::channel_content::InternalCommand;
-use aquarium_control::utilities::config::{
-    read_config_file_with_test_database, ConfigData,
-};
+use aquarium_control::utilities::config::{read_config_file_with_test_database, ConfigData};
 use aquarium_control::utilities::proc_ext_req::ProcessExternalRequestTrait;
-use aquarium_control::water::refill::{prepare_refill_tests, Refill};
 use aquarium_control::water::refill::RefillErrorStates;
+use aquarium_control::water::refill::{prepare_refill_tests, Refill};
 use aquarium_control::water::refill_status::RefillStatus;
-use all_asserts::{assert_ge, assert_le};
 use spin_sleep::SpinSleeper;
 use std::sync::{Arc, Mutex};
 use std::thread;
@@ -64,9 +64,9 @@ fn execute_blocking(
             let is_multi_thread_test = tokio::runtime::Handle::try_current()
                 .map(|h| {
                     matches!(
-                            h.runtime_flavor(),
-                            tokio::runtime::RuntimeFlavor::MultiThread
-                        )
+                        h.runtime_flavor(),
+                        tokio::runtime::RuntimeFlavor::MultiThread
+                    )
                 })
                 .unwrap_or(false);
 
@@ -288,8 +288,7 @@ pub fn test_refill_trigger_water_injection() {
                 .tx_signal_handler_to_refill
                 .send(InternalCommand::Terminate);
             let finish_time = Instant::now();
-            let finalization_duration_millis =
-                finish_time.duration_since(start_time).as_millis();
+            let finalization_duration_millis = finish_time.duration_since(start_time).as_millis();
 
             assert_ge!(finalization_duration_millis, 2000u128);
             assert_le!(finalization_duration_millis, 2150u128);
@@ -321,8 +320,7 @@ pub fn test_refill_trigger_water_injection() {
             );
 
             // send Quit signal to mock threads because the test object has terminated
-            let _ =
-                tx_refill_to_schedule_check_for_test_case_finish.send(InternalCommand::Quit);
+            let _ = tx_refill_to_schedule_check_for_test_case_finish.send(InternalCommand::Quit);
         })
         .unwrap();
 
@@ -446,8 +444,7 @@ pub fn test_refill_trigger_water_injection_switch_stuck_high() {
                 .tx_signal_handler_to_refill
                 .send(InternalCommand::Terminate);
             let finish_time = Instant::now();
-            let finalization_duration_millis =
-                finish_time.duration_since(start_time).as_millis();
+            let finalization_duration_millis = finish_time.duration_since(start_time).as_millis();
 
             println!(
                 "finalization_duration_millis = {}",
@@ -484,8 +481,7 @@ pub fn test_refill_trigger_water_injection_switch_stuck_high() {
             );
 
             // send Quit signal to mock threads because the test object has terminated
-            let _ =
-                tx_refill_to_schedule_check_for_test_case_finish.send(InternalCommand::Quit);
+            let _ = tx_refill_to_schedule_check_for_test_case_finish.send(InternalCommand::Quit);
         })
         .unwrap();
 
@@ -616,13 +612,13 @@ pub fn test_refill_initial_waiting_time() {
                 .as_millis();
 
             assert_le!(
-                    initial_wait_duration_millis,
-                    (config.refill.initial_wait_interval * 1000 + 200) as u128
-                );
+                initial_wait_duration_millis,
+                (config.refill.initial_wait_interval * 1000 + 200) as u128
+            );
             assert_ge!(
-                    initial_wait_duration_millis,
-                    (config.refill.initial_wait_interval * 1000) as u128
-                );
+                initial_wait_duration_millis,
+                (config.refill.initial_wait_interval * 1000) as u128
+            );
             assert_le!(finalization_duration_millis, 150u128);
         })
         .unwrap();
@@ -648,8 +644,7 @@ pub fn test_refill_initial_waiting_time() {
             );
 
             // send Quit signal to mock threads because the test object has terminated
-            let _ =
-                tx_refill_to_schedule_check_for_test_case_finish.send(InternalCommand::Quit);
+            let _ = tx_refill_to_schedule_check_for_test_case_finish.send(InternalCommand::Quit);
         })
         .unwrap();
 
@@ -758,9 +753,9 @@ pub fn test_refill_conditions_historic_data_error_switch_stuck_low() {
 
             for _ in 0..999 {
                 assert!(matches!(
-                        rx_test_environment_from_mock_water_injection.try_recv(),
-                        Err(AquaChannelError::Empty)
-                    ));
+                    rx_test_environment_from_mock_water_injection.try_recv(),
+                    Err(AquaChannelError::Empty)
+                ));
                 spin_sleeper.sleep(sleep_duration_two_millis);
             }
 
@@ -848,8 +843,7 @@ pub fn test_refill_conditions_historic_data_error_switch_stuck_low() {
             assert!(!mock_water_injection.injection_recorder.is_empty());
 
             // send Quit signal to mock threads because the test object has terminated
-            let _ =
-                tx_refill_to_schedule_check_for_test_case_finish.send(InternalCommand::Quit);
+            let _ = tx_refill_to_schedule_check_for_test_case_finish.send(InternalCommand::Quit);
         })
         .unwrap();
 
@@ -955,9 +949,9 @@ pub fn test_refill_conditions_error_sql_update_failed() {
 
             for _ in 0..999 {
                 assert!(matches!(
-                        rx_test_environment_from_mock_water_injection.try_recv(),
-                        Err(AquaChannelError::Empty)
-                    ));
+                    rx_test_environment_from_mock_water_injection.try_recv(),
+                    Err(AquaChannelError::Empty)
+                ));
                 spin_sleeper.sleep(sleep_duration_two_millis);
             }
 
@@ -1011,8 +1005,7 @@ pub fn test_refill_conditions_error_sql_update_failed() {
             assert!(mock_water_injection.injection_recorder.is_empty());
 
             // send Quit signal to mock threads because the test object has terminated
-            let _ =
-                tx_refill_to_schedule_check_for_test_case_finish.send(InternalCommand::Quit);
+            let _ = tx_refill_to_schedule_check_for_test_case_finish.send(InternalCommand::Quit);
 
             spin_sleeper.sleep(sleep_duration_two_millis);
         })
@@ -1179,8 +1172,7 @@ pub fn test_refill_process_external_request_reset_all_errors_command() {
             );
 
             // send Quit signal to mock threads because the test object has terminated
-            let _ =
-                tx_refill_to_schedule_check_for_test_case_finish.send(InternalCommand::Quit);
+            let _ = tx_refill_to_schedule_check_for_test_case_finish.send(InternalCommand::Quit);
 
             println!("{}", refill.refill_errors);
 
@@ -1288,9 +1280,9 @@ pub fn test_refill_blocked_by_schedule() {
 
             for _ in 0..999 {
                 assert!(matches!(
-                        rx_test_environment_from_mock_water_injection.try_recv(),
-                        Err(AquaChannelError::Empty)
-                    ));
+                    rx_test_environment_from_mock_water_injection.try_recv(),
+                    Err(AquaChannelError::Empty)
+                ));
                 spin_sleeper.sleep(sleep_duration_two_millis);
             }
 
@@ -1344,8 +1336,7 @@ pub fn test_refill_blocked_by_schedule() {
             assert!(mock_water_injection.injection_recorder.is_empty());
 
             // send Quit signal to mock threads because the test object has terminated
-            let _ =
-                tx_refill_to_schedule_check_for_test_case_finish.send(InternalCommand::Quit);
+            let _ = tx_refill_to_schedule_check_for_test_case_finish.send(InternalCommand::Quit);
 
             spin_sleeper.sleep(sleep_duration_two_millis);
         })
@@ -1478,9 +1469,9 @@ pub fn test_messaging_stops_starts_refill() {
             // expect to see no event
             for _ in 0..999 {
                 assert!(matches!(
-                        rx_test_environment_from_mock_water_injection.try_recv(),
-                        Err(AquaChannelError::Empty)
-                    ));
+                    rx_test_environment_from_mock_water_injection.try_recv(),
+                    Err(AquaChannelError::Empty)
+                ));
                 spin_sleeper.sleep(sleep_duration_two_millis);
             }
 
@@ -1502,9 +1493,9 @@ pub fn test_messaging_stops_starts_refill() {
 
             // expect to see one event
             assert!(matches!(
-                    rx_test_environment_from_mock_water_injection.blocking_recv(),
-                    Ok(TestCommand::InformWaterInjectionEvent)
-                ));
+                rx_test_environment_from_mock_water_injection.blocking_recv(),
+                Ok(TestCommand::InformWaterInjectionEvent)
+            ));
 
             println!("sending quit signal to test object...");
             let _ = channels
@@ -1556,8 +1547,7 @@ pub fn test_messaging_stops_starts_refill() {
             assert_eq!(mock_water_injection.injection_recorder.len(), 1);
 
             // send Quit signal to mock threads because the test object has terminated
-            let _ =
-                tx_refill_to_schedule_check_for_test_case_finish.send(InternalCommand::Quit);
+            let _ = tx_refill_to_schedule_check_for_test_case_finish.send(InternalCommand::Quit);
 
             spin_sleeper.sleep(sleep_duration_two_millis);
         })
@@ -1656,9 +1646,9 @@ pub fn test_refill_conditions_error_get_historic_data_failed() {
 
             for _ in 0..999 {
                 assert!(matches!(
-                        rx_test_environment_from_mock_water_injection.try_recv(),
-                        Err(AquaChannelError::Empty)
-                    ));
+                    rx_test_environment_from_mock_water_injection.try_recv(),
+                    Err(AquaChannelError::Empty)
+                ));
                 spin_sleeper.sleep(sleep_duration_two_millis);
             }
 
@@ -1712,8 +1702,7 @@ pub fn test_refill_conditions_error_get_historic_data_failed() {
             assert!(mock_water_injection.injection_recorder.is_empty());
 
             // send Quit signal to mock threads because the test object has terminated
-            let _ =
-                tx_refill_to_schedule_check_for_test_case_finish.send(InternalCommand::Quit);
+            let _ = tx_refill_to_schedule_check_for_test_case_finish.send(InternalCommand::Quit);
 
             spin_sleeper.sleep(sleep_duration_two_millis);
         })
@@ -1790,9 +1779,7 @@ pub fn test_refill_check_volume_count_time_limits() {
     };
 
     // first execution without any errors
-    assert!(
-        !refill.check_volume_count_time_limits(&sql_refill_stats_data, &mut channels.refill)
-    );
+    assert!(!refill.check_volume_count_time_limits(&sql_refill_stats_data, &mut channels.refill));
     spin_sleeper.sleep(sleep_duration_200_millis);
 
     // induce errors before executing again
@@ -1824,18 +1811,14 @@ pub fn test_refill_check_volume_count_time_limits() {
 
     // reset the previous error and induce other error before executing again
     sql_refill_stats_data.refill_volume_last_hour = 0.0;
-    sql_refill_stats_data.duration_since_last_refill =
-        config.refill.min_interval_last_refill - 1;
+    sql_refill_stats_data.duration_since_last_refill = config.refill.min_interval_last_refill - 1;
 
     assert!(refill.check_volume_count_time_limits(&sql_refill_stats_data, &mut channels.refill));
     spin_sleeper.sleep(sleep_duration_200_millis);
 
     // reset the previous error and do not induce any further error
-    sql_refill_stats_data.duration_since_last_refill =
-        config.refill.min_interval_last_refill + 1;
-    assert!(
-        !refill.check_volume_count_time_limits(&sql_refill_stats_data, &mut channels.refill)
-    );
+    sql_refill_stats_data.duration_since_last_refill = config.refill.min_interval_last_refill + 1;
+    assert!(!refill.check_volume_count_time_limits(&sql_refill_stats_data, &mut channels.refill));
     spin_sleeper.sleep(sleep_duration_200_millis);
 
     let _ = tx_test_environment_to_monitors.send(InternalCommand::Quit);
@@ -1975,8 +1958,7 @@ pub fn test_refill_trigger_water_injection_with_mutex_blocked() {
                 .tx_signal_handler_to_refill
                 .send(InternalCommand::Terminate);
             let finish_time = Instant::now();
-            let finalization_duration_millis =
-                finish_time.duration_since(start_time).as_millis();
+            let finalization_duration_millis = finish_time.duration_since(start_time).as_millis();
 
             assert_ge!(finalization_duration_millis, 2000u128);
             assert_le!(finalization_duration_millis, 2150u128);
@@ -2007,8 +1989,7 @@ pub fn test_refill_trigger_water_injection_with_mutex_blocked() {
             );
 
             // send Quit signal to mock threads because the test object has terminated
-            let _ =
-                tx_refill_to_schedule_check_for_test_case_finish.send(InternalCommand::Quit);
+            let _ = tx_refill_to_schedule_check_for_test_case_finish.send(InternalCommand::Quit);
         })
         .unwrap();
 
@@ -2025,5 +2006,3 @@ pub fn test_refill_trigger_water_injection_with_mutex_blocked() {
         .join()
         .expect("Test object thread did not finish.");
 }
-
-

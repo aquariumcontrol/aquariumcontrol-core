@@ -2103,7 +2103,9 @@ pub fn test_ventilation_actuation_with_device_scheduler_mutex_blocked() {
                 tx_ventilation_to_schedule_check_for_test_case_finish.send(InternalCommand::Quit);
             let _ =
                 tx_ventilation_to_relay_manager_for_test_case_finish.send(InternalCommand::Quit);
-            println!("* [Ventilation] checking actuation with device scheduler mutex blocked succeeded.");
+            println!(
+                "* [Ventilation] checking actuation with device scheduler mutex blocked succeeded."
+            );
         })
         .unwrap();
 

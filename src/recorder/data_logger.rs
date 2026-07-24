@@ -65,14 +65,16 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 
 #![allow(non_snake_case)]
 use chrono::{Local, NaiveDateTime};
-#[cfg(all(not(feature = "test-utils"), not(test), target_os = "linux"))] // only required in real-life execution
+#[cfg(all(not(feature = "test-utils"), not(test), target_os = "linux"))]
+// only required in real-life execution
 use log::info;
 use log::{error, warn};
 
 #[cfg(feature = "debug_data_logger")]
 use log::debug;
 
-#[cfg(all(not(feature = "test-utils"), not(test), target_os = "linux"))] // only required in real-life execution
+#[cfg(all(not(feature = "test-utils"), not(test), target_os = "linux"))]
+// only required in real-life execution
 use nix::unistd::gettid;
 
 use std::fs;
@@ -1151,20 +1153,23 @@ impl DataLogger {
         let mut filter_water_temperature = IIRFilter::new(
             &self.config.filter_coefficient_water_temperature,
             water_temperature,
-            #[cfg(all(not(test), not(feature = "test-utils")))] // only required in real-life execution
+            #[cfg(all(not(test), not(feature = "test-utils")))]
+            // only required in real-life execution
             "water temperature",
         );
         let mut filter_pH = IIRFilter::new(
             &self.config.filter_coefficient_pH,
             ph,
-            #[cfg(all(not(test), not(feature = "test-utils")))] // only required in real-life execution
+            #[cfg(all(not(test), not(feature = "test-utils")))]
+            // only required in real-life execution
             "pH",
         );
 
         let mut filter_conductivity = IIRFilter::new(
             &self.config.filter_coefficient_conductivity,
             conductivity,
-            #[cfg(all(not(test), not(feature = "test-utils")))] // only required in real-life execution
+            #[cfg(all(not(test), not(feature = "test-utils")))]
+            // only required in real-life execution
             "conductivity",
         );
         #[cfg(feature = "debug_data_logger")]

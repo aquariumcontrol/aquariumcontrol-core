@@ -9,17 +9,19 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 
 //! Module for testing calculation of the temperature gradient of the aquarium water.
 
-use std::sync::{Arc, Mutex};
-use std::thread;
-use std::time::Duration;
-use assert_float_eq::assert_float_absolute_eq;
-use spin_sleep::SpinSleeper;
 use aquarium_control::launch::channels::Channels;
 use aquarium_control::sensors::sensor_manager::{SensorManagerMutexes, SensorManagerSignals};
-use aquarium_control::thermal::temperature_gradient::{calculate_least_squares_gradient, TemperatureGradient};
+use aquarium_control::thermal::temperature_gradient::{
+    calculate_least_squares_gradient, TemperatureGradient,
+};
 use aquarium_control::thermal::temperature_gradient_channels::TemperatureGradientChannels;
 use aquarium_control::thermal::temperature_gradient_config::TemperatureGradientConfig;
 use aquarium_control::utilities::channel_content::InternalCommand;
+use assert_float_eq::assert_float_absolute_eq;
+use spin_sleep::SpinSleeper;
+use std::sync::{Arc, Mutex};
+use std::thread;
+use std::time::Duration;
 
 /// Synchronously executes the main task loop for testing.
 ///
@@ -67,8 +69,7 @@ pub fn test_temperature_gradient_calculation() {
         sample_size,
     };
 
-    let mut temperature_gradient =
-        TemperatureGradient::new(temperature_gradient_config).unwrap();
+    let mut temperature_gradient = TemperatureGradient::new(temperature_gradient_config).unwrap();
 
     let mut channels = Channels::new_for_test();
 
@@ -77,8 +78,7 @@ pub fn test_temperature_gradient_calculation() {
     let mutex_sensor_manager_signals_clone_for_test_environment =
         mutexes_sensor_manager.mutex_sensor_manager_signals.clone();
     let mutex_temperature_gradient = Arc::new(Mutex::new(0.0));
-    let mutex_temperature_gradient_clone_for_test_environment =
-        mutex_temperature_gradient.clone();
+    let mutex_temperature_gradient_clone_for_test_environment = mutex_temperature_gradient.clone();
 
     {
         // scope to limit lifetime of lock
@@ -115,10 +115,10 @@ pub fn test_temperature_gradient_calculation() {
                             .unwrap();
                     if i > sample_size {
                         assert_float_absolute_eq!(
-                                *temperature_gradient_during_execution,
-                                1.0 / sampling_interval as f64,
-                                0.1
-                            );
+                            *temperature_gradient_during_execution,
+                            1.0 / sampling_interval as f64,
+                            0.1
+                        );
                     }
                 }
             }
@@ -132,16 +132,11 @@ pub fn test_temperature_gradient_calculation() {
                             .lock()
                             .unwrap();
                     if i > sample_size {
-                        assert_float_absolute_eq!(
-                                *temperature_gradient_during_execution,
-                                0.0,
-                                0.1
-                            );
+                        assert_float_absolute_eq!(*temperature_gradient_during_execution, 0.0, 0.1);
                     }
                 }
             }
-            let _ =
-                signal_handler_channel_clone_for_test_environment.send(InternalCommand::Quit);
+            let _ = signal_handler_channel_clone_for_test_environment.send(InternalCommand::Quit);
         })
         .unwrap();
 
@@ -197,7 +192,7 @@ fn test_calculate_gradient_from_production_data() {
         sql_interface.get_connection().unwrap(),
         0,
     )
-        .expect("Failed to create SqlInterfaceData.");
+    .expect("Failed to create SqlInterfaceData.");
 
     // --- Get Data ---
     let temperature_data = sql_interface_data
@@ -217,8 +212,7 @@ fn test_calculate_gradient_from_production_data() {
 
     let mut samples: VecDeque<(f64, f64)> = VecDeque::with_capacity(sample_size);
 
-    for (timestamp, temperature, surface_ventilation_status, heater_status) in temperature_data
-    {
+    for (timestamp, temperature, surface_ventilation_status, heater_status) in temperature_data {
         // fill buffer with one sample at a time
         samples.push_back((timestamp, temperature));
 

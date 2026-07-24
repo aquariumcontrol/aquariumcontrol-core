@@ -49,9 +49,9 @@ pub fn test_publish_pid_invalid_content_pid_file() {
         "/var/local/aquarium-ctrl-test-invalid-content.pid".to_string();
     let result = PublishPid::new(config.publish_pid);
     assert!(matches!(
-            result,
-            Err(PublishPidError::PidFileParseError { .. })
-        ));
+        result,
+        Err(PublishPidError::PidFileParseError { .. })
+    ));
 }
 
 #[test]
@@ -63,7 +63,7 @@ pub fn test_publish_pid_file_already_contains_pid() {
         "/var/local/aquarium-ctrl-test-already-filled.pid".to_string();
     let result = PublishPid::new(config.publish_pid);
     assert!(matches!(
-            result,
-            Err(PublishPidError::PidFileContainsPid { .. })
-        ));
+        result,
+        Err(PublishPidError::PidFileContainsPid { .. })
+    ));
 }
