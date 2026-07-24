@@ -1994,11 +1994,12 @@ pub fn test_ventilation_reset_errors_enables_actuator() {
 // Verifies that ventilation actuation is inhibited when device_scheduler mutex is blocked.
 // The test environment thread acquires and holds the device_scheduler mutex lock before ventilation actuation occurs.
 // While the lock is held, ventilation actuation is blocked. Once released, ventilation actuation proceeds normally.
+// Test case uses test database #71.
 pub fn test_ventilation_actuation_with_device_scheduler_mutex_blocked() {
     let sleep_duration_100_millis = Duration::from_millis(100);
     let spin_sleeper = SpinSleeper::default();
 
-    let (mut config, mut ventilation) = prepare_ventilation_tests(None);
+    let (mut config, mut ventilation) = prepare_ventilation_tests(Some(71));
     config.sensor_manager.replacement_value_water_temperature = 30.0;
 
     let mut channels = Channels::new_for_test();

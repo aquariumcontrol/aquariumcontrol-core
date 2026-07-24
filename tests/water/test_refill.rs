@@ -1851,13 +1851,13 @@ pub fn test_refill_check_volume_count_time_limits() {
 // Verifies that water refill injection is inhibited when device_scheduler mutex is blocked.
 // The test environment thread acquires and holds the device_scheduler mutex lock before water injection occurs.
 // While the lock is held, water injection is blocked. Once released, water injection proceeds normally.
-// Test case uses test database #20.
+// Test case uses test database #68.
 pub fn test_refill_trigger_water_injection_with_mutex_blocked() {
     let sleep_duration_50_millis = Duration::from_millis(50);
     let spin_sleeper = SpinSleeper::default();
 
     let (_, mut refill, mut sql_interface, sql_interface_refill) =
-        prepare_refill_tests(None, 1, 1, Some(20));
+        prepare_refill_tests(None, 1, 1, Some(68));
 
     let mut channels = Channels::new_for_test();
 

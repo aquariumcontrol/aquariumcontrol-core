@@ -1170,10 +1170,10 @@ pub fn test_balling_dosing_schedule_allows_multiple_dosings() {
 // The test environment acquires and holds the device_scheduler mutex lock for an initial period.
 // During this period, dosing actuation must be blocked. Once the lock is released by the test environment,
 // dosing actuation proceeds and completes normally.
-// Test case uses test database #03.
+// Test case uses test database #67.
 pub fn test_balling_dosing_with_mutex_blocked() {
     let spin_sleeper = SpinSleeper::default();
-    let test_db_number = 3;
+    let test_db_number = 67;
     let mut config: ConfigData = read_balling_config_with_database(test_db_number);
 
     config.balling.pump1_active = true;

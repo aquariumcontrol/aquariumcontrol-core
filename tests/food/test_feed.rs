@@ -703,7 +703,7 @@ pub fn test_feed_schedule_execution_past_entries_select_oldest() {
 // Verifies that feed profile actuation is inhibited when device_scheduler mutex is blocked.
 // The test environment thread acquires and holds the device_scheduler mutex lock before feed profile actuation occurs.
 // While the lock is held, feed profile actuation is blocked. Once released, feed profile actuation proceeds normally.
-// Test case uses test database #07.
+// Test case uses test database #69.
 pub fn test_feed_schedule_execution_with_mutex_blocked() {
     let sleep_duration_100_millis = Duration::from_millis(100);
     let sleep_duration_6_seconds = Duration::from_millis(6000);
@@ -714,7 +714,7 @@ pub fn test_feed_schedule_execution_with_mutex_blocked() {
 
     let config: ConfigData = read_config_file_with_test_database(
         "config/aquarium_control_test_generic.toml".to_string(),
-        7,
+        69,
     );
 
     let mut sql_interface = match SqlInterface::new(config.sql_interface.clone()) {

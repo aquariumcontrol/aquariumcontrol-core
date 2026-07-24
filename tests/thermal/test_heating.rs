@@ -2364,14 +2364,14 @@ pub fn test_heating_with_increased_set_values() {
 // Check if the heater is switched on and is not switched off with low temperature.
 // Also, implicitly test if the execute function terminates after receiving Quit and Terminate commands.
 // Check if the heater is switched off after sending Quit command and before sending Terminate command.
-// Test case uses test database #12.
+// Test case uses test database #72.
 // Additionally, mutex for heater status is blocked by test environment
 pub fn test_heating_with_measured_temperature_low_with_mutex_blocked() {
     let sleep_duration_100_millis = Duration::from_millis(100);
     let spin_sleeper = SpinSleeper::default();
 
     let (mut config, mut heating, sql_interface, sql_interface_heating_stats) =
-        prepare_heating_tests_mock_midnight_calculator(3600, 12, None);
+        prepare_heating_tests_mock_midnight_calculator(3600, 72, None);
 
     // replacement values are used to initialize the mutexes
     config.sensor_manager.replacement_value_water_temperature = 20.0;
@@ -2527,11 +2527,11 @@ pub fn test_heating_with_measured_temperature_low_with_mutex_blocked() {
 }
 
 #[test]
-// Verifies that `record_heating_stats` does nothing when called before midnight.
+// Test case uses test database #73.
 fn test_record_heating_stats_before_midnight() {
     // 1. Setup
     let (_config, mut heating, mut sql_interface, mut sql_interface_heating_stats) =
-        prepare_heating_tests_mock_midnight_calculator(3600, 20, None); // Midnight is far away
+        prepare_heating_tests_mock_midnight_calculator(3600, 73, None); // Midnight is far away
     let mut mock_transfer = HeatingStatsMockDataTransfer::new(&mut sql_interface.conn);
     let mut midnight_instant = Instant::now() + Duration::from_secs(60);
 
@@ -2562,11 +2562,11 @@ fn test_record_heating_stats_before_midnight() {
 }
 
 #[test]
-// Verifies that `record_heating_stats` correctly transfers data after midnight.
+// Test case uses test database #74.
 fn test_record_heating_stats_after_midnight_success() {
     // 1. Setup - mock midnight is one second away
     let (_config, mut heating, mut sql_interface, mut sql_interface_heating_stats) =
-        prepare_heating_tests_mock_midnight_calculator(1, 21, None);
+        prepare_heating_tests_mock_midnight_calculator(1, 74, None);
     let mut mock_transfer = HeatingStatsMockDataTransfer::new(&mut sql_interface.conn);
     let mut midnight_instant = Instant::now() - Duration::from_secs(1); // Set midnight in the past
     let original_midnight_instant = midnight_instant;
@@ -2612,11 +2612,11 @@ fn test_record_heating_stats_after_midnight_success() {
 }
 
 #[test]
-// Verifies that the function handles a database transfer error gracefully.
+// Test case uses test database #75.
 fn test_record_heating_stats_after_midnight_with_error() {
     // 1. Setup
     let (_config, mut heating, mut sql_interface, mut sql_interface_heating_stats) =
-        prepare_heating_tests_mock_midnight_calculator(1, 22, None);
+        prepare_heating_tests_mock_midnight_calculator(1, 75, None);
     let mut mock_transfer = HeatingStatsMockDataTransfer::new(&mut sql_interface.conn);
     let mut midnight_instant = Instant::now() - Duration::from_secs(1);
     let original_midnight_instant = midnight_instant;
@@ -2654,11 +2654,11 @@ fn test_record_heating_stats_after_midnight_with_error() {
 }
 
 #[test]
-// Verifies that the function does nothing trigger the transfer call if the optional parameter is None when midnight occurs.
+// Test case uses test database #76.
 fn test_record_heating_stats_with_none_stats() {
     // 1. Setup
     let (_config, mut heating, mut sql_interface, mut sql_interface_heating_stats) =
-        prepare_heating_tests_mock_midnight_calculator(1, 23, None);
+        prepare_heating_tests_mock_midnight_calculator(1, 76, None);
     let mut mock_transfer = HeatingStatsMockDataTransfer::new(&mut sql_interface.conn);
     let mut midnight_instant = Instant::now() - Duration::from_secs(1); // Midnight is in the past
     let original_midnight_instant = midnight_instant;
@@ -2689,11 +2689,11 @@ fn test_record_heating_stats_with_none_stats() {
 }
 
 #[test]
-// Verifies that stats are updated correctly when the heater is ON and sensor data is valid.
+// Test case uses test database #77.
 fn test_update_heating_stats_heater_on_valid_data() {
     // 1. Setup
     let (config, mut heating, _sql_interface, mut sql_interface_heating_stats) =
-        prepare_heating_tests_mock_midnight_calculator(3600, 24, None);
+        prepare_heating_tests_mock_midnight_calculator(3600, 77, None);
     let mut heating_stats_opt = Some(HeatingStatsEntry::new(
         &mut sql_interface_heating_stats.conn,
     ));
@@ -2730,11 +2730,11 @@ fn test_update_heating_stats_heater_on_valid_data() {
 }
 
 #[test]
-// Verifies that no energy is added when the heater is OFF.
+// Test case uses test database #78.
 fn test_update_heating_stats_heater_off() {
     // 1. Setup
     let (_config, mut heating, _sql_interface, mut sql_interface_heating_stats) =
-        prepare_heating_tests_mock_midnight_calculator(3600, 25, None);
+        prepare_heating_tests_mock_midnight_calculator(3600, 78, None);
     let mut heating_stats_opt = Some(HeatingStatsEntry::new(
         &mut sql_interface_heating_stats.conn,
     ));
@@ -2761,11 +2761,11 @@ fn test_update_heating_stats_heater_off() {
 }
 
 #[test]
-// Verifies that temperatures are not included in the average when a measurement error occurs.
+// Test case uses test database #79.
 fn test_update_heating_stats_with_measurement_error() {
     // 1. Setup
     let (_config, mut heating, _sql_interface, mut sql_interface_heating_stats) =
-        prepare_heating_tests_mock_midnight_calculator(3600, 26, None);
+        prepare_heating_tests_mock_midnight_calculator(3600, 79, None);
     let mut heating_stats_opt = Some(HeatingStatsEntry::new(
         &mut sql_interface_heating_stats.conn,
     ));
@@ -2837,11 +2837,11 @@ fn test_update_heating_stats_first_call_no_energy() {
 }
 
 #[test]
-// Verifies that the function does not trigger the update if the heating statistic entry is None.
+// Test case uses test database #80.
 fn test_update_heating_stats_with_none_stats_opt() {
     // 1. Setup
     let (_config, mut heating, _sql_interface, _sql_interface_heating_stats) =
-        prepare_heating_tests_mock_midnight_calculator(3600, 28, None);
+        prepare_heating_tests_mock_midnight_calculator(3600, 80, None);
     let mut heating_stats_opt: Option<HeatingStatsEntry> = None;
 
     // 2. Execute
@@ -2861,13 +2861,13 @@ fn test_update_heating_stats_with_none_stats_opt() {
 }
 
 #[test]
-// Verifies that heating gradient monitoring disables actuator.
+// Test case uses test database #81.
 pub fn test_heating_gradient_monitoring_disables_actuator() {
     let sleep_duration_100_millis = Duration::from_millis(100);
     let spin_sleeper = SpinSleeper::default();
 
     let (mut config, mut heating, sql_interface, sql_interface_heating_stats) =
-        prepare_heating_tests_mock_midnight_calculator(3600, 28, None);
+        prepare_heating_tests_mock_midnight_calculator(3600, 81, None);
     // test case is not writing to database, hence db can be reused.
 
     // Configure gradient monitoring to be very aggressive
@@ -3035,13 +3035,13 @@ pub fn test_heating_gradient_monitoring_disables_actuator() {
 }
 
 #[test]
-// Verifies that heating reset errors enables actuator.
+// Test case uses test database #82.
 pub fn test_heating_reset_errors_enables_actuator() {
     let sleep_duration_100_millis = Duration::from_millis(100);
     let spin_sleeper = SpinSleeper::default();
 
     let (mut config, mut heating, sql_interface, sql_interface_heating_stats) =
-        prepare_heating_tests_mock_midnight_calculator(3600, 28, None);
+        prepare_heating_tests_mock_midnight_calculator(3600, 82, None);
     // test case is not writing to database, hence db can be reused.
 
     // Start in disabled state
@@ -3215,13 +3215,13 @@ pub fn test_heating_reset_errors_enables_actuator() {
 // Verifies that heater actuation is inhibited when device_scheduler mutex is blocked.
 // The test environment thread acquires and holds the device_scheduler mutex lock before heater actuation occurs.
 // While the lock is held, heater actuation is blocked. Once released, heater actuation proceeds normally.
-// Test case uses test database #12.
+// Test case uses test database #70.
 pub fn test_heating_actuation_with_device_scheduler_mutex_blocked() {
     let sleep_duration_100_millis = Duration::from_millis(100);
     let spin_sleeper = SpinSleeper::default();
 
     let (mut config, mut heating, sql_interface, sql_interface_heating_stats) =
-        prepare_heating_tests_mock_midnight_calculator(3600, 12, None);
+        prepare_heating_tests_mock_midnight_calculator(3600, 70, None);
 
     config.sensor_manager.replacement_value_water_temperature = 20.0;
     config.sensor_manager.replacement_value_ambient_temperature = 24.0;
