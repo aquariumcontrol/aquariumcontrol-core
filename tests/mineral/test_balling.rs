@@ -30,7 +30,7 @@ use aquarium_control::utilities::config::{
     read_config_file, read_config_file_with_test_database, ConfigData,
 };
 use spin_sleep::SpinSleeper;
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 use std::thread::scope;
 use std::time::{Duration, Instant};
 
@@ -44,7 +44,7 @@ use std::time::{Duration, Instant};
 /// * `sql_interface_balling` - Database interface for Balling operations.
 fn execute_blocking(
     balling: &mut Balling,
-    mutex_device_scheduler_balling: Arc<Mutex<i32>>,
+    mutex_device_scheduler_balling: Arc<tokio::sync::Mutex<i32>>,
     balling_channels: &mut BallingChannels,
     mineral_injection: &mut (impl MineralInjectionTrait + Send),
     sql_interface_balling: SqlInterfaceBalling,
@@ -550,7 +550,7 @@ pub fn test_balling_dosing(
 
     let mut channels = Channels::new_for_test();
 
-    let mutex_device_scheduler = Arc::new(Mutex::new(0));
+    let mutex_device_scheduler = Arc::new(tokio::sync::Mutex::new(0));
     let mutex_device_scheduler_environment = mutex_device_scheduler.clone();
 
     // create the test object
@@ -581,7 +581,7 @@ pub fn test_balling_dosing(
 
             // internal scope to for releasing mutex after read
             {
-                execution_count = *mutex_device_scheduler_environment.lock().unwrap();
+                execution_count = *mutex_device_scheduler_environment.blocking_lock();
             }
 
             println!("test_balling_dosing: execution_count={}", execution_count);
@@ -717,7 +717,7 @@ pub fn test_messaging_stops_starts_balling_dosing() {
     let mut tx_balling_to_schedule_check_for_test_case_finish =
         channels.balling.tx_balling_to_schedule_check.clone();
 
-    let mutex_device_scheduler = Arc::new(Mutex::new(0));
+    let mutex_device_scheduler = Arc::new(tokio::sync::Mutex::new(0));
 
     let mut mock_mineral_injection = MockMineralInjection::new();
 
@@ -744,8 +744,7 @@ pub fn test_messaging_stops_starts_balling_dosing() {
             loop {
                 spin_sleeper.sleep(sleep_duration_100_millis);
                 actuation_count_0 = *mutex_device_scheduler_balling_test_environment
-                    .lock()
-                    .unwrap();
+                    .blocking_lock();
                 if actuation_count_0 >= 1 || start_initial.elapsed() > timeout_initial {
                     break;
                 }
@@ -774,8 +773,7 @@ pub fn test_messaging_stops_starts_balling_dosing() {
             spin_sleeper.sleep(sleep_duration_7_secs);
 
             let actuation_count_1 = *mutex_device_scheduler_balling_test_environment
-                .lock()
-                .unwrap();
+                .blocking_lock();
             // check the amount of actuation (after stop request)
             assert_eq!(actuation_count_1, 1);
 
@@ -802,8 +800,7 @@ pub fn test_messaging_stops_starts_balling_dosing() {
             loop {
                 spin_sleeper.sleep(sleep_duration_100_millis);
                 actuation_count_2 = *mutex_device_scheduler_balling_test_environment
-                    .lock()
-                    .unwrap();
+                    .blocking_lock();
                 if actuation_count_2 >= 3 || start_resume.elapsed() > timeout_resume {
                     break;
                 }
@@ -823,8 +820,7 @@ pub fn test_messaging_stops_starts_balling_dosing() {
                 .unwrap();
 
             let actuation_count_3 = *mutex_device_scheduler_balling_test_environment
-                .lock()
-                .unwrap();
+                .blocking_lock();
             // check the amount of actuation (after Quit command)
             assert_eq!(actuation_count_3, 3);
             let _ = channels
@@ -991,7 +987,7 @@ pub fn test_balling_dosing_external_requests() {
 
     let mut channels = Channels::new_for_test();
 
-    let mutex_device_scheduler = Arc::new(Mutex::new(0));
+    let mutex_device_scheduler = Arc::new(tokio::sync::Mutex::new(0));
     let mutex_device_scheduler_environment = mutex_device_scheduler.clone();
 
     // create the test object
@@ -1021,7 +1017,7 @@ pub fn test_balling_dosing_external_requests() {
             spin_sleeper_test_environment.sleep(sleep_duration_test_environment);
             // internal scope to for releasing mutex after read
             {
-                execution_count1 = *mutex_device_scheduler_environment.lock().unwrap();
+                execution_count1 = *mutex_device_scheduler_environment.blocking_lock();
             }
             println!("test_balling_dosing: execution_count={}", execution_count1);
             assert_eq!(execution_count1, 0);
@@ -1052,7 +1048,7 @@ pub fn test_balling_dosing_external_requests() {
             spin_sleeper_test_environment.sleep(sleep_duration_test_environment);
             // internal scope to for releasing mutex after read
             {
-                execution_count2 = *mutex_device_scheduler_environment.lock().unwrap();
+                execution_count2 = *mutex_device_scheduler_environment.blocking_lock();
             }
             println!("test_balling_dosing: execution_count={}", execution_count2);
             assert_eq!(execution_count2, execution_count_reference);
@@ -1167,4 +1163,138 @@ pub fn test_balling_dosing_schedule_allows_multiple_dosings() {
         1,                  // schedule check interval
         Some((3, 5, 7, 9)), // dosing intervals
     );
+}
+
+#[test]
+// Verifies that Balling mineral dosing actuation is inhibited when the device_scheduler mutex is blocked.
+// The test environment acquires and holds the device_scheduler mutex lock for an initial period.
+// During this period, dosing actuation must be blocked. Once the lock is released by the test environment,
+// dosing actuation proceeds and completes normally.
+// Test case uses test database #03.
+pub fn test_balling_dosing_with_mutex_blocked() {
+    let spin_sleeper = SpinSleeper::default();
+    let test_db_number = 3;
+    let mut config: ConfigData = read_balling_config_with_database(test_db_number);
+
+    config.balling.pump1_active = true;
+    config.balling.pump2_active = false;
+    config.balling.pump3_active = false;
+    config.balling.pump4_active = false;
+    config.balling.schedule_check_interval = 1;
+    config.balling.dosing_interval_pump1 = 3;
+
+    println!("Testing with database {}", config.sql_interface.db_name);
+    let max_rows_balling_set_values = config.sql_interface.max_rows_balling_set_values;
+    let max_rows_balling_dosing_log = config.sql_interface.max_rows_balling_dosing_log;
+    let mut sql_interface = match SqlInterface::new(config.sql_interface) {
+        Ok(c) => c,
+        Err(e) => panic!("Could not connect to SQL database: {e:?}"),
+    };
+    SqlInterface::truncate_table(&mut sql_interface, SQL_TABLE_BALLING_SET_VALS.to_string()).unwrap();
+    SqlInterface::truncate_table(&mut sql_interface, SQL_TABLE_BALLING_DOSING_LOG.to_string()).unwrap();
+
+    let mut sql_interface_balling = SqlInterfaceBalling::new(
+        sql_interface.get_connection().unwrap(),
+        max_rows_balling_set_values,
+        max_rows_balling_dosing_log,
+    )
+    .unwrap();
+
+    insert_pump_configurations(
+        &mut sql_interface,
+        &mut sql_interface_balling,
+        true,
+        false,
+        false,
+        false,
+    );
+    insert_past_dosing_events(&mut sql_interface, &mut sql_interface_balling);
+
+    let mut channels = Channels::new_for_test();
+    let mutex_device_scheduler = Arc::new(tokio::sync::Mutex::new(0));
+    let mutex_device_scheduler_environment = mutex_device_scheduler.clone();
+
+    let mut balling = Balling::new(
+        config.balling,
+        Duration::from_millis(100),
+        &mut sql_interface_balling,
+    )
+    .unwrap();
+
+    let mut mock_mineral_injection = MockMineralInjection::new();
+
+    scope(|scope| {
+        // thread for schedule check
+        scope.spawn(move || {
+            mock_schedule_check(
+                &mut channels.schedule_check.tx_schedule_check_to_balling,
+                &mut channels.schedule_check.rx_schedule_check_from_balling,
+                None,
+                true,
+            )
+        });
+
+        // thread for test environment
+        scope.spawn(move || {
+            // 1. Acquire lock on device_scheduler mutex before Balling executes
+            let lock_guard = mutex_device_scheduler_environment.blocking_lock();
+
+            // Hold lock for 3 seconds
+            spin_sleeper.sleep(Duration::from_secs(3));
+
+            // Verify count remains 0 while lock is held
+            assert_eq!(*lock_guard, 0);
+
+            // 2. Release lock
+            drop(lock_guard);
+
+            // Wait up to 5 seconds for Balling to acquire lock and execute dosing
+            let timeout = Duration::from_secs(5);
+            let start = Instant::now();
+            let mut count: i32;
+            loop {
+                spin_sleeper.sleep(Duration::from_millis(100));
+                count = *mutex_device_scheduler_environment.blocking_lock();
+                if count >= 1 || start.elapsed() > timeout {
+                    break;
+                }
+            }
+
+            println!("test_balling_dosing_with_mutex_blocked: count={count}");
+            assert!(count >= 1);
+
+            // Send Quit command
+            let _ = channels
+                .signal_handler
+                .tx_signal_handler_to_balling
+                .send(InternalCommand::Quit);
+            channels
+                .signal_handler
+                .rx_signal_handler_from_balling
+                .blocking_recv()
+                .unwrap();
+            let _ = channels
+                .signal_handler
+                .tx_signal_handler_to_balling
+                .send(InternalCommand::Terminate);
+        });
+
+        // thread for test object
+        scope.spawn(move || {
+            let mut tx_balling_to_schedule_check_for_test_case_finish =
+                channels.balling.tx_balling_to_schedule_check.clone();
+
+            execute_blocking(
+                &mut balling,
+                mutex_device_scheduler,
+                &mut channels.balling,
+                &mut mock_mineral_injection,
+                sql_interface_balling,
+            );
+
+            let _ = tx_balling_to_schedule_check_for_test_case_finish.send(InternalCommand::Quit);
+
+            assert!(mock_mineral_injection.pump1_engagement_durations.len() >= 1);
+        });
+    });
 }

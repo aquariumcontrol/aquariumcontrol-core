@@ -12,17 +12,24 @@ use aquarium_control::database::sql_interface::SqlInterface;
 use aquarium_control::launch::run::run;
 use aquarium_control::utilities::config::read_config_file;
 use aquarium_control::utilities::signal_handler::TEST_SHUTDOWN_TRIGGER;
-use std::sync::atomic::Ordering;
+use std::sync::{atomic::Ordering, Mutex};
 use std::time::Duration;
+
+static TEST_RUN_MUTEX: Mutex<()> = Mutex::new(());
 
 #[path = "../database/common.rs"]
 mod common;
 
 use common::{add_balling_profile, insert_current_version_information, truncate_all_tables};
 
+use aquarium_control::database::database_interface_feed_trait::DatabaseInterfaceFeedTrait;
+use aquarium_control::database::sql_interface_feed::{insert_feed_profiles, SqlInterfaceFeed};
+
 #[test]
 // Verifies that run async runtime configuration.
 fn test_run_async_runtime_configuration() {
+    let _lock = TEST_RUN_MUTEX.lock().unwrap();
+
     // Path of the dedicated config file
     let config_path = "config/aquarium_control_test_runtime.toml".to_string();
 
@@ -38,26 +45,6 @@ fn test_run_async_runtime_configuration() {
         let mut sql_interface = SqlInterface::new(config_data.sql_interface).unwrap();
 
         truncate_all_tables(&mut sql_interface);
-
-        // Also clean up other settings tables to prevent row limits issues
-        use aquarium_control::database::sql_test_query_strings::{
-            SQL_TABLE_BALLING_SET_VALS, SQL_TABLE_HEATING_SET_VALS, SQL_TABLE_SCHEDULE,
-            SQL_TABLE_VENTILATION_SET_VALS,
-        };
-        let _ = SqlInterface::truncate_table(
-            &mut sql_interface,
-            SQL_TABLE_BALLING_SET_VALS.to_string(),
-        );
-        let _ = SqlInterface::truncate_table(
-            &mut sql_interface,
-            SQL_TABLE_HEATING_SET_VALS.to_string(),
-        );
-        let _ = SqlInterface::truncate_table(
-            &mut sql_interface,
-            SQL_TABLE_VENTILATION_SET_VALS.to_string(),
-        );
-        let _ = SqlInterface::truncate_table(&mut sql_interface, SQL_TABLE_SCHEDULE.to_string());
-        let _ = SqlInterface::truncate_table(&mut sql_interface, "version".to_string());
 
         insert_current_version_information(&mut sql_interface);
 
@@ -75,6 +62,63 @@ fn test_run_async_runtime_configuration() {
 
     // Run the main application run() function with 50 seconds test shutdown duration
     let run_result = run(Some(config_path), Some(Duration::from_secs(20)));
+
+    assert!(
+        run_result.is_ok(),
+        "run() failed with error: {:?}",
+        run_result.err()
+    );
+}
+
+#[test]
+// Verifies application behavior when a past feed schedule entry exists in the database
+// and feed profile execution starts at application startup.
+fn test_run_with_past_feed_schedule_entry() {
+    let _lock = TEST_RUN_MUTEX.lock().unwrap();
+
+    let config_path = "config/aquarium_control_test_runtime.toml".to_string();
+
+    TEST_SHUTDOWN_TRIGGER.store(false, Ordering::Relaxed);
+    let _ = std::fs::remove_file("/tmp/aquarium-ctrl-test.pid");
+
+    {
+        let config_data = read_config_file(config_path.to_string()).unwrap();
+        let mut sql_interface = SqlInterface::new(config_data.sql_interface.clone()).unwrap();
+
+        truncate_all_tables(&mut sql_interface);
+
+        insert_current_version_information(&mut sql_interface);
+
+        for pump_id in 1..=4 {
+            add_balling_profile(
+                &mut sql_interface.conn,
+                pump_id,
+                1.0f32,
+                10.0f32,
+                format!("Pump {}", pump_id),
+            );
+        }
+
+        // Insert feed profiles using helper
+        let mut sql_interface_feed = SqlInterfaceFeed::new(
+            sql_interface.get_connection().unwrap(),
+            config_data.sql_interface.max_rows_feed_profile,
+            config_data.sql_interface.max_rows_feed_schedule,
+            config_data.sql_interface.max_rows_feed_log,
+        )
+        .unwrap();
+
+        insert_feed_profiles(&mut sql_interface, &mut sql_interface_feed);
+
+        let past_timestamp =
+            chrono::NaiveDateTime::parse_from_str("2024-01-01 12:00:00", "%Y-%m-%d %H:%M:%S")
+                .unwrap();
+        sql_interface_feed
+            .insert_feed_schedule_entry(past_timestamp, 1, false, true)
+            .unwrap();
+    }
+
+    let run_result = run(Some(config_path), Some(Duration::from_secs(10)));
 
     assert!(
         run_result.is_ok(),

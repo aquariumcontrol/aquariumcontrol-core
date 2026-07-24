@@ -158,6 +158,9 @@ pub const SQL_TABLE_BALLING_DOSING_LOG: &str = "balling_log";
 /// Definition of table name for schedule
 pub const SQL_TABLE_SCHEDULE: &str = "schedule";
 
+/// Definition of table name for version
+pub const SQL_TABLE_VERSION: &str = "version";
+
 /// Definition of table name for heating set values
 pub const SQL_TABLE_HEATING_SET_VALS: &str = "heating_set_vals";
 

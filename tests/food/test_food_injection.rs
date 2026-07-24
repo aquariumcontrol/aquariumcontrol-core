@@ -210,7 +210,10 @@ pub fn test_food_injection_uninterrupted() {
             };
 
             let start_time = Instant::now();
-            let result_tuple = food_injection.inject_food(&mut channels.feed, &feed_profile);
+            let result_tuple = tokio::runtime::Builder::new_current_thread()
+                .build()
+                .unwrap()
+                .block_on(food_injection.inject_food(&mut channels.feed, &feed_profile));
             let end_time = Instant::now();
 
             let execution_duration = end_time - start_time;
@@ -324,7 +327,10 @@ pub fn test_food_injection_interrupted() {
             };
 
             let start_time = Instant::now();
-            let result_tuple = food_injection.inject_food(&mut channels.feed, &feed_profile);
+            let result_tuple = tokio::runtime::Builder::new_current_thread()
+                .build()
+                .unwrap()
+                .block_on(food_injection.inject_food(&mut channels.feed, &feed_profile));
             let end_time = Instant::now();
 
             let execution_duration = end_time - start_time;

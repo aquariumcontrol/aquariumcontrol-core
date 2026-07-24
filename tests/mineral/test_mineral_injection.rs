@@ -182,12 +182,15 @@ pub fn test_mineral_dosing_happy_case() {
 
         // thread for the test object
         scope.spawn(move || {
-            let (quit_command_received, actual_dosing_duration_millis) = mineral_injection
-                .inject_mineral(
-                    &mut channels.balling,
-                    AquariumDevice::PeristalticPump1,
-                    target_dosing_duration_millis,
-                );
+            let (quit_command_received, actual_dosing_duration_millis) =
+                tokio::runtime::Builder::new_current_thread()
+                    .build()
+                    .unwrap()
+                    .block_on(mineral_injection.inject_mineral(
+                        &mut channels.balling,
+                        AquariumDevice::PeristalticPump1,
+                        target_dosing_duration_millis,
+                    ));
             assert!(!quit_command_received);
             assert_ge!(
                 actual_dosing_duration_millis,
@@ -234,12 +237,15 @@ pub fn test_mineral_dosing_interrupted() {
 
         // thread for the test object
         scope.spawn(move || {
-            let (quit_command_received, actual_dosing_duration_millis) = mineral_injection
-                .inject_mineral(
-                    &mut channels.balling,
-                    AquariumDevice::PeristalticPump1,
-                    target_dosing_duration_millis,
-                );
+            let (quit_command_received, actual_dosing_duration_millis) =
+                tokio::runtime::Builder::new_current_thread()
+                    .build()
+                    .unwrap()
+                    .block_on(mineral_injection.inject_mineral(
+                        &mut channels.balling,
+                        AquariumDevice::PeristalticPump1,
+                        target_dosing_duration_millis,
+                    ));
 
             let lower_bound_float: f32 = sleep_interval_millis as f32 * 0.9;
             let lower_bound: u32 = lower_bound_float.round() as u32;

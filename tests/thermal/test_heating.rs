@@ -54,7 +54,7 @@ use std::time::{Duration, Instant};
 /// * `sql_interface_heating` - Database interface for heating stats.
 fn execute_blocking(
     heating: &mut Heating,
-    mutex_device_scheduler_heating: Arc<Mutex<i32>>,
+    mutex_device_scheduler_heating: Arc<tokio::sync::Mutex<i32>>,
     heating_channels: &mut HeatingChannels,
     heating_stats_transfer: &mut impl HeatingStatsDataTransferTrait,
     heating_set_val_updater: &mut impl ThermalSetValueUpdaterTrait,
@@ -214,7 +214,7 @@ pub fn test_heating_with_measured_temperature_high() {
         })
         .unwrap();
 
-    let mutex_device_scheduler_heating = Arc::new(Mutex::new(0));
+    let mutex_device_scheduler_heating = Arc::new(tokio::sync::Mutex::new(0));
 
     // thread for mock relay manager - includes assertions
     let join_handle_mock_relay_manager = thread::Builder::new()
@@ -351,7 +351,7 @@ pub fn test_heating_with_measured_temperature_low_without_mutex_blocked() {
         })
         .unwrap();
 
-    let mutex_device_scheduler_heating = Arc::new(Mutex::new(0));
+    let mutex_device_scheduler_heating = Arc::new(tokio::sync::Mutex::new(0));
 
     // thread for mock relay manager - includes assertions
     let join_handle_mock_relay_manager = thread::Builder::new()
@@ -497,7 +497,7 @@ pub fn test_heating_with_measured_temperature_50_percent() {
         })
         .unwrap();
 
-    let mutex_device_scheduler_heating = Arc::new(Mutex::new(0));
+    let mutex_device_scheduler_heating = Arc::new(tokio::sync::Mutex::new(0));
 
     // thread for mock relay manager - includes assertions
     let join_handle_mock_relay_manager = thread::Builder::new()
@@ -730,7 +730,7 @@ pub fn test_heating_with_measured_temperature_low_inside_interval() {
         })
         .unwrap();
 
-    let mutex_device_scheduler_heating = Arc::new(Mutex::new(0));
+    let mutex_device_scheduler_heating = Arc::new(tokio::sync::Mutex::new(0));
 
     // thread for mock relay manager - includes assertions
     let join_handle_mock_relay_manager = thread::Builder::new()
@@ -941,7 +941,7 @@ pub fn test_heating_with_measured_temperature_high_inside_interval() {
         })
         .unwrap();
 
-    let mutex_device_scheduler_heating = Arc::new(Mutex::new(0));
+    let mutex_device_scheduler_heating = Arc::new(tokio::sync::Mutex::new(0));
 
     // thread for mock relay manager - includes assertions
     let join_handle_mock_relay_manager = thread::Builder::new()
@@ -1152,7 +1152,7 @@ pub fn test_heating_with_pending_quit_terminate_command() {
         })
         .unwrap();
 
-    let mutex_device_scheduler_heating = Arc::new(Mutex::new(0));
+    let mutex_device_scheduler_heating = Arc::new(tokio::sync::Mutex::new(0));
 
     // thread for mock relay manager
     let join_handle_mock_relay_manager = thread::Builder::new()
@@ -1234,7 +1234,7 @@ pub fn test_heating_with_pending_quit_terminate_command() {
                 let _ = tx_heating_to_relay_manager_for_test_case_finish.send(InternalCommand::Quit);
 
                 // check if heater actuation has taken place
-                let mutex_data = mutex_device_scheduler_heating.lock().unwrap();
+                let mutex_data = mutex_device_scheduler_heating.blocking_lock();
                 assert_eq!(*mutex_data, 1);
                 let finish_time = Instant::now();
                 let execution_duration = finish_time.duration_since(start_time);
@@ -1303,7 +1303,7 @@ pub fn test_heating_wait_for_midnight_calc_stats_heater_on() {
         })
         .unwrap();
 
-    let mutex_device_scheduler_heating = Arc::new(Mutex::new(0));
+    let mutex_device_scheduler_heating = Arc::new(tokio::sync::Mutex::new(0));
 
     // thread for mock relay manager
     let join_handle_mock_relay_manager = thread::Builder::new()
@@ -1530,7 +1530,7 @@ pub fn test_heating_wait_for_midnight_calc_stats_heater_off() {
     let mutex_tank_level_switch_signals =
         Arc::new(Mutex::new(TankLevelSwitchSignals::new(true, true, false)));
 
-    let mutex_device_scheduler_heating = Arc::new(Mutex::new(0));
+    let mutex_device_scheduler_heating = Arc::new(tokio::sync::Mutex::new(0));
 
     // thread for mock relay manager
     let join_handle_mock_relay_manager = thread::Builder::new()
@@ -1738,7 +1738,7 @@ pub fn test_heating_blocked_by_schedule() {
         })
         .unwrap();
 
-    let mutex_device_scheduler_heating = Arc::new(Mutex::new(0));
+    let mutex_device_scheduler_heating = Arc::new(tokio::sync::Mutex::new(0));
 
     // thread for mock relay manager - includes assertions
     let join_handle_mock_relay_manager = thread::Builder::new()
@@ -1871,7 +1871,7 @@ pub fn test_heating_component_protection_when_tank_level_low() {
     let mutex_tank_level_switch_signals =
         Arc::new(Mutex::new(TankLevelSwitchSignals::new(false, false, false)));
 
-    let mutex_device_scheduler_heating = Arc::new(Mutex::new(0));
+    let mutex_device_scheduler_heating = Arc::new(tokio::sync::Mutex::new(0));
 
     // thread for mock relay manager - includes assertions
     let join_handle_mock_relay_manager = thread::Builder::new()
@@ -1994,7 +1994,7 @@ pub fn test_messaging_stops_starts_heating() {
 
     let mut channels = Channels::new_for_test();
 
-    let mutex_device_scheduler_heating = Arc::new(Mutex::new(0));
+    let mutex_device_scheduler_heating = Arc::new(tokio::sync::Mutex::new(0));
     let mutex_device_scheduler_test_environment = mutex_device_scheduler_heating.clone();
 
     // thread for mock schedule check
@@ -2063,7 +2063,7 @@ pub fn test_messaging_stops_starts_heating() {
                 spin_sleeper.sleep(sleep_duration_100_millis);
             }
             // check the initial state of mutex: should be already switched on
-            assert_eq!(*mutex_device_scheduler_test_environment.lock().unwrap(), 1);
+            assert_eq!(*mutex_device_scheduler_test_environment.blocking_lock(), 1);
 
             // sending a message requesting stop of heating control
             match channels
@@ -2085,7 +2085,7 @@ pub fn test_messaging_stops_starts_heating() {
                 spin_sleeper.sleep(sleep_duration_100_millis);
             }
             // check if heating is actuated
-            assert_eq!(*mutex_device_scheduler_test_environment.lock().unwrap(), 2);
+            assert_eq!(*mutex_device_scheduler_test_environment.blocking_lock(), 2);
 
             // sending a message requesting restart of heating control
             match channels
@@ -2107,7 +2107,7 @@ pub fn test_messaging_stops_starts_heating() {
                 spin_sleeper.sleep(sleep_duration_100_millis);
             }
             // check if heating is actuated
-            assert_eq!(*mutex_device_scheduler_test_environment.lock().unwrap(), 3);
+            assert_eq!(*mutex_device_scheduler_test_environment.blocking_lock(), 3);
 
             // sending a message requesting stop of heating control
             match channels
@@ -2129,7 +2129,7 @@ pub fn test_messaging_stops_starts_heating() {
                 spin_sleeper.sleep(sleep_duration_100_millis);
             }
             // check if heating is actuated
-            assert_eq!(*mutex_device_scheduler_test_environment.lock().unwrap(), 4);
+            assert_eq!(*mutex_device_scheduler_test_environment.blocking_lock(), 4);
 
             // requesting heating control to quit
             let _ = channels
@@ -2143,7 +2143,7 @@ pub fn test_messaging_stops_starts_heating() {
                 .unwrap();
 
             // check if heating is not actuated
-            assert_eq!(*mutex_device_scheduler_test_environment.lock().unwrap(), 4);
+            assert_eq!(*mutex_device_scheduler_test_environment.blocking_lock(), 4);
             let _ = channels
                 .signal_handler
                 .tx_signal_handler_to_heating
@@ -2242,7 +2242,7 @@ pub fn test_heating_with_increased_set_values() {
         .unwrap();
 
     // thread for mock TankLevelSwitch
-    let mutex_device_scheduler_heating = Arc::new(Mutex::new(0));
+    let mutex_device_scheduler_heating = Arc::new(tokio::sync::Mutex::new(0));
 
     // thread for mock relay manager - includes assertions
     let join_handle_mock_relay_manager = thread::Builder::new()
@@ -2396,7 +2396,7 @@ pub fn test_heating_with_measured_temperature_low_with_mutex_blocked() {
         })
         .unwrap();
 
-    let mutex_device_scheduler_heating = Arc::new(Mutex::new(0));
+    let mutex_device_scheduler_heating = Arc::new(tokio::sync::Mutex::new(0));
     let mutex_heating_status = Arc::new(Mutex::new(ThermalControlStatus::default()));
     let mutex_heating_status_clone_for_test_environment = mutex_heating_status.clone();
 
@@ -2898,7 +2898,7 @@ pub fn test_heating_gradient_monitoring_disables_actuator() {
         &config.sensor_manager,
     )));
 
-    let mutex_device_scheduler_heating = Arc::new(Mutex::new(0));
+    let mutex_device_scheduler_heating = Arc::new(tokio::sync::Mutex::new(0));
 
     // Mutex for heating status to check assertions
     let mutex_heating_status = Arc::new(Mutex::new(ThermalControlStatus::default()));
@@ -3070,7 +3070,7 @@ pub fn test_heating_reset_errors_enables_actuator() {
         &config.sensor_manager,
     )));
 
-    let mutex_device_scheduler_heating = Arc::new(Mutex::new(0));
+    let mutex_device_scheduler_heating = Arc::new(tokio::sync::Mutex::new(0));
 
     // Mutex for heating status to check assertions
     let mutex_heating_status = Arc::new(Mutex::new(ThermalControlStatus::default()));
@@ -3209,4 +3209,147 @@ pub fn test_heating_reset_errors_enables_actuator() {
         .join()
         .expect("Test environment failed");
     join_handle_test_object.join().expect("Test object failed");
+}
+
+#[test]
+// Verifies that heater actuation is inhibited when device_scheduler mutex is blocked.
+// The test environment thread acquires and holds the device_scheduler mutex lock before heater actuation occurs.
+// While the lock is held, heater actuation is blocked. Once released, heater actuation proceeds normally.
+// Test case uses test database #12.
+pub fn test_heating_actuation_with_device_scheduler_mutex_blocked() {
+    let sleep_duration_100_millis = Duration::from_millis(100);
+    let spin_sleeper = SpinSleeper::default();
+
+    let (mut config, mut heating, sql_interface, sql_interface_heating_stats) =
+        prepare_heating_tests_mock_midnight_calculator(3600, 12, None);
+
+    config.sensor_manager.replacement_value_water_temperature = 20.0;
+    config.sensor_manager.replacement_value_ambient_temperature = 24.0;
+
+    let mut channels = Channels::new_for_test();
+
+    let mutex_tank_level_switch_signals =
+        Arc::new(Mutex::new(TankLevelSwitchSignals::new(true, true, false)));
+
+    // thread for mock schedule check
+    let join_handle_mock_schedule_check = thread::Builder::new()
+        .name("mock_schedule_check".to_string())
+        .spawn(move || {
+            mock_schedule_check(
+                &mut channels.schedule_check.tx_schedule_check_to_heating,
+                &mut channels.schedule_check.rx_schedule_check_from_heating,
+                None,
+                true,
+            );
+        })
+        .unwrap();
+
+    let mutex_device_scheduler_heating = Arc::new(tokio::sync::Mutex::new(0));
+    let mutex_device_scheduler_environment = mutex_device_scheduler_heating.clone();
+
+    // thread for mock relay manager
+    let join_handle_mock_relay_manager = thread::Builder::new()
+        .name("mock_relay_manager".to_string())
+        .spawn(move || {
+            let (actuation_events, mock_actuator_states) = mock_relay_manager(
+                &mut channels.relay_manager.tx_relay_manager_to_heating,
+                &mut channels.relay_manager.rx_relay_manager_from_heating,
+            );
+            assert!(actuation_events.len() >= 1);
+            mock_actuator_states.check_terminal_condition_heating();
+        })
+        .unwrap();
+
+    // thread for controlling duration of test run and blocking mutex
+    let join_handle_test_environment = thread::Builder::new()
+        .name("test_environment".to_string())
+        .spawn(move || {
+            let spin_sleeper = SpinSleeper::default();
+
+            // 1. Acquire lock on device_scheduler mutex before heater actuation executes
+            let lock_guard = mutex_device_scheduler_environment.blocking_lock();
+
+            // Hold lock for 3 seconds
+            spin_sleeper.sleep(Duration::from_secs(3));
+
+            // Verify execution count remains 0 while lock is held
+            assert_eq!(*lock_guard, 0);
+
+            // 2. Release lock so heater actuation can proceed
+            drop(lock_guard);
+
+            // Wait 3 seconds for actuation to complete
+            spin_sleeper.sleep(Duration::from_secs(3));
+
+            let _ = channels
+                .signal_handler
+                .tx_signal_handler_to_heating
+                .send(InternalCommand::Quit);
+            channels
+                .signal_handler
+                .rx_signal_handler_from_heating
+                .blocking_recv()
+                .unwrap();
+            let _ = channels
+                .signal_handler
+                .tx_signal_handler_to_heating
+                .send(InternalCommand::Terminate);
+        })
+        .unwrap();
+
+    spin_sleeper.sleep(sleep_duration_100_millis);
+
+    // thread for the test object
+    let join_handle_test_object = thread::Builder::new()
+        .name("test_object".to_string())
+        .spawn(move || {
+            let mut tx_heating_to_schedule_check_for_test_case_finish =
+                channels.heating.tx_heating_to_schedule_check.clone();
+            let mut tx_heating_to_relay_manager_for_test_case_finish =
+                channels.heating.tx_heating_to_relay_manager.clone();
+
+            let mut heating_stats_transfer =
+                HeatingStatsMockDataTransfer::new(&mut sql_interface.get_connection().unwrap());
+            let mut heating_set_value_updater =
+                MockSqlInterfaceHeatingSetVals::new(false, None, None, None);
+
+            let heating_mutexes = HeatingMutexes {
+                mutex_sensor_manager_signals: Arc::new(Mutex::new(SensorManagerSignals::new(
+                    &config.sensor_manager,
+                ))),
+                mutex_tank_level_switch_signals,
+                mutex_heating_status: Arc::new(Mutex::new(ThermalControlStatus::default())),
+                mutex_temperature_gradient: Arc::new(Mutex::new(0.0)),
+            };
+
+            execute_blocking(
+                &mut heating,
+                mutex_device_scheduler_heating.clone(),
+                &mut channels.heating,
+                &mut heating_stats_transfer,
+                &mut heating_set_value_updater,
+                heating_mutexes,
+                sql_interface_heating_stats,
+            );
+
+            let _ = tx_heating_to_schedule_check_for_test_case_finish.send(InternalCommand::Quit);
+            let _ = tx_heating_to_relay_manager_for_test_case_finish.send(InternalCommand::Quit);
+
+            assert!(*mutex_device_scheduler_heating.blocking_lock() >= 1);
+            println!("* [Heating] checking actuation with device scheduler mutex blocked succeeded.");
+        })
+        .unwrap();
+
+    join_handle_mock_schedule_check
+        .join()
+        .expect("Mock schedule check did not finish.");
+    join_handle_mock_relay_manager
+        .join()
+        .expect("Mock relay manager thread did not finish.");
+    join_handle_test_environment
+        .join()
+        .expect("Test environment thread did not finish.");
+    join_handle_test_object
+        .join()
+        .expect("Test object thread did not finish.");
 }

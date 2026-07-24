@@ -67,7 +67,7 @@ fn create_assert_test_object(
     thread::Builder::new()
         .name("test_object".to_string())
         .spawn(move || {
-            let mutex_device_scheduler_refill: Arc<Mutex<i32>> = Arc::new(Mutex::new(0));
+            let mutex_device_scheduler_refill: Arc<tokio::sync::Mutex<i32>> = Arc::new(tokio::sync::Mutex::new(0));
             let mut water_injection = WaterInjection::new(&refill.config);
 
             let mut boxed_sql_interface_refill: Box<
@@ -76,13 +76,16 @@ fn create_assert_test_object(
                 + Send,
             > = Box::new(sql_interface_refill);
 
-            let result = water_injection.inject_water(
-                &mut refill_channels,
-                &mut refill.refill_errors,
-                &mut boxed_sql_interface_refill,
-                &mutex_tank_level_switch_signals,
-                &mutex_device_scheduler_refill,
-            );
+            let result = tokio::runtime::Builder::new_current_thread()
+                .build()
+                .unwrap()
+                .block_on(water_injection.inject_water(
+                    &mut refill_channels,
+                    &mut refill.refill_errors,
+                    &mut boxed_sql_interface_refill,
+                    &mutex_tank_level_switch_signals,
+                    &mutex_device_scheduler_refill,
+                ));
             assert_eq!(result, target_result);
             assert_eq!(refill.refill_errors.has_error(), target_refill_has_errors);
         })
@@ -580,20 +583,23 @@ pub fn test_water_injection_switch_stuck_low() {
     let join_handle_test_object = thread::Builder::new()
         .name("test_object".to_string())
         .spawn(move || {
-            let mutex_device_scheduler_refill: Arc<Mutex<i32>> = Arc::new(Mutex::new(0));
+            let mutex_device_scheduler_refill: Arc<tokio::sync::Mutex<i32>> = Arc::new(tokio::sync::Mutex::new(0));
             let mut boxed_sql_interface_refill: Box<
                 dyn aquarium_control::database::sql_interface_refill::DatabaseInterfaceRefillTrait
                 + Sync
                 + Send,
             > = Box::new(sql_interface_refill);
 
-            let result = water_injection.inject_water(
-                &mut channels.refill,
-                &mut refill.refill_errors,
-                &mut boxed_sql_interface_refill,
-                &mutex_tank_level_switch_signals,
-                &mutex_device_scheduler_refill,
-            );
+            let result = tokio::runtime::Builder::new_current_thread()
+                .build()
+                .unwrap()
+                .block_on(water_injection.inject_water(
+                    &mut channels.refill,
+                    &mut refill.refill_errors,
+                    &mut boxed_sql_interface_refill,
+                    &mutex_tank_level_switch_signals,
+                    &mutex_device_scheduler_refill,
+                ));
             assert!(!result);
             assert!(refill.refill_errors.has_error());
             assert!(refill.refill_errors.error_switch_stuck_low);
@@ -675,19 +681,22 @@ pub fn test_water_injection_quit_signal() {
     let join_handle_test_object = thread::Builder::new()
         .name("test_object".to_string())
         .spawn(move || {
-            let mutex_device_scheduler_refill: Arc<Mutex<i32>> = Arc::new(Mutex::new(0));
+            let mutex_device_scheduler_refill: Arc<tokio::sync::Mutex<i32>> = Arc::new(tokio::sync::Mutex::new(0));
             let mut boxed_sql_interface_refill: Box<
                 dyn aquarium_control::database::sql_interface_refill::DatabaseInterfaceRefillTrait
                 + Sync
                 + Send,
             > = Box::new(sql_interface_refill);
-            let result = water_injection.inject_water(
-                &mut channels.refill,
-                &mut refill.refill_errors,
-                &mut boxed_sql_interface_refill,
-                &mutex_tank_level_switch_signals,
-                &mutex_device_scheduler_refill,
-            );
+            let result = tokio::runtime::Builder::new_current_thread()
+                .build()
+                .unwrap()
+                .block_on(water_injection.inject_water(
+                    &mut channels.refill,
+                    &mut refill.refill_errors,
+                    &mut boxed_sql_interface_refill,
+                    &mutex_tank_level_switch_signals,
+                    &mutex_device_scheduler_refill,
+                ));
             assert!(result);
             assert!(!refill.refill_errors.has_error());
         })

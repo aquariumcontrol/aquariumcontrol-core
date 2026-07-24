@@ -71,7 +71,7 @@ use crate::utilities::proc_ext_req::ProcessExternalRequestTrait;
 use crate::watchmen::monitors_channels::MonitorsChannels;
 use crate::watchmen::monitors_config::MonitorsConfig;
 use crate::water::refill_monitor_view::RefillMonitorView;
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 use std::time::Duration;
 
 #[cfg_attr(doc, aquamarine::aquamarine)]
@@ -200,7 +200,7 @@ impl Monitors {
     /// * `mutex_device_scheduler_monitors` - A parameter representing `mutex_device_scheduler_monitors`.
     pub async fn execute(
         &mut self,
-        _mutex_device_scheduler_monitors: Arc<Mutex<i32>>,
+        _mutex_device_scheduler_monitors: Arc<tokio::sync::Mutex<i32>>,
         monitors_channels: &mut MonitorsChannels,
     ) {
         #[cfg(all(target_os = "linux", not(feature = "test-utils"), not(test)))] // only required in real-life execution

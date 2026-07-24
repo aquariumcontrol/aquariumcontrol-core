@@ -733,7 +733,7 @@ impl Refill {
     #[allow(clippy::too_many_arguments)]
     pub async fn execute(
         &mut self,
-        mutex_device_scheduler_refill: Arc<Mutex<i32>>,
+        mutex_device_scheduler_refill: Arc<tokio::sync::Mutex<i32>>,
         refill_channels: &mut RefillChannels,
         water_injection: &mut (impl WaterInjectionTrait + Send),
         mutex_tank_level_switch_signals_clone_for_refill: Arc<Mutex<TankLevelSwitchSignals>>,
@@ -926,41 +926,15 @@ impl Refill {
                             }
 
                             // conditions for allowing the refill operation are given
-                            let (quit_res, join_err_opt) = tokio::task::block_in_place(|| {
-                                std::thread::scope(|scope| {
-                                    let handle = scope.spawn(|| {
-                                        water_injection.inject_water(
-                                            refill_channels,
-                                            &mut self.refill_errors,
-                                            &mut sql_interface_refill,
-                                            &mutex_tank_level_switch_signals_clone_for_refill,
-                                            &mutex_device_scheduler_refill,
-                                        )
-                                    });
-                                    match handle.join() {
-                                        Ok(quit) => (quit, None),
-                                        Err(e) => {
-                                            let panic_msg =
-                                                if let Some(s) = e.downcast_ref::<&str>() {
-                                                    s.to_string()
-                                                } else if let Some(s) = e.downcast_ref::<String>() {
-                                                    s.clone()
-                                                } else {
-                                                    "Unknown panic payload".to_string()
-                                                };
-                                            (false, Some(ThreadJoinError(panic_msg)))
-                                        }
-                                    }
-                                })
-                            });
-
-                            if let Some(err) = join_err_opt {
-                                self.refill_errors.error_join_failed = true;
-                                log_error_chain(module_path!(), "could not join thread", err);
-                                quit_command_received = false;
-                            } else {
-                                quit_command_received = quit_res;
-                            }
+                            quit_command_received = water_injection
+                                .inject_water(
+                                    refill_channels,
+                                    &mut self.refill_errors,
+                                    &mut sql_interface_refill,
+                                    &mutex_tank_level_switch_signals_clone_for_refill,
+                                    &mutex_device_scheduler_refill,
+                                )
+                                .await;
 
                             water_injected = true;
 
@@ -1094,20 +1068,7 @@ impl Refill {
     }
 }
 
-#[derive(Debug)]
-struct ThreadJoinError(String);
 
-impl std::fmt::Display for ThreadJoinError {
-    /// Formats the value using the given formatter.
-    ///
-    /// # Arguments
-    /// * `f` - The formatter to write the formatted string to.
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", self.0)
-    }
-}
-
-impl std::error::Error for ThreadJoinError {}
 
 /// Prepares and returns a configured `Refill` control instance along with its associated interfaces for testing.
 ///

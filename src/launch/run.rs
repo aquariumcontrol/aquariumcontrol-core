@@ -744,7 +744,7 @@ pub fn run(
         .map_err(|e| StartupError::I2cSetupFailure { source: e })?;
 
     //**************************************** Mutexes *********************************************
-    let mutex_device_scheduler = Arc::new(Mutex::new(0));
+    let mutex_device_scheduler = Arc::new(tokio::sync::Mutex::new(0));
 
     // Mutexes for DS18B20 signals
     let mutex_ds18b20_water_temperature = Arc::new(Mutex::new(Ok(Ds18b20ResultData::new(

@@ -95,7 +95,8 @@ pub trait FoodInjectionTrait {
     /// encountered, which can include:
     /// - Communication failures with the relay manager (`RelayManagerSend`, `RelayManagerReceive`).
     /// - An attempt to set a device to an undefined state (e.g., `UndefinedTargetStateSkimmer`).
-    fn inject_food(
+    #[allow(async_fn_in_trait)]
+    async fn inject_food(
         &mut self,
         feed_channels: &mut FeedChannels,
         feed_profile: &FeedProfile,
@@ -197,7 +198,7 @@ impl FoodInjection {
     /// - `RelayManagerReceive`: Failure to receive an acknowledgment from the relay manager.
     /// - `UndefinedTargetState...`: An attempt was made to set a device to a state other
     ///   than `On` or `Off`.
-    fn switch_skimmer_pumps_feeder(
+    async fn switch_skimmer_pumps_feeder(
         &mut self,
         target_actuator_states: FoodInjectionTargetActuatorStates,
         feed_channels: &mut FeedChannels,
@@ -231,7 +232,7 @@ impl FoodInjection {
                             device: device.clone(),
                             source: e,
                         });
-                    } else if let Err(e) = feed_channels.rx_feed_from_relay_manager.blocking_recv()
+                    } else if let Err(e) = feed_channels.receive_from_relay_manager().await
                     {
                         println!(
                             "Encountered error when receiving command to relay manager: {e:?}"
@@ -243,10 +244,6 @@ impl FoodInjection {
                         });
                     } else {
                         // Only update state on success
-                        println!(
-                            "Successfully set skimmer state to {:?}",
-                            target_actuator_states.target_skimmer_state
-                        );
                         self.skimmer_state = target_actuator_states.target_skimmer_state;
                     }
                 }
@@ -284,7 +281,7 @@ impl FoodInjection {
                             device: device.clone(),
                             source: e,
                         });
-                    } else if let Err(e) = feed_channels.rx_feed_from_relay_manager.blocking_recv()
+                    } else if let Err(e) = feed_channels.receive_from_relay_manager().await
                     {
                         errors.push(FoodInjectionError::RelayManagerReceive {
                             location: module_path!().to_string(),
@@ -330,7 +327,7 @@ impl FoodInjection {
                             device: device.clone(),
                             source: e,
                         });
-                    } else if let Err(e) = feed_channels.rx_feed_from_relay_manager.blocking_recv()
+                    } else if let Err(e) = feed_channels.receive_from_relay_manager().await
                     {
                         errors.push(FoodInjectionError::RelayManagerReceive {
                             location: module_path!().to_string(),
@@ -376,7 +373,7 @@ impl FoodInjection {
                             device: device.clone(),
                             source: e,
                         });
-                    } else if let Err(e) = feed_channels.rx_feed_from_relay_manager.blocking_recv()
+                    } else if let Err(e) = feed_channels.receive_from_relay_manager().await
                     {
                         errors.push(FoodInjectionError::RelayManagerReceive {
                             location: module_path!().to_string(),
@@ -422,7 +419,7 @@ impl FoodInjection {
                             device: device.clone(),
                             source: e,
                         });
-                    } else if let Err(e) = feed_channels.rx_feed_from_relay_manager.blocking_recv()
+                    } else if let Err(e) = feed_channels.receive_from_relay_manager().await
                     {
                         errors.push(FoodInjectionError::RelayManagerReceive {
                             location: module_path!().to_string(),
@@ -468,7 +465,7 @@ impl FoodInjection {
                             device: device.clone(),
                             source: e,
                         });
-                    } else if let Err(e) = feed_channels.rx_feed_from_relay_manager.blocking_recv()
+                    } else if let Err(e) = feed_channels.receive_from_relay_manager().await
                     {
                         errors.push(FoodInjectionError::RelayManagerReceive {
                             location: module_path!().to_string(),
@@ -523,7 +520,7 @@ impl FoodInjectionTrait for FoodInjection {
     /// or more errors occurred during the process. The function aborts the feed sequence
     /// on the first error but still performs the final cleanup step. The vector will
     /// contain all errors encountered during both the main sequence and the cleanup.
-    fn inject_food(
+    async fn inject_food(
         &mut self,
         feed_channels: &mut FeedChannels,
         feed_profile: &FeedProfile,
@@ -578,7 +575,7 @@ impl FoodInjectionTrait for FoodInjection {
                     target_feeder_state: ActuatorState::Off,
                 };
                 if let Err(collected_errors) =
-                    self.switch_skimmer_pumps_feeder(target_actuator_states, feed_channels)
+                    self.switch_skimmer_pumps_feeder(target_actuator_states, feed_channels).await
                 {
                     collected_errors_cumulated.extend(collected_errors);
                     break; // if any error occurs, abort the feed sequence
@@ -633,7 +630,7 @@ impl FoodInjectionTrait for FoodInjection {
                     target_feeder_state: ActuatorState::On,
                 };
                 if let Err(collected_errors) =
-                    self.switch_skimmer_pumps_feeder(target_actuator_states, feed_channels)
+                    self.switch_skimmer_pumps_feeder(target_actuator_states, feed_channels).await
                 {
                     collected_errors_cumulated.extend(collected_errors);
                     break; // if any error occurs, abort the feed sequence
@@ -670,7 +667,7 @@ impl FoodInjectionTrait for FoodInjection {
                 target_feeder_state: ActuatorState::Off,
             },
             feed_channels,
-        ) {
+        ).await {
             collected_errors_cumulated.extend(collected_errors);
         }
 

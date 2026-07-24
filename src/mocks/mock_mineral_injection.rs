@@ -76,7 +76,7 @@ pub mod tests {
         /// * `balling_channels` - A mutable reference to the `BallingChannels` communication interface.
         /// * `mineral_pump` - A parameter representing `mineral_pump`.
         /// * `dosing_duration_millis` - A parameter representing `dosing_duration_millis`.
-        fn inject_mineral(
+        async fn inject_mineral(
             &mut self,
             _balling_channels: &mut BallingChannels,
             mineral_pump: AquariumDevice,

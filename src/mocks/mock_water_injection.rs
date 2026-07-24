@@ -54,13 +54,13 @@ pub mod tests {
         /// * `sql_interface_refill` - Database interface connection for refill operations.
         /// * `mutex_tank_level_switch` - Shared mutex for the tank level switch signals.
         /// * `mutex_device_scheduler_refill` - Mutex coordinating access to the device scheduler for refill.
-        fn inject_water(
+        async fn inject_water(
             &mut self,
             _refill_channels: &mut RefillChannels,
             refill_errors: &mut RefillErrorStates,
             _sql_interface_refill: &mut Box<dyn DatabaseInterfaceRefillTrait + Sync + Send>,
             _mutex_tank_level_switch: &Arc<Mutex<TankLevelSwitchSignals>>,
-            _mutex_device_scheduler_refill: &Arc<Mutex<i32>>,
+            _mutex_device_scheduler_refill: &Arc<tokio::sync::Mutex<i32>>,
         ) -> bool {
             if self.tx_water_injection_to_test_environment_opt.is_some() {
                 let mut tx_water_injection_to_test_environment = self
