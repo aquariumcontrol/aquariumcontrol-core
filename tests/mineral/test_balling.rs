@@ -1296,7 +1296,7 @@ pub fn test_balling_dosing_with_mutex_blocked() {
 
             let _ = tx_balling_to_schedule_check_for_test_case_finish.send(InternalCommand::Quit);
 
-            assert!(mock_mineral_injection.pump1_engagement_durations.len() >= 1);
+            assert!(!mock_mineral_injection.pump1_engagement_durations.is_empty());
         });
     });
 }
