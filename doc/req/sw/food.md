@@ -26,7 +26,7 @@ The controller shall monitor local time against scheduled feeding entry times, a
 Covers:
 
 * sysreq~food3~1
-Needs: impl, utest
+Needs: impl, utest, itest
 
 ### Execute Remote Feed Request
 `swreq~food_execute_remote~1`

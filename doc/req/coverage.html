@@ -148,6 +148,77 @@ summary .title {
   </head>
   <body>
   <main>
+    <section id="impl">
+      <h3>impl</h3>
+      <section class="sitem" id="impl~food_execute_schedule-2721180931~0">
+        <details>
+          <summary title="impl~food_execute_schedule-2721180931~0"><span class="green">&check;</span> <b>food_execute_schedule-2721180931</b><small>, rev. 0, impl</small></summary>
+          <p class="id">impl~food_execute_schedule-2721180931~0</p>
+          <p class="origin">src/food/feed.rs:377</p>
+          <div class="out">
+            <h6>Out: 1</h6>
+            <ul>
+              <li><a href="#swreq~food_execute_schedule~1">swreq~food_execute_schedule~1</a> <span class="origin">doc/req/sw/food.md:22</span></li>
+            </ul>
+          </div>
+        </details>
+      </section>
+      <section class="sitem" id="impl~food_execute_schedule-3153415192~0">
+        <details>
+          <summary title="impl~food_execute_schedule-3153415192~0"><span class="green">&check;</span> <b>food_execute_schedule-3153415192</b><small>, rev. 0, impl</small></summary>
+          <p class="id">impl~food_execute_schedule-3153415192~0</p>
+          <p class="origin">src/food/food_injection.rs:98</p>
+          <div class="out">
+            <h6>Out: 1</h6>
+            <ul>
+              <li><a href="#swreq~food_execute_schedule~1">swreq~food_execute_schedule~1</a> <span class="origin">doc/req/sw/food.md:22</span></li>
+            </ul>
+          </div>
+        </details>
+      </section>
+      <section class="sitem" id="impl~food_log_database-3474072880~0">
+        <details>
+          <summary title="impl~food_log_database-3474072880~0"><span class="green">&check;</span> <b>food_log_database-3474072880</b><small>, rev. 0, impl</small></summary>
+          <p class="id">impl~food_log_database-3474072880~0</p>
+          <p class="origin">src/food/feed.rs:210</p>
+          <div class="out">
+            <h6>Out: 1</h6>
+            <ul>
+              <li><a href="#swreq~food_log_database~1">swreq~food_log_database~1</a> <span class="origin">doc/req/sw/food.md:62</span></li>
+            </ul>
+          </div>
+        </details>
+      </section>
+    </section>
+    <section id="itest">
+      <h3>itest</h3>
+      <section class="sitem" id="itest~food_execute_schedule-2871893138~0">
+        <details>
+          <summary title="itest~food_execute_schedule-2871893138~0"><span class="green">&check;</span> <b>food_execute_schedule-2871893138</b><small>, rev. 0, itest</small></summary>
+          <p class="id">itest~food_execute_schedule-2871893138~0</p>
+          <p class="origin">tests/launch/test_run.rs:135</p>
+          <div class="out">
+            <h6>Out: 1</h6>
+            <ul>
+              <li><a href="#swreq~food_execute_schedule~1">swreq~food_execute_schedule~1</a> <span class="origin">doc/req/sw/food.md:22</span></li>
+            </ul>
+          </div>
+        </details>
+      </section>
+      <section class="sitem" id="itest~food_execute_schedule-564297493~0">
+        <details>
+          <summary title="itest~food_execute_schedule-564297493~0"><span class="green">&check;</span> <b>food_execute_schedule-564297493</b><small>, rev. 0, itest</small></summary>
+          <p class="id">itest~food_execute_schedule-564297493~0</p>
+          <p class="origin">tests/launch/test_run.rs:76</p>
+          <div class="out">
+            <h6>Out: 1</h6>
+            <ul>
+              <li><a href="#swreq~food_execute_schedule~1">swreq~food_execute_schedule~1</a> <span class="origin">doc/req/sw/food.md:22</span></li>
+            </ul>
+          </div>
+        </details>
+      </section>
+    </section>
     <section id="swreq">
       <h3>swreq</h3>
       <section class="sitem" id="swreq~recorder_apply_iir_filter~1">
@@ -156,11 +227,11 @@ summary .title {
           <p class="id">swreq~recorder_apply_iir_filter~1</p>
           <p>The system shall filter raw sensor inputs using an Infinite Impulse Response (IIR) filter configured with smoothing coefficients to mitigate high-frequency sensor noise.</p>
           <h6>Needs: <ins>impl</ins>, <ins>utest</ins></h6>
-          <p class="origin"><a href="file:///Users/uwe/RustroverProjects/aquarium_control/doc/req/sw/recorder.md">/Users/uwe/RustroverProjects/aquarium_control/doc/req/sw/recorder.md</a>:12</p>
+          <p class="origin">doc/req/sw/recorder.md:12</p>
           <div class="out">
             <h6>Out: 1</h6>
             <ul>
-              <li><a href="#sysreq~recorder2~1">sysreq~recorder2~1</a> <span class="origin"><a href="file:///Users/uwe/RustroverProjects/aquarium_control/doc/req/sys/system_requirements.md">/Users/uwe/RustroverProjects/aquarium_control/doc/req/sys/system_requirements.md</a>:289</span></li>
+              <li><a href="#sysreq~recorder2~1">sysreq~recorder2~1</a> <span class="origin">doc/req/sys/system_requirements.md:289</span></li>
             </ul>
           </div>
         </details>
@@ -171,11 +242,11 @@ summary .title {
           <p class="id">swreq~mineral_calc_duration~1</p>
           <p>The controller shall convert target dosing volumes to active relay runtime seconds using each pump's calibrated flow rate constants.</p>
           <h6>Needs: <ins>impl</ins>, <ins>utest</ins></h6>
-          <p class="origin"><a href="file:///Users/uwe/RustroverProjects/aquarium_control/doc/req/sw/mineral.md">/Users/uwe/RustroverProjects/aquarium_control/doc/req/sw/mineral.md</a>:22</p>
+          <p class="origin">doc/req/sw/mineral.md:22</p>
           <div class="out">
             <h6>Out: 1</h6>
             <ul>
-              <li><a href="#sysreq~mineral3~1">sysreq~mineral3~1</a> <span class="origin"><a href="file:///Users/uwe/RustroverProjects/aquarium_control/doc/req/sys/system_requirements.md">/Users/uwe/RustroverProjects/aquarium_control/doc/req/sys/system_requirements.md</a>:117</span></li>
+              <li><a href="#sysreq~mineral3~1">sysreq~mineral3~1</a> <span class="origin">doc/req/sys/system_requirements.md:117</span></li>
             </ul>
           </div>
         </details>
@@ -186,11 +257,11 @@ summary .title {
           <p class="id">swreq~water_calibration_parameters~1</p>
           <p>The system shall allow the user to define physical pump flow and volume limits in the configuration TOML file:</p><ul><li>Refill pump flow rate (<code>refill<em>pump</em>flow</code> in liters per second).</li><li>Maximum allowed single refill volume (<code>max<em>refill</em>volume</code> in Liters).</li><li>Safety limit thresholds (<code>max<em>refill_volume_hour</code>, <code>max_refill_volume_24h</code>, <code>max_refill_count_hour</code>, <code>max_refill_count</em>24h</code>).</li></ul>
           <h6>Needs: <ins>impl</ins>, <ins>utest</ins></h6>
-          <p class="origin"><a href="file:///Users/uwe/RustroverProjects/aquarium_control/doc/req/sw/water.md">/Users/uwe/RustroverProjects/aquarium_control/doc/req/sw/water.md</a>:107</p>
+          <p class="origin">doc/req/sw/water.md:107</p>
           <div class="out">
             <h6>Out: 1</h6>
             <ul>
-              <li><a href="#sysreq~water9~1">sysreq~water9~1</a> <span class="origin"><a href="file:///Users/uwe/RustroverProjects/aquarium_control/doc/req/sys/system_requirements.md">/Users/uwe/RustroverProjects/aquarium_control/doc/req/sys/system_requirements.md</a>:51</span></li>
+              <li><a href="#sysreq~water9~1">sysreq~water9~1</a> <span class="origin">doc/req/sys/system_requirements.md:51</span></li>
             </ul>
           </div>
         </details>
@@ -201,13 +272,13 @@ summary .title {
           <p class="id">swreq~water_channel_communication~1</p>
           <p>The refill controller shall communicate with other threads using MPSC queues:</p><ul><li><strong>relay_manager</strong>: to send pump relay commands and receive state feedback.</li><li><strong>signal_handler</strong>: to receive <code>Quit</code>/<code>Terminate</code> signals and return completion acknowledgments.</li><li><strong>schedule_check</strong>: to query allowed operational time windows.</li><li><strong>messaging</strong>: to receive remote user control overrides (<code>Start</code>, <code>Stop</code>, <code>ResetAllErrors</code>).</li><li><strong>monitors</strong>: to send diagnostic status views (<code>RefillMonitorView</code>).</li></ul>
           <h6>Needs: <ins>impl</ins>, <ins>utest</ins></h6>
-          <p class="origin"><a href="file:///Users/uwe/RustroverProjects/aquarium_control/doc/req/sw/water.md">/Users/uwe/RustroverProjects/aquarium_control/doc/req/sw/water.md</a>:142</p>
+          <p class="origin">doc/req/sw/water.md:142</p>
           <div class="out">
             <h6>Out: 3</h6>
             <ul>
-              <li><a href="#sysreq~water6~1">sysreq~water6~1</a> <span class="origin"><a href="file:///Users/uwe/RustroverProjects/aquarium_control/doc/req/sys/system_requirements.md">/Users/uwe/RustroverProjects/aquarium_control/doc/req/sys/system_requirements.md</a>:33</span></li>
-              <li><a href="#sysreq~water7~1">sysreq~water7~1</a> <span class="origin"><a href="file:///Users/uwe/RustroverProjects/aquarium_control/doc/req/sys/system_requirements.md">/Users/uwe/RustroverProjects/aquarium_control/doc/req/sys/system_requirements.md</a>:39</span></li>
-              <li><a href="#sysreq~water8~1">sysreq~water8~1</a> <span class="origin"><a href="file:///Users/uwe/RustroverProjects/aquarium_control/doc/req/sys/system_requirements.md">/Users/uwe/RustroverProjects/aquarium_control/doc/req/sys/system_requirements.md</a>:45</span></li>
+              <li><a href="#sysreq~water6~1">sysreq~water6~1</a> <span class="origin">doc/req/sys/system_requirements.md:33</span></li>
+              <li><a href="#sysreq~water7~1">sysreq~water7~1</a> <span class="origin">doc/req/sys/system_requirements.md:39</span></li>
+              <li><a href="#sysreq~water8~1">sysreq~water8~1</a> <span class="origin">doc/req/sys/system_requirements.md:45</span></li>
             </ul>
           </div>
         </details>
@@ -218,11 +289,11 @@ summary .title {
           <p class="id">swreq~utilities_check_version_compatibility~1</p>
           <p>The application shall compare its compiled version information and hash against the database logging table schema on boot to prevent schema mismatches.</p>
           <h6>Needs: <ins>impl</ins>, <ins>utest</ins></h6>
-          <p class="origin"><a href="file:///Users/uwe/RustroverProjects/aquarium_control/doc/req/sw/utilities.md">/Users/uwe/RustroverProjects/aquarium_control/doc/req/sw/utilities.md</a>:22</p>
+          <p class="origin">doc/req/sw/utilities.md:22</p>
           <div class="out">
             <h6>Out: 1</h6>
             <ul>
-              <li><a href="#sysreq~utilities3~1">sysreq~utilities3~1</a> <span class="origin"><a href="file:///Users/uwe/RustroverProjects/aquarium_control/doc/req/sys/system_requirements.md">/Users/uwe/RustroverProjects/aquarium_control/doc/req/sys/system_requirements.md</a>:308</span></li>
+              <li><a href="#sysreq~utilities3~1">sysreq~utilities3~1</a> <span class="origin">doc/req/sys/system_requirements.md:308</span></li>
             </ul>
           </div>
         </details>
@@ -233,11 +304,11 @@ summary .title {
           <p class="id">swreq~mineral_compute_due~1</p>
           <p>The controller shall read the historic dosing logs and determine when the next dosing pump injection is due based on the daily target dose and dosing frequency.</p>
           <h6>Needs: <ins>impl</ins>, <ins>utest</ins></h6>
-          <p class="origin"><a href="file:///Users/uwe/RustroverProjects/aquarium_control/doc/req/sw/mineral.md">/Users/uwe/RustroverProjects/aquarium_control/doc/req/sw/mineral.md</a>:12</p>
+          <p class="origin">doc/req/sw/mineral.md:12</p>
           <div class="out">
             <h6>Out: 1</h6>
             <ul>
-              <li><a href="#sysreq~mineral2~1">sysreq~mineral2~1</a> <span class="origin"><a href="file:///Users/uwe/RustroverProjects/aquarium_control/doc/req/sys/system_requirements.md">/Users/uwe/RustroverProjects/aquarium_control/doc/req/sys/system_requirements.md</a>:111</span></li>
+              <li><a href="#sysreq~mineral2~1">sysreq~mineral2~1</a> <span class="origin">doc/req/sys/system_requirements.md:111</span></li>
             </ul>
           </div>
         </details>
@@ -248,7 +319,7 @@ summary .title {
           <p class="id">swreq~relay_control_actuators~1</p>
           <p>The RelayManager component shall receive state commands (<code>SwitchOn</code> / <code>SwitchOff</code>) from different subsystems and map them to physical Controllino relays or digital GPIO pins.</p>
           <h6>Needs: <ins>impl</ins>, <ins>utest</ins></h6>
-          <p class="origin"><a href="file:///Users/uwe/RustroverProjects/aquarium_control/doc/req/sw/relays.md">/Users/uwe/RustroverProjects/aquarium_control/doc/req/sw/relays.md</a>:2</p>
+          <p class="origin">doc/req/sw/relays.md:2</p>
           <div class="out">
             <h6>Out: 1</h6>
             <ul>
@@ -263,11 +334,11 @@ summary .title {
           <p class="id">swreq~water_db_failure_inhibition~1</p>
           <p>The refill controller shall inhibit and lock out further fresh water refill operations if a database communication failure occurs (such as failing to read historical statistics or failing to write logs).</p>
           <h6>Needs: <ins>impl</ins>, <ins>utest</ins></h6>
-          <p class="origin"><a href="file:///Users/uwe/RustroverProjects/aquarium_control/doc/req/sw/water.md">/Users/uwe/RustroverProjects/aquarium_control/doc/req/sw/water.md</a>:22</p>
+          <p class="origin">doc/req/sw/water.md:22</p>
           <div class="out">
             <h6>Out: 1</h6>
             <ul>
-              <li><a href="#sysreq~water5~1">sysreq~water5~1</a> <span class="origin"><a href="file:///Users/uwe/RustroverProjects/aquarium_control/doc/req/sys/system_requirements.md">/Users/uwe/RustroverProjects/aquarium_control/doc/req/sys/system_requirements.md</a>:27</span></li>
+              <li><a href="#sysreq~water5~1">sysreq~water5~1</a> <span class="origin">doc/req/sys/system_requirements.md:27</span></li>
             </ul>
           </div>
         </details>
@@ -278,11 +349,11 @@ summary .title {
           <p class="id">swreq~water_determine_refill~1</p>
           <p>The controller shall initiate a fresh water refill if the stabilized switch position is LOW, the sensor status is valid, and no active error states or schedule inhibitions are present.</p>
           <h6>Needs: <ins>impl</ins>, <ins>utest</ins></h6>
-          <p class="origin"><a href="file:///Users/uwe/RustroverProjects/aquarium_control/doc/req/sw/water.md">/Users/uwe/RustroverProjects/aquarium_control/doc/req/sw/water.md</a>:12</p>
+          <p class="origin">doc/req/sw/water.md:12</p>
           <div class="out">
             <h6>Out: 1</h6>
             <ul>
-              <li><a href="#sysreq~water2~1">sysreq~water2~1</a> <span class="origin"><a href="file:///Users/uwe/RustroverProjects/aquarium_control/doc/req/sys/system_requirements.md">/Users/uwe/RustroverProjects/aquarium_control/doc/req/sys/system_requirements.md</a>:9</span></li>
+              <li><a href="#sysreq~water2~1">sysreq~water2~1</a> <span class="origin">doc/req/sys/system_requirements.md:9</span></li>
             </ul>
           </div>
         </details>
@@ -293,26 +364,38 @@ summary .title {
           <p class="id">swreq~water_error_detection~1</p>
           <p>The controller shall identify and raise errors for:</p><ul><li><strong>Stuck-High</strong>: The level switch has not indicated a low level (remains HIGH) for an extended period of time exceeding <code>max<em>duration_since_last</em>refill</code>.</li><li><strong>Stuck-Low</strong>: The level switch fails to indicate a high level (remains LOW) during an active refill operation within a maximum pump runtime timeout based on a target maximum water volume for the refill operation.</li></ul>
           <h6>Needs: <ins>impl</ins>, <ins>utest</ins></h6>
-          <p class="origin"><a href="file:///Users/uwe/RustroverProjects/aquarium_control/doc/req/sw/water.md">/Users/uwe/RustroverProjects/aquarium_control/doc/req/sw/water.md</a>:72</p>
+          <p class="origin">doc/req/sw/water.md:72</p>
           <div class="out">
             <h6>Out: 1</h6>
             <ul>
-              <li><a href="#sysreq~water5~1">sysreq~water5~1</a> <span class="origin"><a href="file:///Users/uwe/RustroverProjects/aquarium_control/doc/req/sys/system_requirements.md">/Users/uwe/RustroverProjects/aquarium_control/doc/req/sys/system_requirements.md</a>:27</span></li>
+              <li><a href="#sysreq~water5~1">sysreq~water5~1</a> <span class="origin">doc/req/sys/system_requirements.md:27</span></li>
             </ul>
           </div>
         </details>
       </section>
       <section class="sitem" id="swreq~food_execute_schedule~1">
         <details>
-          <summary title="swreq~food_execute_schedule~1"><span class="red">&cross;</span> <b>Execute Feed Schedule</b><small>, rev. 1, swreq</small></summary>
+          <summary title="swreq~food_execute_schedule~1"><span class="green">&check;</span> <b>Execute Feed Schedule</b><small>, rev. 1, swreq</small></summary>
           <p class="id">swreq~food_execute_schedule~1</p>
           <p>The controller shall monitor local time against scheduled feeding entry times, and actuate the feeder and peripheral relays (such as turning off skimmer/pumps) according to the active profile phases.</p>
-          <h6>Needs: <ins>impl</ins>, <ins>utest</ins></h6>
-          <p class="origin"><a href="file:///Users/uwe/RustroverProjects/aquarium_control/doc/req/sw/food.md">/Users/uwe/RustroverProjects/aquarium_control/doc/req/sw/food.md</a>:22</p>
+          <h6>Needs: impl, itest, utest</h6>
+          <p class="origin">doc/req/sw/food.md:22</p>
+          <div class="in">
+            <h6>In: 7</h6>
+            <ul>
+              <li><a href="#impl~food_execute_schedule-2721180931~0">impl~food_execute_schedule-2721180931~0</a> <span class="origin">src/food/feed.rs:377</span></li>
+              <li><a href="#impl~food_execute_schedule-3153415192~0">impl~food_execute_schedule-3153415192~0</a> <span class="origin">src/food/food_injection.rs:98</span></li>
+              <li><a href="#itest~food_execute_schedule-2871893138~0">itest~food_execute_schedule-2871893138~0</a> <span class="origin">tests/launch/test_run.rs:135</span></li>
+              <li><a href="#itest~food_execute_schedule-564297493~0">itest~food_execute_schedule-564297493~0</a> <span class="origin">tests/launch/test_run.rs:76</span></li>
+              <li><a href="#utest~food_execute_schedule-1941468277~0">utest~food_execute_schedule-1941468277~0</a> <span class="origin">tests/food/test_feed.rs:77</span></li>
+              <li><a href="#utest~food_execute_schedule-2398187600~0">utest~food_execute_schedule-2398187600~0</a> <span class="origin">tests/food/test_food_injection.rs:239</span></li>
+              <li><a href="#utest~food_execute_schedule-791994061~0">utest~food_execute_schedule-791994061~0</a> <span class="origin">tests/food/test_food_injection.rs:144</span></li>
+            </ul>
+          </div>
           <div class="out">
             <h6>Out: 1</h6>
             <ul>
-              <li><a href="#sysreq~food3~1">sysreq~food3~1</a> <span class="origin"><a href="file:///Users/uwe/RustroverProjects/aquarium_control/doc/req/sys/system_requirements.md">/Users/uwe/RustroverProjects/aquarium_control/doc/req/sys/system_requirements.md</a>:74</span></li>
+              <li><a href="#sysreq~food3~1">sysreq~food3~1</a> <span class="origin">doc/req/sys/system_requirements.md:74</span></li>
             </ul>
           </div>
         </details>
@@ -323,11 +406,11 @@ summary .title {
           <p class="id">swreq~mineral_manual_dosing~1</p>
           <p>The controller shall parse manual dosing requests targeting specific pumps and actuate them for the requested duration immediately.</p>
           <h6>Needs: <ins>impl</ins>, <ins>utest</ins></h6>
-          <p class="origin"><a href="file:///Users/uwe/RustroverProjects/aquarium_control/doc/req/sw/mineral.md">/Users/uwe/RustroverProjects/aquarium_control/doc/req/sw/mineral.md</a>:42</p>
+          <p class="origin">doc/req/sw/mineral.md:42</p>
           <div class="out">
             <h6>Out: 1</h6>
             <ul>
-              <li><a href="#sysreq~mineral5~1">sysreq~mineral5~1</a> <span class="origin"><a href="file:///Users/uwe/RustroverProjects/aquarium_control/doc/req/sys/system_requirements.md">/Users/uwe/RustroverProjects/aquarium_control/doc/req/sys/system_requirements.md</a>:129</span></li>
+              <li><a href="#sysreq~mineral5~1">sysreq~mineral5~1</a> <span class="origin">doc/req/sys/system_requirements.md:129</span></li>
             </ul>
           </div>
         </details>
@@ -337,12 +420,18 @@ summary .title {
           <summary title="swreq~food_execute_remote~1"><span class="red">&cross;</span> <b>Execute Remote Feed Request</b><small>, rev. 1, swreq</small></summary>
           <p class="id">swreq~food_execute_remote~1</p>
           <p>The controller shall parse immediate manual feed requests received via the OS message queues and initiate feed profile execution immediately.</p>
-          <h6>Needs: <ins>impl</ins>, <ins>utest</ins></h6>
-          <p class="origin"><a href="file:///Users/uwe/RustroverProjects/aquarium_control/doc/req/sw/food.md">/Users/uwe/RustroverProjects/aquarium_control/doc/req/sw/food.md</a>:32</p>
+          <h6>Needs: <ins>impl</ins>, utest</h6>
+          <p class="origin">doc/req/sw/food.md:32</p>
+          <div class="in">
+            <h6>In: 1</h6>
+            <ul>
+              <li><a href="#utest~food_execute_remote-81903312~0">utest~food_execute_remote-81903312~0</a> <span class="origin">tests/food/test_feed.rs:198</span></li>
+            </ul>
+          </div>
           <div class="out">
             <h6>Out: 1</h6>
             <ul>
-              <li><a href="#sysreq~food4~1">sysreq~food4~1</a> <span class="origin"><a href="file:///Users/uwe/RustroverProjects/aquarium_control/doc/req/sys/system_requirements.md">/Users/uwe/RustroverProjects/aquarium_control/doc/req/sys/system_requirements.md</a>:80</span></li>
+              <li><a href="#sysreq~food4~1">sysreq~food4~1</a> <span class="origin">doc/req/sys/system_requirements.md:80</span></li>
             </ul>
           </div>
         </details>
@@ -353,11 +442,11 @@ summary .title {
           <p class="id">swreq~water_faulty_switch_protection~1</p>
           <p>The controller shall protect against overfilling by monitoring and enforcing the following limits:</p><ul><li>Maximum permitted refill volume and maximum refill count within the last 24 hours (<code>max<em>refill_volume_24h</code> and <code>max_refill_count</em>24h</code>).</li><li>Maximum permitted refill volume and maximum refill count within the last hour (<code>max<em>refill_volume_hour</code> and <code>max_refill_count</em>hour</code>). If any of these limits are exceeded, subsequent refill operations shall be inhibited.</li></ul>
           <h6>Needs: <ins>impl</ins>, <ins>utest</ins></h6>
-          <p class="origin"><a href="file:///Users/uwe/RustroverProjects/aquarium_control/doc/req/sw/water.md">/Users/uwe/RustroverProjects/aquarium_control/doc/req/sw/water.md</a>:84</p>
+          <p class="origin">doc/req/sw/water.md:84</p>
           <div class="out">
             <h6>Out: 1</h6>
             <ul>
-              <li><a href="#sysreq~water9~1">sysreq~water9~1</a> <span class="origin"><a href="file:///Users/uwe/RustroverProjects/aquarium_control/doc/req/sys/system_requirements.md">/Users/uwe/RustroverProjects/aquarium_control/doc/req/sys/system_requirements.md</a>:51</span></li>
+              <li><a href="#sysreq~water9~1">sysreq~water9~1</a> <span class="origin">doc/req/sys/system_requirements.md:51</span></li>
             </ul>
           </div>
         </details>
@@ -368,7 +457,7 @@ summary .title {
           <p class="id">swreq~thermal_heater_heating~1</p>
           <p>The heating controller shall actuate the heater relay using a two-point control loop depending on the actual water temperature setpoint thresholds.</p>
           <h6>Needs: <ins>impl</ins>, <ins>utest</ins></h6>
-          <p class="origin"><a href="file:///Users/uwe/RustroverProjects/aquarium_control/doc/req/sw/thermal.md">/Users/uwe/RustroverProjects/aquarium_control/doc/req/sw/thermal.md</a>:42</p>
+          <p class="origin">doc/req/sw/thermal.md:42</p>
           <div class="out">
             <h6>Out: 1</h6>
             <ul>
@@ -383,11 +472,11 @@ summary .title {
           <p class="id">swreq~water_hysteresis~1</p>
           <p>The refill controller shall implement a hysteresis functionality. Once the pre-processed level switch signals HIGH (sump full), the controller shall continue to actuate the pump for an additional duration corresponding to the calibrated <code>additional<em>refill</em>volume</code> before turning off the pump.</p>
           <h6>Needs: <ins>impl</ins>, <ins>utest</ins></h6>
-          <p class="origin"><a href="file:///Users/uwe/RustroverProjects/aquarium_control/doc/req/sw/water.md">/Users/uwe/RustroverProjects/aquarium_control/doc/req/sw/water.md</a>:52</p>
+          <p class="origin">doc/req/sw/water.md:52</p>
           <div class="out">
             <h6>Out: 1</h6>
             <ul>
-              <li><a href="#sysreq~water3~1">sysreq~water3~1</a> <span class="origin"><a href="file:///Users/uwe/RustroverProjects/aquarium_control/doc/req/sys/system_requirements.md">/Users/uwe/RustroverProjects/aquarium_control/doc/req/sys/system_requirements.md</a>:15</span></li>
+              <li><a href="#sysreq~water3~1">sysreq~water3~1</a> <span class="origin">doc/req/sys/system_requirements.md:15</span></li>
             </ul>
           </div>
         </details>
@@ -398,11 +487,11 @@ summary .title {
           <p class="id">swreq~schedule_inhibit_mineral~1</p>
           <p>The schedule check controller shall evaluate local time against the mineral dosing window, raising an inhibition flag to the dosing loop if the current time is outside the allowed window.</p>
           <h6>Needs: <ins>impl</ins>, <ins>utest</ins></h6>
-          <p class="origin"><a href="file:///Users/uwe/RustroverProjects/aquarium_control/doc/req/sw/schedule.md">/Users/uwe/RustroverProjects/aquarium_control/doc/req/sw/schedule.md</a>:22</p>
+          <p class="origin">doc/req/sw/schedule.md:22</p>
           <div class="out">
             <h6>Out: 1</h6>
             <ul>
-              <li><a href="#sysreq~schedule3~1">sysreq~schedule3~1</a> <span class="origin"><a href="file:///Users/uwe/RustroverProjects/aquarium_control/doc/req/sys/system_requirements.md">/Users/uwe/RustroverProjects/aquarium_control/doc/req/sys/system_requirements.md</a>:162</span></li>
+              <li><a href="#sysreq~schedule3~1">sysreq~schedule3~1</a> <span class="origin">doc/req/sys/system_requirements.md:162</span></li>
             </ul>
           </div>
         </details>
@@ -413,11 +502,11 @@ summary .title {
           <p class="id">swreq~thermal_inhibit_heating_low_water~1</p>
           <p>The heating controller shall monitor the tank level switch and immediately disable the heater relay if a low water level is detected in the sump, preventing heater burnout.</p>
           <h6>Needs: <ins>impl</ins>, <ins>utest</ins></h6>
-          <p class="origin"><a href="file:///Users/uwe/RustroverProjects/aquarium_control/doc/req/sw/thermal.md">/Users/uwe/RustroverProjects/aquarium_control/doc/req/sw/thermal.md</a>:82</p>
+          <p class="origin">doc/req/sw/thermal.md:82</p>
           <div class="out">
             <h6>Out: 1</h6>
             <ul>
-              <li><a href="#sysreq~thermal9~1">sysreq~thermal9~1</a> <span class="origin"><a href="file:///Users/uwe/RustroverProjects/aquarium_control/doc/req/sys/system_requirements.md">/Users/uwe/RustroverProjects/aquarium_control/doc/req/sys/system_requirements.md</a>:257</span></li>
+              <li><a href="#sysreq~thermal9~1">sysreq~thermal9~1</a> <span class="origin">doc/req/sys/system_requirements.md:257</span></li>
             </ul>
           </div>
         </details>
@@ -428,11 +517,11 @@ summary .title {
           <p class="id">swreq~schedule_inhibit_heating~1</p>
           <p>The schedule check controller shall evaluate local time against the heating operational window, raising an inhibition flag to the heating loop if the current time is outside the allowed window.</p>
           <h6>Needs: <ins>impl</ins>, <ins>utest</ins></h6>
-          <p class="origin"><a href="file:///Users/uwe/RustroverProjects/aquarium_control/doc/req/sw/schedule.md">/Users/uwe/RustroverProjects/aquarium_control/doc/req/sw/schedule.md</a>:32</p>
+          <p class="origin">doc/req/sw/schedule.md:32</p>
           <div class="out">
             <h6>Out: 1</h6>
             <ul>
-              <li><a href="#sysreq~schedule4~1">sysreq~schedule4~1</a> <span class="origin"><a href="file:///Users/uwe/RustroverProjects/aquarium_control/doc/req/sys/system_requirements.md">/Users/uwe/RustroverProjects/aquarium_control/doc/req/sys/system_requirements.md</a>:168</span></li>
+              <li><a href="#sysreq~schedule4~1">sysreq~schedule4~1</a> <span class="origin">doc/req/sys/system_requirements.md:168</span></li>
             </ul>
           </div>
         </details>
@@ -443,11 +532,11 @@ summary .title {
           <p class="id">swreq~schedule_inhibit_refill~1</p>
           <p>The schedule check controller shall evaluate the current local time of day against the refill operational window, raising an inhibition flag to the refill subsystem if the current time is outside the allowed window.</p>
           <h6>Needs: <ins>impl</ins>, <ins>utest</ins></h6>
-          <p class="origin"><a href="file:///Users/uwe/RustroverProjects/aquarium_control/doc/req/sw/schedule.md">/Users/uwe/RustroverProjects/aquarium_control/doc/req/sw/schedule.md</a>:12</p>
+          <p class="origin">doc/req/sw/schedule.md:12</p>
           <div class="out">
             <h6>Out: 1</h6>
             <ul>
-              <li><a href="#sysreq~schedule2~1">sysreq~schedule2~1</a> <span class="origin"><a href="file:///Users/uwe/RustroverProjects/aquarium_control/doc/req/sys/system_requirements.md">/Users/uwe/RustroverProjects/aquarium_control/doc/req/sys/system_requirements.md</a>:156</span></li>
+              <li><a href="#sysreq~schedule2~1">sysreq~schedule2~1</a> <span class="origin">doc/req/sys/system_requirements.md:156</span></li>
             </ul>
           </div>
         </details>
@@ -458,26 +547,33 @@ summary .title {
           <p class="id">swreq~schedule_inhibit_ventilation~1</p>
           <p>The schedule check controller shall evaluate local time against the ventilation operational window, raising an inhibition flag to the ventilation loop if the current time is outside the allowed window.</p>
           <h6>Needs: <ins>impl</ins>, <ins>utest</ins></h6>
-          <p class="origin"><a href="file:///Users/uwe/RustroverProjects/aquarium_control/doc/req/sw/schedule.md">/Users/uwe/RustroverProjects/aquarium_control/doc/req/sw/schedule.md</a>:42</p>
+          <p class="origin">doc/req/sw/schedule.md:42</p>
           <div class="out">
             <h6>Out: 1</h6>
             <ul>
-              <li><a href="#sysreq~schedule5~1">sysreq~schedule5~1</a> <span class="origin"><a href="file:///Users/uwe/RustroverProjects/aquarium_control/doc/req/sys/system_requirements.md">/Users/uwe/RustroverProjects/aquarium_control/doc/req/sys/system_requirements.md</a>:174</span></li>
+              <li><a href="#sysreq~schedule5~1">sysreq~schedule5~1</a> <span class="origin">doc/req/sys/system_requirements.md:174</span></li>
             </ul>
           </div>
         </details>
       </section>
       <section class="sitem" id="swreq~food_log_database~1">
         <details>
-          <summary title="swreq~food_log_database~1"><span class="red">&cross;</span> <b>Log Feed Operation</b><small>, rev. 1, swreq</small></summary>
+          <summary title="swreq~food_log_database~1"><span class="green">&check;</span> <b>Log Feed Operation</b><small>, rev. 1, swreq</small></summary>
           <p class="id">swreq~food_log_database~1</p>
           <p>The controller shall log each feeding execution in the database log tables containing profile ID, time of execution, and status.</p>
-          <h6>Needs: <ins>impl</ins>, <ins>utest</ins></h6>
-          <p class="origin"><a href="file:///Users/uwe/RustroverProjects/aquarium_control/doc/req/sw/food.md">/Users/uwe/RustroverProjects/aquarium_control/doc/req/sw/food.md</a>:62</p>
+          <h6>Needs: impl, utest</h6>
+          <p class="origin">doc/req/sw/food.md:62</p>
+          <div class="in">
+            <h6>In: 2</h6>
+            <ul>
+              <li><a href="#impl~food_log_database-3474072880~0">impl~food_log_database-3474072880~0</a> <span class="origin">src/food/feed.rs:210</span></li>
+              <li><a href="#utest~food_log_database-4060468459~0">utest~food_log_database-4060468459~0</a> <span class="origin">tests/food/test_feed.rs:399</span></li>
+            </ul>
+          </div>
           <div class="out">
             <h6>Out: 1</h6>
             <ul>
-              <li><a href="#sysreq~food7~1">sysreq~food7~1</a> <span class="origin"><a href="file:///Users/uwe/RustroverProjects/aquarium_control/doc/req/sys/system_requirements.md">/Users/uwe/RustroverProjects/aquarium_control/doc/req/sys/system_requirements.md</a>:98</span></li>
+              <li><a href="#sysreq~food7~1">sysreq~food7~1</a> <span class="origin">doc/req/sys/system_requirements.md:98</span></li>
             </ul>
           </div>
         </details>
@@ -488,11 +584,11 @@ summary .title {
           <p class="id">swreq~water_log_flood_protection~1</p>
           <p>The controller shall use log warning suppression flags (such as <code>volume<em>last_24h</code>, <code>count_last_24h</code>, <code>volume_last_hour</code>, <code>count_last_hour</code> inside <code>RefillLocks</code> and <code>lock_warn_max_mutex_access</em>duration</code> inside <code>WaterInjection</code>) to suppress repetitive log warnings and prevent log flood.</p>
           <h6>Needs: <ins>impl</ins>, <ins>utest</ins></h6>
-          <p class="origin"><a href="file:///Users/uwe/RustroverProjects/aquarium_control/doc/req/sw/water.md">/Users/uwe/RustroverProjects/aquarium_control/doc/req/sw/water.md</a>:120</p>
+          <p class="origin">doc/req/sw/water.md:120</p>
           <div class="out">
             <h6>Out: 1</h6>
             <ul>
-              <li><a href="#sysreq~water5~1">sysreq~water5~1</a> <span class="origin"><a href="file:///Users/uwe/RustroverProjects/aquarium_control/doc/req/sys/system_requirements.md">/Users/uwe/RustroverProjects/aquarium_control/doc/req/sys/system_requirements.md</a>:27</span></li>
+              <li><a href="#sysreq~water5~1">sysreq~water5~1</a> <span class="origin">doc/req/sys/system_requirements.md:27</span></li>
             </ul>
           </div>
         </details>
@@ -503,11 +599,11 @@ summary .title {
           <p class="id">swreq~mineral_log_database~1</p>
           <p>The control system shall write records to the database dosing log table containing pump ID, volume dosed, execution time, and status.</p>
           <h6>Needs: <ins>impl</ins>, <ins>utest</ins></h6>
-          <p class="origin"><a href="file:///Users/uwe/RustroverProjects/aquarium_control/doc/req/sw/mineral.md">/Users/uwe/RustroverProjects/aquarium_control/doc/req/sw/mineral.md</a>:32</p>
+          <p class="origin">doc/req/sw/mineral.md:32</p>
           <div class="out">
             <h6>Out: 1</h6>
             <ul>
-              <li><a href="#sysreq~mineral4~1">sysreq~mineral4~1</a> <span class="origin"><a href="file:///Users/uwe/RustroverProjects/aquarium_control/doc/req/sys/system_requirements.md">/Users/uwe/RustroverProjects/aquarium_control/doc/req/sys/system_requirements.md</a>:123</span></li>
+              <li><a href="#sysreq~mineral4~1">sysreq~mineral4~1</a> <span class="origin">doc/req/sys/system_requirements.md:123</span></li>
             </ul>
           </div>
         </details>
@@ -518,11 +614,11 @@ summary .title {
           <p class="id">swreq~water_log_database~1</p>
           <p>The control system shall log each refill sequence by creating a record in the database <code>refill</code> table, capturing start/stop timestamps, duration, calculated refill volume (based on duration and pump flow rate), and the system error code.</p>
           <h6>Needs: <ins>impl</ins>, <ins>utest</ins></h6>
-          <p class="origin"><a href="file:///Users/uwe/RustroverProjects/aquarium_control/doc/req/sw/water.md">/Users/uwe/RustroverProjects/aquarium_control/doc/req/sw/water.md</a>:62</p>
+          <p class="origin">doc/req/sw/water.md:62</p>
           <div class="out">
             <h6>Out: 1</h6>
             <ul>
-              <li><a href="#sysreq~water4~1">sysreq~water4~1</a> <span class="origin"><a href="file:///Users/uwe/RustroverProjects/aquarium_control/doc/req/sys/system_requirements.md">/Users/uwe/RustroverProjects/aquarium_control/doc/req/sys/system_requirements.md</a>:21</span></li>
+              <li><a href="#sysreq~water4~1">sysreq~water4~1</a> <span class="origin">doc/req/sys/system_requirements.md:21</span></li>
             </ul>
           </div>
         </details>
@@ -533,11 +629,11 @@ summary .title {
           <p class="id">swreq~water_actuate_pump~1</p>
           <p>The refill controller shall use the shared mutex (<code>mutex<em>device_scheduler</em>refill</code>) to serialize relay state changes and avoid parallel actuation of conflicting device relays when starting or stopping the refill pump.</p>
           <h6>Needs: <ins>impl</ins>, <ins>utest</ins></h6>
-          <p class="origin"><a href="file:///Users/uwe/RustroverProjects/aquarium_control/doc/req/sw/water.md">/Users/uwe/RustroverProjects/aquarium_control/doc/req/sw/water.md</a>:42</p>
+          <p class="origin">doc/req/sw/water.md:42</p>
           <div class="out">
             <h6>Out: 1</h6>
             <ul>
-              <li><a href="#sysreq~water3~1">sysreq~water3~1</a> <span class="origin"><a href="file:///Users/uwe/RustroverProjects/aquarium_control/doc/req/sys/system_requirements.md">/Users/uwe/RustroverProjects/aquarium_control/doc/req/sys/system_requirements.md</a>:15</span></li>
+              <li><a href="#sysreq~water3~1">sysreq~water3~1</a> <span class="origin">doc/req/sys/system_requirements.md:15</span></li>
             </ul>
           </div>
         </details>
@@ -548,11 +644,11 @@ summary .title {
           <p class="id">swreq~water_observe_schedule~1</p>
           <p>The refill controller shall monitor the schedule check inhibition status and prevent or suspend refill pump operations if the current daytime is outside of the configured allowed operational window.</p>
           <h6>Needs: <ins>impl</ins>, <ins>utest</ins></h6>
-          <p class="origin"><a href="file:///Users/uwe/RustroverProjects/aquarium_control/doc/req/sw/water.md">/Users/uwe/RustroverProjects/aquarium_control/doc/req/sw/water.md</a>:32</p>
+          <p class="origin">doc/req/sw/water.md:32</p>
           <div class="out">
             <h6>Out: 1</h6>
             <ul>
-              <li><a href="#sysreq~schedule2~1">sysreq~schedule2~1</a> <span class="origin"><a href="file:///Users/uwe/RustroverProjects/aquarium_control/doc/req/sys/system_requirements.md">/Users/uwe/RustroverProjects/aquarium_control/doc/req/sys/system_requirements.md</a>:156</span></li>
+              <li><a href="#sysreq~schedule2~1">sysreq~schedule2~1</a> <span class="origin">doc/req/sys/system_requirements.md:156</span></li>
             </ul>
           </div>
         </details>
@@ -563,11 +659,11 @@ summary .title {
           <p class="id">swreq~utilities_parse_toml_config~1</p>
           <p>The application shall parse configuration parameters from a local TOML configuration file on startup to initialize device parameters and pins.</p>
           <h6>Needs: <ins>impl</ins>, <ins>utest</ins></h6>
-          <p class="origin"><a href="file:///Users/uwe/RustroverProjects/aquarium_control/doc/req/sw/utilities.md">/Users/uwe/RustroverProjects/aquarium_control/doc/req/sw/utilities.md</a>:12</p>
+          <p class="origin">doc/req/sw/utilities.md:12</p>
           <div class="out">
             <h6>Out: 1</h6>
             <ul>
-              <li><a href="#sysreq~utilities2~1">sysreq~utilities2~1</a> <span class="origin"><a href="file:///Users/uwe/RustroverProjects/aquarium_control/doc/req/sys/system_requirements.md">/Users/uwe/RustroverProjects/aquarium_control/doc/req/sys/system_requirements.md</a>:302</span></li>
+              <li><a href="#sysreq~utilities2~1">sysreq~utilities2~1</a> <span class="origin">doc/req/sys/system_requirements.md:302</span></li>
             </ul>
           </div>
         </details>
@@ -578,11 +674,11 @@ summary .title {
           <p class="id">swreq~watchmen_pet_watchdog~1</p>
           <p>The watchdog loop shall write the heartbeat signal to the configured watchdog file path at regular intervals.</p>
           <h6>Needs: <ins>impl</ins>, <ins>utest</ins></h6>
-          <p class="origin"><a href="file:///Users/uwe/RustroverProjects/aquarium_control/doc/req/sw/watchmen.md">/Users/uwe/RustroverProjects/aquarium_control/doc/req/sw/watchmen.md</a>:12</p>
+          <p class="origin">doc/req/sw/watchmen.md:12</p>
           <div class="out">
             <h6>Out: 1</h6>
             <ul>
-              <li><a href="#sysreq~watchmen2~1">sysreq~watchmen2~1</a> <span class="origin"><a href="file:///Users/uwe/RustroverProjects/aquarium_control/doc/req/sys/system_requirements.md">/Users/uwe/RustroverProjects/aquarium_control/doc/req/sys/system_requirements.md</a>:270</span></li>
+              <li><a href="#sysreq~watchmen2~1">sysreq~watchmen2~1</a> <span class="origin">doc/req/sys/system_requirements.md:270</span></li>
             </ul>
           </div>
         </details>
@@ -593,7 +689,7 @@ summary .title {
           <p class="id">swreq~utilities_process_signals~1</p>
           <p>The signal handler shall capture operating system terminal signals (like SIGINT, SIGTERM, SIGABRT) and coordinate clean, sequential shutdown sequences across all running loops.</p>
           <h6>Needs: <ins>impl</ins>, <ins>utest</ins></h6>
-          <p class="origin"><a href="file:///Users/uwe/RustroverProjects/aquarium_control/doc/req/sw/utilities.md">/Users/uwe/RustroverProjects/aquarium_control/doc/req/sw/utilities.md</a>:2</p>
+          <p class="origin">doc/req/sw/utilities.md:2</p>
           <div class="out">
             <h6>Out: 1</h6>
             <ul>
@@ -608,11 +704,11 @@ summary .title {
           <p class="id">swreq~dispatch_process_posix_messages~1</p>
           <p>The messaging module shall read incoming POSIX messages from the operating system message queue and route commands to target subsystems (refill, heater, feeder) using internal channel dispatchers.</p>
           <h6>Needs: <ins>impl</ins>, <ins>utest</ins></h6>
-          <p class="origin"><a href="file:///Users/uwe/RustroverProjects/aquarium_control/doc/req/sw/dispatch.md">/Users/uwe/RustroverProjects/aquarium_control/doc/req/sw/dispatch.md</a>:2</p>
+          <p class="origin">doc/req/sw/dispatch.md:2</p>
           <div class="out">
             <h6>Out: 1</h6>
             <ul>
-              <li><a href="#sysreq~messaging~1">sysreq~messaging~1</a> <span class="origin"><a href="file:///Users/uwe/RustroverProjects/aquarium_control/doc/req/sys/system_requirements.md">/Users/uwe/RustroverProjects/aquarium_control/doc/req/sys/system_requirements.md</a>:321</span></li>
+              <li><a href="#sysreq~messaging~1">sysreq~messaging~1</a> <span class="origin">doc/req/sys/system_requirements.md:321</span></li>
             </ul>
           </div>
         </details>
@@ -623,11 +719,11 @@ summary .title {
           <p class="id">swreq~mineral_read_profiles~1</p>
           <p>The control system shall query the database at check intervals to retrieve dosing pump configuration limits, calibration parameters, and daily dosing quantities.</p>
           <h6>Needs: <ins>impl</ins>, <ins>utest</ins></h6>
-          <p class="origin"><a href="file:///Users/uwe/RustroverProjects/aquarium_control/doc/req/sw/mineral.md">/Users/uwe/RustroverProjects/aquarium_control/doc/req/sw/mineral.md</a>:2</p>
+          <p class="origin">doc/req/sw/mineral.md:2</p>
           <div class="out">
             <h6>Out: 1</h6>
             <ul>
-              <li><a href="#sysreq~mineral1~1">sysreq~mineral1~1</a> <span class="origin"><a href="file:///Users/uwe/RustroverProjects/aquarium_control/doc/req/sys/system_requirements.md">/Users/uwe/RustroverProjects/aquarium_control/doc/req/sys/system_requirements.md</a>:105</span></li>
+              <li><a href="#sysreq~mineral1~1">sysreq~mineral1~1</a> <span class="origin">doc/req/sys/system_requirements.md:105</span></li>
             </ul>
           </div>
         </details>
@@ -638,11 +734,11 @@ summary .title {
           <p class="id">swreq~food_read_profiles~1</p>
           <p>The control system shall query the <code>feed_profile</code> database table to load configured feeding sequences, each consisting of up to ten phases of pause and feed durations, specifying device ON/OFF states.</p>
           <h6>Needs: <ins>impl</ins>, <ins>utest</ins></h6>
-          <p class="origin"><a href="file:///Users/uwe/RustroverProjects/aquarium_control/doc/req/sw/food.md">/Users/uwe/RustroverProjects/aquarium_control/doc/req/sw/food.md</a>:12</p>
+          <p class="origin">doc/req/sw/food.md:12</p>
           <div class="out">
             <h6>Out: 1</h6>
             <ul>
-              <li><a href="#sysreq~food2~1">sysreq~food2~1</a> <span class="origin"><a href="file:///Users/uwe/RustroverProjects/aquarium_control/doc/req/sys/system_requirements.md">/Users/uwe/RustroverProjects/aquarium_control/doc/req/sys/system_requirements.md</a>:65</span></li>
+              <li><a href="#sysreq~food2~1">sysreq~food2~1</a> <span class="origin">doc/req/sys/system_requirements.md:65</span></li>
             </ul>
           </div>
         </details>
@@ -652,12 +748,19 @@ summary .title {
           <summary title="swreq~food_read_schedule~1"><span class="red">&cross;</span> <b>Read Feed Schedules</b><small>, rev. 1, swreq</small></summary>
           <p class="id">swreq~food_read_schedule~1</p>
           <p>The control system shall query the <code>feed_schedule</code> database table at regular intervals to load active feeding times, repetition frequencies, and linked profile IDs.</p>
-          <h6>Needs: <ins>impl</ins>, <ins>utest</ins></h6>
-          <p class="origin"><a href="file:///Users/uwe/RustroverProjects/aquarium_control/doc/req/sw/food.md">/Users/uwe/RustroverProjects/aquarium_control/doc/req/sw/food.md</a>:2</p>
+          <h6>Needs: <ins>impl</ins>, utest</h6>
+          <p class="origin">doc/req/sw/food.md:2</p>
+          <div class="in">
+            <h6>In: 2</h6>
+            <ul>
+              <li><a href="#utest~food_read_schedule-2088904839~0">utest~food_read_schedule-2088904839~0</a> <span class="origin">tests/food/test_feed.rs:599</span></li>
+              <li><a href="#utest~food_read_schedule-737604621~0">utest~food_read_schedule-737604621~0</a> <span class="origin">tests/food/test_feed.rs:487</span></li>
+            </ul>
+          </div>
           <div class="out">
             <h6>Out: 1</h6>
             <ul>
-              <li><a href="#sysreq~food1~1">sysreq~food1~1</a> <span class="origin"><a href="file:///Users/uwe/RustroverProjects/aquarium_control/doc/req/sys/system_requirements.md">/Users/uwe/RustroverProjects/aquarium_control/doc/req/sys/system_requirements.md</a>:58</span></li>
+              <li><a href="#sysreq~food1~1">sysreq~food1~1</a> <span class="origin">doc/req/sys/system_requirements.md:58</span></li>
             </ul>
           </div>
         </details>
@@ -668,7 +771,7 @@ summary .title {
           <p class="id">swreq~thermal_read_heating_limits~1</p>
           <p>The controller shall repeatedly read heating temperature setpoint windows and hystereses from the database.</p>
           <h6>Needs: <ins>impl</ins>, <ins>utest</ins></h6>
-          <p class="origin"><a href="file:///Users/uwe/RustroverProjects/aquarium_control/doc/req/sw/thermal.md">/Users/uwe/RustroverProjects/aquarium_control/doc/req/sw/thermal.md</a>:52</p>
+          <p class="origin">doc/req/sw/thermal.md:52</p>
           <div class="out">
             <h6>Out: 1</h6>
             <ul>
@@ -683,11 +786,11 @@ summary .title {
           <p class="id">swreq~water_read_level_switch~1</p>
           <p>The refill controller shall use the pre-processed tank level switch signals (<code>tank<em>level_switch_position_stabilized</code> and <code>tank_level_switch</em>invalid</code>).</p>
           <h6>Needs: <ins>impl</ins>, <ins>utest</ins></h6>
-          <p class="origin"><a href="file:///Users/uwe/RustroverProjects/aquarium_control/doc/req/sw/water.md">/Users/uwe/RustroverProjects/aquarium_control/doc/req/sw/water.md</a>:2</p>
+          <p class="origin">doc/req/sw/water.md:2</p>
           <div class="out">
             <h6>Out: 1</h6>
             <ul>
-              <li><a href="#sysreq~water1~1">sysreq~water1~1</a> <span class="origin"><a href="file:///Users/uwe/RustroverProjects/aquarium_control/doc/req/sys/system_requirements.md">/Users/uwe/RustroverProjects/aquarium_control/doc/req/sys/system_requirements.md</a>:3</span></li>
+              <li><a href="#sysreq~water1~1">sysreq~water1~1</a> <span class="origin">doc/req/sys/system_requirements.md:3</span></li>
             </ul>
           </div>
         </details>
@@ -698,11 +801,11 @@ summary .title {
           <p class="id">swreq~schedule_read_entries~1</p>
           <p>The control system shall query the <code>schedule</code> database table at regular intervals to load allowed operational windows (start time of day, stop time of day) for each actuator category.</p>
           <h6>Needs: <ins>impl</ins>, <ins>utest</ins></h6>
-          <p class="origin"><a href="file:///Users/uwe/RustroverProjects/aquarium_control/doc/req/sw/schedule.md">/Users/uwe/RustroverProjects/aquarium_control/doc/req/sw/schedule.md</a>:2</p>
+          <p class="origin">doc/req/sw/schedule.md:2</p>
           <div class="out">
             <h6>Out: 1</h6>
             <ul>
-              <li><a href="#sysreq~schedule1~1">sysreq~schedule1~1</a> <span class="origin"><a href="file:///Users/uwe/RustroverProjects/aquarium_control/doc/req/sys/system_requirements.md">/Users/uwe/RustroverProjects/aquarium_control/doc/req/sys/system_requirements.md</a>:148</span></li>
+              <li><a href="#sysreq~schedule1~1">sysreq~schedule1~1</a> <span class="origin">doc/req/sys/system_requirements.md:148</span></li>
             </ul>
           </div>
         </details>
@@ -713,7 +816,7 @@ summary .title {
           <p class="id">swreq~sensors_read_data~1</p>
           <p>The control system shall read measurements from configured sensor hardware:</p><ul><li>Water temperature and ambient parameters using 1-wire DS18B20 drivers.</li><li>Ambient temperature/humidity from DHT22 GPIO line pulses.</li><li>Water temperature, pH, and conductivity via I2C communications to Atlas Scientific EZO/OEM chips.</li><li>Tank level state from physical digital level switch inputs.</li></ul>
           <h6>Needs: <ins>impl</ins>, <ins>utest</ins></h6>
-          <p class="origin"><a href="file:///Users/uwe/RustroverProjects/aquarium_control/doc/req/sw/sensors.md">/Users/uwe/RustroverProjects/aquarium_control/doc/req/sw/sensors.md</a>:2</p>
+          <p class="origin">doc/req/sw/sensors.md:2</p>
           <div class="out">
             <h6>Out: 1</h6>
             <ul>
@@ -728,7 +831,7 @@ summary .title {
           <p class="id">swreq~thermal_read_ventilation_limits~1</p>
           <p>The controller shall repeatedly read ventilation temperature setpoint windows and hystereses from the database.</p>
           <h6>Needs: <ins>impl</ins>, <ins>utest</ins></h6>
-          <p class="origin"><a href="file:///Users/uwe/RustroverProjects/aquarium_control/doc/req/sw/thermal.md">/Users/uwe/RustroverProjects/aquarium_control/doc/req/sw/thermal.md</a>:12</p>
+          <p class="origin">doc/req/sw/thermal.md:12</p>
           <div class="out">
             <h6>Out: 1</h6>
             <ul>
@@ -742,12 +845,18 @@ summary .title {
           <summary title="swreq~food_restart~1"><span class="red">&cross;</span> <b>Remote Feed Restart</b><small>, rev. 1, swreq</small></summary>
           <p class="id">swreq~food_restart~1</p>
           <p>The controller shall resume scheduled feeding cycles upon receiving a <code>Start</code> command.</p>
-          <h6>Needs: <ins>impl</ins>, <ins>utest</ins></h6>
-          <p class="origin"><a href="file:///Users/uwe/RustroverProjects/aquarium_control/doc/req/sw/food.md">/Users/uwe/RustroverProjects/aquarium_control/doc/req/sw/food.md</a>:52</p>
+          <h6>Needs: <ins>impl</ins>, utest</h6>
+          <p class="origin">doc/req/sw/food.md:52</p>
+          <div class="in">
+            <h6>In: 1</h6>
+            <ul>
+              <li><a href="#utest~food_restart-741477540~0">utest~food_restart-741477540~0</a> <span class="origin">tests/food/test_feed.rs:200</span></li>
+            </ul>
+          </div>
           <div class="out">
             <h6>Out: 1</h6>
             <ul>
-              <li><a href="#sysreq~food6~1">sysreq~food6~1</a> <span class="origin"><a href="file:///Users/uwe/RustroverProjects/aquarium_control/doc/req/sys/system_requirements.md">/Users/uwe/RustroverProjects/aquarium_control/doc/req/sys/system_requirements.md</a>:92</span></li>
+              <li><a href="#sysreq~food6~1">sysreq~food6~1</a> <span class="origin">doc/req/sys/system_requirements.md:92</span></li>
             </ul>
           </div>
         </details>
@@ -757,12 +866,18 @@ summary .title {
           <summary title="swreq~food_stop_indefinitely~1"><span class="red">&cross;</span> <b>Remote Feed Stop</b><small>, rev. 1, swreq</small></summary>
           <p class="id">swreq~food_stop_indefinitely~1</p>
           <p>The controller shall abort any active feed operation and suspend scheduled feedings indefinitely upon receiving a <code>Stop</code> command.</p>
-          <h6>Needs: <ins>impl</ins>, <ins>utest</ins></h6>
-          <p class="origin"><a href="file:///Users/uwe/RustroverProjects/aquarium_control/doc/req/sw/food.md">/Users/uwe/RustroverProjects/aquarium_control/doc/req/sw/food.md</a>:42</p>
+          <h6>Needs: <ins>impl</ins>, utest</h6>
+          <p class="origin">doc/req/sw/food.md:42</p>
+          <div class="in">
+            <h6>In: 1</h6>
+            <ul>
+              <li><a href="#utest~food_stop_indefinitely-1529341948~0">utest~food_stop_indefinitely-1529341948~0</a> <span class="origin">tests/food/test_feed.rs:199</span></li>
+            </ul>
+          </div>
           <div class="out">
             <h6>Out: 1</h6>
             <ul>
-              <li><a href="#sysreq~food5~1">sysreq~food5~1</a> <span class="origin"><a href="file:///Users/uwe/RustroverProjects/aquarium_control/doc/req/sys/system_requirements.md">/Users/uwe/RustroverProjects/aquarium_control/doc/req/sys/system_requirements.md</a>:86</span></li>
+              <li><a href="#sysreq~food5~1">sysreq~food5~1</a> <span class="origin">doc/req/sys/system_requirements.md:86</span></li>
             </ul>
           </div>
         </details>
@@ -773,7 +888,7 @@ summary .title {
           <p class="id">swreq~thermal_remote_heating_start~1</p>
           <p>The controller shall resume automated temperature heating loops upon receiving a remote <code>Start</code> command.</p>
           <h6>Needs: <ins>impl</ins>, <ins>utest</ins></h6>
-          <p class="origin"><a href="file:///Users/uwe/RustroverProjects/aquarium_control/doc/req/sw/thermal.md">/Users/uwe/RustroverProjects/aquarium_control/doc/req/sw/thermal.md</a>:72</p>
+          <p class="origin">doc/req/sw/thermal.md:72</p>
           <div class="out">
             <h6>Out: 1</h6>
             <ul>
@@ -788,11 +903,11 @@ summary .title {
           <p class="id">swreq~mineral_restart~1</p>
           <p>The controller shall resume automatic mineral dosing cycles upon receiving a <code>Start</code> command.</p>
           <h6>Needs: <ins>impl</ins>, <ins>utest</ins></h6>
-          <p class="origin"><a href="file:///Users/uwe/RustroverProjects/aquarium_control/doc/req/sw/mineral.md">/Users/uwe/RustroverProjects/aquarium_control/doc/req/sw/mineral.md</a>:62</p>
+          <p class="origin">doc/req/sw/mineral.md:62</p>
           <div class="out">
             <h6>Out: 1</h6>
             <ul>
-              <li><a href="#sysreq~mineral7~1">sysreq~mineral7~1</a> <span class="origin"><a href="file:///Users/uwe/RustroverProjects/aquarium_control/doc/req/sys/system_requirements.md">/Users/uwe/RustroverProjects/aquarium_control/doc/req/sys/system_requirements.md</a>:141</span></li>
+              <li><a href="#sysreq~mineral7~1">sysreq~mineral7~1</a> <span class="origin">doc/req/sys/system_requirements.md:141</span></li>
             </ul>
           </div>
         </details>
@@ -803,7 +918,7 @@ summary .title {
           <p class="id">swreq~thermal_remote_ventilation_start~1</p>
           <p>The controller shall resume automated temperature cooling loops upon receiving a remote <code>Start</code> command.</p>
           <h6>Needs: <ins>impl</ins>, <ins>utest</ins></h6>
-          <p class="origin"><a href="file:///Users/uwe/RustroverProjects/aquarium_control/doc/req/sw/thermal.md">/Users/uwe/RustroverProjects/aquarium_control/doc/req/sw/thermal.md</a>:32</p>
+          <p class="origin">doc/req/sw/thermal.md:32</p>
           <div class="out">
             <h6>Out: 1</h6>
             <ul>
@@ -818,7 +933,7 @@ summary .title {
           <p class="id">swreq~watchmen_self_monitoring~1</p>
           <p>The control system shall monitor thread loop execution times and track mutex locking delay durations, recording warning flags if delays exceed configurable thresholds.</p>
           <h6>Needs: <ins>impl</ins>, <ins>utest</ins></h6>
-          <p class="origin"><a href="file:///Users/uwe/RustroverProjects/aquarium_control/doc/req/sw/watchmen.md">/Users/uwe/RustroverProjects/aquarium_control/doc/req/sw/watchmen.md</a>:2</p>
+          <p class="origin">doc/req/sw/watchmen.md:2</p>
           <div class="out">
             <h6>Out: 1</h6>
             <ul>
@@ -833,11 +948,11 @@ summary .title {
           <p class="id">swreq~water_shutdown_sequence~1</p>
           <p>The controller shall handle OS shutdown requests received via the message channel from the signal handler:</p><ul><li>Upon receiving a <code>Quit</code> signal, it shall immediately stop the refill pump if it is active and exit the inner loop for monitoring the tank level switch and poll for further signals.</li><li>Upon receiving a <code>Terminate</code> signal, it shall exit the thread context cleanly.</li></ul>
           <h6>Needs: <ins>impl</ins>, <ins>utest</ins></h6>
-          <p class="origin"><a href="file:///Users/uwe/RustroverProjects/aquarium_control/doc/req/sw/water.md">/Users/uwe/RustroverProjects/aquarium_control/doc/req/sw/water.md</a>:130</p>
+          <p class="origin">doc/req/sw/water.md:130</p>
           <div class="out">
             <h6>Out: 1</h6>
             <ul>
-              <li><a href="#sysreq~water8~1">sysreq~water8~1</a> <span class="origin"><a href="file:///Users/uwe/RustroverProjects/aquarium_control/doc/req/sys/system_requirements.md">/Users/uwe/RustroverProjects/aquarium_control/doc/req/sys/system_requirements.md</a>:45</span></li>
+              <li><a href="#sysreq~water8~1">sysreq~water8~1</a> <span class="origin">doc/req/sys/system_requirements.md:45</span></li>
             </ul>
           </div>
         </details>
@@ -848,11 +963,11 @@ summary .title {
           <p class="id">swreq~water_startup_data_recovery~1</p>
           <p>Upon application startup, the controller shall read historical refill logs from the database to initialize the 1-hour and 24-hour volume and count statistics, preventing the unintentional reset of error states across system reboots.</p>
           <h6>Needs: <ins>impl</ins>, <ins>utest</ins></h6>
-          <p class="origin"><a href="file:///Users/uwe/RustroverProjects/aquarium_control/doc/req/sw/water.md">/Users/uwe/RustroverProjects/aquarium_control/doc/req/sw/water.md</a>:97</p>
+          <p class="origin">doc/req/sw/water.md:97</p>
           <div class="out">
             <h6>Out: 1</h6>
             <ul>
-              <li><a href="#sysreq~water5~1">sysreq~water5~1</a> <span class="origin"><a href="file:///Users/uwe/RustroverProjects/aquarium_control/doc/req/sys/system_requirements.md">/Users/uwe/RustroverProjects/aquarium_control/doc/req/sys/system_requirements.md</a>:27</span></li>
+              <li><a href="#sysreq~water5~1">sysreq~water5~1</a> <span class="origin">doc/req/sys/system_requirements.md:27</span></li>
             </ul>
           </div>
         </details>
@@ -863,7 +978,7 @@ summary .title {
           <p class="id">swreq~thermal_remote_heating_stop~1</p>
           <p>The controller shall immediately turn off the heater relay and suspend automated heating loops upon receiving a remote <code>Stop</code> command.</p>
           <h6>Needs: <ins>impl</ins>, <ins>utest</ins></h6>
-          <p class="origin"><a href="file:///Users/uwe/RustroverProjects/aquarium_control/doc/req/sw/thermal.md">/Users/uwe/RustroverProjects/aquarium_control/doc/req/sw/thermal.md</a>:62</p>
+          <p class="origin">doc/req/sw/thermal.md:62</p>
           <div class="out">
             <h6>Out: 1</h6>
             <ul>
@@ -878,11 +993,11 @@ summary .title {
           <p class="id">swreq~mineral_stop_indefinitely~1</p>
           <p>The controller shall cancel active dosing pump operations and suspend automatic dosing cycles upon receiving a <code>Stop</code> command.</p>
           <h6>Needs: <ins>impl</ins>, <ins>utest</ins></h6>
-          <p class="origin"><a href="file:///Users/uwe/RustroverProjects/aquarium_control/doc/req/sw/mineral.md">/Users/uwe/RustroverProjects/aquarium_control/doc/req/sw/mineral.md</a>:52</p>
+          <p class="origin">doc/req/sw/mineral.md:52</p>
           <div class="out">
             <h6>Out: 1</h6>
             <ul>
-              <li><a href="#sysreq~mineral6~1">sysreq~mineral6~1</a> <span class="origin"><a href="file:///Users/uwe/RustroverProjects/aquarium_control/doc/req/sys/system_requirements.md">/Users/uwe/RustroverProjects/aquarium_control/doc/req/sys/system_requirements.md</a>:135</span></li>
+              <li><a href="#sysreq~mineral6~1">sysreq~mineral6~1</a> <span class="origin">doc/req/sys/system_requirements.md:135</span></li>
             </ul>
           </div>
         </details>
@@ -893,7 +1008,7 @@ summary .title {
           <p class="id">swreq~thermal_remote_ventilation_stop~1</p>
           <p>The controller shall immediately turn off ventilation fan relays and suspend automated cooling loops upon receiving a remote <code>Stop</code> command.</p>
           <h6>Needs: <ins>impl</ins>, <ins>utest</ins></h6>
-          <p class="origin"><a href="file:///Users/uwe/RustroverProjects/aquarium_control/doc/req/sw/thermal.md">/Users/uwe/RustroverProjects/aquarium_control/doc/req/sw/thermal.md</a>:22</p>
+          <p class="origin">doc/req/sw/thermal.md:22</p>
           <div class="out">
             <h6>Out: 1</h6>
             <ul>
@@ -908,7 +1023,7 @@ summary .title {
           <p class="id">swreq~recorder_store_measurements~1</p>
           <p>The data logger subsystem shall periodically compile system measurements (temperatures, pH, conductivity, humidity, actuator states) and commit them to the database log tables.</p>
           <h6>Needs: <ins>impl</ins>, <ins>utest</ins></h6>
-          <p class="origin"><a href="file:///Users/uwe/RustroverProjects/aquarium_control/doc/req/sw/recorder.md">/Users/uwe/RustroverProjects/aquarium_control/doc/req/sw/recorder.md</a>:2</p>
+          <p class="origin">doc/req/sw/recorder.md:2</p>
           <div class="out">
             <h6>Out: 1</h6>
             <ul>
@@ -923,7 +1038,7 @@ summary .title {
           <p class="id">swreq~sensors_tank_level_switch_preprocessing~1</p>
           <p>The sensor manager shall perform preprocessing on the raw digital input from the tank level switch GPIO pin:</p><ul><li>Apply a stabilization/debounce filter counting consecutive matching readings (configured via <code>tank<em>level_switch_position_low_stabilization</em>count</code>).</li><li>Publish a pre-processed boolean flag <code>tank<em>level_switch_position</em>stabilized</code> representing the stabilized switch position.</li><li>Publish a pre-processed boolean flag <code>tank<em>level_switch</em>invalid</code> representing the signal invalidity status in case of signal interface failures.</li></ul>
           <h6>Needs: <ins>impl</ins>, <ins>utest</ins></h6>
-          <p class="origin"><a href="file:///Users/uwe/RustroverProjects/aquarium_control/doc/req/sw/sensors.md">/Users/uwe/RustroverProjects/aquarium_control/doc/req/sw/sensors.md</a>:16</p>
+          <p class="origin">doc/req/sw/sensors.md:16</p>
           <div class="out">
             <h6>Out: 1</h6>
             <ul>
@@ -938,11 +1053,11 @@ summary .title {
           <p class="id">swreq~watchmen_reboot_on_stall~1</p>
           <p>The watchdog loop shall stop petting the watchdog and execute clean component shutdowns if critical errors or execution stalls are detected, triggering a safe system reboot.</p>
           <h6>Needs: <ins>impl</ins>, <ins>utest</ins></h6>
-          <p class="origin"><a href="file:///Users/uwe/RustroverProjects/aquarium_control/doc/req/sw/watchmen.md">/Users/uwe/RustroverProjects/aquarium_control/doc/req/sw/watchmen.md</a>:22</p>
+          <p class="origin">doc/req/sw/watchmen.md:22</p>
           <div class="out">
             <h6>Out: 1</h6>
             <ul>
-              <li><a href="#sysreq~watchmen3~1">sysreq~watchmen3~1</a> <span class="origin"><a href="file:///Users/uwe/RustroverProjects/aquarium_control/doc/req/sys/system_requirements.md">/Users/uwe/RustroverProjects/aquarium_control/doc/req/sys/system_requirements.md</a>:276</span></li>
+              <li><a href="#sysreq~watchmen3~1">sysreq~watchmen3~1</a> <span class="origin">doc/req/sys/system_requirements.md:276</span></li>
             </ul>
           </div>
         </details>
@@ -953,7 +1068,7 @@ summary .title {
           <p class="id">swreq~thermal_ventilation_cooling~1</p>
           <p>The ventilation controller shall actuate ventilation cooling fans using a two-point control loop depending on the actual water temperature setpoint thresholds.</p>
           <h6>Needs: <ins>impl</ins>, <ins>utest</ins></h6>
-          <p class="origin"><a href="file:///Users/uwe/RustroverProjects/aquarium_control/doc/req/sw/thermal.md">/Users/uwe/RustroverProjects/aquarium_control/doc/req/sw/thermal.md</a>:2</p>
+          <p class="origin">doc/req/sw/thermal.md:2</p>
           <div class="out">
             <h6>Out: 1</h6>
             <ul>
@@ -968,11 +1083,11 @@ summary .title {
           <p class="id">swreq~utilities_write_pid_file~1</p>
           <p>The application shall write its active process ID (PID) to a local file on startup, preventing duplicate instances from initiating.</p>
           <h6>Needs: <ins>impl</ins>, <ins>utest</ins></h6>
-          <p class="origin"><a href="file:///Users/uwe/RustroverProjects/aquarium_control/doc/req/sw/utilities.md">/Users/uwe/RustroverProjects/aquarium_control/doc/req/sw/utilities.md</a>:32</p>
+          <p class="origin">doc/req/sw/utilities.md:32</p>
           <div class="out">
             <h6>Out: 1</h6>
             <ul>
-              <li><a href="#sysreq~utilities4~1">sysreq~utilities4~1</a> <span class="origin"><a href="file:///Users/uwe/RustroverProjects/aquarium_control/doc/req/sys/system_requirements.md">/Users/uwe/RustroverProjects/aquarium_control/doc/req/sys/system_requirements.md</a>:314</span></li>
+              <li><a href="#sysreq~utilities4~1">sysreq~utilities4~1</a> <span class="origin">doc/req/sys/system_requirements.md:314</span></li>
             </ul>
           </div>
         </details>
@@ -986,12 +1101,12 @@ summary .title {
           <p class="id">sysreq~water3~1</p>
           <p>The control system shall actuate the fresh water pump to refill the main tank.</p>
           <h6>Needs: swreq</h6>
-          <p class="origin"><a href="file:///Users/uwe/RustroverProjects/aquarium_control/doc/req/sys/system_requirements.md">/Users/uwe/RustroverProjects/aquarium_control/doc/req/sys/system_requirements.md</a>:15</p>
+          <p class="origin">doc/req/sys/system_requirements.md:15</p>
           <div class="in">
             <h6>In: 2</h6>
             <ul>
-              <li><a href="#swreq~water_actuate_pump~1">swreq~water_actuate_pump~1</a> <span class="origin"><a href="file:///Users/uwe/RustroverProjects/aquarium_control/doc/req/sw/water.md">/Users/uwe/RustroverProjects/aquarium_control/doc/req/sw/water.md</a>:42</span></li>
-              <li><a href="#swreq~water_hysteresis~1">swreq~water_hysteresis~1</a> <span class="origin"><a href="file:///Users/uwe/RustroverProjects/aquarium_control/doc/req/sw/water.md">/Users/uwe/RustroverProjects/aquarium_control/doc/req/sw/water.md</a>:52</span></li>
+              <li><a href="#swreq~water_actuate_pump~1">swreq~water_actuate_pump~1</a> <span class="origin">doc/req/sw/water.md:42</span></li>
+              <li><a href="#swreq~water_hysteresis~1">swreq~water_hysteresis~1</a> <span class="origin">doc/req/sw/water.md:52</span></li>
             </ul>
           </div>
         </details>
@@ -1002,11 +1117,11 @@ summary .title {
           <p class="id">sysreq~mineral3~1</p>
           <p>The control system shall calculate the injection duration of each balling pump based on the volume flow of each pump and the desired mineral dosing quantity.</p>
           <h6>Needs: swreq</h6>
-          <p class="origin"><a href="file:///Users/uwe/RustroverProjects/aquarium_control/doc/req/sys/system_requirements.md">/Users/uwe/RustroverProjects/aquarium_control/doc/req/sys/system_requirements.md</a>:117</p>
+          <p class="origin">doc/req/sys/system_requirements.md:117</p>
           <div class="in">
             <h6>In: 1</h6>
             <ul>
-              <li><a href="#swreq~mineral_calc_duration~1">swreq~mineral_calc_duration~1</a> <span class="origin"><a href="file:///Users/uwe/RustroverProjects/aquarium_control/doc/req/sw/mineral.md">/Users/uwe/RustroverProjects/aquarium_control/doc/req/sw/mineral.md</a>:22</span></li>
+              <li><a href="#swreq~mineral_calc_duration~1">swreq~mineral_calc_duration~1</a> <span class="origin">doc/req/sw/mineral.md:22</span></li>
             </ul>
           </div>
         </details>
@@ -1017,11 +1132,11 @@ summary .title {
           <p class="id">sysreq~mineral2~1</p>
           <p>The control system shall compute when the next mineral injection is due based on the log of previous mineral injections.</p>
           <h6>Needs: swreq</h6>
-          <p class="origin"><a href="file:///Users/uwe/RustroverProjects/aquarium_control/doc/req/sys/system_requirements.md">/Users/uwe/RustroverProjects/aquarium_control/doc/req/sys/system_requirements.md</a>:111</p>
+          <p class="origin">doc/req/sys/system_requirements.md:111</p>
           <div class="in">
             <h6>In: 1</h6>
             <ul>
-              <li><a href="#swreq~mineral_compute_due~1">swreq~mineral_compute_due~1</a> <span class="origin"><a href="file:///Users/uwe/RustroverProjects/aquarium_control/doc/req/sw/mineral.md">/Users/uwe/RustroverProjects/aquarium_control/doc/req/sw/mineral.md</a>:12</span></li>
+              <li><a href="#swreq~mineral_compute_due~1">swreq~mineral_compute_due~1</a> <span class="origin">doc/req/sw/mineral.md:12</span></li>
             </ul>
           </div>
         </details>
@@ -1032,11 +1147,11 @@ summary .title {
           <p class="id">sysreq~watchmen3~1</p>
           <p>The control system shall detect execution stalls or component failures and signal the watchdog to trigger a safe system reboot.</p>
           <h6>Needs: swreq</h6>
-          <p class="origin"><a href="file:///Users/uwe/RustroverProjects/aquarium_control/doc/req/sys/system_requirements.md">/Users/uwe/RustroverProjects/aquarium_control/doc/req/sys/system_requirements.md</a>:276</p>
+          <p class="origin">doc/req/sys/system_requirements.md:276</p>
           <div class="in">
             <h6>In: 1</h6>
             <ul>
-              <li><a href="#swreq~watchmen_reboot_on_stall~1">swreq~watchmen_reboot_on_stall~1</a> <span class="origin"><a href="file:///Users/uwe/RustroverProjects/aquarium_control/doc/req/sw/watchmen.md">/Users/uwe/RustroverProjects/aquarium_control/doc/req/sw/watchmen.md</a>:22</span></li>
+              <li><a href="#swreq~watchmen_reboot_on_stall~1">swreq~watchmen_reboot_on_stall~1</a> <span class="origin">doc/req/sw/watchmen.md:22</span></li>
             </ul>
           </div>
         </details>
@@ -1047,11 +1162,11 @@ summary .title {
           <p class="id">sysreq~water2~1</p>
           <p>The control system shall use the tank level switch position to determine when to refill fresh water.</p>
           <h6>Needs: swreq</h6>
-          <p class="origin"><a href="file:///Users/uwe/RustroverProjects/aquarium_control/doc/req/sys/system_requirements.md">/Users/uwe/RustroverProjects/aquarium_control/doc/req/sys/system_requirements.md</a>:9</p>
+          <p class="origin">doc/req/sys/system_requirements.md:9</p>
           <div class="in">
             <h6>In: 1</h6>
             <ul>
-              <li><a href="#swreq~water_determine_refill~1">swreq~water_determine_refill~1</a> <span class="origin"><a href="file:///Users/uwe/RustroverProjects/aquarium_control/doc/req/sw/water.md">/Users/uwe/RustroverProjects/aquarium_control/doc/req/sw/water.md</a>:12</span></li>
+              <li><a href="#swreq~water_determine_refill~1">swreq~water_determine_refill~1</a> <span class="origin">doc/req/sw/water.md:12</span></li>
             </ul>
           </div>
         </details>
@@ -1062,26 +1177,26 @@ summary .title {
           <p class="id">sysreq~food4~1</p>
           <p>The control system shall execute the feed profile as per remote user request.</p>
           <h6>Needs: swreq</h6>
-          <p class="origin"><a href="file:///Users/uwe/RustroverProjects/aquarium_control/doc/req/sys/system_requirements.md">/Users/uwe/RustroverProjects/aquarium_control/doc/req/sys/system_requirements.md</a>:80</p>
+          <p class="origin">doc/req/sys/system_requirements.md:80</p>
           <div class="in">
             <h6>In: 1</h6>
             <ul>
-              <li><a href="#swreq~food_execute_remote~1">swreq~food_execute_remote~1</a> <span class="origin"><a href="file:///Users/uwe/RustroverProjects/aquarium_control/doc/req/sw/food.md">/Users/uwe/RustroverProjects/aquarium_control/doc/req/sw/food.md</a>:32</span></li>
+              <li><a href="#swreq~food_execute_remote~1">swreq~food_execute_remote~1</a> <span class="origin">doc/req/sw/food.md:32</span></li>
             </ul>
           </div>
         </details>
       </section>
       <section class="sitem" id="sysreq~food3~1">
         <details>
-          <summary title="sysreq~food3~1"><span class="red">&cross;</span> <b>Execute Feed Profile per Schedule</b><small>, rev. 1, sysreq</small></summary>
+          <summary title="sysreq~food3~1"><span class="green">&check;</span> <b>Execute Feed Profile per Schedule</b><small>, rev. 1, sysreq</small></summary>
           <p class="id">sysreq~food3~1</p>
           <p>The control system shall execute the feed profile as per feed schedule entry.</p>
           <h6>Needs: swreq</h6>
-          <p class="origin"><a href="file:///Users/uwe/RustroverProjects/aquarium_control/doc/req/sys/system_requirements.md">/Users/uwe/RustroverProjects/aquarium_control/doc/req/sys/system_requirements.md</a>:74</p>
+          <p class="origin">doc/req/sys/system_requirements.md:74</p>
           <div class="in">
             <h6>In: 1</h6>
             <ul>
-              <li><a href="#swreq~food_execute_schedule~1">swreq~food_execute_schedule~1</a> <span class="origin"><a href="file:///Users/uwe/RustroverProjects/aquarium_control/doc/req/sw/food.md">/Users/uwe/RustroverProjects/aquarium_control/doc/req/sw/food.md</a>:22</span></li>
+              <li><a href="#swreq~food_execute_schedule~1">swreq~food_execute_schedule~1</a> <span class="origin">doc/req/sw/food.md:22</span></li>
             </ul>
           </div>
         </details>
@@ -1092,11 +1207,11 @@ summary .title {
           <p class="id">sysreq~mineral5~1</p>
           <p>The control system shall allow the user to execute a mineral dosing for a specific pump.</p>
           <h6>Needs: swreq</h6>
-          <p class="origin"><a href="file:///Users/uwe/RustroverProjects/aquarium_control/doc/req/sys/system_requirements.md">/Users/uwe/RustroverProjects/aquarium_control/doc/req/sys/system_requirements.md</a>:129</p>
+          <p class="origin">doc/req/sys/system_requirements.md:129</p>
           <div class="in">
             <h6>In: 1</h6>
             <ul>
-              <li><a href="#swreq~mineral_manual_dosing~1">swreq~mineral_manual_dosing~1</a> <span class="origin"><a href="file:///Users/uwe/RustroverProjects/aquarium_control/doc/req/sw/mineral.md">/Users/uwe/RustroverProjects/aquarium_control/doc/req/sw/mineral.md</a>:42</span></li>
+              <li><a href="#swreq~mineral_manual_dosing~1">swreq~mineral_manual_dosing~1</a> <span class="origin">doc/req/sw/mineral.md:42</span></li>
             </ul>
           </div>
         </details>
@@ -1107,11 +1222,11 @@ summary .title {
           <p class="id">sysreq~recorder2~1</p>
           <p>The control system shall filter raw sensor readings using an infinite impulse response (IIR) filter to eliminate measurement noise.</p>
           <h6>Needs: swreq</h6>
-          <p class="origin"><a href="file:///Users/uwe/RustroverProjects/aquarium_control/doc/req/sys/system_requirements.md">/Users/uwe/RustroverProjects/aquarium_control/doc/req/sys/system_requirements.md</a>:289</p>
+          <p class="origin">doc/req/sys/system_requirements.md:289</p>
           <div class="in">
             <h6>In: 1</h6>
             <ul>
-              <li><a href="#swreq~recorder_apply_iir_filter~1">swreq~recorder_apply_iir_filter~1</a> <span class="origin"><a href="file:///Users/uwe/RustroverProjects/aquarium_control/doc/req/sw/recorder.md">/Users/uwe/RustroverProjects/aquarium_control/doc/req/sw/recorder.md</a>:12</span></li>
+              <li><a href="#swreq~recorder_apply_iir_filter~1">swreq~recorder_apply_iir_filter~1</a> <span class="origin">doc/req/sw/recorder.md:12</span></li>
             </ul>
           </div>
         </details>
@@ -1122,11 +1237,11 @@ summary .title {
           <p class="id">sysreq~schedule3~1</p>
           <p>The control system shall inhibit balling mineral dosing if the current daytime is outside of the operation window for the actuator.</p>
           <h6>Needs: swreq</h6>
-          <p class="origin"><a href="file:///Users/uwe/RustroverProjects/aquarium_control/doc/req/sys/system_requirements.md">/Users/uwe/RustroverProjects/aquarium_control/doc/req/sys/system_requirements.md</a>:162</p>
+          <p class="origin">doc/req/sys/system_requirements.md:162</p>
           <div class="in">
             <h6>In: 1</h6>
             <ul>
-              <li><a href="#swreq~schedule_inhibit_mineral~1">swreq~schedule_inhibit_mineral~1</a> <span class="origin"><a href="file:///Users/uwe/RustroverProjects/aquarium_control/doc/req/sw/schedule.md">/Users/uwe/RustroverProjects/aquarium_control/doc/req/sw/schedule.md</a>:22</span></li>
+              <li><a href="#swreq~schedule_inhibit_mineral~1">swreq~schedule_inhibit_mineral~1</a> <span class="origin">doc/req/sw/schedule.md:22</span></li>
             </ul>
           </div>
         </details>
@@ -1137,11 +1252,11 @@ summary .title {
           <p class="id">sysreq~thermal9~1</p>
           <p>The control system shall inhibit the heater if the tank level switch reports a low water level for an extended time period.</p>
           <h6>Needs: swreq</h6>
-          <p class="origin"><a href="file:///Users/uwe/RustroverProjects/aquarium_control/doc/req/sys/system_requirements.md">/Users/uwe/RustroverProjects/aquarium_control/doc/req/sys/system_requirements.md</a>:257</p>
+          <p class="origin">doc/req/sys/system_requirements.md:257</p>
           <div class="in">
             <h6>In: 1</h6>
             <ul>
-              <li><a href="#swreq~thermal_inhibit_heating_low_water~1">swreq~thermal_inhibit_heating_low_water~1</a> <span class="origin"><a href="file:///Users/uwe/RustroverProjects/aquarium_control/doc/req/sw/thermal.md">/Users/uwe/RustroverProjects/aquarium_control/doc/req/sw/thermal.md</a>:82</span></li>
+              <li><a href="#swreq~thermal_inhibit_heating_low_water~1">swreq~thermal_inhibit_heating_low_water~1</a> <span class="origin">doc/req/sw/thermal.md:82</span></li>
             </ul>
           </div>
         </details>
@@ -1152,11 +1267,11 @@ summary .title {
           <p class="id">sysreq~schedule4~1</p>
           <p>The control system shall inhibit the use of the heater if the current daytime is outside of the operation window for the actuator.</p>
           <h6>Needs: swreq</h6>
-          <p class="origin"><a href="file:///Users/uwe/RustroverProjects/aquarium_control/doc/req/sys/system_requirements.md">/Users/uwe/RustroverProjects/aquarium_control/doc/req/sys/system_requirements.md</a>:168</p>
+          <p class="origin">doc/req/sys/system_requirements.md:168</p>
           <div class="in">
             <h6>In: 1</h6>
             <ul>
-              <li><a href="#swreq~schedule_inhibit_heating~1">swreq~schedule_inhibit_heating~1</a> <span class="origin"><a href="file:///Users/uwe/RustroverProjects/aquarium_control/doc/req/sw/schedule.md">/Users/uwe/RustroverProjects/aquarium_control/doc/req/sw/schedule.md</a>:32</span></li>
+              <li><a href="#swreq~schedule_inhibit_heating~1">swreq~schedule_inhibit_heating~1</a> <span class="origin">doc/req/sw/schedule.md:32</span></li>
             </ul>
           </div>
         </details>
@@ -1167,12 +1282,12 @@ summary .title {
           <p class="id">sysreq~schedule2~1</p>
           <p>The control system shall inhibit fresh water refill operations if the current daytime is outside of the operation window for the actuator.</p>
           <h6>Needs: swreq</h6>
-          <p class="origin"><a href="file:///Users/uwe/RustroverProjects/aquarium_control/doc/req/sys/system_requirements.md">/Users/uwe/RustroverProjects/aquarium_control/doc/req/sys/system_requirements.md</a>:156</p>
+          <p class="origin">doc/req/sys/system_requirements.md:156</p>
           <div class="in">
             <h6>In: 2</h6>
             <ul>
-              <li><a href="#swreq~schedule_inhibit_refill~1">swreq~schedule_inhibit_refill~1</a> <span class="origin"><a href="file:///Users/uwe/RustroverProjects/aquarium_control/doc/req/sw/schedule.md">/Users/uwe/RustroverProjects/aquarium_control/doc/req/sw/schedule.md</a>:12</span></li>
-              <li><a href="#swreq~water_observe_schedule~1">swreq~water_observe_schedule~1</a> <span class="origin"><a href="file:///Users/uwe/RustroverProjects/aquarium_control/doc/req/sw/water.md">/Users/uwe/RustroverProjects/aquarium_control/doc/req/sw/water.md</a>:32</span></li>
+              <li><a href="#swreq~schedule_inhibit_refill~1">swreq~schedule_inhibit_refill~1</a> <span class="origin">doc/req/sw/schedule.md:12</span></li>
+              <li><a href="#swreq~water_observe_schedule~1">swreq~water_observe_schedule~1</a> <span class="origin">doc/req/sw/water.md:32</span></li>
             </ul>
           </div>
         </details>
@@ -1183,26 +1298,26 @@ summary .title {
           <p class="id">sysreq~schedule5~1</p>
           <p>The control system shall inhibit the use of the ventilation if the current daytime is outside of the operation window for the actuator.</p>
           <h6>Needs: swreq</h6>
-          <p class="origin"><a href="file:///Users/uwe/RustroverProjects/aquarium_control/doc/req/sys/system_requirements.md">/Users/uwe/RustroverProjects/aquarium_control/doc/req/sys/system_requirements.md</a>:174</p>
+          <p class="origin">doc/req/sys/system_requirements.md:174</p>
           <div class="in">
             <h6>In: 1</h6>
             <ul>
-              <li><a href="#swreq~schedule_inhibit_ventilation~1">swreq~schedule_inhibit_ventilation~1</a> <span class="origin"><a href="file:///Users/uwe/RustroverProjects/aquarium_control/doc/req/sw/schedule.md">/Users/uwe/RustroverProjects/aquarium_control/doc/req/sw/schedule.md</a>:42</span></li>
+              <li><a href="#swreq~schedule_inhibit_ventilation~1">swreq~schedule_inhibit_ventilation~1</a> <span class="origin">doc/req/sw/schedule.md:42</span></li>
             </ul>
           </div>
         </details>
       </section>
       <section class="sitem" id="sysreq~food7~1">
         <details>
-          <summary title="sysreq~food7~1"><span class="red">&cross;</span> <b>Log Feed Operation in Database</b><small>, rev. 1, sysreq</small></summary>
+          <summary title="sysreq~food7~1"><span class="green">&check;</span> <b>Log Feed Operation in Database</b><small>, rev. 1, sysreq</small></summary>
           <p class="id">sysreq~food7~1</p>
           <p>The control system shall log any feed operation in the database.</p>
           <h6>Needs: swreq</h6>
-          <p class="origin"><a href="file:///Users/uwe/RustroverProjects/aquarium_control/doc/req/sys/system_requirements.md">/Users/uwe/RustroverProjects/aquarium_control/doc/req/sys/system_requirements.md</a>:98</p>
+          <p class="origin">doc/req/sys/system_requirements.md:98</p>
           <div class="in">
             <h6>In: 1</h6>
             <ul>
-              <li><a href="#swreq~food_log_database~1">swreq~food_log_database~1</a> <span class="origin"><a href="file:///Users/uwe/RustroverProjects/aquarium_control/doc/req/sw/food.md">/Users/uwe/RustroverProjects/aquarium_control/doc/req/sw/food.md</a>:62</span></li>
+              <li><a href="#swreq~food_log_database~1">swreq~food_log_database~1</a> <span class="origin">doc/req/sw/food.md:62</span></li>
             </ul>
           </div>
         </details>
@@ -1213,11 +1328,11 @@ summary .title {
           <p class="id">sysreq~mineral4~1</p>
           <p>The control system shall log any mineral dosing operation in the database.</p>
           <h6>Needs: swreq</h6>
-          <p class="origin"><a href="file:///Users/uwe/RustroverProjects/aquarium_control/doc/req/sys/system_requirements.md">/Users/uwe/RustroverProjects/aquarium_control/doc/req/sys/system_requirements.md</a>:123</p>
+          <p class="origin">doc/req/sys/system_requirements.md:123</p>
           <div class="in">
             <h6>In: 1</h6>
             <ul>
-              <li><a href="#swreq~mineral_log_database~1">swreq~mineral_log_database~1</a> <span class="origin"><a href="file:///Users/uwe/RustroverProjects/aquarium_control/doc/req/sw/mineral.md">/Users/uwe/RustroverProjects/aquarium_control/doc/req/sw/mineral.md</a>:32</span></li>
+              <li><a href="#swreq~mineral_log_database~1">swreq~mineral_log_database~1</a> <span class="origin">doc/req/sw/mineral.md:32</span></li>
             </ul>
           </div>
         </details>
@@ -1228,11 +1343,11 @@ summary .title {
           <p class="id">sysreq~water4~1</p>
           <p>The control system shall log each fresh water refill operation in the database.</p>
           <h6>Needs: swreq</h6>
-          <p class="origin"><a href="file:///Users/uwe/RustroverProjects/aquarium_control/doc/req/sys/system_requirements.md">/Users/uwe/RustroverProjects/aquarium_control/doc/req/sys/system_requirements.md</a>:21</p>
+          <p class="origin">doc/req/sys/system_requirements.md:21</p>
           <div class="in">
             <h6>In: 1</h6>
             <ul>
-              <li><a href="#swreq~water_log_database~1">swreq~water_log_database~1</a> <span class="origin"><a href="file:///Users/uwe/RustroverProjects/aquarium_control/doc/req/sw/water.md">/Users/uwe/RustroverProjects/aquarium_control/doc/req/sw/water.md</a>:62</span></li>
+              <li><a href="#swreq~water_log_database~1">swreq~water_log_database~1</a> <span class="origin">doc/req/sw/water.md:62</span></li>
             </ul>
           </div>
         </details>
@@ -1243,11 +1358,11 @@ summary .title {
           <p class="id">sysreq~watchmen2~1</p>
           <p>The control system shall pet the hardware watchdog at regular intervals to verify process liveness.</p>
           <h6>Needs: swreq</h6>
-          <p class="origin"><a href="file:///Users/uwe/RustroverProjects/aquarium_control/doc/req/sys/system_requirements.md">/Users/uwe/RustroverProjects/aquarium_control/doc/req/sys/system_requirements.md</a>:270</p>
+          <p class="origin">doc/req/sys/system_requirements.md:270</p>
           <div class="in">
             <h6>In: 1</h6>
             <ul>
-              <li><a href="#swreq~watchmen_pet_watchdog~1">swreq~watchmen_pet_watchdog~1</a> <span class="origin"><a href="file:///Users/uwe/RustroverProjects/aquarium_control/doc/req/sw/watchmen.md">/Users/uwe/RustroverProjects/aquarium_control/doc/req/sw/watchmen.md</a>:12</span></li>
+              <li><a href="#swreq~watchmen_pet_watchdog~1">swreq~watchmen_pet_watchdog~1</a> <span class="origin">doc/req/sw/watchmen.md:12</span></li>
             </ul>
           </div>
         </details>
@@ -1258,12 +1373,12 @@ summary .title {
           <p class="id">sysreq~water9~1</p>
           <p>The control system shall protect against faulty tank level switch sensor causing excessive fresh water refill.</p>
           <h6>Needs: swreq</h6>
-          <p class="origin"><a href="file:///Users/uwe/RustroverProjects/aquarium_control/doc/req/sys/system_requirements.md">/Users/uwe/RustroverProjects/aquarium_control/doc/req/sys/system_requirements.md</a>:51</p>
+          <p class="origin">doc/req/sys/system_requirements.md:51</p>
           <div class="in">
             <h6>In: 2</h6>
             <ul>
-              <li><a href="#swreq~water_calibration_parameters~1">swreq~water_calibration_parameters~1</a> <span class="origin"><a href="file:///Users/uwe/RustroverProjects/aquarium_control/doc/req/sw/water.md">/Users/uwe/RustroverProjects/aquarium_control/doc/req/sw/water.md</a>:107</span></li>
-              <li><a href="#swreq~water_faulty_switch_protection~1">swreq~water_faulty_switch_protection~1</a> <span class="origin"><a href="file:///Users/uwe/RustroverProjects/aquarium_control/doc/req/sw/water.md">/Users/uwe/RustroverProjects/aquarium_control/doc/req/sw/water.md</a>:84</span></li>
+              <li><a href="#swreq~water_calibration_parameters~1">swreq~water_calibration_parameters~1</a> <span class="origin">doc/req/sw/water.md:107</span></li>
+              <li><a href="#swreq~water_faulty_switch_protection~1">swreq~water_faulty_switch_protection~1</a> <span class="origin">doc/req/sw/water.md:84</span></li>
             </ul>
           </div>
         </details>
@@ -1274,11 +1389,11 @@ summary .title {
           <p class="id">sysreq~utilities4~1</p>
           <p>The control system shall publish its process ID (PID) to a file on startup to prevent duplicate running instances.</p>
           <h6>Needs: swreq</h6>
-          <p class="origin"><a href="file:///Users/uwe/RustroverProjects/aquarium_control/doc/req/sys/system_requirements.md">/Users/uwe/RustroverProjects/aquarium_control/doc/req/sys/system_requirements.md</a>:314</p>
+          <p class="origin">doc/req/sys/system_requirements.md:314</p>
           <div class="in">
             <h6>In: 1</h6>
             <ul>
-              <li><a href="#swreq~utilities_write_pid_file~1">swreq~utilities_write_pid_file~1</a> <span class="origin"><a href="file:///Users/uwe/RustroverProjects/aquarium_control/doc/req/sw/utilities.md">/Users/uwe/RustroverProjects/aquarium_control/doc/req/sw/utilities.md</a>:32</span></li>
+              <li><a href="#swreq~utilities_write_pid_file~1">swreq~utilities_write_pid_file~1</a> <span class="origin">doc/req/sw/utilities.md:32</span></li>
             </ul>
           </div>
         </details>
@@ -1289,11 +1404,11 @@ summary .title {
           <p class="id">sysreq~schedule1~1</p>
           <p>The control system shall repeatedly read the actuator schedule entries from the database. Each actuator schedule entry has a starting time of day and a stop time of day determining the allowed operation window for each actuator. The database may contain schedule entries for the following actuators: mineral dosing, fresh water refill, ventilation, heating.</p>
           <h6>Needs: swreq</h6>
-          <p class="origin"><a href="file:///Users/uwe/RustroverProjects/aquarium_control/doc/req/sys/system_requirements.md">/Users/uwe/RustroverProjects/aquarium_control/doc/req/sys/system_requirements.md</a>:148</p>
+          <p class="origin">doc/req/sys/system_requirements.md:148</p>
           <div class="in">
             <h6>In: 1</h6>
             <ul>
-              <li><a href="#swreq~schedule_read_entries~1">swreq~schedule_read_entries~1</a> <span class="origin"><a href="file:///Users/uwe/RustroverProjects/aquarium_control/doc/req/sw/schedule.md">/Users/uwe/RustroverProjects/aquarium_control/doc/req/sw/schedule.md</a>:2</span></li>
+              <li><a href="#swreq~schedule_read_entries~1">swreq~schedule_read_entries~1</a> <span class="origin">doc/req/sw/schedule.md:2</span></li>
             </ul>
           </div>
         </details>
@@ -1304,11 +1419,11 @@ summary .title {
           <p class="id">sysreq~mineral1~1</p>
           <p>The control system shall repeatedly read the balling pump profiles from the database.</p>
           <h6>Needs: swreq</h6>
-          <p class="origin"><a href="file:///Users/uwe/RustroverProjects/aquarium_control/doc/req/sys/system_requirements.md">/Users/uwe/RustroverProjects/aquarium_control/doc/req/sys/system_requirements.md</a>:105</p>
+          <p class="origin">doc/req/sys/system_requirements.md:105</p>
           <div class="in">
             <h6>In: 1</h6>
             <ul>
-              <li><a href="#swreq~mineral_read_profiles~1">swreq~mineral_read_profiles~1</a> <span class="origin"><a href="file:///Users/uwe/RustroverProjects/aquarium_control/doc/req/sw/mineral.md">/Users/uwe/RustroverProjects/aquarium_control/doc/req/sw/mineral.md</a>:2</span></li>
+              <li><a href="#swreq~mineral_read_profiles~1">swreq~mineral_read_profiles~1</a> <span class="origin">doc/req/sw/mineral.md:2</span></li>
             </ul>
           </div>
         </details>
@@ -1319,11 +1434,11 @@ summary .title {
           <p class="id">sysreq~utilities2~1</p>
           <p>The control system shall read all configuration parameters from a local configuration file on startup.</p>
           <h6>Needs: swreq</h6>
-          <p class="origin"><a href="file:///Users/uwe/RustroverProjects/aquarium_control/doc/req/sys/system_requirements.md">/Users/uwe/RustroverProjects/aquarium_control/doc/req/sys/system_requirements.md</a>:302</p>
+          <p class="origin">doc/req/sys/system_requirements.md:302</p>
           <div class="in">
             <h6>In: 1</h6>
             <ul>
-              <li><a href="#swreq~utilities_parse_toml_config~1">swreq~utilities_parse_toml_config~1</a> <span class="origin"><a href="file:///Users/uwe/RustroverProjects/aquarium_control/doc/req/sw/utilities.md">/Users/uwe/RustroverProjects/aquarium_control/doc/req/sw/utilities.md</a>:12</span></li>
+              <li><a href="#swreq~utilities_parse_toml_config~1">swreq~utilities_parse_toml_config~1</a> <span class="origin">doc/req/sw/utilities.md:12</span></li>
             </ul>
           </div>
         </details>
@@ -1334,11 +1449,11 @@ summary .title {
           <p class="id">sysreq~food2~1</p>
           <p>The control system shall read the feed profiles from the database. The feed profile consists of ten phases where each phase consists of a pause and a feed subphase. For each subphase, the feed profile maintains the information which devices shall be ON or OFF. At the end of the feed profile, the feeder shall be switched off and all other devices shall be switched on.</p>
           <h6>Needs: swreq</h6>
-          <p class="origin"><a href="file:///Users/uwe/RustroverProjects/aquarium_control/doc/req/sys/system_requirements.md">/Users/uwe/RustroverProjects/aquarium_control/doc/req/sys/system_requirements.md</a>:65</p>
+          <p class="origin">doc/req/sys/system_requirements.md:65</p>
           <div class="in">
             <h6>In: 1</h6>
             <ul>
-              <li><a href="#swreq~food_read_profiles~1">swreq~food_read_profiles~1</a> <span class="origin"><a href="file:///Users/uwe/RustroverProjects/aquarium_control/doc/req/sw/food.md">/Users/uwe/RustroverProjects/aquarium_control/doc/req/sw/food.md</a>:12</span></li>
+              <li><a href="#swreq~food_read_profiles~1">swreq~food_read_profiles~1</a> <span class="origin">doc/req/sw/food.md:12</span></li>
             </ul>
           </div>
         </details>
@@ -1349,11 +1464,11 @@ summary .title {
           <p class="id">sysreq~food1~1</p>
           <p>The control system shall repeatedly read feed schedule entries from the database. The feed schedule entry defines when a certain feed profile shall be executed and with which frequency it shall be repeated.</p>
           <h6>Needs: swreq</h6>
-          <p class="origin"><a href="file:///Users/uwe/RustroverProjects/aquarium_control/doc/req/sys/system_requirements.md">/Users/uwe/RustroverProjects/aquarium_control/doc/req/sys/system_requirements.md</a>:58</p>
+          <p class="origin">doc/req/sys/system_requirements.md:58</p>
           <div class="in">
             <h6>In: 1</h6>
             <ul>
-              <li><a href="#swreq~food_read_schedule~1">swreq~food_read_schedule~1</a> <span class="origin"><a href="file:///Users/uwe/RustroverProjects/aquarium_control/doc/req/sw/food.md">/Users/uwe/RustroverProjects/aquarium_control/doc/req/sw/food.md</a>:2</span></li>
+              <li><a href="#swreq~food_read_schedule~1">swreq~food_read_schedule~1</a> <span class="origin">doc/req/sw/food.md:2</span></li>
             </ul>
           </div>
         </details>
@@ -1364,11 +1479,11 @@ summary .title {
           <p class="id">sysreq~water1~1</p>
           <p>The control system shall read the tank level switch position.</p>
           <h6>Needs: swreq</h6>
-          <p class="origin"><a href="file:///Users/uwe/RustroverProjects/aquarium_control/doc/req/sys/system_requirements.md">/Users/uwe/RustroverProjects/aquarium_control/doc/req/sys/system_requirements.md</a>:3</p>
+          <p class="origin">doc/req/sys/system_requirements.md:3</p>
           <div class="in">
             <h6>In: 1</h6>
             <ul>
-              <li><a href="#swreq~water_read_level_switch~1">swreq~water_read_level_switch~1</a> <span class="origin"><a href="file:///Users/uwe/RustroverProjects/aquarium_control/doc/req/sw/water.md">/Users/uwe/RustroverProjects/aquarium_control/doc/req/sw/water.md</a>:2</span></li>
+              <li><a href="#swreq~water_read_level_switch~1">swreq~water_read_level_switch~1</a> <span class="origin">doc/req/sw/water.md:2</span></li>
             </ul>
           </div>
         </details>
@@ -1379,11 +1494,11 @@ summary .title {
           <p class="id">sysreq~messaging~1</p>
           <p>The control system shall receive POSIX messages from the operating system and react accordingly.</p>
           <h6>Needs: swreq</h6>
-          <p class="origin"><a href="file:///Users/uwe/RustroverProjects/aquarium_control/doc/req/sys/system_requirements.md">/Users/uwe/RustroverProjects/aquarium_control/doc/req/sys/system_requirements.md</a>:321</p>
+          <p class="origin">doc/req/sys/system_requirements.md:321</p>
           <div class="in">
             <h6>In: 1</h6>
             <ul>
-              <li><a href="#swreq~dispatch_process_posix_messages~1">swreq~dispatch_process_posix_messages~1</a> <span class="origin"><a href="file:///Users/uwe/RustroverProjects/aquarium_control/doc/req/sw/dispatch.md">/Users/uwe/RustroverProjects/aquarium_control/doc/req/sw/dispatch.md</a>:2</span></li>
+              <li><a href="#swreq~dispatch_process_posix_messages~1">swreq~dispatch_process_posix_messages~1</a> <span class="origin">doc/req/sw/dispatch.md:2</span></li>
             </ul>
           </div>
         </details>
@@ -1394,14 +1509,14 @@ summary .title {
           <p class="id">sysreq~water5~1</p>
           <p>The control system shall recognize error states of database communication, sensor, actuator or main tank.</p>
           <h6>Needs: swreq</h6>
-          <p class="origin"><a href="file:///Users/uwe/RustroverProjects/aquarium_control/doc/req/sys/system_requirements.md">/Users/uwe/RustroverProjects/aquarium_control/doc/req/sys/system_requirements.md</a>:27</p>
+          <p class="origin">doc/req/sys/system_requirements.md:27</p>
           <div class="in">
             <h6>In: 4</h6>
             <ul>
-              <li><a href="#swreq~water_db_failure_inhibition~1">swreq~water_db_failure_inhibition~1</a> <span class="origin"><a href="file:///Users/uwe/RustroverProjects/aquarium_control/doc/req/sw/water.md">/Users/uwe/RustroverProjects/aquarium_control/doc/req/sw/water.md</a>:22</span></li>
-              <li><a href="#swreq~water_error_detection~1">swreq~water_error_detection~1</a> <span class="origin"><a href="file:///Users/uwe/RustroverProjects/aquarium_control/doc/req/sw/water.md">/Users/uwe/RustroverProjects/aquarium_control/doc/req/sw/water.md</a>:72</span></li>
-              <li><a href="#swreq~water_log_flood_protection~1">swreq~water_log_flood_protection~1</a> <span class="origin"><a href="file:///Users/uwe/RustroverProjects/aquarium_control/doc/req/sw/water.md">/Users/uwe/RustroverProjects/aquarium_control/doc/req/sw/water.md</a>:120</span></li>
-              <li><a href="#swreq~water_startup_data_recovery~1">swreq~water_startup_data_recovery~1</a> <span class="origin"><a href="file:///Users/uwe/RustroverProjects/aquarium_control/doc/req/sw/water.md">/Users/uwe/RustroverProjects/aquarium_control/doc/req/sw/water.md</a>:97</span></li>
+              <li><a href="#swreq~water_db_failure_inhibition~1">swreq~water_db_failure_inhibition~1</a> <span class="origin">doc/req/sw/water.md:22</span></li>
+              <li><a href="#swreq~water_error_detection~1">swreq~water_error_detection~1</a> <span class="origin">doc/req/sw/water.md:72</span></li>
+              <li><a href="#swreq~water_log_flood_protection~1">swreq~water_log_flood_protection~1</a> <span class="origin">doc/req/sw/water.md:120</span></li>
+              <li><a href="#swreq~water_startup_data_recovery~1">swreq~water_startup_data_recovery~1</a> <span class="origin">doc/req/sw/water.md:97</span></li>
             </ul>
           </div>
         </details>
@@ -1412,11 +1527,11 @@ summary .title {
           <p class="id">sysreq~water6~1</p>
           <p>The control system shall allow the user to reset the error remotely.</p>
           <h6>Needs: swreq</h6>
-          <p class="origin"><a href="file:///Users/uwe/RustroverProjects/aquarium_control/doc/req/sys/system_requirements.md">/Users/uwe/RustroverProjects/aquarium_control/doc/req/sys/system_requirements.md</a>:33</p>
+          <p class="origin">doc/req/sys/system_requirements.md:33</p>
           <div class="in">
             <h6>In: 1</h6>
             <ul>
-              <li><a href="#swreq~water_channel_communication~1">swreq~water_channel_communication~1</a> <span class="origin"><a href="file:///Users/uwe/RustroverProjects/aquarium_control/doc/req/sw/water.md">/Users/uwe/RustroverProjects/aquarium_control/doc/req/sw/water.md</a>:142</span></li>
+              <li><a href="#swreq~water_channel_communication~1">swreq~water_channel_communication~1</a> <span class="origin">doc/req/sw/water.md:142</span></li>
             </ul>
           </div>
         </details>
@@ -1427,11 +1542,11 @@ summary .title {
           <p class="id">sysreq~food6~1</p>
           <p>The control system shall allow the user to restart all feed operations.</p>
           <h6>Needs: swreq</h6>
-          <p class="origin"><a href="file:///Users/uwe/RustroverProjects/aquarium_control/doc/req/sys/system_requirements.md">/Users/uwe/RustroverProjects/aquarium_control/doc/req/sys/system_requirements.md</a>:92</p>
+          <p class="origin">doc/req/sys/system_requirements.md:92</p>
           <div class="in">
             <h6>In: 1</h6>
             <ul>
-              <li><a href="#swreq~food_restart~1">swreq~food_restart~1</a> <span class="origin"><a href="file:///Users/uwe/RustroverProjects/aquarium_control/doc/req/sw/food.md">/Users/uwe/RustroverProjects/aquarium_control/doc/req/sw/food.md</a>:52</span></li>
+              <li><a href="#swreq~food_restart~1">swreq~food_restart~1</a> <span class="origin">doc/req/sw/food.md:52</span></li>
             </ul>
           </div>
         </details>
@@ -1442,11 +1557,11 @@ summary .title {
           <p class="id">sysreq~mineral7~1</p>
           <p>The control system shall allow the to restart all mineral dosing operations indefinitely.</p>
           <h6>Needs: swreq</h6>
-          <p class="origin"><a href="file:///Users/uwe/RustroverProjects/aquarium_control/doc/req/sys/system_requirements.md">/Users/uwe/RustroverProjects/aquarium_control/doc/req/sys/system_requirements.md</a>:141</p>
+          <p class="origin">doc/req/sys/system_requirements.md:141</p>
           <div class="in">
             <h6>In: 1</h6>
             <ul>
-              <li><a href="#swreq~mineral_restart~1">swreq~mineral_restart~1</a> <span class="origin"><a href="file:///Users/uwe/RustroverProjects/aquarium_control/doc/req/sw/mineral.md">/Users/uwe/RustroverProjects/aquarium_control/doc/req/sw/mineral.md</a>:62</span></li>
+              <li><a href="#swreq~mineral_restart~1">swreq~mineral_restart~1</a> <span class="origin">doc/req/sw/mineral.md:62</span></li>
             </ul>
           </div>
         </details>
@@ -1457,11 +1572,11 @@ summary .title {
           <p class="id">sysreq~water7~1</p>
           <p>The control system shall allow the user to start the refill controller remotely.</p>
           <h6>Needs: swreq</h6>
-          <p class="origin"><a href="file:///Users/uwe/RustroverProjects/aquarium_control/doc/req/sys/system_requirements.md">/Users/uwe/RustroverProjects/aquarium_control/doc/req/sys/system_requirements.md</a>:39</p>
+          <p class="origin">doc/req/sys/system_requirements.md:39</p>
           <div class="in">
             <h6>In: 1</h6>
             <ul>
-              <li><a href="#swreq~water_channel_communication~1">swreq~water_channel_communication~1</a> <span class="origin"><a href="file:///Users/uwe/RustroverProjects/aquarium_control/doc/req/sw/water.md">/Users/uwe/RustroverProjects/aquarium_control/doc/req/sw/water.md</a>:142</span></li>
+              <li><a href="#swreq~water_channel_communication~1">swreq~water_channel_communication~1</a> <span class="origin">doc/req/sw/water.md:142</span></li>
             </ul>
           </div>
         </details>
@@ -1472,11 +1587,11 @@ summary .title {
           <p class="id">sysreq~food5~1</p>
           <p>The control system shall allow the user to stop all feed operations indefinitely.</p>
           <h6>Needs: swreq</h6>
-          <p class="origin"><a href="file:///Users/uwe/RustroverProjects/aquarium_control/doc/req/sys/system_requirements.md">/Users/uwe/RustroverProjects/aquarium_control/doc/req/sys/system_requirements.md</a>:86</p>
+          <p class="origin">doc/req/sys/system_requirements.md:86</p>
           <div class="in">
             <h6>In: 1</h6>
             <ul>
-              <li><a href="#swreq~food_stop_indefinitely~1">swreq~food_stop_indefinitely~1</a> <span class="origin"><a href="file:///Users/uwe/RustroverProjects/aquarium_control/doc/req/sw/food.md">/Users/uwe/RustroverProjects/aquarium_control/doc/req/sw/food.md</a>:42</span></li>
+              <li><a href="#swreq~food_stop_indefinitely~1">swreq~food_stop_indefinitely~1</a> <span class="origin">doc/req/sw/food.md:42</span></li>
             </ul>
           </div>
         </details>
@@ -1487,11 +1602,11 @@ summary .title {
           <p class="id">sysreq~mineral6~1</p>
           <p>The control system shall allow the to stop all mineral dosing operations indefinitely.</p>
           <h6>Needs: swreq</h6>
-          <p class="origin"><a href="file:///Users/uwe/RustroverProjects/aquarium_control/doc/req/sys/system_requirements.md">/Users/uwe/RustroverProjects/aquarium_control/doc/req/sys/system_requirements.md</a>:135</p>
+          <p class="origin">doc/req/sys/system_requirements.md:135</p>
           <div class="in">
             <h6>In: 1</h6>
             <ul>
-              <li><a href="#swreq~mineral_stop_indefinitely~1">swreq~mineral_stop_indefinitely~1</a> <span class="origin"><a href="file:///Users/uwe/RustroverProjects/aquarium_control/doc/req/sw/mineral.md">/Users/uwe/RustroverProjects/aquarium_control/doc/req/sw/mineral.md</a>:52</span></li>
+              <li><a href="#swreq~mineral_stop_indefinitely~1">swreq~mineral_stop_indefinitely~1</a> <span class="origin">doc/req/sw/mineral.md:52</span></li>
             </ul>
           </div>
         </details>
@@ -1502,12 +1617,12 @@ summary .title {
           <p class="id">sysreq~water8~1</p>
           <p>The control system shall allow the user to stop the refill controller remotely.</p>
           <h6>Needs: swreq</h6>
-          <p class="origin"><a href="file:///Users/uwe/RustroverProjects/aquarium_control/doc/req/sys/system_requirements.md">/Users/uwe/RustroverProjects/aquarium_control/doc/req/sys/system_requirements.md</a>:45</p>
+          <p class="origin">doc/req/sys/system_requirements.md:45</p>
           <div class="in">
             <h6>In: 2</h6>
             <ul>
-              <li><a href="#swreq~water_channel_communication~1">swreq~water_channel_communication~1</a> <span class="origin"><a href="file:///Users/uwe/RustroverProjects/aquarium_control/doc/req/sw/water.md">/Users/uwe/RustroverProjects/aquarium_control/doc/req/sw/water.md</a>:142</span></li>
-              <li><a href="#swreq~water_shutdown_sequence~1">swreq~water_shutdown_sequence~1</a> <span class="origin"><a href="file:///Users/uwe/RustroverProjects/aquarium_control/doc/req/sw/water.md">/Users/uwe/RustroverProjects/aquarium_control/doc/req/sw/water.md</a>:130</span></li>
+              <li><a href="#swreq~water_channel_communication~1">swreq~water_channel_communication~1</a> <span class="origin">doc/req/sw/water.md:142</span></li>
+              <li><a href="#swreq~water_shutdown_sequence~1">swreq~water_shutdown_sequence~1</a> <span class="origin">doc/req/sw/water.md:130</span></li>
             </ul>
           </div>
         </details>
@@ -1518,11 +1633,131 @@ summary .title {
           <p class="id">sysreq~utilities3~1</p>
           <p>The control system shall verify that its internal version information and hash are compatible with the database schema on startup.</p>
           <h6>Needs: swreq</h6>
-          <p class="origin"><a href="file:///Users/uwe/RustroverProjects/aquarium_control/doc/req/sys/system_requirements.md">/Users/uwe/RustroverProjects/aquarium_control/doc/req/sys/system_requirements.md</a>:308</p>
+          <p class="origin">doc/req/sys/system_requirements.md:308</p>
           <div class="in">
             <h6>In: 1</h6>
             <ul>
-              <li><a href="#swreq~utilities_check_version_compatibility~1">swreq~utilities_check_version_compatibility~1</a> <span class="origin"><a href="file:///Users/uwe/RustroverProjects/aquarium_control/doc/req/sw/utilities.md">/Users/uwe/RustroverProjects/aquarium_control/doc/req/sw/utilities.md</a>:22</span></li>
+              <li><a href="#swreq~utilities_check_version_compatibility~1">swreq~utilities_check_version_compatibility~1</a> <span class="origin">doc/req/sw/utilities.md:22</span></li>
+            </ul>
+          </div>
+        </details>
+      </section>
+    </section>
+    <section id="utest">
+      <h3>utest</h3>
+      <section class="sitem" id="utest~food_execute_remote-81903312~0">
+        <details>
+          <summary title="utest~food_execute_remote-81903312~0"><span class="green">&check;</span> <b>food_execute_remote-81903312</b><small>, rev. 0, utest</small></summary>
+          <p class="id">utest~food_execute_remote-81903312~0</p>
+          <p class="origin">tests/food/test_feed.rs:198</p>
+          <div class="out">
+            <h6>Out: 1</h6>
+            <ul>
+              <li><a href="#swreq~food_execute_remote~1">swreq~food_execute_remote~1</a> <span class="origin">doc/req/sw/food.md:32</span></li>
+            </ul>
+          </div>
+        </details>
+      </section>
+      <section class="sitem" id="utest~food_execute_schedule-1941468277~0">
+        <details>
+          <summary title="utest~food_execute_schedule-1941468277~0"><span class="green">&check;</span> <b>food_execute_schedule-1941468277</b><small>, rev. 0, utest</small></summary>
+          <p class="id">utest~food_execute_schedule-1941468277~0</p>
+          <p class="origin">tests/food/test_feed.rs:77</p>
+          <div class="out">
+            <h6>Out: 1</h6>
+            <ul>
+              <li><a href="#swreq~food_execute_schedule~1">swreq~food_execute_schedule~1</a> <span class="origin">doc/req/sw/food.md:22</span></li>
+            </ul>
+          </div>
+        </details>
+      </section>
+      <section class="sitem" id="utest~food_execute_schedule-2398187600~0">
+        <details>
+          <summary title="utest~food_execute_schedule-2398187600~0"><span class="green">&check;</span> <b>food_execute_schedule-2398187600</b><small>, rev. 0, utest</small></summary>
+          <p class="id">utest~food_execute_schedule-2398187600~0</p>
+          <p class="origin">tests/food/test_food_injection.rs:239</p>
+          <div class="out">
+            <h6>Out: 1</h6>
+            <ul>
+              <li><a href="#swreq~food_execute_schedule~1">swreq~food_execute_schedule~1</a> <span class="origin">doc/req/sw/food.md:22</span></li>
+            </ul>
+          </div>
+        </details>
+      </section>
+      <section class="sitem" id="utest~food_execute_schedule-791994061~0">
+        <details>
+          <summary title="utest~food_execute_schedule-791994061~0"><span class="green">&check;</span> <b>food_execute_schedule-791994061</b><small>, rev. 0, utest</small></summary>
+          <p class="id">utest~food_execute_schedule-791994061~0</p>
+          <p class="origin">tests/food/test_food_injection.rs:144</p>
+          <div class="out">
+            <h6>Out: 1</h6>
+            <ul>
+              <li><a href="#swreq~food_execute_schedule~1">swreq~food_execute_schedule~1</a> <span class="origin">doc/req/sw/food.md:22</span></li>
+            </ul>
+          </div>
+        </details>
+      </section>
+      <section class="sitem" id="utest~food_log_database-4060468459~0">
+        <details>
+          <summary title="utest~food_log_database-4060468459~0"><span class="green">&check;</span> <b>food_log_database-4060468459</b><small>, rev. 0, utest</small></summary>
+          <p class="id">utest~food_log_database-4060468459~0</p>
+          <p class="origin">tests/food/test_feed.rs:399</p>
+          <div class="out">
+            <h6>Out: 1</h6>
+            <ul>
+              <li><a href="#swreq~food_log_database~1">swreq~food_log_database~1</a> <span class="origin">doc/req/sw/food.md:62</span></li>
+            </ul>
+          </div>
+        </details>
+      </section>
+      <section class="sitem" id="utest~food_read_schedule-2088904839~0">
+        <details>
+          <summary title="utest~food_read_schedule-2088904839~0"><span class="green">&check;</span> <b>food_read_schedule-2088904839</b><small>, rev. 0, utest</small></summary>
+          <p class="id">utest~food_read_schedule-2088904839~0</p>
+          <p class="origin">tests/food/test_feed.rs:599</p>
+          <div class="out">
+            <h6>Out: 1</h6>
+            <ul>
+              <li><a href="#swreq~food_read_schedule~1">swreq~food_read_schedule~1</a> <span class="origin">doc/req/sw/food.md:2</span></li>
+            </ul>
+          </div>
+        </details>
+      </section>
+      <section class="sitem" id="utest~food_read_schedule-737604621~0">
+        <details>
+          <summary title="utest~food_read_schedule-737604621~0"><span class="green">&check;</span> <b>food_read_schedule-737604621</b><small>, rev. 0, utest</small></summary>
+          <p class="id">utest~food_read_schedule-737604621~0</p>
+          <p class="origin">tests/food/test_feed.rs:487</p>
+          <div class="out">
+            <h6>Out: 1</h6>
+            <ul>
+              <li><a href="#swreq~food_read_schedule~1">swreq~food_read_schedule~1</a> <span class="origin">doc/req/sw/food.md:2</span></li>
+            </ul>
+          </div>
+        </details>
+      </section>
+      <section class="sitem" id="utest~food_restart-741477540~0">
+        <details>
+          <summary title="utest~food_restart-741477540~0"><span class="green">&check;</span> <b>food_restart-741477540</b><small>, rev. 0, utest</small></summary>
+          <p class="id">utest~food_restart-741477540~0</p>
+          <p class="origin">tests/food/test_feed.rs:200</p>
+          <div class="out">
+            <h6>Out: 1</h6>
+            <ul>
+              <li><a href="#swreq~food_restart~1">swreq~food_restart~1</a> <span class="origin">doc/req/sw/food.md:52</span></li>
+            </ul>
+          </div>
+        </details>
+      </section>
+      <section class="sitem" id="utest~food_stop_indefinitely-1529341948~0">
+        <details>
+          <summary title="utest~food_stop_indefinitely-1529341948~0"><span class="green">&check;</span> <b>food_stop_indefinitely-1529341948</b><small>, rev. 0, utest</small></summary>
+          <p class="id">utest~food_stop_indefinitely-1529341948~0</p>
+          <p class="origin">tests/food/test_feed.rs:199</p>
+          <div class="out">
+            <h6>Out: 1</h6>
+            <ul>
+              <li><a href="#swreq~food_stop_indefinitely~1">swreq~food_stop_indefinitely~1</a> <span class="origin">doc/req/sw/food.md:42</span></li>
             </ul>
           </div>
         </details>
@@ -1530,6 +1765,6 @@ summary .title {
     </section>
   </main>
   <nav>
-    <span class="red">&cross;</span> 91 total <meter value="0" low="90" max="91">0%</meter> <span class=".red">91 defects</span> | <a href="#swreq">swreq</a> &middot; <a href="#sysreq">sysreq</a>  </nav>
+    <span class="red">&cross;</span> 105 total <meter value="18" low="104" max="105">17%</meter> <span class=".red">87 defects</span> | <a href="#impl">impl</a> &middot; <a href="#itest">itest</a> &middot; <a href="#swreq">swreq</a> &middot; <a href="#sysreq">sysreq</a> &middot; <a href="#utest">utest</a>  </nav>
   </body>
 </html>

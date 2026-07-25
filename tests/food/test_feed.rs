@@ -74,6 +74,7 @@ fn execute_blocking(
 #[test]
 // "Happy" case executing a set of feed schedule entries. Additionally, it checks row limitation.
 // Test case uses test database #07.
+/// [utest->swreq~food_execute_schedule~1]
 pub fn test_feed_schedule_execution() {
     let sleep_duration_100_millis = Duration::from_millis(100);
     let sleep_duration_8_seconds = Duration::from_millis(10000);
@@ -194,6 +195,9 @@ pub fn test_feed_schedule_execution() {
 // resumes operation. Afterward, the test case triggers execution of a specific feed profile
 // by sending the "execute" message via the channel.
 // Test case uses test database #08.
+/// [utest->swreq~food_execute_remote~1]
+/// [utest->swreq~food_stop_indefinitely~1]
+/// [utest->swreq~food_restart~1]
 pub fn test_messaging_stops_starts_execute_feed() {
     let sleep_duration_100_millis = Duration::from_millis(100);
     let sleep_duration_2_secs = Duration::from_secs(2);
@@ -392,6 +396,7 @@ pub fn test_messaging_stops_starts_execute_feed() {
 #[test]
 // Test case runs feed control and triggers inhibition by using a mock SQL interface which returns only errors.
 // This test case does not require any communication with the database.
+/// [utest->swreq~food_log_database~1]
 pub fn test_messaging_sql_error_inhibition_feed() {
     let sleep_duration_100_millis = Duration::from_millis(100);
     let sleep_duration_10_secs = Duration::from_secs(10);
@@ -479,6 +484,7 @@ pub fn test_messaging_sql_error_inhibition_feed() {
 // Test case test implementation with multiple feed schedule entries in the past.
 // The youngest feed schedule entry shall be selected.
 // Test case uses test database #09.
+/// [utest->swreq~food_read_schedule~1]
 pub fn test_feed_schedule_execution_past_entries_select_youngest() {
     let sleep_duration_100_millis = Duration::from_millis(100);
     let sleep_duration_8_seconds = Duration::from_millis(10000);
@@ -590,6 +596,7 @@ pub fn test_feed_schedule_execution_past_entries_select_youngest() {
 // Test case test implementation with multiple feed schedule entries in the past.
 // The oldest feed schedule entry shall be selected.
 // Test case uses test database #10.
+/// [utest->swreq~food_read_schedule~1]
 pub fn test_feed_schedule_execution_past_entries_select_oldest() {
     let sleep_duration_100_millis = Duration::from_millis(100);
     let sleep_duration_8_seconds = Duration::from_millis(10000);

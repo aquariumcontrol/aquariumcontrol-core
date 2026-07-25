@@ -73,6 +73,7 @@ fn test_run_async_runtime_configuration() {
 #[test]
 // Verifies application behavior when a past feed schedule entry exists in the database
 // and feed profile execution starts at application startup.
+/// [itest->swreq~food_execute_schedule~1]
 fn test_run_with_past_feed_schedule_entry() {
     let _lock = TEST_RUN_MUTEX.lock().unwrap();
 
@@ -131,6 +132,7 @@ fn test_run_with_past_feed_schedule_entry() {
 // Test case uses test database #83.
 // Verifies that execution of a feed profile with a long duration (> 30s) blocks the Tokio worker thread
 // due to spin_sleeper.sleep, preventing the watchdog task from petting the watchdog timer.
+/// [itest->swreq~food_execute_schedule~1]
 fn test_run_feed_profile_blocks_watchdog() {
     // The test case asserts that the watchdog task was not blocked and operated continuously
     // through two key mechanisms:

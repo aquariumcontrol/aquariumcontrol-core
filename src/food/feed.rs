@@ -207,6 +207,7 @@ impl Feed {
     /// # Returns
     /// An empty Ok() or Err() depending on result of the logging operation.
     /// * `is_multi_thread` - A boolean flag indicating if the Tokio runtime is running in multithreaded mode.
+    /// [impl->swreq~food_log_database~1]
     fn log_feed_operation(
         &mut self,
         feed_profile: FeedProfile,
@@ -373,6 +374,7 @@ impl Feed {
     ///   to the SQL database for feed-specific operations. This allows for
     ///   dependency injection and mock implementations during testing.
     /// * `is_multi_thread` - A boolean indicating if the tokio runtime is running in multithreaded mode.
+    /// [impl->swreq~food_execute_schedule~1]
     pub async fn execute(
         &mut self,
         mutex_device_scheduler_feed: Arc<tokio::sync::Mutex<i32>>,

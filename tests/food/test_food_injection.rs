@@ -141,6 +141,7 @@ fn update_actuator_states(
 
 #[test]
 // this test case executes the food injection without interruption from the signal handler
+/// [utest->swreq~food_execute_schedule~1]
 pub fn test_food_injection_uninterrupted() {
     let config: ConfigData =
         read_config_file("config/aquarium_control_test_generic.toml".to_string()).unwrap();
@@ -235,6 +236,7 @@ pub fn test_food_injection_uninterrupted() {
 
 #[test]
 // this test case executes the food injection with interruption from the signal handler
+/// [utest->swreq~food_execute_schedule~1]
 pub fn test_food_injection_interrupted() {
     let config: ConfigData =
         read_config_file("config/aquarium_control_test_generic.toml".to_string()).unwrap();

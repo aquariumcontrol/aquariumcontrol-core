@@ -95,6 +95,7 @@ pub trait FoodInjectionTrait {
     /// - Communication failures with the relay manager (`RelayManagerSend`, `RelayManagerReceive`).
     /// - An attempt to set a device to an undefined state (e.g., `UndefinedTargetStateSkimmer`).
     #[allow(async_fn_in_trait)]
+    /// [impl->swreq~food_execute_schedule~1]
     async fn inject_food(
         &mut self,
         feed_channels: &mut FeedChannels,
