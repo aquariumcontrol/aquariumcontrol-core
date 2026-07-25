@@ -387,7 +387,7 @@ impl Ventilation {
     ) {
         #[cfg(all(target_os = "linux", not(test), not(feature = "test-utils")))] // only required in real-life execution
         #[cfg(not(tarpaulin_include))]
-        info!(target: module_path!(), "Thread started with TID: {}", gettid()).await;
+        info!(target: module_path!(), "Thread started with TID: {}", gettid());
 
         let cycle_time_duration = Duration::from_millis(CYCLE_TIME_VENTILATION_MILLIS);
         let sleep_duration_hundred_millis = Duration::from_millis(100);
