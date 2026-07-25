@@ -168,7 +168,7 @@ fn test_run_feed_profile_blocks_watchdog() {
 
     TEST_SHUTDOWN_TRIGGER.store(false, Ordering::Relaxed);
     let _ = std::fs::remove_file("/tmp/aquarium-ctrl-test2.pid");
-    
+
     let watchdog_file_path = "/tmp/aquarium_watchdog_test2.tmp";
     let _ = std::fs::remove_file(watchdog_file_path);
 
@@ -214,7 +214,6 @@ fn test_run_feed_profile_blocks_watchdog() {
         "Watchdog file was not petted during feed profile execution!"
     );
 
-    let _ = std::fs::remove_file(test_config_path);
     let _ = std::fs::remove_file(watchdog_file_path);
 }
 
