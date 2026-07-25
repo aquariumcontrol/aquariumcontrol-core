@@ -82,6 +82,7 @@ impl FeedScheduleEntry {
     /// # Errors
     /// Returns `SqlInterfaceError::FeedScheduleEntryRepeatDailyOutOfRange` if
     /// `repeat_daily` is not either zero or one.
+    /// [impl->swreq~food_read_schedule~1]
     pub fn new(
         sql_feed_schedule_entry: &SqlFeedScheduleEntry,
     ) -> Result<FeedScheduleEntry, SqlInterfaceError> {
@@ -180,6 +181,7 @@ mod tests {
     /// Tests the successful creation of a `FeedScheduleEntry` when `repeat_daily` is 0.
     #[test]
     // Verifies that new with repeat daily zero.
+    /// [utest->swreq~food_read_schedule~1]
     fn test_new_with_repeat_daily_zero() {
         println!("* Testing FeedScheduleEntry::new with repeat_daily = 0...");
         // --- Setup ---

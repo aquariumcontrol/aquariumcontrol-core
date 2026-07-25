@@ -188,6 +188,7 @@ impl Feed {
     //
     // # Returns
     // A `String` representation of the feed schedule entries.
+    /// [impl->swreq~food_read_schedule~1]
     fn feed_schedule_entries_to_string(feedschedule_entries: Vec<FeedScheduleEntry>) -> String {
         let mut output: String = "Vec<FeedscheduleEntry>=".to_string();
         for (i, s) in feedschedule_entries.iter().enumerate() {
@@ -719,6 +720,7 @@ pub mod tests {
     // Test case test selection of feed schedule entry in case there are multiple entries in the past
     // This test case tests the strategy to select none of them.
     // This test case does not require any communication with the database.
+    /// [utest->swreq~food_read_schedule~1]
     pub fn test_select_feed_schedule_entry_for_execution_none() {
         setup_logger(LoggerConfig::default()).unwrap();
         let mut config: ConfigData =
@@ -815,6 +817,7 @@ pub mod tests {
     // ensuring a predictable starting state for the Feed controller.
     //
     // Test case uses test database #65 for configuration loading, as requested.
+    /// [utest->swreq~food_execute_schedule~1]
     fn test_feed_new() {
         println!("* Testing Feed::new constructor...");
 

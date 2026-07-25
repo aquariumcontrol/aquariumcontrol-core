@@ -70,6 +70,7 @@ impl FeedProfile {
     ///
     /// # Returns
     /// The total feeder run time for this profile, expressed as an `f64` in seconds.
+    /// [impl->swreq~food_log_database~1]
     pub fn calc_feeder_runtime(&self) -> f64 {
         self.feedphases
             .iter()
@@ -142,6 +143,7 @@ impl FeedPhase {
     ///
     /// # Returns
     /// A new `FeedPhase` struct initialized with the provided values.
+    /// [impl->swreq~food_read_profiles~1]
     pub fn new(
         pause_duration: i32,
         pause_skimmer: bool,
@@ -180,6 +182,7 @@ mod tests {
     /// Tests that `calc_feeder_runtime` returns 0.0 for a profile with no feed phases.
     #[test]
     // Verifies that calc feeder runtime empty.
+    /// [utest->swreq~food_log_database~1]
     fn test_calc_feeder_runtime_empty() {
         println!("* Testing calc_feeder_runtime with an empty phase list...");
         let profile = FeedProfile {

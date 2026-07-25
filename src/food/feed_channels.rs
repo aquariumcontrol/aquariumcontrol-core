@@ -66,6 +66,7 @@ pub struct FeedChannels {
 
 impl FeedChannels {
     /// Sends a command to the relay manager.
+    /// [impl->swreq~food_execute_schedule~1]
     pub fn send_to_relay_manager(
         &mut self,
         command: InternalCommand,
