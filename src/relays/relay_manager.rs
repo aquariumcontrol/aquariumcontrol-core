@@ -61,7 +61,8 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 
 #[cfg(all(not(test), not(feature = "test-utils")))] // only required in real-life execution
 use log::error;
-#[cfg(all(not(feature = "test-utils"), not(test), target_os = "linux"))] // only required in real-life execution
+#[cfg(all(not(feature = "test-utils"), not(test), target_os = "linux"))]
+// only required in real-life execution
 use log::info;
 
 #[cfg(all(not(test), not(feature = "test-utils")))] // only required in real-life execution
@@ -71,7 +72,8 @@ use log::warn;
 use log::debug;
 
 // reduce terminal output when testing
-#[cfg(all(not(feature = "test-utils"), not(test), target_os = "linux"))] // only required in real-life execution
+#[cfg(all(not(feature = "test-utils"), not(test), target_os = "linux"))]
+// only required in real-life execution
 use nix::unistd::gettid;
 
 use crate::launch::channels::{AquaChannelError, AquaReceiver, AquaSender};

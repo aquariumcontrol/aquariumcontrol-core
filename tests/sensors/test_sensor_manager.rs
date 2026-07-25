@@ -112,7 +112,7 @@ fn execute_blocking(
     sensor_manager_channels: &mut SensorManagerChannels,
     mutexes: SensorManagerMutexes,
 ) {
-    tokio::runtime::Builder::new_multi_thread()
+    tokio::runtime::Builder::new_multi_thread().enable_all()
         .enable_all()
         .build()
         .unwrap()

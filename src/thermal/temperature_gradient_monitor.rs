@@ -40,8 +40,7 @@ pub trait TemperatureGradientMonitorTrait {
         mutex_temperature_gradient: &Arc<Mutex<f64>>,
         actuator_status: bool,
         expected_gradient_is_positive: bool,
-        #[cfg(all(not(test), not(feature = "test-utils")))]
-        component_name: &str, // only required in real-life execution
+        #[cfg(all(not(test), not(feature = "test-utils")))] component_name: &str, // only required in real-life execution
     ) -> bool {
         let max_time = self.max_time_actuator_effect_monitor();
         if max_time == 0 {

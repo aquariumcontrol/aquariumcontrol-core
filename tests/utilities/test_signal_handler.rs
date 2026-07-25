@@ -44,7 +44,7 @@ fn test_signal_handling() {
     let join_handle_test_object = thread::Builder::new()
         .name("test_object".to_string())
         .spawn(move || {
-            tokio::runtime::Builder::new_multi_thread()
+            tokio::runtime::Builder::new_multi_thread().enable_all()
                 .worker_threads(1)
                 .enable_all()
                 .build()
@@ -56,7 +56,8 @@ fn test_signal_handling() {
                         channels.signal_handler,
                         ExecutionConfig::default(),
                         None,
-                    ).await;
+                    )
+                    .await;
                 });
         })
         .unwrap();

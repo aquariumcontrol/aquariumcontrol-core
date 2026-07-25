@@ -41,12 +41,12 @@ use std::time::Duration;
 /// * `ventilation_mutexes` - Shared mutexes for ventilation conditions.
 fn execute_blocking(
     ventilation: &mut Ventilation,
-    mutex_device_scheduler_ventilation: Arc<Mutex<i32>>,
+    mutex_device_scheduler_ventilation: Arc<tokio::sync::Mutex<i32>>,
     ventilation_channels: &mut VentilationChannels,
     ventilation_set_val_updater: &mut impl ThermalSetValueUpdaterTrait,
     ventilation_mutexes: VentilationMutexes,
 ) {
-    tokio::runtime::Builder::new_current_thread()
+    tokio::runtime::Builder::new_current_thread().enable_all()
         .enable_all()
         .build()
         .unwrap()
@@ -204,7 +204,7 @@ pub fn test_ventilation_with_measured_temperature_high_without_blocking_mutex() 
         &config.sensor_manager,
     )));
 
-    let mutex_device_scheduler_ventilation = Arc::new(Mutex::new(0));
+    let mutex_device_scheduler_ventilation = Arc::new(tokio::sync::Mutex::new(0));
 
     // thread for mock relay manager - includes assertions
     let join_handle_mock_relay_manager = create_mock_relay_manager_for_ventilation_on(
@@ -362,7 +362,7 @@ pub fn test_ventilation_with_measured_temperature_low() {
         &config.sensor_manager,
     )));
 
-    let mutex_device_scheduler_ventilation = Arc::new(Mutex::new(0));
+    let mutex_device_scheduler_ventilation = Arc::new(tokio::sync::Mutex::new(0));
 
     // thread for mock relay manager - includes assertions
     let join_handle_mock_relay_manager = create_mock_relay_manager(
@@ -469,7 +469,7 @@ pub fn test_ventilation_with_measured_temperature_50_percent() {
         &config.sensor_manager,
     )));
 
-    let mutex_device_scheduler_ventilation = Arc::new(Mutex::new(0));
+    let mutex_device_scheduler_ventilation = Arc::new(tokio::sync::Mutex::new(0));
 
     // thread for mock relay manager - includes assertions
     let join_handle_mock_relay_manager = thread::Builder::new()
@@ -684,7 +684,7 @@ pub fn test_ventilation_with_measured_temperature_high_within_interval() {
         &config.sensor_manager,
     )));
 
-    let mutex_device_scheduler_ventilation = Arc::new(Mutex::new(0));
+    let mutex_device_scheduler_ventilation = Arc::new(tokio::sync::Mutex::new(0));
 
     // thread for mock relay manager - includes assertions
     let join_handle_mock_relay_manager = thread::Builder::new()
@@ -877,7 +877,7 @@ pub fn test_ventilation_with_measured_temperature_low_within_interval() {
         &config.sensor_manager,
     )));
 
-    let mutex_device_scheduler_ventilation = Arc::new(Mutex::new(0));
+    let mutex_device_scheduler_ventilation = Arc::new(tokio::sync::Mutex::new(0));
 
     // thread for mock relay manager - includes assertions
     let join_handle_mock_relay_manager = thread::Builder::new()
@@ -1070,7 +1070,7 @@ pub fn test_ventilation_block_by_schedule() {
         &config.sensor_manager,
     )));
 
-    let mutex_device_scheduler_ventilation = Arc::new(Mutex::new(0));
+    let mutex_device_scheduler_ventilation = Arc::new(tokio::sync::Mutex::new(0));
 
     // thread for mock relay manager - includes assertions
     let join_handle_mock_relay_manager = create_mock_relay_manager(
@@ -1122,7 +1122,7 @@ pub fn test_ventilation_block_by_schedule() {
             let _ =
                 tx_ventilation_to_relay_manager_for_test_case_finish.send(InternalCommand::Quit);
 
-            let actuation_count = *mutex_device_scheduler_ventilation.lock().unwrap();
+            let actuation_count = *mutex_device_scheduler_ventilation.blocking_lock();
 
             // check if ventilation is only actuated once (when quitting)
             assert_eq!(actuation_count, 2);
@@ -1167,7 +1167,7 @@ pub fn test_messaging_stops_starts_ventilation() {
 
     let mut channels = Channels::new_for_test();
 
-    let mutex_device_scheduler_ventilation = Arc::new(Mutex::new(0));
+    let mutex_device_scheduler_ventilation = Arc::new(tokio::sync::Mutex::new(0));
     let mutex_device_scheduler_test_environment = mutex_device_scheduler_ventilation.clone();
 
     // thread for mock schedule check
@@ -1237,7 +1237,7 @@ pub fn test_messaging_stops_starts_ventilation() {
                 spin_sleeper.sleep(sleep_duration_100_millis);
             }
             // check the initial state of mutex: should be already switched on
-            assert_eq!(*mutex_device_scheduler_test_environment.lock().unwrap(), 1);
+            assert_eq!(*mutex_device_scheduler_test_environment.blocking_lock(), 1);
 
             // sending a message requesting stop of ventilation control
             match channels
@@ -1259,7 +1259,7 @@ pub fn test_messaging_stops_starts_ventilation() {
                 spin_sleeper.sleep(sleep_duration_100_millis);
             }
             // check if ventilation is actuated
-            assert_eq!(*mutex_device_scheduler_test_environment.lock().unwrap(), 2);
+            assert_eq!(*mutex_device_scheduler_test_environment.blocking_lock(), 2);
 
             // sending a message requesting restart of ventilation control
             match channels
@@ -1281,7 +1281,7 @@ pub fn test_messaging_stops_starts_ventilation() {
                 spin_sleeper.sleep(sleep_duration_100_millis);
             }
             // check if ventilation is actuated
-            assert_eq!(*mutex_device_scheduler_test_environment.lock().unwrap(), 3);
+            assert_eq!(*mutex_device_scheduler_test_environment.blocking_lock(), 3);
 
             // sending a message requesting stop of ventilation control
             match channels
@@ -1303,7 +1303,7 @@ pub fn test_messaging_stops_starts_ventilation() {
                 spin_sleeper.sleep(sleep_duration_100_millis);
             }
             // check if ventilation is actuated
-            assert_eq!(*mutex_device_scheduler_test_environment.lock().unwrap(), 4);
+            assert_eq!(*mutex_device_scheduler_test_environment.blocking_lock(), 4);
 
             // requesting ventilation control to quit
             let _ = channels
@@ -1317,7 +1317,7 @@ pub fn test_messaging_stops_starts_ventilation() {
                 .unwrap();
 
             // check if ventilation is actuated
-            assert_eq!(*mutex_device_scheduler_test_environment.lock().unwrap(), 5);
+            assert_eq!(*mutex_device_scheduler_test_environment.blocking_lock(), 5);
             let _ = channels
                 .signal_handler
                 .tx_signal_handler_to_ventilation
@@ -1413,7 +1413,7 @@ pub fn test_ventilation_with_decreased_set_values() {
         &config.sensor_manager,
     )));
 
-    let mutex_device_scheduler_ventilation = Arc::new(Mutex::new(0));
+    let mutex_device_scheduler_ventilation = Arc::new(tokio::sync::Mutex::new(0));
 
     // thread for mock relay manager - includes assertions
     let join_handle_mock_relay_manager = thread::Builder::new()
@@ -1573,7 +1573,7 @@ pub fn test_ventilation_with_measured_temperature_high_with_blocking_mutex() {
         &config.sensor_manager,
     )));
 
-    let mutex_device_scheduler_ventilation = Arc::new(Mutex::new(0));
+    let mutex_device_scheduler_ventilation = Arc::new(tokio::sync::Mutex::new(0));
 
     // thread for mock relay manager - includes assertions
     let join_handle_mock_relay_manager = create_mock_relay_manager_for_ventilation_on(
@@ -1681,7 +1681,7 @@ pub fn test_ventilation_gradient_monitoring_disables_actuator() {
         &config.sensor_manager,
     )));
 
-    let mutex_device_scheduler_ventilation = Arc::new(Mutex::new(0));
+    let mutex_device_scheduler_ventilation = Arc::new(tokio::sync::Mutex::new(0));
 
     // Mutex for ventilation status to check assertions
     let mutex_ventilation_status = Arc::new(Mutex::new(ThermalControlStatus::default()));
@@ -1851,7 +1851,7 @@ pub fn test_ventilation_reset_errors_enables_actuator() {
         &config.sensor_manager,
     )));
 
-    let mutex_device_scheduler_ventilation = Arc::new(Mutex::new(0));
+    let mutex_device_scheduler_ventilation = Arc::new(tokio::sync::Mutex::new(0));
 
     // Mutex for ventilation status to check assertions
     let mutex_ventilation_status = Arc::new(Mutex::new(ThermalControlStatus::default()));
@@ -1975,6 +1975,137 @@ pub fn test_ventilation_reset_errors_enables_actuator() {
             let _ =
                 tx_ventilation_to_relay_manager_for_test_case_finish.send(InternalCommand::Quit);
             println!("* [Ventilation] checking reset errors enables actuator succeeded.");
+        })
+        .unwrap();
+
+    join_handle_mock_schedule_check
+        .join()
+        .expect("Mock schedule check failed");
+    join_handle_mock_relay_manager
+        .join()
+        .expect("Mock relay manager failed");
+    join_handle_test_environment
+        .join()
+        .expect("Test environment failed");
+    join_handle_test_object.join().expect("Test object failed");
+}
+
+#[test]
+// Verifies that ventilation actuation is inhibited when device_scheduler mutex is blocked.
+// The test environment thread acquires and holds the device_scheduler mutex lock before ventilation actuation occurs.
+// While the lock is held, ventilation actuation is blocked. Once released, ventilation actuation proceeds normally.
+// Test case uses test database #71.
+pub fn test_ventilation_actuation_with_device_scheduler_mutex_blocked() {
+    let sleep_duration_100_millis = Duration::from_millis(100);
+    let spin_sleeper = SpinSleeper::default();
+
+    let (mut config, mut ventilation) = prepare_ventilation_tests(None);
+    config.sensor_manager.replacement_value_water_temperature = 30.0;
+
+    let mut channels = Channels::new_for_test();
+
+    // thread for mock schedule check
+    let join_handle_mock_schedule_check = thread::Builder::new()
+        .name("mock_schedule_check".to_string())
+        .spawn(move || {
+            mock_schedule_check(
+                &mut channels.schedule_check.tx_schedule_check_to_ventilation,
+                &mut channels.schedule_check.rx_schedule_check_from_ventilation,
+                None,
+                true,
+            );
+        })
+        .unwrap();
+
+    let mutex_sensor_manager_signals = Arc::new(Mutex::new(SensorManagerSignals::new(
+        &config.sensor_manager,
+    )));
+
+    let mutex_device_scheduler_ventilation = Arc::new(tokio::sync::Mutex::new(0));
+    let mutex_device_scheduler_environment = mutex_device_scheduler_ventilation.clone();
+
+    // thread for mock relay manager
+    let join_handle_mock_relay_manager = create_mock_relay_manager_for_ventilation_on(
+        channels.relay_manager.tx_relay_manager_to_ventilation,
+        channels.relay_manager.rx_relay_manager_from_ventilation,
+    );
+
+    // thread for controlling duration of test run and blocking device_scheduler mutex
+    let join_handle_test_environment = thread::Builder::new()
+        .name("test_environment".to_string())
+        .spawn(move || {
+            let spin_sleeper = SpinSleeper::default();
+
+            // 1. Acquire lock on device_scheduler mutex before ventilation actuation executes
+            let lock_guard = mutex_device_scheduler_environment.blocking_lock();
+
+            // Hold lock for 3 seconds
+            spin_sleeper.sleep(Duration::from_secs(3));
+
+            // Verify count remains 0 while lock is held
+            assert_eq!(*lock_guard, 0);
+
+            // 2. Release lock so ventilation actuation can proceed
+            drop(lock_guard);
+
+            // Wait 3 seconds for actuation to complete
+            spin_sleeper.sleep(Duration::from_secs(3));
+
+            let _ = channels
+                .signal_handler
+                .tx_signal_handler_to_ventilation
+                .send(InternalCommand::Quit);
+            channels
+                .signal_handler
+                .rx_signal_handler_from_ventilation
+                .blocking_recv()
+                .unwrap();
+            let _ = channels
+                .signal_handler
+                .tx_signal_handler_to_ventilation
+                .send(InternalCommand::Terminate);
+        })
+        .unwrap();
+
+    spin_sleeper.sleep(sleep_duration_100_millis);
+
+    // thread for the test object
+    let join_handle_test_object = thread::Builder::new()
+        .name("test_object".to_string())
+        .spawn(move || {
+            let mut tx_ventilation_to_schedule_check_for_test_case_finish = channels
+                .ventilation
+                .tx_ventilation_to_schedule_check
+                .clone();
+            let mut tx_ventilation_to_relay_manager_for_test_case_finish =
+                channels.ventilation.tx_ventilation_to_relay_manager.clone();
+
+            let mut ventilation_set_value_updater =
+                MockSqlInterfaceVentilationSetVals::new(false, None, None, None);
+
+            let ventilation_mutexes = VentilationMutexes {
+                mutex_sensor_manager_signals,
+                mutex_ventilation_status: Arc::new(Mutex::new(ThermalControlStatus::default())),
+                mutex_temperature_gradient: Arc::new(Mutex::new(0.0)),
+            };
+
+            execute_blocking(
+                &mut ventilation,
+                mutex_device_scheduler_ventilation.clone(),
+                &mut channels.ventilation,
+                &mut ventilation_set_value_updater,
+                ventilation_mutexes,
+            );
+
+            assert!(*mutex_device_scheduler_ventilation.blocking_lock() >= 1);
+
+            let _ =
+                tx_ventilation_to_schedule_check_for_test_case_finish.send(InternalCommand::Quit);
+            let _ =
+                tx_ventilation_to_relay_manager_for_test_case_finish.send(InternalCommand::Quit);
+            println!(
+                "* [Ventilation] checking actuation with device scheduler mutex blocked succeeded."
+            );
         })
         .unwrap();
 

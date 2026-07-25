@@ -67,7 +67,8 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 
 #![allow(non_snake_case)]
 
-#[cfg(all(not(feature = "test-utils"), not(test), target_os = "linux"))] // only required in real-life execution
+#[cfg(all(not(feature = "test-utils"), not(test), target_os = "linux"))]
+// only required in real-life execution
 use log::info;
 use std::collections::HashMap;
 use std::fmt;
@@ -86,7 +87,8 @@ use crate::utilities::channel_content::AquariumSignal;
 use crate::utilities::logger::log_error_chain;
 use crate::utilities::proc_ext_req::ProcessExternalRequestTrait;
 use crate::utilities::wait_for_termination::WaitForTerminationTrait;
-#[cfg(all(not(feature = "test-utils"), not(test), target_os = "linux"))] // only required in real-life execution
+#[cfg(all(not(feature = "test-utils"), not(test), target_os = "linux"))]
+// only required in real-life execution
 use nix::unistd::gettid;
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};

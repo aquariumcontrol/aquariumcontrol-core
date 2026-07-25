@@ -12,17 +12,24 @@ use aquarium_control::database::sql_interface::SqlInterface;
 use aquarium_control::launch::run::run;
 use aquarium_control::utilities::config::read_config_file;
 use aquarium_control::utilities::signal_handler::TEST_SHUTDOWN_TRIGGER;
-use std::sync::atomic::Ordering;
+use std::sync::{atomic::Ordering, Mutex};
 use std::time::Duration;
+
+static TEST_RUN_MUTEX: Mutex<()> = Mutex::new(());
 
 #[path = "../database/common.rs"]
 mod common;
 
 use common::{add_balling_profile, insert_current_version_information, truncate_all_tables};
 
+use aquarium_control::database::database_interface_feed_trait::DatabaseInterfaceFeedTrait;
+use aquarium_control::database::sql_interface_feed::{insert_feed_profiles, insert_feed_schedule_entry, SqlInterfaceFeed};
+
 #[test]
 // Verifies that run async runtime configuration.
 fn test_run_async_runtime_configuration() {
+    let _lock = TEST_RUN_MUTEX.lock().unwrap();
+
     // Path of the dedicated config file
     let config_path = "config/aquarium_control_test_runtime.toml".to_string();
 
@@ -38,26 +45,6 @@ fn test_run_async_runtime_configuration() {
         let mut sql_interface = SqlInterface::new(config_data.sql_interface).unwrap();
 
         truncate_all_tables(&mut sql_interface);
-
-        // Also clean up other settings tables to prevent row limits issues
-        use aquarium_control::database::sql_test_query_strings::{
-            SQL_TABLE_BALLING_SET_VALS, SQL_TABLE_HEATING_SET_VALS, SQL_TABLE_SCHEDULE,
-            SQL_TABLE_VENTILATION_SET_VALS,
-        };
-        let _ = SqlInterface::truncate_table(
-            &mut sql_interface,
-            SQL_TABLE_BALLING_SET_VALS.to_string(),
-        );
-        let _ = SqlInterface::truncate_table(
-            &mut sql_interface,
-            SQL_TABLE_HEATING_SET_VALS.to_string(),
-        );
-        let _ = SqlInterface::truncate_table(
-            &mut sql_interface,
-            SQL_TABLE_VENTILATION_SET_VALS.to_string(),
-        );
-        let _ = SqlInterface::truncate_table(&mut sql_interface, SQL_TABLE_SCHEDULE.to_string());
-        let _ = SqlInterface::truncate_table(&mut sql_interface, "version".to_string());
 
         insert_current_version_information(&mut sql_interface);
 
@@ -82,3 +69,151 @@ fn test_run_async_runtime_configuration() {
         run_result.err()
     );
 }
+
+#[test]
+// Verifies application behavior when a past feed schedule entry exists in the database
+// and feed profile execution starts at application startup.
+fn test_run_with_past_feed_schedule_entry() {
+    let _lock = TEST_RUN_MUTEX.lock().unwrap();
+
+    let config_path = "config/aquarium_control_test_runtime.toml".to_string();
+
+    TEST_SHUTDOWN_TRIGGER.store(false, Ordering::Relaxed);
+    let _ = std::fs::remove_file("/tmp/aquarium-ctrl-test.pid");
+
+    {
+        let config_data = read_config_file(config_path.to_string()).unwrap();
+        let mut sql_interface = SqlInterface::new(config_data.sql_interface.clone()).unwrap();
+
+        truncate_all_tables(&mut sql_interface);
+
+        insert_current_version_information(&mut sql_interface);
+
+        for pump_id in 1..=4 {
+            add_balling_profile(
+                &mut sql_interface.conn,
+                pump_id,
+                1.0f32,
+                10.0f32,
+                format!("Pump {}", pump_id),
+            );
+        }
+
+        // Insert feed profiles using helper
+        let mut sql_interface_feed = SqlInterfaceFeed::new(
+            sql_interface.get_connection().unwrap(),
+            config_data.sql_interface.max_rows_feed_profile,
+            config_data.sql_interface.max_rows_feed_schedule,
+            config_data.sql_interface.max_rows_feed_log,
+        )
+        .unwrap();
+
+        insert_feed_profiles(&mut sql_interface, &mut sql_interface_feed);
+
+        let past_timestamp =
+            chrono::NaiveDateTime::parse_from_str("2024-01-01 12:00:00", "%Y-%m-%d %H:%M:%S")
+                .unwrap();
+        sql_interface_feed
+            .insert_feed_schedule_entry(past_timestamp, 1, false, true)
+            .unwrap();
+    }
+
+    let run_result = run(Some(config_path), Some(Duration::from_secs(10)));
+
+    assert!(
+        run_result.is_ok(),
+        "run() failed with error: {:?}",
+        run_result.err()
+    );
+}
+
+#[test]
+// Test case uses test database #83.
+// Verifies that execution of a feed profile with a long duration (> 30s) blocks the Tokio worker thread
+// due to spin_sleeper.sleep, preventing the watchdog task from petting the watchdog timer.
+fn test_run_feed_profile_blocks_watchdog() {
+    // The test case asserts that the watchdog task was not blocked and operated continuously
+    // through two key mechanisms:
+    //
+    // 1. Watchdog Petting Assertion
+    // The test configures a custom watchdog filename /tmp/aquarium_watchdog_test_83.tmp in the
+    // test configuration and assert its content:
+    //    assert!(
+    //        std::path::Path::new(watchdog_file_path).exists(),
+    //        "Watchdog file was not petted during feed profile execution!"
+    //    );
+    // - When Watchdog::execute runs asynchronously on Tokio, it writes its heartbeat to
+    // watchdog_file_path on each interval using PettingTrait::pet.
+    // - If the Tokio worker thread were blocked by during the feed profile execution, the watchdog
+    // task would be starved of CPU execution time, preventing it from creating or updating
+    // this file.
+    // 2. Runtime Completion Assertion (test_run.rs)
+    //    let run_result = run(Some(test_config_path.to_string()), Some(Duration::from_secs(3)));
+    //
+    //    assert!(
+    //        run_result.is_ok(),
+    //        "run() failed with error: {:?}",
+    //        run_result.err()
+    //    );
+    // - run(...) executes the main application async runtime for 3 seconds.
+    // During this window, feed profile #83 (configured with an extended pause duration) is actively
+    // executing via food_injection.inject_food(...).
+    // Asserting run_result.is_ok() verifies that all Tokio tasks (including feed, watchdog,
+    // sensor_manager, and signal handler) join cleanly and exit without timing out or crashing.
+
+    let _lock = TEST_RUN_MUTEX.lock().unwrap();
+
+    // configuration is derived from previous test case test_run_async_runtime_configuration
+    let test_config_path = "config/aquarium_control_test_runtime_blocked.toml";
+
+    TEST_SHUTDOWN_TRIGGER.store(false, Ordering::Relaxed);
+    let _ = std::fs::remove_file("/tmp/aquarium-ctrl-test2.pid");
+
+    let watchdog_file_path = "/tmp/aquarium_watchdog_test2.tmp";
+    let _ = std::fs::remove_file(watchdog_file_path);
+
+    {
+        let config_data = read_config_file(test_config_path.to_string()).unwrap();
+        let mut sql_interface = SqlInterface::new(config_data.sql_interface.clone()).unwrap();
+
+        truncate_all_tables(&mut sql_interface);
+        insert_current_version_information(&mut sql_interface);
+
+        for pump_id in 1..=4 {
+            add_balling_profile(
+                &mut sql_interface.conn,
+                pump_id,
+                1.0f32,
+                10.0f32,
+                format!("Pump {}", pump_id),
+            );
+        }
+
+        let mut sql_interface_feed = SqlInterfaceFeed::new(
+            sql_interface.get_connection().unwrap(),
+            config_data.sql_interface.max_rows_feed_profile,
+            config_data.sql_interface.max_rows_feed_schedule,
+            config_data.sql_interface.max_rows_feed_log,
+        )
+        .unwrap();
+
+        insert_feed_profiles(&mut sql_interface, &mut sql_interface_feed);
+        insert_feed_schedule_entry(&mut sql_interface_feed);
+    }
+
+    let run_result = run(Some(test_config_path.to_string()), Some(Duration::from_secs(3)));
+
+    assert!(
+        run_result.is_ok(),
+        "run() failed with error: {:?}",
+        run_result.err()
+    );
+
+    assert!(
+        std::path::Path::new(watchdog_file_path).exists(),
+        "Watchdog file was not petted during feed profile execution!"
+    );
+
+    let _ = std::fs::remove_file(watchdog_file_path);
+}
+

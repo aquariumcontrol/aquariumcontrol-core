@@ -69,13 +69,13 @@ use log::error;
 #[cfg(all(not(test), not(feature = "test-utils")))]
 use log::info;
 
-use std::error;
 use std::fmt;
 
-#[cfg(all(not(feature = "test-utils"), not(test), target_os = "linux"))] // only required in real-life execution
+#[cfg(all(not(feature = "test-utils"), not(test), target_os = "linux"))]
+// only required in real-life execution
 use nix::unistd::gettid;
 
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use crate::database::sql_interface_balling::{BallingSetVal, SqlInterfaceBalling};
@@ -86,7 +86,6 @@ use crate::mineral::mineral_injection::MineralInjectionTrait;
 use crate::utilities::acknowledge_signal_handler::AcknowledgeSignalHandlerTrait;
 use crate::utilities::channel_content::AquariumDevice;
 use crate::utilities::database_ping_trait::DatabasePingTrait;
-use crate::utilities::logger::log_error_chain;
 use crate::utilities::proc_ext_req::ProcessExternalRequestTrait;
 use crate::utilities::wait_for_termination::WaitForTerminationTrait;
 use crate::{check_quit_increment_counter_ping_database, perform_schedule_check};
@@ -515,7 +514,7 @@ impl Balling {
         mineral_injection: &mut (impl MineralInjectionTrait + Send),
         balling_channels: &mut BallingChannels,
         sql_interface_balling: &mut SqlInterfaceBalling,
-        mutex_device_scheduler_balling: &Arc<Mutex<i32>>,
+        mutex_device_scheduler_balling: &Arc<tokio::sync::Mutex<i32>>,
         is_multi_thread: bool,
     ) -> bool {
         let mut quit_command_received: bool = false;
@@ -535,46 +534,13 @@ impl Balling {
                     Self::calc_target_dosing_duration_millis(&balling_setval);
 
                 if dosing_duration_millis > 0 {
-                    // inner scope to limit the lifetime of unlocked mutex
-                    let (res_opt, join_err_opt) = tokio::task::block_in_place(|| {
-                        std::thread::scope(|scope| {
-                            let handle = scope.spawn(|| {
-                                let mut mutex_data = mutex_device_scheduler_balling.lock().unwrap();
-                                let res = mineral_injection.inject_mineral(
-                                    balling_channels,
-                                    pump_device,
-                                    dosing_duration_millis,
-                                );
-                                *mutex_data = mutex_data.saturating_add(1);
-                                res
-                            });
-                            match handle.join() {
-                                Ok(res) => (Some(res), None),
-                                Err(e) => {
-                                    let panic_msg = if let Some(s) = e.downcast_ref::<&str>() {
-                                        s.to_string()
-                                    } else if let Some(s) = e.downcast_ref::<String>() {
-                                        s.clone()
-                                    } else {
-                                        "Unknown panic payload".to_string()
-                                    };
-                                    (None, Some(ThreadJoinError(panic_msg)))
-                                }
-                            }
-                        })
-                    });
-
-                    if let Some(err) = join_err_opt {
-                        self.execution_blocked = true;
-                        log_error_chain(module_path!(), "could not join thread", err);
-                        quit_command_received = false;
-                        actual_dosing_duration_millis = 0;
-                    } else if let Some((q, actual_dur)) = res_opt {
-                        quit_command_received = q;
-                        actual_dosing_duration_millis = actual_dur;
-                    } else {
-                        actual_dosing_duration_millis = 0;
-                    }
+                    let mut mutex_data = mutex_device_scheduler_balling.lock().await;
+                    let (q, actual_dur) = mineral_injection
+                        .inject_mineral(balling_channels, pump_device, dosing_duration_millis)
+                        .await;
+                    *mutex_data = mutex_data.saturating_add(1);
+                    quit_command_received = q;
+                    actual_dosing_duration_millis = actual_dur;
 
                     let actual_dosing_volume = Self::calc_actual_dosing_volume(
                         &balling_setval,
@@ -657,7 +623,7 @@ impl Balling {
     /// * `is_multi_thread` - A boolean indicating if the tokio runtime is running in multithreaded mode.
     pub async fn execute(
         &mut self,
-        mutex_device_scheduler_balling: Arc<Mutex<i32>>,
+        mutex_device_scheduler_balling: Arc<tokio::sync::Mutex<i32>>,
         balling_channels: &mut BallingChannels,
         mineral_injection: &mut (impl MineralInjectionTrait + Send),
         mut sql_interface_balling: SqlInterfaceBalling,
@@ -773,8 +739,7 @@ impl Balling {
                             is_multi_thread,
                         )
                         .await;
-                }
-                else {
+                } else {
                     #[cfg(all(not(test), not(feature = "test-utils")))]
                     info!(
                         target: module_path!(),
@@ -826,21 +791,6 @@ impl Balling {
         .await;
     }
 }
-
-#[derive(Debug)]
-struct ThreadJoinError(String);
-
-impl fmt::Display for ThreadJoinError {
-    /// Formats the value using the given formatter.
-    ///
-    /// # Arguments
-    /// * `f` - The formatter to write the formatted string to.
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{}", self.0)
-    }
-}
-
-impl error::Error for ThreadJoinError {}
 
 #[cfg(test)]
 pub mod tests {

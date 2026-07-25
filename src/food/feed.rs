@@ -70,14 +70,20 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 #[cfg(all(not(test), not(feature = "test-utils")))] // only required in real-life execution
 use log::info;
 
-#[cfg(all(feature = "debug_feed", not(test), not(feature = "test-utils")))] // only required in real-life execution
-use log::debug;
-
-#[cfg(all(feature = "debug_signal_handler", not(test), not(feature = "test-utils")))]
+#[cfg(all(feature = "debug_feed", not(test), not(feature = "test-utils")))]
 // only required in real-life execution
 use log::debug;
 
-#[cfg(all(target_os = "linux", not(test), not(feature = "test-utils")))] // only required in real-life execution
+#[cfg(all(
+    feature = "debug_signal_handler",
+    not(test),
+    not(feature = "test-utils")
+))]
+// only required in real-life execution
+use log::debug;
+
+#[cfg(all(target_os = "linux", not(test), not(feature = "test-utils")))]
+// only required in real-life execution
 use nix::unistd::gettid;
 
 use crate::check_quit_increment_counter_ping_database;
@@ -92,7 +98,7 @@ use crate::utilities::database_ping_trait::DatabasePingTrait;
 use crate::utilities::logger::log_error_chain;
 use crate::utilities::proc_ext_req::ProcessExternalRequestTrait;
 use crate::utilities::wait_for_termination::WaitForTerminationTrait;
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 #[cfg_attr(doc, aquamarine::aquamarine)]
@@ -273,7 +279,7 @@ impl Feed {
     /// This function does not return a distinct error type. Instead, it returns `Err(())`
     /// in the result tuple to signify failure. The function can fail if:
     /// the `food_injection.inject_food` method reports an error.
-    fn execute_feed(
+    async fn execute_feed(
         &mut self,
         feed_profile: FeedProfile,
         food_injection: &mut impl FoodInjectionTrait,
@@ -282,8 +288,9 @@ impl Feed {
         // *** Execute the feed profile and destructure the returned tuple ***
         // 1. `quit_during_injection`: A bool indicating if a quit command was received.
         // 2. `injection_result`: A Result indicating if the injection itself succeeded.
-        let (quit_during_injection, injection_result) =
-            food_injection.inject_food(feed_channels, &feed_profile);
+        let (quit_during_injection, injection_result) = food_injection
+            .inject_food(feed_channels, &feed_profile)
+            .await;
         // *** Handle the Result part of the tuple independently ***
         // If errors occurred during injection, log each one.
         if let Err(errors) = &injection_result {
@@ -368,7 +375,7 @@ impl Feed {
     /// * `is_multi_thread` - A boolean indicating if the tokio runtime is running in multithreaded mode.
     pub async fn execute(
         &mut self,
-        mutex_device_scheduler_feed: Arc<Mutex<i32>>,
+        mutex_device_scheduler_feed: Arc<tokio::sync::Mutex<i32>>,
         feed_channels: &mut FeedChannels,
         food_injection: &mut (impl FoodInjectionTrait + Send),
         mut sql_interface_feed: Box<dyn DatabaseInterfaceFeedTrait + Sync + Send>,
@@ -409,7 +416,11 @@ impl Feed {
                 match get_past_res {
                     Ok(feed_schedule_entries_opt) => {
                         if let Some(mut feed_schedule_entries) = feed_schedule_entries_opt {
-                            #[cfg(all(feature = "debug_feed", not(test), not(feature = "test-utils")))] // only required in real-life execution
+                            #[cfg(all(
+                                feature = "debug_feed",
+                                not(test),
+                                not(feature = "test-utils")
+                            ))] // only required in real-life execution
                             #[cfg(not(tarpaulin_include))]
                             debug!(
                                 target: module_path!(),
@@ -421,7 +432,11 @@ impl Feed {
                                 .select_feed_schedule_entry_for_execution(&feed_schedule_entries);
 
                             if let Some(feed_schedule_entry) = feed_schedule_entry_opt {
-                                #[cfg(all(feature = "debug_feed", not(test), not(feature = "test-utils")))] // only required in real-life execution
+                                #[cfg(all(
+                                    feature = "debug_feed",
+                                    not(test),
+                                    not(feature = "test-utils")
+                                ))] // only required in real-life execution
                                 #[cfg(not(tarpaulin_include))]
                                 debug!(
                                     target: module_path!(),
@@ -460,24 +475,20 @@ impl Feed {
                                     };
 
                                     if let Some(feed_profile) = feed_profile_opt {
-                                        {
-                                            // this scope limits the lifetime of unlocked mutex
-                                            let mut mutex_data =
-                                                mutex_device_scheduler_feed.lock().unwrap();
-
-                                            let injection_result: Result<(), ()>;
-
-                                            (injection_result, quit_command_received) = self
-                                                .execute_feed(
-                                                    feed_profile.clone(),
-                                                    food_injection,
-                                                    feed_channels,
-                                                );
-                                            if injection_result.is_err() {
-                                                self.execution_blocked = true;
-                                            }
-                                            *mutex_data = mutex_data.saturating_add(1);
+                                        let mut mutex_data =
+                                            mutex_device_scheduler_feed.lock().await;
+                                        let (injection_result, quit_cmd) = self
+                                            .execute_feed(
+                                                feed_profile.clone(),
+                                                food_injection,
+                                                feed_channels,
+                                            )
+                                            .await;
+                                        quit_command_received = quit_cmd;
+                                        if injection_result.is_err() {
+                                            self.execution_blocked = true;
                                         }
+                                        *mutex_data = mutex_data.saturating_add(1);
 
                                         let logging_result = self.log_feed_operation(
                                             feed_profile,
@@ -540,7 +551,7 @@ impl Feed {
                             );
                             self.lock_error_get_feed_schedule_entry = true;
                         }
-                        #[cfg(any(test, feature="test-utils"))]
+                        #[cfg(any(test, feature = "test-utils"))]
                         let _e = e; // Explicitly declare and "use" with an underscore
                         self.lock_error_get_feed_schedule_entry = true;
                     }
@@ -634,66 +645,22 @@ impl Feed {
 
                 if let Some(feed_profile) = feed_profile_opt {
                     let feed_profile_clone = feed_profile.clone();
-                    let (res_opt, join_err_opt) = tokio::task::block_in_place(|| {
-                        std::thread::scope(|scope| {
-                            let handle =
-                                scope.spawn(|| {
-                                    let mut mutex_data =
-                                        mutex_device_scheduler_feed.lock().unwrap();
+                    let mut mutex_data = mutex_device_scheduler_feed.lock().await;
+                    let (injection_result, quit_command_received_during_requested_feed) = self
+                        .execute_feed(feed_profile_clone.clone(), food_injection, feed_channels)
+                        .await;
 
-                                    let (
-                                        injection_result,
-                                        quit_command_received_during_requested_feed,
-                                    ) = self.execute_feed(
-                                        feed_profile_clone.clone(),
-                                        food_injection,
-                                        feed_channels,
-                                    );
+                    *mutex_data = mutex_data.saturating_add(1);
 
-                                    let logging_result = self.log_feed_operation(
-                                        feed_profile_clone,
-                                        &mut sql_interface_feed,
-                                        is_multi_thread,
-                                    );
+                    let logging_result = self.log_feed_operation(
+                        feed_profile_clone,
+                        &mut sql_interface_feed,
+                        is_multi_thread,
+                    );
 
-                                    *mutex_data = mutex_data.saturating_add(1);
-
-                                    (
-                                        injection_result,
-                                        quit_command_received_during_requested_feed,
-                                        logging_result,
-                                    )
-                                });
-                            match handle.join() {
-                                Ok(res) => (Some(res), None),
-                                Err(e) => {
-                                    let panic_msg = if let Some(s) = e.downcast_ref::<&str>() {
-                                        s.to_string()
-                                    } else if let Some(s) = e.downcast_ref::<String>() {
-                                        s.clone()
-                                    } else {
-                                        "Unknown panic payload".to_string()
-                                    };
-                                    (None, Some(ThreadJoinError(panic_msg)))
-                                }
-                            }
-                        })
-                    });
-
-                    if let Some(err) = join_err_opt {
-                        self.execution_blocked = true;
-                        log_error_chain(module_path!(), "could not join thread", err);
-                        quit_command_received = false;
-                    } else if let Some((
-                        injection_result,
-                        quit_command_received_during_requested_feed,
-                        logging_result,
-                    )) = res_opt
-                    {
-                        self.execution_blocked |= injection_result.is_err();
-                        self.execution_blocked |= logging_result.is_err();
-                        quit_command_received = quit_command_received_during_requested_feed;
-                    }
+                    self.execution_blocked |= injection_result.is_err();
+                    self.execution_blocked |= logging_result.is_err();
+                    quit_command_received = quit_command_received_during_requested_feed;
                 }
             }
 
@@ -709,7 +676,11 @@ impl Feed {
 
         // The application received request to terminate. That is why the loop was left.
         // Answer to the thread which sent the request for termination, so that shutdown can proceed further.
-        #[cfg(all(feature = "debug_signal_handler", not(test), not(feature = "test-utils")))] // only required in real-life execution
+        #[cfg(all(
+            feature = "debug_signal_handler",
+            not(test),
+            not(feature = "test-utils")
+        ))] // only required in real-life execution
         #[cfg(not(tarpaulin_include))]
         debug!(
             target: module_path!(),
@@ -729,21 +700,6 @@ impl Feed {
         .await;
     }
 }
-
-#[derive(Debug)]
-struct ThreadJoinError(String);
-
-impl std::fmt::Display for ThreadJoinError {
-    /// Formats the value using the given formatter.
-    ///
-    /// # Arguments
-    /// * `f` - The formatter to write the formatted string to.
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", self.0)
-    }
-}
-
-impl std::error::Error for ThreadJoinError {}
 
 #[cfg(test)]
 pub mod tests {

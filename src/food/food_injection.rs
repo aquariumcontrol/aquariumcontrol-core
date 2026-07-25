@@ -59,7 +59,6 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 //!   that occurred during a single injection attempt, which is invaluable for
 //!   diagnostics.
 
-use spin_sleep::SpinSleeper;
 use std::time::{Duration, Instant};
 
 use crate::food::feed_channels::FeedChannels;
@@ -95,7 +94,8 @@ pub trait FoodInjectionTrait {
     /// encountered, which can include:
     /// - Communication failures with the relay manager (`RelayManagerSend`, `RelayManagerReceive`).
     /// - An attempt to set a device to an undefined state (e.g., `UndefinedTargetStateSkimmer`).
-    fn inject_food(
+    #[allow(async_fn_in_trait)]
+    async fn inject_food(
         &mut self,
         feed_channels: &mut FeedChannels,
         feed_profile: &FeedProfile,
@@ -140,7 +140,6 @@ pub struct FoodInjection {
     aux_pump1_state: ActuatorState,
     aux_pump2_state: ActuatorState,
     feeder_state: ActuatorState,
-    spin_sleeper: SpinSleeper,
     sleep_duration_device_switch: Duration,
 }
 
@@ -166,7 +165,6 @@ impl FoodInjection {
             aux_pump1_state: ActuatorState::Undefined,
             aux_pump2_state: ActuatorState::Undefined,
             feeder_state: ActuatorState::Undefined,
-            spin_sleeper: SpinSleeper::default(),
             sleep_duration_device_switch: Duration::from_millis(
                 config.device_switch_delay_millis as u64,
             ),
@@ -197,7 +195,7 @@ impl FoodInjection {
     /// - `RelayManagerReceive`: Failure to receive an acknowledgment from the relay manager.
     /// - `UndefinedTargetState...`: An attempt was made to set a device to a state other
     ///   than `On` or `Off`.
-    fn switch_skimmer_pumps_feeder(
+    async fn switch_skimmer_pumps_feeder(
         &mut self,
         target_actuator_states: FoodInjectionTargetActuatorStates,
         feed_channels: &mut FeedChannels,
@@ -207,7 +205,7 @@ impl FoodInjection {
 
         // --- Skimmer ---
         if self.skimmer_state != target_actuator_states.target_skimmer_state {
-            self.spin_sleeper.sleep(self.sleep_duration_device_switch);
+            tokio::time::sleep(self.sleep_duration_device_switch).await;
             let device = AquariumDevice::Skimmer;
 
             match target_actuator_states.target_skimmer_state {
@@ -231,8 +229,7 @@ impl FoodInjection {
                             device: device.clone(),
                             source: e,
                         });
-                    } else if let Err(e) = feed_channels.rx_feed_from_relay_manager.blocking_recv()
-                    {
+                    } else if let Err(e) = feed_channels.receive_from_relay_manager().await {
                         println!(
                             "Encountered error when receiving command to relay manager: {e:?}"
                         );
@@ -243,10 +240,6 @@ impl FoodInjection {
                         });
                     } else {
                         // Only update state on success
-                        println!(
-                            "Successfully set skimmer state to {:?}",
-                            target_actuator_states.target_skimmer_state
-                        );
                         self.skimmer_state = target_actuator_states.target_skimmer_state;
                     }
                 }
@@ -260,7 +253,7 @@ impl FoodInjection {
 
         // --- Main pump 1 ---
         if self.main_pump1_state != target_actuator_states.target_main_pump1_state {
-            self.spin_sleeper.sleep(self.sleep_duration_device_switch);
+            tokio::time::sleep(self.sleep_duration_device_switch).await;
             let device = AquariumDevice::MainPump1;
 
             match target_actuator_states.target_main_pump1_state {
@@ -284,8 +277,7 @@ impl FoodInjection {
                             device: device.clone(),
                             source: e,
                         });
-                    } else if let Err(e) = feed_channels.rx_feed_from_relay_manager.blocking_recv()
-                    {
+                    } else if let Err(e) = feed_channels.receive_from_relay_manager().await {
                         errors.push(FoodInjectionError::RelayManagerReceive {
                             location: module_path!().to_string(),
                             device: device.clone(),
@@ -306,7 +298,7 @@ impl FoodInjection {
 
         // --- Main pump 2 ---
         if self.main_pump2_state != target_actuator_states.target_main_pump2_state {
-            self.spin_sleeper.sleep(self.sleep_duration_device_switch);
+            tokio::time::sleep(self.sleep_duration_device_switch).await;
             let device = AquariumDevice::MainPump2;
 
             match target_actuator_states.target_main_pump2_state {
@@ -330,8 +322,7 @@ impl FoodInjection {
                             device: device.clone(),
                             source: e,
                         });
-                    } else if let Err(e) = feed_channels.rx_feed_from_relay_manager.blocking_recv()
-                    {
+                    } else if let Err(e) = feed_channels.receive_from_relay_manager().await {
                         errors.push(FoodInjectionError::RelayManagerReceive {
                             location: module_path!().to_string(),
                             device: device.clone(),
@@ -352,7 +343,7 @@ impl FoodInjection {
 
         // --- Aux. pump 1 ---
         if self.aux_pump1_state != target_actuator_states.target_aux_pump1_state {
-            self.spin_sleeper.sleep(self.sleep_duration_device_switch);
+            tokio::time::sleep(self.sleep_duration_device_switch).await;
             let device = AquariumDevice::AuxPump1;
 
             match target_actuator_states.target_aux_pump1_state {
@@ -376,8 +367,7 @@ impl FoodInjection {
                             device: device.clone(),
                             source: e,
                         });
-                    } else if let Err(e) = feed_channels.rx_feed_from_relay_manager.blocking_recv()
-                    {
+                    } else if let Err(e) = feed_channels.receive_from_relay_manager().await {
                         errors.push(FoodInjectionError::RelayManagerReceive {
                             location: module_path!().to_string(),
                             device: device.clone(),
@@ -398,7 +388,7 @@ impl FoodInjection {
 
         // --- Aux. pump 2 ---
         if self.aux_pump2_state != target_actuator_states.target_aux_pump2_state {
-            self.spin_sleeper.sleep(self.sleep_duration_device_switch);
+            tokio::time::sleep(self.sleep_duration_device_switch).await;
             let device = AquariumDevice::AuxPump2;
 
             match target_actuator_states.target_aux_pump2_state {
@@ -422,8 +412,7 @@ impl FoodInjection {
                             device: device.clone(),
                             source: e,
                         });
-                    } else if let Err(e) = feed_channels.rx_feed_from_relay_manager.blocking_recv()
-                    {
+                    } else if let Err(e) = feed_channels.receive_from_relay_manager().await {
                         errors.push(FoodInjectionError::RelayManagerReceive {
                             location: module_path!().to_string(),
                             device: device.clone(),
@@ -444,7 +433,7 @@ impl FoodInjection {
 
         // --- Feeder ---
         if self.feeder_state != target_actuator_states.target_feeder_state {
-            self.spin_sleeper.sleep(self.sleep_duration_device_switch);
+            tokio::time::sleep(self.sleep_duration_device_switch).await;
             let device = AquariumDevice::Feeder;
 
             match target_actuator_states.target_feeder_state {
@@ -468,8 +457,7 @@ impl FoodInjection {
                             device: device.clone(),
                             source: e,
                         });
-                    } else if let Err(e) = feed_channels.rx_feed_from_relay_manager.blocking_recv()
-                    {
+                    } else if let Err(e) = feed_channels.receive_from_relay_manager().await {
                         errors.push(FoodInjectionError::RelayManagerReceive {
                             location: module_path!().to_string(),
                             device: device.clone(),
@@ -523,12 +511,11 @@ impl FoodInjectionTrait for FoodInjection {
     /// or more errors occurred during the process. The function aborts the feed sequence
     /// on the first error but still performs the final cleanup step. The vector will
     /// contain all errors encountered during both the main sequence and the cleanup.
-    fn inject_food(
+    async fn inject_food(
         &mut self,
         feed_channels: &mut FeedChannels,
         feed_profile: &FeedProfile,
     ) -> (bool, Result<(), Vec<FoodInjectionError>>) {
-        let spin_sleeper = SpinSleeper::default();
         let sleep_interval_millis: i16 = 1;
         let sleep_duration = Duration::from_millis(sleep_interval_millis as u64);
         let mut target_skimmer_state: ActuatorState;
@@ -577,8 +564,9 @@ impl FoodInjectionTrait for FoodInjection {
                     target_aux_pump2_state,
                     target_feeder_state: ActuatorState::Off,
                 };
-                if let Err(collected_errors) =
-                    self.switch_skimmer_pumps_feeder(target_actuator_states, feed_channels)
+                if let Err(collected_errors) = self
+                    .switch_skimmer_pumps_feeder(target_actuator_states, feed_channels)
+                    .await
                 {
                     collected_errors_cumulated.extend(collected_errors);
                     break; // if any error occurs, abort the feed sequence
@@ -596,7 +584,7 @@ impl FoodInjectionTrait for FoodInjection {
                     println!("Received quit command during pause phase of food injection");
                     break; // exit inner loop
                 }
-                spin_sleeper.sleep(sleep_duration);
+                tokio::time::sleep(sleep_duration).await;
             }
             if quit_command_received {
                 break; // exit outer loop
@@ -632,8 +620,9 @@ impl FoodInjectionTrait for FoodInjection {
                     target_aux_pump2_state,
                     target_feeder_state: ActuatorState::On,
                 };
-                if let Err(collected_errors) =
-                    self.switch_skimmer_pumps_feeder(target_actuator_states, feed_channels)
+                if let Err(collected_errors) = self
+                    .switch_skimmer_pumps_feeder(target_actuator_states, feed_channels)
+                    .await
                 {
                     collected_errors_cumulated.extend(collected_errors);
                     break; // if any error occurs, abort the feed sequence
@@ -651,7 +640,7 @@ impl FoodInjectionTrait for FoodInjection {
                     println!("Received quit command during feed phase of food injection");
                     break; // exit inner loop
                 }
-                spin_sleeper.sleep(sleep_duration);
+                tokio::time::sleep(sleep_duration).await;
             }
             if quit_command_received {
                 break; // exit outer loop
@@ -660,17 +649,20 @@ impl FoodInjectionTrait for FoodInjection {
 
         // The feed sequence has finished or has been aborted.
         // Switch on all pumps. Switch off feeder.
-        if let Err(collected_errors) = self.switch_skimmer_pumps_feeder(
-            FoodInjectionTargetActuatorStates {
-                target_skimmer_state: ActuatorState::On,
-                target_main_pump1_state: ActuatorState::On,
-                target_main_pump2_state: ActuatorState::On,
-                target_aux_pump1_state: ActuatorState::On,
-                target_aux_pump2_state: ActuatorState::On,
-                target_feeder_state: ActuatorState::Off,
-            },
-            feed_channels,
-        ) {
+        if let Err(collected_errors) = self
+            .switch_skimmer_pumps_feeder(
+                FoodInjectionTargetActuatorStates {
+                    target_skimmer_state: ActuatorState::On,
+                    target_main_pump1_state: ActuatorState::On,
+                    target_main_pump2_state: ActuatorState::On,
+                    target_aux_pump1_state: ActuatorState::On,
+                    target_aux_pump2_state: ActuatorState::On,
+                    target_feeder_state: ActuatorState::Off,
+                },
+                feed_channels,
+            )
+            .await
+        {
             collected_errors_cumulated.extend(collected_errors);
         }
 

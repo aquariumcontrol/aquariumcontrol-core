@@ -16,7 +16,7 @@ use aquarium_control::database::sql_test_query_strings;
 use aquarium_control::database::sql_test_query_strings::{
     SQL_QUERY_WRITE_VERSION_INFORMATION, SQL_TABLE_BALLING_DOSING_LOG, SQL_TABLE_BALLING_SET_VALS,
     SQL_TABLE_DATA, SQL_TABLE_FEED_LOG, SQL_TABLE_HEATING_SET_VALS, SQL_TABLE_HEATING_STATS,
-    SQL_TABLE_REFILL, SQL_TABLE_SCHEDULE, SQL_TABLE_VENTILATION_SET_VALS,
+    SQL_TABLE_REFILL, SQL_TABLE_SCHEDULE, SQL_TABLE_VENTILATION_SET_VALS, SQL_TABLE_VERSION,
 };
 use aquarium_control::utilities::version_information::VersionInformation;
 use mysql::params;
@@ -81,6 +81,7 @@ pub fn truncate_all_tables(sql_interface: &mut SqlInterface) {
         .unwrap();
     SqlInterface::truncate_table(sql_interface, SQL_TABLE_REFILL.to_string()).unwrap();
     SqlInterface::truncate_table(sql_interface, SQL_TABLE_SCHEDULE.to_string()).unwrap();
+    SqlInterface::truncate_table(sql_interface, SQL_TABLE_VERSION.to_string()).unwrap();
 }
 
 // Helper function to insert current version information into database

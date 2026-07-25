@@ -41,7 +41,7 @@ fn execute_blocking(
     mutex_water_temperature: Arc<Mutex<Ds18b20Result>>,
     mutex_ambient_temperature: Arc<Mutex<Ds18b20Result>>,
 ) {
-    tokio::runtime::Builder::new_multi_thread()
+    tokio::runtime::Builder::new_multi_thread().enable_all()
         .enable_all()
         .build()
         .unwrap()

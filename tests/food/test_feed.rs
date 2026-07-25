@@ -25,7 +25,7 @@ use aquarium_control::utilities::config::{
 use aquarium_control::utilities::logger::setup_logger;
 use aquarium_control::utilities::logger_config::LoggerConfig;
 use spin_sleep::SpinSleeper;
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 use std::thread;
 use std::thread::scope;
 use std::time::Duration;
@@ -40,12 +40,12 @@ use std::time::Duration;
 /// * `sql_interface_feed` - Database interface for feed operations.
 fn execute_blocking(
     feed: &mut Feed,
-    mutex_device_scheduler_feed: Arc<Mutex<i32>>,
+    mutex_device_scheduler_feed: Arc<tokio::sync::Mutex<i32>>,
     feed_channels: &mut FeedChannels,
     food_injection: &mut (impl FoodInjectionTrait + Send),
     sql_interface_feed: Box<dyn DatabaseInterfaceFeedTrait + Sync + Send>,
 ) {
-    tokio::runtime::Builder::new_multi_thread()
+    tokio::runtime::Builder::new_multi_thread().enable_all()
         .enable_all()
         .build()
         .unwrap()
@@ -155,7 +155,7 @@ pub fn test_feed_schedule_execution() {
     let mut feed = Feed::new(config.feed, Duration::from_millis(1000));
 
     scope(|scope| {
-        let mutex_device_scheduler_feed = Arc::new(Mutex::new(0));
+        let mutex_device_scheduler_feed = Arc::new(tokio::sync::Mutex::new(0));
 
         // thread for mock signal handler
         scope.spawn(move || {
@@ -257,7 +257,7 @@ pub fn test_messaging_stops_starts_execute_feed() {
 
     let mut mock_food_injection = MockFoodInjection::new();
 
-    let mutex_device_scheduler_feed_test_object = Arc::new(Mutex::new(0));
+    let mutex_device_scheduler_feed_test_object = Arc::new(tokio::sync::Mutex::new(0));
     let mutex_device_scheduler_feed_test_environment =
         mutex_device_scheduler_feed_test_object.clone();
 
@@ -287,7 +287,7 @@ pub fn test_messaging_stops_starts_execute_feed() {
             // then food injection will happen in this period.
             spin_sleeper.sleep(sleep_duration_10_secs);
 
-            let actuation_count_1 = *mutex_device_scheduler_feed_test_environment.lock().unwrap();
+            let actuation_count_1 = *mutex_device_scheduler_feed_test_environment.blocking_lock();
 
             // check the amount of actuation (after stop request)
             assert_eq!(actuation_count_1, 0);
@@ -312,7 +312,7 @@ pub fn test_messaging_stops_starts_execute_feed() {
             spin_sleeper.sleep(sleep_duration_10_secs);
 
             // get count of feed profiles executed
-            let actuation_count_2 = *mutex_device_scheduler_feed_test_environment.lock().unwrap();
+            let actuation_count_2 = *mutex_device_scheduler_feed_test_environment.blocking_lock();
 
             // check the amount of actuation (after start request)
             assert_eq!(actuation_count_2, 1);
@@ -337,7 +337,7 @@ pub fn test_messaging_stops_starts_execute_feed() {
             spin_sleeper.sleep(sleep_duration_2_secs);
 
             // get count of feed profiles executed
-            let actuation_count_3 = *mutex_device_scheduler_feed_test_environment.lock().unwrap();
+            let actuation_count_3 = *mutex_device_scheduler_feed_test_environment.blocking_lock();
 
             // check the amount of actuation (after the "execute" request)
             assert_eq!(actuation_count_3, 2);
@@ -413,7 +413,7 @@ pub fn test_messaging_sql_error_inhibition_feed() {
 
     let mut mock_food_injection = MockFoodInjection::new();
 
-    let mutex_device_scheduler_feed_test_object = Arc::new(Mutex::new(0));
+    let mutex_device_scheduler_feed_test_object = Arc::new(tokio::sync::Mutex::new(0));
     let mutex_device_scheduler_feed_test_environment =
         mutex_device_scheduler_feed_test_object.clone();
 
@@ -425,7 +425,7 @@ pub fn test_messaging_sql_error_inhibition_feed() {
             // if the test object still managed to execute a feed operation
             spin_sleeper.sleep(sleep_duration_10_secs);
 
-            let actuation_count_1 = *mutex_device_scheduler_feed_test_environment.lock().unwrap();
+            let actuation_count_1 = *mutex_device_scheduler_feed_test_environment.blocking_lock();
 
             // check the amount of actuation (after stop request)
             assert_eq!(actuation_count_1, 0);
@@ -555,7 +555,7 @@ pub fn test_feed_schedule_execution_past_entries_select_youngest() {
     let mut feed = Feed::new(config.feed, Duration::from_millis(1000));
 
     scope(|scope| {
-        let mutex_device_scheduler_feed = Arc::new(Mutex::new(0));
+        let mutex_device_scheduler_feed = Arc::new(tokio::sync::Mutex::new(0));
 
         // thread for mock signal handler
         scope.spawn(move || {
@@ -668,7 +668,7 @@ pub fn test_feed_schedule_execution_past_entries_select_oldest() {
     let mut feed = Feed::new(config.feed, Duration::from_millis(1000));
 
     scope(|scope| {
-        let mutex_device_scheduler_feed = Arc::new(Mutex::new(0));
+        let mutex_device_scheduler_feed = Arc::new(tokio::sync::Mutex::new(0));
 
         // thread for mock signal handler
         scope.spawn(move || {
@@ -694,6 +694,113 @@ pub fn test_feed_schedule_execution_past_entries_select_oldest() {
 
             // check if the right profiles have been executed in the right order
             assert_eq!(mock_food_injection.pop_profile_id_executed(), Some(2));
+            assert_eq!(mock_food_injection.pop_profile_id_executed(), None);
+        });
+    });
+}
+
+#[test]
+// Verifies that feed profile actuation is inhibited when device_scheduler mutex is blocked.
+// The test environment thread acquires and holds the device_scheduler mutex lock before feed profile actuation occurs.
+// While the lock is held, feed profile actuation is blocked. Once released, feed profile actuation proceeds normally.
+// Test case uses test database #69.
+pub fn test_feed_schedule_execution_with_mutex_blocked() {
+    let sleep_duration_100_millis = Duration::from_millis(100);
+    let sleep_duration_6_seconds = Duration::from_millis(6000);
+    let spin_sleeper = SpinSleeper::default();
+
+    let mut channels = Channels::new_for_test();
+    let mut mock_food_injection = MockFoodInjection::new();
+
+    let config: ConfigData = read_config_file_with_test_database(
+        "config/aquarium_control_test_generic.toml".to_string(),
+        69,
+    );
+
+    let mut sql_interface = match SqlInterface::new(config.sql_interface.clone()) {
+        Ok(c) => c,
+        Err(e) => panic!("Could not connect to SQL database: {e:?}"),
+    };
+
+    let mut sql_interface_feed_unboxed = SqlInterfaceFeed::new(
+        sql_interface.get_connection().unwrap(),
+        config.sql_interface.max_rows_feed_profile,
+        config.sql_interface.max_rows_feed_schedule,
+        config.sql_interface.max_rows_feed_log,
+    )
+    .unwrap();
+
+    insert_feed_profiles(&mut sql_interface, &mut sql_interface_feed_unboxed);
+
+    let mut sql_interface_feed: Box<dyn DatabaseInterfaceFeedTrait + Sync + Send> =
+        Box::new(sql_interface_feed_unboxed);
+
+    // empty the feed schedule table
+    match SqlInterface::truncate_table(&mut sql_interface, SQL_TABLE_FEED_SCHEDULE.to_string()) {
+        Ok(_) => {}
+        Err(e) => panic!("Could not prepare test case: {e:?}"),
+    }
+    // empty the feed log table
+    match SqlInterface::truncate_table(&mut sql_interface, SQL_TABLE_FEED_LOG.to_string()) {
+        Ok(_) => {}
+        Err(e) => panic!("Could not prepare test case: {e:?}"),
+    }
+
+    let time_stamp_feed_schedule_entry =
+        match SqlInterface::get_current_timestamp_offset_seconds(&mut sql_interface.conn, 1) {
+            Ok(c) => c,
+            Err(e) => panic!("Could not calculate timestamp: {e:?}"),
+        };
+
+    sql_interface_feed
+        .insert_feed_schedule_entry(time_stamp_feed_schedule_entry, 1, false, false)
+        .expect("Could not insert stimuli into database");
+
+    let mut feed = Feed::new(config.feed, Duration::from_millis(1000));
+
+    scope(|scope| {
+        let mutex_device_scheduler_feed = Arc::new(tokio::sync::Mutex::new(0));
+        let mutex_device_scheduler_feed_env = mutex_device_scheduler_feed.clone();
+
+        // thread for mock signal handler
+        scope.spawn(move || {
+            create_mock_signal_handler(
+                &mut channels.signal_handler.tx_signal_handler_to_feed,
+                &mut channels.signal_handler.rx_signal_handler_from_feed,
+                spin_sleeper,
+                sleep_duration_6_seconds,
+            );
+        });
+
+        // thread for test environment mutex blocker
+        scope.spawn(move || {
+            // 1. Acquire lock on device_scheduler mutex before feed execution
+            let lock_guard = mutex_device_scheduler_feed_env.blocking_lock();
+
+            // Hold lock for 3 seconds
+            spin_sleeper.sleep(Duration::from_secs(3));
+
+            // Verify count remains 0 while lock is held
+            assert_eq!(*lock_guard, 0);
+
+            // 2. Release lock so feed profile execution can proceed
+            drop(lock_guard);
+        });
+
+        spin_sleeper.sleep(sleep_duration_100_millis);
+
+        // thread for the test object
+        scope.spawn(move || {
+            execute_blocking(
+                &mut feed,
+                mutex_device_scheduler_feed.clone(),
+                &mut channels.feed,
+                &mut mock_food_injection,
+                sql_interface_feed,
+            );
+
+            // check if profile #1 was executed after lock was released
+            assert_eq!(mock_food_injection.pop_profile_id_executed(), Some(1));
             assert_eq!(mock_food_injection.pop_profile_id_executed(), None);
         });
     });

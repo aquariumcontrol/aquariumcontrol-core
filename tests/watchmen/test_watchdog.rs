@@ -32,7 +32,7 @@ fn execute_blocking(
     watchdog_channels: &mut aquarium_control::watchmen::watchdog_channels::WatchDogChannels,
     petting: &mut impl aquarium_control::watchmen::petting::PettingTrait,
 ) {
-    tokio::runtime::Builder::new_multi_thread()
+    tokio::runtime::Builder::new_multi_thread().enable_all()
         .enable_all()
         .build()
         .unwrap()
@@ -70,9 +70,9 @@ fn test_new_fails_with_empty_heartbeat() {
 
     // Assert
     assert!(matches!(
-            result,
-            Err(WatchdogError::HeartbeatMessageIsEmpty(_))
-        ));
+        result,
+        Err(WatchdogError::HeartbeatMessageIsEmpty(_))
+    ));
 }
 
 #[test]
@@ -88,9 +88,9 @@ fn test_new_fails_with_empty_deactivation_message() {
 
     // Assert
     assert!(matches!(
-            result,
-            Err(WatchdogError::DeactivationMessageIsEmpty(_))
-        ));
+        result,
+        Err(WatchdogError::DeactivationMessageIsEmpty(_))
+    ));
 }
 
 #[test]
@@ -107,12 +107,12 @@ fn test_new_fails_with_identical_messages() {
 
     // Assert
     assert!(matches!(
-            result,
-            Err(WatchdogError::HeartbeatAndDeactivationMessagesAreIdentical(
-                _,
-                _
-            ))
-        ));
+        result,
+        Err(WatchdogError::HeartbeatAndDeactivationMessagesAreIdentical(
+            _,
+            _
+        ))
+    ));
 }
 
 #[test]
@@ -128,9 +128,9 @@ fn test_new_fails_with_zero_heartbeat_duration() {
 
     // Assert
     assert!(matches!(
-            result,
-            Err(WatchdogError::DurationBetweenTwoHeartbeatsIsZero(_))
-        ));
+        result,
+        Err(WatchdogError::DurationBetweenTwoHeartbeatsIsZero(_))
+    ));
 }
 
 #[test]
@@ -171,11 +171,7 @@ fn test_watchdog_execute_petting() {
 
         // thread for the test object
         scope.spawn(move || {
-            execute_blocking(
-                &mut watchdog,
-                &mut channels.watchdog,
-                &mut mock_petting,
-            );
+            execute_blocking(&mut watchdog, &mut channels.watchdog, &mut mock_petting);
 
             assert_eq!(mock_petting.petting_recorder.len(), 5);
 
@@ -200,12 +196,9 @@ fn test_watchdog_execute_petting() {
             // Assert that the first 4 entries are "1"
             for i in 0..4 {
                 assert_eq!(
-                    mock_petting.signal_recorder[i],
-                    reference_heartbeat_signal,
+                    mock_petting.signal_recorder[i], reference_heartbeat_signal,
                     "Signal at index {} was expected to be '{}', but was '{}'",
-                    i,
-                    reference_deactivation_signal,
-                    mock_petting.signal_recorder[i]
+                    i, reference_deactivation_signal, mock_petting.signal_recorder[i]
                 );
             }
 

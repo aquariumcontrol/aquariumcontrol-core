@@ -50,7 +50,6 @@ use crate::mineral::balling_channels::BallingChannels;
 use crate::utilities::channel_content::{AquariumDevice, InternalCommand};
 use crate::utilities::proc_ext_req::ProcessExternalRequestTrait;
 use log::error;
-use spin_sleep::SpinSleeper;
 use std::time::{Duration, Instant};
 
 /// Trait for the execution of the Balling mineral dosing.
@@ -72,7 +71,8 @@ pub trait MineralInjectionTrait {
     /// - The `bool` is `true` if a `Quit` command was received from the signal handler during injection,
     ///   indicating that the operation was interrupted. It's `false` otherwise.
     /// - The `u32` is the actual duration (in milliseconds) the pump ran before stopping or being interrupted.
-    fn inject_mineral(
+    #[allow(async_fn_in_trait)]
+    async fn inject_mineral(
         &mut self,
         balling_channels: &mut BallingChannels,
         mineral_pump: AquariumDevice,
@@ -104,7 +104,7 @@ impl MineralInjection {
     /// # Arguments
     /// * `balling_channels` - A mutable reference to the `BallingChannels` communication interface.
     /// * `action_description` - A parameter representing `action_description`.
-    fn send_and_confirm(
+    async fn send_and_confirm(
         &self,
         balling_channels: &mut BallingChannels,
         command: InternalCommand,
@@ -118,10 +118,7 @@ impl MineralInjection {
             return; // Don't wait for a response if the send-operation failed
         }
 
-        if let Err(e) = balling_channels
-            .rx_balling_from_relay_manager
-            .blocking_recv()
-        {
+        if let Err(e) = balling_channels.receive_from_relay_manager().await {
             error!(
                 target: module_path!(),
                 "Receiving answer from relay manager when {} failed ({:?})", action_description, e
@@ -156,13 +153,12 @@ impl MineralInjectionTrait for MineralInjection {
     /// A tuple `(bool, u32)`:
     /// - The `bool` is `true` if a `Quit` command was received during injection; otherwise `false`.
     /// - The `u32` is the actual duration (in milliseconds) the pump ran before stopping or being interrupted.
-    fn inject_mineral(
+    async fn inject_mineral(
         &mut self,
         balling_channels: &mut BallingChannels,
         mineral_pump: AquariumDevice,
         dosing_duration_millis: u32,
     ) -> (bool, u32) {
-        let spin_sleeper = SpinSleeper::default();
         let sleep_interval_millis: u32 = 1;
         let sleep_duration = Duration::from_millis(sleep_interval_millis as u64);
         let mut quit_command_received: bool;
@@ -172,7 +168,8 @@ impl MineralInjectionTrait for MineralInjection {
             balling_channels,
             InternalCommand::SwitchOn(mineral_pump.clone()),
             "switching on dosing pump",
-        );
+        )
+        .await;
 
         let instant_start_of_injection = Instant::now();
         let mut dosing_counter: u32 = 0;
@@ -187,7 +184,7 @@ impl MineralInjectionTrait for MineralInjection {
                 break; // stop dosing
             }
 
-            spin_sleeper.sleep(sleep_duration);
+            tokio::time::sleep(sleep_duration).await;
 
             dosing_counter = match Instant::now()
                 .duration_since(instant_start_of_injection)
@@ -214,7 +211,8 @@ impl MineralInjectionTrait for MineralInjection {
             balling_channels,
             InternalCommand::SwitchOff(mineral_pump),
             "switching off dosing pump",
-        );
+        )
+        .await;
 
         (quit_command_received, dosing_counter)
     }

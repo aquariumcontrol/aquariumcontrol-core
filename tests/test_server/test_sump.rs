@@ -60,7 +60,8 @@ fn test_static_sump_water_level() {
                 fallback_initial_value: 0.8,
             },
             Some(1.0),
-            #[cfg(all(not(test), not(feature = "test-utils")))] // only required in real-life execution
+            #[cfg(all(not(test), not(feature = "test-utils")))]
+            // only required in real-life execution
             "sump level",
         ),
         config: config.sump,
@@ -109,7 +110,8 @@ fn test_dynamic_sump_water_level() {
                 fallback_initial_value: 0.8,
             },
             Some(0.8),
-            #[cfg(all(not(test), not(feature = "test-utils")))] // only required in real-life execution
+            #[cfg(all(not(test), not(feature = "test-utils")))]
+            // only required in real-life execution
             "sump level",
         ),
         config: config.sump,

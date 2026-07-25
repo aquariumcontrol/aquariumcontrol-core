@@ -64,12 +64,14 @@ use crate::watchmen::petting::PettingTrait;
 use crate::watchmen::watchdog_channels::WatchDogChannels;
 use std::time::Duration;
 
-#[cfg(all(target_os = "linux", not(test), not(feature = "test-utils")))] // only required in real-life execution
+#[cfg(all(target_os = "linux", not(test), not(feature = "test-utils")))]
+// only required in real-life execution
 use log::info;
 
 use crate::utilities::acknowledge_signal_handler::AcknowledgeSignalHandlerTrait;
 use crate::watchmen::watchdog_config::WatchdogConfig;
-#[cfg(all(target_os = "linux", not(test), not(feature = "test-utils")))] // only required in real-life execution
+#[cfg(all(target_os = "linux", not(test), not(feature = "test-utils")))]
+// only required in real-life execution
 use nix::unistd::gettid;
 use thiserror::Error;
 

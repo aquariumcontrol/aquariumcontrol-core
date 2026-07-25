@@ -74,7 +74,7 @@ impl FoodInjectionTrait for MockFoodInjection {
     /// # Arguments
     /// * `feed_channels` - A mutable reference to the `FeedChannels` communication interface.
     /// * `feed_pattern` - A parameter representing `feed_pattern`.
-    fn inject_food(
+    async fn inject_food(
         &mut self,
         _feed_channels: &mut FeedChannels,
         feed_pattern: &FeedProfile,

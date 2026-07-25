@@ -44,7 +44,8 @@ impl HeatFlow {
             filter: IIRFilter::new(
                 &config_heat_flow.heater_filter,
                 Some(config_heat_flow.heater_power),
-                #[cfg(all(not(test), not(feature = "test-utils")))] // only required in real-life execution
+                #[cfg(all(not(test), not(feature = "test-utils")))]
+                // only required in real-life execution
                 "heat_flow",
             ),
             config: config_heat_flow,
