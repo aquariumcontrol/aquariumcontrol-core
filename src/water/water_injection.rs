@@ -11,7 +11,6 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 
 use chrono::Local;
 use log::error;
-use spin_sleep::SpinSleeper;
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
@@ -74,9 +73,6 @@ pub struct WaterInjection {
     /// This serves as a safety cutoff to prevent overfilling if the level switch fails.
     max_refill_volume: f64,
 
-    /// A high-precision sleeper utility to pause the control loop for a consistent duration.
-    spin_sleeper: SpinSleeper,
-
     /// The `Duration` for which the control loop sleeps on each iteration (e.g., 100 ms).
     sleep_duration_hundred_milli_sec: Duration,
 
@@ -121,7 +117,6 @@ impl WaterInjection {
             refill_increment: sleep_interval_seconds * config.refill_pump_flow,
             additional_refill_volume: config.additional_refill_volume,
             max_refill_volume: config.max_refill_volume,
-            spin_sleeper: SpinSleeper::default(),
             sleep_duration_hundred_milli_sec: Duration::from_millis(sleep_interval_millis),
             sleep_interval_seconds,
             lock_warn_max_mutex_access_duration: false,
@@ -203,8 +198,7 @@ impl WaterInjectionTrait for WaterInjection {
 
         //*** wait for condition to stop refilling ***
         loop {
-            self.spin_sleeper
-                .sleep(self.sleep_duration_hundred_milli_sec);
+            tokio::time::sleep(self.sleep_duration_hundred_milli_sec).await;
             refill_time_seconds += self.sleep_interval_seconds;
 
             let instant_before_locking_mutex = Instant::now();

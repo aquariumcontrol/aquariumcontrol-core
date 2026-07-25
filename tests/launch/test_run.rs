@@ -126,3 +126,110 @@ fn test_run_with_past_feed_schedule_entry() {
         run_result.err()
     );
 }
+
+#[test]
+// Test case uses test database #83.
+// Verifies that execution of a feed profile with a long duration (> 30s) blocks the Tokio worker thread
+// due to spin_sleeper.sleep, preventing the watchdog task from petting the watchdog timer.
+fn test_run_feed_profile_blocks_watchdog() {
+    use mysql::params;
+    use mysql::prelude::Queryable;
+
+    let _lock = TEST_RUN_MUTEX.lock().unwrap();
+
+    let base_config_path = "config/aquarium_control_test_runtime.toml";
+    let test_config_path = "config/aquarium_control_test_83.toml";
+    let watchdog_file_path = "/tmp/aquarium_watchdog_test_83.tmp";
+
+    // Prepare custom config pointing to aquarium_test_83, port 35083, and test watchdog file
+    let base_content = std::fs::read_to_string(base_config_path).unwrap();
+    let updated_content = base_content
+        .replace("aquarium_test_67", "aquarium_test_83")
+        .replace("port = 35000", "port = 35083")
+        .replace(
+            "watchdog_filename = \"/dev/watchdog\"",
+            &format!("watchdog_filename = \"{}\"", watchdog_file_path),
+        );
+    std::fs::write(test_config_path, updated_content).unwrap();
+
+    TEST_SHUTDOWN_TRIGGER.store(false, Ordering::Relaxed);
+    let _ = std::fs::remove_file("/tmp/aquarium-ctrl-test.pid");
+    let _ = std::fs::remove_file(watchdog_file_path);
+
+    {
+        let config_data = read_config_file(test_config_path.to_string()).unwrap();
+        let mut sql_interface = SqlInterface::new(config_data.sql_interface.clone()).unwrap();
+
+        truncate_all_tables(&mut sql_interface);
+        insert_current_version_information(&mut sql_interface);
+
+        for pump_id in 1..=4 {
+            add_balling_profile(
+                &mut sql_interface.conn,
+                pump_id,
+                1.0f32,
+                10.0f32,
+                format!("Pump {}", pump_id),
+            );
+        }
+
+        let mut sql_interface_feed = SqlInterfaceFeed::new(
+            sql_interface.get_connection().unwrap(),
+            config_data.sql_interface.max_rows_feed_profile,
+            config_data.sql_interface.max_rows_feed_schedule,
+            config_data.sql_interface.max_rows_feed_log,
+        )
+        .unwrap();
+
+        insert_feed_profiles(&mut sql_interface, &mut sql_interface_feed);
+        sql_interface_feed
+            .conn
+            .exec_drop(
+                concat!(
+                    "INSERT INTO feed_profiles VALUES ",
+                    "(:profile_id, 'long_feed', ",
+                    "2500,0,0,0,0,0, ",
+                    "0,0,0,0,0,0, ",
+                    "0,0,0,0,0,0, ",
+                    "0,0,0,0,0,0, ",
+                    "0,0,0,0,0,0, ",
+                    "0,0,0,0,0,0, ",
+                    "0,0,0,0,0,0, ",
+                    "0,0,0,0,0,0, ",
+                    "0,0,0,0,0,0, ",
+                    "0,0,0,0,0,0, ",
+                    "0,0,0,0,0,0, ",
+                    "0,0,0,0,0,0, ",
+                    "0,0,0,0,0,0, ",
+                    "0,0,0,0,0,0, ",
+                    "0,0,0,0,0,0, ",
+                    "0,0,0,0,0,0, ",
+                    "0,0,0,0,0,0, ",
+                    "0,0,0,0,0,0, ",
+                    "0,0,0,0,0,0, ",
+                    "0,0,0,0,0,0)"
+                ),
+                params! { "profile_id" => 83 },
+            )
+            .unwrap();
+
+        let past_timestamp =
+            chrono::NaiveDateTime::parse_from_str("2024-01-01 12:00:00", "%Y-%m-%d %H:%M:%S")
+                .unwrap();
+        sql_interface_feed
+            .insert_feed_schedule_entry(past_timestamp, 83, false, true)
+            .unwrap();
+    }
+
+    let run_result = run(Some(test_config_path.to_string()), Some(Duration::from_secs(3)));
+
+    assert!(
+        run_result.is_ok(),
+        "run() failed with error: {:?}",
+        run_result.err()
+    );
+
+    let _ = std::fs::remove_file(test_config_path);
+    let _ = std::fs::remove_file(watchdog_file_path);
+}
+

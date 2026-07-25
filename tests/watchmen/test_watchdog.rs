@@ -32,7 +32,7 @@ fn execute_blocking(
     watchdog_channels: &mut aquarium_control::watchmen::watchdog_channels::WatchDogChannels,
     petting: &mut impl aquarium_control::watchmen::petting::PettingTrait,
 ) {
-    tokio::runtime::Builder::new_multi_thread()
+    tokio::runtime::Builder::new_multi_thread().enable_all()
         .enable_all()
         .build()
         .unwrap()

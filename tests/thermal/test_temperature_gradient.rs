@@ -36,7 +36,7 @@ fn execute_blocking(
     temperature_gradient_channels: &mut TemperatureGradientChannels,
     mutex_temperature_gradient: Arc<Mutex<f64>>,
 ) {
-    tokio::runtime::Builder::new_current_thread()
+    tokio::runtime::Builder::new_current_thread().enable_all()
         .enable_all()
         .build()
         .unwrap()

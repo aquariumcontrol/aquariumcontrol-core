@@ -50,7 +50,6 @@ use crate::mineral::balling_channels::BallingChannels;
 use crate::utilities::channel_content::{AquariumDevice, InternalCommand};
 use crate::utilities::proc_ext_req::ProcessExternalRequestTrait;
 use log::error;
-use spin_sleep::SpinSleeper;
 use std::time::{Duration, Instant};
 
 /// Trait for the execution of the Balling mineral dosing.
@@ -160,7 +159,6 @@ impl MineralInjectionTrait for MineralInjection {
         mineral_pump: AquariumDevice,
         dosing_duration_millis: u32,
     ) -> (bool, u32) {
-        let spin_sleeper = SpinSleeper::default();
         let sleep_interval_millis: u32 = 1;
         let sleep_duration = Duration::from_millis(sleep_interval_millis as u64);
         let mut quit_command_received: bool;
@@ -186,7 +184,7 @@ impl MineralInjectionTrait for MineralInjection {
                 break; // stop dosing
             }
 
-            spin_sleeper.sleep(sleep_duration);
+            tokio::time::sleep(sleep_duration).await;
 
             dosing_counter = match Instant::now()
                 .duration_since(instant_start_of_injection)

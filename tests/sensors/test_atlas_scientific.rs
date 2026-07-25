@@ -280,7 +280,7 @@ pub fn test_atlas_scientific_interfaces_with_blocking_mutexes() {
     let join_handle_mock_i2c_interface = thread::Builder::new()
         .name("i2c_interface".to_string())
         .spawn(move || {
-            tokio::runtime::Builder::new_current_thread()
+            tokio::runtime::Builder::new_current_thread().enable_all()
                 .enable_all()
                 .build()
                 .unwrap()
@@ -311,7 +311,7 @@ pub fn test_atlas_scientific_interfaces_with_blocking_mutexes() {
             let sleep_time = Duration::from_millis(1000);
             let spin_sleeper = SpinSleeper::default();
             spin_sleeper.sleep(sleep_time);
-            tokio::runtime::Builder::new_multi_thread()
+            tokio::runtime::Builder::new_multi_thread().enable_all()
                 .enable_all()
                 .build()
                 .unwrap()

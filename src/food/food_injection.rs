@@ -59,7 +59,6 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 //!   that occurred during a single injection attempt, which is invaluable for
 //!   diagnostics.
 
-use spin_sleep::SpinSleeper;
 use std::time::{Duration, Instant};
 
 use crate::food::feed_channels::FeedChannels;
@@ -141,7 +140,6 @@ pub struct FoodInjection {
     aux_pump1_state: ActuatorState,
     aux_pump2_state: ActuatorState,
     feeder_state: ActuatorState,
-    spin_sleeper: SpinSleeper,
     sleep_duration_device_switch: Duration,
 }
 
@@ -167,7 +165,6 @@ impl FoodInjection {
             aux_pump1_state: ActuatorState::Undefined,
             aux_pump2_state: ActuatorState::Undefined,
             feeder_state: ActuatorState::Undefined,
-            spin_sleeper: SpinSleeper::default(),
             sleep_duration_device_switch: Duration::from_millis(
                 config.device_switch_delay_millis as u64,
             ),
@@ -208,7 +205,7 @@ impl FoodInjection {
 
         // --- Skimmer ---
         if self.skimmer_state != target_actuator_states.target_skimmer_state {
-            self.spin_sleeper.sleep(self.sleep_duration_device_switch);
+            tokio::time::sleep(self.sleep_duration_device_switch).await;
             let device = AquariumDevice::Skimmer;
 
             match target_actuator_states.target_skimmer_state {
@@ -256,7 +253,7 @@ impl FoodInjection {
 
         // --- Main pump 1 ---
         if self.main_pump1_state != target_actuator_states.target_main_pump1_state {
-            self.spin_sleeper.sleep(self.sleep_duration_device_switch);
+            tokio::time::sleep(self.sleep_duration_device_switch).await;
             let device = AquariumDevice::MainPump1;
 
             match target_actuator_states.target_main_pump1_state {
@@ -301,7 +298,7 @@ impl FoodInjection {
 
         // --- Main pump 2 ---
         if self.main_pump2_state != target_actuator_states.target_main_pump2_state {
-            self.spin_sleeper.sleep(self.sleep_duration_device_switch);
+            tokio::time::sleep(self.sleep_duration_device_switch).await;
             let device = AquariumDevice::MainPump2;
 
             match target_actuator_states.target_main_pump2_state {
@@ -346,7 +343,7 @@ impl FoodInjection {
 
         // --- Aux. pump 1 ---
         if self.aux_pump1_state != target_actuator_states.target_aux_pump1_state {
-            self.spin_sleeper.sleep(self.sleep_duration_device_switch);
+            tokio::time::sleep(self.sleep_duration_device_switch).await;
             let device = AquariumDevice::AuxPump1;
 
             match target_actuator_states.target_aux_pump1_state {
@@ -391,7 +388,7 @@ impl FoodInjection {
 
         // --- Aux. pump 2 ---
         if self.aux_pump2_state != target_actuator_states.target_aux_pump2_state {
-            self.spin_sleeper.sleep(self.sleep_duration_device_switch);
+            tokio::time::sleep(self.sleep_duration_device_switch).await;
             let device = AquariumDevice::AuxPump2;
 
             match target_actuator_states.target_aux_pump2_state {
@@ -436,7 +433,7 @@ impl FoodInjection {
 
         // --- Feeder ---
         if self.feeder_state != target_actuator_states.target_feeder_state {
-            self.spin_sleeper.sleep(self.sleep_duration_device_switch);
+            tokio::time::sleep(self.sleep_duration_device_switch).await;
             let device = AquariumDevice::Feeder;
 
             match target_actuator_states.target_feeder_state {
@@ -519,7 +516,6 @@ impl FoodInjectionTrait for FoodInjection {
         feed_channels: &mut FeedChannels,
         feed_profile: &FeedProfile,
     ) -> (bool, Result<(), Vec<FoodInjectionError>>) {
-        let spin_sleeper = SpinSleeper::default();
         let sleep_interval_millis: i16 = 1;
         let sleep_duration = Duration::from_millis(sleep_interval_millis as u64);
         let mut target_skimmer_state: ActuatorState;
@@ -588,7 +584,7 @@ impl FoodInjectionTrait for FoodInjection {
                     println!("Received quit command during pause phase of food injection");
                     break; // exit inner loop
                 }
-                spin_sleeper.sleep(sleep_duration);
+                tokio::time::sleep(sleep_duration).await;
             }
             if quit_command_received {
                 break; // exit outer loop
@@ -644,7 +640,7 @@ impl FoodInjectionTrait for FoodInjection {
                     println!("Received quit command during feed phase of food injection");
                     break; // exit inner loop
                 }
-                spin_sleeper.sleep(sleep_duration);
+                tokio::time::sleep(sleep_duration).await;
             }
             if quit_command_received {
                 break; // exit outer loop

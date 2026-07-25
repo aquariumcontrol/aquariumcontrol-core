@@ -49,7 +49,7 @@ fn execute_blocking(
     mineral_injection: &mut (impl MineralInjectionTrait + Send),
     sql_interface_balling: SqlInterfaceBalling,
 ) {
-    tokio::runtime::Builder::new_multi_thread()
+    tokio::runtime::Builder::new_multi_thread().enable_all()
         .enable_all()
         .build()
         .unwrap()

@@ -40,7 +40,7 @@ macro_rules! manage_cycle_time_thermal {
             }
         } else {
             let remaining_sleep_time = $cycle_time_duration - execution_duration;
-            $spin_sleeper.sleep(remaining_sleep_time);
+            tokio::time::sleep(remaining_sleep_time).await;
             $lock_warn_cycle_time_exceeded = false;
         }
 

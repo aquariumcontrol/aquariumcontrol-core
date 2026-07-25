@@ -61,7 +61,7 @@ fn execute_blocking(
     heating_mutexes: HeatingMutexes,
     sql_interface_heating: SqlInterfaceHeatingStats,
 ) {
-    tokio::runtime::Builder::new_current_thread()
+    tokio::runtime::Builder::new_current_thread().enable_all()
         .enable_all()
         .build()
         .unwrap()

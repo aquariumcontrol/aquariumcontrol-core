@@ -78,7 +78,7 @@ cfg_if::cfg_if! {
             thread::Builder::new()
                 .name("test_object".to_string())
                 .spawn(move || {
-                    tokio::runtime::Builder::new_current_thread()
+                    tokio::runtime::Builder::new_current_thread().enable_all()
                         .enable_all()
                         .build()
                         .unwrap()

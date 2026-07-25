@@ -48,7 +48,7 @@ fn execute_blocking<D: DataInjectionTrait + Send + 'static>(
     data_logger_channels: &mut DataLoggerChannels,
     data_logger_mutexes: DataLoggerMutexes,
 ) {
-    tokio::runtime::Builder::new_current_thread()
+    tokio::runtime::Builder::new_current_thread().enable_all()
         .enable_all()
         .build()
         .unwrap()
