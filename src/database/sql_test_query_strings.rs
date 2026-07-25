@@ -106,6 +106,32 @@ pub const SQL_QUERY_WRITE_FEED_PROFILE_TEST2: &str = concat!(
     "1,1,1,1,1,1);"
 );
 
+/// This query is used for testing: It creates a second third profile.
+pub const SQL_QUERY_WRITE_FEED_PROFILE_TEST3: &str = concat!(
+    "INSERT INTO feed_profiles VALUES ",
+    "(:profile_id, 'long_feed', ",
+    "2500,0,0,0,0,0, ",
+    "0,0,0,0,0,0, ",
+    "0,0,0,0,0,0, ",
+    "0,0,0,0,0,0, ",
+    "0,0,0,0,0,0, ",
+    "0,0,0,0,0,0, ",
+    "0,0,0,0,0,0, ",
+    "0,0,0,0,0,0, ",
+    "0,0,0,0,0,0, ",
+    "0,0,0,0,0,0, ",
+    "0,0,0,0,0,0, ",
+    "0,0,0,0,0,0, ",
+    "0,0,0,0,0,0, ",
+    "0,0,0,0,0,0, ",
+    "0,0,0,0,0,0, ",
+    "0,0,0,0,0,0, ",
+    "0,0,0,0,0,0, ",
+    "0,0,0,0,0,0, ",
+    "0,0,0,0,0,0, ",
+    "0,0,0,0,0,0)"
+);
+
 /// Query for reading the first part from data for test cases operating on a valid database entry
 pub const SQL_QUERY_READ_DATA_FRAME_1: &str = concat!(
     "SELECT timestamp, ",

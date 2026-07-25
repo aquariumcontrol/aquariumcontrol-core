@@ -23,7 +23,7 @@ mod common;
 use common::{add_balling_profile, insert_current_version_information, truncate_all_tables};
 
 use aquarium_control::database::database_interface_feed_trait::DatabaseInterfaceFeedTrait;
-use aquarium_control::database::sql_interface_feed::{insert_feed_profiles, SqlInterfaceFeed};
+use aquarium_control::database::sql_interface_feed::{insert_feed_profiles, insert_feed_schedule_entry, SqlInterfaceFeed};
 
 #[test]
 // Verifies that run async runtime configuration.
@@ -132,28 +132,44 @@ fn test_run_with_past_feed_schedule_entry() {
 // Verifies that execution of a feed profile with a long duration (> 30s) blocks the Tokio worker thread
 // due to spin_sleeper.sleep, preventing the watchdog task from petting the watchdog timer.
 fn test_run_feed_profile_blocks_watchdog() {
-    use mysql::params;
-    use mysql::prelude::Queryable;
+    // The test case asserts that the watchdog task was not blocked and operated continuously
+    // through two key mechanisms:
+    //
+    // 1. Watchdog Petting Assertion
+    // The test configures a custom watchdog filename /tmp/aquarium_watchdog_test_83.tmp in the
+    // test configuration and assert its content:
+    //    assert!(
+    //        std::path::Path::new(watchdog_file_path).exists(),
+    //        "Watchdog file was not petted during feed profile execution!"
+    //    );
+    // - When Watchdog::execute runs asynchronously on Tokio, it writes its heartbeat to
+    // watchdog_file_path on each interval using PettingTrait::pet.
+    // - If the Tokio worker thread were blocked by during the feed profile execution, the watchdog
+    // task would be starved of CPU execution time, preventing it from creating or updating
+    // this file.
+    // 2. Runtime Completion Assertion (test_run.rs)
+    //    let run_result = run(Some(test_config_path.to_string()), Some(Duration::from_secs(3)));
+    //
+    //    assert!(
+    //        run_result.is_ok(),
+    //        "run() failed with error: {:?}",
+    //        run_result.err()
+    //    );
+    // - run(...) executes the main application async runtime for 3 seconds.
+    // During this window, feed profile #83 (configured with an extended pause duration) is actively
+    // executing via food_injection.inject_food(...).
+    // Asserting run_result.is_ok() verifies that all Tokio tasks (including feed, watchdog,
+    // sensor_manager, and signal handler) join cleanly and exit without timing out or crashing.
 
     let _lock = TEST_RUN_MUTEX.lock().unwrap();
 
-    let base_config_path = "config/aquarium_control_test_runtime.toml";
-    let test_config_path = "config/aquarium_control_test_83.toml";
-    let watchdog_file_path = "/tmp/aquarium_watchdog_test_83.tmp";
-
-    // Prepare custom config pointing to aquarium_test_83, port 35083, and test watchdog file
-    let base_content = std::fs::read_to_string(base_config_path).unwrap();
-    let updated_content = base_content
-        .replace("aquarium_test_67", "aquarium_test_83")
-        .replace("port = 35000", "port = 35083")
-        .replace(
-            "watchdog_filename = \"/dev/watchdog\"",
-            &format!("watchdog_filename = \"{}\"", watchdog_file_path),
-        );
-    std::fs::write(test_config_path, updated_content).unwrap();
+    // configuration is derived from previous test case test_run_async_runtime_configuration
+    let test_config_path = "config/aquarium_control_test_runtime_blocked.toml";
 
     TEST_SHUTDOWN_TRIGGER.store(false, Ordering::Relaxed);
-    let _ = std::fs::remove_file("/tmp/aquarium-ctrl-test.pid");
+    let _ = std::fs::remove_file("/tmp/aquarium-ctrl-test2.pid");
+    
+    let watchdog_file_path = "/tmp/aquarium_watchdog_test2.tmp";
     let _ = std::fs::remove_file(watchdog_file_path);
 
     {
@@ -182,43 +198,7 @@ fn test_run_feed_profile_blocks_watchdog() {
         .unwrap();
 
         insert_feed_profiles(&mut sql_interface, &mut sql_interface_feed);
-        sql_interface_feed
-            .conn
-            .exec_drop(
-                concat!(
-                    "INSERT INTO feed_profiles VALUES ",
-                    "(:profile_id, 'long_feed', ",
-                    "2500,0,0,0,0,0, ",
-                    "0,0,0,0,0,0, ",
-                    "0,0,0,0,0,0, ",
-                    "0,0,0,0,0,0, ",
-                    "0,0,0,0,0,0, ",
-                    "0,0,0,0,0,0, ",
-                    "0,0,0,0,0,0, ",
-                    "0,0,0,0,0,0, ",
-                    "0,0,0,0,0,0, ",
-                    "0,0,0,0,0,0, ",
-                    "0,0,0,0,0,0, ",
-                    "0,0,0,0,0,0, ",
-                    "0,0,0,0,0,0, ",
-                    "0,0,0,0,0,0, ",
-                    "0,0,0,0,0,0, ",
-                    "0,0,0,0,0,0, ",
-                    "0,0,0,0,0,0, ",
-                    "0,0,0,0,0,0, ",
-                    "0,0,0,0,0,0, ",
-                    "0,0,0,0,0,0)"
-                ),
-                params! { "profile_id" => 83 },
-            )
-            .unwrap();
-
-        let past_timestamp =
-            chrono::NaiveDateTime::parse_from_str("2024-01-01 12:00:00", "%Y-%m-%d %H:%M:%S")
-                .unwrap();
-        sql_interface_feed
-            .insert_feed_schedule_entry(past_timestamp, 83, false, true)
-            .unwrap();
+        insert_feed_schedule_entry(&mut sql_interface_feed);
     }
 
     let run_result = run(Some(test_config_path.to_string()), Some(Duration::from_secs(3)));
@@ -227,6 +207,11 @@ fn test_run_feed_profile_blocks_watchdog() {
         run_result.is_ok(),
         "run() failed with error: {:?}",
         run_result.err()
+    );
+
+    assert!(
+        std::path::Path::new(watchdog_file_path).exists(),
+        "Watchdog file was not petted during feed profile execution!"
     );
 
     let _ = std::fs::remove_file(test_config_path);
