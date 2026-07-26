@@ -82,6 +82,7 @@ impl FeedScheduleEntry {
     /// # Errors
     /// Returns `SqlInterfaceError::FeedScheduleEntryRepeatDailyOutOfRange` if
     /// `repeat_daily` is not either zero or one.
+    ///
     /// [impl->swreq~food_read_schedule~1]
     pub fn new(
         sql_feed_schedule_entry: &SqlFeedScheduleEntry,

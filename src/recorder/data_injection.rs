@@ -51,6 +51,7 @@ pub trait DataInjectionTrait {
     /// # Arguments
     /// * `data_frame` - Data to be transferred to SQL database
     /// * `conn` - Database connection
+    ///
     /// [impl->swreq~recorder_store_measurements~1]
     fn inject_data(&mut self, data_frame: RecorderDataFrame, conn: PooledConn) -> PooledConn;
 }

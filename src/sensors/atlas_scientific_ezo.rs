@@ -123,6 +123,7 @@ impl AtlasScientificEzo {
     /// * `i2c_address` - The I2C address of the EZO circuit.
     /// * `sleep_time_millis` - The time to wait between sending the read command and reading the response.
     /// * `max_mutex_access_duration_millis` - Threshold for logging mutex contention warnings.
+    ///
     /// [impl->swreq~sensors_read_data~1]
     pub fn new(
         i2c_address: u16,

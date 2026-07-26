@@ -196,6 +196,7 @@ pub fn test_feed_schedule_execution() {
 // by sending the "execute" message via the channel.
 // Test case uses test database #08.
 /// [utest->swreq~food_execute_remote~1]
+///
 /// [utest->swreq~food_stop_indefinitely~1]
 /// [utest->swreq~food_restart~1]
 pub fn test_messaging_stops_starts_execute_feed() {

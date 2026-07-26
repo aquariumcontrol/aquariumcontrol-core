@@ -220,6 +220,7 @@ impl Refill {
     ///
     /// # Returns
     /// A new **`Refill` struct**, ready to manage the aquarium's freshwater refill system.
+    ///
     /// [impl->swreq~water_calibration_parameters~1]
     pub fn new(config: RefillConfig, database_ping_interval: Duration) -> Refill {
         Self {
@@ -265,6 +266,7 @@ impl Refill {
     ///
     /// # Returns
     /// A new **`Refill` struct**, with its `refill_errors` field initialized to the provided value.
+    ///
     /// [impl->swreq~water_startup_data_recovery~1]
     pub fn new_with_errors(config: RefillConfig, refill_errors: RefillErrorStates) -> Refill {
         Self {
@@ -473,6 +475,7 @@ impl Refill {
     ///
     /// # Arguments
     /// * `duration_since_last_refill` - The duration (in seconds) that has passed since the last refill operation.
+    ///
     /// [impl->swreq~water_error_detection~1]
     fn check_error_condition_switch_stuck_high(&mut self, duration_since_last_refill: u64) {
         self.refill_errors.error_switch_stuck_high =
@@ -493,6 +496,7 @@ impl Refill {
     ///
     /// # Returns
     /// A `bool` representing the **new state of the inhibition flag** after processing the commands.
+    ///
     /// [impl->swreq~water_determine_refill~1]
     fn calc_inhibition_flag(
         &mut self,
@@ -564,6 +568,7 @@ impl Refill {
     /// # Returns
     /// * `true` if `actual_value` is greater than `max_value`.
     /// * `false` if `actual_value` is within the limit.
+    ///
     /// [impl->swreq~water_faulty_switch_protection~1]
     fn check_volume_count_time_limit<T: std::fmt::Display + PartialOrd>(
         actual_value: T,
@@ -1119,6 +1124,7 @@ impl Refill {
 /// - `read_config_file` or `read_config_file_with_test_database` fail (e.g., file not found, invalid DB number).
 /// - It fails to connect to the SQL database.
 /// - It fails to get a connection from the SQL pool for `SqlInterfaceRefill` initialization.
+///
 /// [utest->swreq~water_determine_refill~1]
 pub fn prepare_refill_tests(
     refill_errors: Option<RefillErrorStates>,

@@ -189,6 +189,7 @@ impl SqlInterfaceHeatingSetVals {
     /// - The query returns more than one row, indicating a data inconsistency (`HeatingSetValsNoSingleResponse`).
     /// - The retrieved `heating_switch_on_temperature` is bigger than the `heating_switch_off_temperature`,
     ///   which is a critical configuration error (`HeatingSetValsInvalid`).
+    ///
     /// [impl->swreq~thermal_read_heating_limits~1]
     pub fn get_heating_set_values(&mut self) -> Result<Option<HeatingSetVals>, SqlInterfaceError> {
         let sql_heating_setvals_array = match self.conn.query_map(

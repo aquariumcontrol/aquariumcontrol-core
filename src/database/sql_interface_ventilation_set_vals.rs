@@ -200,6 +200,7 @@ impl SqlInterfaceVentilationSetVals {
     /// - More than one `VentilationSetVals` entry is found in the database.
     /// - The `ventilation_switch_on_temperature` is found to be greater than the
     ///   `ventilation_switch_off_temperature`, which is a critical configuration inconsistency.
+    ///
     /// [impl->swreq~thermal_read_ventilation_limits~1]
     pub fn get_ventilation_set_values(
         &mut self,

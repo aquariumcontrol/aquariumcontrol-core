@@ -70,6 +70,7 @@ impl FeedProfile {
     ///
     /// # Returns
     /// The total feeder run time for this profile, expressed as an `f64` in seconds.
+    ///
     /// [impl->swreq~food_log_database~1]
     pub fn calc_feeder_runtime(&self) -> f64 {
         self.feedphases
@@ -143,6 +144,7 @@ impl FeedPhase {
     ///
     /// # Returns
     /// A new `FeedPhase` struct initialized with the provided values.
+    ///
     /// [impl->swreq~food_read_profiles~1]
     pub fn new(
         pause_duration: i32,

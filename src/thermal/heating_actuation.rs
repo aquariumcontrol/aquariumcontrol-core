@@ -35,6 +35,7 @@ use std::sync::Arc;
 /// * `mutex_blocked_during_actuation` - A mutable flag to track if the actuation mutex was blocked.
 /// * `heating_channels` - A mutable reference to the struct containing the channels.
 /// * `is_multi_thread` - A boolean flag indicating if the Tokio runtime is running in multi-threaded mode.
+///
 /// [impl->swreq~thermal_heater_heating~1]
 async fn actuate_heater(
     command: InternalCommand,

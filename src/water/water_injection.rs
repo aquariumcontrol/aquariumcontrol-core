@@ -110,6 +110,7 @@ impl WaterInjection {
     ///
     /// # Returns
     /// A new **`WaterInjection` struct**, ready to perform water injection operations.
+    ///
     /// [impl->swreq~water_calibration_parameters~1]
     pub fn new(config: &RefillConfig) -> WaterInjection {
         let sleep_interval_millis = 100;

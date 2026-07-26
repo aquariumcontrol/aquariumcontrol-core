@@ -228,6 +228,7 @@ impl DataLogger {
     /// - Any of the configured output filenames are empty (`OutputFilenameEmpty`).
     /// - It fails to write to (and thus reset) any of the configured output files,
     ///   which could be due to permission issues or an invalid path (`FileResetFailure`).
+    ///
     /// [impl->swreq~recorder_store_measurements~1]
     pub fn new(config: DataLoggerConfig) -> Result<DataLogger, DataLoggerError> {
         if config.output_to_disk {
@@ -977,6 +978,7 @@ impl DataLogger {
     /// * `filter_water_temperature` - filter configuration for water temperature.
     /// * `filter_pH` - filter configuration for pH.
     /// * `filter_conductivity` - filter configuration for conductivity.
+    ///
     /// [impl->swreq~recorder_apply_iir_filter~1]
     fn calculate_filtered_signals(
         &mut self,
@@ -1485,6 +1487,7 @@ pub mod tests {
     #[test]
     /// Verifies that `DataLogger::new()` returns an `OutputFilenameEmpty` error
     /// if `output_to_disk` is true but a filename is an empty string.
+    ///
     /// [utest->swreq~recorder_store_measurements~1]
     fn test_new_failure_on_empty_filename() {
         // 1. Setup

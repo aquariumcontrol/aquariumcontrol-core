@@ -122,6 +122,7 @@ impl Monitors {
     ///
     /// # Returns
     /// A new **`Monitors` struct**, ready to perform its monitoring tasks.
+    ///
     /// [impl->swreq~watchmen_self_monitoring~1]
     pub fn new(config: MonitorsConfig) -> Monitors {
         Self {

@@ -52,6 +52,7 @@ use std::time::{Duration, Instant};
 /// * `heating_set_val_updater` - A mutable reference to the set value updater.
 /// * `heating_mutexes` - Shared mutexes for heating conditions.
 /// * `sql_interface_heating` - Database interface for heating stats.
+///
 /// [utest->swreq~thermal_heater_heating~1]
 fn execute_blocking(
     heating: &mut Heating,
@@ -1987,6 +1988,7 @@ pub fn test_heating_component_protection_when_tank_level_low() {
 // resumes operation.
 // Test case uses test database #19.
 /// [utest->swreq~thermal_remote_heating_stop~1]
+///
 /// [utest->swreq~thermal_remote_heating_start~1]
 pub fn test_messaging_stops_starts_heating() {
     let (mut config, mut heating, sql_interface, sql_interface_heating_stats) =

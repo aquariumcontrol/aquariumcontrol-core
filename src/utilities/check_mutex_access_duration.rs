@@ -96,6 +96,7 @@ pub trait CheckMutexAccessDurationTrait {
     /// * `key_opt` - An optional configuration key.
     /// * `instant_after_locking_mutex` - A parameter representing `instant_after_locking_mutex`.
     /// * `instant_before_locking_mutex` - A parameter representing `instant_before_locking_mutex`.
+    ///
     /// [impl->swreq~watchmen_self_monitoring~1]
     fn check_mutex_access_duration(
         &mut self,

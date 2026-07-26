@@ -140,6 +140,7 @@ impl SqlInterfaceRefill {
     /// - The initial database query to get the table row count fails (`DatabaseCheckRefillFailure`).
     /// - The retrieved row count is a negative number, indicating a database issue (`DatabaseRefillTableNegativeValue`).
     /// - The number of rows in the `refill` table exceeds the configured `max_rows_refill` limit (`DatabaseRefillTableContainsTooManyRows`).
+    ///
     /// [impl->swreq~water_startup_data_recovery~1]
     pub fn new(
         mut conn: PooledConn,

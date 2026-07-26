@@ -42,6 +42,7 @@ use std::time::{Duration, Instant};
 /// * `balling_channels` - A mutable reference to the `BallingChannels` instance.
 /// * `mineral_injection` - A mutable reference to the mineral injector instance.
 /// * `sql_interface_balling` - Database interface for Balling operations.
+///
 /// [utest->swreq~mineral_compute_due~1]
 fn execute_blocking(
     balling: &mut Balling,
@@ -77,6 +78,7 @@ fn execute_blocking(
         });
 }
 /// Performs the `read_balling_config` operation.
+///
 /// [utest->swreq~mineral_read_profiles~1]
 fn read_balling_config() -> ConfigData {
     read_config_file("config/aquarium_control_test_generic.toml".to_string()).unwrap()
@@ -652,6 +654,7 @@ pub fn test_balling_dosing(
 // resumes operation.
 // Test case uses test database #06.
 /// [utest->swreq~mineral_stop_indefinitely~1]
+///
 /// [utest->swreq~mineral_restart~1]
 pub fn test_messaging_stops_starts_balling_dosing() {
     let sleep_duration_100_millis = Duration::from_millis(100);

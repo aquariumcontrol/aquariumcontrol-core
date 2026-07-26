@@ -118,6 +118,7 @@ impl MessagingChannels {
     /// - The `domain` is `MessagingDomain::Unknown`.
     /// - The target channel is disconnected (i.e., the receiving thread has terminated),
     ///   wrapped in `MessagingError::ChannelSendError`.
+    ///
     /// [impl->swreq~dispatch_process_posix_messages~1]
     pub fn send_command_to_domain(
         &mut self,

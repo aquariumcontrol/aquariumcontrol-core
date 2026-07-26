@@ -39,6 +39,7 @@ use std::time::Duration;
 /// * `ventilation_channels` - A mutable reference to the `VentilationChannels` instance.
 /// * `ventilation_set_val_updater` - A mutable reference to the set value updater.
 /// * `ventilation_mutexes` - Shared mutexes for ventilation conditions.
+///
 /// [utest->swreq~thermal_ventilation_cooling~1]
 fn execute_blocking(
     ventilation: &mut Ventilation,
@@ -1153,6 +1154,7 @@ pub fn test_ventilation_block_by_schedule() {
 #[test]
 // Verifies that messaging stops starts ventilation.
 /// [utest->swreq~thermal_remote_ventilation_stop~1]
+///
 /// [utest->swreq~thermal_remote_ventilation_start~1]
 pub fn test_messaging_stops_starts_ventilation() {
     let mut config: ConfigData =

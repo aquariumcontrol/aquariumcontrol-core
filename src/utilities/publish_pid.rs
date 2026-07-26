@@ -124,6 +124,7 @@ impl PublishPid {
     ///   positive PID, indicating a potential duplicate instance is running.
     /// - `PublishPidError::UnableToWritePidFile`: If writing the current process's PID to
     ///   the file fails, for example due to insufficient write permissions or an invalid path.
+    ///
     /// [impl->swreq~utilities_write_pid_file~1]
     pub fn new(config: PublishPidConfig) -> Result<PublishPid, PublishPidError> {
         match fs::read_to_string(&config.pid_filename) {

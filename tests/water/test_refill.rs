@@ -46,6 +46,7 @@ use aquarium_control::water::water_injection::WaterInjectionTrait;
 /// * `mutex_device_scheduler_refill` - Mutex coordinating access to the device scheduler for refill.
 /// * `refill_channels` - A mutable reference to the `RefillChannels` communication interface.
 /// * `water_injection` - A parameter representing `water_injection`.
+///
 /// [utest->swreq~water_determine_refill~1]
 fn execute_blocking(
     refill: &mut Refill,

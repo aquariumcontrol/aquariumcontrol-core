@@ -83,6 +83,7 @@ impl IIRFilter {
     /// # Returns
     /// A new `IIRFilter` struct, initialized with the provided values and a
     /// time-step-corrected filter coefficient.
+    ///
     /// [impl->swreq~recorder_apply_iir_filter~1]
     pub fn new(
         filter_config: &IIRFilterConfig,
@@ -144,6 +145,7 @@ pub mod tests {
 
     #[test]
     /// Verifies the `new` constructor correctly initializes the filter's starting value.
+    ///
     /// [utest->swreq~recorder_apply_iir_filter~1]
     fn test_new_constructor_initialization() {
         let config = prepare_filter_config();

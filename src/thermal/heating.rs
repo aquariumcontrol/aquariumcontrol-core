@@ -200,6 +200,7 @@ impl Heating {
     ///
     /// # Returns
     /// A new **`Heating` struct**, ready to manage the aquarium's heating system.
+    ///
     /// [impl->swreq~thermal_read_heating_limits~1]
     pub fn new(config: HeatingConfig, database_ping_interval: Duration) -> Heating {
         Self {
@@ -466,6 +467,7 @@ impl Heating {
     /// (switching off the heater, logging final stats) and confirms shutdown.
     #[allow(clippy::too_many_arguments)]
     /// [impl->swreq~thermal_heater_heating~1]
+///
 /// [impl->swreq~thermal_inhibit_heating_low_water~1]
     pub async fn execute(
         &mut self,

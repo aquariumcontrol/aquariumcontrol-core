@@ -72,6 +72,7 @@ pub struct BallingChannels {
 
 impl BallingChannels {
     /// Sends a command to the relay manager.
+    ///
     /// [impl->swreq~mineral_calc_duration~1]
     pub fn send_to_relay_manager(
         &mut self,
@@ -86,6 +87,7 @@ impl BallingChannels {
     }
 
     /// Sends a command to the schedule checker.
+    ///
     /// [impl->swreq~mineral_compute_due~1]
     pub fn send_to_schedule_check(
         &mut self,

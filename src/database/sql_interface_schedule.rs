@@ -338,6 +338,7 @@ impl SqlInterfaceSchedule {
     /// - One or more raw schedule entries fail to be converted into a `ScheduleEntry`
     ///   (`ScheduleProcessingFailure`). This can happen due to invalid data formats
     ///   (e.g., a malformed time string) in the database.
+    ///
     /// [impl->swreq~schedule_read_entries~1]
     pub fn read_schedule(&mut self) -> Result<(), Vec<SqlInterfaceError>> {
         // Get all schedule entries from the database

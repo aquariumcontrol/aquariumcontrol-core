@@ -220,6 +220,7 @@ impl RelayManager {
     /// A new `RelayManager` struct, ready to handle relay actuation commands
     /// and communicate with other modules.    
     /// * `execution_config` - An execution configuration instance.
+    ///
     /// [impl->swreq~relay_control_actuators~1]
     pub fn new(config: RelayManagerConfig, execution_config: ExecutionConfig) -> RelayManager {
         RelayManager {

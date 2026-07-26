@@ -157,6 +157,7 @@ impl ScheduleCheck {
     ///
     /// # Returns
     /// A new `ScheduleCheck` struct, ready to monitor and evaluate schedules.
+    ///
     /// [impl->swreq~schedule_read_entries~1]
     pub fn new(config: ScheduleCheckConfig, database_ping_interval: Duration) -> ScheduleCheck {
         ScheduleCheck {
@@ -194,8 +195,10 @@ impl ScheduleCheck {
     /// * `_module_name` - Name of the module for which the schedule shall be checked for logging purposes.
     ///
     /// * `module_name` - A parameter representing `module_name`.
+    ///
     /// [impl->swreq~schedule_inhibit_refill~1]
 /// [impl->swreq~schedule_inhibit_mineral~1]
+///
 /// [impl->swreq~schedule_inhibit_heating~1]
 /// [impl->swreq~schedule_inhibit_ventilation~1]
     fn check_pending_schedule_request(

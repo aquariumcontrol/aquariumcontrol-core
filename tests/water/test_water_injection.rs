@@ -195,6 +195,7 @@ pub fn test_water_injection_immediate_switch_high_no_quit_signal() {
 /// # Arguments
 /// * `tx_relay_manager_to_water_injection` - Sender channel to communicate relay state changes to water injection.
 /// * `rx_relay_manager_from_water_injection` - Receiver channel to read commands from water injection.
+///
 /// [utest->swreq~water_actuate_pump~1]
 fn create_mock_relay_manager(
     mut tx_relay_manager_to_water_injection: AquaSender<bool>,

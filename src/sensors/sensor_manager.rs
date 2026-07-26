@@ -214,6 +214,7 @@ impl SensorManagerSignals {
     ///
     /// # Arguments
     /// * `config` - A parameter representing `config`.
+    ///
     /// [impl->swreq~sensors_read_data~1]
     pub fn new(config: &SensorManagerConfig) -> SensorManagerSignals {
         SensorManagerSignals {

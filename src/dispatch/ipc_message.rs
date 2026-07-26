@@ -28,6 +28,7 @@ pub struct Message {
 
 impl Message {
     /// Creates a new `Message` instance with all its fields initialized to zero.
+    ///
     /// [impl->swreq~dispatch_process_posix_messages~1]
     pub fn new() -> Message {
         Message {

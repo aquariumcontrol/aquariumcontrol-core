@@ -72,6 +72,7 @@ enum RelayLogic {
 ///
 /// # Errors
 /// Propagates errors for irrelevant or unsupported commands.
+///
 /// [impl->swreq~relay_control_actuators~1]
 fn get_gpio_state(command: &InternalCommand, logic: RelayLogic) -> Result<bool, RelayError> {
     match (command, logic) {
