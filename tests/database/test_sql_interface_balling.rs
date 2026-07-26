@@ -47,6 +47,7 @@ pub struct BallingEvent {
 // 3. Failure on Row Limit (DosingLog): Fails when `ballingdosinglog` exceeds its max row count.
 // 4. Deactivated Checks: Succeeds even with excess rows if the limits are set to 0.
 // Test case uses test database #57.
+/// [utest->swreq~mineral_read_profiles~1]
 fn test_sql_interface_balling_new() {
     // --- Common Setup ---
     let config: ConfigData = read_config_file_with_test_database(

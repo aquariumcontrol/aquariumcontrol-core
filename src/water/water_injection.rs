@@ -39,6 +39,7 @@ const MAX_MUTEX_ACCESS_DURATION_MILLIS: u64 = 10;
 /// * `mutex_device_scheduler_refill` - Mutex coordinating access to the device scheduler for refill.
 pub trait WaterInjectionTrait {
     #[allow(async_fn_in_trait)]
+    /// [impl->swreq~water_hysteresis~1]
     async fn inject_water(
         &mut self,
         refill_channels: &mut RefillChannels,
@@ -109,6 +110,7 @@ impl WaterInjection {
     ///
     /// # Returns
     /// A new **`WaterInjection` struct**, ready to perform water injection operations.
+    /// [impl->swreq~water_calibration_parameters~1]
     pub fn new(config: &RefillConfig) -> WaterInjection {
         let sleep_interval_millis = 100;
         let sleep_interval_seconds: f64 = (sleep_interval_millis as f64) / (1000f64);

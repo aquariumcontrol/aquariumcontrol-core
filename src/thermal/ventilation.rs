@@ -254,6 +254,7 @@ impl Ventilation {
     ///
     /// # Returns
     /// A new `Ventilation` struct, ready to manage the aquarium's ventilation system.
+    /// [impl->swreq~thermal_read_ventilation_limits~1]
     pub fn new(config: VentilationConfig) -> Ventilation {
         Self {
             config,
@@ -377,6 +378,7 @@ impl Ventilation {
     /// to loop indefinitely. It will only break out of its loop and terminate when a `Quit`
     /// command is received from the signal handler, after which it performs final cleanup
     /// (switching the ventilation to its configured terminal state) and confirms shutdown.
+    /// [impl->swreq~thermal_ventilation_cooling~1]
     pub async fn execute(
         &mut self,
         mutex_device_scheduler_ventilation: Arc<tokio::sync::Mutex<i32>>,

@@ -52,6 +52,7 @@ use std::time::{Duration, Instant};
 /// * `heating_set_val_updater` - A mutable reference to the set value updater.
 /// * `heating_mutexes` - Shared mutexes for heating conditions.
 /// * `sql_interface_heating` - Database interface for heating stats.
+/// [utest->swreq~thermal_heater_heating~1]
 fn execute_blocking(
     heating: &mut Heating,
     mutex_device_scheduler_heating: Arc<tokio::sync::Mutex<i32>>,
@@ -1842,6 +1843,7 @@ pub fn test_heating_blocked_by_schedule() {
 #[test]
 // Test case checks if component protection is executed.
 // Test case uses test database #18.
+/// [utest->swreq~thermal_inhibit_heating_low_water~1]
 pub fn test_heating_component_protection_when_tank_level_low() {
     let sleep_duration_100_millis = Duration::from_millis(100);
     let spin_sleeper = SpinSleeper::default();
@@ -1984,6 +1986,8 @@ pub fn test_heating_component_protection_when_tank_level_low() {
 // The test case sends the start message via the channel and verifies if heating control
 // resumes operation.
 // Test case uses test database #19.
+/// [utest->swreq~thermal_remote_heating_stop~1]
+/// [utest->swreq~thermal_remote_heating_start~1]
 pub fn test_messaging_stops_starts_heating() {
     let (mut config, mut heating, sql_interface, sql_interface_heating_stats) =
         prepare_heating_tests_mock_midnight_calculator(3600, 19, None);
@@ -2212,6 +2216,7 @@ pub fn test_messaging_stops_starts_heating() {
 // After a limited time period, increase the set values and observe if the heater is switched on.
 // Also, implicitly test if the execute function terminates after receiving Quit and Terminate commands.
 // Test case uses test database #50.
+/// [utest->swreq~thermal_read_heating_limits~1]
 pub fn test_heating_with_increased_set_values() {
     let sleep_duration_100_millis = Duration::from_millis(100);
     let spin_sleeper = SpinSleeper::default();

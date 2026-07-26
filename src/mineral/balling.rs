@@ -193,6 +193,7 @@ impl Balling {
     ///   in the database (`SetValueRetrievalError`).
     /// - It fails to calculate the initial countdown for any pump due to a database error
     ///   or data conversion issue.
+    /// [impl->swreq~mineral_read_profiles~1]
     pub fn new(
         config: BallingConfig,
         database_ping_interval: Duration,
@@ -443,6 +444,7 @@ impl Balling {
     /// A `u32` representing the calculated dosing duration in milliseconds.
     /// Returns `0` if either `dosing_speed` or `dosing_volume` is zero or negative,
     /// indicating that no dosing should occur due to invalid parameters.
+    /// [impl->swreq~mineral_calc_duration~1]
     fn calc_target_dosing_duration_millis(balling_setval: &BallingSetVal) -> u32 {
         if balling_setval.dosing_speed > 0.0 && balling_setval.dosing_volume > 0.0 {
             let dosing_duration_seconds =
@@ -621,6 +623,7 @@ impl Balling {
     /// * `sql_interface_balling` - A `SqlInterfaceBalling` instance, providing the
     ///   specific SQL interface for Balling dosing operations.
     /// * `is_multi_thread` - A boolean indicating if the tokio runtime is running in multithreaded mode.
+    /// [impl->swreq~mineral_compute_due~1]
     pub async fn execute(
         &mut self,
         mutex_device_scheduler_balling: Arc<tokio::sync::Mutex<i32>>,
@@ -801,6 +804,7 @@ pub mod tests {
     // Test case checks if the target dosing duration is calculated correctly
     // considering only valid input values.
     // The test case does not require any communication with the database.
+    /// [utest->swreq~mineral_calc_duration~1]
     pub fn test_calc_target_dosing_duration_millis_happy_case() {
         let balling_setval = BallingSetVal {
             pump_id: 1,

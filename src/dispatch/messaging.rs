@@ -150,6 +150,7 @@ impl Messaging {
     ///   be a `MessagingError::PosixMessageQueueOpeningError`.
     /// - It fails to retrieve the attributes (like max message length) of the opened
     ///   message queue. This will be a `MessagingError::PosixMessageQueueAttributesError`.
+    /// [impl->swreq~dispatch_process_posix_messages~1]
     pub fn new(
         config: MessagingConfig,
         execution_config: ExecutionConfig,

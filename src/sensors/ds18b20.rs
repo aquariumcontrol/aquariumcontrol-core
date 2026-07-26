@@ -236,6 +236,7 @@ impl Ds18b20 {
     /// - `Ds18b20Error::TemperatureParseError`: If the temperature value after "t=" cannot be parsed into a number.
     /// - `Ds18b20Error::TemperatureOutOfRange`: If the parsed temperature is outside the plausible range defined
     ///   by `MIN_TEMPERATURE` and `MAX_TEMPERATURE`.
+    /// [impl->swreq~sensors_read_data~1]
     pub fn read(&self, sensor_id: &str) -> Ds18b20Result {
         let base_dir = PathBuf::from(self.config.system_driver_base_path.clone());
         let device_folder =

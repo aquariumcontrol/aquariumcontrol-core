@@ -142,6 +142,7 @@ impl MessagingDomain {
     /// # Returns
     /// Returns `true` if the thread for the domain is configured as active, and `false`
     /// if the thread is inactive or if the domain is `MessagingDomain::Unknown`.
+    /// [impl->swreq~dispatch_process_posix_messages~1]
     pub fn is_domain_thread_executed(&self, execution_config: &ExecutionConfig) -> bool {
         match self {
             MessagingDomain::Refill => execution_config.refill,

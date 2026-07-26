@@ -182,6 +182,7 @@ pub struct ConfigData {
 ///   necessary permissions to access it.
 /// - `ConfigError::TomlParse`: If the file's content is not valid TOML, or if its
 ///   structure does not match the `ConfigData` struct, preventing deserialization.
+/// [impl->swreq~utilities_parse_toml_config~1]
 pub fn read_config_file(filename: String) -> Result<ConfigData, ConfigError> {
     #[cfg(all(not(test), not(feature = "test-utils")))] // only required in real-life execution
     info!(target: module_path!(), "reading configuration from {filename}");

@@ -146,6 +146,7 @@ impl Watchdog {
     /// # Panics
     /// This function will **panic** if any of the configuration validation checks fail,
     /// as an incorrectly configured watchdog can lead to system instability or unintended resets.
+    /// [impl->swreq~watchmen_pet_watchdog~1]
     pub fn new(config: WatchdogConfig) -> Result<Watchdog, WatchdogError> {
         if config.heartbeat_duration_millis == 0 {
             return Err(WatchdogError::DurationBetweenTwoHeartbeatsIsZero(
@@ -197,6 +198,8 @@ impl Watchdog {
     /// * `watchdog_channels` - A mutable reference to the struct containing the channels.
     /// * `petting` - A mutable reference to an object implementing the `PettingTrait`,
     ///   responsible for the actual writing of heartbeat/deactivation messages to the watchdog file.
+    /// [impl->swreq~watchmen_pet_watchdog~1]
+/// [impl->swreq~watchmen_reboot_on_stall~1]
     pub async fn execute(
         &mut self,
         watchdog_channels: &mut WatchDogChannels,

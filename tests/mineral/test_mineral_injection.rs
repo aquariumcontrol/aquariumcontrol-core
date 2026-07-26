@@ -41,6 +41,7 @@ use std::time::Duration;
 /// - It fails to receive a command from the `MineralInjection` test object.
 /// - It receives an `InternalCommand` that is neither `SwitchOn` nor `SwitchOff`.
 /// - It fails to send the acknowledgment back.
+/// [utest->swreq~mineral_calc_duration~1]
 fn test_mineral_injection_receive_actuation_command_send_confirmation(
     tx_relay_manager_to_mineral_injection: &mut AquaSender<bool>,
     rx_relay_manager_from_mineral_injection: &mut AquaReceiver<InternalCommand>,

@@ -200,6 +200,7 @@ impl Heating {
     ///
     /// # Returns
     /// A new **`Heating` struct**, ready to manage the aquarium's heating system.
+    /// [impl->swreq~thermal_read_heating_limits~1]
     pub fn new(config: HeatingConfig, database_ping_interval: Duration) -> Heating {
         Self {
             config,
@@ -464,6 +465,8 @@ impl Heating {
     /// command is received from the signal handler, after which it performs final cleanup
     /// (switching off the heater, logging final stats) and confirms shutdown.
     #[allow(clippy::too_many_arguments)]
+    /// [impl->swreq~thermal_heater_heating~1]
+/// [impl->swreq~thermal_inhibit_heating_low_water~1]
     pub async fn execute(
         &mut self,
         mutex_device_scheduler_heating: Arc<tokio::sync::Mutex<i32>>,

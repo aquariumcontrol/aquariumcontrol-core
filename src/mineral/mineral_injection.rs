@@ -72,6 +72,7 @@ pub trait MineralInjectionTrait {
     ///   indicating that the operation was interrupted. It's `false` otherwise.
     /// - The `u32` is the actual duration (in milliseconds) the pump ran before stopping or being interrupted.
     #[allow(async_fn_in_trait)]
+    /// [impl->swreq~mineral_calc_duration~1]
     async fn inject_mineral(
         &mut self,
         balling_channels: &mut BallingChannels,

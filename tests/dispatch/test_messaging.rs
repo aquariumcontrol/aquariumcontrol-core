@@ -183,6 +183,7 @@ cfg_if::cfg_if! {
         // Test case checks if messages for ventilation control are triggering the corresponding channel communication
         #[test]
         // Verifies that messaging ventilation.
+        /// [utest->swreq~dispatch_process_posix_messages~1]
         pub fn test_messaging_ventilation() {
             let mut config: ConfigData =
                 read_config_file("config/aquarium_control_test_generic.toml".to_string()).unwrap();

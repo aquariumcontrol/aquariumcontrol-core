@@ -153,6 +153,7 @@ impl AtlasScientificOem {
     /// * `register_data_msb` - The register address where the measurement data starts (Most Significant Byte).
     /// * `scale_factor` - The divisor used to convert the raw integer value to a float (e.g., 100.0 or 1000.0).
     /// * `response_length` - The number of bytes to read for a measurement (typically 4).
+    /// [impl->swreq~sensors_read_data~1]
     pub fn new(
         i2c_address: u16,
         device_type: u8,

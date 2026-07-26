@@ -21,6 +21,7 @@ impl Petting {
     ///
     /// # Returns
     /// A new `Petting` struct.
+    /// [impl->swreq~watchmen_pet_watchdog~1]
     pub fn new() -> Petting {
         Petting {}
     }

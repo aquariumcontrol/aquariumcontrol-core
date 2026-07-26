@@ -286,6 +286,7 @@ impl RelayActuationTrait for ActuateGpio {
     /// This function will return a `RelayError` if the command is not applicable:
     /// - `RelayError::IrrelevantCommand`: If the `internal_command` is not `SwitchOn` or `SwitchOff` (e.g., `Pulse`, `RequestSignal`).
     /// - `RelayError::PulseNotAllowedForDevice`: If a `Pulse` command is attempted, as this GPIO implementation does not support it.
+    /// [impl->swreq~relay_control_actuators~1]
     fn actuate(&mut self, internal_command: &InternalCommand) -> Result<(), RelayError> {
         match internal_command {
             InternalCommand::SwitchOn(ref aquarium_device)

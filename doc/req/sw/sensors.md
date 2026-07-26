@@ -1,4 +1,4 @@
-### Read Sensor Data
+### [sensors] Read Sensor Data
 `swreq~sensors_read_data~1`
 
 The control system shall read measurements from configured sensor hardware:
@@ -12,7 +12,7 @@ Covers:
 * sysreq~sensors1~1
 Needs: impl, utest
 
-### Tank Level Switch Signal Preprocessing
+### [sensors] Tank Level Switch Signal Preprocessing
 `swreq~sensors_tank_level_switch_preprocessing~1`
 
 The sensor manager shall perform preprocessing on the raw digital input from the tank level switch GPIO pin:

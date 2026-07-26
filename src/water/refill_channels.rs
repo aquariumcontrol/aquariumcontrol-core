@@ -73,6 +73,7 @@ impl RefillChannels {
     ///
     /// # Arguments
     /// * `command` - The command string to verify.
+    /// [impl->swreq~water_channel_communication~1]
     pub fn send_to_relay_manager(
         &mut self,
         command: InternalCommand,

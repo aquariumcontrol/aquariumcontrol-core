@@ -19,6 +19,7 @@ use aquarium_control::water::refill_monitor_view::RefillMonitorView;
 /// This function sets up all the necessary channels and returns the `RefillChannels`
 /// struct along with the "other ends" of the channels that the test needs to interact with
 /// or assert against.
+/// [utest->swreq~water_channel_communication~1]
 fn setup_channels() -> (
     RefillChannels,
     AquaReceiver<InternalCommand>,   // Test receiver for schedule_check

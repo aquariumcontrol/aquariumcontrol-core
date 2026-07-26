@@ -349,6 +349,7 @@ impl RelayActuationTrait for ActuateControllino {
     /// - `IncorrectChecksum`: If the received response has an invalid checksum, indicating data corruption.
     /// - `SerialPortNotConfigured`: If the serial port was not initialized (e.g., `active` is false in config).
     /// - `IrrelevantCommand`: If an inapplicable command (e.g., `ResetAllErrors`) is provided.
+    /// [impl->swreq~relay_control_actuators~1]
     fn actuate(&mut self, internal_command: &InternalCommand) -> Result<(), RelayError> {
         match internal_command {
             InternalCommand::SwitchOn(ref _c)

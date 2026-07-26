@@ -398,6 +398,7 @@ impl TankLevelSwitch {
     ///   simulator fails for either signal.
     /// - `TankLevelSwitchError::InputPinNotProvided`: If in hardware mode but the GPIO
     ///   input pin is not available.
+    /// [impl->swreq~sensors_tank_level_switch_preprocessing~1]
     pub fn update_tank_level_switch_signals(
         &mut self,
         tx_tank_level_switch_to_tcp_opt: &mut Option<AquaSender<InternalCommand>>,

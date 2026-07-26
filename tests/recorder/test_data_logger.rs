@@ -130,6 +130,7 @@ fn prepare_data_logger_test_rig(
 #[test]
 /// Verifies that `DataLogger::new()` successfully creates and resets all
 /// specified output files when `output_to_disk` is enabled.
+/// [utest->swreq~recorder_store_measurements~1]
 fn test_new_success_with_file_creation() {
     // 1. Setup
     let global_config =
