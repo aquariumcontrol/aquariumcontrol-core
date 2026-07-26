@@ -89,6 +89,8 @@ impl SqlInterfaceMidnightCalculator {
     ///
     /// # Returns
     /// A new `SqlInterfaceMidnightCalculator` struct.
+    ///
+    /// [impl->swreq~thermal_midnight_calculator~1]
     pub fn new(conn: PooledConn) -> SqlInterfaceMidnightCalculator {
         SqlInterfaceMidnightCalculator { conn }
     }

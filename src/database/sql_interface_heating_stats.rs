@@ -272,6 +272,8 @@ impl SqlInterfaceHeatingStats {
     /// - Any of the retrieved counts are negative, indicating a database issue (`DatabaseHeatingStatsTableNegativeValue`).
     /// - The `heatingstats` table contains entries with `NULL` values (`DatabaseHeatingStatsTableContainsNull`).
     /// - The number of rows in the `heatingstats` table exceeds `max_rows_heating_stats` (`DatabaseHeatingStatsTableContainsTooManyRows`).
+    ///
+    /// [impl->swreq~thermal_connect_heating_stats~1]
     pub fn new(
         mut conn: PooledConn,
         max_rows_heating_stats: u64,

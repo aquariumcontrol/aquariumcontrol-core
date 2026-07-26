@@ -44,6 +44,7 @@ pub struct RefillEvent {
 // 4. Edge Case: Succeeds when the row count is exactly the limit.
 // Test case uses a dedicated test database to avoid conflicts.
 /// [itest->swreq~water_startup_data_recovery~1]
+/// [itest->swreq~water_connect_database~1]
 fn test_sql_interface_refill_new() {
     // --- Common Setup ---
     let config: ConfigData = read_config_file_with_test_database(

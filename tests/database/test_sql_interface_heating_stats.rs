@@ -29,6 +29,8 @@ use chrono::{Datelike, Local, NaiveDate, NaiveDateTime};
 // 3. Deactivated Check: Succeeds even with excess rows if the limit is set to 0.
 // Test case uses test database #61.
 /// [itest->swreq~thermal_heater_heating~1]
+/// [itest->swreq~thermal_connect_heating_stats~1]
+/// [itest->swreq~thermal_midnight_calculator~1]
 fn test_sql_interface_heating_stats_new() {
     // --- Common Setup ---
     let config: ConfigData = read_config_file_with_test_database(

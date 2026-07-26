@@ -47,3 +47,14 @@ Covers:
 
 * sysreq~schedule5~1
 Needs: impl, utest
+
+### [schedule] Connect to database
+`swreq~schedule_connect_database~1`
+
+The software shall connect to the database and initialize the SQL interface for reading schedule entries.
+
+Covers:
+
+* sysreq~schedule1~1
+Needs: impl, itest
+

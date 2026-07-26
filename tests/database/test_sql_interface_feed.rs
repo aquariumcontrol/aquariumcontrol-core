@@ -37,6 +37,7 @@ pub struct FeedEvent {
     feed_profile_id: i32,
 }
 
+/// [itest->swreq~food_connect_database~1]
 #[test]
 // This test case verifies the validation logic within the `SqlInterfaceFeed::new()` constructor.
 // It covers the following scenarios:

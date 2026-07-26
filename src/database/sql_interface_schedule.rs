@@ -268,6 +268,8 @@ impl SqlInterfaceSchedule {
     /// - Any of the retrieved counts are negative, indicating a database issue (`DatabaseScheduleTableNegativeValue`).
     /// - The `schedule` table contains entries with `NULL` values (`DatabaseScheduleTableContainsNull`).
     /// - The number of rows in the `schedule` table exceeds `max_rows_schedule` (`DatabaseScheduleTableContainsTooManyRows`).
+    ///
+    /// [impl->swreq~schedule_connect_database~1]
     pub fn new(
         mut conn: PooledConn,
         max_rows_schedule: u64,

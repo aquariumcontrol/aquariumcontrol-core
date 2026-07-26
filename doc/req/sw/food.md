@@ -67,3 +67,14 @@ Covers:
 
 * sysreq~food7~1
 Needs: impl, utest, itest
+
+### [food] Connect to database
+`swreq~food_connect_database~1`
+
+The software shall connect to the database and initialize the SQL interface for feed schedules and profiles, checking table row count limits.
+
+Covers:
+
+* sysreq~food1~1
+Needs: impl, itest
+

@@ -29,6 +29,7 @@ use std::collections::HashMap;
 // Test case uses test database #63.
 // [itest->swreq~schedule_read_entries~1]
 /// [itest->swreq~schedule_read_entries~1]
+/// [itest->swreq~schedule_connect_database~1]
 fn test_sql_interface_schedule_new_and_read() {
     // --- Common Setup ---
     let config: ConfigData = read_config_file_with_test_database(

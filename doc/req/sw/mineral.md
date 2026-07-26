@@ -58,6 +58,17 @@ Covers:
 * sysreq~mineral6~1
 Needs: impl, utest, itest
 
+### [mineral] Connect to database
+`swreq~mineral_connect_database~1`
+
+The software shall connect to the database and initialize the SQL interface for mineral dosing parameters, verifying row count limits.
+
+Covers:
+
+* sysreq~mineral1~1
+Needs: impl, itest
+
+
 ### [mineral] Restart Mineral Dosing
 `swreq~mineral_restart~1`
 

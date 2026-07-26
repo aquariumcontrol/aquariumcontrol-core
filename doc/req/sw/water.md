@@ -8,6 +8,17 @@ Covers:
 * sysreq~water1~1
 Needs: impl, utest, itest
 
+### [water] Connect to database
+`swreq~water_connect_database~1`
+
+The software shall connect to the database and initialize the SQL interface for water refill parameters, verifying row count limits and recovering initial refill state.
+
+Covers:
+
+* sysreq~water1~1
+Needs: impl, itest
+
+
 ### [water] Determine Refill Trigger
 `swreq~water_determine_refill~1`
 

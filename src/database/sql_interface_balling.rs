@@ -112,6 +112,8 @@ impl SqlInterfaceBalling {
     /// - The `ballingsetvals` table contains entries with `NULL` values (`DatabaseBallingSetValTableContainsNull`).
     /// - The number of rows in the `ballingsetvals` table exceeds `max_rows_balling_set_values` (`DatabaseBallingSetValTableContainsTooManyRows`).
     /// - The number of rows in the `ballingdosinglog` table exceeds `max_rows_balling_dosing_log` (`DatabaseBallingDosingLogTableContainsTooManyRows`).
+    ///
+    /// [impl->swreq~mineral_connect_database~1]
     pub fn new(
         mut conn: PooledConn,
         max_rows_balling_set_values: u64,

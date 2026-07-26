@@ -49,6 +49,7 @@ pub struct BallingEvent {
 // Test case uses test database #57.
 // [itest->swreq~mineral_read_profiles~1]
 /// [itest->swreq~mineral_read_profiles~1]
+/// [itest->swreq~mineral_connect_database~1]
 fn test_sql_interface_balling_new() {
     // --- Common Setup ---
     let config: ConfigData = read_config_file_with_test_database(

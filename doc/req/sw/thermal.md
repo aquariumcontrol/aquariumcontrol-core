@@ -98,3 +98,24 @@ Covers:
 * sysreq~thermal10~1
 Needs: impl, utest
 
+### [thermal] Connect to Database for Heating Statistics
+`swreq~thermal_connect_heating_stats~1`
+
+The software shall connect to the database and initialize the SQL interface for recording daily heating energy statistics, verifying table row count limits.
+
+Covers:
+
+* sysreq~thermal5~1
+Needs: impl, itest
+
+### [thermal] Connect to Database for Midnight Calculation
+`swreq~thermal_midnight_calculator~1`
+
+The software shall connect to the database and initialize the midnight calculator interface to determine duration until midnight for daily statistics calculation.
+
+Covers:
+
+* sysreq~thermal5~1
+Needs: impl, itest
+
+

@@ -143,6 +143,8 @@ impl SqlInterfaceFeed {
     /// - Any of the retrieved counts are negative, indicating a database issue (`DatabaseFeedTableNegativeValue`).
     /// - The `feed_profiles` or `feed_schedule` tables contain entries with `NULL` values (`DatabaseFeedSetValTableContainsNull`).
     /// - The number of rows in any of the checked tables exceeds its configured maximum (`DatabaseFeedTableContainsTooManyRows`). .
+    ///
+    /// [impl->swreq~food_connect_database~1]
     pub fn new(
         mut conn: PooledConn,
         max_rows_feed_profiles: u64,
