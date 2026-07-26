@@ -580,6 +580,7 @@ impl Feed {
             if quit_command_received {
                 break;
             }
+            // [impl->swreq~food_stop_indefinitely~1]
             if stop_command_received {
                 #[cfg(all(not(test), not(feature = "test-utils")))] // only required in real-life execution
                 #[cfg(not(tarpaulin_include))]
@@ -597,6 +598,7 @@ impl Feed {
 
                 feed_inhibited = true;
             }
+            // [impl->swreq~food_restart~1]
             if start_command_received {
                 #[cfg(all(not(test), not(feature = "test-utils")))] // only required in real-life execution
                 #[cfg(not(tarpaulin_include))]
@@ -614,6 +616,7 @@ impl Feed {
 
                 feed_inhibited = false;
             }
+            // [impl->swreq~food_execute_remote~1]
             if self.execute_command_received
                 && self.profile_id_requested >= 0
                 && !self.execution_blocked

@@ -1,67 +1,67 @@
 ## sys-water: Water
-### Read Tank Level Switch Position
+### [water] Read Tank Level Switch Position
 `sysreq~water1~1`
 
 The control system shall read the tank level switch position.
 Needs: swreq
 
-### Determine Refill Trigger
+### [water] Determine Refill Trigger
 `sysreq~water2~1`
 
 The control system shall use the tank level switch position to determine when to refill fresh water.
 Needs: swreq
 
-### Actuate Fresh Water Refill Pump
+### [water] Actuate Fresh Water Refill Pump
 `sysreq~water3~1`
 
 The control system shall actuate the fresh water pump to refill the main tank.
 Needs: swreq
 
-### Log Refill Operation in Database
+### [water] Log Refill Operation in Database
 `sysreq~water4~1`
 
 The control system shall log each fresh water refill operation in the database.
 Needs: swreq
 
-### Recognize Subsystem Error States
+### [water] Recognize Subsystem Error States
 `sysreq~water5~1`
 
 The control system shall recognize error states of database communication, sensor, actuator or main tank.
 Needs: swreq
 
-### Reset Refill Error States Remotely
+### [water] Reset Refill Error States Remotely
 `sysreq~water6~1`
 
 The control system shall allow the user to reset the error remotely.
 Needs: swreq
 
-### Start Refill Controller Remotely
+### [water] Start Refill Controller Remotely
 `sysreq~water7~1`
 
 The control system shall allow the user to start the refill controller remotely.
 Needs: swreq
 
-### Stop Refill Controller Remotely
+### [water] Stop Refill Controller Remotely
 `sysreq~water8~1`
 
 The control system shall allow the user to stop the refill controller remotely.
 Needs: swreq
 
-### Protect Against Faulty Level Switch
+### [water] Protect Against Faulty Level Switch
 `sysreq~water9~1`
 
 The control system shall protect against faulty tank level switch sensor causing excessive fresh water refill.
 Needs: swreq
 
 ## sys-food: Food
-### Read Feed Schedule Entries
+### [food] Read Feed Schedule Entries
 `sysreq~food1~1`
 
 The control system shall repeatedly read feed schedule entries from the database.
 The feed schedule entry defines when a certain feed profile shall be executed and with which frequency it shall be repeated.
 Needs: swreq
 
-### Read Feed Profiles
+### [food] Read Feed Profiles
 `sysreq~food2~1`
 
 The control system shall read the feed profiles from the database.
@@ -70,81 +70,81 @@ For each subphase, the feed profile maintains the information which devices shal
 At the end of the feed profile, the feeder shall be switched off and all other devices shall be switched on.
 Needs: swreq
 
-### Execute Feed Profile per Schedule
+### [food] Execute Feed Profile per Schedule
 `sysreq~food3~1`
 
 The control system shall execute the feed profile as per feed schedule entry.
 Needs: swreq
 
-### Execute Feed Profile per Remote Request
+### [food] Feed Profile per Remote Request
 `sysreq~food4~1`
 
 The control system shall execute the feed profile as per remote user request.
 Needs: swreq
 
-### Stop Feed Operations Indefinitely
+### [food] Stop Feed Operations Indefinitely
 `sysreq~food5~1`
 
-The control system shall allow the user to stop all feed operations indefinitely.
+The control system shall allow the user to stop feed operations indefinitely.
 Needs: swreq
 
-### Restart Feed Operations
+### [food] Restart Feed Operations
 `sysreq~food6~1`
 
-The control system shall allow the user to restart all feed operations.
+The control system shall allow the user to restart feed operations.
 Needs: swreq
 
-### Log Feed Operation in Database
+### [food] Log Feed Operation in Database
 `sysreq~food7~1`
 
 The control system shall log any feed operation in the database.
 Needs: swreq
 
 ## sys-mineral: Mineral
-### Read Balling Dosing Profiles
+### [mineral] Read Balling Dosing Profiles
 `sysreq~mineral1~1`
 
 The control system shall repeatedly read the balling pump profiles from the database.
 Needs: swreq
 
-### Compute Next Mineral Injection Due Time
+### [mineral] Compute Next Mineral Injection Due Time
 `sysreq~mineral2~1`
 
 The control system shall compute when the next mineral injection is due based on the log of previous mineral injections.
 Needs: swreq
 
-### Calculate Injection Duration
+### [mineral] Calculate Injection Duration
 `sysreq~mineral3~1`
 
 The control system shall calculate the injection duration of each balling pump based on the volume flow of each pump and the desired mineral dosing quantity.
 Needs: swreq
 
-### Log Mineral Dosing Operation in Database
+### [mineral] Log Mineral Dosing Operation in Database
 `sysreq~mineral4~1`
 
 The control system shall log any mineral dosing operation in the database.
 Needs: swreq
 
-### Execute Manual Mineral Dosing
+### [mineral] Execute Manual Mineral Dosing
 `sysreq~mineral5~1`
 
 The control system shall allow the user to execute a mineral dosing for a specific pump.
 Needs: swreq
 
-### Stop Mineral Dosing Indefinitely
+### [mineral] Stop Mineral Dosing Indefinitely
 `sysreq~mineral6~1`
 
-The control system shall allow the to stop all mineral dosing operations indefinitely.
+The control system shall allow the to stop mineral dosing operation indefinitely.
 Needs: swreq
 
-### Restart Mineral Dosing
+### [mineral] Restart Mineral Dosing
 `sysreq~mineral7~1`
 
-The control system shall allow the to restart all mineral dosing operations indefinitely.
+The control system shall allow the to restart mineral dosing operation indefinitely.
 Needs: swreq
 
 ## sys-schedule: Schedule
-### Read Actuator Schedule Entries
+### [schedule] Read Actuator Schedule Entries
 `sysreq~schedule1~1`
 
 The control system shall repeatedly read the actuator schedule entries from the database.
@@ -152,33 +152,33 @@ Each actuator schedule entry has a starting time of day and a stop time of day d
 The database may contain schedule entries for the following actuators: mineral dosing, fresh water refill, ventilation, heating.
 Needs: swreq
 
-### Inhibit Refill Operations Outside Operational Window
+### [schedule] Inhibit Refill Operations Outside Operational Window
 `sysreq~schedule2~1`
 
 The control system shall inhibit fresh water refill operations if the current daytime is outside of the operation window for the actuator.
 Needs: swreq
 
-### Inhibit Balling Dosing Outside Operational Window
+### [schedule] Inhibit Balling Dosing Outside Operational Window
 `sysreq~schedule3~1`
 
 The control system shall inhibit balling mineral dosing if the current daytime is outside of the operation window for the actuator.
 Needs: swreq
 
-### Inhibit Heating Operations Outside Operational Window
+### [schedule] Inhibit Heating Operations Outside Operational Window
 `sysreq~schedule4~1`
 
 The control system shall inhibit the use of the heater if the current daytime is outside of the operation window for the actuator.
 Needs: swreq
 
-### Inhibit Ventilation Operations Outside Operational Window
+### [schedule] Inhibit Ventilation Operations Outside Operational Window
 `sysreq~schedule5~1`
 
 The control system shall inhibit the use of the ventilation if the current daytime is outside of the operation window for the actuator.
 Needs: swreq
 
 ## sys-relays: Relays
-### Control Aquarium System Actuators
-`sys-req~relay1~1`
+### [relays] Control Aquarium System Actuators
+`sysreq~relay1~1`
 
 The control system shall control the following actuators:
 - Protein skimmer
@@ -191,8 +191,8 @@ The control system shall control the following actuators:
 Needs: swreq
 
 ## sys-sensors: Sensors
-### Read Aquarium Sensors
-`sys-req~sensors1~1`
+### [sensors] Read Aquarium Sensors
+`sysreq~sensors1~1`
 
 The control system read from the following sensors:
 - Atlas Scientific temperature sensor for water temperature
@@ -205,119 +205,127 @@ The control system read from the following sensors:
 Needs: swreq
 
 ## sys-thermal: Thermal
-### Reduce Water Temperature via Ventilation
-`sys-req~thermal1~1`
+### [thermal] Reduce Water Temperature via Ventilation
+`sysreq~thermal1~1`
 
 The control system shall reduce the water temperature by actuating ventilation fans depending on the actual water temperature.
 Needs: swreq
 
-### Read Ventilation Target Temperature Window
-`sys-req~thermal2~1`
+### [thermal] Read Ventilation Target Temperature Window
+`sysreq~thermal2~1`
 
 The control system shall repeatedly read the target temperature window for the ventilation control from the database.
 Needs: swreq
 
-### Stop Ventilation Control Remotely
-`sys-req~thermal3~1`
+### [thermal] Stop Ventilation Control Remotely
+`sysreq~thermal3~1`
 
 The control system shall allow the user to stop the ventilation control.
 Needs: swreq
 
-### Restart Ventilation Control Remotely
-`sys-req~thermal4~1`
+### [thermal] Restart Ventilation Control Remotely
+`sysreq~thermal4~1`
 
 The control system shall allow the user to re-start the ventilation control.
 Needs: swreq
 
-### Increase Water Temperature via Heater
-`sys-req~thermal5~1`
+### [thermal] Increase Water Temperature via Heater
+`sysreq~thermal5~1`
 
 The control system shall increase the water temperature by actuating a heater depending on the actual water temperature.
 Needs: swreq
 
-### Read Heating Target Temperature Window
-`sys-req~thermal6~1`
+### [thermal] Read Heating Target Temperature Window
+`sysreq~thermal6~1`
 
 The control system shall repeatedly read the target temperature window for the heating control from the database.
 Needs: swreq
 
-### Stop Heating Control Remotely
-`sys-req~thermal7~1`
+### [thermal] Stop Heating Control Remotely
+`sysreq~thermal7~1`
 
 The control system shall allow the user to stop the heating control.
 Needs: swreq
 
-### Restart Heating Control Remotely
-`sys-req~thermal8~1`
+### [thermal] Restart Heating Control Remotely
+`sysreq~thermal8~1`
 
 The control system shall allow the user to re-start the heating control.
 Needs: swreq
 
-### Inhibit Heater on Low Sump Water Level
+### [thermal] Inhibit Heater on Low Sump Water Level
 `sysreq~thermal9~1`
 
 The control system shall inhibit the heater if the tank level switch reports a low water level for an extended time period.
 Needs: swreq
 
+### [thermal] Check if heating and ventilation control target temperature windows are distinct
+`sysreq~thermal10~1`
+
+Upon startup the control system shall check if the target temperature windows for heating and ventilation overlap.
+If they overlap, the application shall abort the startup.
+
+Needs: swreq
+
 ## sys-watchmen: Watchmen
-### Self Monitoring and Liveness
-`sys-req~watchmen~1`
+### [watchmen] Self Monitoring and Liveness
+`sysreq~watchmen~1`
 
 The control system shall monitor itself.
 Needs: swreq
 
-### Pet Hardware Watchdog
+### [watchmen] Pet Hardware Watchdog
 `sysreq~watchmen2~1`
 
 The control system shall pet the hardware watchdog at regular intervals to verify process liveness.
 Needs: swreq
 
-### Detect Execution Stalls and Trigger Reboot
+### [watchmen] Detect Execution Stalls and Trigger Reboot
 `sysreq~watchmen3~1`
 
 The control system shall detect execution stalls or component failures and signal the watchdog to trigger a safe system reboot.
 Needs: swreq
 
 ## sys-recorder: Recorder
-### Record Measurement Signals in Database
-`sys-req~recorder~1`
+### [recorder] Record Measurement Signals in Database
+`sysreq~recorder~1`
 
 The control system shall regularly record measurement signals in the database.
 Needs: swreq
 
-### Filter Raw Sensor Readings
+### [recorder] Filter Raw Sensor Readings
 `sysreq~recorder2~1`
 
 The control system shall filter raw sensor readings using an infinite impulse response (IIR) filter to eliminate measurement noise.
 Needs: swreq
 
 ## sys-utilities: Utilities
-### Process OS Shutdown Signals
-`sys-req~utilities1~1`
+### [utilities] Process OS Shutdown Signals
+`sysreq~utilities1~1`
 
 The control system shall receive signals from the operating system and react accordingly.
 Needs: swreq
 
-### Read Configuration File on Startup
+### [utilities] Read Configuration File on Startup
 `sysreq~utilities2~1`
 
 The control system shall read all configuration parameters from a local configuration file on startup.
 Needs: swreq
 
-### Verify Version Hash Compatibility
+### [utilities] Verify Version Hash Compatibility
 `sysreq~utilities3~1`
 
 The control system shall verify that its internal version information and hash are compatible with the database schema on startup.
 Needs: swreq
 
-### Publish Process ID File
+### [utilities] Publish Process ID File
 `sysreq~utilities4~1`
 
 The control system shall publish its process ID (PID) to a file on startup to prevent duplicate running instances.
 Needs: swreq
 
 ## sys-dispatch: Dispatch
-### Receive POSIX Queue Messages
+### [dispatch] Receive POSIX Queue Messages
 `sysreq~messaging~1`
 
 The control system shall receive POSIX messages from the operating system and react accordingly.

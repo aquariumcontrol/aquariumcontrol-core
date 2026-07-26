@@ -87,3 +87,14 @@ Covers:
 
 * sysreq~thermal9~1
 Needs: impl, utest
+
+### [thermal] Check Distinct Target Temperature Windows
+`swreq~thermal_distinct_interval_check~1`
+
+Upon startup, the control system shall verify that the target temperature windows for heating and ventilation do not overlap, aborting startup if an overlap is detected.
+
+Covers:
+
+* sysreq~thermal10~1
+Needs: impl, utest
+

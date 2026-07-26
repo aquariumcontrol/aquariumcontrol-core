@@ -550,7 +550,7 @@ impl Balling {
                         &balling_setval,
                         actual_dosing_duration_millis,
                     );
-
+                    // [impl->swreq~mineral_log_database~1]
                     let insert_res = if is_multi_thread {
                         tokio::task::block_in_place(|| {
                             sql_interface_balling
@@ -723,6 +723,7 @@ impl Balling {
                 &mut balling_channels.rx_balling_from_signal_handler,
                 Some(&mut balling_channels.rx_balling_from_messaging),
             );
+            // [impl->swreq~mineral_manual_dosing~1]
             if self.execute_command_received && self.config.active && !self.execution_blocked {
                 let pump_device_opt = Self::get_pump_from_id(self.pump_id_requested);
                 if let Some((pump_id, pump_device)) = pump_device_opt {
@@ -755,6 +756,7 @@ impl Balling {
                 }
             }
 
+            // [impl->swreq~mineral_stop_indefinitely~1]
             if stop_command_received {
                 #[cfg(test)]
                 println!(
@@ -764,6 +766,7 @@ impl Balling {
 
                 dosing_inhibited = true;
             }
+            // [impl->swreq~mineral_restart~1]
             if start_command_received {
                 #[cfg(test)]
                 println!(
