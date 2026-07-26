@@ -566,6 +566,7 @@ pub fn run(
             .map_err(|e| StartupError::Database {
                 source: Box::new(e),
             })?;
+    // [impl->swreq~recorder_connect_database~1]
     let sql_interface_data = SqlInterfaceData::new(
         database_connection_data_for_timestamp,
         database_connection_data_for_data,

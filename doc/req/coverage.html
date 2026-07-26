@@ -501,6 +501,19 @@ summary .title {
           </div>
         </details>
       </section>
+      <section class="sitem" id="impl~recorder_connect_database-4084263301~0">
+        <details>
+          <summary title="impl~recorder_connect_database-4084263301~0"><span class="green">&check;</span> <b>recorder_connect_database-4084263301</b><small>, rev. 0, impl</small></summary>
+          <p class="id">impl~recorder_connect_database-4084263301~0</p>
+          <p class="origin">src/launch/run.rs:569</p>
+          <div class="out">
+            <h6>Out: 1</h6>
+            <ul>
+              <li><a href="#swreq~recorder_connect_database~1">swreq~recorder_connect_database~1</a> <span class="origin">doc/req/sw/recorder.md:22</span></li>
+            </ul>
+          </div>
+        </details>
+      </section>
       <section class="sitem" id="impl~recorder_store_measurements-1454672625~0">
         <details>
           <summary title="impl~recorder_store_measurements-1454672625~0"><span class="green">&check;</span> <b>recorder_store_measurements-1454672625</b><small>, rev. 0, impl</small></summary>
@@ -1401,15 +1414,15 @@ summary .title {
           </div>
         </details>
       </section>
-      <section class="sitem" id="itest~recorder_data_logger-30780569~0">
+      <section class="sitem" id="itest~recorder_connect_database-3236607687~0">
         <details>
-          <summary title="itest~recorder_data_logger-30780569~0"><span class="red">&cross;</span> <b>recorder_data_logger-30780569</b><small>, rev. 0, itest</small></summary>
-          <p class="id">itest~recorder_data_logger-30780569~0</p>
+          <summary title="itest~recorder_connect_database-3236607687~0"><span class="green">&check;</span> <b>recorder_connect_database-3236607687</b><small>, rev. 0, itest</small></summary>
+          <p class="id">itest~recorder_connect_database-3236607687~0</p>
           <p class="origin">tests/database/test_sql_interface_data.rs:31</p>
           <div class="out">
             <h6>Out: 1</h6>
             <ul>
-              <li><a href="#swreq~recorder_data_logger~1">swreq~recorder_data_logger~1</a> <em>(orphaned)</em></li>
+              <li><a href="#swreq~recorder_connect_database~1">swreq~recorder_connect_database~1</a> <span class="origin">doc/req/sw/recorder.md:22</span></li>
             </ul>
           </div>
         </details>
@@ -1637,13 +1650,13 @@ summary .title {
       </section>
       <section class="sitem" id="itest~thermal_read_ventilation_limits-331198632~0">
         <details>
-          <summary title="itest~thermal_read_ventilation_limits-331198632~0"><span class="red">&cross;</span> <b>thermal_read_ventilation_limits-331198632</b><small>, rev. 0, itest</small></summary>
+          <summary title="itest~thermal_read_ventilation_limits-331198632~0"><span class="green">&check;</span> <b>thermal_read_ventilation_limits-331198632</b><small>, rev. 0, itest</small></summary>
           <p class="id">itest~thermal_read_ventilation_limits-331198632~0</p>
           <p class="origin">tests/database/test_sql_interface_ventilation_set_vals.rs:26</p>
           <div class="out">
             <h6>Out: 1</h6>
             <ul>
-              <li><a href="#swreq~thermal_read_ventilation_limits~1">swreq~thermal_read_ventilation_limits~1</a> <em>(unwanted)</em> <span class="origin">doc/req/sw/thermal.md:12</span></li>
+              <li><a href="#swreq~thermal_read_ventilation_limits~1">swreq~thermal_read_ventilation_limits~1</a> <span class="origin">doc/req/sw/thermal.md:12</span></li>
             </ul>
           </div>
         </details>
@@ -2301,6 +2314,28 @@ summary .title {
           </div>
         </details>
       </section>
+      <section class="sitem" id="swreq~recorder_connect_database~1">
+        <details>
+          <summary title="swreq~recorder_connect_database~1"><span class="green">&check;</span> <b>[recorder] Connect to database</b><small>, rev. 1, swreq</small></summary>
+          <p class="id">swreq~recorder_connect_database~1</p>
+          <p>The software shall connect to the database and check if the number of rows exceeds the configured limit.</p>
+          <h6>Needs: impl, itest</h6>
+          <p class="origin">doc/req/sw/recorder.md:22</p>
+          <div class="in">
+            <h6>In: 2</h6>
+            <ul>
+              <li><a href="#impl~recorder_connect_database-4084263301~0">impl~recorder_connect_database-4084263301~0</a> <span class="origin">src/launch/run.rs:569</span></li>
+              <li><a href="#itest~recorder_connect_database-3236607687~0">itest~recorder_connect_database-3236607687~0</a> <span class="origin">tests/database/test_sql_interface_data.rs:31</span></li>
+            </ul>
+          </div>
+          <div class="out">
+            <h6>Out: 1</h6>
+            <ul>
+              <li><a href="#sysreq~recorder~1">sysreq~recorder~1</a> <span class="origin">doc/req/sys/system_requirements.md:291</span></li>
+            </ul>
+          </div>
+        </details>
+      </section>
       <section class="sitem" id="swreq~recorder_store_measurements~1">
         <details>
           <summary title="swreq~recorder_store_measurements~1"><span class="green">&check;</span> <b>[recorder] Store Measurement Signals</b><small>, rev. 1, swreq</small></summary>
@@ -2564,10 +2599,10 @@ summary .title {
       </section>
       <section class="sitem" id="swreq~thermal_heater_heating~1">
         <details>
-          <summary title="swreq~thermal_heater_heating~1"><span class="red">&cross;</span> <b>[thermal] Heater Heating Control</b><small>, rev. 1, swreq</small></summary>
+          <summary title="swreq~thermal_heater_heating~1"><span class="green">&check;</span> <b>[thermal] Heater Heating Control</b><small>, rev. 1, swreq</small></summary>
           <p class="id">swreq~thermal_heater_heating~1</p>
           <p>The heating controller shall actuate the heater relay using a two-point control loop depending on the actual water temperature setpoint thresholds.</p>
-          <h6>Needs: impl, itest, <ins>utest</ins></h6>
+          <h6>Needs: impl, itest</h6>
           <p class="origin">doc/req/sw/thermal.md:42</p>
           <div class="in">
             <h6>In: 4</h6>
@@ -2588,10 +2623,10 @@ summary .title {
       </section>
       <section class="sitem" id="swreq~thermal_inhibit_heating_low_water~1">
         <details>
-          <summary title="swreq~thermal_inhibit_heating_low_water~1"><span class="red">&cross;</span> <b>[thermal] Inhibit Heater on Low Sump Water Level</b><small>, rev. 1, swreq</small></summary>
+          <summary title="swreq~thermal_inhibit_heating_low_water~1"><span class="green">&check;</span> <b>[thermal] Inhibit Heater on Low Sump Water Level</b><small>, rev. 1, swreq</small></summary>
           <p class="id">swreq~thermal_inhibit_heating_low_water~1</p>
           <p>The heating controller shall monitor the tank level switch and immediately disable the heater relay if a low water level is detected in the sump, preventing heater burnout.</p>
-          <h6>Needs: impl, itest, <ins>utest</ins></h6>
+          <h6>Needs: impl, itest</h6>
           <p class="origin">doc/req/sw/thermal.md:82</p>
           <div class="in">
             <h6>In: 2</h6>
@@ -2610,10 +2645,10 @@ summary .title {
       </section>
       <section class="sitem" id="swreq~thermal_read_heating_limits~1">
         <details>
-          <summary title="swreq~thermal_read_heating_limits~1"><span class="red">&cross;</span> <b>[thermal] Read Heating Limits</b><small>, rev. 1, swreq</small></summary>
+          <summary title="swreq~thermal_read_heating_limits~1"><span class="green">&check;</span> <b>[thermal] Read Heating Limits</b><small>, rev. 1, swreq</small></summary>
           <p class="id">swreq~thermal_read_heating_limits~1</p>
           <p>The controller shall repeatedly read heating temperature setpoint windows and hystereses from the database.</p>
-          <h6>Needs: impl, itest, <ins>utest</ins></h6>
+          <h6>Needs: impl, itest</h6>
           <p class="origin">doc/req/sw/thermal.md:52</p>
           <div class="in">
             <h6>In: 4</h6>
@@ -2634,17 +2669,17 @@ summary .title {
       </section>
       <section class="sitem" id="swreq~thermal_read_ventilation_limits~1">
         <details>
-          <summary title="swreq~thermal_read_ventilation_limits~1"><span class="red">&cross;</span> <b>[thermal] Read Ventilation Limits</b><small>, rev. 1, swreq</small></summary>
+          <summary title="swreq~thermal_read_ventilation_limits~1"><span class="green">&check;</span> <b>[thermal] Read Ventilation Limits</b><small>, rev. 1, swreq</small></summary>
           <p class="id">swreq~thermal_read_ventilation_limits~1</p>
           <p>The controller shall repeatedly read ventilation temperature setpoint windows and hystereses from the database.</p>
-          <h6>Needs: impl, <del>itest</del>, <ins>utest</ins></h6>
+          <h6>Needs: impl, itest</h6>
           <p class="origin">doc/req/sw/thermal.md:12</p>
           <div class="in">
             <h6>In: 3</h6>
             <ul>
               <li><a href="#impl~thermal_read_ventilation_limits-1038095095~0">impl~thermal_read_ventilation_limits-1038095095~0</a> <span class="origin">src/thermal/ventilation.rs:258</span></li>
               <li><a href="#impl~thermal_read_ventilation_limits-2786663219~0">impl~thermal_read_ventilation_limits-2786663219~0</a> <span class="origin">src/database/sql_interface_ventilation_set_vals.rs:204</span></li>
-              <li><a href="#itest~thermal_read_ventilation_limits-331198632~0">itest~thermal_read_ventilation_limits-331198632~0</a> <em>(unwanted coverage)</em> <span class="origin">tests/database/test_sql_interface_ventilation_set_vals.rs:26</span></li>
+              <li><a href="#itest~thermal_read_ventilation_limits-331198632~0">itest~thermal_read_ventilation_limits-331198632~0</a> <span class="origin">tests/database/test_sql_interface_ventilation_set_vals.rs:26</span></li>
             </ul>
           </div>
           <div class="out">
@@ -2660,7 +2695,7 @@ summary .title {
           <summary title="swreq~thermal_remote_heating_start~1"><span class="red">&cross;</span> <b>[thermal] Restart Heating Control Remotely</b><small>, rev. 1, swreq</small></summary>
           <p class="id">swreq~thermal_remote_heating_start~1</p>
           <p>The controller shall resume automated temperature heating loops upon receiving a remote <code>Start</code> command.</p>
-          <h6>Needs: <ins>impl</ins>, itest, <ins>utest</ins></h6>
+          <h6>Needs: <ins>impl</ins>, itest</h6>
           <p class="origin">doc/req/sw/thermal.md:72</p>
           <div class="in">
             <h6>In: 1</h6>
@@ -2681,7 +2716,7 @@ summary .title {
           <summary title="swreq~thermal_remote_ventilation_start~1"><span class="red">&cross;</span> <b>[thermal] Restart Ventilation Control Remotely</b><small>, rev. 1, swreq</small></summary>
           <p class="id">swreq~thermal_remote_ventilation_start~1</p>
           <p>The controller shall resume automated temperature cooling loops upon receiving a remote <code>Start</code> command.</p>
-          <h6>Needs: <ins>impl</ins>, itest, <ins>utest</ins></h6>
+          <h6>Needs: <ins>impl</ins>, itest</h6>
           <p class="origin">doc/req/sw/thermal.md:32</p>
           <div class="in">
             <h6>In: 1</h6>
@@ -2702,7 +2737,7 @@ summary .title {
           <summary title="swreq~thermal_remote_heating_stop~1"><span class="red">&cross;</span> <b>[thermal] Stop Heating Control Remotely</b><small>, rev. 1, swreq</small></summary>
           <p class="id">swreq~thermal_remote_heating_stop~1</p>
           <p>The controller shall immediately turn off the heater relay and suspend automated heating loops upon receiving a remote <code>Stop</code> command.</p>
-          <h6>Needs: <ins>impl</ins>, itest, <ins>utest</ins></h6>
+          <h6>Needs: <ins>impl</ins>, itest</h6>
           <p class="origin">doc/req/sw/thermal.md:62</p>
           <div class="in">
             <h6>In: 1</h6>
@@ -2723,7 +2758,7 @@ summary .title {
           <summary title="swreq~thermal_remote_ventilation_stop~1"><span class="red">&cross;</span> <b>[thermal] Stop Ventilation Control Remotely</b><small>, rev. 1, swreq</small></summary>
           <p class="id">swreq~thermal_remote_ventilation_stop~1</p>
           <p>The controller shall immediately turn off ventilation fan relays and suspend automated cooling loops upon receiving a remote <code>Stop</code> command.</p>
-          <h6>Needs: <ins>impl</ins>, itest, <ins>utest</ins></h6>
+          <h6>Needs: <ins>impl</ins>, itest</h6>
           <p class="origin">doc/req/sw/thermal.md:22</p>
           <div class="in">
             <h6>In: 1</h6>
@@ -3455,8 +3490,9 @@ summary .title {
           <h6>Needs: swreq</h6>
           <p class="origin">doc/req/sys/system_requirements.md:291</p>
           <div class="in">
-            <h6>In: 1</h6>
+            <h6>In: 2</h6>
             <ul>
+              <li><a href="#swreq~recorder_connect_database~1">swreq~recorder_connect_database~1</a> <span class="origin">doc/req/sw/recorder.md:22</span></li>
               <li><a href="#swreq~recorder_store_measurements~1">swreq~recorder_store_measurements~1</a> <span class="origin">doc/req/sw/recorder.md:2</span></li>
             </ul>
           </div>
@@ -3587,7 +3623,7 @@ summary .title {
       </section>
       <section class="sitem" id="sysreq~thermal5~1">
         <details>
-          <summary title="sysreq~thermal5~1"><span class="red">&cross;</span> <b>[thermal] Increase Water Temperature via Heater</b><small>, rev. 1, sysreq</small></summary>
+          <summary title="sysreq~thermal5~1"><span class="green">&check;</span> <b>[thermal] Increase Water Temperature via Heater</b><small>, rev. 1, sysreq</small></summary>
           <p class="id">sysreq~thermal5~1</p>
           <p>The control system shall increase the water temperature by actuating a heater depending on the actual water temperature.</p>
           <h6>Needs: swreq</h6>
@@ -3602,7 +3638,7 @@ summary .title {
       </section>
       <section class="sitem" id="sysreq~thermal9~1">
         <details>
-          <summary title="sysreq~thermal9~1"><span class="red">&cross;</span> <b>[thermal] Inhibit Heater on Low Sump Water Level</b><small>, rev. 1, sysreq</small></summary>
+          <summary title="sysreq~thermal9~1"><span class="green">&check;</span> <b>[thermal] Inhibit Heater on Low Sump Water Level</b><small>, rev. 1, sysreq</small></summary>
           <p class="id">sysreq~thermal9~1</p>
           <p>The control system shall inhibit the heater if the tank level switch reports a low water level for an extended time period.</p>
           <h6>Needs: swreq</h6>
@@ -3617,7 +3653,7 @@ summary .title {
       </section>
       <section class="sitem" id="sysreq~thermal6~1">
         <details>
-          <summary title="sysreq~thermal6~1"><span class="red">&cross;</span> <b>[thermal] Read Heating Target Temperature Window</b><small>, rev. 1, sysreq</small></summary>
+          <summary title="sysreq~thermal6~1"><span class="green">&check;</span> <b>[thermal] Read Heating Target Temperature Window</b><small>, rev. 1, sysreq</small></summary>
           <p class="id">sysreq~thermal6~1</p>
           <p>The control system shall repeatedly read the target temperature window for the heating control from the database.</p>
           <h6>Needs: swreq</h6>
@@ -3632,7 +3668,7 @@ summary .title {
       </section>
       <section class="sitem" id="sysreq~thermal2~1">
         <details>
-          <summary title="sysreq~thermal2~1"><span class="red">&cross;</span> <b>[thermal] Read Ventilation Target Temperature Window</b><small>, rev. 1, sysreq</small></summary>
+          <summary title="sysreq~thermal2~1"><span class="green">&check;</span> <b>[thermal] Read Ventilation Target Temperature Window</b><small>, rev. 1, sysreq</small></summary>
           <p class="id">sysreq~thermal2~1</p>
           <p>The control system shall repeatedly read the target temperature window for the ventilation control from the database.</p>
           <h6>Needs: swreq</h6>
@@ -4206,6 +4242,6 @@ summary .title {
     </section>
   </main>
   <nav>
-    <span class="red">&cross;</span> 261 total <meter value="182" low="260" max="261">69%</meter> <span class=".red">79 defects</span> | <a href="#impl">impl</a> &middot; <a href="#itest">itest</a> &middot; <a href="#swreq">swreq</a> &middot; <a href="#sysreq">sysreq</a> &middot; <a href="#utest">utest</a>  </nav>
+    <span class="red">&cross;</span> 263 total <meter value="194" low="262" max="263">73%</meter> <span class=".red">69 defects</span> | <a href="#impl">impl</a> &middot; <a href="#itest">itest</a> &middot; <a href="#swreq">swreq</a> &middot; <a href="#sysreq">sysreq</a> &middot; <a href="#utest">utest</a>  </nav>
   </body>
 </html>

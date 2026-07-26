@@ -17,3 +17,13 @@ Covers:
 
 * sysreq~recorder2~1
 Needs: impl, utest
+
+### [recorder] Connect to database
+`swreq~recorder_connect_database~1`
+
+The software shall connect to the database and check if the number of rows exceeds the configured limit.
+
+Covers:
+
+* sysreq~recorder~1
+Needs: impl, itest
