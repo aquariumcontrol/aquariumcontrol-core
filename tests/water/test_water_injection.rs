@@ -98,7 +98,7 @@ fn create_assert_test_object(
 #[test]
 // This test case executes the inject_water-function and immediately sets the sensor signal to high value.
 // Test case uses test database #39.
-/// [utest->swreq~water_hysteresis~1]
+/// [itest->swreq~water_hysteresis~1]
 pub fn test_water_injection_immediate_switch_high_no_quit_signal() {
     let sleep_duration_100_millis = Duration::from_millis(100);
     let spin_sleeper = SpinSleeper::default();
@@ -196,7 +196,7 @@ pub fn test_water_injection_immediate_switch_high_no_quit_signal() {
 /// * `tx_relay_manager_to_water_injection` - Sender channel to communicate relay state changes to water injection.
 /// * `rx_relay_manager_from_water_injection` - Receiver channel to read commands from water injection.
 ///
-/// [utest->swreq~water_actuate_pump~1]
+/// [itest->swreq~water_actuate_pump~1]
 fn create_mock_relay_manager(
     mut tx_relay_manager_to_water_injection: AquaSender<bool>,
     mut rx_relay_manager_from_water_injection: AquaReceiver<InternalCommand>,
@@ -239,7 +239,7 @@ fn create_mock_relay_manager(
 // Additionally, the Quit signal is sent.
 // Expected behavior: immediate stop of additional refill operation.
 // Test case uses test database #40.
-/// [utest->swreq~water_shutdown_sequence~1]
+/// [itest->swreq~water_shutdown_sequence~1]
 pub fn test_water_injection_immediate_switch_high_and_quit_signal() {
     let sleep_duration_100_millis = Duration::from_millis(100);
     let spin_sleeper = SpinSleeper::default();
@@ -356,7 +356,7 @@ fn create_test_environment(
 // - sets the invalid bit.
 // Water injection shall be aborted without adding further water.
 // Test case uses test database #41.
-/// [utest->swreq~water_read_level_switch~1]
+/// [itest->swreq~water_read_level_switch~1]
 pub fn test_water_injection_immediate_switch_high_with_invalid_true() {
     let sleep_duration_100_millis = Duration::from_millis(100);
     let spin_sleeper = SpinSleeper::default();
@@ -522,7 +522,7 @@ pub fn test_water_injection_delayed_switch_high() {
 #[test]
 // This test case executes inject_water function with simulation of level switch stuck at low position.
 // Test case uses test database #43.
-/// [utest->swreq~water_error_detection~1]
+/// [itest->swreq~water_error_detection~1]
 pub fn test_water_injection_switch_stuck_low() {
     let sleep_duration_100_millis = Duration::from_millis(100);
     let spin_sleeper = SpinSleeper::default();

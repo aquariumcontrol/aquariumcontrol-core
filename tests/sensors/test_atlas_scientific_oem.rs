@@ -113,6 +113,8 @@ fn setup_receive_test() -> (
 
 #[test]
 // Verifies that conductivity reading.
+///
+/// [itest->swreq~sensors_read_data~1]
 fn test_conductivity_reading() {
     let (
         mut drivers,

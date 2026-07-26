@@ -821,7 +821,7 @@ pub mod tests {
     // This test checks that all fields are set to their expected default values upon creation,
     // ensuring a predictable starting state for the Feed controller.
     //
-    // Test case uses test database #65 for configuration loading, as requested.
+    // Test case uses test database #65 for configuration loading.
     /// [utest->swreq~food_execute_schedule~1]
     fn test_feed_new() {
         println!("* Testing Feed::new constructor...");

@@ -43,7 +43,7 @@ pub struct RefillEvent {
 // 3. Deactivated Check: Succeeds even with excess rows if the limit is set to 0.
 // 4. Edge Case: Succeeds when the row count is exactly the limit.
 // Test case uses a dedicated test database to avoid conflicts.
-/// [utest->swreq~water_startup_data_recovery~1]
+/// [itest->swreq~water_startup_data_recovery~1]
 fn test_sql_interface_refill_new() {
     // --- Common Setup ---
     let config: ConfigData = read_config_file_with_test_database(
@@ -140,7 +140,7 @@ fn test_sql_interface_refill_new() {
 #[test]
 // Test case includes all checks for this table combined in one function to limit the number of additional databases.
 // Test case uses test database #37.
-/// [utest->swreq~water_log_database~1]
+/// [itest->swreq~water_log_database~1]
 pub fn test_sql_interface_refill() {
     let config: ConfigData = read_config_file_with_test_database(
         "config/aquarium_control_test_generic.toml".to_string(),

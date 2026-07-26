@@ -116,7 +116,7 @@ impl ActuateVoid {
 #[test]
 // Test case tests the channel communication for the .execute function of relay manager.
 // It also checks the heartbeat communication.
-/// [utest->swreq~relay_control_actuators~1]
+/// [itest->swreq~relay_control_actuators~1]
 pub fn test_relay_manager_channel_communication() {
     let config: ConfigData =
         read_config_file("config/aquarium_control_test_simulator.toml".to_string()).unwrap();

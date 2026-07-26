@@ -130,7 +130,7 @@ fn test_sql_interface_feed_new() {
     println!("* Succeeded: Initialization passes when row limit checks are deactivated.");
 }
 
-/// [utest->swreq~food_read_profiles~1]
+/// [itest->swreq~food_read_profiles~1]
 #[test]
 pub fn test_sql_interface_feed_profiles() {
     let config: ConfigData = read_config_file_with_test_database(
@@ -351,7 +351,7 @@ pub fn test_sql_interface_feed_profiles() {
     // *****************************************************************************************
 }
 
-/// [utest->swreq~food_log_database~1]
+/// [itest->swreq~food_log_database~1]
 #[test]
 // Test case includes all checks for this table combined in one function to limit the number of additional databases.
 // Test case uses test database #34.
@@ -436,7 +436,7 @@ pub fn test_sql_interface_feedlog() {
     ));
 }
 
-/// [utest->swreq~food_read_schedule~1]
+/// [itest->swreq~food_read_schedule~1]
 #[test]
 // Test case includes all checks for this table combined in one function to limit the number of additional databases.
 // Test case uses test database #35.

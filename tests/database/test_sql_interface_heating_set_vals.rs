@@ -23,6 +23,7 @@ use aquarium_control::utilities::config::{read_config_file_with_test_database, C
 // 1. Happy Path: Initialization succeeds when the table is empty or has one valid row.
 // 2. Failure on Row Limit: Fails when `heatingsetvals` contains more than one row.
 // Test case uses test database #60.
+/// [itest->swreq~thermal_read_heating_limits~1]
 fn test_sql_interface_heating_set_vals_new() {
     // --- Common Setup ---
     let config: ConfigData = read_config_file_with_test_database(

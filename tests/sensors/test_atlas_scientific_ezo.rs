@@ -718,6 +718,9 @@ fn test_receive_response_long_mutex_wait_triggers_warning() {
 // - pH sensor
 // - conductivity sensor
 // - temperature
+///
+
+/// [itest->swreq~sensors_read_data~1]
 pub fn test_atlas_scientific_ezo_read_sensors() {
     let config: ConfigData =
         read_config_file("config/aquarium_control_test_generic.toml".to_string()).unwrap();

@@ -197,10 +197,9 @@ impl ScheduleCheck {
     /// * `module_name` - A parameter representing `module_name`.
     ///
     /// [impl->swreq~schedule_inhibit_refill~1]
-/// [impl->swreq~schedule_inhibit_mineral~1]
-///
-/// [impl->swreq~schedule_inhibit_heating~1]
-/// [impl->swreq~schedule_inhibit_ventilation~1]
+    /// [impl->swreq~schedule_inhibit_mineral~1]
+    /// [impl->swreq~schedule_inhibit_heating~1]
+    /// [impl->swreq~schedule_inhibit_ventilation~1]
     fn check_pending_schedule_request(
         config: &ScheduleCheckConfig,
         tx: &mut AquaSender<bool>,
@@ -504,8 +503,7 @@ mod tests {
     use crate::utilities::channel_content::InternalCommand;
     use chrono::NaiveTime;
 
-    // Helper function to create a default config for tests.
-    /// Performs the `default_test_config` operation.
+    /// Helper function to create a default config for tests.
     ///
     /// # Arguments
     /// * `strategy_if_not_found` - A parameter representing `strategy_if_not_found`.
@@ -518,8 +516,7 @@ mod tests {
         }
     }
 
-    // Helper to create a schedule entry that is always active and covers the entire day.
-    /// Performs the `always_allowed_schedule` operation.
+    /// Helper function to create a schedule entry that is always active and covers the entire day.
     fn always_allowed_schedule() -> ScheduleEntry {
         ScheduleEntry::new_for_test(
             ScheduleType::Heating,
@@ -531,7 +528,10 @@ mod tests {
 
     #[test]
     // Verifies that check request allowed by schedule.
-    /// [utest->swreq~schedule_inhibit_refill~1]
+    // [utest->swreq~schedule_inhibit_refill~1]
+    // [utest->swreq~schedule_inhibit_mineral~1]
+    // [utest->swreq~schedule_inhibit_heating~1]
+    // [utest->swreq~schedule_inhibit_ventilation~1]
     fn test_check_request_allowed_by_schedule() {
         // Arrange
         let config = default_test_config(false);

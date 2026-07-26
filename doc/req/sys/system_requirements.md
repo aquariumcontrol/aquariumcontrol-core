@@ -2,7 +2,7 @@
 ### [water] Read Tank Level Switch Position
 `sysreq~water1~1`
 
-The control system shall read the tank level switch position.
+The control system shall read the pre-processed tank level switch position signal.
 Needs: swreq
 
 ### [water] Determine Refill Trigger

@@ -33,6 +33,8 @@ use aquarium_control::sensors::tank_level_switch_channels::TankLevelSwitchChanne
 
 #[test]
 // test if position stabilized signal is updating when the invalid signal is true
+//
+// [itest->swreq~sensors_tank_level_switch_preprocessing~1]
 pub fn test_refill_calc_tank_level_switch_position_stabilized_false_when_invalid() {
     let mut channels = Channels::new(false, false, true, true);
 
@@ -164,8 +166,7 @@ fn execute_blocking(
         })
 }
 
-// helper function for creating the test object
-/// Performs the `create_test_object` operation.
+/// Helper function for creating the test object
 ///
 /// # Arguments
 /// * `tank_level_switch` - A parameter representing `tank_level_switch`.
@@ -190,6 +191,7 @@ fn create_test_object(
 
 #[test]
 // test if the position signal is updating without delay when the invalid signal is false
+// [itest->swreq~sensors_tank_level_switch_invalid~1]
 pub fn test_refill_calc_tank_level_switch_position_stabilized_false_true() {
     let mut channels = Channels::new(false, false, true, true);
 

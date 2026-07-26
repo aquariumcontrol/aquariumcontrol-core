@@ -29,6 +29,9 @@ cfg_if::cfg_if! {
 #[test]
 // Test case executes a read operation from real hardware.
 // Test case does not require any communication with the database.
+///
+
+/// [itest->swreq~sensors_read_data~1]
 pub fn test_dht_read() {
     setup_logger(LoggerConfig::default()).unwrap();
 

@@ -6,7 +6,7 @@ The control system shall query the database at check intervals to retrieve dosin
 Covers:
 
 * sysreq~mineral1~1
-Needs: impl, utest
+Needs: impl, utest, itest
 
 ### [mineral] Compute Next Mineral Injection Due Time
 `swreq~mineral_compute_due~1`
@@ -16,7 +16,7 @@ The controller shall read the historic dosing logs and determine when the next d
 Covers:
 
 * sysreq~mineral2~1
-Needs: impl, utest
+Needs: impl, utest, itest
 
 ### [mineral] Calculate Dosing Injection Duration
 `swreq~mineral_calc_duration~1`
@@ -26,7 +26,7 @@ The controller shall convert target dosing volumes to active relay runtime secon
 Covers:
 
 * sysreq~mineral3~1
-Needs: impl, utest
+Needs: impl, utest, itest
 
 ### [mineral] Log Mineral Dosing Operation
 `swreq~mineral_log_database~1`
@@ -46,7 +46,7 @@ The controller shall parse manual dosing requests targeting specific pumps and a
 Covers:
 
 * sysreq~mineral5~1
-Needs: impl, utest
+Needs: impl, utest, itest
 
 ### [mineral] Stop Mineral Dosing Indefinitely
 `swreq~mineral_stop_indefinitely~1`
@@ -56,7 +56,7 @@ The controller shall cancel active dosing pump operations and suspend automatic 
 Covers:
 
 * sysreq~mineral6~1
-Needs: impl, utest
+Needs: impl, utest, itest
 
 ### [mineral] Restart Mineral Dosing
 `swreq~mineral_restart~1`
@@ -66,4 +66,4 @@ The controller shall resume automatic mineral dosing cycles upon receiving a `St
 Covers:
 
 * sysreq~mineral7~1
-Needs: impl, utest
+Needs: impl, utest, itest

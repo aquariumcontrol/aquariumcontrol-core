@@ -484,6 +484,9 @@ impl TankLevelSwitch {
     /// - **Low Water Level (with Delay)**: If the raw position is `false`, a counter increments.
     ///   The stabilized signal only changes to `false` after this counter exceeds the configured
     ///   threshold, preventing flickering from momentary low readings.
+    ///
+    /// [impl->swreq~sensors_tank_level_switch_preprocessing~1]
+    /// [impl->swreq~sensors_tank_level_switch_invalid~1]
     fn calc_tank_level_switch_position_stabilized(&mut self) {
         if self.tank_level_switch_invalid {
             // go to safe position if the input signal is invalid

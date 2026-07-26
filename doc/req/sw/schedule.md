@@ -6,7 +6,7 @@ The control system shall query the `schedule` database table at regular interval
 Covers:
 
 * sysreq~schedule1~1
-Needs: impl, utest
+Needs: impl, itest
 
 ### [schedule] Inhibit Refill Operations
 `swreq~schedule_inhibit_refill~1`

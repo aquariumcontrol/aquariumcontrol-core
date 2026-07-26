@@ -16,7 +16,7 @@ The watchdog loop shall write the heartbeat signal to the configured watchdog fi
 Covers:
 
 * sysreq~watchmen2~1
-Needs: impl, utest
+Needs: impl, utest, itest
 
 ### [watchmen] Trigger Reboot on Stall
 `swreq~watchmen_reboot_on_stall~1`

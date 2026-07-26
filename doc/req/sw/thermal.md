@@ -6,7 +6,7 @@ The ventilation controller shall actuate ventilation cooling fans using a two-po
 Covers:
 
 * sysreq~thermal1~1
-Needs: impl, utest
+Needs: impl, utest, itest
 
 ### [thermal] Read Ventilation Limits
 `swreq~thermal_read_ventilation_limits~1`
@@ -26,7 +26,7 @@ The controller shall immediately turn off ventilation fan relays and suspend aut
 Covers:
 
 * sysreq~thermal3~1
-Needs: impl, utest
+Needs: impl, utest, itest
 
 ### [thermal] Restart Ventilation Control Remotely
 `swreq~thermal_remote_ventilation_start~1`
@@ -36,7 +36,7 @@ The controller shall resume automated temperature cooling loops upon receiving a
 Covers:
 
 * sysreq~thermal4~1
-Needs: impl, utest
+Needs: impl, utest, itest
 
 ### [thermal] Heater Heating Control
 `swreq~thermal_heater_heating~1`
@@ -46,7 +46,7 @@ The heating controller shall actuate the heater relay using a two-point control 
 Covers:
 
 * sysreq~thermal5~1
-Needs: impl, utest
+Needs: impl, utest, itest
 
 ### [thermal] Read Heating Limits
 `swreq~thermal_read_heating_limits~1`
@@ -56,7 +56,7 @@ The controller shall repeatedly read heating temperature setpoint windows and hy
 Covers:
 
 * sysreq~thermal6~1
-Needs: impl, utest
+Needs: impl, utest, itest
 
 ### [thermal] Stop Heating Control Remotely
 `swreq~thermal_remote_heating_stop~1`
@@ -66,7 +66,7 @@ The controller shall immediately turn off the heater relay and suspend automated
 Covers:
 
 * sysreq~thermal7~1
-Needs: impl, utest
+Needs: impl, utest, itest
 
 ### [thermal] Restart Heating Control Remotely
 `swreq~thermal_remote_heating_start~1`
@@ -76,7 +76,7 @@ The controller shall resume automated temperature heating loops upon receiving a
 Covers:
 
 * sysreq~thermal8~1
-Needs: impl, utest
+Needs: impl, utest, itest
 
 ### [thermal] Inhibit Heater on Low Sump Water Level
 `swreq~thermal_inhibit_heating_low_water~1`
@@ -86,7 +86,7 @@ The heating controller shall monitor the tank level switch and immediately disab
 Covers:
 
 * sysreq~thermal9~1
-Needs: impl, utest
+Needs: impl, utest, itest
 
 ### [thermal] Check Distinct Target Temperature Windows
 `swreq~thermal_distinct_interval_check~1`

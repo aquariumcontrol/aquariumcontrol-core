@@ -28,6 +28,7 @@ use std::time::Duration;
 // 2. Failure on Row Limit: Fails when the `data` table exceeds its max row count.
 // 3. Deactivated Check: Succeeds even with excess rows if the limit is set to 0.
 // Test case uses test database #58.
+/// [itest->swreq~recorder_data_logger~1]
 fn test_sql_interface_data_new() {
     // --- Common Setup ---
     let config: ConfigData = read_config_file_with_test_database(

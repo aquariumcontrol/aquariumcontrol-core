@@ -109,6 +109,8 @@ fn test_new_with_invalid_configuration() {
 #[cfg(feature = "test-utils")]
 #[test]
 // Test function receive_response_from_i2c_interface
+//
+// [itest->swreq~sensors_read_data~1]
 pub fn test_atlas_scientific_interfaces_with_blocking_mutexes() {
     let mut stimuli_array_temperature = [0u8; 64];
     let message_temperature: [u8; atlas_scientific_ezo_constants::MESSAGE_SIZE] = [

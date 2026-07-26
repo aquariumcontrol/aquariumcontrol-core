@@ -43,7 +43,7 @@ use std::time::{Duration, Instant};
 /// * `mineral_injection` - A mutable reference to the mineral injector instance.
 /// * `sql_interface_balling` - Database interface for Balling operations.
 ///
-/// [utest->swreq~mineral_compute_due~1]
+/// [itest->swreq~mineral_compute_due~1]
 fn execute_blocking(
     balling: &mut Balling,
     mutex_device_scheduler_balling: Arc<tokio::sync::Mutex<i32>>,
@@ -79,7 +79,7 @@ fn execute_blocking(
 }
 /// Performs the `read_balling_config` operation.
 ///
-/// [utest->swreq~mineral_read_profiles~1]
+/// [itest->swreq~mineral_read_profiles~1]
 fn read_balling_config() -> ConfigData {
     read_config_file("config/aquarium_control_test_generic.toml".to_string()).unwrap()
 }
@@ -653,9 +653,9 @@ pub fn test_balling_dosing(
 // The test case sends the start message and verifies if Balling dosing control
 // resumes operation.
 // Test case uses test database #06.
-/// [utest->swreq~mineral_stop_indefinitely~1]
+/// [itest->swreq~mineral_stop_indefinitely~1]
 ///
-/// [utest->swreq~mineral_restart~1]
+/// [itest->swreq~mineral_restart~1]
 pub fn test_messaging_stops_starts_balling_dosing() {
     let sleep_duration_100_millis = Duration::from_millis(100);
     let sleep_duration_7_secs = Duration::from_secs(7);
@@ -940,7 +940,7 @@ pub fn test_check_database_vs_config() {
 
 #[test]
 // The test case executes the test object using dosing requests via the external interface.
-/// [utest->swreq~mineral_manual_dosing~1]
+/// [itest->swreq~mineral_manual_dosing~1]
 pub fn test_balling_dosing_external_requests() {
     let test_db_number = 49;
     let schedule_allows = true;

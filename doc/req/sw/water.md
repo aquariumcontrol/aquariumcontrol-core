@@ -6,7 +6,7 @@ The refill controller shall use the pre-processed tank level switch signals (`ta
 Covers:
 
 * sysreq~water1~1
-Needs: impl, utest
+Needs: impl, utest, itest
 
 ### [water] Determine Refill Trigger
 `swreq~water_determine_refill~1`
@@ -16,7 +16,7 @@ The controller shall initiate a fresh water refill if the stabilized switch posi
 Covers:
 
 * sysreq~water2~1
-Needs: impl, utest
+Needs: impl, utest, itest
 
 ### [water] Database Failure Inhibition
 `swreq~water_db_failure_inhibition~1`
@@ -26,7 +26,7 @@ The refill controller shall inhibit and lock out further fresh water refill oper
 Covers:
 
 * sysreq~water5~1
-Needs: impl, utest
+Needs: impl, utest, itest
 
 ### [water] Observe Operational Time Window
 `swreq~water_observe_schedule~1`
@@ -36,7 +36,7 @@ The refill controller shall monitor the schedule check inhibition status and pre
 Covers:
 
 * sysreq~schedule2~1
-Needs: impl, utest
+Needs: impl, utest, itest
 
 ### [water] Mutex Actuation Protection
 `swreq~water_actuate_pump~1`
@@ -46,7 +46,7 @@ The refill controller shall use the shared mutex (`mutex_device_scheduler_refill
 Covers:
 
 * sysreq~water3~1
-Needs: impl, utest
+Needs: impl, utest, itest
 
 ### [water] Hysteresis (Additional Refill Volume)
 `swreq~water_hysteresis~1`
@@ -56,7 +56,7 @@ The refill controller shall implement a hysteresis functionality. Once the pre-p
 Covers:
 
 * sysreq~water3~1
-Needs: impl, utest
+Needs: impl, utest, itest
 
 ### [water] Log Refill Operation
 `swreq~water_log_database~1`
@@ -66,7 +66,7 @@ The control system shall log each refill sequence by creating a record in the da
 Covers:
 
 * sysreq~water4~1
-Needs: impl, utest
+Needs: impl, utest, itest
 
 ### [water] Error Detection (Stuck-High and Stuck-Low)
 `swreq~water_error_detection~1`
@@ -78,7 +78,7 @@ The controller shall identify and raise errors for:
 Covers:
 
 * sysreq~water5~1
-Needs: impl, utest
+Needs: impl, utest, itest
 
 ### [water] Faulty Sensor Protection (Volume & Count Limits)
 `swreq~water_faulty_switch_protection~1`
@@ -91,7 +91,7 @@ If any of these limits are exceeded, subsequent refill operations shall be inhib
 Covers:
 
 * sysreq~water9~1
-Needs: impl, utest
+Needs: impl, utest, itest
 
 ### [water] Startup Data Recovery
 `swreq~water_startup_data_recovery~1`
@@ -101,7 +101,7 @@ Upon application startup, the controller shall read historical refill logs from 
 Covers:
 
 * sysreq~water5~1
-Needs: impl, utest
+Needs: impl, utest, itest
 
 ### [water] Calibration Parameters
 `swreq~water_calibration_parameters~1`
@@ -136,7 +136,7 @@ The controller shall handle OS shutdown requests received via the message channe
 Covers:
 
 * sysreq~water8~1
-Needs: impl, utest
+Needs: impl, utest, itest
 
 ### [water] Channel Communication
 `swreq~water_channel_communication~1`
@@ -153,4 +153,4 @@ Covers:
 * sysreq~water6~1
 * sysreq~water7~1
 * sysreq~water8~1
-Needs: impl, utest
+Needs: impl, utest, itest

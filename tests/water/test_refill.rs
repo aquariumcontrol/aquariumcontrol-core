@@ -47,7 +47,7 @@ use aquarium_control::water::water_injection::WaterInjectionTrait;
 /// * `refill_channels` - A mutable reference to the `RefillChannels` communication interface.
 /// * `water_injection` - A parameter representing `water_injection`.
 ///
-/// [utest->swreq~water_determine_refill~1]
+/// [itest->swreq~water_determine_refill~1]
 fn execute_blocking(
     refill: &mut Refill,
     mutex_device_scheduler_refill: Arc<tokio::sync::Mutex<i32>>,
@@ -145,7 +145,7 @@ pub fn prepare_refill_tests_with_mock_database_interface(
 #[test]
 // Test case checks the implementation of ProcessExternalRequestTrait.
 // The test case uses test database #46.
-/// [utest->swreq~water_channel_communication~1]
+/// [itest->swreq~water_channel_communication~1]
 pub fn test_refill_process_external_request_empty_channel() {
     let refill_errors = RefillErrorStates {
         error_switch_stuck_high: false,
@@ -344,7 +344,7 @@ pub fn test_refill_trigger_water_injection() {
 #[test]
 // This test case executes multiple iterations of the loop inside the .execute function, including triggering a refill and simulation of the switch stuck low scenario.
 // Test case uses test database #47.
-/// [utest->swreq~water_error_detection~1]
+/// [itest->swreq~water_error_detection~1]
 pub fn test_refill_trigger_water_injection_switch_stuck_high() {
     let sleep_duration_50_millis = Duration::from_millis(50);
     let spin_sleeper = SpinSleeper::default();
@@ -869,7 +869,7 @@ pub fn test_refill_conditions_historic_data_error_switch_stuck_low() {
 // This test case executes multiple iterations of the loop inside .execute function with error flag error_sql_update_failed
 // The refill control shall not initiate a refill operation.
 // Test case uses test database #23.
-/// [utest->swreq~water_db_failure_inhibition~1]
+/// [itest->swreq~water_db_failure_inhibition~1]
 pub fn test_refill_conditions_error_sql_update_failed() {
     let sleep_duration_50_millis = Duration::from_millis(50);
     let spin_sleeper = SpinSleeper::default();
@@ -1206,7 +1206,7 @@ pub fn test_refill_process_external_request_reset_all_errors_command() {
 // Executes loop of the .execute function manipulating the sensor signals only and giving a negative schedule check.
 // Checks if the test object correctly processes the negative schedule check result.
 // Test case uses test database #25.
-/// [utest->swreq~water_observe_schedule~1]
+/// [itest->swreq~water_observe_schedule~1]
 pub fn test_refill_blocked_by_schedule() {
     let sleep_duration_50_millis = Duration::from_millis(50);
     let spin_sleeper = SpinSleeper::default();
@@ -1731,7 +1731,7 @@ pub fn test_refill_conditions_error_get_historic_data_failed() {
 #[test]
 // This test case executes the check_volume_count_time_limits function of refill.
 // It also instantiates Monitor to capture the monitor view sent via the channel.
-/// [utest->swreq~water_faulty_switch_protection~1]
+/// [itest->swreq~water_faulty_switch_protection~1]
 pub fn test_refill_check_volume_count_time_limits() {
     let mut mock_monitors = MockMonitors::new();
     let sleep_duration_200_millis = Duration::from_millis(200);
@@ -1842,7 +1842,7 @@ pub fn test_refill_check_volume_count_time_limits() {
 // The test environment thread acquires and holds the device_scheduler mutex lock before water injection occurs.
 // While the lock is held, water injection is blocked. Once released, water injection proceeds normally.
 // Test case uses test database #68.
-/// [utest->swreq~water_actuate_pump~1]
+/// [itest->swreq~water_actuate_pump~1]
 pub fn test_refill_trigger_water_injection_with_mutex_blocked() {
     let sleep_duration_50_millis = Duration::from_millis(50);
     let spin_sleeper = SpinSleeper::default();

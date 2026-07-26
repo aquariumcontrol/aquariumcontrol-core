@@ -44,7 +44,7 @@ fn execute_blocking(
 
 #[test]
 // test if Watchdog::new fails if the configuration contains an empty watchdog filename
-/// [utest->swreq~watchmen_pet_watchdog~1]
+/// [itest->swreq~watchmen_pet_watchdog~1]
 fn test_new_fails_with_empty_filename() {
     // Arrange
     let mut config: ConfigData =

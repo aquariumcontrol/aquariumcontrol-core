@@ -6,7 +6,7 @@ The data logger subsystem shall periodically compile system measurements (temper
 Covers:
 
 * sysreq~recorder~1
-Needs: impl, utest
+Needs: impl, utest, itest
 
 ### [recorder] Apply IIR Filtering
 `swreq~recorder_apply_iir_filter~1`
