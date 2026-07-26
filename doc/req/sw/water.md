@@ -6,7 +6,7 @@ The refill controller shall use the pre-processed tank level switch signals (`ta
 Covers:
 
 * sysreq~water1~1
-Needs: impl, utest, itest
+Needs: impl, itest
 
 ### [water] Connect to database
 `swreq~water_connect_database~1`
@@ -47,7 +47,7 @@ The refill controller shall monitor the schedule check inhibition status and pre
 Covers:
 
 * sysreq~schedule2~1
-Needs: impl, utest, itest
+Needs: impl, itest
 
 ### [water] Mutex Actuation Protection
 `swreq~water_actuate_pump~1`
@@ -57,7 +57,7 @@ The refill controller shall use the shared mutex (`mutex_device_scheduler_refill
 Covers:
 
 * sysreq~water3~1
-Needs: impl, utest, itest
+Needs: impl, itest
 
 ### [water] Hysteresis (Additional Refill Volume)
 `swreq~water_hysteresis~1`
@@ -67,7 +67,7 @@ The refill controller shall implement a hysteresis functionality. Once the pre-p
 Covers:
 
 * sysreq~water3~1
-Needs: impl, utest, itest
+Needs: impl, itest
 
 ### [water] Log Refill Operation
 `swreq~water_log_database~1`
@@ -89,7 +89,7 @@ The controller shall identify and raise errors for:
 Covers:
 
 * sysreq~water5~1
-Needs: impl, utest, itest
+Needs: impl, itest
 
 ### [water] Faulty Sensor Protection (Volume & Count Limits)
 `swreq~water_faulty_switch_protection~1`
@@ -164,4 +164,4 @@ Covers:
 * sysreq~water6~1
 * sysreq~water7~1
 * sysreq~water8~1
-Needs: impl, utest, itest
+Needs: impl, itest

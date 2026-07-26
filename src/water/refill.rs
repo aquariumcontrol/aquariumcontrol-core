@@ -381,9 +381,11 @@ impl Refill {
                             refill_stats_data.duration_since_last_refill = duration;
                         }
                         Err(_e) => {
+                            // [impl->swreq~water_db_failure_inhibition~1]
                             self.refill_errors.error_sql_get_historic_data_failed = true;
                             #[cfg(all(not(test), not(feature = "test-utils")))] // only required in real-life execution
                             #[cfg(not(tarpaulin_include))]
+                            // [impl->swreq~water_log_flood_protection~1]
                             if !self.lock_error_read_duration_since_last_refill {
                                 log_error_chain(
                                     module_path!(),
@@ -399,6 +401,7 @@ impl Refill {
                     self.refill_errors.error_sql_get_historic_data_failed = true;
                     #[cfg(all(not(test), not(feature = "test-utils")))] // only required in real-life execution
                     #[cfg(not(tarpaulin_include))]
+                    // [impl->swreq~water_log_flood_protection~1]
                     if !self.lock_error_check_empty {
                         log_error_chain(
                             module_path!(),
@@ -508,6 +511,7 @@ impl Refill {
         let mut new_state: bool = current_state;
 
         if stop_command_received {
+            // [impl->swreq~water_log_flood_protection~1]
             if !self.lock_info_stop_command_received {
                 #[cfg(all(not(test), not(feature = "test-utils")))] // only required in real-life execution
                 #[cfg(not(tarpaulin_include))]
@@ -525,6 +529,7 @@ impl Refill {
         // The start command has a higher priority than the stop command.
         // Therefore, it is evaluated after the stop command.
         if start_command_received {
+            // [impl->swreq~water_log_flood_protection~1]
             if !self.lock_info_start_command_received {
                 #[cfg(all(not(test), not(feature = "test-utils")))] // only required in real-life execution
                 #[cfg(not(tarpaulin_include))]
@@ -679,6 +684,7 @@ impl Refill {
         let refill_check_interval_last_refill =
             sql_refill_data.duration_since_last_refill < self.config.min_interval_last_refill;
         if refill_check_interval_last_refill {
+            // [impl->swreq~water_log_flood_protection~1]
             if !self.lock_info_refill_check_interval_last_refill {
                 #[cfg(all(not(test), not(feature = "test-utils")))] // only required in real-life execution
                 #[cfg(not(tarpaulin_include))]
@@ -718,6 +724,7 @@ impl Refill {
                     self.lock_error_channel_send_monitors = false;
                 }
                 Err(e) => {
+                    // [impl->swreq~water_log_flood_protection~1]
                     if !self.lock_error_channel_send_monitors {
                         log_error_chain(module_path!(), "sending view to monitor failed", e);
                         self.lock_error_channel_send_monitors = true;
@@ -880,6 +887,7 @@ impl Refill {
                 if !quit_command_received && !refill_inhibited {
                     // access mutex for reading tank level switch signals
                     {
+                        // [impl->swreq~water_read_level_switch~1]
                         match mutex_tank_level_switch_signals_clone_for_refill.lock() {
                             Ok(c) => {
                                 tank_level_switch_position_stabilized =
@@ -923,7 +931,7 @@ impl Refill {
 
                     // execute checks before initiating refill
                     if !critical_error_present {
-                        perform_schedule_check!(
+                        perform_schedule_check!( // [impl->swreq~water_observe_schedule~1]
                             refill_channels,
                             schedule_check_result,
                             self.lock_error_channel_send_schedule_check,
@@ -931,6 +939,7 @@ impl Refill {
                             module_path!()
                         );
 
+                        // [impl->swreq~water_read_level_switch~1]
                         if schedule_check_result
                             && !tank_level_switch_position_stabilized
                             && !tank_level_switch_invalid

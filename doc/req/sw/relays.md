@@ -6,4 +6,4 @@ The RelayManager component shall receive state commands (`SwitchOn` / `SwitchOff
 Covers:
 
 * sysreq~relay1~1
-Needs: impl, utest, itest
+Needs: impl, itest

@@ -16,7 +16,7 @@ The control system shall query the `feed_profile` database table to load configu
 Covers:
 
 * sysreq~food2~1
-Needs: impl, utest, itest
+Needs: impl, itest
 
 ### [food] Execute Feed Schedule
 `swreq~food_execute_schedule~1`
@@ -36,7 +36,7 @@ The controller shall parse immediate manual feed requests received via the OS me
 Covers:
 
 * sysreq~food4~1
-Needs: impl, utest, itest
+Needs: impl, itest
 
 ### [food] Remote Feed Stop
 `swreq~food_stop_indefinitely~1`
@@ -46,7 +46,7 @@ The controller shall abort any active feed operation and suspend scheduled feedi
 Covers:
 
 * sysreq~food5~1
-Needs: impl, utest, itest
+Needs: impl, itest
 
 ### [food] Remote Feed Restart
 `swreq~food_restart~1`
@@ -56,7 +56,7 @@ The controller shall resume scheduled feeding cycles upon receiving a `Start` co
 Covers:
 
 * sysreq~food6~1
-Needs: impl, utest, itest
+Needs: impl, itest
 
 ### [food] Log Feed Operation
 `swreq~food_log_database~1`

@@ -6,7 +6,7 @@ The ventilation controller shall actuate ventilation cooling fans using a two-po
 Covers:
 
 * sysreq~thermal1~1
-Needs: impl, utest, itest
+Needs: impl, itest
 
 ### [thermal] Read Ventilation Limits
 `swreq~thermal_read_ventilation_limits~1`
@@ -118,4 +118,22 @@ Covers:
 * sysreq~thermal5~1
 Needs: impl, itest
 
+### [thermal] Observe Operational Time Window for heater
+`swreq~thermal_observe_schedule_heater~1`
 
+The controller shall monitor the schedule check inhibition status and suspend heater actuation if the current daytime is outside the configured allowed operational window.
+
+Covers:
+
+* sysreq~schedule4~1
+  Needs: impl, itest
+
+### [thermal] Observe Operational Time Window for ventilation
+`swreq~thermal_observe_schedule_ventilation~1`
+
+The controller shall monitor the schedule check inhibition status and suspend ventilation actuation if the current daytime is outside the configured allowed operational window.
+
+Covers:
+
+* sysreq~schedule5~1
+  Needs: impl, itest

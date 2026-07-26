@@ -6,7 +6,7 @@ The control system shall query the database at check intervals to retrieve dosin
 Covers:
 
 * sysreq~mineral1~1
-Needs: impl, utest, itest
+Needs: impl, itest
 
 ### [mineral] Compute Next Mineral Injection Due Time
 `swreq~mineral_compute_due~1`
@@ -16,7 +16,7 @@ The controller shall read the historic dosing logs and determine when the next d
 Covers:
 
 * sysreq~mineral2~1
-Needs: impl, utest, itest
+Needs: impl, itest
 
 ### [mineral] Calculate Dosing Injection Duration
 `swreq~mineral_calc_duration~1`
@@ -36,7 +36,7 @@ The control system shall write records to the database dosing log table containi
 Covers:
 
 * sysreq~mineral4~1
-Needs: impl, utest
+Needs: impl, itest
 
 ### [mineral] Execute Manual Dosing
 `swreq~mineral_manual_dosing~1`
@@ -46,7 +46,7 @@ The controller shall parse manual dosing requests targeting specific pumps and a
 Covers:
 
 * sysreq~mineral5~1
-Needs: impl, utest, itest
+Needs: impl, itest
 
 ### [mineral] Stop Mineral Dosing Indefinitely
 `swreq~mineral_stop_indefinitely~1`
@@ -56,7 +56,7 @@ The controller shall cancel active dosing pump operations and suspend automatic 
 Covers:
 
 * sysreq~mineral6~1
-Needs: impl, utest, itest
+Needs: impl, itest
 
 ### [mineral] Connect to database
 `swreq~mineral_connect_database~1`
@@ -77,4 +77,14 @@ The controller shall resume automatic mineral dosing cycles upon receiving a `St
 Covers:
 
 * sysreq~mineral7~1
-Needs: impl, utest, itest
+Needs: impl, itest
+
+### [water] Observe Operational Time Window
+`swreq~mineral_observe_schedule~1`
+
+The controller shall monitor the schedule check inhibition status and prevent or suspend mineral dosing operations if the current daytime is outside of the configured allowed operational window.
+
+Covers:
+
+* sysreq~schedule3~1
+  Needs: impl, itest

@@ -166,6 +166,7 @@ impl WaterInjectionTrait for WaterInjection {
         mutex_tank_level_switch_signals: &Arc<Mutex<TankLevelSwitchSignals>>,
         mutex_device_scheduler_refill: &Arc<tokio::sync::Mutex<i32>>,
     ) -> bool {
+        // [impl->swreq~water_actuate_pump~1]
         let mut mutex_device_scheduler = mutex_device_scheduler_refill.lock().await;
         let mut refill_volume = 0.0;
         let mut refill_time_seconds = 0.0;
@@ -209,6 +210,7 @@ impl WaterInjectionTrait for WaterInjection {
 
             // access mutex for reading tank level switch signals
             {
+                // [impl->swreq~water_read_level_switch~1]
                 match mutex_tank_level_switch_signals.lock() {
                     Ok(c) => {
                         tank_level_switch_position = c.tank_level_switch_position;
@@ -228,6 +230,7 @@ impl WaterInjectionTrait for WaterInjection {
                 instant_before_locking_mutex,
             );
 
+            // [impl->swreq~water_read_level_switch~1]
             if tank_level_switch_position
                 && additional_refill_volume_executed > self.additional_refill_volume
             {
@@ -242,11 +245,13 @@ impl WaterInjectionTrait for WaterInjection {
 
             // calculate volume refilled in this operation
             refill_volume += self.refill_increment;
+            // [impl->swreq~water_read_level_switch~1]
             if tank_level_switch_position {
                 additional_refill_volume_executed += self.refill_increment;
             }
             (quit_command_received, _, _) = self
                 .process_external_request(&mut refill_channels.rx_refill_from_signal_handler, None);
+            // [impl->swreq~water_shutdown_sequence~1]
             if quit_command_received {
                 break;
             }
@@ -284,6 +289,7 @@ impl WaterInjectionTrait for WaterInjection {
         *mutex_device_scheduler = mutex_device_scheduler.saturating_add(1);
 
         // write the result to the database
+        // [impl->swreq~water_log_database~1]
         match sql_interface_refill.insert_refill_event(
             Local::now().naive_local(),
             refill_time_seconds,
@@ -292,6 +298,7 @@ impl WaterInjectionTrait for WaterInjection {
         ) {
             Ok(_) => {}
             Err(e) => {
+                // [impl->swreq~water_db_failure_inhibition~1]
                 error!(
                     target: module_path!(),
                     "writing refill operation data to SQL database failed ({e:?})"

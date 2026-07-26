@@ -145,7 +145,7 @@ pub fn prepare_refill_tests_with_mock_database_interface(
 #[test]
 // Test case checks the implementation of ProcessExternalRequestTrait.
 // The test case uses test database #46.
-/// [itest->swreq~water_channel_communication~1]
+// [itest->swreq~water_channel_communication~1]
 pub fn test_refill_process_external_request_empty_channel() {
     let refill_errors = RefillErrorStates {
         error_switch_stuck_high: false,

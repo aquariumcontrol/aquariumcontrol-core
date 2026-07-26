@@ -6,4 +6,4 @@ The messaging module shall read incoming POSIX messages from the operating syste
 Covers:
 
 * sysreq~messaging~1
-Needs: impl, utest, itest
+Needs: impl, itest

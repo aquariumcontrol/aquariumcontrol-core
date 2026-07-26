@@ -191,6 +191,7 @@ impl VersionInformation {
     /// # Returns
     /// A `Result` containing a new `VersionInformation` struct, or a `VersionInformationError`
     /// if the version string cannot be parsed.
+    // [impl->swreq~utilities_check_version_compatibility~1]
     pub fn from_string_and_hash(
         version_string: String,
         hash: String,
@@ -291,6 +292,7 @@ mod tests {
 
     #[test]
     // Verifies that valid version string.
+    // [utest->swreq~utilities_check_version_compatibility~1]
     fn test_valid_version_string() {
         let info =
             VersionInformation::from_string_and_hash("1.2.3".to_string(), dummy_hash()).unwrap();
@@ -301,6 +303,7 @@ mod tests {
 
     #[test]
     // Verifies that version string with prerelease tag.
+    // [utest->swreq~utilities_check_version_compatibility~1]
     fn test_version_string_with_prerelease_tag() {
         let info =
             VersionInformation::from_string_and_hash("0.4.5-beta.1".to_string(), dummy_hash())
@@ -312,6 +315,7 @@ mod tests {
 
     #[test]
     // Verifies that invalid major version.
+    // [utest->swreq~utilities_check_version_compatibility~1]
     fn test_invalid_major_version() {
         let result = VersionInformation::from_string_and_hash("a.2.3".to_string(), dummy_hash());
         assert!(matches!(
@@ -322,6 +326,7 @@ mod tests {
 
     #[test]
     // Verifies that invalid minor version.
+    // [utest->swreq~utilities_check_version_compatibility~1]
     fn test_invalid_minor_version() {
         let result = VersionInformation::from_string_and_hash("1.a.3".to_string(), dummy_hash());
         assert!(matches!(
@@ -332,6 +337,7 @@ mod tests {
 
     #[test]
     // Verifies that invalid build version.
+    // [utest->swreq~utilities_check_version_compatibility~1]
     fn test_invalid_build_version() {
         let result = VersionInformation::from_string_and_hash("1.2.x".to_string(), dummy_hash());
         assert!(matches!(
@@ -342,6 +348,7 @@ mod tests {
 
     #[test]
     // Verifies that incomplete version string.
+    // [utest->swreq~utilities_check_version_compatibility~1]
     fn test_incomplete_version_string() {
         let result = VersionInformation::from_string_and_hash("1.2".to_string(), dummy_hash());
         assert!(matches!(

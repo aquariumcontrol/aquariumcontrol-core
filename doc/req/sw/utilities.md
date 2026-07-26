@@ -6,7 +6,7 @@ The signal handler shall capture operating system terminal signals (like SIGINT,
 Covers:
 
 * sysreq~utilities1~1
-Needs: impl, utest
+Needs: impl, itest
 
 ### [utilities] Parse TOML Configuration
 `swreq~utilities_parse_toml_config~1`
@@ -32,8 +32,10 @@ Needs: impl, utest
 `swreq~utilities_write_pid_file~1`
 
 The application shall write its active process ID (PID) to a local file on startup, preventing duplicate instances from initiating.
+Before writing the PID, the application shall check if the file contains only a zero as contain.
+Otherwise, the application shall abort the startup.
 
 Covers:
 
 * sysreq~utilities4~1
-Needs: impl, utest
+Needs: impl, itest

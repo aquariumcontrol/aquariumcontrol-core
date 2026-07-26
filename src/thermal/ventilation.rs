@@ -415,6 +415,7 @@ impl Ventilation {
             if quit_command_received {
                 break;
             }
+            // [impl->swreq~thermal_remote_ventilation_stop~1]
             if stop_command_received {
                 #[cfg(all(not(test), not(feature = "test-utils")))] // only required in real-life execution
                 #[cfg(not(tarpaulin_include))]
@@ -424,6 +425,7 @@ impl Ventilation {
                 );
                 ventilation_inhibited = true;
             }
+            // [impl->swreq~thermal_remote_ventilation_start~1]
             if start_command_received {
                 #[cfg(all(not(test), not(feature = "test-utils")))] // only required in real-life execution
                 #[cfg(not(tarpaulin_include))]
@@ -449,7 +451,7 @@ impl Ventilation {
                 }
 
                 // schedule check to see if actuation is allowed
-                perform_schedule_check!(
+                perform_schedule_check!( // [impl->swreq~thermal_observe_schedule_ventilation~1]
                     ventilation_channels,
                     schedule_check_result,
                     self.lock_error_channel_send_schedule_check,
