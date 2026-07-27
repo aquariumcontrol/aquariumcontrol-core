@@ -300,3 +300,48 @@ pub fn read_config_file_with_test_database(
 
     config
 }
+
+#[cfg(test)]
+mod tests {
+    use crate::utilities::config::{
+        read_config_file, read_config_file_with_test_database, ConfigData,
+    };
+
+    #[test]
+    // Verifies that a valid TOML configuration file is parsed correctly.
+    // [utest->swreq~utilities_parse_toml_config~1]
+    pub fn test_parse_valid_toml_config() {
+        let config: ConfigData =
+            read_config_file("config/aquarium_control_test_generic.toml".to_string())
+                .expect("Failed to read generic test TOML configuration file");
+
+        // Verify SQL interface configuration
+        assert!(!config.sql_interface.db_host.is_empty());
+        assert!(!config.sql_interface.db_user.is_empty());
+
+        // Verify thermal configuration
+        assert!(config.heating.switch_off_temperature > 0.0);
+        assert!(config.ventilation.switch_off_temperature > 0.0);
+
+        // Verify water refill configuration
+        assert!(config.refill.additional_refill_volume >= 0.0);
+
+        // Verify food feeding configuration
+        assert!(config.feed.schedule_check_interval > 0);
+
+        // Verify mineral dosing configuration
+        assert!(config.balling.schedule_check_interval > 0);
+    }
+
+    #[test]
+    // Verifies reading config file with test database override.
+    // [utest->swreq~utilities_parse_toml_config~1]
+    pub fn test_read_config_file_with_test_db_override() {
+        let config: ConfigData = read_config_file_with_test_database(
+            "config/aquarium_control_test_generic.toml".to_string(),
+            42,
+        );
+
+        assert!(config.sql_interface.db_name.contains("42"));
+    }
+}

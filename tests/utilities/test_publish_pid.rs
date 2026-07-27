@@ -20,7 +20,7 @@ use aquarium_control::utilities::publish_pid::{PublishPid, PublishPidError};
 // [itest->swreq~utilities_write_pid_file~1]
 pub fn test_publish_pid() {
     let config: ConfigData =
-        read_config_file("/config/aquarium_control_test_generic.toml".to_string()).unwrap();
+        read_config_file("config/aquarium_control_test_generic.toml".to_string()).unwrap();
     let pid_filename = config.publish_pid.pid_filename.clone();
     fs::write(pid_filename.clone(), "0").expect("test_publish_PID: Could not erase PID.");
 
@@ -46,7 +46,7 @@ pub fn test_publish_pid() {
 // [itest->swreq~utilities_write_pid_file~1]
 pub fn test_publish_pid_invalid_content_pid_file() {
     let mut config: ConfigData =
-        read_config_file("/config/aquarium_control_test_generic.toml".to_string()).unwrap();
+        read_config_file("config/aquarium_control_test_generic.toml".to_string()).unwrap();
     config.publish_pid.pid_filename =
         "/var/local/aquarium-ctrl-test-invalid-content.pid".to_string();
     let result = PublishPid::new(config.publish_pid);
@@ -61,7 +61,7 @@ pub fn test_publish_pid_invalid_content_pid_file() {
 // [itest->swreq~utilities_write_pid_file~1]
 pub fn test_publish_pid_file_already_contains_pid() {
     let mut config: ConfigData =
-        read_config_file("/config/aquarium_control_test_generic.toml".to_string()).unwrap();
+        read_config_file("config/aquarium_control_test_generic.toml".to_string()).unwrap();
     config.publish_pid.pid_filename =
         "/var/local/aquarium-ctrl-test-already-filled.pid".to_string();
     let result = PublishPid::new(config.publish_pid);

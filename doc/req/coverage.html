@@ -1791,11 +1791,11 @@ summary .title {
           </div>
         </details>
       </section>
-      <section class="sitem" id="itest~mineral_observe_schedule-1686200021~0">
+      <section class="sitem" id="itest~mineral_observe_schedule-3510838912~0">
         <details>
-          <summary title="itest~mineral_observe_schedule-1686200021~0"><span class="green">&check;</span> <b>mineral_observe_schedule-1686200021</b><small>, rev. 0, itest</small></summary>
-          <p class="id">itest~mineral_observe_schedule-1686200021~0</p>
-          <p class="origin">tests/mineral/test_balling.rs:1135</p>
+          <summary title="itest~mineral_observe_schedule-3510838912~0"><span class="green">&check;</span> <b>mineral_observe_schedule-3510838912</b><small>, rev. 0, itest</small></summary>
+          <p class="id">itest~mineral_observe_schedule-3510838912~0</p>
+          <p class="origin">tests/mineral/test_balling.rs:1140</p>
           <div class="out">
             <h6>Out: 1</h6>
             <ul>
@@ -2889,7 +2889,7 @@ summary .title {
             <h6>In: 2</h6>
             <ul>
               <li><a href="#impl~mineral_observe_schedule-2214240333~0">impl~mineral_observe_schedule-2214240333~0</a> <span class="origin">src/mineral/balling.rs:667</span></li>
-              <li><a href="#itest~mineral_observe_schedule-1686200021~0">itest~mineral_observe_schedule-1686200021~0</a> <span class="origin">tests/mineral/test_balling.rs:1135</span></li>
+              <li><a href="#itest~mineral_observe_schedule-3510838912~0">itest~mineral_observe_schedule-3510838912~0</a> <span class="origin">tests/mineral/test_balling.rs:1140</span></li>
             </ul>
           </div>
           <div class="out">
@@ -3616,15 +3616,17 @@ summary .title {
       </section>
       <section class="sitem" id="swreq~utilities_parse_toml_config~1">
         <details>
-          <summary title="swreq~utilities_parse_toml_config~1"><span class="red">&cross;</span> <b>[utilities] Parse TOML Configuration</b><small>, rev. 1, swreq</small></summary>
+          <summary title="swreq~utilities_parse_toml_config~1"><span class="green">&check;</span> <b>[utilities] Parse TOML Configuration</b><small>, rev. 1, swreq</small></summary>
           <p class="id">swreq~utilities_parse_toml_config~1</p>
           <p>The application shall parse configuration parameters from a local TOML configuration file on startup to initialize device parameters and pins.</p>
-          <h6>Needs: impl, <ins>utest</ins></h6>
+          <h6>Needs: impl, utest</h6>
           <p class="origin">doc/req/sw/utilities.md:12</p>
           <div class="in">
-            <h6>In: 1</h6>
+            <h6>In: 3</h6>
             <ul>
               <li><a href="#impl~utilities_parse_toml_config-1252784497~0">impl~utilities_parse_toml_config-1252784497~0</a> <span class="origin">src/utilities/config.rs:186</span></li>
+              <li><a href="#utest~utilities_parse_toml_config-1163183980~0">utest~utilities_parse_toml_config-1163183980~0</a> <span class="origin">src/utilities/config.rs:338</span></li>
+              <li><a href="#utest~utilities_parse_toml_config-2198061032~0">utest~utilities_parse_toml_config-2198061032~0</a> <span class="origin">src/utilities/config.rs:312</span></li>
             </ul>
           </div>
           <div class="out">
@@ -4655,7 +4657,7 @@ summary .title {
       </section>
       <section class="sitem" id="sysreq~utilities2~1">
         <details>
-          <summary title="sysreq~utilities2~1"><span class="red">&cross;</span> <b>[utilities] Read Configuration File on Startup</b><small>, rev. 1, sysreq</small></summary>
+          <summary title="sysreq~utilities2~1"><span class="green">&check;</span> <b>[utilities] Read Configuration File on Startup</b><small>, rev. 1, sysreq</small></summary>
           <p class="id">sysreq~utilities2~1</p>
           <p>The control system shall read all configuration parameters from a local configuration file on startup.</p>
           <h6>Needs: swreq</h6>
@@ -5146,6 +5148,32 @@ summary .title {
           </div>
         </details>
       </section>
+      <section class="sitem" id="utest~utilities_parse_toml_config-1163183980~0">
+        <details>
+          <summary title="utest~utilities_parse_toml_config-1163183980~0"><span class="green">&check;</span> <b>utilities_parse_toml_config-1163183980</b><small>, rev. 0, utest</small></summary>
+          <p class="id">utest~utilities_parse_toml_config-1163183980~0</p>
+          <p class="origin">src/utilities/config.rs:338</p>
+          <div class="out">
+            <h6>Out: 1</h6>
+            <ul>
+              <li><a href="#swreq~utilities_parse_toml_config~1">swreq~utilities_parse_toml_config~1</a> <span class="origin">doc/req/sw/utilities.md:12</span></li>
+            </ul>
+          </div>
+        </details>
+      </section>
+      <section class="sitem" id="utest~utilities_parse_toml_config-2198061032~0">
+        <details>
+          <summary title="utest~utilities_parse_toml_config-2198061032~0"><span class="green">&check;</span> <b>utilities_parse_toml_config-2198061032</b><small>, rev. 0, utest</small></summary>
+          <p class="id">utest~utilities_parse_toml_config-2198061032~0</p>
+          <p class="origin">src/utilities/config.rs:312</p>
+          <div class="out">
+            <h6>Out: 1</h6>
+            <ul>
+              <li><a href="#swreq~utilities_parse_toml_config~1">swreq~utilities_parse_toml_config~1</a> <span class="origin">doc/req/sw/utilities.md:12</span></li>
+            </ul>
+          </div>
+        </details>
+      </section>
       <section class="sitem" id="utest~water_determine_refill-4141524356~0">
         <details>
           <summary title="utest~water_determine_refill-4141524356~0"><span class="green">&check;</span> <b>water_determine_refill-4141524356</b><small>, rev. 0, utest</small></summary>
@@ -5188,6 +5216,6 @@ summary .title {
     </section>
   </main>
   <nav>
-    <span class="red">&cross;</span> 325 total <meter value="319" low="324" max="325">98%</meter> <span class=".red">6 defects</span> | <a href="#impl">impl</a> &middot; <a href="#itest">itest</a> &middot; <a href="#swreq">swreq</a> &middot; <a href="#sysreq">sysreq</a> &middot; <a href="#utest">utest</a>  </nav>
+    <span class="red">&cross;</span> 327 total <meter value="323" low="326" max="327">98%</meter> <span class=".red">4 defects</span> | <a href="#impl">impl</a> &middot; <a href="#itest">itest</a> &middot; <a href="#swreq">swreq</a> &middot; <a href="#sysreq">sysreq</a> &middot; <a href="#utest">utest</a>  </nav>
   </body>
 </html>
