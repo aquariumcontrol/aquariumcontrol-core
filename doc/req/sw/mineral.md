@@ -87,4 +87,5 @@ The controller shall monitor the schedule check inhibition status and prevent or
 Covers:
 
 * sysreq~schedule3~1
-  Needs: impl, itest
+Needs: impl, itest
+

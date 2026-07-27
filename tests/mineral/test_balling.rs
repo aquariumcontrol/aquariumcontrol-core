@@ -1137,6 +1137,7 @@ pub fn test_balling_dosing_schedule_allows_single_dosing() {
 // - all pumps are active
 // - schedule checker is not allowing operation
 // Test case uses test database #04.
+// [itest->swreq~mineral_observe_schedule~1]
 pub fn test_balling_dosing_schedule_forbids() {
     test_balling_dosing(
         4,     // index for determining the test database
