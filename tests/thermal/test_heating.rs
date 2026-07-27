@@ -1710,6 +1710,7 @@ pub fn test_heating_wait_for_midnight_calc_stats_heater_off() {
 #[test]
 // Test case checks if a negative schedule checker result is processed correctly.
 // Test case uses test database #17.
+// [itest->swreq~thermal_observe_schedule_heater~1]
 pub fn test_heating_blocked_by_schedule() {
     let sleep_duration_100_millis = Duration::from_millis(100);
     let spin_sleeper = SpinSleeper::default();

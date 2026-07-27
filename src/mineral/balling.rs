@@ -664,7 +664,8 @@ impl Balling {
                 // and the monitoring period has passed (usually every 60 seconds)
 
                 // schedule check to see if actuation is allowed
-                perform_schedule_check!( // [impl->swreq~mineral_observe_schedule~1]
+                // [impl->swreq~mineral_observe_schedule~1]
+                perform_schedule_check!(
                     balling_channels,
                     schedule_check_result,
                     self.lock_error_channel_send_schedule_check,

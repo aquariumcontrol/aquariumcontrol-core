@@ -931,7 +931,8 @@ impl Refill {
 
                     // execute checks before initiating refill
                     if !critical_error_present {
-                        perform_schedule_check!( // [impl->swreq~water_observe_schedule~2]
+                        // [impl->swreq~water_observe_schedule~2]
+                        perform_schedule_check!(
                             refill_channels,
                             schedule_check_result,
                             self.lock_error_channel_send_schedule_check,

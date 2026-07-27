@@ -451,7 +451,8 @@ impl Ventilation {
                 }
 
                 // schedule check to see if actuation is allowed
-                perform_schedule_check!( // [impl->swreq~thermal_observe_schedule_ventilation~1]
+                // [impl->swreq~thermal_observe_schedule_ventilation~1]
+                perform_schedule_check!(
                     ventilation_channels,
                     schedule_check_result,
                     self.lock_error_channel_send_schedule_check,

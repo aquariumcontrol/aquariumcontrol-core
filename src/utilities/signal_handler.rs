@@ -207,6 +207,7 @@ pub async fn send_command(
 ///     temperature_gradient --> signal_handler
 /// ```
 /// * `execution_config` - An execution configuration instance.
+///
 /// [impl->swreq~utilities_process_signals~1]
 pub async fn handle_signals(
     term: Arc<AtomicBool>,

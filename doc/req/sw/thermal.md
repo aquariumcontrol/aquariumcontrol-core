@@ -126,7 +126,7 @@ The controller shall monitor the schedule check inhibition status and suspend he
 Covers:
 
 * sysreq~schedule4~1
-  Needs: impl, itest
+Needs: impl, itest
 
 ### [thermal] Observe Operational Time Window for ventilation
 `swreq~thermal_observe_schedule_ventilation~1`
@@ -136,4 +136,5 @@ The controller shall monitor the schedule check inhibition status and suspend ve
 Covers:
 
 * sysreq~schedule5~1
-  Needs: impl, itest
+Needs: impl, itest
+
