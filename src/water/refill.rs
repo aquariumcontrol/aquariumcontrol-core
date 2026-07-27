@@ -1278,6 +1278,7 @@ pub mod tests {
     #[test]
     // Tests the `check_volume_count_time_limit` helper function.
     /// [utest->swreq~water_faulty_switch_protection~1]
+    /// [utest->swreq~water_log_flood_protection~1]
     fn test_check_volume_count_time_limit() {
         // === Test Case 1: Value is below the limit (u64) ===
         // Should return false, indicating no limit was exceeded.

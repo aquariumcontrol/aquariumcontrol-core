@@ -3937,13 +3937,13 @@ summary .title {
       </section>
       <section class="sitem" id="swreq~water_log_flood_protection~1">
         <details>
-          <summary title="swreq~water_log_flood_protection~1"><span class="red">&cross;</span> <b>[water] Log Flood Protection</b><small>, rev. 1, swreq</small></summary>
+          <summary title="swreq~water_log_flood_protection~1"><span class="green">&check;</span> <b>[water] Log Flood Protection</b><small>, rev. 1, swreq</small></summary>
           <p class="id">swreq~water_log_flood_protection~1</p>
           <p>The controller shall use log warning suppression flags (such as <code>volume<em>last_24h</code>, <code>count_last_24h</code>, <code>volume_last_hour</code>, <code>count_last_hour</code> inside <code>RefillLocks</code> and <code>lock_warn_max_mutex_access</em>duration</code> inside <code>WaterInjection</code>) to suppress repetitive log warnings and prevent log flood.</p>
-          <h6>Needs: impl, <ins>utest</ins></h6>
+          <h6>Needs: impl, utest</h6>
           <p class="origin">doc/req/sw/water.md:131</p>
           <div class="in">
-            <h6>In: 6</h6>
+            <h6>In: 7</h6>
             <ul>
               <li><a href="#impl~water_log_flood_protection-1710560281~0">impl~water_log_flood_protection-1710560281~0</a> <span class="origin">src/water/refill.rs:514</span></li>
               <li><a href="#impl~water_log_flood_protection-1754136292~0">impl~water_log_flood_protection-1754136292~0</a> <span class="origin">src/water/refill.rs:404</span></li>
@@ -3951,6 +3951,7 @@ summary .title {
               <li><a href="#impl~water_log_flood_protection-2601823490~0">impl~water_log_flood_protection-2601823490~0</a> <span class="origin">src/water/refill.rs:727</span></li>
               <li><a href="#impl~water_log_flood_protection-279696865~0">impl~water_log_flood_protection-279696865~0</a> <span class="origin">src/water/refill.rs:687</span></li>
               <li><a href="#impl~water_log_flood_protection-3934471951~0">impl~water_log_flood_protection-3934471951~0</a> <span class="origin">src/water/refill.rs:388</span></li>
+              <li><a href="#utest~water_log_flood_protection-2093365636~0">utest~water_log_flood_protection-2093365636~0</a> <span class="origin">src/water/refill.rs:1281</span></li>
             </ul>
           </div>
           <div class="out">
@@ -4810,7 +4811,7 @@ summary .title {
       </section>
       <section class="sitem" id="sysreq~water5~1">
         <details>
-          <summary title="sysreq~water5~1"><span class="red">&cross;</span> <b>[water] Recognize Subsystem Error States</b><small>, rev. 1, sysreq</small></summary>
+          <summary title="sysreq~water5~1"><span class="green">&check;</span> <b>[water] Recognize Subsystem Error States</b><small>, rev. 1, sysreq</small></summary>
           <p class="id">sysreq~water5~1</p>
           <p>The control system shall recognize error states of database communication, sensor, actuator or main tank.</p>
           <h6>Needs: swreq</h6>
@@ -5200,6 +5201,19 @@ summary .title {
           </div>
         </details>
       </section>
+      <section class="sitem" id="utest~water_log_flood_protection-2093365636~0">
+        <details>
+          <summary title="utest~water_log_flood_protection-2093365636~0"><span class="green">&check;</span> <b>water_log_flood_protection-2093365636</b><small>, rev. 0, utest</small></summary>
+          <p class="id">utest~water_log_flood_protection-2093365636~0</p>
+          <p class="origin">src/water/refill.rs:1281</p>
+          <div class="out">
+            <h6>Out: 1</h6>
+            <ul>
+              <li><a href="#swreq~water_log_flood_protection~1">swreq~water_log_flood_protection~1</a> <span class="origin">doc/req/sw/water.md:131</span></li>
+            </ul>
+          </div>
+        </details>
+      </section>
       <section class="sitem" id="utest~water_startup_data_recovery-948249483~0">
         <details>
           <summary title="utest~water_startup_data_recovery-948249483~0"><span class="green">&check;</span> <b>water_startup_data_recovery-948249483</b><small>, rev. 0, utest</small></summary>
@@ -5216,6 +5230,6 @@ summary .title {
     </section>
   </main>
   <nav>
-    <span class="red">&cross;</span> 327 total <meter value="323" low="326" max="327">98%</meter> <span class=".red">4 defects</span> | <a href="#impl">impl</a> &middot; <a href="#itest">itest</a> &middot; <a href="#swreq">swreq</a> &middot; <a href="#sysreq">sysreq</a> &middot; <a href="#utest">utest</a>  </nav>
+    <span class="red">&cross;</span> 328 total <meter value="326" low="327" max="328">99%</meter> <span class=".red">2 defects</span> | <a href="#impl">impl</a> &middot; <a href="#itest">itest</a> &middot; <a href="#swreq">swreq</a> &middot; <a href="#sysreq">sysreq</a> &middot; <a href="#utest">utest</a>  </nav>
   </body>
 </html>
