@@ -136,6 +136,7 @@ fn test_new_fails_with_zero_heartbeat_duration() {
 
 #[test]
 // test if the watchdog is executing the petting in time
+// [itest->swreq~watchmen_reboot_on_stall~1]
 fn test_watchdog_execute_petting() {
     let config: ConfigData =
         read_config_file("/config/aquarium_control_test_generic.toml".to_string()).unwrap();
@@ -216,6 +217,7 @@ fn test_watchdog_execute_petting() {
 
 #[test]
 // test if the watchdog is writing the right heartbeat messages to the watchdog file
+// [itest->swreq~watchmen_reboot_on_stall~1]
 fn test_watchdog_check_heartbeat_message() {
     let mut config: ConfigData =
         read_config_file("/config/aquarium_control_test_generic.toml".to_string()).unwrap();

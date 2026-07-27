@@ -1206,7 +1206,7 @@ pub fn test_refill_process_external_request_reset_all_errors_command() {
 // Executes loop of the .execute function manipulating the sensor signals only and giving a negative schedule check.
 // Checks if the test object correctly processes the negative schedule check result.
 // Test case uses test database #25.
-/// [itest->swreq~water_observe_schedule~1]
+// [itest->swreq~water_observe_schedule~2]
 pub fn test_refill_blocked_by_schedule() {
     let sleep_duration_50_millis = Duration::from_millis(50);
     let spin_sleeper = SpinSleeper::default();

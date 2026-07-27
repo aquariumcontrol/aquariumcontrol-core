@@ -37,12 +37,12 @@ The refill controller shall inhibit and lock out further fresh water refill oper
 Covers:
 
 * sysreq~water5~1
-Needs: impl, utest, itest
+Needs: impl, itest
 
 ### [water] Observe Operational Time Window
-`swreq~water_observe_schedule~1`
+`swreq~water_observe_schedule~2`
 
-The refill controller shall monitor the schedule check inhibition status and prevent or suspend refill pump operations if the current daytime is outside of the configured allowed operational window.
+The refill controller shall monitor the schedule check inhibition status and prevent or suspend refill pump operations if the current daytime is outside the configured allowed operational window.
 
 Covers:
 
@@ -77,7 +77,7 @@ The control system shall log each refill sequence by creating a record in the da
 Covers:
 
 * sysreq~water4~1
-Needs: impl, utest, itest
+Needs: impl, itest
 
 ### [water] Error Detection (Stuck-High and Stuck-Low)
 `swreq~water_error_detection~1`
@@ -125,7 +125,7 @@ The system shall allow the user to define physical pump flow and volume limits i
 Covers:
 
 * sysreq~water9~1
-Needs: impl, utest
+Needs: impl
 
 ### [water] Log Flood Protection
 `swreq~water_log_flood_protection~1`
@@ -147,7 +147,7 @@ The controller shall handle OS shutdown requests received via the message channe
 Covers:
 
 * sysreq~water8~1
-Needs: impl, utest, itest
+Needs: impl, itest
 
 ### [water] Channel Communication
 `swreq~water_channel_communication~1`

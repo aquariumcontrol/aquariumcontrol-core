@@ -79,7 +79,7 @@ Covers:
 * sysreq~mineral7~1
 Needs: impl, itest
 
-### [water] Observe Operational Time Window
+### [mineral] Observe Operational Time Window
 `swreq~mineral_observe_schedule~1`
 
 The controller shall monitor the schedule check inhibition status and prevent or suspend mineral dosing operations if the current daytime is outside of the configured allowed operational window.
