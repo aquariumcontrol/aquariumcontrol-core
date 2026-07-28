@@ -22,7 +22,7 @@ use serde_derive::Deserialize;
 /// Holds the configuration data for the regular data logging to SQL database.
 /// The configuration is loaded from the .toml configuration file.
 /// This struct does not contain any implementation.
-#[derive(Deserialize)]
+#[derive(Deserialize, Clone)]
 pub struct DataLoggerConfig {
     /// data logging will only be active when the flag is set to true
     pub active: bool,

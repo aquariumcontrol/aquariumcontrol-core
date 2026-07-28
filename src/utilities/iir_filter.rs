@@ -48,7 +48,7 @@ use log::warn;
 use serde_derive::Deserialize;
 
 /// Configuration for a filter
-#[derive(Deserialize)]
+#[derive(Deserialize, Clone)]
 pub struct IIRFilterConfig {
     /// filter coefficient: value between 1 (no filtering) and 0 (strongest filter, value remains same as initial value)
     pub filter_coefficient: f32,

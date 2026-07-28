@@ -373,6 +373,7 @@ impl DataLogger {
 
         Ok(Self {
             config,
+            // [impl->swreq~recorder_log_flood_protection~1]
             lock_error_get_timestamp: false,
             lock_error_output_signal_water_temperature: false,
             lock_error_output_state_refill_in_progress: false,
@@ -443,6 +444,7 @@ impl DataLogger {
                     false // indicate no error
                 }
                 Err(e) => {
+                    // [impl->swreq~recorder_log_flood_protection~1]
                     if !inhibit_error_log {
                         error!(
                             target: module_path!(),
@@ -498,6 +500,7 @@ impl DataLogger {
                     false // indicate no error
                 }
                 Err(e) => {
+                    // [impl->swreq~recorder_log_flood_protection~1]
                     if !inhibit_error_log {
                         error!(
                             target: module_path!(),
@@ -543,6 +546,7 @@ impl DataLogger {
                     false // indicate no error
                 }
                 Err(e) => {
+                    // [impl->swreq~recorder_log_flood_protection~1]
                     if !inhibit_error_log {
                         error!(
                             target: module_path!(),
@@ -588,6 +592,7 @@ impl DataLogger {
                     false // indicate no error
                 }
                 Err(e) => {
+                    // [impl->swreq~recorder_log_flood_protection~1]
                     if !inhibit_error_log {
                         error!(
                             target: module_path!(),
@@ -1552,4 +1557,200 @@ pub mod tests {
             _ => panic!("Expected OutputFilenameEmpty error"),
         }
     }
+
+    #[test]
+    /// Verifies that DataLogger::new initializes all log flood protection lock flags to false.
+    ///
+    /// [utest->swreq~recorder_log_flood_protection~1]
+    fn test_data_logger_lock_flags_initialization() {
+        let config = DataLoggerConfig {
+            active: true,
+            execute: true,
+            use_sql_timestamp: false,
+            logging_interval: 100,
+            filter_coefficient_water_temperature: IIRFilterConfig {
+                filter_coefficient: 0.5,
+                fallback_initial_value: 25.0,
+            },
+            filter_coefficient_pH: IIRFilterConfig {
+                filter_coefficient: 0.5,
+                fallback_initial_value: 7.0,
+            },
+            filter_coefficient_conductivity: IIRFilterConfig {
+                filter_coefficient: 0.5,
+                fallback_initial_value: 50000.0,
+            },
+            output_to_disk: true,
+            output_file_name_timestamp: "/tmp/test_ts.txt".to_string(),
+            output_file_name_water_temperature: "/tmp/test_temp.txt".to_string(),
+            output_file_name_water_temperature_filtered: "/tmp/test_temp_f.txt".to_string(),
+            output_file_name_pH: "/tmp/test_ph.txt".to_string(),
+            output_file_name_pH_filtered: "/tmp/test_ph_f.txt".to_string(),
+            output_file_name_conductivity: "/tmp/test_cond.txt".to_string(),
+            output_file_name_conductivity_filtered: "/tmp/test_cond_f.txt".to_string(),
+            output_file_name_tank_level_switch_position: "/tmp/test_tank.txt".to_string(),
+            output_file_name_tank_level_switch_invalid: "/tmp/test_tank_inv.txt".to_string(),
+            output_file_name_tank_level_switch_position_stabilized: "/tmp/test_tank_stab.txt".to_string(),
+            output_file_name_ventilation_controller_state: "/tmp/test_vent.txt".to_string(),
+            output_file_name_ventilation_is_on: "/tmp/test_vent_on.txt".to_string(),
+            output_file_name_ventilation_actuator_ineffective: "/tmp/test_vent_ineff.txt".to_string(),
+            output_file_name_ventilation_actuator_disabled: "/tmp/test_vent_dis.txt".to_string(),
+            output_file_name_heating_controller_state: "/tmp/test_heat.txt".to_string(),
+            output_file_name_heating_is_on: "/tmp/test_heat_on.txt".to_string(),
+            output_file_name_heating_actuator_ineffective: "/tmp/test_heat_ineff.txt".to_string(),
+            output_file_name_heating_actuator_disabled: "/tmp/test_heat_dis.txt".to_string(),
+            output_file_name_ambient_temperature: "/tmp/test_amb_temp.txt".to_string(),
+            output_file_name_humidity: "/tmp/test_hum.txt".to_string(),
+            output_file_name_temperature_gradient: "/tmp/test_grad.txt".to_string(),
+            output_file_name_refill_in_progress: "/tmp/test_refill.txt".to_string(),
+            output_file_name_refill_controller_state: "/tmp/test_refill_st.txt".to_string(),
+            initial_sleep_time_millis: 0,
+        };
+
+        let logger = DataLogger::new(config).expect("DataLogger creation failed");
+
+        assert!(!logger.lock_error_get_timestamp);
+        assert!(!logger.lock_error_output_signal_water_temperature);
+        assert!(!logger.lock_error_output_state_refill_in_progress);
+        assert!(!logger.lock_error_output_state_heating_status);
+        assert!(!logger.lock_error_output_state_heating_is_on);
+        assert!(!logger.lock_error_output_state_heating_actuator_ineffective);
+        assert!(!logger.lock_error_output_state_heating_actuator_disabled);
+        assert!(!logger.lock_error_output_state_ventilation_status);
+        assert!(!logger.lock_error_output_state_ventilation_is_on);
+        assert!(!logger.lock_error_output_state_ventilation_actuator_ineffective);
+        assert!(!logger.lock_error_output_state_ventilation_actuator_disabled);
+        assert!(!logger.lock_error_output_signal_pH);
+        assert!(!logger.lock_error_output_signal_conductivity);
+        assert!(!logger.lock_error_output_signal_ambient_temperature);
+        assert!(!logger.lock_error_output_signal_humidity);
+        assert!(!logger.lock_error_output_state_tank_level_switch_position);
+        assert!(!logger.lock_error_output_state_tank_level_switch_invalid);
+        assert!(!logger.lock_error_output_state_tank_level_switch_position_stabilized);
+        assert!(!logger.lock_error_output_signal_water_temperature_filtered);
+        assert!(!logger.lock_error_output_signal_pH_filtered);
+        assert!(!logger.lock_error_output_signal_conductivity_filtered);
+        assert!(!logger.lock_error_output_signal_temperature_gradient);
+        assert!(!logger.lock_error_output_timestamp);
+        assert!(!logger.lock_warn_inapplicable_command_signal_handler);
+        assert!(!logger.lock_error_channel_receive_termination);
+        assert!(!logger.lock_error_mutex_signal_manager);
+        assert!(!logger.lock_error_output_description_refill_controller_state);
+        assert!(!logger.lock_error_output_description_heating_controller_state);
+        assert!(!logger.lock_error_output_description_ventilation_controller_state);
+        assert!(!logger.lock_error_task_failure);
+    }
+
+    #[test]
+    /// Verifies that output helper functions set and reset lock flags properly for log flood protection.
+    ///
+    /// [utest->swreq~recorder_log_flood_protection~1]
+    fn test_data_logger_output_helpers_log_flood_protection() {
+        use crate::utilities::channel_content::AquariumSignal;
+        use chrono::Utc;
+
+        let temp_dir = std::env::temp_dir();
+        let valid_ts = temp_dir.join("test_ts.txt").to_string_lossy().to_string();
+        let valid_temp = temp_dir.join("test_temp.txt").to_string_lossy().to_string();
+        let valid_temp_f = temp_dir.join("test_temp_f.txt").to_string_lossy().to_string();
+        let valid_ph = temp_dir.join("test_ph.txt").to_string_lossy().to_string();
+        let valid_ph_f = temp_dir.join("test_ph_f.txt").to_string_lossy().to_string();
+        let valid_cond = temp_dir.join("test_cond.txt").to_string_lossy().to_string();
+        let valid_cond_f = temp_dir.join("test_cond_f.txt").to_string_lossy().to_string();
+        let valid_tank = temp_dir.join("test_tank.txt").to_string_lossy().to_string();
+        let valid_tank_inv = temp_dir.join("test_tank_inv.txt").to_string_lossy().to_string();
+        let valid_tank_stab = temp_dir.join("test_tank_stab.txt").to_string_lossy().to_string();
+        let valid_vent = temp_dir.join("test_vent.txt").to_string_lossy().to_string();
+        let valid_vent_on = temp_dir.join("test_vent_on.txt").to_string_lossy().to_string();
+        let valid_vent_ineff = temp_dir.join("test_vent_ineff.txt").to_string_lossy().to_string();
+        let valid_vent_dis = temp_dir.join("test_vent_dis.txt").to_string_lossy().to_string();
+        let valid_heat = temp_dir.join("test_heat.txt").to_string_lossy().to_string();
+        let valid_heat_on = temp_dir.join("test_heat_on.txt").to_string_lossy().to_string();
+        let valid_heat_ineff = temp_dir.join("test_heat_ineff.txt").to_string_lossy().to_string();
+        let valid_heat_dis = temp_dir.join("test_heat_dis.txt").to_string_lossy().to_string();
+        let valid_amb_temp = temp_dir.join("test_amb_temp.txt").to_string_lossy().to_string();
+        let valid_hum = temp_dir.join("test_hum.txt").to_string_lossy().to_string();
+        let valid_grad = temp_dir.join("test_grad.txt").to_string_lossy().to_string();
+        let valid_refill = temp_dir.join("test_refill.txt").to_string_lossy().to_string();
+        let valid_refill_st = temp_dir.join("test_refill_st.txt").to_string_lossy().to_string();
+
+        let config = DataLoggerConfig {
+            active: true,
+            execute: true,
+            use_sql_timestamp: false,
+            logging_interval: 100,
+            filter_coefficient_water_temperature: IIRFilterConfig {
+                filter_coefficient: 0.5,
+                fallback_initial_value: 25.0,
+            },
+            filter_coefficient_pH: IIRFilterConfig {
+                filter_coefficient: 0.5,
+                fallback_initial_value: 7.0,
+            },
+            filter_coefficient_conductivity: IIRFilterConfig {
+                filter_coefficient: 0.5,
+                fallback_initial_value: 50000.0,
+            },
+            output_to_disk: true,
+            output_file_name_timestamp: valid_ts,
+            output_file_name_water_temperature: valid_temp.clone(),
+            output_file_name_water_temperature_filtered: valid_temp_f,
+            output_file_name_pH: valid_ph,
+            output_file_name_pH_filtered: valid_ph_f,
+            output_file_name_conductivity: valid_cond,
+            output_file_name_conductivity_filtered: valid_cond_f,
+            output_file_name_tank_level_switch_position: valid_tank,
+            output_file_name_tank_level_switch_invalid: valid_tank_inv,
+            output_file_name_tank_level_switch_position_stabilized: valid_tank_stab,
+            output_file_name_ventilation_controller_state: valid_vent,
+            output_file_name_ventilation_is_on: valid_vent_on,
+            output_file_name_ventilation_actuator_ineffective: valid_vent_ineff,
+            output_file_name_ventilation_actuator_disabled: valid_vent_dis,
+            output_file_name_heating_controller_state: valid_heat,
+            output_file_name_heating_is_on: valid_heat_on,
+            output_file_name_heating_actuator_ineffective: valid_heat_ineff,
+            output_file_name_heating_actuator_disabled: valid_heat_dis,
+            output_file_name_ambient_temperature: valid_amb_temp,
+            output_file_name_humidity: valid_hum,
+            output_file_name_temperature_gradient: valid_grad,
+            output_file_name_refill_in_progress: valid_refill,
+            output_file_name_refill_controller_state: valid_refill_st,
+            initial_sleep_time_millis: 0,
+        };
+
+        let logger = DataLogger::new(config).expect("DataLogger creation failed");
+
+        let invalid_path = "/nonexistent_dir_xyz/test_file.txt".to_string();
+
+        // 1. Test output_signal with invalid file path -> returns true (error)
+        let err1 = logger.output_signal(25.4, AquariumSignal::WaterTemperature, &invalid_path, false);
+        assert!(err1, "Should return true on file write error");
+
+        // 2. Test output_signal with inhibit_error_log = true -> returns true (error) and suppresses duplicate logging
+        let err2 = logger.output_signal(25.4, AquariumSignal::WaterTemperature, &invalid_path, true);
+        assert!(err2, "Should return true on file write error with error log inhibited");
+
+        // 3. Test output_state with invalid path
+        let err_state1 = logger.output_state(true, "ON", "OFF", &invalid_path, false);
+        assert!(err_state1, "output_state should return true on file write error");
+        let err_state2 = logger.output_state(true, "ON", "OFF", &invalid_path, true);
+        assert!(err_state2, "output_state should return true when inhibit_error_log is true");
+
+        // 4. Test output_description with invalid path
+        let err_desc1 = logger.output_description("ACTIVE", &invalid_path, false);
+        assert!(err_desc1, "output_description should return true on file write error");
+        let err_desc2 = logger.output_description("ACTIVE", &invalid_path, true);
+        assert!(err_desc2, "output_description should return true when inhibit_error_log is true");
+
+        // 5. Test output_timestamp with invalid path
+        let err_ts1 = logger.output_timestamp(Utc::now().naive_utc(), &invalid_path, false);
+        assert!(err_ts1, "output_timestamp should return true on file write error");
+        let err_ts2 = logger.output_timestamp(Utc::now().naive_utc(), &invalid_path, true);
+        assert!(err_ts2, "output_timestamp should return true when inhibit_error_log is true");
+
+        // 6. Test successful write returns false
+        let ok_result = logger.output_signal(25.4, AquariumSignal::WaterTemperature, &valid_temp, true);
+        assert!(!ok_result, "Should return false on successful file write");
+    }
 }
+
