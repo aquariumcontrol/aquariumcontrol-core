@@ -539,10 +539,10 @@ impl Refill {
                 );
 
                 self.lock_info_start_command_received = true;
-            } else {
-                self.lock_info_start_command_received = true;
             }
             new_state = false;
+        } else {
+            self.lock_info_start_command_received = false;
         }
         new_state
     }
@@ -709,30 +709,7 @@ impl Refill {
         };
 
         let has_issue = refill_monitor_view.has_any_issue();
-
-        // Only send the view if it's different from the last one we sent.
-        let mut monitor_view_is_different = true;
-        if self.last_sent_monitor_view.is_some() {
-            let previous_monitor_view = self.last_sent_monitor_view.clone().unwrap();
-            if refill_monitor_view == previous_monitor_view {
-                monitor_view_is_different = false;
-            }
-        }
-        if monitor_view_is_different {
-            match refill_channels.send_to_monitor(refill_monitor_view) {
-                Ok(_) => {
-                    self.lock_error_channel_send_monitors = false;
-                }
-                Err(e) => {
-                    // [impl->swreq~water_log_flood_protection~1]
-                    if !self.lock_error_channel_send_monitors {
-                        log_error_chain(module_path!(), "sending view to monitor failed", e);
-                        self.lock_error_channel_send_monitors = true;
-                    }
-                }
-            }
-        }
-
+        self.send_monitor_view_log_flood(refill_channels, refill_monitor_view);
         has_issue
     }
 
@@ -1103,6 +1080,37 @@ impl Refill {
         )
         .await;
     }
+
+    /// Sends monitor view to Monitors channel with log flood protection.
+    ///
+    /// [impl->swreq~water_log_flood_protection~1]
+    pub(crate) fn send_monitor_view_log_flood(
+        &mut self,
+        refill_channels: &mut RefillChannels,
+        refill_monitor_view: RefillMonitorView,
+    ) {
+        let mut monitor_view_is_different = true;
+        if let Some(previous_monitor_view) = &self.last_sent_monitor_view {
+            if &refill_monitor_view == previous_monitor_view {
+                monitor_view_is_different = false;
+            }
+        }
+        if monitor_view_is_different {
+            match refill_channels.send_to_monitor(refill_monitor_view.clone()) {
+                Ok(_) => {
+                    self.lock_error_channel_send_monitors = false;
+                    self.last_sent_monitor_view = Some(refill_monitor_view);
+                }
+                Err(e) => {
+                    // [impl->swreq~water_log_flood_protection~1]
+                    if !self.lock_error_channel_send_monitors {
+                        log_error_chain(module_path!(), "sending view to monitor failed", e);
+                        self.lock_error_channel_send_monitors = true;
+                    }
+                }
+            }
+        }
+    }
 }
 
 /// Prepares and returns a configured `Refill` control instance along with its associated interfaces for testing.
@@ -1414,5 +1422,110 @@ pub mod tests {
             !lock_flag_f32_reset,
             "Lock flag should be reset for f32 values"
         );
+    }
+
+    #[test]
+    /// Tests calc_inhibition_flag log flood protection flags (lock_info_stop_command_received, lock_info_start_command_received).
+    ///
+    /// [utest->swreq~water_log_flood_protection~1]
+    fn test_calc_inhibition_flag_log_flood_protection() {
+        let (config, _, _, _) = super::prepare_refill_tests(None, 1, 1, Some(20));
+        let mut refill = Refill::new(config.refill, std::time::Duration::from_millis(1000));
+
+        // 1. Initial lock flags
+        assert!(!refill.lock_info_stop_command_received);
+        assert!(!refill.lock_info_start_command_received);
+
+        // 2. Test stop command flag handling
+        let state1 = refill.calc_inhibition_flag(false, false, true);
+        assert!(state1);
+        assert!(refill.lock_info_stop_command_received);
+
+        let state2 = refill.calc_inhibition_flag(true, false, true);
+        assert!(state2);
+        assert!(refill.lock_info_stop_command_received);
+
+        let state3 = refill.calc_inhibition_flag(true, false, false);
+        assert!(state3);
+        assert!(!refill.lock_info_stop_command_received);
+
+        // 3. Test start command flag handling
+        let state4 = refill.calc_inhibition_flag(true, true, false);
+        assert!(!state4);
+        assert!(refill.lock_info_start_command_received);
+
+        let state5 = refill.calc_inhibition_flag(false, false, false);
+        assert!(!state5);
+        assert!(!refill.lock_info_start_command_received);
+    }
+
+    #[test]
+    /// Tests send_monitor_view_log_flood lock flag (lock_error_channel_send_monitors).
+    ///
+    /// [utest->swreq~water_log_flood_protection~1]
+    fn test_send_monitor_view_log_flood_protection() {
+        let (config, _, _, _) = super::prepare_refill_tests(None, 1, 1, Some(20));
+        let mut refill = Refill::new(config.refill, std::time::Duration::from_millis(1000));
+
+        assert!(!refill.lock_error_channel_send_monitors);
+
+        let view = crate::water::refill_monitor_view::RefillMonitorView {
+            refill_check_volume_last_24h: false,
+            refill_check_count_last_24h: false,
+            refill_check_volume_last_hour: false,
+            refill_check_count_last_hour: false,
+            refill_check_interval_last_refill: false,
+        };
+
+        let (tx_mon, _rx_mon) = crate::launch::channels::channel(1, false);
+        let (tx_relay, _rx_relay) = crate::launch::channels::channel::<crate::utilities::channel_content::InternalCommand>(1, false);
+        let (_tx_relay_resp, rx_relay) = crate::launch::channels::channel::<bool>(1, false);
+        let (tx_sig, _rx_sig) = crate::launch::channels::channel::<bool>(1, false);
+        let (_tx_sig_resp, rx_sig) = crate::launch::channels::channel::<crate::utilities::channel_content::InternalCommand>(1, false);
+        let (tx_sched, _rx_sched) = crate::launch::channels::channel::<crate::utilities::channel_content::InternalCommand>(1, false);
+        let (_tx_sched_resp, rx_sched) = crate::launch::channels::channel::<bool>(1, false);
+        let (_tx_msg, rx_msg) = crate::launch::channels::channel::<crate::utilities::channel_content::InternalCommand>(1, false);
+
+        let mut refill_channels = crate::water::refill_channels::RefillChannels {
+            tx_refill_to_relay_manager: tx_relay,
+            rx_refill_from_relay_manager: rx_relay,
+            tx_refill_to_signal_handler: tx_sig,
+            rx_refill_from_signal_handler: rx_sig,
+            tx_refill_to_schedule_check: tx_sched,
+            rx_refill_from_schedule_check: rx_sched,
+            rx_refill_from_messaging: rx_msg,
+            tx_refill_to_monitors: tx_mon,
+        };
+
+        // 1. Successful send
+        refill.send_monitor_view_log_flood(&mut refill_channels, view.clone());
+        assert!(!refill.lock_error_channel_send_monitors);
+
+        // 2. Disconnected channel send failure
+        let (tx_mon_fail, rx_mon_fail) = crate::launch::channels::channel(1, false);
+        drop(rx_mon_fail);
+        refill_channels.tx_refill_to_monitors = tx_mon_fail;
+
+        let new_view = crate::water::refill_monitor_view::RefillMonitorView {
+            refill_check_volume_last_24h: true,
+            refill_check_count_last_24h: false,
+            refill_check_volume_last_hour: false,
+            refill_check_count_last_hour: false,
+            refill_check_interval_last_refill: false,
+        };
+
+        refill.send_monitor_view_log_flood(&mut refill_channels, new_view.clone());
+        assert!(refill.lock_error_channel_send_monitors, "lock_error_channel_send_monitors should be true when channel send fails");
+
+        let diff_view = crate::water::refill_monitor_view::RefillMonitorView {
+            refill_check_volume_last_24h: true,
+            refill_check_count_last_24h: true,
+            refill_check_volume_last_hour: false,
+            refill_check_count_last_hour: false,
+            refill_check_interval_last_refill: false,
+        };
+
+        refill.send_monitor_view_log_flood(&mut refill_channels, diff_view);
+        assert!(refill.lock_error_channel_send_monitors, "lock_error_channel_send_monitors should remain true on repeated failure");
     }
 }
