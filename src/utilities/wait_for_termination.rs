@@ -73,6 +73,16 @@ pub trait WaitForTerminationTrait {
                         true
                     }
                     _ => {
+                        // [impl->swreq~water_log_flood_protection~1]
+                        // [impl->swreq~food_log_flood_protection~1]
+                        // [impl->swreq~dispatch_log_flood_protection~1]
+                        // [impl->swreq~mineral_log_flood_protection~1]
+                        // [impl->swreq~recorder_log_flood_protection~1]
+                        // [impl->swreq~relays_log_flood_protection~1]
+                        // [impl->swreq~schedule_log_flood_protection~1]
+                        // [impl->swreq~sensors_log_flood_protection~1]
+                        // [impl->swreq~thermal_log_flood_protection~1]
+                        // [impl->swreq~watchmen_log_flood_protection~1]
                         if !*self.get_warn_lock_mut() {
                             warn!(
                                 target: origin,
@@ -157,6 +167,16 @@ pub trait WaitForTerminationTrait {
                         AquaChannelError::Full => { /* Not applicable. Do nothing */ }
                         AquaChannelError::Empty => { /* do nothing */ }
                         AquaChannelError::Disconnected => {
+                            // [impl->swreq~water_log_flood_protection~1]
+                            // [impl->swreq~food_log_flood_protection~1]
+                            // [impl->swreq~dispatch_log_flood_protection~1]
+                            // [impl->swreq~mineral_log_flood_protection~1]
+                            // [impl->swreq~recorder_log_flood_protection~1]
+                            // [impl->swreq~relays_log_flood_protection~1]
+                            // [impl->swreq~schedule_log_flood_protection~1]
+                            // [impl->swreq~sensors_log_flood_protection~1]
+                            // [impl->swreq~thermal_log_flood_protection~1]
+                            // [impl->swreq~watchmen_log_flood_protection~1]
                             if !*self.get_error_lock_mut() {
                                 error!(
                                     target: origin,

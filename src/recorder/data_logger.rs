@@ -697,6 +697,7 @@ impl DataLogger {
                     heating_status.actuator_switched_on
                 }
                 Err(_) => {
+                    // [impl->swreq~recorder_log_flood_protection~1]
                     if !self.lock_error_output_state_heating_status {
                         error!(target: module_path!(), "error locking mutex for heating status");
                         self.lock_error_output_state_heating_status = true;
@@ -747,6 +748,7 @@ impl DataLogger {
                     ventilation_status.actuator_switched_on
                 }
                 Err(_) => {
+                    // [impl->swreq~recorder_log_flood_protection~1]
                     if !self.lock_error_output_state_ventilation_status {
                         self.lock_error_output_state_ventilation_status = true;
                         error!(target: module_path!(), "error locking mutex for ventilation status");
@@ -771,6 +773,7 @@ impl DataLogger {
     /// # Arguments
     /// * `mutex_temperature_gradient` - An `Arc<Mutex<f64>>` holding the latest temperature gradient value.
     fn update_temperature_gradient(&mut self, mutex_temperature_gradient: &Arc<Mutex<f64>>) {
+        // [impl->swreq~recorder_log_flood_protection~1]
         if !self.lock_error_output_signal_temperature_gradient {
             #[cfg(feature = "debug_data_logger")]
             log::debug!(target: module_path!(), "data_logger: Attempting to lock mutex_temperature_gradient");
@@ -784,6 +787,7 @@ impl DataLogger {
                     );
                 }
                 Err(e) => {
+                    // [impl->swreq~recorder_log_flood_protection~1]
                     if !self.lock_error_output_signal_temperature_gradient {
                         self.lock_error_output_signal_temperature_gradient = true;
                         error!(target: module_path!(), "error locking mutex for temperature gradient: {e:?}");
@@ -838,6 +842,7 @@ impl DataLogger {
                     humidity = c.ambient_humidity;
                 }
                 Err(_) => {
+                    // [impl->swreq~recorder_log_flood_protection~1]
                     if !self.lock_error_mutex_signal_manager {
                         self.lock_error_mutex_signal_manager = true;
                         error!(target: module_path!(), "error locking mutex for sensor manager");
@@ -1283,6 +1288,7 @@ impl DataLogger {
                                         c
                                     }
                                     Err(e) => {
+                                        // [impl->swreq~recorder_log_flood_protection~1]
                                         if !self.lock_error_get_timestamp {
                                             error!(
                                                 target: module_path!(),
@@ -1298,6 +1304,7 @@ impl DataLogger {
                                 // The task (likely panicked). Use fallback strategy
                                 // and prevent using database in next loop.
                                 sql_date_request_failed = true;
+                                // [impl->swreq~recorder_log_flood_protection~1]
                                 if !self.lock_error_task_failure {
                                     self.lock_error_task_failure = true;
                                     error!(

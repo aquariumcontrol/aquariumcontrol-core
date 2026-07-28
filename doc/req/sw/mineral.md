@@ -89,3 +89,13 @@ Covers:
 * sysreq~schedule3~1
 Needs: impl, itest
 
+### [mineral] Log Flood Protection
+`swreq~mineral_log_flood_protection~1`
+
+The controller shall use log suppression flags to record warnings and errors and inhibit repeated identical logging.
+
+Covers:
+
+* ssysreq~general1~1
+  Needs: impl, itest
+

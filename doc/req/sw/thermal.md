@@ -138,3 +138,14 @@ Covers:
 * sysreq~schedule5~1
 Needs: impl, itest
 
+### [thermal] Log Flood Protection
+`swreq~thermal_log_flood_protection~1`
+
+The controller shall use log suppression flags to record warnings and errors and inhibit repeated identical logging.
+
+Covers:
+
+* sysreq~general1~1
+  Needs: impl, itest
+
+

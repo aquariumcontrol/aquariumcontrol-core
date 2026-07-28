@@ -571,6 +571,7 @@ impl RelayManager {
                     }
                 }
                 if let Err(_e) = tx.send(true) {
+                    // [impl->swreq~relays_log_flood_protection~1]
                     if !lock_send {
                         #[cfg(all(not(test), not(feature = "test-utils")))] // only required in real-life execution
                         #[cfg(not(tarpaulin_include))]
@@ -591,6 +592,7 @@ impl RelayManager {
                     lock_receive = false;
                 }
                 AquaChannelError::Disconnected => {
+                    // [impl->swreq~relays_log_flood_protection~1]
                     if !lock_receive {
                         #[cfg(all(not(test), not(feature = "test-utils")))] // only required in real-life execution
                         #[cfg(not(tarpaulin_include))]

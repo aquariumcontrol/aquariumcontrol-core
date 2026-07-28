@@ -220,6 +220,7 @@ impl Monitors {
         loop {
             if self.config.active {
                 #[allow(clippy::needless_bool_assign)]
+                // [impl->swreq~watchmen_log_flood_protection~1]
                 if monitors_inhibited && !self.lock_info_monitors_inhibited {
                     #[cfg(all(not(test), not(feature = "test-utils")))]
                     info!(
@@ -250,6 +251,7 @@ impl Monitors {
                             }
                             AquaChannelError::Empty => { /* empty buffer - no action required */ }
                             AquaChannelError::Disconnected => {
+                                // [impl->swreq~watchmen_log_flood_protection~1]
                                 if !self.lock_error_receive_refill {
                                     error!(target: module_path!(), "Error when trying to receive from refill: {e}");
                                     self.lock_error_receive_refill = true;
@@ -279,6 +281,7 @@ impl Monitors {
                             AquaChannelError::Full => { /* only applicable to send */ }
                             AquaChannelError::Empty => { /* empty buffer - no action required */ }
                             AquaChannelError::Disconnected => {
+                                // [impl->swreq~watchmen_log_flood_protection~1]
                                 if !self.lock_error_receive_atlas_scientific {
                                     error!(target: module_path!(), "Error when trying to receive from atlas_scientific: {e}");
                                     self.lock_error_receive_atlas_scientific = true;

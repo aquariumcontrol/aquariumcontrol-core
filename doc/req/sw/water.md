@@ -130,11 +130,11 @@ Needs: impl
 ### [water] Log Flood Protection
 `swreq~water_log_flood_protection~1`
 
-The controller shall use log warning suppression flags (such as `volume_last_24h`, `count_last_24h`, `volume_last_hour`, `count_last_hour` inside `RefillLocks` and `lock_warn_max_mutex_access_duration` inside `WaterInjection`) to suppress repetitive log warnings and prevent log flood.
+The controller shall use log suppression flags to record warnings and errors and inhibit repeated identical logging.
 
 Covers:
 
-* sysreq~water5~1
+* sysreq~general1~1
 Needs: impl, utest
 
 ### [water] Shutdown Sequence

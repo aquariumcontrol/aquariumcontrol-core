@@ -620,6 +620,7 @@ impl SensorManager {
                                 }
                             }
                             Err(e) => {
+                                // [impl->swreq~sensors_log_flood_protection~1]
                                 if !self.lock_error_ds18b20_water_temperature_mutex {
                                     self.lock_error_ds18b20_water_temperature_mutex = true;
                                     error!(target: module_path!(), "error when trying to lock Ds18b20 water temperature mutex: {e}");
@@ -643,6 +644,7 @@ impl SensorManager {
                                 }
                             }
                             Err(e) => {
+                                // [impl->swreq~sensors_log_flood_protection~1]
                                 if !self.lock_error_ds18b20_ambient_temperature_mutex {
                                     self.lock_error_ds18b20_ambient_temperature_mutex = true;
                                     error!(target: module_path!(), "error when trying to lock Ds18b20 ambient temperature mutex: {e}");
@@ -668,6 +670,7 @@ impl SensorManager {
                                 }
                             }
                             Err(e) => {
+                                // [impl->swreq~sensors_log_flood_protection~1]
                                 if !self.lock_error_dht_mutex {
                                     self.lock_error_dht_mutex = true;
                                     error!(target: module_path!(), "error when trying to lock Dht mutex: {e}");
@@ -685,6 +688,7 @@ impl SensorManager {
                                 }
                             }
                             Err(e) => {
+                                // [impl->swreq~sensors_log_flood_protection~1]
                                 if !self.lock_error_atlas_scientific_temperature_mutex {
                                     self.lock_error_atlas_scientific_temperature_mutex = true;
                                     error!(target: module_path!(), "error when trying to lock mutex: {e}");
@@ -699,6 +703,7 @@ impl SensorManager {
                                 self.pH = atlas_scientific_ph.value;
                             }
                             Err(e) => {
+                                // [impl->swreq~sensors_log_flood_protection~1]
                                 if !self.lock_error_atlas_scientific_ph_mutex {
                                     self.lock_error_atlas_scientific_ph_mutex = true;
                                     error!(target: module_path!(), "error when trying to lock mutex: {e}");
@@ -713,6 +718,7 @@ impl SensorManager {
                                 self.conductivity = atlas_scientific_conductivity.value;
                             }
                             Err(e) => {
+                                // [impl->swreq~sensors_log_flood_protection~1]
                                 if !self.lock_error_atlas_scientific_conductivity_mutex {
                                     self.lock_error_atlas_scientific_conductivity_mutex = true;
                                     error!(target: module_path!(), "error when trying to lock mutex: {e}");

@@ -78,3 +78,15 @@ Covers:
 * sysreq~food1~1
 Needs: impl, itest
 
+### [food] Log Flood Protection
+`swreq~food_log_flood_protection~1`
+
+The controller shall use log suppression flags to record warnings and errors and inhibit repeated identical logging.
+
+Covers:
+
+* sysreq~general1~1
+Needs: impl, itest
+
+
+

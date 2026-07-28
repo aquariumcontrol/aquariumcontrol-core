@@ -398,6 +398,7 @@ impl ScheduleCheck {
                 .unwrap();
                 sql_interface_schedule = sql_interface;
                 if let Err(errors) = res {
+                    // [impl->swreq~schedule_log_flood_protection~1]
                     if !self.lock_error_database_read {
                         for e in errors {
                             log_error_chain(module_path!(), "Reading schedule failed", e);

@@ -499,6 +499,7 @@ impl AtlasScientific {
                     self.last_sent_monitor_view = Some(monitor_view);
                 }
                 Err(e) => {
+                    // [impl->swreq~sensors_log_flood_protection~1]
                     if !self.lock_error_channel_send_monitors {
                         log_error_chain(module_path!(), "sending view to monitor failed", e);
                         self.lock_error_channel_send_monitors = true;

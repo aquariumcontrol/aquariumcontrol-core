@@ -599,6 +599,7 @@ impl TankLevelSwitch {
                 });
                 if let Err(e) = update_result {
                     if matches!(e, TankLevelSwitchError::InputPinNotProvided(_)) {
+                        // [impl->swreq~sensors_log_flood_protection~1]
                         if !self.lock_error_input_pin_none {
                             log_error_chain(
                                 module_path!(),
@@ -609,6 +610,7 @@ impl TankLevelSwitch {
                         }
                     } else if matches!(e, TankLevelSwitchError::SimulatorCommunicationError { .. })
                     {
+                        // [impl->swreq~sensors_log_flood_protection~1]
                         if !self.lock_error_simulator_communication {
                             log_error_chain(
                                 module_path!(),
@@ -618,6 +620,7 @@ impl TankLevelSwitch {
                             self.lock_error_simulator_communication = true;
                         }
                     } else if matches!(e, TankLevelSwitchError::SimulatorChannelNotProvided(_)) {
+                        // [impl->swreq~sensors_log_flood_protection~1]
                         if !self.lock_error_channel_not_provided {
                             log_error_chain(
                                 module_path!(),
@@ -655,6 +658,7 @@ impl TankLevelSwitch {
                             self.lock_error_mutex_poisoned = false;
                         }
                         Err(e) => {
+                            // [impl->swreq~sensors_log_flood_protection~1]
                             if !self.lock_error_mutex_poisoned {
                                 error!(target: module_path!(), "Could not lock mutex ({e:?}).");
                             }

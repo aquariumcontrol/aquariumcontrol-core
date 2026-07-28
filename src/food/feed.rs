@@ -548,6 +548,7 @@ impl Feed {
                     Err(e) => {
                         #[cfg(all(not(test), not(feature = "test-utils")))] // only required in real-life execution
                         #[cfg(not(tarpaulin_include))]
+                        // [impl->swreq~food_log_flood_protection~1]
                         if !self.lock_error_get_feed_schedule_entry {
                             log_error_chain(
                                 module_path!(),
@@ -725,7 +726,7 @@ pub mod tests {
     // Test case test selection of feed schedule entry in case there are multiple entries in the past
     // This test case tests the strategy to select none of them.
     // This test case does not require any communication with the database.
-    /// [utest->swreq~food_read_schedule~1]
+    // [utest->swreq~food_read_schedule~1]
     pub fn test_select_feed_schedule_entry_for_execution_none() {
         setup_logger(LoggerConfig::default()).unwrap();
         let mut config: ConfigData =
@@ -822,7 +823,8 @@ pub mod tests {
     // ensuring a predictable starting state for the Feed controller.
     //
     // Test case uses test database #65 for configuration loading.
-    /// [utest->swreq~food_execute_schedule~1]
+    // [utest->swreq~food_execute_schedule~1]
+    // [utest->swreq~food_log_flood_protection~1]
     fn test_feed_new() {
         println!("* Testing Feed::new constructor...");
 

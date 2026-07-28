@@ -398,6 +398,7 @@ pub fn test_messaging_stops_starts_execute_feed() {
 // Test case runs feed control and triggers inhibition by using a mock SQL interface which returns only errors.
 // This test case does not require any communication with the database.
 /// [itest->swreq~food_log_database~1]
+/// [itest->swreq~food_log_flood_protection~1]
 pub fn test_messaging_sql_error_inhibition_feed() {
     let sleep_duration_100_millis = Duration::from_millis(100);
     let sleep_duration_10_secs = Duration::from_secs(10);

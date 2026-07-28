@@ -1,3 +1,10 @@
+## sys-general: General
+### [general] Avoid log flooding
+`sysreq~general1~1`
+
+The control system shall inhibit any subsystem from repeatedly logging identical warning or error messages.
+Needs: swreq
+
 ## sys-water: Water
 ### [water] Read Tank Level Switch Position
 `sysreq~water1~1`

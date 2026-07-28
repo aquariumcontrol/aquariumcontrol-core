@@ -804,6 +804,7 @@ impl Dht {
                                 source: _
                             }
                         ) {
+                            // [impl->swreq~sensors_log_flood_protection~1]
                             if !self.lock_error_failed_after_retries {
                                 // avoid log flooding
                                 #[cfg(all(not(test), not(feature = "test-utils")))] // only required in real-life execution
@@ -840,6 +841,7 @@ impl Dht {
                                 self.lock_error_mutex = false;
                             }
                             Err(e) => {
+                                // [impl->swreq~sensors_log_flood_protection~1]
                                 if !self.lock_error_mutex {
                                     self.lock_error_mutex = true;
                                     error!(target: module_path!(), "error locking mutex for dht result ({e:?})");
