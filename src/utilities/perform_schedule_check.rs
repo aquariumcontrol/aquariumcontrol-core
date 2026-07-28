@@ -118,8 +118,14 @@ mod tests {
         );
 
         assert!(!result_var, "Schedule check result should be false");
-        assert!(!send_lock, "Send lock flag should be reset to false on success");
-        assert!(!receive_lock, "Receive lock flag should be reset to false on success");
+        assert!(
+            !send_lock,
+            "Send lock flag should be reset to false on success"
+        );
+        assert!(
+            !receive_lock,
+            "Receive lock flag should be reset to false on success"
+        );
     }
 
     // [utest->swreq~mineral_log_flood_protection~1]
@@ -148,8 +154,14 @@ mod tests {
             "test_perform_schedule_check_send_error"
         );
 
-        assert!(result_var, "Result should default to true on communication error");
-        assert!(send_lock, "Send lock should be set to true on first send error");
+        assert!(
+            result_var,
+            "Result should default to true on communication error"
+        );
+        assert!(
+            send_lock,
+            "Send lock should be set to true on first send error"
+        );
         assert!(!receive_lock, "Receive lock should remain false");
 
         let result_var_2;
@@ -161,8 +173,14 @@ mod tests {
             "test_perform_schedule_check_send_error"
         );
 
-        assert!(result_var_2, "Result should default to true on communication error");
-        assert!(send_lock, "Send lock should remain true to suppress repeated error logs");
+        assert!(
+            result_var_2,
+            "Result should default to true on communication error"
+        );
+        assert!(
+            send_lock,
+            "Send lock should remain true to suppress repeated error logs"
+        );
         assert!(!receive_lock, "Receive lock should remain false");
     }
 
@@ -198,7 +216,10 @@ mod tests {
 
         assert!(result_var, "Result should default to true on receive error");
         assert!(!send_lock, "Send lock should be false as send succeeded");
-        assert!(receive_lock, "Receive lock should be set to true on first receive error");
+        assert!(
+            receive_lock,
+            "Receive lock should be set to true on first receive error"
+        );
 
         let result_var_2;
         perform_schedule_check!(
@@ -209,9 +230,14 @@ mod tests {
             "test_perform_schedule_check_recv_error"
         );
 
-        assert!(result_var_2, "Result should default to true on receive error");
+        assert!(
+            result_var_2,
+            "Result should default to true on receive error"
+        );
         assert!(!send_lock, "Send lock should remain false");
-        assert!(receive_lock, "Receive lock should remain true to suppress repeated error logs");
+        assert!(
+            receive_lock,
+            "Receive lock should remain true to suppress repeated error logs"
+        );
     }
 }
-

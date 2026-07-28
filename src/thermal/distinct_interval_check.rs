@@ -62,54 +62,68 @@ mod tests {
     /// [utest->swreq~thermal_distinct_interval_check~1]
     #[test]
     fn test_distinct_interval_valid_non_overlapping() {
-        let config = read_config_file("config/aquarium_control_test_generic.toml".to_string()).unwrap();
+        let config =
+            read_config_file("config/aquarium_control_test_generic.toml".to_string()).unwrap();
         let mut heating = config.heating;
         let mut ventilation = config.ventilation;
         heating.active = true;
         heating.switch_off_temperature = 24.5;
         ventilation.active = true;
         ventilation.switch_off_temperature = 25.5;
-        assert!(distinct_thermal_control_interval_check(&heating, &ventilation));
+        assert!(distinct_thermal_control_interval_check(
+            &heating,
+            &ventilation
+        ));
     }
 
     /// [utest->swreq~thermal_distinct_interval_check~1]
     #[test]
     fn test_distinct_interval_invalid_overlapping() {
-        let config = read_config_file("config/aquarium_control_test_generic.toml".to_string()).unwrap();
+        let config =
+            read_config_file("config/aquarium_control_test_generic.toml".to_string()).unwrap();
         let mut heating = config.heating;
         let mut ventilation = config.ventilation;
         heating.active = true;
         heating.switch_off_temperature = 26.0;
         ventilation.active = true;
         ventilation.switch_off_temperature = 25.0;
-        assert!(!distinct_thermal_control_interval_check(&heating, &ventilation));
+        assert!(!distinct_thermal_control_interval_check(
+            &heating,
+            &ventilation
+        ));
     }
 
     /// [utest->swreq~thermal_distinct_interval_check~1]
     #[test]
     fn test_distinct_interval_heating_inactive() {
-        let config = read_config_file("config/aquarium_control_test_generic.toml".to_string()).unwrap();
+        let config =
+            read_config_file("config/aquarium_control_test_generic.toml".to_string()).unwrap();
         let mut heating = config.heating;
         let mut ventilation = config.ventilation;
         heating.active = false;
         heating.switch_off_temperature = 26.0;
         ventilation.active = true;
         ventilation.switch_off_temperature = 25.0;
-        assert!(distinct_thermal_control_interval_check(&heating, &ventilation));
+        assert!(distinct_thermal_control_interval_check(
+            &heating,
+            &ventilation
+        ));
     }
 
     /// [utest->swreq~thermal_distinct_interval_check~1]
     #[test]
     fn test_distinct_interval_ventilation_inactive() {
-        let config = read_config_file("config/aquarium_control_test_generic.toml".to_string()).unwrap();
+        let config =
+            read_config_file("config/aquarium_control_test_generic.toml".to_string()).unwrap();
         let mut heating = config.heating;
         let mut ventilation = config.ventilation;
         heating.active = true;
         heating.switch_off_temperature = 26.0;
         ventilation.active = false;
         ventilation.switch_off_temperature = 25.0;
-        assert!(distinct_thermal_control_interval_check(&heating, &ventilation));
+        assert!(distinct_thermal_control_interval_check(
+            &heating,
+            &ventilation
+        ));
     }
 }
-
-

@@ -79,7 +79,8 @@ fn create_assert_test_object(
                     + Send,
             > = Box::new(sql_interface_refill);
 
-            let result = tokio::runtime::Builder::new_current_thread().enable_all()
+            let result = tokio::runtime::Builder::new_current_thread()
+                .enable_all()
                 .build()
                 .unwrap()
                 .block_on(water_injection.inject_water(
@@ -598,7 +599,8 @@ pub fn test_water_injection_switch_stuck_low() {
                     + Send,
             > = Box::new(sql_interface_refill);
 
-            let result = tokio::runtime::Builder::new_current_thread().enable_all()
+            let result = tokio::runtime::Builder::new_current_thread()
+                .enable_all()
                 .build()
                 .unwrap()
                 .block_on(water_injection.inject_water(
@@ -696,7 +698,8 @@ pub fn test_water_injection_quit_signal() {
                     + Sync
                     + Send,
             > = Box::new(sql_interface_refill);
-            let result = tokio::runtime::Builder::new_current_thread().enable_all()
+            let result = tokio::runtime::Builder::new_current_thread()
+                .enable_all()
                 .build()
                 .unwrap()
                 .block_on(water_injection.inject_water(

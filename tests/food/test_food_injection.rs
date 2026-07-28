@@ -211,7 +211,8 @@ pub fn test_food_injection_uninterrupted() {
             };
 
             let start_time = Instant::now();
-            let result_tuple = tokio::runtime::Builder::new_current_thread().enable_all()
+            let result_tuple = tokio::runtime::Builder::new_current_thread()
+                .enable_all()
                 .build()
                 .unwrap()
                 .block_on(food_injection.inject_food(&mut channels.feed, &feed_profile));
@@ -329,7 +330,8 @@ pub fn test_food_injection_interrupted() {
             };
 
             let start_time = Instant::now();
-            let result_tuple = tokio::runtime::Builder::new_current_thread().enable_all()
+            let result_tuple = tokio::runtime::Builder::new_current_thread()
+                .enable_all()
                 .build()
                 .unwrap()
                 .block_on(food_injection.inject_food(&mut channels.feed, &feed_profile));

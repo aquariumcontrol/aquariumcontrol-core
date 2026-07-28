@@ -310,5 +310,3 @@ mod tests {
         assert!(!messaging.lock_error_channel_receive_termination);
     }
 }
-
-

@@ -48,7 +48,8 @@ fn execute_blocking(
     ventilation_set_val_updater: &mut impl ThermalSetValueUpdaterTrait,
     ventilation_mutexes: VentilationMutexes,
 ) {
-    tokio::runtime::Builder::new_current_thread().enable_all()
+    tokio::runtime::Builder::new_current_thread()
+        .enable_all()
         .enable_all()
         .build()
         .unwrap()

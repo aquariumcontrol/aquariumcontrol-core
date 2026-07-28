@@ -47,13 +47,13 @@ use chrono::NaiveDateTime;
 use mysql::prelude::*;
 use mysql::*;
 
+use crate::database::database_interface_feed_trait::DatabaseInterfaceFeedTrait;
 use crate::database::sql_query_strings::SQL_TABLE_FEED_PROFILES;
 use crate::database::sql_test_query_strings::SQL_QUERY_READ_FUTURE_FEED_SCHEDULE_ENTRY;
 use crate::database::{
     sql_interface::SqlInterface, sql_interface_error::SqlInterfaceError, sql_query_strings,
     sql_test_query_strings,
 };
-use crate::database::database_interface_feed_trait::DatabaseInterfaceFeedTrait;
 use crate::food::feed_schedule_entry::FeedScheduleEntry;
 
 #[derive(Clone)]
@@ -616,11 +616,9 @@ pub fn insert_feed_profiles(
 ///
 /// Arguments:
 /// * `sql_interface_feed`: A mutable reference to the feed-specific SQL interface, used for inserting feed schedule entry.
-pub fn insert_feed_schedule_entry(
-    sql_interface_feed: &mut SqlInterfaceFeed,
-) {
-    let past_timestamp = NaiveDateTime::parse_from_str("2024-01-01 12:00:00", "%Y-%m-%d %H:%M:%S")
-            .unwrap();
+pub fn insert_feed_schedule_entry(sql_interface_feed: &mut SqlInterfaceFeed) {
+    let past_timestamp =
+        NaiveDateTime::parse_from_str("2024-01-01 12:00:00", "%Y-%m-%d %H:%M:%S").unwrap();
     sql_interface_feed
         .insert_feed_schedule_entry(past_timestamp, 3, false, true)
         .unwrap();

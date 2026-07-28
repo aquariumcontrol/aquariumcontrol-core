@@ -201,7 +201,7 @@ impl Watchdog {
     ///   responsible for the actual writing of heartbeat/deactivation messages to the watchdog file.
     ///
     /// [impl->swreq~watchmen_pet_watchdog~1]
-/// [impl->swreq~watchmen_reboot_on_stall~1]
+    /// [impl->swreq~watchmen_reboot_on_stall~1]
     pub async fn execute(
         &mut self,
         watchdog_channels: &mut WatchDogChannels,

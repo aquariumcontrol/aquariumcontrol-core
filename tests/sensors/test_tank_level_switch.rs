@@ -154,7 +154,8 @@ fn execute_blocking(
     tank_level_switch_channels: &mut TankLevelSwitchChannels,
     mutex_tank_level_switch_signals: Arc<Mutex<TankLevelSwitchSignals>>,
 ) -> Result<(), TankLevelSwitchError> {
-    tokio::runtime::Builder::new_multi_thread().enable_all()
+    tokio::runtime::Builder::new_multi_thread()
+        .enable_all()
         .enable_all()
         .build()
         .unwrap()

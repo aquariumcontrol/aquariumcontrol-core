@@ -23,7 +23,9 @@ mod common;
 use common::{add_balling_profile, insert_current_version_information, truncate_all_tables};
 
 use aquarium_control::database::database_interface_feed_trait::DatabaseInterfaceFeedTrait;
-use aquarium_control::database::sql_interface_feed::{insert_feed_profiles, insert_feed_schedule_entry, SqlInterfaceFeed};
+use aquarium_control::database::sql_interface_feed::{
+    insert_feed_profiles, insert_feed_schedule_entry, SqlInterfaceFeed,
+};
 
 #[test]
 // Verifies that run async runtime configuration.
@@ -203,7 +205,10 @@ fn test_run_feed_profile_blocks_watchdog() {
         insert_feed_schedule_entry(&mut sql_interface_feed);
     }
 
-    let run_result = run(Some(test_config_path.to_string()), Some(Duration::from_secs(3)));
+    let run_result = run(
+        Some(test_config_path.to_string()),
+        Some(Duration::from_secs(3)),
+    );
 
     assert!(
         run_result.is_ok(),
@@ -218,4 +223,3 @@ fn test_run_feed_profile_blocks_watchdog() {
 
     let _ = std::fs::remove_file(watchdog_file_path);
 }
-

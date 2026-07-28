@@ -467,8 +467,8 @@ impl Heating {
     /// (switching off the heater, logging final stats) and confirms shutdown.
     #[allow(clippy::too_many_arguments)]
     /// [impl->swreq~thermal_heater_heating~1]
-///
-/// [impl->swreq~thermal_inhibit_heating_low_water~1]
+    ///
+    /// [impl->swreq~thermal_inhibit_heating_low_water~1]
     pub async fn execute(
         &mut self,
         mutex_device_scheduler_heating: Arc<tokio::sync::Mutex<i32>>,

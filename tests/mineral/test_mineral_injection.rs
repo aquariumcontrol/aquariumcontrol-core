@@ -185,7 +185,8 @@ pub fn test_mineral_dosing_happy_case() {
         // thread for the test object
         scope.spawn(move || {
             let (quit_command_received, actual_dosing_duration_millis) =
-                tokio::runtime::Builder::new_current_thread().enable_all()
+                tokio::runtime::Builder::new_current_thread()
+                    .enable_all()
                     .build()
                     .unwrap()
                     .block_on(mineral_injection.inject_mineral(
@@ -240,7 +241,8 @@ pub fn test_mineral_dosing_interrupted() {
         // thread for the test object
         scope.spawn(move || {
             let (quit_command_received, actual_dosing_duration_millis) =
-                tokio::runtime::Builder::new_current_thread().enable_all()
+                tokio::runtime::Builder::new_current_thread()
+                    .enable_all()
                     .build()
                     .unwrap()
                     .block_on(mineral_injection.inject_mineral(

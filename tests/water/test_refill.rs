@@ -57,7 +57,8 @@ fn execute_blocking(
     mutex_refill_status: Arc<Mutex<RefillStatus>>,
     sql_interface_refill: Box<dyn DatabaseInterfaceRefillTrait + Sync + Send>,
 ) {
-    tokio::runtime::Builder::new_multi_thread().enable_all()
+    tokio::runtime::Builder::new_multi_thread()
+        .enable_all()
         .enable_all()
         .build()
         .unwrap()

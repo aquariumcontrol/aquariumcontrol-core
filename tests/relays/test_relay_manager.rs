@@ -30,7 +30,8 @@ fn execute_blocking(
     relay_manager_channels: &mut RelayManagerChannels,
     actuator: &mut impl RelayActuationTrait,
 ) {
-    tokio::runtime::Builder::new_multi_thread().enable_all()
+    tokio::runtime::Builder::new_multi_thread()
+        .enable_all()
         .enable_all()
         .build()
         .unwrap()
