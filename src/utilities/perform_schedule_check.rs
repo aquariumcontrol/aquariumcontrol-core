@@ -49,6 +49,9 @@ macro_rules! perform_schedule_check {
                 };
             }
             Err(e) => {
+                // [impl->swreq~mineral_log_flood_protection~1]
+                // [impl->swreq~thermal_log_flood_protection~1]
+                // [impl->swreq~refill_log_flood_protection~1]
                 if !$send_lock {
                     log::error!(
                         target: $location,
@@ -62,3 +65,153 @@ macro_rules! perform_schedule_check {
         }
     };
 }
+
+#[cfg(test)]
+mod tests {
+    use crate::launch::channels::{channel, AquaChannelError, AquaReceiver, AquaSender};
+    use crate::utilities::channel_content::InternalCommand;
+
+    struct MockScheduleChannels {
+        tx: AquaSender<InternalCommand>,
+        rx: AquaReceiver<bool>,
+    }
+
+    impl MockScheduleChannels {
+        fn send_to_schedule_check(&mut self, cmd: InternalCommand) -> Result<(), AquaChannelError> {
+            self.tx.send(cmd)
+        }
+
+        async fn receive_from_schedule_check(&mut self) -> Result<bool, AquaChannelError> {
+            self.rx.recv().await
+        }
+    }
+
+    // [utest->swreq~mineral_log_flood_protection~1]
+    // [utest->swreq~thermal_log_flood_protection~1]
+    // [utest->swreq~water_log_flood_protection~1]
+    #[tokio::test]
+    async fn test_perform_schedule_check_macro_happy_path() {
+        let (tx_cmd, mut rx_cmd) = channel::<InternalCommand>(10, false);
+        let (mut tx_resp, rx_resp) = channel::<bool>(10, false);
+
+        let mut channels = MockScheduleChannels {
+            tx: tx_cmd,
+            rx: rx_resp,
+        };
+
+        tokio::spawn(async move {
+            if let Ok(InternalCommand::ScheduleCheck) = rx_cmd.recv().await {
+                tx_resp.send(false).unwrap();
+            }
+        });
+
+        let result_var;
+        let mut send_lock = true;
+        let mut receive_lock = true;
+
+        perform_schedule_check!(
+            channels,
+            result_var,
+            send_lock,
+            receive_lock,
+            "test_perform_schedule_check_happy_path"
+        );
+
+        assert!(!result_var, "Schedule check result should be false");
+        assert!(!send_lock, "Send lock flag should be reset to false on success");
+        assert!(!receive_lock, "Receive lock flag should be reset to false on success");
+    }
+
+    // [utest->swreq~mineral_log_flood_protection~1]
+    // [utest->swreq~thermal_log_flood_protection~1]
+    // [utest->swreq~water_log_flood_protection~1]
+    #[tokio::test]
+    async fn test_perform_schedule_check_macro_send_error_and_log_flood_protection() {
+        let (tx_cmd, rx_cmd) = channel::<InternalCommand>(10, false);
+        let (_tx_resp, rx_resp) = channel::<bool>(10, false);
+        drop(rx_cmd); // Disconnect send channel to trigger send error
+
+        let mut channels = MockScheduleChannels {
+            tx: tx_cmd,
+            rx: rx_resp,
+        };
+
+        let result_var;
+        let mut send_lock = false;
+        let mut receive_lock = false;
+
+        perform_schedule_check!(
+            channels,
+            result_var,
+            send_lock,
+            receive_lock,
+            "test_perform_schedule_check_send_error"
+        );
+
+        assert!(result_var, "Result should default to true on communication error");
+        assert!(send_lock, "Send lock should be set to true on first send error");
+        assert!(!receive_lock, "Receive lock should remain false");
+
+        let result_var_2;
+        perform_schedule_check!(
+            channels,
+            result_var_2,
+            send_lock,
+            receive_lock,
+            "test_perform_schedule_check_send_error"
+        );
+
+        assert!(result_var_2, "Result should default to true on communication error");
+        assert!(send_lock, "Send lock should remain true to suppress repeated error logs");
+        assert!(!receive_lock, "Receive lock should remain false");
+    }
+
+    // [utest->swreq~mineral_log_flood_protection~1]
+    // [utest->swreq~thermal_log_flood_protection~1]
+    // [utest->swreq~water_log_flood_protection~1]
+    #[tokio::test]
+    async fn test_perform_schedule_check_macro_receive_error_and_log_flood_protection() {
+        let (tx_cmd, mut rx_cmd) = channel::<InternalCommand>(10, false);
+        let (tx_resp, rx_resp) = channel::<bool>(10, false);
+        drop(tx_resp); // Disconnect receive channel so recv().await fails
+
+        let mut channels = MockScheduleChannels {
+            tx: tx_cmd,
+            rx: rx_resp,
+        };
+
+        tokio::spawn(async move {
+            let _ = rx_cmd.recv().await;
+        });
+
+        let result_var;
+        let mut send_lock = false;
+        let mut receive_lock = false;
+
+        perform_schedule_check!(
+            channels,
+            result_var,
+            send_lock,
+            receive_lock,
+            "test_perform_schedule_check_recv_error"
+        );
+
+        assert!(result_var, "Result should default to true on receive error");
+        assert!(!send_lock, "Send lock should be false as send succeeded");
+        assert!(receive_lock, "Receive lock should be set to true on first receive error");
+
+        let result_var_2;
+        perform_schedule_check!(
+            channels,
+            result_var_2,
+            send_lock,
+            receive_lock,
+            "test_perform_schedule_check_recv_error"
+        );
+
+        assert!(result_var_2, "Result should default to true on receive error");
+        assert!(!send_lock, "Send lock should remain false");
+        assert!(receive_lock, "Receive lock should remain true to suppress repeated error logs");
+    }
+}
+

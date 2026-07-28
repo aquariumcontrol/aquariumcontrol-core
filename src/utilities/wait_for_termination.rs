@@ -99,6 +99,16 @@ pub trait WaitForTerminationTrait {
                         AquaChannelError::Full => { /* Not applicable. Do nothing */ }
                         AquaChannelError::Empty => { /* do nothing */ }
                         AquaChannelError::Disconnected => {
+                            // [impl->swreq~water_log_flood_protection~1]
+                            // [impl->swreq~food_log_flood_protection~1]
+                            // [impl->swreq~dispatch_log_flood_protection~1]
+                            // [impl->swreq~mineral_log_flood_protection~1]
+                            // [impl->swreq~recorder_log_flood_protection~1]
+                            // [impl->swreq~relays_log_flood_protection~1]
+                            // [impl->swreq~schedule_log_flood_protection~1]
+                            // [impl->swreq~sensors_log_flood_protection~1]
+                            // [impl->swreq~thermal_log_flood_protection~1]
+                            // [impl->swreq~watchmen_log_flood_protection~1]
                             if !*self.get_error_lock_mut() {
                                 error!(
                                     target: origin,
@@ -151,6 +161,16 @@ pub trait WaitForTerminationTrait {
                         true
                     }
                     _ => {
+                        // [impl->swreq~water_log_flood_protection~1]
+                        // [impl->swreq~food_log_flood_protection~1]
+                        // [impl->swreq~dispatch_log_flood_protection~1]
+                        // [impl->swreq~mineral_log_flood_protection~1]
+                        // [impl->swreq~recorder_log_flood_protection~1]
+                        // [impl->swreq~relays_log_flood_protection~1]
+                        // [impl->swreq~schedule_log_flood_protection~1]
+                        // [impl->swreq~sensors_log_flood_protection~1]
+                        // [impl->swreq~thermal_log_flood_protection~1]
+                        // [impl->swreq~watchmen_log_flood_protection~1]
                         if !*self.get_warn_lock_mut() {
                             warn!(
                                 target: origin,
@@ -229,7 +249,66 @@ impl_wait_for_termination!(
     Balling,
     SensorManager,
     AtlasScientific,
-    DataLogger
+    DataLogger,
+    Messaging
 );
 
-impl_wait_for_termination!(Messaging);
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::dispatch::messaging_config::MessagingConfig;
+    use crate::launch::channels::channel;
+    use crate::launch::execution_config::ExecutionConfig;
+    use std::time::Duration;
+
+    // [utest->swreq~water_log_flood_protection~1]
+    // [utest->swreq~food_log_flood_protection~1]
+    // [utest->swreq~dispatch_log_flood_protection~1]
+    // [utest->swreq~mineral_log_flood_protection~1]
+    // [utest->swreq~recorder_log_flood_protection~1]
+    // [utest->swreq~relays_log_flood_protection~1]
+    // [utest->swreq~schedule_log_flood_protection~1]
+    // [utest->swreq~sensors_log_flood_protection~1]
+    // [utest->swreq~thermal_log_flood_protection~1]
+    // [utest->swreq~watchmen_log_flood_protection~1]
+    #[tokio::test]
+    async fn test_messaging_wait_for_termination_inhibition_flags() {
+        #[cfg(not(target_os = "linux"))]
+        let mut messaging = Messaging::new(MessagingConfig {}, ExecutionConfig::default())
+            .expect("Initialization of Messaging failed");
+
+        #[cfg(target_os = "linux")]
+        let mut messaging = Messaging {
+            mq: None,
+            mq_max_msg_len: 0,
+            lock_warn_inapplicable_command_signal_handler: false,
+            lock_error_channel_receive_termination: false,
+            execution_config: ExecutionConfig::default(),
+        };
+
+        // Verify initial state of inhibition flags on Messaging struct
+        assert!(!*messaging.get_warn_lock_mut());
+        assert!(!*messaging.get_error_lock_mut());
+
+        // 1. Verify warning lock flag usage on receiving inapplicable command
+        let (mut tx, mut rx) = channel::<InternalCommand>(10, false);
+        tx.send(InternalCommand::Quit).unwrap();
+        tx.send(InternalCommand::Terminate).unwrap();
+
+        messaging
+            .wait_for_termination_async(&mut rx, Duration::from_millis(1), "test_messaging")
+            .await;
+
+        // After Terminate signal, warn lock flag is reset to false
+        assert!(!messaging.lock_warn_inapplicable_command_signal_handler);
+
+        // 2. Verify error lock flag state manipulation via get_error_lock_mut
+        assert!(!messaging.lock_error_channel_receive_termination);
+        *messaging.get_error_lock_mut() = true;
+        assert!(messaging.lock_error_channel_receive_termination);
+        *messaging.get_error_lock_mut() = false;
+        assert!(!messaging.lock_error_channel_receive_termination);
+    }
+}
+
+
