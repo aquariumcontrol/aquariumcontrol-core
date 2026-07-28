@@ -597,75 +597,12 @@ impl TankLevelSwitch {
                         &mut tank_level_switch_channels.rx_tank_level_switch_from_tcp_opt,
                     )
                 });
-                if let Err(e) = update_result {
-                    if matches!(e, TankLevelSwitchError::InputPinNotProvided(_)) {
-                        // [impl->swreq~sensors_log_flood_protection~1]
-                        if !self.lock_error_input_pin_none {
-                            log_error_chain(
-                                module_path!(),
-                                "Failed to update tank level switch signals.",
-                                e,
-                            );
-                            self.lock_error_input_pin_none = true;
-                        }
-                    } else if matches!(e, TankLevelSwitchError::SimulatorCommunicationError { .. })
-                    {
-                        // [impl->swreq~sensors_log_flood_protection~1]
-                        if !self.lock_error_simulator_communication {
-                            log_error_chain(
-                                module_path!(),
-                                "Failed to update tank level switch signals.",
-                                e,
-                            );
-                            self.lock_error_simulator_communication = true;
-                        }
-                    } else if matches!(e, TankLevelSwitchError::SimulatorChannelNotProvided(_)) {
-                        // [impl->swreq~sensors_log_flood_protection~1]
-                        if !self.lock_error_channel_not_provided {
-                            log_error_chain(
-                                module_path!(),
-                                "Failed to update tank level switch signals.",
-                                e,
-                            );
-                            self.lock_error_channel_not_provided = true;
-                        }
-                    } else {
-                        // Protection for future error variants
-                        log_error_chain(
-                            module_path!(),
-                            "Failed to update tank level switch signals.",
-                            e,
-                        );
-                    }
-                } else {
-                    self.lock_error_input_pin_none = false;
-                }
-
+                self.handle_update_result_log_flood(&update_result);
                 self.calc_tank_level_switch_position_stabilized();
 
                 let instant_before_locking_mutex = Instant::now();
-                let mut instant_after_locking_mutex = Instant::now(); // initialization is overwritten
-
-                // Write calculated signals to mutex
-                {
-                    match mutex_tank_level_switch_signals.lock() {
-                        Ok(mut c) => {
-                            instant_after_locking_mutex = Instant::now();
-                            c.tank_level_switch_position_stabilized =
-                                self.tank_level_switch_position_stabilized;
-                            c.tank_level_switch_invalid = self.tank_level_switch_invalid;
-                            c.tank_level_switch_position = self.tank_level_switch_position;
-                            self.lock_error_mutex_poisoned = false;
-                        }
-                        Err(e) => {
-                            // [impl->swreq~sensors_log_flood_protection~1]
-                            if !self.lock_error_mutex_poisoned {
-                                error!(target: module_path!(), "Could not lock mutex ({e:?}).");
-                            }
-                            self.lock_error_mutex_poisoned = true;
-                        }
-                    }
-                }
+                let instant_after_locking_mutex =
+                    self.write_signals_to_mutex(&mutex_tank_level_switch_signals);
 
                 // check if access to mutex took too long
                 self.check_mutex_access_duration(
@@ -709,6 +646,9 @@ impl TankLevelSwitch {
         // This thread has channel connections to underlying threads (GpioHandler).
         // Those threads have to stop receiving commands from this thread.
         // The shutdown sequence is handled by the signal_handler module.
+        // This thread has channel connections to underlying threads (GpioHandler).
+        // Those threads have to stop receiving commands from this thread.
+        // The shutdown sequence is handled by the signal_handler module.
         let sleep_duration_one_millis = Duration::from_millis(1);
         self.wait_for_termination_async(
             &mut tank_level_switch_channels.rx_tank_level_switch_from_signal_handler,
@@ -717,5 +657,153 @@ impl TankLevelSwitch {
         )
         .await;
         Ok(())
+    }
+
+    /// Handles log flood protection logic for update result errors.
+    ///
+    /// [impl->swreq~sensors_log_flood_protection~1]
+    pub(crate) fn handle_update_result_log_flood(
+        &mut self,
+        update_result: &Result<(), TankLevelSwitchError>,
+    ) {
+        if let Err(e) = update_result {
+            if matches!(e, TankLevelSwitchError::InputPinNotProvided(_)) {
+                // [impl->swreq~sensors_log_flood_protection~1]
+                if !self.lock_error_input_pin_none {
+                    log_error_chain(
+                        module_path!(),
+                        "Failed to update tank level switch signals.",
+                        e,
+                    );
+                    self.lock_error_input_pin_none = true;
+                }
+            } else if matches!(e, TankLevelSwitchError::SimulatorCommunicationError { .. }) {
+                // [impl->swreq~sensors_log_flood_protection~1]
+                if !self.lock_error_simulator_communication {
+                    log_error_chain(
+                        module_path!(),
+                        "Failed to update tank level switch signals.",
+                        e,
+                    );
+                    self.lock_error_simulator_communication = true;
+                }
+            } else if matches!(e, TankLevelSwitchError::SimulatorChannelNotProvided(_)) {
+                // [impl->swreq~sensors_log_flood_protection~1]
+                if !self.lock_error_channel_not_provided {
+                    log_error_chain(
+                        module_path!(),
+                        "Failed to update tank level switch signals.",
+                        e,
+                    );
+                    self.lock_error_channel_not_provided = true;
+                }
+            } else {
+                log_error_chain(
+                    module_path!(),
+                    "Failed to update tank level switch signals.",
+                    e,
+                );
+            }
+        } else {
+            self.lock_error_input_pin_none = false;
+            self.lock_error_simulator_communication = false;
+            self.lock_error_channel_not_provided = false;
+        }
+    }
+
+    /// Writes calculated signals to mutex while managing log flood protection.
+    ///
+    /// [impl->swreq~sensors_log_flood_protection~1]
+    pub(crate) fn write_signals_to_mutex(
+        &mut self,
+        mutex_tank_level_switch_signals: &Arc<Mutex<TankLevelSwitchSignals>>,
+    ) -> Instant {
+        let mut instant_after_locking_mutex = Instant::now();
+        match mutex_tank_level_switch_signals.lock() {
+            Ok(mut c) => {
+                instant_after_locking_mutex = Instant::now();
+                c.tank_level_switch_position_stabilized =
+                    self.tank_level_switch_position_stabilized;
+                c.tank_level_switch_invalid = self.tank_level_switch_invalid;
+                c.tank_level_switch_position = self.tank_level_switch_position;
+                self.lock_error_mutex_poisoned = false;
+            }
+            Err(e) => {
+                // [impl->swreq~sensors_log_flood_protection~1]
+                if !self.lock_error_mutex_poisoned {
+                    error!(target: module_path!(), "Could not lock mutex ({e:?}).");
+                }
+                self.lock_error_mutex_poisoned = true;
+            }
+        };
+        instant_after_locking_mutex
+    }
+}
+
+#[cfg(test)]
+pub mod tests {
+    use super::*;
+    use crate::sensors::tank_level_switch_config::TankLevelSwitchConfig;
+    use std::sync::{Arc, Mutex};
+
+    #[test]
+    /// Verifies that TankLevelSwitch initializes lock flags to false and handles log flood protection.
+    ///
+    /// [utest->swreq~sensors_log_flood_protection~1]
+    fn test_tank_level_switch_lock_flags_log_flood_protection() {
+        let config = TankLevelSwitchConfig {
+            active: true,
+            execute: true,
+            use_simulator: false,
+            tank_level_switch_position_low_stabilization_count: 3,
+        };
+
+        let mut tls = TankLevelSwitch::new(config, true).unwrap();
+
+        // 1. Verify initial lock flags
+        assert!(!tls.lock_error_mutex_poisoned);
+        assert!(!tls.lock_error_input_pin_none);
+        assert!(!tls.lock_error_simulator_communication);
+        assert!(!tls.lock_error_channel_not_provided);
+
+        // 2. Test InputPinNotProvided log flood protection
+        let err_pin = TankLevelSwitchError::InputPinNotProvided("test_loc".to_string());
+        tls.handle_update_result_log_flood(&Err(err_pin));
+        assert!(tls.lock_error_input_pin_none, "lock_error_input_pin_none should be true");
+
+        let err_pin_2 = TankLevelSwitchError::InputPinNotProvided("test_loc".to_string());
+        tls.handle_update_result_log_flood(&Err(err_pin_2));
+        assert!(tls.lock_error_input_pin_none, "lock_error_input_pin_none should remain true");
+
+        // 3. Test SimulatorCommunicationError log flood protection
+        let err_sim = TankLevelSwitchError::SimulatorChannelNotProvided("test_loc".to_string());
+        tls.handle_update_result_log_flood(&Err(err_sim));
+        assert!(tls.lock_error_channel_not_provided, "lock_error_channel_not_provided should be true");
+
+        // Reset via Ok
+        tls.handle_update_result_log_flood(&Ok(()));
+        assert!(!tls.lock_error_input_pin_none);
+        assert!(!tls.lock_error_channel_not_provided);
+
+        // 4. Test mutex poisoning log flood protection
+        let mutex_signals = Arc::new(Mutex::new(TankLevelSwitchSignals::new(true, true, false)));
+        let m_clone = mutex_signals.clone();
+        let _ = std::thread::spawn(move || {
+            let _g = m_clone.lock().unwrap();
+            panic!("poison mutex");
+        }).join();
+
+        // First attempt to write to poisoned mutex: lock_error_mutex_poisoned becomes true
+        tls.write_signals_to_mutex(&mutex_signals);
+        assert!(tls.lock_error_mutex_poisoned, "lock_error_mutex_poisoned should be true when mutex lock fails");
+
+        // Second attempt: lock_error_mutex_poisoned remains true
+        tls.write_signals_to_mutex(&mutex_signals);
+        assert!(tls.lock_error_mutex_poisoned, "lock_error_mutex_poisoned should remain true");
+
+        // Unpoisoned mutex: resets lock_error_mutex_poisoned to false
+        let valid_mutex = Arc::new(Mutex::new(TankLevelSwitchSignals::new(true, true, false)));
+        tls.write_signals_to_mutex(&valid_mutex);
+        assert!(!tls.lock_error_mutex_poisoned, "lock_error_mutex_poisoned should reset to false on success");
     }
 }
