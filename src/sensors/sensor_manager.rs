@@ -603,129 +603,7 @@ impl SensorManager {
                         );
                     }
                 } else {
-                    //*** Ds18b20 ******************************************************************
-                    if self.config.source_water_temperature
-                        == sensor_manager_constants::SOURCE_WATER_TEMPERATURE_DS18B20
-                    {
-                        match mutexes.mutex_ds18b20_water_temperature.lock() {
-                            Ok(ds18b20_water_temperature_result) => {
-                                match &*ds18b20_water_temperature_result {
-                                    Ok(ds18b20_water_temperature_result_data) => {
-                                        self.water_temperature =
-                                            ds18b20_water_temperature_result_data.value;
-                                    }
-                                    Err(_) => {
-                                        // keep the values from previous measurement
-                                    }
-                                }
-                            }
-                            Err(e) => {
-                                // [impl->swreq~sensors_log_flood_protection~1]
-                                if !self.lock_error_ds18b20_water_temperature_mutex {
-                                    self.lock_error_ds18b20_water_temperature_mutex = true;
-                                    error!(target: module_path!(), "error when trying to lock Ds18b20 water temperature mutex: {e}");
-                                }
-                            }
-                        }
-                    }
-                    if self.config.source_ambient_temperature
-                        == sensor_manager_constants::SOURCE_WATER_TEMPERATURE_DS18B20
-                    {
-                        match mutexes.mutex_ds18b20_ambient_temperature.lock() {
-                            Ok(ds18b20_ambient_temperature_result) => {
-                                match &*ds18b20_ambient_temperature_result {
-                                    Ok(ds18b20_ambient_temperature_result_data) => {
-                                        self.ambient_temperature =
-                                            ds18b20_ambient_temperature_result_data.value;
-                                    }
-                                    Err(_) => {
-                                        // keep the values from previous measurement
-                                    }
-                                }
-                            }
-                            Err(e) => {
-                                // [impl->swreq~sensors_log_flood_protection~1]
-                                if !self.lock_error_ds18b20_ambient_temperature_mutex {
-                                    self.lock_error_ds18b20_ambient_temperature_mutex = true;
-                                    error!(target: module_path!(), "error when trying to lock Ds18b20 ambient temperature mutex: {e}");
-                                }
-                            }
-                        }
-                    }
-                    //*** Dht **********************************************************************
-                    {
-                        match mutexes.mutex_dht.lock() {
-                            Ok(dht_result) => {
-                                match *dht_result {
-                                    Ok(tuple) => {
-                                        if self.config.source_ambient_temperature ==
-                                            sensor_manager_constants::SOURCE_AMBIENT_TEMPERATURE_DHT {
-                                            self.ambient_temperature = tuple.0;
-                                        }
-                                        self.ambient_humidity = tuple.1;
-                                    }
-                                    Err(_) => {
-                                        // keep the values from previous measurement
-                                    }
-                                }
-                            }
-                            Err(e) => {
-                                // [impl->swreq~sensors_log_flood_protection~1]
-                                if !self.lock_error_dht_mutex {
-                                    self.lock_error_dht_mutex = true;
-                                    error!(target: module_path!(), "error when trying to lock Dht mutex: {e}");
-                                }
-                            }
-                        }
-                    }
-
-                    //*** Atlas Scientific **********************************************************
-                    {
-                        match mutexes.mutex_atlas_scientific_temperature.lock() {
-                            Ok(atlas_scientific_temperature) => {
-                                if self.config.source_water_temperature == sensor_manager_constants::SOURCE_WATER_TEMPERATURE_ATLAS_SCIENTIFIC {
-                                    self.water_temperature = atlas_scientific_temperature.value;
-                                }
-                            }
-                            Err(e) => {
-                                // [impl->swreq~sensors_log_flood_protection~1]
-                                if !self.lock_error_atlas_scientific_temperature_mutex {
-                                    self.lock_error_atlas_scientific_temperature_mutex = true;
-                                    error!(target: module_path!(), "error when trying to lock mutex: {e}");
-                                }
-                            }
-                        }
-                    }
-
-                    {
-                        match mutexes.mutex_atlas_scientific_ph.lock() {
-                            Ok(atlas_scientific_ph) => {
-                                self.pH = atlas_scientific_ph.value;
-                            }
-                            Err(e) => {
-                                // [impl->swreq~sensors_log_flood_protection~1]
-                                if !self.lock_error_atlas_scientific_ph_mutex {
-                                    self.lock_error_atlas_scientific_ph_mutex = true;
-                                    error!(target: module_path!(), "error when trying to lock mutex: {e}");
-                                }
-                            }
-                        }
-                    }
-
-                    {
-                        match mutexes.mutex_atlas_scientific_conductivity.lock() {
-                            Ok(atlas_scientific_conductivity) => {
-                                self.conductivity = atlas_scientific_conductivity.value;
-                            }
-                            Err(e) => {
-                                // [impl->swreq~sensors_log_flood_protection~1]
-                                if !self.lock_error_atlas_scientific_conductivity_mutex {
-                                    self.lock_error_atlas_scientific_conductivity_mutex = true;
-                                    error!(target: module_path!(), "error when trying to lock mutex: {e}");
-                                }
-                            }
-                        }
-                    }
+                    self.read_sensor_values_from_mutexes(&mutexes);
                 }
 
                 if !mutex_poisoned {
@@ -733,22 +611,20 @@ impl SensorManager {
                     let mut instant_after_locking_mutex = Instant::now(); // initialization is overwritten
 
                     // write the measurement result to Mutex
-                    {
-                        match mutexes.mutex_sensor_manager_signals.lock() {
-                            Ok(mut sensor_manager_signals) => {
-                                instant_after_locking_mutex = Instant::now();
-                                sensor_manager_signals.ambient_humidity = self.ambient_humidity;
-                                sensor_manager_signals.ambient_temperature =
-                                    self.ambient_temperature;
-                                sensor_manager_signals.water_temperature = self.water_temperature;
-                                sensor_manager_signals.conductivity = self.conductivity;
-                                sensor_manager_signals.ph = self.pH;
-                                sensor_manager_signals.instant_last_recording = Instant::now();
-                            }
-                            Err(e) => {
-                                log_error_chain(module_path!(), "error when trying to lock mutex for writing sensor manager data", e);
-                                mutex_poisoned = true;
-                            }
+                    match mutexes.mutex_sensor_manager_signals.lock() {
+                        Ok(mut sensor_manager_signals) => {
+                            instant_after_locking_mutex = Instant::now();
+                            sensor_manager_signals.ambient_humidity = self.ambient_humidity;
+                            sensor_manager_signals.ambient_temperature =
+                                self.ambient_temperature;
+                            sensor_manager_signals.water_temperature = self.water_temperature;
+                            sensor_manager_signals.conductivity = self.conductivity;
+                            sensor_manager_signals.ph = self.pH;
+                            sensor_manager_signals.instant_last_recording = Instant::now();
+                        }
+                        Err(e) => {
+                            log_error_chain(module_path!(), "error when trying to lock mutex for writing sensor manager data", e);
+                            mutex_poisoned = true;
                         }
                     }
 
@@ -765,14 +641,235 @@ impl SensorManager {
 
         sensor_manager_channels.acknowledge_signal_handler();
 
-        // This thread has channel connections to underlying threads.
-        // Those threads have to stop receiving commands from this thread.
-        // The shutdown sequence is handled by the signal_handler module.
         self.wait_for_termination_async(
             &mut sensor_manager_channels.rx_sensor_manager_from_signal_handler,
             sleep_duration_one_millis,
             module_path!(),
         )
         .await;
+    }
+
+    /// Reads sensor measurement values from all component shared mutexes.
+    ///
+    /// [impl->swreq~sensors_log_flood_protection~1]
+    pub(crate) fn read_sensor_values_from_mutexes(&mut self, mutexes: &SensorManagerMutexes) {
+        //*** Ds18b20 ******************************************************************
+        if self.config.source_water_temperature
+            == sensor_manager_constants::SOURCE_WATER_TEMPERATURE_DS18B20
+        {
+            match mutexes.mutex_ds18b20_water_temperature.lock() {
+                Ok(ds18b20_water_temperature_result) => {
+                    self.lock_error_ds18b20_water_temperature_mutex = false;
+                    if let Ok(ds18b20_water_temperature_result_data) = &*ds18b20_water_temperature_result {
+                        self.water_temperature = ds18b20_water_temperature_result_data.value;
+                    }
+                }
+                Err(e) => {
+                    // [impl->swreq~sensors_log_flood_protection~1]
+                    if !self.lock_error_ds18b20_water_temperature_mutex {
+                        self.lock_error_ds18b20_water_temperature_mutex = true;
+                        error!(target: module_path!(), "error when trying to lock Ds18b20 water temperature mutex: {e}");
+                    }
+                }
+            }
+        }
+        if self.config.source_ambient_temperature
+            == sensor_manager_constants::SOURCE_WATER_TEMPERATURE_DS18B20
+        {
+            match mutexes.mutex_ds18b20_ambient_temperature.lock() {
+                Ok(ds18b20_ambient_temperature_result) => {
+                    self.lock_error_ds18b20_ambient_temperature_mutex = false;
+                    if let Ok(ds18b20_ambient_temperature_result_data) = &*ds18b20_ambient_temperature_result {
+                        self.ambient_temperature = ds18b20_ambient_temperature_result_data.value;
+                    }
+                }
+                Err(e) => {
+                    // [impl->swreq~sensors_log_flood_protection~1]
+                    if !self.lock_error_ds18b20_ambient_temperature_mutex {
+                        self.lock_error_ds18b20_ambient_temperature_mutex = true;
+                        error!(target: module_path!(), "error when trying to lock Ds18b20 ambient temperature mutex: {e}");
+                    }
+                }
+            }
+        }
+        //*** Dht **********************************************************************
+        {
+            match mutexes.mutex_dht.lock() {
+                Ok(dht_result) => {
+                    self.lock_error_dht_mutex = false;
+                    if let Ok(tuple) = *dht_result {
+                        if self.config.source_ambient_temperature == sensor_manager_constants::SOURCE_AMBIENT_TEMPERATURE_DHT {
+                            self.ambient_temperature = tuple.0;
+                        }
+                        self.ambient_humidity = tuple.1;
+                    }
+                }
+                Err(e) => {
+                    // [impl->swreq~sensors_log_flood_protection~1]
+                    if !self.lock_error_dht_mutex {
+                        self.lock_error_dht_mutex = true;
+                        error!(target: module_path!(), "error when trying to lock Dht mutex: {e}");
+                    }
+                }
+            }
+        }
+
+        //*** Atlas Scientific **********************************************************
+        {
+            match mutexes.mutex_atlas_scientific_temperature.lock() {
+                Ok(atlas_scientific_temperature) => {
+                    self.lock_error_atlas_scientific_temperature_mutex = false;
+                    if self.config.source_water_temperature == sensor_manager_constants::SOURCE_WATER_TEMPERATURE_ATLAS_SCIENTIFIC {
+                        self.water_temperature = atlas_scientific_temperature.value;
+                    }
+                }
+                Err(e) => {
+                    // [impl->swreq~sensors_log_flood_protection~1]
+                    if !self.lock_error_atlas_scientific_temperature_mutex {
+                        self.lock_error_atlas_scientific_temperature_mutex = true;
+                        error!(target: module_path!(), "error when trying to lock mutex: {e}");
+                    }
+                }
+            }
+        }
+
+        {
+            match mutexes.mutex_atlas_scientific_ph.lock() {
+                Ok(atlas_scientific_ph) => {
+                    self.lock_error_atlas_scientific_ph_mutex = false;
+                    self.pH = atlas_scientific_ph.value;
+                }
+                Err(e) => {
+                    // [impl->swreq~sensors_log_flood_protection~1]
+                    if !self.lock_error_atlas_scientific_ph_mutex {
+                        self.lock_error_atlas_scientific_ph_mutex = true;
+                        error!(target: module_path!(), "error when trying to lock mutex: {e}");
+                    }
+                }
+            }
+        }
+
+        {
+            match mutexes.mutex_atlas_scientific_conductivity.lock() {
+                Ok(atlas_scientific_conductivity) => {
+                    self.lock_error_atlas_scientific_conductivity_mutex = false;
+                    self.conductivity = atlas_scientific_conductivity.value;
+                }
+                Err(e) => {
+                    // [impl->swreq~sensors_log_flood_protection~1]
+                    if !self.lock_error_atlas_scientific_conductivity_mutex {
+                        self.lock_error_atlas_scientific_conductivity_mutex = true;
+                        error!(target: module_path!(), "error when trying to lock mutex: {e}");
+                    }
+                }
+            }
+        }
+    }
+}
+
+#[cfg(test)]
+pub mod tests {
+    use super::*;
+    use crate::sensors::sensor_manager_config::SensorManagerConfig;
+
+    #[test]
+    /// Verifies that SensorManager initializes all mutex lock flags to false and handles log flood protection.
+    ///
+    /// [utest->swreq~sensors_log_flood_protection~1]
+    fn test_sensor_manager_lock_flags_log_flood_protection() {
+        let config = SensorManagerConfig {
+            use_simulator: false,
+            execute: true,
+            replacement_value_ambient_temperature: 20.0,
+            replacement_value_ambient_humidity: 50.0,
+            replacement_value_water_temperature: 25.0,
+            replacement_value_ph: 8.0,
+            replacement_value_conductivity: 50000.0,
+            source_water_temperature: sensor_manager_constants::SOURCE_WATER_TEMPERATURE_DS18B20.to_string(),
+            source_ambient_temperature: sensor_manager_constants::SOURCE_WATER_TEMPERATURE_DS18B20.to_string(),
+        };
+
+        let mut sensor_manager = SensorManager::new(config).unwrap();
+
+        // 1. Initial lock flags verification
+        assert!(!sensor_manager.lock_error_ds18b20_water_temperature_mutex);
+        assert!(!sensor_manager.lock_error_ds18b20_ambient_temperature_mutex);
+        assert!(!sensor_manager.lock_error_dht_mutex);
+        assert!(!sensor_manager.lock_error_atlas_scientific_temperature_mutex);
+        assert!(!sensor_manager.lock_error_atlas_scientific_ph_mutex);
+        assert!(!sensor_manager.lock_error_atlas_scientific_conductivity_mutex);
+
+        // 2. Create mutexes and poison them to trigger lock failures
+        let mutexes = SensorManagerMutexes::new_for_test();
+
+        // Poison ds18b20_water_temperature mutex
+        let m_ds_water = mutexes.mutex_ds18b20_water_temperature.clone();
+        let _ = std::thread::spawn(move || {
+            let _g = m_ds_water.lock().unwrap();
+            panic!("poisoning ds18b20 water mutex");
+        }).join();
+
+        // Poison ds18b20_ambient_temperature mutex
+        let m_ds_amb = mutexes.mutex_ds18b20_ambient_temperature.clone();
+        let _ = std::thread::spawn(move || {
+            let _g = m_ds_amb.lock().unwrap();
+            panic!("poisoning ds18b20 ambient mutex");
+        }).join();
+
+        // Poison dht mutex
+        let m_dht = mutexes.mutex_dht.clone();
+        let _ = std::thread::spawn(move || {
+            let _g = m_dht.lock().unwrap();
+            panic!("poisoning dht mutex");
+        }).join();
+
+        // Poison atlas_scientific_temperature mutex
+        let m_atlas_temp = mutexes.mutex_atlas_scientific_temperature.clone();
+        let _ = std::thread::spawn(move || {
+            let _g = m_atlas_temp.lock().unwrap();
+            panic!("poisoning atlas temp mutex");
+        }).join();
+
+        // Poison atlas_scientific_ph mutex
+        let m_atlas_ph = mutexes.mutex_atlas_scientific_ph.clone();
+        let _ = std::thread::spawn(move || {
+            let _g = m_atlas_ph.lock().unwrap();
+            panic!("poisoning atlas ph mutex");
+        }).join();
+
+        // Poison atlas_scientific_conductivity mutex
+        let m_atlas_cond = mutexes.mutex_atlas_scientific_conductivity.clone();
+        let _ = std::thread::spawn(move || {
+            let _g = m_atlas_cond.lock().unwrap();
+            panic!("poisoning atlas cond mutex");
+        }).join();
+
+        // First call to read_sensor_values_from_mutexes with poisoned mutexes:
+        sensor_manager.read_sensor_values_from_mutexes(&mutexes);
+        assert!(sensor_manager.lock_error_ds18b20_water_temperature_mutex, "lock_error_ds18b20_water_temperature_mutex should be true");
+        assert!(sensor_manager.lock_error_ds18b20_ambient_temperature_mutex, "lock_error_ds18b20_ambient_temperature_mutex should be true");
+        assert!(sensor_manager.lock_error_dht_mutex, "lock_error_dht_mutex should be true");
+        assert!(sensor_manager.lock_error_atlas_scientific_temperature_mutex, "lock_error_atlas_scientific_temperature_mutex should be true");
+        assert!(sensor_manager.lock_error_atlas_scientific_ph_mutex, "lock_error_atlas_scientific_ph_mutex should be true");
+        assert!(sensor_manager.lock_error_atlas_scientific_conductivity_mutex, "lock_error_atlas_scientific_conductivity_mutex should be true");
+
+        // Second call: lock flags remain true (log flood suppressed)
+        sensor_manager.read_sensor_values_from_mutexes(&mutexes);
+        assert!(sensor_manager.lock_error_ds18b20_water_temperature_mutex);
+        assert!(sensor_manager.lock_error_ds18b20_ambient_temperature_mutex);
+        assert!(sensor_manager.lock_error_dht_mutex);
+        assert!(sensor_manager.lock_error_atlas_scientific_temperature_mutex);
+        assert!(sensor_manager.lock_error_atlas_scientific_ph_mutex);
+        assert!(sensor_manager.lock_error_atlas_scientific_conductivity_mutex);
+
+        // Third call with clean unpoisoned mutexes: resets lock flags to false
+        let clean_mutexes = SensorManagerMutexes::new_for_test();
+        sensor_manager.read_sensor_values_from_mutexes(&clean_mutexes);
+        assert!(!sensor_manager.lock_error_ds18b20_water_temperature_mutex);
+        assert!(!sensor_manager.lock_error_ds18b20_ambient_temperature_mutex);
+        assert!(!sensor_manager.lock_error_dht_mutex);
+        assert!(!sensor_manager.lock_error_atlas_scientific_temperature_mutex);
+        assert!(!sensor_manager.lock_error_atlas_scientific_ph_mutex);
+        assert!(!sensor_manager.lock_error_atlas_scientific_conductivity_mutex);
     }
 }

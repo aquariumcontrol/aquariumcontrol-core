@@ -257,6 +257,7 @@ impl Dht {
     ///
     /// # Returns
     /// A new **`Dht` struct**, ready to read temperature and humidity.
+    /// [impl->swreq~sensors_log_flood_protection~1]
     pub fn new(
         config: DhtConfig,
         gpio_opt: Option<Gpio>,
@@ -795,60 +796,11 @@ impl Dht {
                 // Check if a sufficient amount of time has passed since the last measurement.
                 if self.instant_last_measurement.elapsed() > self.measurement_interval {
                     let result = self.get_data();
-                    if let Err(ref dht_error) = result {
-                        if matches!(
-                            dht_error,
-                            DhtError::FailedAfterRetries {
-                                location: _,
-                                retry_counter: _,
-                                source: _
-                            }
-                        ) {
-                            // [impl->swreq~sensors_log_flood_protection~1]
-                            if !self.lock_error_failed_after_retries {
-                                // avoid log flooding
-                                #[cfg(all(not(test), not(feature = "test-utils")))] // only required in real-life execution
-                                #[cfg(not(tarpaulin_include))]
-                                log_error_chain(
-                                    module_path!(),
-                                    "Failure to read from DHT sensor",
-                                    dht_error,
-                                );
-                                self.lock_error_failed_after_retries = true;
-                            }
-                        } else {
-                            self.lock_error_failed_after_retries = false;
-                            // report directly
-                            #[cfg(all(not(test), not(feature = "test-utils")))] // only required in real-life execution
-                            #[cfg(not(tarpaulin_include))]
-                            log_error_chain(
-                                module_path!(),
-                                "Failure to read from DHT sensor",
-                                dht_error,
-                            );
-                        }
-                    }
+                    self.handle_dht_read_result_log_flood(&result);
 
                     let instant_before_locking_mutex = Instant::now();
-                    let mut instant_after_locking_mutex = Instant::now(); // initialization is overwritten
-
-                    {
-                        // internal scope to limit lifetime of mutex lock
-                        match mutex_dht.lock() {
-                            Ok(mut c) => {
-                                instant_after_locking_mutex = Instant::now();
-                                *c = result;
-                                self.lock_error_mutex = false;
-                            }
-                            Err(e) => {
-                                // [impl->swreq~sensors_log_flood_protection~1]
-                                if !self.lock_error_mutex {
-                                    self.lock_error_mutex = true;
-                                    error!(target: module_path!(), "error locking mutex for dht result ({e:?})");
-                                }
-                            }
-                        };
-                    }
+                    let instant_after_locking_mutex =
+                        self.write_dht_result_to_mutex(result, &mutex_dht);
 
                     // check if access to mutex took too long
                     self.check_mutex_access_duration(
@@ -861,6 +813,76 @@ impl Dht {
                 }
             }
         }
+    }
+
+    /// Handles log flood protection logic when reading from the DHT sensor.
+    ///
+    /// [impl->swreq~sensors_log_flood_protection~1]
+    pub(crate) fn handle_dht_read_result_log_flood(
+        &mut self,
+        result: &Result<(f32, f32), DhtError>,
+    ) {
+        if let Err(ref dht_error) = result {
+            if matches!(
+                dht_error,
+                DhtError::FailedAfterRetries {
+                    location: _,
+                    retry_counter: _,
+                    source: _
+                }
+            ) {
+                // [impl->swreq~sensors_log_flood_protection~1]
+                if !self.lock_error_failed_after_retries {
+                    // avoid log flooding
+                    #[cfg(all(not(test), not(feature = "test-utils")))] // only required in real-life execution
+                    #[cfg(not(tarpaulin_include))]
+                    log_error_chain(
+                        module_path!(),
+                        "Failure to read from DHT sensor",
+                        dht_error,
+                    );
+                    self.lock_error_failed_after_retries = true;
+                }
+            } else {
+                self.lock_error_failed_after_retries = false;
+                // report directly
+                #[cfg(all(not(test), not(feature = "test-utils")))] // only required in real-life execution
+                #[cfg(not(tarpaulin_include))]
+                log_error_chain(
+                    module_path!(),
+                    "Failure to read from DHT sensor",
+                    dht_error,
+                );
+            }
+        } else {
+            self.lock_error_failed_after_retries = false;
+        }
+    }
+
+    /// Writes the DHT measurement result to shared mutex while managing log flood protection.
+    ///
+    /// [impl->swreq~sensors_log_flood_protection~1]
+    pub(crate) fn write_dht_result_to_mutex(
+        &mut self,
+        result: Result<(f32, f32), DhtError>,
+        mutex_dht: &Arc<Mutex<Result<(f32, f32), DhtError>>>,
+    ) -> Instant {
+        let mut instant_after_locking_mutex = Instant::now();
+        match mutex_dht.lock() {
+            Ok(mut c) => {
+                instant_after_locking_mutex = Instant::now();
+                *c = result;
+                self.lock_error_mutex = false;
+            }
+            Err(e) => {
+                // [impl->swreq~sensors_log_flood_protection~1]
+                if !self.lock_error_mutex {
+                    self.lock_error_mutex = true;
+                    error!(target: module_path!(), "error locking mutex for dht result ({e:?})");
+                }
+            }
+        };
+        instant_after_locking_mutex
     }
 }
 
@@ -1016,5 +1038,102 @@ pub mod tests {
         }
 
         assert!(reference.iter().eq(result.iter()));
+    }
+
+    #[test]
+    /// Verifies that Dht initializes lock flags to false and manages log flood suppression properly.
+    ///
+    /// [utest->swreq~sensors_log_flood_protection~1]
+    fn test_dht_lock_flags_log_flood_protection() {
+        use crate::sensors::dht_config::DhtConfig;
+        use crate::utilities::check_mutex_access_duration::CheckMutexAccessDurationTrait;
+        use std::time::Instant;
+
+        let config = DhtConfig {
+            active: true,
+            execute: true,
+            #[cfg(all(target_os = "linux", feature = "target_hw"))]
+            sensor_init_pin_down_duration_micros: 1000,
+            #[cfg(all(target_os = "linux", feature = "target_hw"))]
+            sensor_init_pin_up_duration_micros: 40,
+            #[cfg(all(target_os = "linux", feature = "target_hw"))]
+            timeout_duration_micros: 100,
+            #[cfg(all(target_os = "linux", feature = "target_hw"))]
+            sensor_reset_duration_millis: 10,
+            #[cfg(all(target_os = "linux", feature = "target_hw"))]
+            sensor_startup_duration_millis: 10,
+            #[cfg(all(target_os = "linux", feature = "target_hw"))]
+            sensor_pause_duration_millis: 10,
+            measurement_interval_millis: 100,
+        };
+
+        let mut dht = Dht::new(config, None, 0, 0);
+
+        // 1. Initial state check
+        assert!(!dht.lock_error_mutex);
+        assert!(!dht.lock_warn_max_mutex_access_duration);
+        assert!(!dht.lock_error_failed_after_retries);
+
+        // 2. CheckMutexAccessDurationTrait integration for lock_warn_max_mutex_access_duration
+        assert!(!dht.get_warn_lock(&None));
+        dht.set_warn_lock(&None, true);
+        assert!(dht.lock_warn_max_mutex_access_duration);
+        assert!(dht.get_warn_lock(&None));
+        dht.set_warn_lock(&None, false);
+        assert!(!dht.lock_warn_max_mutex_access_duration);
+
+        // 3. Mutex access duration check resets warn lock when duration is within limit
+        let now = Instant::now();
+        dht.set_warn_lock(&None, true);
+        dht.check_mutex_access_duration(None, now, now);
+        assert!(!dht.lock_warn_max_mutex_access_duration, "check_mutex_access_duration should reset warn lock when duration is within limit");
+
+        // 4. Test lock_error_failed_after_retries log flood protection
+        let failed_error = DhtError::FailedAfterRetries {
+            location: "test_loc".to_string(),
+            retry_counter: 3,
+            source: Box::new(DhtError::ChecksumError("test_loc".to_string(), 10, 20)),
+        };
+        // First occurrence: sets lock_error_failed_after_retries to true
+        dht.handle_dht_read_result_log_flood(&Err(failed_error));
+        assert!(dht.lock_error_failed_after_retries, "lock_error_failed_after_retries should be set to true on FailedAfterRetries");
+
+        // Second occurrence: lock_error_failed_after_retries stays true (log flood suppressed)
+        let failed_error_2 = DhtError::FailedAfterRetries {
+            location: "test_loc".to_string(),
+            retry_counter: 3,
+            source: Box::new(DhtError::ChecksumError("test_loc".to_string(), 10, 20)),
+        };
+        dht.handle_dht_read_result_log_flood(&Err(failed_error_2));
+        assert!(dht.lock_error_failed_after_retries, "lock_error_failed_after_retries should remain true to suppress repeated errors");
+
+        // Success result: resets lock_error_failed_after_retries back to false
+        let valid_data = (24.0, 55.0);
+        dht.handle_dht_read_result_log_flood(&Ok(valid_data));
+        assert!(!dht.lock_error_failed_after_retries, "lock_error_failed_after_retries should reset to false on success");
+
+        // 5. Test lock_error_mutex log flood protection with poisoned mutex
+        use std::sync::{Arc, Mutex};
+        let mutex_dht: Arc<Mutex<Result<(f32, f32), DhtError>>> = Arc::new(Mutex::new(Ok(valid_data)));
+        
+        // Poison the mutex
+        let mutex_clone = mutex_dht.clone();
+        let _ = std::thread::spawn(move || {
+            let _guard = mutex_clone.lock().unwrap();
+            panic!("Poisoning mutex for testing");
+        }).join();
+
+        // First attempt to write to poisoned mutex: lock_error_mutex transitions false -> true
+        dht.write_dht_result_to_mutex(Ok(valid_data), &mutex_dht);
+        assert!(dht.lock_error_mutex, "lock_error_mutex should be set to true when mutex lock fails");
+
+        // Second attempt to write to poisoned mutex: lock_error_mutex remains true (log flood suppressed)
+        dht.write_dht_result_to_mutex(Ok(valid_data), &mutex_dht);
+        assert!(dht.lock_error_mutex, "lock_error_mutex should remain true on repeated mutex lock failure");
+
+        // Unpoisoned mutex: resets lock_error_mutex back to false
+        let valid_mutex = Arc::new(Mutex::new(Ok(valid_data)));
+        dht.write_dht_result_to_mutex(Ok(valid_data), &valid_mutex);
+        assert!(!dht.lock_error_mutex, "lock_error_mutex should reset to false when mutex lock succeeds");
     }
 }
