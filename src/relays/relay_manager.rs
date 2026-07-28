@@ -608,3 +608,169 @@ impl RelayManager {
         (lock_receive, lock_send)
     }
 }
+
+#[cfg(test)]
+pub mod tests {
+    use super::*;
+    use crate::launch::channels::channel;
+    use crate::launch::execution_config::ExecutionConfig;
+    use crate::relays::relay_error::RelayError;
+    use crate::relays::relay_manager_config::RelayManagerConfig;
+    use crate::utilities::channel_content::{AquariumDevice, InternalCommand};
+    use std::time::Duration;
+
+    struct DummyActuator;
+
+    impl RelayActuationTrait for DummyActuator {
+        fn actuate(&mut self, _command: &InternalCommand) -> Result<(), RelayError> {
+            Ok(())
+        }
+        fn get_heartbeat_interval_seconds(&self) -> Option<u64> {
+            None
+        }
+        fn heartbeat(&mut self) -> Result<(), RelayError> {
+            Ok(())
+        }
+        fn flush_buffer(&mut self) -> Result<(), RelayError> {
+            Ok(())
+        }
+    }
+
+    #[test]
+    /// Verifies that `RelayManager::new()` initializes all channel lock flags to false.
+    ///
+    /// [utest->swreq~relays_log_flood_protection~1]
+    fn test_relay_manager_lock_flags_initialization() {
+        let config = RelayManagerConfig {
+            active: true,
+            execute: true,
+            use_simulator: true,
+            use_gpio: false,
+            actuation_retries: 3,
+            pause_between_retries_millis: 10,
+        };
+        let execution_config = ExecutionConfig::default();
+
+        let relay_manager = RelayManager::new(config, execution_config);
+
+        assert!(!relay_manager.lock_error_channel_send_refill);
+        assert!(!relay_manager.lock_error_channel_receive_refill);
+        assert!(!relay_manager.lock_error_channel_send_heating);
+        assert!(!relay_manager.lock_error_channel_receive_heating);
+        assert!(!relay_manager.lock_error_channel_send_ventilation);
+        assert!(!relay_manager.lock_error_channel_receive_ventilation);
+        assert!(!relay_manager.lock_error_channel_send_balling);
+        assert!(!relay_manager.lock_error_channel_receive_balling);
+        assert!(!relay_manager.lock_error_channel_send_feed);
+        assert!(!relay_manager.lock_error_channel_receive_feed);
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    /// Verifies that `process_actuation_request` sets and resets lock flags properly for log flood protection.
+    ///
+    /// [utest->swreq~relays_log_flood_protection~1]
+    async fn test_relay_manager_process_actuation_request_log_flood_protection() {
+        let config = RelayManagerConfig {
+            active: true,
+            execute: true,
+            use_simulator: true,
+            use_gpio: false,
+            actuation_retries: 3,
+            pause_between_retries_millis: 10,
+        };
+        let mut relay_manager = RelayManager::new(config, ExecutionConfig::default());
+        let mut actuator = DummyActuator;
+
+        // 1. Channel Disconnected test scenario (Receive error)
+        let (tx_cmd, rx_cmd) = channel::<InternalCommand>(10, false);
+        let (mut tx_resp, rx_resp) = channel::<bool>(10, false);
+        drop(tx_cmd); // Disconnect rx_cmd
+
+        let mut rx_cmd_mut = rx_cmd;
+
+        // First call: lock_receive transitions false -> true (error logged once)
+        let (lock_recv_1, lock_send_1) = relay_manager
+            .process_actuation_request(
+                (&mut rx_cmd_mut, &mut tx_resp),
+                (false, false),
+                "refill",
+                &mut actuator,
+                Duration::from_millis(1),
+            )
+            .await;
+        assert!(lock_recv_1, "lock_receive should be set to true on receive error");
+        assert!(!lock_send_1, "lock_send should remain false");
+
+        // Second call: lock_receive remains true (duplicate error log suppressed)
+        let (lock_recv_2, _lock_send_2) = relay_manager
+            .process_actuation_request(
+                (&mut rx_cmd_mut, &mut tx_resp),
+                (lock_recv_1, lock_send_1),
+                "refill",
+                &mut actuator,
+                Duration::from_millis(1),
+            )
+            .await;
+        assert!(lock_recv_2, "lock_receive should remain true on repeated receive error");
+
+        // 2. Channel Empty test scenario -> resets lock_receive to false
+        let (mut tx_cmd_empty, mut rx_cmd_empty) = channel::<InternalCommand>(10, false);
+        let (lock_recv_3, _lock_send_3) = relay_manager
+            .process_actuation_request(
+                (&mut rx_cmd_empty, &mut tx_resp),
+                (true, false),
+                "refill",
+                &mut actuator,
+                Duration::from_millis(1),
+            )
+            .await;
+        assert!(!lock_recv_3, "lock_receive should reset to false on channel Empty");
+
+        // 3. Send Error test scenario (Command received, but response tx disconnected)
+        tx_cmd_empty.send(InternalCommand::SwitchOn(AquariumDevice::RefillPump)).unwrap();
+        drop(rx_resp); // Disconnect response channel
+
+        // First call with disconnected response channel: lock_send transitions false -> true
+        let (lock_recv_4, lock_send_4) = relay_manager
+            .process_actuation_request(
+                (&mut rx_cmd_empty, &mut tx_resp),
+                (false, false),
+                "refill",
+                &mut actuator,
+                Duration::from_millis(1),
+            )
+            .await;
+        assert!(!lock_recv_4, "lock_receive should be false after receiving command");
+        assert!(lock_send_4, "lock_send should be set to true on response send error");
+
+        // Second call with command and disconnected response channel: lock_send remains true
+        tx_cmd_empty.send(InternalCommand::SwitchOff(AquariumDevice::RefillPump)).unwrap();
+        let (lock_recv_5, lock_send_5) = relay_manager
+            .process_actuation_request(
+                (&mut rx_cmd_empty, &mut tx_resp),
+                (false, lock_send_4),
+                "refill",
+                &mut actuator,
+                Duration::from_millis(1),
+            )
+            .await;
+        assert!(!lock_recv_5, "lock_receive should be false");
+        assert!(lock_send_5, "lock_send should remain true to suppress repeated send error logs");
+
+        // 4. Send Success test scenario -> resets lock_send to false
+        let (mut tx_resp_valid, _rx_resp_valid) = channel::<bool>(10, false);
+        tx_cmd_empty.send(InternalCommand::SwitchOn(AquariumDevice::RefillPump)).unwrap();
+        let (lock_recv_6, lock_send_6) = relay_manager
+            .process_actuation_request(
+                (&mut rx_cmd_empty, &mut tx_resp_valid),
+                (false, true),
+                "refill",
+                &mut actuator,
+                Duration::from_millis(1),
+            )
+            .await;
+        assert!(!lock_recv_6, "lock_receive should be false");
+        assert!(!lock_send_6, "lock_send should be reset to false on response send success");
+    }
+}
+

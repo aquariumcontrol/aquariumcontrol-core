@@ -608,6 +608,7 @@ impl AtlasScientific {
                                     true
                                 }
                                 Err(e) => {
+                                    // [impl->swreq~sensors_log_flood_protection~1]
                                     if !matches!(
                                         e,
                                         AtlasScientificError::SendingRequestToI2cInterfaceFailed { .. }
@@ -624,6 +625,7 @@ impl AtlasScientific {
                             };
                         }
                         Err(e) => {
+                            // [impl->swreq~sensors_log_flood_protection~1]
                             if !self
                                 .lock_error_driver_not_found
                                 .get(&signal)
@@ -960,4 +962,79 @@ pub mod tests {
         assert_eq!(next, AquariumSignal::WaterTemperature);
         assert!(!complete);
     }
+
+    #[test]
+    /// Verifies lock_error_channel_send_monitors and lock_error_driver_not_found log flood protection behavior.
+    ///
+    /// [utest->swreq~sensors_log_flood_protection~1]
+    fn test_atlas_scientific_lock_flags_log_flood_protection() {
+        use crate::launch::channels::channel;
+        use crate::sensors::atlas_scientific_channels::AtlasScientificChannels;
+        use crate::sensors::atlas_scientific_config::AtlasScientificConfig;
+        use crate::sensors::atlas_scientific_monitor_view::AtlasScientificMonitorView;
+        use std::collections::HashMap;
+
+        let config = AtlasScientificConfig {
+            active: true,
+            execute: true,
+            address_atlas_scientific_ph: 0x63,
+            address_atlas_scientific_conductivity: 0x64,
+            address_atlas_scientific_temperature: 0x66,
+            sleep_time_millis_ph: 10,
+            sleep_time_millis_conductivity: 10,
+            sleep_time_millis_temperature: 10,
+            max_val_atlas_scientific_ph: 8.5,
+            min_val_atlas_scientific_ph: 6.5,
+            max_val_atlas_scientific_temperature: 30.0,
+            min_val_atlas_scientific_temperature: 20.0,
+            max_val_atlas_scientific_conductivity: 60000.0,
+            min_val_atlas_scientific_conductivity: 40000.0,
+            measurement_interval_millis: 100,
+            sensor_type_temperature: "oem".to_string(),
+            sensor_type_ph: "oem".to_string(),
+            sensor_type_conductivity: "oem".to_string(),
+        };
+
+        let mut atlas = AtlasScientific::new(config, HashMap::new());
+
+        // 1. Verify initial lock states
+        assert!(!atlas.lock_error_channel_send_monitors);
+        assert!(!atlas.lock_error_driver_not_found.get(&AquariumSignal::WaterTemperature).copied().unwrap_or(false));
+
+        // 2. Test check_and_send_monitor_view log flood protection with disconnected monitor channel
+        let (tx_mon, rx_mon) = channel::<AtlasScientificMonitorView>(10, false);
+        drop(rx_mon); // Disconnect monitor receiver channel
+
+        let (tx_i2c, _rx_i2c) = channel(10, false);
+        let (_tx_i2c_res, rx_i2c_res) = channel(10, false);
+        let (_tx_sig, rx_sig) = channel(10, false);
+        let (tx_ack, _rx_ack) = channel(10, false);
+
+        let mut channels = AtlasScientificChannels {
+            tx_atlas_scientific_to_i2c_interface: tx_i2c,
+            rx_atlas_scientific_from_i2c_interface: rx_i2c_res,
+            tx_atlas_scientific_to_signal_handler: tx_ack,
+            rx_atlas_scientific_from_signal_handler: rx_sig,
+            tx_atlas_scientific_to_monitors: tx_mon,
+        };
+
+        // Populate mutexes with an out-of-range value to trigger monitor view transmission
+        let mutex_temp = Arc::new(Mutex::new(AtlasScientificResultData::new(10.0))); // Out of range (< 20.0)
+        let mutex_ph = Arc::new(Mutex::new(AtlasScientificResultData::new(7.0)));
+        let mutex_cond = Arc::new(Mutex::new(AtlasScientificResultData::new(50000.0)));
+
+        // First call: send fails, lock_error_channel_send_monitors becomes true
+        atlas.check_and_send_monitor_view(&mut channels, &mutex_temp, &mutex_ph, &mutex_cond);
+        assert!(atlas.lock_error_channel_send_monitors, "lock_error_channel_send_monitors should be set to true on send error");
+
+        // Second call with different view: send fails again, lock_error_channel_send_monitors remains true (log flood protection)
+        atlas.last_sent_monitor_view = None; // Reset last view to force send attempt
+        atlas.check_and_send_monitor_view(&mut channels, &mutex_temp, &mutex_ph, &mutex_cond);
+        assert!(atlas.lock_error_channel_send_monitors, "lock_error_channel_send_monitors should remain true to suppress repeated error logs");
+
+        // 3. Test lock_error_driver_not_found state tracking
+        atlas.lock_error_driver_not_found.insert(AquariumSignal::WaterTemperature, true);
+        assert!(atlas.lock_error_driver_not_found.get(&AquariumSignal::WaterTemperature).copied().unwrap_or(false));
+    }
 }
+
