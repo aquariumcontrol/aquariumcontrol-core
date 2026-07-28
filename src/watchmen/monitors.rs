@@ -53,10 +53,8 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 //!   encapsulates all the `mpsc` channels required for the `Monitors` thread to
 //!   communicate with other parts of the application.
 
-use log::error;
-
 #[cfg(all(not(test), not(feature = "test-utils")))]
-use log::info;
+use log::{error, info};
 
 #[cfg(feature = "debug_channels")]
 use log::debug;
@@ -219,20 +217,12 @@ impl Monitors {
 
         loop {
             if self.config.active {
-                #[allow(clippy::needless_bool_assign)]
-                // [impl->swreq~watchmen_log_flood_protection~1]
-                if monitors_inhibited && !self.lock_info_monitors_inhibited {
-                    #[cfg(all(not(test), not(feature = "test-utils")))]
-                    info!(
-                        target: module_path!(),
-                        "monitors are inhibited after receiving stop command via message.");
-                    self.lock_info_monitors_inhibited = true;
-                } else {
-                    self.lock_info_monitors_inhibited = false;
-                }
+                self.update_inhibition_log_flood(monitors_inhibited);
 
-                match monitors_channels.rx_monitors_from_refill.try_recv() {
-                    Ok(new_refill_view) => match old_refill_view_opt {
+                let refill_recv = monitors_channels.rx_monitors_from_refill.try_recv();
+                self.handle_refill_receive_log_flood(&refill_recv);
+                if let Ok(new_refill_view) = refill_recv {
+                    match old_refill_view_opt {
                         Some(ref old_refill_view) => {
                             if &new_refill_view != old_refill_view {
                                 self.append_refill_monitor_view(new_refill_view.clone());
@@ -243,51 +233,20 @@ impl Monitors {
                             self.append_refill_monitor_view(new_refill_view.clone());
                             old_refill_view_opt = Some(new_refill_view);
                         }
-                    },
-                    Err(e) => {
-                        match e {
-                            #[cfg(feature = "debug_channels")]
-                            AquaChannelError::Full => { /* only applicable to send - no action required */
-                            }
-                            AquaChannelError::Empty => { /* empty buffer - no action required */ }
-                            AquaChannelError::Disconnected => {
-                                // [impl->swreq~watchmen_log_flood_protection~1]
-                                if !self.lock_error_receive_refill {
-                                    error!(target: module_path!(), "Error when trying to receive from refill: {e}");
-                                    self.lock_error_receive_refill = true;
-                                }
-                            }
-                        }
                     }
-                };
+                }
 
-                match monitors_channels
+                let atlas_recv = monitors_channels
                     .rx_monitors_from_atlas_scientific
-                    .try_recv()
-                {
-                    Ok(new_view) => {
-                        // Deduplicate against last stored view
-                        if let Some(last_view) = self.atlas_scientific_monitor_views.last() {
-                            if &new_view != last_view {
-                                self.append_atlas_scientific_monitor_view(new_view);
-                            }
-                        } else {
+                    .try_recv();
+                self.handle_atlas_scientific_receive_log_flood(&atlas_recv);
+                if let Ok(new_view) = atlas_recv {
+                    if let Some(last_view) = self.atlas_scientific_monitor_views.last() {
+                        if &new_view != last_view {
                             self.append_atlas_scientific_monitor_view(new_view);
                         }
-                    }
-                    Err(e) => {
-                        match e {
-                            #[cfg(feature = "debug_channels")]
-                            AquaChannelError::Full => { /* only applicable to send */ }
-                            AquaChannelError::Empty => { /* empty buffer - no action required */ }
-                            AquaChannelError::Disconnected => {
-                                // [impl->swreq~watchmen_log_flood_protection~1]
-                                if !self.lock_error_receive_atlas_scientific {
-                                    error!(target: module_path!(), "Error when trying to receive from atlas_scientific: {e}");
-                                    self.lock_error_receive_atlas_scientific = true;
-                                }
-                            }
-                        }
+                    } else {
+                        self.append_atlas_scientific_monitor_view(new_view);
                     }
                 }
             }
@@ -323,5 +282,127 @@ impl Monitors {
         }
 
         monitors_channels.acknowledge_signal_handler();
+    }
+
+    /// Log flood protection for monitors inhibition state log.
+    ///
+    /// [impl->swreq~watchmen_log_flood_protection~1]
+    pub(crate) fn update_inhibition_log_flood(&mut self, monitors_inhibited: bool) {
+        if monitors_inhibited {
+            if !self.lock_info_monitors_inhibited {
+                #[cfg(all(not(test), not(feature = "test-utils")))]
+                info!(
+                    target: module_path!(),
+                    "monitors are inhibited after receiving stop command via message."
+                );
+                self.lock_info_monitors_inhibited = true;
+            }
+        } else {
+            self.lock_info_monitors_inhibited = false;
+        }
+    }
+
+    /// Log flood protection for refill channel receive errors.
+    ///
+    /// [impl->swreq~watchmen_log_flood_protection~1]
+    pub(crate) fn handle_refill_receive_log_flood(
+        &mut self,
+        result: &Result<RefillMonitorView, AquaChannelError>,
+    ) {
+        match result {
+            Ok(_) | Err(AquaChannelError::Empty) => {
+                self.lock_error_receive_refill = false;
+            }
+            #[cfg(feature = "debug_channels")]
+            Err(AquaChannelError::Full) => {}
+            Err(_e @ AquaChannelError::Disconnected) => {
+                // [impl->swreq~watchmen_log_flood_protection~1]
+                if !self.lock_error_receive_refill {
+                    #[cfg(all(not(test), not(feature = "test-utils")))]
+                    error!(target: module_path!(), "Error when trying to receive from refill: {_e}");
+                    self.lock_error_receive_refill = true;
+                }
+            }
+        }
+    }
+
+    /// Log flood protection for Atlas Scientific channel receive errors.
+    ///
+    /// [impl->swreq~watchmen_log_flood_protection~1]
+    pub(crate) fn handle_atlas_scientific_receive_log_flood(
+        &mut self,
+        result: &Result<AtlasScientificMonitorView, AquaChannelError>,
+    ) {
+        match result {
+            Ok(_) | Err(AquaChannelError::Empty) => {
+                self.lock_error_receive_atlas_scientific = false;
+            }
+            #[cfg(feature = "debug_channels")]
+            Err(AquaChannelError::Full) => {}
+            Err(_e @ AquaChannelError::Disconnected) => {
+                // [impl->swreq~watchmen_log_flood_protection~1]
+                if !self.lock_error_receive_atlas_scientific {
+                    #[cfg(all(not(test), not(feature = "test-utils")))]
+                    error!(target: module_path!(), "Error when trying to receive from atlas_scientific: {_e}");
+                    self.lock_error_receive_atlas_scientific = true;
+                }
+            }
+        }
+    }
+}
+
+#[cfg(test)]
+pub mod tests {
+    use super::*;
+    use crate::watchmen::monitors_config::MonitorsConfig;
+
+    #[test]
+    /// Verifies that Monitors initializes lock flags to false and handles log flood protection.
+    ///
+    /// [utest->swreq~watchmen_log_flood_protection~1]
+    fn test_monitors_lock_flags_log_flood_protection() {
+        let config = MonitorsConfig {
+            active: true,
+            execute: true,
+            max_length_refill_monitor_views: 10,
+            max_length_atlas_scientific_monitor_views: 10,
+        };
+
+        let mut monitors = Monitors::new(config);
+
+        // 1. Initial state
+        assert!(!monitors.lock_info_monitors_inhibited);
+        assert!(!monitors.lock_error_receive_refill);
+        assert!(!monitors.lock_error_receive_atlas_scientific);
+
+        // 2. Test lock_info_monitors_inhibited
+        monitors.update_inhibition_log_flood(true);
+        assert!(monitors.lock_info_monitors_inhibited, "lock_info_monitors_inhibited should be true when inhibited");
+
+        monitors.update_inhibition_log_flood(true);
+        assert!(monitors.lock_info_monitors_inhibited, "lock_info_monitors_inhibited should remain true");
+
+        monitors.update_inhibition_log_flood(false);
+        assert!(!monitors.lock_info_monitors_inhibited, "lock_info_monitors_inhibited should reset to false when uninhibited");
+
+        // 3. Test lock_error_receive_refill
+        monitors.handle_refill_receive_log_flood(&Err(AquaChannelError::Disconnected));
+        assert!(monitors.lock_error_receive_refill, "lock_error_receive_refill should be true on Disconnected");
+
+        monitors.handle_refill_receive_log_flood(&Err(AquaChannelError::Disconnected));
+        assert!(monitors.lock_error_receive_refill, "lock_error_receive_refill should remain true");
+
+        monitors.handle_refill_receive_log_flood(&Err(AquaChannelError::Empty));
+        assert!(!monitors.lock_error_receive_refill, "lock_error_receive_refill should reset on Empty");
+
+        // 4. Test lock_error_receive_atlas_scientific
+        monitors.handle_atlas_scientific_receive_log_flood(&Err(AquaChannelError::Disconnected));
+        assert!(monitors.lock_error_receive_atlas_scientific, "lock_error_receive_atlas_scientific should be true on Disconnected");
+
+        monitors.handle_atlas_scientific_receive_log_flood(&Err(AquaChannelError::Disconnected));
+        assert!(monitors.lock_error_receive_atlas_scientific, "lock_error_receive_atlas_scientific should remain true");
+
+        monitors.handle_atlas_scientific_receive_log_flood(&Err(AquaChannelError::Empty));
+        assert!(!monitors.lock_error_receive_atlas_scientific, "lock_error_receive_atlas_scientific should reset on Empty");
     }
 }
