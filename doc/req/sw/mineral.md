@@ -96,7 +96,5 @@ The controller shall use log suppression flags to record warnings and errors and
 
 Covers:
 
-* ssysreq~general1~1
-Needs: impl, utest, itest
-
-
+* sysreq~general1~1
+Needs: impl, utest

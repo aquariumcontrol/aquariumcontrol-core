@@ -35,7 +35,7 @@ macro_rules! perform_schedule_check {
                     Err(e) => {
                         // [impl->swreq~mineral_log_flood_protection~1]
                         // [impl->swreq~thermal_log_flood_protection~1]
-                        // [impl->swreq~refill_log_flood_protection~1]
+                        // [impl->swreq~water_log_flood_protection~1]
                         if !$receive_lock {
                             log::error!(
                                 target: $location,
@@ -51,7 +51,7 @@ macro_rules! perform_schedule_check {
             Err(e) => {
                 // [impl->swreq~mineral_log_flood_protection~1]
                 // [impl->swreq~thermal_log_flood_protection~1]
-                // [impl->swreq~refill_log_flood_protection~1]
+                // [swreq~water_log_flood_protection~1]
                 if !$send_lock {
                     log::error!(
                         target: $location,
