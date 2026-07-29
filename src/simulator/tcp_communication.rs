@@ -72,6 +72,8 @@ pub(crate) use crate::simulator::tcp_communication_error::TcpCommunicationError;
 use crate::simulator::tcp_data::*;
 use crate::utilities::acknowledge_signal_handler::AcknowledgeSignalHandlerTrait;
 use crate::utilities::channel_content::{AquariumSignal, InternalCommand};
+#[cfg(all(not(test), not(feature = "test-utils")))]
+#[cfg(not(tarpaulin_include))]
 use crate::utilities::logger::log_error_chain;
 use crate::utilities::proc_ext_req::ProcessExternalRequestTrait;
 #[cfg(all(not(test), target_os = "linux"))] // only required in real-life execution
@@ -417,15 +419,18 @@ impl TcpCommunication {
         is_active: bool,
         rx_opt: &mut Option<AquaReceiver<InternalCommand>>,
         tx_opt: &mut Option<AquaSender<Result<f32, TcpCommunicationError>>>,
-        module_name: &str,
+        _module_name: &str,
     ) {
         if is_active {
             if let (Some(rx), Some(tx)) = (rx_opt, tx_opt) {
-                if let Err(e) = self.receive_and_answer(rx, tx) {
+                if let Err(_e) = self.receive_and_answer(rx, tx) {
+                    #[cfg(all(not(test), not(feature = "test-utils")))]
+                    #[cfg(not(tarpaulin_include))]
                     log_error_chain(
+                        // not required during testing
                         module_path!(),
-                        &format!("Error in communication with {module_name}"),
-                        e,
+                        &format!("Error in communication with {_module_name}"),
+                        _e,
                     );
                 }
             }
@@ -493,21 +498,27 @@ impl TcpCommunication {
                             Ok(c) => match c {
                                 InternalCommand::SetRelay(c) => {
                                     let response = self.change_relay(c, true);
-                                    if let Err(response_err) = response {
+                                    if let Err(_response_err) = response {
+                                        #[cfg(all(not(test), not(feature = "test-utils")))]
+                                        #[cfg(not(tarpaulin_include))]
                                         log_error_chain(
+                                            // not required for testing
                                             module_path!(),
                                             "Error in communication to relay manager",
-                                            response_err,
+                                            _response_err,
                                         );
                                     }
                                 }
                                 InternalCommand::UnsetRelay(c) => {
                                     let response = self.change_relay(c, false);
-                                    if let Err(response_err) = response {
+                                    if let Err(_response_err) = response {
+                                        #[cfg(all(not(test), not(feature = "test-utils")))]
+                                        #[cfg(not(tarpaulin_include))]
                                         log_error_chain(
+                                            // not required for testing
                                             module_path!(),
                                             "Error in communication to relay manager",
-                                            response_err,
+                                            _response_err,
                                         );
                                     }
                                 }

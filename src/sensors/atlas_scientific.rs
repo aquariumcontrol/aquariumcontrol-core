@@ -84,6 +84,8 @@ use crate::sensors::atlas_scientific_oem::AtlasScientificOem;
 use crate::simulator::get_resp_sim::GetResponseFromSimulatorTrait;
 use crate::utilities::acknowledge_signal_handler::AcknowledgeSignalHandlerTrait;
 use crate::utilities::channel_content::AquariumSignal;
+#[cfg(all(not(test), not(feature = "test-utils")))]
+#[cfg(not(tarpaulin_include))]
 use crate::utilities::logger::log_error_chain;
 use crate::utilities::proc_ext_req::ProcessExternalRequestTrait;
 use crate::utilities::wait_for_termination::WaitForTerminationTrait;
@@ -498,10 +500,17 @@ impl AtlasScientific {
                     self.lock_error_channel_send_monitors = false;
                     self.last_sent_monitor_view = Some(monitor_view);
                 }
-                Err(e) => {
+                Err(_e) => {
                     // [impl->swreq~sensors_log_flood_protection~1]
                     if !self.lock_error_channel_send_monitors {
-                        log_error_chain(module_path!(), "sending view to monitor failed", e);
+                        #[cfg(all(not(test), not(feature = "test-utils")))]
+                        #[cfg(not(tarpaulin_include))]
+                        log_error_chain(
+                            // not required during testing
+                            module_path!(),
+                            "sending view to monitor failed",
+                            _e,
+                        );
                         self.lock_error_channel_send_monitors = true;
                     }
                 }
@@ -614,7 +623,10 @@ impl AtlasScientific {
                                         AtlasScientificError::SendingRequestToI2cInterfaceFailed { .. }
                                     ) || !self.lock_error_channel_send_i2c_interface
                                     {
+                                        #[cfg(all(not(test), not(feature = "test-utils")))]
+                                        #[cfg(not(tarpaulin_include))]
                                         log_error_chain(
+                                            // not required during testing
                                             module_path!(),
                                             "Error in communication with I2C thread.",
                                             e,
@@ -624,17 +636,20 @@ impl AtlasScientific {
                                 }
                             };
                         }
-                        Err(e) => {
+                        Err(_e) => {
                             // [impl->swreq~sensors_log_flood_protection~1]
                             if !self
                                 .lock_error_driver_not_found
                                 .get(&signal)
                                 .unwrap_or(&false)
                             {
+                                #[cfg(all(not(test), not(feature = "test-utils")))]
+                                #[cfg(not(tarpaulin_include))]
                                 log_error_chain(
+                                    // not required during testing
                                     module_path!(),
                                     "Internal error when trying to send signal request: ",
-                                    e,
+                                    _e,
                                 );
                                 self.lock_error_driver_not_found
                                     .insert(signal.clone(), true);
@@ -677,7 +692,10 @@ impl AtlasScientific {
                                     ) {
                                         channel_is_disconnected = true;
                                     } else {
+                                        #[cfg(all(not(test), not(feature = "test-utils")))]
+                                        #[cfg(not(tarpaulin_include))]
                                         log_error_chain(
+                                            // not required during testing
                                             module_path!(),
                                             "Encountered error trying to receive from I2C",
                                             e,
@@ -709,16 +727,19 @@ impl AtlasScientific {
                                 receive_counter = receive_counter.saturating_add(1);
                             }
                         }
-                        Err(e) => {
+                        Err(_e) => {
                             if !self
                                 .lock_error_driver_not_found
                                 .get(&signal)
                                 .unwrap_or(&false)
                             {
+                                #[cfg(all(not(test), not(feature = "test-utils")))]
+                                #[cfg(not(tarpaulin_include))]
                                 log_error_chain(
+                                    // not required during testing
                                     module_path!(),
                                     "Internal error when trying to send signal request: ",
-                                    e,
+                                    _e,
                                 );
                                 self.lock_error_driver_not_found
                                     .insert(signal.clone(), true);
@@ -999,7 +1020,11 @@ pub mod tests {
 
         // 1. Verify initial lock states
         assert!(!atlas.lock_error_channel_send_monitors);
-        assert!(!atlas.lock_error_driver_not_found.get(&AquariumSignal::WaterTemperature).copied().unwrap_or(false));
+        assert!(!atlas
+            .lock_error_driver_not_found
+            .get(&AquariumSignal::WaterTemperature)
+            .copied()
+            .unwrap_or(false));
 
         // 2. Test check_and_send_monitor_view log flood protection with disconnected monitor channel
         let (tx_mon, rx_mon) = channel::<AtlasScientificMonitorView>(10, false);
@@ -1025,16 +1050,27 @@ pub mod tests {
 
         // First call: send fails, lock_error_channel_send_monitors becomes true
         atlas.check_and_send_monitor_view(&mut channels, &mutex_temp, &mutex_ph, &mutex_cond);
-        assert!(atlas.lock_error_channel_send_monitors, "lock_error_channel_send_monitors should be set to true on send error");
+        assert!(
+            atlas.lock_error_channel_send_monitors,
+            "lock_error_channel_send_monitors should be set to true on send error"
+        );
 
         // Second call with different view: send fails again, lock_error_channel_send_monitors remains true (log flood protection)
         atlas.last_sent_monitor_view = None; // Reset last view to force send attempt
         atlas.check_and_send_monitor_view(&mut channels, &mutex_temp, &mutex_ph, &mutex_cond);
-        assert!(atlas.lock_error_channel_send_monitors, "lock_error_channel_send_monitors should remain true to suppress repeated error logs");
+        assert!(
+            atlas.lock_error_channel_send_monitors,
+            "lock_error_channel_send_monitors should remain true to suppress repeated error logs"
+        );
 
         // 3. Test lock_error_driver_not_found state tracking
-        atlas.lock_error_driver_not_found.insert(AquariumSignal::WaterTemperature, true);
-        assert!(atlas.lock_error_driver_not_found.get(&AquariumSignal::WaterTemperature).copied().unwrap_or(false));
+        atlas
+            .lock_error_driver_not_found
+            .insert(AquariumSignal::WaterTemperature, true);
+        assert!(atlas
+            .lock_error_driver_not_found
+            .get(&AquariumSignal::WaterTemperature)
+            .copied()
+            .unwrap_or(false));
     }
 }
-

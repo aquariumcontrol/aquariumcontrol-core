@@ -377,32 +377,59 @@ pub mod tests {
 
         // 2. Test lock_info_monitors_inhibited
         monitors.update_inhibition_log_flood(true);
-        assert!(monitors.lock_info_monitors_inhibited, "lock_info_monitors_inhibited should be true when inhibited");
+        assert!(
+            monitors.lock_info_monitors_inhibited,
+            "lock_info_monitors_inhibited should be true when inhibited"
+        );
 
         monitors.update_inhibition_log_flood(true);
-        assert!(monitors.lock_info_monitors_inhibited, "lock_info_monitors_inhibited should remain true");
+        assert!(
+            monitors.lock_info_monitors_inhibited,
+            "lock_info_monitors_inhibited should remain true"
+        );
 
         monitors.update_inhibition_log_flood(false);
-        assert!(!monitors.lock_info_monitors_inhibited, "lock_info_monitors_inhibited should reset to false when uninhibited");
+        assert!(
+            !monitors.lock_info_monitors_inhibited,
+            "lock_info_monitors_inhibited should reset to false when uninhibited"
+        );
 
         // 3. Test lock_error_receive_refill
         monitors.handle_refill_receive_log_flood(&Err(AquaChannelError::Disconnected));
-        assert!(monitors.lock_error_receive_refill, "lock_error_receive_refill should be true on Disconnected");
+        assert!(
+            monitors.lock_error_receive_refill,
+            "lock_error_receive_refill should be true on Disconnected"
+        );
 
         monitors.handle_refill_receive_log_flood(&Err(AquaChannelError::Disconnected));
-        assert!(monitors.lock_error_receive_refill, "lock_error_receive_refill should remain true");
+        assert!(
+            monitors.lock_error_receive_refill,
+            "lock_error_receive_refill should remain true"
+        );
 
         monitors.handle_refill_receive_log_flood(&Err(AquaChannelError::Empty));
-        assert!(!monitors.lock_error_receive_refill, "lock_error_receive_refill should reset on Empty");
+        assert!(
+            !monitors.lock_error_receive_refill,
+            "lock_error_receive_refill should reset on Empty"
+        );
 
         // 4. Test lock_error_receive_atlas_scientific
         monitors.handle_atlas_scientific_receive_log_flood(&Err(AquaChannelError::Disconnected));
-        assert!(monitors.lock_error_receive_atlas_scientific, "lock_error_receive_atlas_scientific should be true on Disconnected");
+        assert!(
+            monitors.lock_error_receive_atlas_scientific,
+            "lock_error_receive_atlas_scientific should be true on Disconnected"
+        );
 
         monitors.handle_atlas_scientific_receive_log_flood(&Err(AquaChannelError::Disconnected));
-        assert!(monitors.lock_error_receive_atlas_scientific, "lock_error_receive_atlas_scientific should remain true");
+        assert!(
+            monitors.lock_error_receive_atlas_scientific,
+            "lock_error_receive_atlas_scientific should remain true"
+        );
 
         monitors.handle_atlas_scientific_receive_log_flood(&Err(AquaChannelError::Empty));
-        assert!(!monitors.lock_error_receive_atlas_scientific, "lock_error_receive_atlas_scientific should reset on Empty");
+        assert!(
+            !monitors.lock_error_receive_atlas_scientific,
+            "lock_error_receive_atlas_scientific should reset on Empty"
+        );
     }
 }

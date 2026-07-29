@@ -41,6 +41,8 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 
 use crate::database::sql_interface_data::SqlInterfaceData;
 use crate::recorder::recorder_data_frame::RecorderDataFrame;
+#[cfg(all(not(test), not(feature = "test-utils")))]
+#[cfg(not(tarpaulin_include))]
 use crate::utilities::logger::log_error_chain;
 use mysql::PooledConn;
 
@@ -78,11 +80,14 @@ impl DataInjectionTrait for DataInjection {
     fn inject_data(&mut self, data_frame: RecorderDataFrame, mut conn: PooledConn) -> PooledConn {
         match SqlInterfaceData::write_data_frame_to_database(&mut conn, &data_frame) {
             Ok(()) => { /* do nothing */ }
-            Err(e) => {
+            Err(_e) => {
+                #[cfg(all(not(test), not(feature = "test-utils")))]
+                #[cfg(not(tarpaulin_include))]
                 log_error_chain(
+                    // not required during testing
                     module_path!(),
                     "Error occurred when injecting data into database.",
-                    e,
+                    _e,
                 );
             }
         };

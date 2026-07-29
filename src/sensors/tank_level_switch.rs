@@ -96,6 +96,8 @@ use crate::simulator::get_resp_sim::GetResponseFromSimulatorTrait;
 use crate::simulator::tcp_communication_error::TcpCommunicationError;
 use crate::utilities::acknowledge_signal_handler::AcknowledgeSignalHandlerTrait;
 use crate::utilities::channel_content::{AquariumSignal, InternalCommand};
+#[cfg(all(not(test), not(feature = "test-utils")))]
+#[cfg(not(tarpaulin_include))]
 use crate::utilities::logger::log_error_chain;
 use crate::utilities::proc_ext_req::ProcessExternalRequestTrait;
 use crate::utilities::wait_for_termination::WaitForTerminationTrait;
@@ -670,7 +672,10 @@ impl TankLevelSwitch {
             if matches!(e, TankLevelSwitchError::InputPinNotProvided(_)) {
                 // [impl->swreq~sensors_log_flood_protection~1]
                 if !self.lock_error_input_pin_none {
+                    #[cfg(all(not(test), not(feature = "test-utils")))]
+                    #[cfg(not(tarpaulin_include))]
                     log_error_chain(
+                        // not required during testing
                         module_path!(),
                         "Failed to update tank level switch signals.",
                         e,
@@ -680,7 +685,10 @@ impl TankLevelSwitch {
             } else if matches!(e, TankLevelSwitchError::SimulatorCommunicationError { .. }) {
                 // [impl->swreq~sensors_log_flood_protection~1]
                 if !self.lock_error_simulator_communication {
+                    #[cfg(all(not(test), not(feature = "test-utils")))]
+                    #[cfg(not(tarpaulin_include))]
                     log_error_chain(
+                        // not required during testing
                         module_path!(),
                         "Failed to update tank level switch signals.",
                         e,
@@ -690,7 +698,10 @@ impl TankLevelSwitch {
             } else if matches!(e, TankLevelSwitchError::SimulatorChannelNotProvided(_)) {
                 // [impl->swreq~sensors_log_flood_protection~1]
                 if !self.lock_error_channel_not_provided {
+                    #[cfg(all(not(test), not(feature = "test-utils")))]
+                    #[cfg(not(tarpaulin_include))]
                     log_error_chain(
+                        // not required during testing
                         module_path!(),
                         "Failed to update tank level switch signals.",
                         e,
@@ -698,7 +709,10 @@ impl TankLevelSwitch {
                     self.lock_error_channel_not_provided = true;
                 }
             } else {
+                #[cfg(all(not(test), not(feature = "test-utils")))]
+                #[cfg(not(tarpaulin_include))]
                 log_error_chain(
+                    // not required during testing
                     module_path!(),
                     "Failed to update tank level switch signals.",
                     e,
@@ -769,16 +783,25 @@ pub mod tests {
         // 2. Test InputPinNotProvided log flood protection
         let err_pin = TankLevelSwitchError::InputPinNotProvided("test_loc".to_string());
         tls.handle_update_result_log_flood(&Err(err_pin));
-        assert!(tls.lock_error_input_pin_none, "lock_error_input_pin_none should be true");
+        assert!(
+            tls.lock_error_input_pin_none,
+            "lock_error_input_pin_none should be true"
+        );
 
         let err_pin_2 = TankLevelSwitchError::InputPinNotProvided("test_loc".to_string());
         tls.handle_update_result_log_flood(&Err(err_pin_2));
-        assert!(tls.lock_error_input_pin_none, "lock_error_input_pin_none should remain true");
+        assert!(
+            tls.lock_error_input_pin_none,
+            "lock_error_input_pin_none should remain true"
+        );
 
         // 3. Test SimulatorCommunicationError log flood protection
         let err_sim = TankLevelSwitchError::SimulatorChannelNotProvided("test_loc".to_string());
         tls.handle_update_result_log_flood(&Err(err_sim));
-        assert!(tls.lock_error_channel_not_provided, "lock_error_channel_not_provided should be true");
+        assert!(
+            tls.lock_error_channel_not_provided,
+            "lock_error_channel_not_provided should be true"
+        );
 
         // Reset via Ok
         tls.handle_update_result_log_flood(&Ok(()));
@@ -791,19 +814,29 @@ pub mod tests {
         let _ = std::thread::spawn(move || {
             let _g = m_clone.lock().unwrap();
             panic!("poison mutex");
-        }).join();
+        })
+        .join();
 
         // First attempt to write to poisoned mutex: lock_error_mutex_poisoned becomes true
         tls.write_signals_to_mutex(&mutex_signals);
-        assert!(tls.lock_error_mutex_poisoned, "lock_error_mutex_poisoned should be true when mutex lock fails");
+        assert!(
+            tls.lock_error_mutex_poisoned,
+            "lock_error_mutex_poisoned should be true when mutex lock fails"
+        );
 
         // Second attempt: lock_error_mutex_poisoned remains true
         tls.write_signals_to_mutex(&mutex_signals);
-        assert!(tls.lock_error_mutex_poisoned, "lock_error_mutex_poisoned should remain true");
+        assert!(
+            tls.lock_error_mutex_poisoned,
+            "lock_error_mutex_poisoned should remain true"
+        );
 
         // Unpoisoned mutex: resets lock_error_mutex_poisoned to false
         let valid_mutex = Arc::new(Mutex::new(TankLevelSwitchSignals::new(true, true, false)));
         tls.write_signals_to_mutex(&valid_mutex);
-        assert!(!tls.lock_error_mutex_poisoned, "lock_error_mutex_poisoned should reset to false on success");
+        assert!(
+            !tls.lock_error_mutex_poisoned,
+            "lock_error_mutex_poisoned should reset to false on success"
+        );
     }
 }

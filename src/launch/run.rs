@@ -63,7 +63,10 @@ use crate::thermal::temperature_gradient::TemperatureGradient;
 use crate::thermal::ventilation::Ventilation;
 use crate::thermal::ventilation_mutexes::VentilationMutexes;
 use crate::utilities::config::read_config_file;
-use crate::utilities::logger::{log_error_chain, setup_logger};
+#[cfg(all(not(test), not(feature = "test-utils")))]
+#[cfg(not(tarpaulin_include))]
+use crate::utilities::logger::log_error_chain;
+use crate::utilities::logger::setup_logger;
 use crate::utilities::publish_pid::PublishPid;
 
 #[cfg(all(feature = "target_hw", target_os = "linux"))]
@@ -1343,11 +1346,14 @@ pub fn run(
 
     // remove PID from the file
     let publish_pid_result = publish_pid.erase_pid();
-    if let Err(e) = publish_pid_result {
+    if let Err(_e) = publish_pid_result {
+        #[cfg(all(not(test), not(feature = "test-utils")))]
+        #[cfg(not(tarpaulin_include))]
         log_error_chain(
+            // not required during testing
             module_path!(),
             "Error occurred when trying to reset PID.",
-            e,
+            _e,
         );
     }
 

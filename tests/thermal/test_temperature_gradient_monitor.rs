@@ -55,12 +55,7 @@ fn test_monitor_deactivated() {
     // Simulate actuator on for a long time
     monitor.last_actuator_on_time = Some(Instant::now() - Duration::from_secs(100));
 
-    let result = monitor.temperature_gradient_monitor(
-        &gradient,
-        true,
-        true,
-        "TestComponent",
-    );
+    let result = monitor.temperature_gradient_monitor(&gradient, true, true, "TestComponent");
 
     assert!(!result, "Should return false when max_time is 0");
     assert!(
@@ -78,12 +73,7 @@ fn test_actuator_off_resets_state() {
     monitor.log_inhibition = true;
     let gradient = Arc::new(Mutex::new(1.0));
 
-    let result = monitor.temperature_gradient_monitor(
-        &gradient,
-        false,
-        true,
-        "TestComponent",
-    );
+    let result = monitor.temperature_gradient_monitor(&gradient, false, true, "TestComponent");
 
     assert!(!result, "Should return false when actuator is off");
     assert!(
@@ -103,12 +93,7 @@ fn test_duration_short_no_action() {
     // Simulate actuator on for 5 seconds (less than 10)
     monitor.last_actuator_on_time = Some(Instant::now() - Duration::from_secs(5));
 
-    let result = monitor.temperature_gradient_monitor(
-        &gradient,
-        true,
-        true,
-        "TestComponent",
-    );
+    let result = monitor.temperature_gradient_monitor(&gradient, true, true, "TestComponent");
 
     assert!(!result, "Should return false if duration < max_time");
     assert!(
@@ -127,12 +112,7 @@ fn test_gradient_correct_positive() {
     // Simulate actuator on for 15 seconds
     monitor.last_actuator_on_time = Some(Instant::now() - Duration::from_secs(15));
 
-    let result = monitor.temperature_gradient_monitor(
-        &gradient,
-        true,
-        true,
-        "TestComponent",
-    );
+    let result = monitor.temperature_gradient_monitor(&gradient, true, true, "TestComponent");
 
     assert!(!result, "Should return false if gradient is correct");
     assert!(
@@ -151,12 +131,7 @@ fn test_gradient_correct_negative() {
     // Simulate actuator on for 15 seconds
     monitor.last_actuator_on_time = Some(Instant::now() - Duration::from_secs(15));
 
-    let result = monitor.temperature_gradient_monitor(
-        &gradient,
-        true,
-        false,
-        "TestComponent",
-    );
+    let result = monitor.temperature_gradient_monitor(&gradient, true, false, "TestComponent");
 
     assert!(!result, "Should return false if gradient is correct");
     assert!(
@@ -175,12 +150,7 @@ fn test_gradient_incorrect_positive_expected() {
     // Simulate actuator on for 15 seconds
     monitor.last_actuator_on_time = Some(Instant::now() - Duration::from_secs(15));
 
-    let result = monitor.temperature_gradient_monitor(
-        &gradient,
-        true,
-        true,
-        "TestComponent",
-    );
+    let result = monitor.temperature_gradient_monitor(&gradient, true, true, "TestComponent");
 
     assert!(result, "Should return true when gradient is incorrect");
     assert!(
@@ -199,12 +169,7 @@ fn test_gradient_incorrect_negative_expected() {
     // Simulate actuator on for 15 seconds
     monitor.last_actuator_on_time = Some(Instant::now() - Duration::from_secs(15));
 
-    let result = monitor.temperature_gradient_monitor(
-        &gradient,
-        true,
-        false,
-        "TestComponent",
-    );
+    let result = monitor.temperature_gradient_monitor(&gradient, true, false, "TestComponent");
 
     assert!(result, "Should return true when gradient is incorrect");
     assert!(
@@ -224,12 +189,7 @@ fn test_recovery_resets_inhibition() {
     monitor.last_actuator_on_time = Some(Instant::now() - Duration::from_secs(15));
     monitor.log_inhibition = true;
 
-    let result = monitor.temperature_gradient_monitor(
-        &gradient,
-        true,
-        true,
-        "TestComponent",
-    );
+    let result = monitor.temperature_gradient_monitor(&gradient, true, true, "TestComponent");
 
     assert!(!result, "Should return false when gradient becomes correct");
     assert!(
@@ -247,12 +207,7 @@ fn test_initial_start_time_set() {
 
     assert!(monitor.last_actuator_on_time.is_none());
 
-    let result = monitor.temperature_gradient_monitor(
-        &gradient,
-        true,
-        true,
-        "TestComponent",
-    );
+    let result = monitor.temperature_gradient_monitor(&gradient, true, true, "TestComponent");
 
     assert!(!result, "Should return false on first call (duration ~0)");
     assert!(

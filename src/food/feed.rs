@@ -95,6 +95,8 @@ use crate::food::feed_schedule_entry::FeedScheduleEntry;
 use crate::food::food_injection::FoodInjectionTrait;
 use crate::utilities::acknowledge_signal_handler::AcknowledgeSignalHandlerTrait;
 use crate::utilities::database_ping_trait::DatabasePingTrait;
+#[cfg(all(not(test), not(feature = "test-utils")))]
+#[cfg(not(tarpaulin_include))]
 use crate::utilities::logger::log_error_chain;
 use crate::utilities::proc_ext_req::ProcessExternalRequestTrait;
 use crate::utilities::wait_for_termination::WaitForTerminationTrait;
@@ -220,11 +222,14 @@ impl Feed {
             // Get the current timestamp to log the event
             let current_timestamp = match sql_interface_feed.get_current_timestamp() {
                 Ok(c) => c,
-                Err(e) => {
+                Err(_e) => {
+                    #[cfg(all(not(test), not(feature = "test-utils")))]
+                    #[cfg(not(tarpaulin_include))]
                     log_error_chain(
+                        // not required during testing
                         module_path!(),
                         "Could not get current timestamp from database.",
-                        e,
+                        _e,
                     );
                     return Err(());
                 }
@@ -237,11 +242,14 @@ impl Feed {
                 feed_profile.profile_id,
             ) {
                 Ok(_) => Ok(()),
-                Err(e) => {
+                Err(_e) => {
+                    #[cfg(all(not(test), not(feature = "test-utils")))]
+                    #[cfg(not(tarpaulin_include))]
                     log_error_chain(
+                        // not required during testing
                         module_path!(),
                         "Could not insert feed event into database.",
-                        e,
+                        _e,
                     );
                     Err(())
                 }
@@ -297,8 +305,15 @@ impl Feed {
         // *** Handle the Result part of the tuple independently ***
         // If errors occurred during injection, log each one.
         if let Err(errors) = &injection_result {
-            for error in errors {
-                log_error_chain(module_path!(), "Food injection failed.", error);
+            for _error in errors {
+                #[cfg(all(not(test), not(feature = "test-utils")))]
+                #[cfg(not(tarpaulin_include))]
+                log_error_chain(
+                    // not required during testing
+                    module_path!(),
+                    "Food injection failed.",
+                    _error,
+                );
             }
         }
 
@@ -467,13 +482,16 @@ impl Feed {
                                         )
                                     };
 
+                                    #[allow(clippy::manual_ok_err)]
                                     let feed_profile_opt = match get_profile_res {
                                         Ok(feed_profile_loaded) => Some(feed_profile_loaded),
-                                        Err(e) => {
-                                            log_error_chain(
-                                                    module_path!(),
-                                                    "Error occurred when trying to read feed profile {profile_id} from database.",
-                                                    e,
+                                        Err(_e) => {
+                                            #[cfg(all(not(test), not(feature = "test-utils")))]
+                                            #[cfg(not(tarpaulin_include))]
+                                            log_error_chain( // not required during testing
+                                                             module_path!(),
+                                                             "Error occurred when trying to read feed profile {profile_id} from database.",
+                                                             _e,
                                                 );
                                             None
                                         }
@@ -527,7 +545,10 @@ impl Feed {
                                         #[cfg(all(not(test), not(feature = "test-utils")))] // only required in real-life execution
                                         #[cfg(not(tarpaulin_include))]
                                         Err(e) => {
+                                            #[cfg(all(not(test), not(feature = "test-utils")))]
+                                            #[cfg(not(tarpaulin_include))]
                                             log_error_chain(
+                                                // not required during testing
                                                 module_path!(),
                                                 "Updating feed schedule entry failed.",
                                                 e,
@@ -550,7 +571,10 @@ impl Feed {
                         #[cfg(not(tarpaulin_include))]
                         // [impl->swreq~food_log_flood_protection~1]
                         if !self.lock_error_get_feed_schedule_entry {
+                            #[cfg(all(not(test), not(feature = "test-utils")))]
+                            #[cfg(not(tarpaulin_include))]
                             log_error_chain(
+                                // not required during testing
                                 module_path!(),
                                 "Could not retrieve feed schedule information from database.",
                                 e,
@@ -640,13 +664,16 @@ impl Feed {
                         .get_single_feed_profile_from_database(self.profile_id_requested)
                 };
 
+                #[allow(clippy::manual_ok_err)]
                 let feed_profile_opt = match get_profile_res {
                     Ok(feed_profile_loaded) => Some(feed_profile_loaded),
-                    Err(e) => {
-                        log_error_chain(
-                                module_path!(),
-                                "Error occurred when trying to read feed profile {profile_id} from database.",
-                                e,
+                    Err(_e) => {
+                        #[cfg(all(not(test), not(feature = "test-utils")))]
+                        #[cfg(not(tarpaulin_include))]
+                        log_error_chain( // not required during testing
+                                         module_path!(),
+                                         "Error occurred when trying to read feed profile {profile_id} from database.",
+                                         _e,
                             );
                         None
                     }

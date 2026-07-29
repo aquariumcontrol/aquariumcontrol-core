@@ -18,7 +18,10 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 //! - Balling mineral dosing
 
 use aquarium_control::launch::run::run;
-use aquarium_control::utilities::logger::{log_error_chain, setup_logger};
+#[cfg(all(not(test), not(feature = "test-utils")))]
+#[cfg(not(tarpaulin_include))]
+use aquarium_control::utilities::logger::log_error_chain;
+use aquarium_control::utilities::logger::{setup_logger};
 use aquarium_control::utilities::logger_config::LoggerConfig;
 
 /// The main function is a simple error handler.
@@ -32,8 +35,15 @@ fn main() {
 
     let run_res = run(None, None);
 
-    if let Err(e) = run_res {
-        log_error_chain(module_path!(), "Application failed to start.", e);
+    if let Err(_e) = run_res {
+        #[cfg(all(not(test), not(feature = "test-utils")))]
+        #[cfg(not(tarpaulin_include))]
+        log_error_chain(
+            // not required during testing
+            module_path!(),
+            "Application failed to start.",
+            _e,
+        );
         std::process::exit(1);
     }
 }

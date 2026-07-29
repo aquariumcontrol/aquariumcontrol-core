@@ -1590,10 +1590,12 @@ pub mod tests {
             output_file_name_conductivity_filtered: "/tmp/test_cond_f.txt".to_string(),
             output_file_name_tank_level_switch_position: "/tmp/test_tank.txt".to_string(),
             output_file_name_tank_level_switch_invalid: "/tmp/test_tank_inv.txt".to_string(),
-            output_file_name_tank_level_switch_position_stabilized: "/tmp/test_tank_stab.txt".to_string(),
+            output_file_name_tank_level_switch_position_stabilized: "/tmp/test_tank_stab.txt"
+                .to_string(),
             output_file_name_ventilation_controller_state: "/tmp/test_vent.txt".to_string(),
             output_file_name_ventilation_is_on: "/tmp/test_vent_on.txt".to_string(),
-            output_file_name_ventilation_actuator_ineffective: "/tmp/test_vent_ineff.txt".to_string(),
+            output_file_name_ventilation_actuator_ineffective: "/tmp/test_vent_ineff.txt"
+                .to_string(),
             output_file_name_ventilation_actuator_disabled: "/tmp/test_vent_dis.txt".to_string(),
             output_file_name_heating_controller_state: "/tmp/test_heat.txt".to_string(),
             output_file_name_heating_is_on: "/tmp/test_heat_on.txt".to_string(),
@@ -1652,27 +1654,66 @@ pub mod tests {
         let temp_dir = std::env::temp_dir();
         let valid_ts = temp_dir.join("test_ts.txt").to_string_lossy().to_string();
         let valid_temp = temp_dir.join("test_temp.txt").to_string_lossy().to_string();
-        let valid_temp_f = temp_dir.join("test_temp_f.txt").to_string_lossy().to_string();
+        let valid_temp_f = temp_dir
+            .join("test_temp_f.txt")
+            .to_string_lossy()
+            .to_string();
         let valid_ph = temp_dir.join("test_ph.txt").to_string_lossy().to_string();
         let valid_ph_f = temp_dir.join("test_ph_f.txt").to_string_lossy().to_string();
         let valid_cond = temp_dir.join("test_cond.txt").to_string_lossy().to_string();
-        let valid_cond_f = temp_dir.join("test_cond_f.txt").to_string_lossy().to_string();
+        let valid_cond_f = temp_dir
+            .join("test_cond_f.txt")
+            .to_string_lossy()
+            .to_string();
         let valid_tank = temp_dir.join("test_tank.txt").to_string_lossy().to_string();
-        let valid_tank_inv = temp_dir.join("test_tank_inv.txt").to_string_lossy().to_string();
-        let valid_tank_stab = temp_dir.join("test_tank_stab.txt").to_string_lossy().to_string();
+        let valid_tank_inv = temp_dir
+            .join("test_tank_inv.txt")
+            .to_string_lossy()
+            .to_string();
+        let valid_tank_stab = temp_dir
+            .join("test_tank_stab.txt")
+            .to_string_lossy()
+            .to_string();
         let valid_vent = temp_dir.join("test_vent.txt").to_string_lossy().to_string();
-        let valid_vent_on = temp_dir.join("test_vent_on.txt").to_string_lossy().to_string();
-        let valid_vent_ineff = temp_dir.join("test_vent_ineff.txt").to_string_lossy().to_string();
-        let valid_vent_dis = temp_dir.join("test_vent_dis.txt").to_string_lossy().to_string();
+        let valid_vent_on = temp_dir
+            .join("test_vent_on.txt")
+            .to_string_lossy()
+            .to_string();
+        let valid_vent_ineff = temp_dir
+            .join("test_vent_ineff.txt")
+            .to_string_lossy()
+            .to_string();
+        let valid_vent_dis = temp_dir
+            .join("test_vent_dis.txt")
+            .to_string_lossy()
+            .to_string();
         let valid_heat = temp_dir.join("test_heat.txt").to_string_lossy().to_string();
-        let valid_heat_on = temp_dir.join("test_heat_on.txt").to_string_lossy().to_string();
-        let valid_heat_ineff = temp_dir.join("test_heat_ineff.txt").to_string_lossy().to_string();
-        let valid_heat_dis = temp_dir.join("test_heat_dis.txt").to_string_lossy().to_string();
-        let valid_amb_temp = temp_dir.join("test_amb_temp.txt").to_string_lossy().to_string();
+        let valid_heat_on = temp_dir
+            .join("test_heat_on.txt")
+            .to_string_lossy()
+            .to_string();
+        let valid_heat_ineff = temp_dir
+            .join("test_heat_ineff.txt")
+            .to_string_lossy()
+            .to_string();
+        let valid_heat_dis = temp_dir
+            .join("test_heat_dis.txt")
+            .to_string_lossy()
+            .to_string();
+        let valid_amb_temp = temp_dir
+            .join("test_amb_temp.txt")
+            .to_string_lossy()
+            .to_string();
         let valid_hum = temp_dir.join("test_hum.txt").to_string_lossy().to_string();
         let valid_grad = temp_dir.join("test_grad.txt").to_string_lossy().to_string();
-        let valid_refill = temp_dir.join("test_refill.txt").to_string_lossy().to_string();
-        let valid_refill_st = temp_dir.join("test_refill_st.txt").to_string_lossy().to_string();
+        let valid_refill = temp_dir
+            .join("test_refill.txt")
+            .to_string_lossy()
+            .to_string();
+        let valid_refill_st = temp_dir
+            .join("test_refill_st.txt")
+            .to_string_lossy()
+            .to_string();
 
         let config = DataLoggerConfig {
             active: true,
@@ -1723,34 +1764,57 @@ pub mod tests {
         let invalid_path = "/nonexistent_dir_xyz/test_file.txt".to_string();
 
         // 1. Test output_signal with invalid file path -> returns true (error)
-        let err1 = logger.output_signal(25.4, AquariumSignal::WaterTemperature, &invalid_path, false);
+        let err1 =
+            logger.output_signal(25.4, AquariumSignal::WaterTemperature, &invalid_path, false);
         assert!(err1, "Should return true on file write error");
 
         // 2. Test output_signal with inhibit_error_log = true -> returns true (error) and suppresses duplicate logging
-        let err2 = logger.output_signal(25.4, AquariumSignal::WaterTemperature, &invalid_path, true);
-        assert!(err2, "Should return true on file write error with error log inhibited");
+        let err2 =
+            logger.output_signal(25.4, AquariumSignal::WaterTemperature, &invalid_path, true);
+        assert!(
+            err2,
+            "Should return true on file write error with error log inhibited"
+        );
 
         // 3. Test output_state with invalid path
         let err_state1 = logger.output_state(true, "ON", "OFF", &invalid_path, false);
-        assert!(err_state1, "output_state should return true on file write error");
+        assert!(
+            err_state1,
+            "output_state should return true on file write error"
+        );
         let err_state2 = logger.output_state(true, "ON", "OFF", &invalid_path, true);
-        assert!(err_state2, "output_state should return true when inhibit_error_log is true");
+        assert!(
+            err_state2,
+            "output_state should return true when inhibit_error_log is true"
+        );
 
         // 4. Test output_description with invalid path
         let err_desc1 = logger.output_description("ACTIVE", &invalid_path, false);
-        assert!(err_desc1, "output_description should return true on file write error");
+        assert!(
+            err_desc1,
+            "output_description should return true on file write error"
+        );
         let err_desc2 = logger.output_description("ACTIVE", &invalid_path, true);
-        assert!(err_desc2, "output_description should return true when inhibit_error_log is true");
+        assert!(
+            err_desc2,
+            "output_description should return true when inhibit_error_log is true"
+        );
 
         // 5. Test output_timestamp with invalid path
         let err_ts1 = logger.output_timestamp(Utc::now().naive_utc(), &invalid_path, false);
-        assert!(err_ts1, "output_timestamp should return true on file write error");
+        assert!(
+            err_ts1,
+            "output_timestamp should return true on file write error"
+        );
         let err_ts2 = logger.output_timestamp(Utc::now().naive_utc(), &invalid_path, true);
-        assert!(err_ts2, "output_timestamp should return true when inhibit_error_log is true");
+        assert!(
+            err_ts2,
+            "output_timestamp should return true when inhibit_error_log is true"
+        );
 
         // 6. Test successful write returns false
-        let ok_result = logger.output_signal(25.4, AquariumSignal::WaterTemperature, &valid_temp, true);
+        let ok_result =
+            logger.output_signal(25.4, AquariumSignal::WaterTemperature, &valid_temp, true);
         assert!(!ok_result, "Should return false on successful file write");
     }
 }
-

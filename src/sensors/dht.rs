@@ -837,6 +837,7 @@ impl Dht {
                     #[cfg(all(not(test), not(feature = "test-utils")))] // only required in real-life execution
                     #[cfg(not(tarpaulin_include))]
                     log_error_chain(
+                        // not required during testing
                         module_path!(),
                         "Failure to read from DHT sensor",
                         dht_error,
@@ -849,6 +850,7 @@ impl Dht {
                 #[cfg(all(not(test), not(feature = "test-utils")))] // only required in real-life execution
                 #[cfg(not(tarpaulin_include))]
                 log_error_chain(
+                    // not required during testing
                     module_path!(),
                     "Failure to read from DHT sensor",
                     dht_error,
@@ -1086,7 +1088,10 @@ pub mod tests {
         let now = Instant::now();
         dht.set_warn_lock(&None, true);
         dht.check_mutex_access_duration(None, now, now);
-        assert!(!dht.lock_warn_max_mutex_access_duration, "check_mutex_access_duration should reset warn lock when duration is within limit");
+        assert!(
+            !dht.lock_warn_max_mutex_access_duration,
+            "check_mutex_access_duration should reset warn lock when duration is within limit"
+        );
 
         // 4. Test lock_error_failed_after_retries log flood protection
         let failed_error = DhtError::FailedAfterRetries {
@@ -1096,7 +1101,10 @@ pub mod tests {
         };
         // First occurrence: sets lock_error_failed_after_retries to true
         dht.handle_dht_read_result_log_flood(&Err(failed_error));
-        assert!(dht.lock_error_failed_after_retries, "lock_error_failed_after_retries should be set to true on FailedAfterRetries");
+        assert!(
+            dht.lock_error_failed_after_retries,
+            "lock_error_failed_after_retries should be set to true on FailedAfterRetries"
+        );
 
         // Second occurrence: lock_error_failed_after_retries stays true (log flood suppressed)
         let failed_error_2 = DhtError::FailedAfterRetries {
@@ -1105,35 +1113,52 @@ pub mod tests {
             source: Box::new(DhtError::ChecksumError("test_loc".to_string(), 10, 20)),
         };
         dht.handle_dht_read_result_log_flood(&Err(failed_error_2));
-        assert!(dht.lock_error_failed_after_retries, "lock_error_failed_after_retries should remain true to suppress repeated errors");
+        assert!(
+            dht.lock_error_failed_after_retries,
+            "lock_error_failed_after_retries should remain true to suppress repeated errors"
+        );
 
         // Success result: resets lock_error_failed_after_retries back to false
         let valid_data = (24.0, 55.0);
         dht.handle_dht_read_result_log_flood(&Ok(valid_data));
-        assert!(!dht.lock_error_failed_after_retries, "lock_error_failed_after_retries should reset to false on success");
+        assert!(
+            !dht.lock_error_failed_after_retries,
+            "lock_error_failed_after_retries should reset to false on success"
+        );
 
         // 5. Test lock_error_mutex log flood protection with poisoned mutex
         use std::sync::{Arc, Mutex};
-        let mutex_dht: Arc<Mutex<Result<(f32, f32), DhtError>>> = Arc::new(Mutex::new(Ok(valid_data)));
-        
+        let mutex_dht: Arc<Mutex<Result<(f32, f32), DhtError>>> =
+            Arc::new(Mutex::new(Ok(valid_data)));
+
         // Poison the mutex
         let mutex_clone = mutex_dht.clone();
         let _ = std::thread::spawn(move || {
             let _guard = mutex_clone.lock().unwrap();
             panic!("Poisoning mutex for testing");
-        }).join();
+        })
+        .join();
 
         // First attempt to write to poisoned mutex: lock_error_mutex transitions false -> true
         dht.write_dht_result_to_mutex(Ok(valid_data), &mutex_dht);
-        assert!(dht.lock_error_mutex, "lock_error_mutex should be set to true when mutex lock fails");
+        assert!(
+            dht.lock_error_mutex,
+            "lock_error_mutex should be set to true when mutex lock fails"
+        );
 
         // Second attempt to write to poisoned mutex: lock_error_mutex remains true (log flood suppressed)
         dht.write_dht_result_to_mutex(Ok(valid_data), &mutex_dht);
-        assert!(dht.lock_error_mutex, "lock_error_mutex should remain true on repeated mutex lock failure");
+        assert!(
+            dht.lock_error_mutex,
+            "lock_error_mutex should remain true on repeated mutex lock failure"
+        );
 
         // Unpoisoned mutex: resets lock_error_mutex back to false
         let valid_mutex = Arc::new(Mutex::new(Ok(valid_data)));
         dht.write_dht_result_to_mutex(Ok(valid_data), &valid_mutex);
-        assert!(!dht.lock_error_mutex, "lock_error_mutex should reset to false when mutex lock succeeds");
+        assert!(
+            !dht.lock_error_mutex,
+            "lock_error_mutex should reset to false when mutex lock succeeds"
+        );
     }
 }

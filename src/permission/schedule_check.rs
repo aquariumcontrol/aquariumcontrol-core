@@ -80,6 +80,8 @@ use crate::permission::schedule_check_config::ScheduleCheckConfig;
 use crate::utilities::acknowledge_signal_handler::AcknowledgeSignalHandlerTrait;
 use crate::utilities::channel_content::InternalCommand;
 use crate::utilities::database_ping_trait::DatabasePingTrait;
+#[cfg(all(not(test), not(feature = "test-utils")))]
+#[cfg(not(tarpaulin_include))]
 use crate::utilities::logger::log_error_chain;
 use crate::utilities::proc_ext_req::ProcessExternalRequestTrait;
 use std::time::{Duration, Instant};
@@ -225,11 +227,18 @@ impl ScheduleCheck {
                     AquaChannelError::Disconnected => {
                         if !locks.channel_receive {
                             #[cfg(all(not(test), not(feature = "test-utils")))]
-                            // only required in real-life execution
-                            let context = format!("receiving command from {_module_name} failed.");
-                            #[cfg(all(not(test), not(feature = "test-utils")))]
-                            // only required in real-life execution
-                            log_error_chain(module_path!(), &context, e);
+                            #[cfg(not(tarpaulin_include))]
+                            {
+                                // only required in real-life execution
+                                let context =
+                                    format!("receiving command from {_module_name} failed.");
+                                log_error_chain(
+                                    // not required during testing
+                                    module_path!(),
+                                    &context,
+                                    e,
+                                );
+                            }
                             locks.channel_receive = true;
                         }
                     }
@@ -272,7 +281,12 @@ impl ScheduleCheck {
                     #[cfg(not(tarpaulin_include))]
                     {
                         let context = format!("sending back message to {_module_name} failed");
-                        log_error_chain(module_path!(), &context, _e);
+                        log_error_chain(
+                            // not required for testing
+                            module_path!(),
+                            &context,
+                            _e,
+                        );
                     }
                     locks.channel_send = true;
                 }
@@ -325,8 +339,17 @@ impl ScheduleCheck {
                         #[cfg(all(not(test), not(feature = "test-utils")))]
                         // only required in real-life execution
                         if !locks.find_schedule {
-                            let context = format!("could not find schedule for {module_name}");
-                            log_error_chain(module_path!(), &context, _e);
+                            #[cfg(all(not(test), not(feature = "test-utils")))]
+                            #[cfg(not(tarpaulin_include))]
+                            {
+                                let context = format!("could not find schedule for {module_name}");
+                                log_error_chain(
+                                    // not required during testing
+                                    module_path!(),
+                                    &context,
+                                    _e,
+                                );
+                            }
                             locks.find_schedule = true;
                         }
                         None
@@ -397,11 +420,20 @@ impl ScheduleCheck {
                 .await
                 .unwrap();
                 sql_interface_schedule = sql_interface;
-                if let Err(errors) = res {
+                if let Err(_errors) = res {
                     // [impl->swreq~schedule_log_flood_protection~1]
                     if !self.lock_error_database_read {
-                        for e in errors {
-                            log_error_chain(module_path!(), "Reading schedule failed", e);
+                        #[cfg(all(not(test), not(feature = "test-utils")))]
+                        #[cfg(not(tarpaulin_include))]
+                        {
+                            for e in _errors {
+                                log_error_chain(
+                                    // not required during testing
+                                    module_path!(),
+                                    "Reading schedule failed",
+                                    e,
+                                );
+                            }
                         }
                         self.lock_error_database_read = true;
                     }

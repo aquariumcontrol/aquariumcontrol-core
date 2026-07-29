@@ -20,6 +20,8 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 
 use crate::thermal::heating_channels::HeatingChannels;
 use crate::utilities::channel_content::{AquariumDevice, InternalCommand};
+#[cfg(all(not(test), not(feature = "test-utils")))]
+#[cfg(not(tarpaulin_include))]
 use crate::utilities::logger::log_error_chain;
 use std::sync::Arc;
 
@@ -50,15 +52,34 @@ async fn actuate_heater(
     let mut mutex_data = mutex_device_scheduler_heating.lock().await;
 
     // Use map_err for more concise error handling on the send operation.
-    if let Err(e) = heating_channels.send_to_relay_manager(command.clone()) {
-        let error_message = format!("Channel communication to relay manager for {command} failed.");
-        log_error_chain(module_path!(), &error_message, e);
+    if let Err(_e) = heating_channels.send_to_relay_manager(command.clone()) {
+        #[cfg(all(not(test), not(feature = "test-utils")))]
+        #[cfg(not(tarpaulin_include))]
+        {
+            let error_message =
+                format!("Channel communication to relay manager for {command} failed.");
+            log_error_chain(
+                // not required during testing
+                module_path!(),
+                &error_message,
+                _e,
+            );
+        }
     } else {
         // If send was successful, wait for the response.
-        if let Err(e) = heating_channels.receive_from_relay_manager().await {
-            let error_message =
-                format!("Receiving answer from relay manager for {command} failed.");
-            log_error_chain(module_path!(), &error_message, e);
+        if let Err(_e) = heating_channels.receive_from_relay_manager().await {
+            #[cfg(all(not(test), not(feature = "test-utils")))]
+            #[cfg(not(tarpaulin_include))]
+            {
+                let error_message =
+                    format!("Receiving answer from relay manager for {command} failed.");
+                log_error_chain(
+                    // not required during testing
+                    module_path!(),
+                    &error_message,
+                    _e,
+                );
+            }
         }
     }
 

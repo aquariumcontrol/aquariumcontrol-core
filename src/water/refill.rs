@@ -84,6 +84,8 @@ use crate::sensors::tank_level_switch::TankLevelSwitchSignals;
 use crate::utilities::acknowledge_signal_handler::AcknowledgeSignalHandlerTrait;
 use crate::utilities::config::{read_config_file, read_config_file_with_test_database, ConfigData};
 use crate::utilities::database_ping_trait::DatabasePingTrait;
+#[cfg(all(not(test), not(feature = "test-utils")))]
+#[cfg(not(tarpaulin_include))]
 use crate::utilities::logger::log_error_chain;
 use crate::utilities::proc_ext_req::ProcessExternalRequestTrait;
 use crate::utilities::wait_for_termination::WaitForTerminationTrait;
@@ -336,7 +338,7 @@ impl Refill {
                 if !*lock_flag {
                     let context =
                         format!("Could not get refill {} of last {}.", check_type, duration);
-                    log_error_chain(module_path!(), &context, _e);
+                    log_error_chain(module_path!(), &context, _e); // not required during testing
                     *lock_flag = true;
                 }
                 true
@@ -388,6 +390,7 @@ impl Refill {
                             // [impl->swreq~water_log_flood_protection~1]
                             if !self.lock_error_read_duration_since_last_refill {
                                 log_error_chain(
+                                    // no required during testing
                                     module_path!(),
                                     "could not get duration since last refill event",
                                     _e,
@@ -404,6 +407,7 @@ impl Refill {
                     // [impl->swreq~water_log_flood_protection~1]
                     if !self.lock_error_check_empty {
                         log_error_chain(
+                            // not required during testing
                             module_path!(),
                             "could not check if refill table is empty or not",
                             _e,
@@ -851,11 +855,14 @@ impl Refill {
                         Ok(mut refill_status) => {
                             refill_status.external_inhibition_request = refill_inhibited;
                         }
-                        Err(e) => {
+                        Err(_e) => {
+                            #[cfg(all(not(test), not(feature = "test-utils")))]
+                            #[cfg(not(tarpaulin_include))]
                             log_error_chain(
+                                // not required during testing
                                 module_path!(),
                                 "error locking mutex for refill status",
-                                e,
+                                _e,
                             );
                         }
                     };
@@ -896,11 +903,14 @@ impl Refill {
                             Ok(mut refill_status) => {
                                 refill_status.critical_error_present = critical_error_present;
                             }
-                            Err(e) => {
+                            Err(_e) => {
+                                #[cfg(all(not(test), not(feature = "test-utils")))]
+                                #[cfg(not(tarpaulin_include))]
                                 log_error_chain(
+                                    // not required during testing
                                     module_path!(),
                                     "error locking mutex for refill status",
-                                    e,
+                                    _e,
                                 );
                             }
                         };
@@ -929,11 +939,14 @@ impl Refill {
                                         refill_status.refill_in_progress_live = true;
                                         refill_status.refill_in_progress_for_database = true;
                                     }
-                                    Err(e) => {
+                                    Err(_e) => {
+                                        #[cfg(all(not(test), not(feature = "test-utils")))]
+                                        #[cfg(not(tarpaulin_include))]
                                         log_error_chain(
+                                            // not required during testing
                                             module_path!(),
                                             "error locking mutex for refill status",
-                                            e,
+                                            _e,
                                         );
                                     }
                                 };
@@ -958,11 +971,14 @@ impl Refill {
                                     Ok(mut refill_status) => {
                                         refill_status.refill_in_progress_live = false;
                                     }
-                                    Err(e) => {
+                                    Err(_e) => {
+                                        #[cfg(all(not(test), not(feature = "test-utils")))]
+                                        #[cfg(not(tarpaulin_include))]
                                         log_error_chain(
+                                            // not required during testing
                                             module_path!(),
                                             "error locking mutex for refill status",
-                                            e,
+                                            _e,
                                         );
                                     }
                                 };
@@ -1101,10 +1117,17 @@ impl Refill {
                     self.lock_error_channel_send_monitors = false;
                     self.last_sent_monitor_view = Some(refill_monitor_view);
                 }
-                Err(e) => {
+                Err(_e) => {
                     // [impl->swreq~water_log_flood_protection~1]
                     if !self.lock_error_channel_send_monitors {
-                        log_error_chain(module_path!(), "sending view to monitor failed", e);
+                        #[cfg(all(not(test), not(feature = "test-utils")))]
+                        #[cfg(not(tarpaulin_include))]
+                        log_error_chain(
+                            // not required during testing
+                            module_path!(),
+                            "sending view to monitor failed",
+                            _e,
+                        );
                         self.lock_error_channel_send_monitors = true;
                     }
                 }
@@ -1478,13 +1501,21 @@ pub mod tests {
         };
 
         let (tx_mon, _rx_mon) = crate::launch::channels::channel(1, false);
-        let (tx_relay, _rx_relay) = crate::launch::channels::channel::<crate::utilities::channel_content::InternalCommand>(1, false);
+        let (tx_relay, _rx_relay) = crate::launch::channels::channel::<
+            crate::utilities::channel_content::InternalCommand,
+        >(1, false);
         let (_tx_relay_resp, rx_relay) = crate::launch::channels::channel::<bool>(1, false);
         let (tx_sig, _rx_sig) = crate::launch::channels::channel::<bool>(1, false);
-        let (_tx_sig_resp, rx_sig) = crate::launch::channels::channel::<crate::utilities::channel_content::InternalCommand>(1, false);
-        let (tx_sched, _rx_sched) = crate::launch::channels::channel::<crate::utilities::channel_content::InternalCommand>(1, false);
+        let (_tx_sig_resp, rx_sig) = crate::launch::channels::channel::<
+            crate::utilities::channel_content::InternalCommand,
+        >(1, false);
+        let (tx_sched, _rx_sched) = crate::launch::channels::channel::<
+            crate::utilities::channel_content::InternalCommand,
+        >(1, false);
         let (_tx_sched_resp, rx_sched) = crate::launch::channels::channel::<bool>(1, false);
-        let (_tx_msg, rx_msg) = crate::launch::channels::channel::<crate::utilities::channel_content::InternalCommand>(1, false);
+        let (_tx_msg, rx_msg) = crate::launch::channels::channel::<
+            crate::utilities::channel_content::InternalCommand,
+        >(1, false);
 
         let mut refill_channels = crate::water::refill_channels::RefillChannels {
             tx_refill_to_relay_manager: tx_relay,
@@ -1515,7 +1546,10 @@ pub mod tests {
         };
 
         refill.send_monitor_view_log_flood(&mut refill_channels, new_view.clone());
-        assert!(refill.lock_error_channel_send_monitors, "lock_error_channel_send_monitors should be true when channel send fails");
+        assert!(
+            refill.lock_error_channel_send_monitors,
+            "lock_error_channel_send_monitors should be true when channel send fails"
+        );
 
         let diff_view = crate::water::refill_monitor_view::RefillMonitorView {
             refill_check_volume_last_24h: true,
@@ -1526,6 +1560,9 @@ pub mod tests {
         };
 
         refill.send_monitor_view_log_flood(&mut refill_channels, diff_view);
-        assert!(refill.lock_error_channel_send_monitors, "lock_error_channel_send_monitors should remain true on repeated failure");
+        assert!(
+            refill.lock_error_channel_send_monitors,
+            "lock_error_channel_send_monitors should remain true on repeated failure"
+        );
     }
 }

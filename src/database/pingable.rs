@@ -43,6 +43,7 @@ use crate::database::sql_interface_feed::SqlInterfaceFeed;
 use crate::database::sql_interface_heating_stats::SqlInterfaceHeatingStats;
 use crate::database::sql_interface_refill::SqlInterfaceRefill;
 use crate::database::sql_interface_schedule::SqlInterfaceSchedule;
+#[cfg(all(not(test), not(feature = "test-utils")))]
 use crate::utilities::logger::log_error_chain;
 
 /// Represents a component that can be "pinged" to keep a connection alive.
@@ -66,11 +67,13 @@ macro_rules! impl_pingable {
             impl Pingable for $struct_name {
                 /// Pings the database to check connection health and prevent timeouts.
                 fn ping(&mut self) {
-                    if let Err(e) = SqlInterface::ping_database(&mut self.conn) {
-                        log_error_chain(
+                    if let Err(_e) = SqlInterface::ping_database(&mut self.conn) {
+                        #[cfg(all(not(test), not(feature = "test-utils")))]
+                        #[cfg(not(tarpaulin_include))]
+                        log_error_chain( // not required during testing
                             module_path!(),
                             "Encountered error while pinging database.",
-                            e,
+                            _e,
                         );
                     }
                 }

@@ -82,6 +82,8 @@ pub use crate::relays::relay_error::RelayError;
 use crate::relays::relay_manager_channels::RelayManagerChannels;
 use crate::relays::relay_manager_config::RelayManagerConfig;
 use crate::utilities::channel_content::InternalCommand;
+#[cfg(all(not(test), not(feature = "test-utils")))]
+#[cfg(not(tarpaulin_include))]
 use crate::utilities::logger::log_error_chain;
 use crate::utilities::proc_ext_req::ProcessExternalRequestTrait;
 use std::time::{Duration, Instant};
@@ -481,11 +483,14 @@ impl RelayManager {
             if let Some(interval_secs) = actuator.get_heartbeat_interval_seconds() {
                 if Instant::now().duration_since(last_heartbeat_time).as_secs() >= interval_secs {
                     let hb_result = tokio::task::block_in_place(|| actuator.heartbeat());
-                    if let Err(e) = hb_result {
+                    if let Err(_e) = hb_result {
+                        #[cfg(all(not(test), not(feature = "test-utils")))]
+                        #[cfg(not(tarpaulin_include))]
                         log_error_chain(
+                            // not required during testing
                             module_path!(),
                             "Execution of heartbeat for relay control failed.",
-                            e,
+                            _e,
                         );
                     }
                     last_heartbeat_time = Instant::now();
@@ -564,6 +569,7 @@ impl RelayManager {
                         #[cfg(all(not(test), not(feature = "test-utils")))] // only required in real-life execution
                         #[cfg(not(tarpaulin_include))]
                         log_error_chain(
+                            // not required during testing
                             module_path!(),
                             &format!("Actuation of {actuation_name} failed."),
                             _actuation_error,
@@ -698,7 +704,10 @@ pub mod tests {
                 Duration::from_millis(1),
             )
             .await;
-        assert!(lock_recv_1, "lock_receive should be set to true on receive error");
+        assert!(
+            lock_recv_1,
+            "lock_receive should be set to true on receive error"
+        );
         assert!(!lock_send_1, "lock_send should remain false");
 
         // Second call: lock_receive remains true (duplicate error log suppressed)
@@ -711,7 +720,10 @@ pub mod tests {
                 Duration::from_millis(1),
             )
             .await;
-        assert!(lock_recv_2, "lock_receive should remain true on repeated receive error");
+        assert!(
+            lock_recv_2,
+            "lock_receive should remain true on repeated receive error"
+        );
 
         // 2. Channel Empty test scenario -> resets lock_receive to false
         let (mut tx_cmd_empty, mut rx_cmd_empty) = channel::<InternalCommand>(10, false);
@@ -724,10 +736,15 @@ pub mod tests {
                 Duration::from_millis(1),
             )
             .await;
-        assert!(!lock_recv_3, "lock_receive should reset to false on channel Empty");
+        assert!(
+            !lock_recv_3,
+            "lock_receive should reset to false on channel Empty"
+        );
 
         // 3. Send Error test scenario (Command received, but response tx disconnected)
-        tx_cmd_empty.send(InternalCommand::SwitchOn(AquariumDevice::RefillPump)).unwrap();
+        tx_cmd_empty
+            .send(InternalCommand::SwitchOn(AquariumDevice::RefillPump))
+            .unwrap();
         drop(rx_resp); // Disconnect response channel
 
         // First call with disconnected response channel: lock_send transitions false -> true
@@ -740,11 +757,19 @@ pub mod tests {
                 Duration::from_millis(1),
             )
             .await;
-        assert!(!lock_recv_4, "lock_receive should be false after receiving command");
-        assert!(lock_send_4, "lock_send should be set to true on response send error");
+        assert!(
+            !lock_recv_4,
+            "lock_receive should be false after receiving command"
+        );
+        assert!(
+            lock_send_4,
+            "lock_send should be set to true on response send error"
+        );
 
         // Second call with command and disconnected response channel: lock_send remains true
-        tx_cmd_empty.send(InternalCommand::SwitchOff(AquariumDevice::RefillPump)).unwrap();
+        tx_cmd_empty
+            .send(InternalCommand::SwitchOff(AquariumDevice::RefillPump))
+            .unwrap();
         let (lock_recv_5, lock_send_5) = relay_manager
             .process_actuation_request(
                 (&mut rx_cmd_empty, &mut tx_resp),
@@ -755,11 +780,16 @@ pub mod tests {
             )
             .await;
         assert!(!lock_recv_5, "lock_receive should be false");
-        assert!(lock_send_5, "lock_send should remain true to suppress repeated send error logs");
+        assert!(
+            lock_send_5,
+            "lock_send should remain true to suppress repeated send error logs"
+        );
 
         // 4. Send Success test scenario -> resets lock_send to false
         let (mut tx_resp_valid, _rx_resp_valid) = channel::<bool>(10, false);
-        tx_cmd_empty.send(InternalCommand::SwitchOn(AquariumDevice::RefillPump)).unwrap();
+        tx_cmd_empty
+            .send(InternalCommand::SwitchOn(AquariumDevice::RefillPump))
+            .unwrap();
         let (lock_recv_6, lock_send_6) = relay_manager
             .process_actuation_request(
                 (&mut rx_cmd_empty, &mut tx_resp_valid),
@@ -770,7 +800,9 @@ pub mod tests {
             )
             .await;
         assert!(!lock_recv_6, "lock_receive should be false");
-        assert!(!lock_send_6, "lock_send should be reset to false on response send success");
+        assert!(
+            !lock_send_6,
+            "lock_send should be reset to false on response send success"
+        );
     }
 }
-

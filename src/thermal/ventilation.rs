@@ -83,6 +83,8 @@ use crate::thermal::ventilation_config::VentilationConfig;
 use crate::thermal::ventilation_mutexes::VentilationMutexes;
 use crate::utilities::acknowledge_signal_handler::AcknowledgeSignalHandlerTrait;
 use crate::utilities::check_mutex_access_duration::CheckMutexAccessDurationTrait;
+#[cfg(all(not(test), not(feature = "test-utils")))]
+#[cfg(not(tarpaulin_include))]
 use crate::utilities::logger::log_error_chain;
 use crate::utilities::wait_for_termination::WaitForTerminationTrait;
 use crate::{perform_schedule_check, update_thermal_set_values};
@@ -122,15 +124,34 @@ async fn actuate_ventilation(
     let mut mutex_data = mutex_device_scheduler_ventilation.lock().await;
 
     // Use if let for cleaner error handling
-    if let Err(e) = ventilation_channels.send_to_relay_manager(command.clone()) {
-        let error_message = format!("Channel communication to relay manager for {command} failed.");
-        log_error_chain(module_path!(), &error_message, e);
+    if let Err(_e) = ventilation_channels.send_to_relay_manager(command.clone()) {
+        #[cfg(all(not(test), not(feature = "test-utils")))]
+        #[cfg(not(tarpaulin_include))]
+        {
+            let error_message =
+                format!("Channel communication to relay manager for {command} failed.");
+            log_error_chain(
+                // not required during testing
+                module_path!(),
+                &error_message,
+                _e,
+            );
+        }
     } else {
         // now listen for the response
-        if let Err(e) = ventilation_channels.receive_from_relay_manager().await {
-            let error_message =
-                format!("Receiving answer from relay manager for {command} failed.");
-            log_error_chain(module_path!(), &error_message, e);
+        if let Err(_e) = ventilation_channels.receive_from_relay_manager().await {
+            #[cfg(all(not(test), not(feature = "test-utils")))]
+            #[cfg(not(tarpaulin_include))]
+            {
+                let error_message =
+                    format!("Receiving answer from relay manager for {command} failed.");
+                log_error_chain(
+                    // not required during testing
+                    module_path!(),
+                    &error_message,
+                    _e,
+                );
+            }
         }
     }
 
