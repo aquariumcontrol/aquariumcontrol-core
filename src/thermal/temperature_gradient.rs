@@ -97,6 +97,8 @@ impl TemperatureGradient {
     /// * `mutex_sensor_manager_signals` - Shared mutex for consolidated sensor signals.
     /// * `temperature_gradient_channels` - A parameter representing `temperature_gradient_channels`.
     /// * `mutex_temperature_gradient` - A parameter representing `mutex_temperature_gradient`.
+    ///
+    /// [impl->swreq~thermal_temperature_gradient~1]
     pub async fn execute(
         &mut self,
         mutex_sensor_manager_signals: Arc<Mutex<SensorManagerSignals>>,
@@ -319,6 +321,7 @@ mod tests {
 
     #[test]
     // Verifies that calculate least squares gradient zero gradient.
+    // [utest->swreq~thermal_temperature_gradient~1]
     fn test_calculate_least_squares_gradient_zero_gradient() {
         let mut samples = VecDeque::new();
         let now = current_timestamp_as_f64();
@@ -331,6 +334,7 @@ mod tests {
 
     #[test]
     // Verifies that calculate least squares gradient positive gradient one.
+    // [utest->swreq~thermal_temperature_gradient~1]
     fn test_calculate_least_squares_gradient_positive_gradient_one() {
         let mut samples = VecDeque::new();
         let now = current_timestamp_as_f64();
@@ -343,6 +347,7 @@ mod tests {
 
     #[test]
     // Verifies that calculate least squares gradient negative gradient one.
+    // [utest->swreq~thermal_temperature_gradient~1]
     fn test_calculate_least_squares_gradient_negative_gradient_one() {
         let mut samples = VecDeque::new();
         let now = current_timestamp_as_f64();
@@ -355,6 +360,7 @@ mod tests {
 
     #[test]
     // Verifies that calculate least squares gradient very high positive gradient.
+    // [utest->swreq~thermal_temperature_gradient~1]
     fn test_calculate_least_squares_gradient_very_high_positive_gradient() {
         let mut samples = VecDeque::new();
         samples.push_back((1.0, 1.0));
@@ -366,6 +372,7 @@ mod tests {
 
     #[test]
     // Verifies that calculate least squares gradient very high negative gradient.
+    // [utest->swreq~thermal_temperature_gradient~1]
     fn test_calculate_least_squares_gradient_very_high_negative_gradient() {
         let mut samples = VecDeque::new();
         samples.push_back((1.0, 1000.0));
@@ -377,6 +384,7 @@ mod tests {
 
     #[test]
     // Verifies that calculate least squares gradient x values are the same.
+    // [utest->swreq~thermal_temperature_gradient~1]
     fn test_calculate_least_squares_gradient_x_values_are_the_same() {
         let mut samples = VecDeque::new();
         samples.push_back((1.0, 10.0));

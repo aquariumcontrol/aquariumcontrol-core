@@ -1653,6 +1653,7 @@ pub fn test_ventilation_with_measured_temperature_high_with_blocking_mutex() {
 
 #[test]
 // Verifies that ventilation gradient monitoring disables actuator.
+// [itest->swreq~thermal_temperature_gradient_monitor~1]
 pub fn test_ventilation_gradient_monitoring_disables_actuator() {
     let sleep_duration_100_millis = Duration::from_millis(100);
     let spin_sleeper = SpinSleeper::default();

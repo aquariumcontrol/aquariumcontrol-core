@@ -48,6 +48,9 @@ ds18b20 = "0.1.1"
 assert_float_eq = "1.2"
 all_asserts = "2.3.4"
 
+[package.metadata.cargo-llvm-cov]
+ignore-filename-regex = "(src/main\\.rs$|.*_channels\\.rs$|.*/mock_.*\\.rs$)"
+
 [features]
 default = []
 test-utils = []

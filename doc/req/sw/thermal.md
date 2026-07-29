@@ -148,5 +148,23 @@ Covers:
 * sysreq~general1~1
 Needs: impl, utest
 
+### [thermal] Temperature gradient
+`swreq~thermal_temperature_gradient~1`
 
+The controller shall calculate the time-based gradient of the water temperature signal.
+
+Covers:
+
+* sysreq~thermal11~1
+Needs: impl, utest, itest
+
+### [thermal] Temperature gradient monitoring
+`swreq~thermal_temperature_gradient_monitor~1`
+
+The controller shall use the temperature gradient signal to detect a potential malfunction of either heater or ventilation.
+
+Covers:
+
+* sysreq~thermal11~1
+Needs: impl, utest, itest
 

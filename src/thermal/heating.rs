@@ -625,8 +625,6 @@ impl Heating {
                     &heating_mutexes.mutex_temperature_gradient,
                     heater_state == ActuatorState::On,
                     true, // heating expects a positive gradient
-                    #[cfg(all(not(test), not(feature = "test-utils")))]
-                    // only required in real-life execution
                     "Heating",
                 );
                 if actuator_ineffective

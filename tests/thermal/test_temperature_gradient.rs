@@ -53,10 +53,10 @@ fn execute_blocking(
         });
 }
 
+#[test]
 // Check if the temperature gradient calculation works.
 // Also, implicitly test if the execute function terminates after receiving Quit command.
-#[test]
-// Verifies that temperature gradient calculation.
+// [itest->swreq~thermal_temperature_gradient~1]
 pub fn test_temperature_gradient_calculation() {
     let spin_sleeper = SpinSleeper::default();
 

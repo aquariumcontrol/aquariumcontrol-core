@@ -269,8 +269,15 @@ Needs: swreq
 ### [thermal] Check if heating and ventilation control target temperature windows are distinct
 `sysreq~thermal10~1`
 
-Upon startup the control system shall check if the target temperature windows for heating and ventilation overlap.
+Upon startup, the control system shall check if the target temperature windows for heating and ventilation overlap.
 If they overlap, the application shall abort the startup.
+
+Needs: swreq
+
+### [thermal] Temperature gradient calculation
+`sysreq~thermal11~1`
+
+The control system shall calculate the temperature gradient for monitoring purposes.
 
 Needs: swreq
 

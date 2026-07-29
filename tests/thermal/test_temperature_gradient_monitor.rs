@@ -9,8 +9,6 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 
 //! Tests a trait for monitoring the effect of thermal actuators on the temperature gradient.
 
-#![cfg(all(not(test), not(feature = "test-utils")))]
-
 use aquarium_control::thermal::temperature_gradient_monitor::TemperatureGradientMonitorTrait;
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
@@ -49,6 +47,7 @@ impl TemperatureGradientMonitorTrait for MockMonitor {
 
 #[test]
 // Verifies that monitor deactivated.
+// [utest->swreq~thermal_temperature_gradient_monitor~1]
 fn test_monitor_deactivated() {
     let mut monitor = MockMonitor::new(0);
     let gradient = Arc::new(Mutex::new(-1.0)); // Incorrect gradient
@@ -60,7 +59,6 @@ fn test_monitor_deactivated() {
         &gradient,
         true,
         true,
-        #[cfg(all(not(test), not(feature = "test-utils")))] // only required in real-life execution
         "TestComponent",
     );
 
@@ -73,6 +71,7 @@ fn test_monitor_deactivated() {
 
 #[test]
 // Verifies that actuator off resets state.
+// [utest->swreq~thermal_temperature_gradient_monitor~1]
 fn test_actuator_off_resets_state() {
     let mut monitor = MockMonitor::new(10);
     monitor.last_actuator_on_time = Some(Instant::now());
@@ -83,7 +82,6 @@ fn test_actuator_off_resets_state() {
         &gradient,
         false,
         true,
-        #[cfg(all(not(test), not(feature = "test-utils")))] // only required in real-life execution
         "TestComponent",
     );
 
@@ -97,6 +95,7 @@ fn test_actuator_off_resets_state() {
 
 #[test]
 // Verifies that duration short no action.
+// [utest->swreq~thermal_temperature_gradient_monitor~1]
 fn test_duration_short_no_action() {
     let mut monitor = MockMonitor::new(10);
     let gradient = Arc::new(Mutex::new(-1.0)); // Incorrect gradient
@@ -108,7 +107,6 @@ fn test_duration_short_no_action() {
         &gradient,
         true,
         true,
-        #[cfg(all(not(test), not(feature = "test-utils")))] // only required in real-life execution
         "TestComponent",
     );
 
@@ -121,6 +119,7 @@ fn test_duration_short_no_action() {
 
 #[test]
 // Verifies that gradient correct positive.
+// [utest->swreq~thermal_temperature_gradient_monitor~1]
 fn test_gradient_correct_positive() {
     let mut monitor = MockMonitor::new(10);
     let gradient = Arc::new(Mutex::new(0.5)); // Correct positive gradient
@@ -132,7 +131,6 @@ fn test_gradient_correct_positive() {
         &gradient,
         true,
         true,
-        #[cfg(all(not(test), not(feature = "test-utils")))] // only required in real-life execution
         "TestComponent",
     );
 
@@ -145,6 +143,7 @@ fn test_gradient_correct_positive() {
 
 #[test]
 // Verifies that gradient correct negative.
+// [utest->swreq~thermal_temperature_gradient_monitor~1]
 fn test_gradient_correct_negative() {
     let mut monitor = MockMonitor::new(10);
     let gradient = Arc::new(Mutex::new(-0.5)); // Correct negative gradient
@@ -156,7 +155,6 @@ fn test_gradient_correct_negative() {
         &gradient,
         true,
         false,
-        #[cfg(all(not(test), not(feature = "test-utils")))] // only required in real-life execution
         "TestComponent",
     );
 
@@ -169,6 +167,7 @@ fn test_gradient_correct_negative() {
 
 #[test]
 // Verifies that gradient incorrect positive expected.
+// [utest->swreq~thermal_temperature_gradient_monitor~1]
 fn test_gradient_incorrect_positive_expected() {
     let mut monitor = MockMonitor::new(10);
     let gradient = Arc::new(Mutex::new(-0.5)); // Incorrect (negative instead of positive)
@@ -180,7 +179,6 @@ fn test_gradient_incorrect_positive_expected() {
         &gradient,
         true,
         true,
-        #[cfg(all(not(test), not(feature = "test-utils")))] // only required in real-life execution
         "TestComponent",
     );
 
@@ -193,6 +191,7 @@ fn test_gradient_incorrect_positive_expected() {
 
 #[test]
 // Verifies that gradient incorrect negative expected.
+// [utest->swreq~thermal_temperature_gradient_monitor~1]
 fn test_gradient_incorrect_negative_expected() {
     let mut monitor = MockMonitor::new(10);
     let gradient = Arc::new(Mutex::new(0.5)); // Incorrect (positive instead of negative)
@@ -204,7 +203,6 @@ fn test_gradient_incorrect_negative_expected() {
         &gradient,
         true,
         false,
-        #[cfg(all(not(test), not(feature = "test-utils")))] // only required in real-life execution
         "TestComponent",
     );
 
@@ -217,6 +215,7 @@ fn test_gradient_incorrect_negative_expected() {
 
 #[test]
 // Verifies that recovery resets inhibition.
+// [utest->swreq~thermal_temperature_gradient_monitor~1]
 fn test_recovery_resets_inhibition() {
     let mut monitor = MockMonitor::new(10);
     let gradient = Arc::new(Mutex::new(0.5)); // Now correct
@@ -229,7 +228,6 @@ fn test_recovery_resets_inhibition() {
         &gradient,
         true,
         true,
-        #[cfg(all(not(test), not(feature = "test-utils")))] // only required in real-life execution
         "TestComponent",
     );
 
@@ -242,6 +240,7 @@ fn test_recovery_resets_inhibition() {
 
 #[test]
 // Verifies that initial start time set.
+// [utest->swreq~thermal_temperature_gradient_monitor~1]
 fn test_initial_start_time_set() {
     let mut monitor = MockMonitor::new(10);
     let gradient = Arc::new(Mutex::new(0.0));
@@ -252,7 +251,6 @@ fn test_initial_start_time_set() {
         &gradient,
         true,
         true,
-        #[cfg(all(not(test), not(feature = "test-utils")))] // only required in real-life execution
         "TestComponent",
     );
 

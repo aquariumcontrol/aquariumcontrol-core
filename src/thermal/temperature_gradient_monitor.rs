@@ -9,9 +9,7 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 
 //! Provides a trait for monitoring the effect of thermal actuators on the temperature gradient.
 
-use log::error;
-#[cfg(all(not(test), not(feature = "test-utils")))] // only required in real-life execution
-use log::info;
+use log::{error, info};
 use std::sync::{Arc, Mutex};
 use std::time::Instant;
 
@@ -35,12 +33,14 @@ pub trait TemperatureGradientMonitorTrait {
     /// # Returns
     /// * `true` if the gradient is incorrect after the specified duration (i.e., a warning condition).
     /// * `false` if the gradient is correct, the duration hasn't been exceeded, or the monitor is inactive.
+    ///
+    /// [impl->swreq~thermal_temperature_gradient_monitor~1]
     fn temperature_gradient_monitor(
         &mut self,
         mutex_temperature_gradient: &Arc<Mutex<f64>>,
         actuator_status: bool,
         expected_gradient_is_positive: bool,
-        #[cfg(all(not(test), not(feature = "test-utils")))] component_name: &str, // only required in real-life execution
+        component_name: &str,
     ) -> bool {
         let max_time = self.max_time_actuator_effect_monitor();
         if max_time == 0 {
@@ -65,8 +65,6 @@ pub trait TemperatureGradientMonitorTrait {
 
                         if !gradient_sign_correct {
                             if !*log_inhibition {
-                                #[cfg(all(not(test), not(feature = "test-utils")))] // only required in real-life execution
-                                #[cfg(not(tarpaulin_include))]
                                 info!(
                                     target: module_path!(),
                                     "{} has been active for {}s, but the temperature gradient ({:.4}) does not have the expected {} sign.",
