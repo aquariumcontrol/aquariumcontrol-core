@@ -425,6 +425,24 @@ pub fn test_sql_interface_feedlog() {
         Ok(_) => {}
         Err(e) => panic!("Could not insert feed event into database: {e:?}"),
     }
+
+    // *** check error path of insert_feed_event when table is missing ***
+    sql_interface_feed.conn.query_drop("DROP TABLE feed_log").unwrap();
+    let invalid_result = sql_interface_feed.insert_feed_event(feed_timestamp, 5.5, 1);
+    assert!(
+        matches!(invalid_result, Err(SqlInterfaceError::InsertFeedEventFailure { .. })),
+        "Expected InsertFeedEventFailure when table is missing, but got {:?}",
+        invalid_result
+    );
+    println!("* checking error handling for insert_feed_event (FAIL) succeeded.");
+
+    // Recreate feed_log table and populate 2 entries for remaining checks
+    sql_interface_feed.conn.query_drop(
+        "CREATE TABLE IF NOT EXISTS feed_log (timestamp DATETIME NOT NULL, feeder_on_time DOUBLE NOT NULL, profile_id INT NOT NULL)"
+    ).unwrap();
+    sql_interface_feed.insert_feed_event(feed_timestamp, 5.5, 1).unwrap();
+    sql_interface_feed.insert_feed_event(feed_timestamp, 5.5, 2).unwrap();
+
     let test_result = SqlInterfaceFeed::new(sql_interface.get_connection().unwrap(), 0, 0, 1);
     assert!(matches!(
         test_result,
@@ -613,6 +631,38 @@ pub fn test_sql_interface_feed_schedule() {
         }
     };
     println!("* deleting existing entry from feed schedule succeeded.");
+
+    // *** check error paths of update_feed_schedule_entries_in_database (table missing) ***
+    let mut entries_repeat = vec![FeedScheduleEntry {
+        timestamp: NaiveDateTime::parse_from_str("2024-04-10 14:00:00", "%Y-%m-%d %H:%M:%S").unwrap(),
+        profile_id: 1,
+        repeat_daily: true,
+    }];
+    sql_interface_feed.conn.query_drop("DROP TABLE feed_schedule").unwrap();
+    let err_update = sql_interface_feed.update_feed_schedule_entries_in_database(&mut entries_repeat);
+    assert!(
+        matches!(err_update, Err(SqlInterfaceError::FeedScheduleDropFailure { .. })),
+        "Expected FeedScheduleDropFailure when table is missing during update, but got {:?}",
+        err_update
+    );
+
+    let mut entries_no_repeat = vec![FeedScheduleEntry {
+        timestamp: NaiveDateTime::parse_from_str("2024-04-10 14:00:00", "%Y-%m-%d %H:%M:%S").unwrap(),
+        profile_id: 1,
+        repeat_daily: false,
+    }];
+    let err_delete = sql_interface_feed.update_feed_schedule_entries_in_database(&mut entries_no_repeat);
+    assert!(
+        matches!(err_delete, Err(SqlInterfaceError::FeedScheduleDropFailure { .. })),
+        "Expected FeedScheduleDropFailure when table is missing during delete, but got {:?}",
+        err_delete
+    );
+
+    // Recreate table feed_schedule for remaining checks
+    sql_interface_feed.conn.query_drop(
+        "CREATE TABLE IF NOT EXISTS feed_schedule (timestamp DATETIME NOT NULL, profile_id INT NOT NULL, is_weekly BOOLEAN NOT NULL, is_daily BOOLEAN NOT NULL)"
+    ).unwrap();
+    println!("* checking error handling for update_feed_schedule_entries_in_database (FAIL) succeeded.");
     // *****************************************************************************************
 
     // *** check updating multiple feed schedule entries with repetition ***********************
