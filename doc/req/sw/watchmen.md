@@ -6,7 +6,7 @@ The control system shall monitor thread loop execution times and track mutex loc
 Covers:
 
 * sysreq~watchmen~1
-Needs: impl, itest
+Needs: impl, itest, utest
 
 ### [watchmen] Pet Watchdog
 `swreq~watchmen_pet_watchdog~1`

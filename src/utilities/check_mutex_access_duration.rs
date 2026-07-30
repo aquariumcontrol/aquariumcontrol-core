@@ -636,6 +636,7 @@ mod tests {
         }
     }
 
+    // [utest->swreq~watchmen_self_monitoring~1]
     #[test]
     fn test_mutex_access_within_limit() {
         let mut monitor = TestMutexMonitor::new(50);
@@ -648,6 +649,7 @@ mod tests {
         assert_eq!(monitor.violation_count, 0);
     }
 
+    // [utest->swreq~watchmen_self_monitoring~1]
     #[test]
     fn test_mutex_access_exceeded_first_time() {
         let mut monitor = TestMutexMonitor::new(10);
@@ -660,6 +662,7 @@ mod tests {
         assert_eq!(monitor.violation_count, 1);
     }
 
+    /// [utest->swreq~watchmen_self_monitoring~1]
     #[test]
     fn test_mutex_access_exceeded_log_flood_prevention() {
         let mut monitor = TestMutexMonitor::new(10);
@@ -677,6 +680,7 @@ mod tests {
         assert_eq!(monitor.violation_count, 1);
     }
 
+    /// [utest->swreq~watchmen_self_monitoring~1]
     #[test]
     fn test_mutex_access_recovery() {
         let mut monitor = TestMutexMonitor::new(10);
@@ -700,6 +704,7 @@ mod tests {
         assert_eq!(monitor.violation_count, 2);
     }
 
+    /// [utest->swreq~watchmen_self_monitoring~1]
     #[test]
     fn test_atlas_scientific_ezo_signals() {
         let mut ezo = AtlasScientificEzo::new(0x61, 100, 500);
@@ -737,6 +742,7 @@ mod tests {
         assert!(!ezo.get_warn_lock(&Some(&signal_other)));
     }
 
+    /// [utest->swreq~watchmen_self_monitoring~1]
     #[test]
     fn test_atlas_scientific_oem_signals() {
         let mut oem = AtlasScientificOem::new(0x61, 1, 100, 500, 0x07, 1.0, 4);
