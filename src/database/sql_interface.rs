@@ -147,7 +147,12 @@ impl SqlInterface {
                 Err(e) => {
                     last_err = Some(e);
                     if i < 9 {
-                        std::thread::sleep(std::time::Duration::from_millis(500));
+                        let sleep_duration = if cfg!(test) {
+                            std::time::Duration::from_millis(1)
+                        } else {
+                            std::time::Duration::from_millis(500)
+                        };
+                        std::thread::sleep(sleep_duration);
                     }
                 }
             }
@@ -223,7 +228,7 @@ impl SqlInterface {
     /// - The underlying database query fails.
     /// - The query returns zero rows (`SqlInterfaceError::SingleStringRequestEmptyResponse`).
     /// - The query returns more than one row (`SqlInterfaceError::SingleStringRequestNoSingleResponse`).
-    fn get_single_string_from_database(
+    pub fn get_single_string_from_database(
         conn: &mut PooledConn,
         sql_query_string: &str,
     ) -> Result<String, SqlInterfaceError> {
@@ -331,7 +336,7 @@ impl SqlInterface {
     /// - The query returns zero rows (`SqlInterfaceError::MultipleStringRequestEmptyResponse`).
     /// - The query returns only one row (`SqlInterfaceError::MultipleStringRequestSingleResponse`), as this function
     ///   strictly expects multiple results.
-    fn get_multiple_strings_from_database(
+    pub fn get_multiple_strings_from_database(
         &mut self,
         sql_query_string: &str,
     ) -> Result<Vec<String>, SqlInterfaceError> {
@@ -856,7 +861,6 @@ impl SqlInterface {
             .map(|_| ()) // On success, transform the i64 into a unit type
     }
 
-    //#[cfg(test)]
     /// This helper function **empties the specified database table** using a TRUNCATE command.
     /// The function is only used in test environments across different crates to ensure a clean state
     /// before running tests.

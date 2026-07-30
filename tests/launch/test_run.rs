@@ -23,8 +23,10 @@ mod common;
 use common::{add_balling_profile, insert_current_version_information, truncate_all_tables};
 
 use aquarium_control::database::database_interface_feed_trait::DatabaseInterfaceFeedTrait;
+#[cfg(any(test, feature="test-utils"))]
+use aquarium_control::database::sql_interface_feed::insert_feed_profiles;
 use aquarium_control::database::sql_interface_feed::{
-    insert_feed_profiles, insert_feed_schedule_entry, SqlInterfaceFeed,
+    insert_feed_schedule_entry, SqlInterfaceFeed,
 };
 
 #[test]

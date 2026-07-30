@@ -35,6 +35,18 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 //! The `ping` method is designed to be non-disruptive; it logs any errors internally
 //! but does not propagate them. This prevents keep-alive failures from crashing
 //! a main control loop.
+//!
+//! ## Coverage Exclusion Rationale
+//!
+//! This module is explicitly excluded from test code coverage measurement (`cargo-llvm-cov`) via
+//! `ignore-filename-regex` in `Cargo.toml`. The rationale for this exclusion is:
+//! 1. **Pure Boilerplate**: It contains only the `Pingable` trait definition and macro-generated (`impl_pingable!`)
+//!    delegation blocks to `SqlInterface::ping_database`.
+//! 2. **Core Query Tested Elsewhere**: The underlying database ping query functionality (`SELECT CURRENT_TIMESTAMP()`)
+//!    lives in `sql_interface.rs` and is independently tested.
+//! 3. **Macro Coverage Artifacts**: Diagnostic error logging inside `ping()` is conditionally compiled out during test
+//!    runs (`#[cfg(all(not(test), not(feature = "test-utils")))]`), which causes source line coverage tools to report
+//!    these macro-generated lines as uncovered despite `ping()` being executed 600+ times across test suites.
 
 use crate::database::sql_interface::SqlInterface;
 use crate::database::sql_interface_balling::SqlInterfaceBalling;

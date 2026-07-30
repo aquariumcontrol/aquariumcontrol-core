@@ -49,7 +49,7 @@ assert_float_eq = "1.2"
 all_asserts = "2.3.4"
 
 [package.metadata.cargo-llvm-cov]
-ignore-filename-regex = '(.*main\.rs$|.*channels\.rs$|.*mock.*\.rs$)'
+ignore-filename-regex = '(.*main\.rs$|.*channels\.rs$|.*mock.*\.rs$|.*pingable\.rs$)'
 
 [features]
 default = []

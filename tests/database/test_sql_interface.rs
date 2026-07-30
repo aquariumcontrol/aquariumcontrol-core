@@ -99,9 +99,340 @@ fn test_get_string_array_from_database() {
     assert_eq!(result_vec[1].single_string, test_string_2); // "World"
     println!("* Succeeded: Table with multiple entries returns a Vec with all elements.");
 
+    // --- Test Case 4: Invalid SQL Query Error Handling ---
+    println!("* Testing string array with invalid SQL query...");
+    let invalid_result = SqlInterface::get_string_array_from_database(
+        &mut conn,
+        "SELECT invalid_col FROM nonexistent_table_xyz_123",
+    );
+    assert!(matches!(
+        invalid_result,
+        Err(SqlInterfaceError::SingleStringRequestFailure { .. })
+    ));
+    println!("* Succeeded: Invalid SQL query returns SingleStringRequestFailure.");
+
     // Cleanup
     conn.query_drop(format!("DROP TABLE {}", table_name))
         .unwrap();
+}
+
+#[test]
+// This test case checks the functionality and error handling of get_single_string_from_database.
+// - response when querying an empty table (should be Err(SingleStringRequestEmptyResponse))
+// - response when querying a table with one entry (should be Ok(String))
+// - response when querying a table with multiple entries (should be Err(SingleStringRequestNoSingleResponse))
+// Test case uses test database #56.
+pub fn test_get_single_string_from_database() {
+    let config: ConfigData = read_config_file_with_test_database(
+        "config/aquarium_control_test_generic.toml".to_string(),
+        56,
+    );
+    let sql_interface: SqlInterface = SqlInterface::new(config.sql_interface)
+        .expect("Initialization of SQL interface for test failed.");
+    let mut conn = sql_interface.get_connection().unwrap();
+
+    let table_name = "test_single_string";
+    conn.query_drop(format!("CREATE TABLE IF NOT EXISTS {} (name VARCHAR(255));", table_name))
+        .unwrap();
+    conn.query_drop(format!("TRUNCATE TABLE {}", table_name))
+        .unwrap();
+
+    // 1. Test empty response (0 rows)
+    let res_empty = SqlInterface::get_single_string_from_database(
+        &mut conn,
+        &format!("SELECT name FROM {}", table_name),
+    );
+    assert!(matches!(
+        res_empty,
+        Err(SqlInterfaceError::SingleStringRequestEmptyResponse(_, _))
+    ));
+
+    // 2. Test happy path (1 row)
+    conn.exec_drop(
+        format!("INSERT INTO {} (name) VALUES (:name)", table_name),
+        params! { "name" => "hello" },
+    )
+    .unwrap();
+    let res_single = SqlInterface::get_single_string_from_database(
+        &mut conn,
+        &format!("SELECT name FROM {}", table_name),
+    );
+    assert_eq!(res_single.unwrap(), "hello");
+
+    // 3. Test multiple responses (>1 rows)
+    conn.exec_drop(
+        format!("INSERT INTO {} (name) VALUES (:name)", table_name),
+        params! { "name" => "world" },
+    )
+    .unwrap();
+    let res_multi = SqlInterface::get_single_string_from_database(
+        &mut conn,
+        &format!("SELECT name FROM {}", table_name),
+    );
+    assert!(matches!(
+        res_multi,
+        Err(SqlInterfaceError::SingleStringRequestNoSingleResponse(_, _))
+    ));
+
+    // Cleanup
+    conn.query_drop(format!("DROP TABLE {}", table_name))
+        .unwrap();
+}
+
+#[test]
+// This test case checks the functionality and error handling of get_multiple_strings_from_database.
+// - response when querying an empty table (should be Err(MultipleStringRequestEmptyResponse))
+// - response when querying a table with one entry (should be Err(MultipleStringRequestSingleResponse))
+// - response when querying a table with multiple entries (should be Ok(Vec<String>))
+// - response when executing an invalid SQL query (should be Err(SingleStringRequestFailure))
+// Test case uses dedicated test database #57.
+pub fn test_get_multiple_strings_from_database() {
+    let config: ConfigData = read_config_file_with_test_database(
+        "config/aquarium_control_test_generic.toml".to_string(),
+        57,
+    );
+    let mut sql_interface: SqlInterface = SqlInterface::new(config.sql_interface)
+        .expect("Initialization of SQL interface for test failed.");
+    let mut conn = sql_interface.get_connection().unwrap();
+
+    let table_name = "test_multiple_strings";
+    conn.query_drop(format!("CREATE TABLE IF NOT EXISTS {} (name VARCHAR(255));", table_name))
+        .unwrap();
+    conn.query_drop(format!("TRUNCATE TABLE {}", table_name))
+        .unwrap();
+
+    // 1. Test empty table response (0 rows)
+    let res_empty = sql_interface.get_multiple_strings_from_database(
+        &format!("SELECT name FROM {}", table_name),
+    );
+    assert!(matches!(
+        res_empty,
+        Err(SqlInterfaceError::MultipleStringRequestEmptyResponse(_, _))
+    ));
+
+    // 2. Test single row response (1 row)
+    conn.exec_drop(
+        format!("INSERT INTO {} (name) VALUES (:name)", table_name),
+        params! { "name" => "item1" },
+    )
+    .unwrap();
+    let res_single = sql_interface.get_multiple_strings_from_database(
+        &format!("SELECT name FROM {}", table_name),
+    );
+    assert!(matches!(
+        res_single,
+        Err(SqlInterfaceError::MultipleStringRequestSingleResponse(_, _))
+    ));
+
+    // 3. Test multiple rows response (2+ rows - Happy Path)
+    conn.exec_drop(
+        format!("INSERT INTO {} (name) VALUES (:name)", table_name),
+        params! { "name" => "item2" },
+    )
+    .unwrap();
+    let res_multi = sql_interface.get_multiple_strings_from_database(
+        &format!("SELECT name FROM {} ORDER BY name ASC", table_name),
+    );
+    assert_eq!(res_multi.unwrap(), vec!["item1".to_string(), "item2".to_string()]);
+
+    // 4. Test invalid query syntax / missing table error
+    let res_invalid = sql_interface.get_multiple_strings_from_database(
+        "SELECT invalid_col FROM nonexistent_table_xyz_999",
+    );
+    assert!(matches!(
+        res_invalid,
+        Err(SqlInterfaceError::SingleStringRequestFailure { .. })
+    ));
+
+    // Cleanup
+    conn.query_drop(format!("DROP TABLE {}", table_name))
+        .unwrap();
+}
+
+#[test]
+// This test case checks the functionality and error handling of get_single_integer_from_database.
+// - response when querying an empty table (should be Err(SingleIntegerRequestNoSingleResponse))
+// - response when querying a table with one entry (should be Ok(i64))
+// - response when querying a table with multiple entries (should be Err(SingleIntegerRequestNoSingleResponse))
+// - response when executing an invalid SQL query (should be Err(SingleIntegerRequestFailure))
+// Test case uses dedicated test database #58.
+pub fn test_get_single_integer_from_database() {
+    let config: ConfigData = read_config_file_with_test_database(
+        "config/aquarium_control_test_generic.toml".to_string(),
+        58,
+    );
+    let sql_interface: SqlInterface = SqlInterface::new(config.sql_interface)
+        .expect("Initialization of SQL interface for test failed.");
+    let mut conn = sql_interface.get_connection().unwrap();
+
+    let table_name = "test_single_integer";
+    conn.query_drop(format!("CREATE TABLE IF NOT EXISTS {} (val INT);", table_name))
+        .unwrap();
+    conn.query_drop(format!("TRUNCATE TABLE {}", table_name))
+        .unwrap();
+
+    // 1. Test empty table response (0 rows)
+    let res_empty = SqlInterface::get_single_integer_from_database(
+        &mut conn,
+        &format!("SELECT val FROM {}", table_name),
+    );
+    assert!(matches!(
+        res_empty,
+        Err(SqlInterfaceError::SingleIntegerRequestNoSingleResponse(_, _))
+    ));
+
+    // 2. Test single row response (1 row - Happy Path)
+    conn.exec_drop(
+        format!("INSERT INTO {} (val) VALUES (:val)", table_name),
+        params! { "val" => 42 },
+    )
+    .unwrap();
+    let res_single = SqlInterface::get_single_integer_from_database(
+        &mut conn,
+        &format!("SELECT val FROM {}", table_name),
+    );
+    assert_eq!(res_single.unwrap(), 42);
+
+    // 3. Test multiple rows response (> 1 rows)
+    conn.exec_drop(
+        format!("INSERT INTO {} (val) VALUES (:val)", table_name),
+        params! { "val" => 99 },
+    )
+    .unwrap();
+    let res_multi = SqlInterface::get_single_integer_from_database(
+        &mut conn,
+        &format!("SELECT val FROM {}", table_name),
+    );
+    assert!(matches!(
+        res_multi,
+        Err(SqlInterfaceError::SingleIntegerRequestNoSingleResponse(_, _))
+    ));
+
+    // 4. Test invalid query syntax / missing table error
+    let res_invalid = SqlInterface::get_single_integer_from_database(
+        &mut conn,
+        "SELECT invalid_col FROM nonexistent_table_xyz_888",
+    );
+    assert!(matches!(
+        res_invalid,
+        Err(SqlInterfaceError::SingleIntegerRequestFailure(_, _))
+    ));
+
+    // Cleanup
+    conn.query_drop(format!("DROP TABLE {}", table_name))
+        .unwrap();
+}
+
+#[test]
+// This test case checks the functionality and error handling of get_single_float_from_database.
+// - response when querying an empty table (should be Err(SingleFloatRequestEmptyResponse))
+// - response when querying a table with one entry (should be Ok(f64))
+// - response when querying a table with multiple entries (should be Err(SingleFloatRequestNoSingleResponse))
+// - response when executing an invalid SQL query (should be Err(SingleFloatRequestFailure))
+// Test case uses dedicated test database #60.
+pub fn test_get_single_float_from_database() {
+    let config: ConfigData = read_config_file_with_test_database(
+        "config/aquarium_control_test_generic.toml".to_string(),
+        60,
+    );
+    let sql_interface: SqlInterface = SqlInterface::new(config.sql_interface)
+        .expect("Initialization of SQL interface for test failed.");
+    let mut conn = sql_interface.get_connection().unwrap();
+
+    let table_name = "test_single_float";
+    conn.query_drop(format!("CREATE TABLE IF NOT EXISTS {} (val DOUBLE);", table_name))
+        .unwrap();
+    conn.query_drop(format!("TRUNCATE TABLE {}", table_name))
+        .unwrap();
+
+    // 1. Test empty table response (0 rows)
+    let res_empty = SqlInterface::get_single_float_from_database(
+        &mut conn,
+        &format!("SELECT val FROM {}", table_name),
+    );
+    assert!(matches!(
+        res_empty,
+        Err(SqlInterfaceError::SingleFloatRequestEmptyResponse(_, _))
+    ));
+
+    // 2. Test single row response (1 row - Happy Path)
+    conn.exec_drop(
+        format!("INSERT INTO {} (val) VALUES (:val)", table_name),
+        params! { "val" => 123.456 },
+    )
+    .unwrap();
+    let res_single = SqlInterface::get_single_float_from_database(
+        &mut conn,
+        &format!("SELECT val FROM {}", table_name),
+    );
+    assert!((res_single.unwrap() - 123.456).abs() < 0.00001);
+
+    // 3. Test multiple rows response (> 1 rows)
+    conn.exec_drop(
+        format!("INSERT INTO {} (val) VALUES (:val)", table_name),
+        params! { "val" => 789.012 },
+    )
+    .unwrap();
+    let res_multi = SqlInterface::get_single_float_from_database(
+        &mut conn,
+        &format!("SELECT val FROM {}", table_name),
+    );
+    assert!(matches!(
+        res_multi,
+        Err(SqlInterfaceError::SingleFloatRequestNoSingleResponse(_, _))
+    ));
+
+    // 4. Test invalid query syntax / missing table error
+    let res_invalid = SqlInterface::get_single_float_from_database(
+        &mut conn,
+        "SELECT invalid_col FROM nonexistent_table_xyz_777",
+    );
+    assert!(matches!(
+        res_invalid,
+        Err(SqlInterfaceError::SingleFloatRequestFailure(_, _))
+    ));
+
+    // Cleanup
+    conn.query_drop(format!("DROP TABLE {}", table_name))
+        .unwrap();
+}
+
+#[test]
+// This test case checks the functionality and error handling of get_timestamp.
+// - Happy Path: Returns Ok(NaiveDateTime) for valid timestamp query.
+// - 0 Rows: Returns Err(TimestampRequestFailure) when query returns no rows.
+// - Invalid Query: Returns Err(TimestampRequestFailure) when query syntax is invalid.
+// Test case uses dedicated test database #62.
+pub fn test_get_timestamp() {
+    let config: ConfigData = read_config_file_with_test_database(
+        "config/aquarium_control_test_generic.toml".to_string(),
+        62,
+    );
+    let sql_interface: SqlInterface = SqlInterface::new(config.sql_interface)
+        .expect("Initialization of SQL interface for test failed.");
+    let mut conn = sql_interface.get_connection().unwrap();
+
+    // 1. Happy Path
+    let res_valid = SqlInterface::get_timestamp(&mut conn, "SELECT CURRENT_TIMESTAMP() LIMIT 1;");
+    assert!(res_valid.is_ok());
+
+    // 2. 0 Rows (None -> Err)
+    let res_no_rows =
+        SqlInterface::get_timestamp(&mut conn, "SELECT CURRENT_TIMESTAMP() WHERE 1=0;");
+    assert!(matches!(
+        res_no_rows,
+        Err(SqlInterfaceError::TimestampRequestFailure { .. })
+    ));
+
+    // 3. Invalid Query (map_err -> Err)
+    let res_invalid = SqlInterface::get_timestamp(
+        &mut conn,
+        "SELECT invalid_col FROM nonexistent_table_xyz_666;",
+    );
+    assert!(matches!(
+        res_invalid,
+        Err(SqlInterfaceError::TimestampRequestFailure { .. })
+    ));
 }
 
 #[test]
@@ -169,6 +500,18 @@ fn test_get_optional_timestamp() {
         SqlInterface::get_optional_timestamp(&mut conn, &format!("SELECT ts FROM {}", table_name));
     assert_eq!(result.unwrap(), Some(test_timestamp));
     println!("* Succeeded: Table with multiple entries returns Ok(Some(timestamp)).");
+
+    // --- Test Case 4: Invalid query syntax error handling ---
+    println!("* Testing optional timestamp with invalid SQL query...");
+    let res_invalid = SqlInterface::get_optional_timestamp(
+        &mut conn,
+        "SELECT invalid_col FROM nonexistent_table_xyz_555",
+    );
+    assert!(matches!(
+        res_invalid,
+        Err(SqlInterfaceError::OptionalTimestampRequestFailure { .. })
+    ));
+    println!("* Succeeded: Invalid SQL query returns OptionalTimestampRequestFailure.");
 
     // Cleanup
     conn.query_drop(format!("DROP TABLE {}", table_name))
@@ -334,6 +677,18 @@ fn test_get_date() {
     assert_eq!(tomorrow_date_from_db, local_tomorrow);
     println!("* Succeeded: Public wrappers return correct dates.");
 
+    // --- Test Case 4: Invalid query syntax error handling ---
+    println!("* Testing get_date with invalid SQL query...");
+    let res_invalid = SqlInterface::get_date(
+        &mut conn,
+        "SELECT invalid_col FROM nonexistent_table_xyz_444",
+    );
+    assert!(matches!(
+        res_invalid,
+        Err(SqlInterfaceError::DateRequestFailure { .. })
+    ));
+    println!("* Succeeded: Invalid SQL query returns DateRequestFailure.");
+
     // Cleanup
     conn.query_drop(format!("DROP TABLE {}", table_name))
         .unwrap();
@@ -463,6 +818,41 @@ pub fn test_sql_interface_min_wait_timeout_check() {
 }
 
 #[test]
+// This test case checks error handling when the connection pool creation fails due to an invalid URL format.
+pub fn test_sql_interface_new_connection_pool_failure() {
+    let mut config: ConfigData = read_config_file_with_test_database(
+        "config/aquarium_control_test_generic.toml".to_string(),
+        28,
+    );
+    config.sql_interface.db_user = "invalid user with spaces#".to_string();
+    let result = SqlInterface::new(config.sql_interface);
+    assert!(matches!(
+        result,
+        Err(SqlInterfaceError::ConnectionPoolFailure { .. })
+    ));
+}
+
+#[test]
+// This test case checks error handling when the connection pool fails to retrieve an initial connection.
+pub fn test_sql_interface_new_connection_from_pool_failure() {
+    let config: ConfigData = read_config_file_with_test_database(
+        "config/aquarium_control_test_generic.toml".to_string(),
+        28,
+    );
+    let mut sql_interface = SqlInterface::new(config.sql_interface.clone()).unwrap();
+    // Temporarily lower max_connections to 1 so get_conn fails
+    if sql_interface.conn.query_drop("SET GLOBAL max_connections = 1;").is_ok() {
+        let result = SqlInterface::new(config.sql_interface.clone());
+        // Restore max_connections immediately
+        let _ = sql_interface.conn.query_drop("SET GLOBAL max_connections = 151;");
+        assert!(matches!(
+            result,
+            Err(SqlInterfaceError::ConnectionFromPool { .. }) | Err(SqlInterfaceError::ConnectionPoolFailure { .. })
+        ));
+    }
+}
+
+#[test]
 // This test case checks
 // - error response when querying empty table
 // - error response when version information does not match entry in database
@@ -543,6 +933,55 @@ pub fn test_sql_interface_version() {
         }
     }
     // ***************************************************************************************
+
+    // *** check error response when version table contains multiple matching results *********
+    sql_interface
+        .conn
+        .exec_drop::<_, _>(
+            SQL_QUERY_WRITE_VERSION_INFORMATION,
+            params! {
+                "major" => version_information.major,
+                "minor" => version_information.minor,
+                "build" => version_information.build,
+                "hash" => "duplicate_hash".to_string(),
+            },
+        )
+        .unwrap();
+    let multi_res = sql_interface.get_hash_from_database(&version_information);
+    assert!(
+        matches!(
+            multi_res,
+            Err(SqlInterfaceError::SingleVersionRequestMultipleResults(
+                _, _, _, _, _
+            ))
+        ),
+        "Expected SingleVersionRequestMultipleResults, got {:?}",
+        multi_res
+    );
+    println!("* checking multiple results error response succeeded.");
+
+    // *** check error response when version table is missing **********************************
+    sql_interface.conn.query_drop("DROP TABLE version").unwrap();
+    let fail_res = sql_interface.get_hash_from_database(&version_information);
+    assert!(
+        matches!(
+            fail_res,
+            Err(SqlInterfaceError::SingleVersionRequestFailure(
+                _, _, _, _, _
+            ))
+        ),
+        "Expected SingleVersionRequestFailure when version table is dropped, got {:?}",
+        fail_res
+    );
+    println!("* checking version table missing error response succeeded.");
+
+    // Recreate version table for cleanup
+    sql_interface
+        .conn
+        .query_drop(
+            "CREATE TABLE IF NOT EXISTS version (major INT NOT NULL, minor INT NOT NULL, build INT NOT NULL, hash VARCHAR(255) NOT NULL)"
+        )
+        .unwrap();
 }
 
 #[test]
@@ -556,4 +995,141 @@ pub fn test_sql_interface_ping() {
         .expect("Initialization of SQL interface for test failed");
 
     SqlInterface::ping_database(&mut sql_interface.get_connection().unwrap()).unwrap();
+}
+
+#[test]
+// This test case checks error handling of get_database when the connection is killed.
+// Test case uses dedicated test database #61.
+pub fn test_sql_interface_get_database_error() {
+    let config: ConfigData = read_config_file_with_test_database(
+        "config/aquarium_control_test_generic.toml".to_string(),
+        61,
+    );
+    let mut sql_interface = SqlInterface::new(config.sql_interface)
+        .expect("Initialization of SQL interface for test failed.");
+
+    // Retrieve connection ID for the test connection
+    let connection_id: u64 = sql_interface
+        .conn
+        .query_first("SELECT CONNECTION_ID();")
+        .unwrap()
+        .unwrap();
+
+    // Create a temporary helper connection from the pool to kill the test connection
+    let mut helper_conn = sql_interface.get_connection().unwrap();
+    helper_conn
+        .query_drop(format!("KILL {};", connection_id))
+        .unwrap();
+
+    // Call get_database on the killed connection -> expects DatabaseNameRequestFailure
+    let result = sql_interface.get_database();
+    assert!(
+        matches!(
+            result,
+            Err(SqlInterfaceError::DatabaseNameRequestFailure { .. })
+        ),
+        "Expected DatabaseNameRequestFailure on killed connection, got {:?}",
+        result.as_ref().err()
+    );
+}
+
+#[test]
+// This test case checks error handling of get_tables when the connection is killed.
+// Test case uses dedicated test database #63.
+pub fn test_sql_interface_get_tables_error() {
+    let config: ConfigData = read_config_file_with_test_database(
+        "config/aquarium_control_test_generic.toml".to_string(),
+        63,
+    );
+    let mut sql_interface = SqlInterface::new(config.sql_interface)
+        .expect("Initialization of SQL interface for test failed.");
+
+    // Retrieve connection ID for the test connection
+    let connection_id: u64 = sql_interface
+        .conn
+        .query_first("SELECT CONNECTION_ID();")
+        .unwrap()
+        .unwrap();
+
+    // Create a temporary helper connection from the pool to kill the test connection
+    let mut helper_conn = sql_interface.get_connection().unwrap();
+    helper_conn
+        .query_drop(format!("KILL {};", connection_id))
+        .unwrap();
+
+    // Call get_tables on the killed connection -> expects ShowTablesWithoutProperResult
+    let result = sql_interface.get_tables();
+    assert!(
+        matches!(
+            result,
+            Err(SqlInterfaceError::ShowTablesWithoutProperResult(_))
+        ),
+        "Expected ShowTablesWithoutProperResult on killed connection, got {:?}",
+        result.as_ref().err()
+    );
+}
+
+#[test]
+// This test case checks error handling of ping_database when the connection is killed.
+// Test case uses dedicated test database #64.
+pub fn test_sql_interface_ping_database_error() {
+    let config: ConfigData = read_config_file_with_test_database(
+        "config/aquarium_control_test_generic.toml".to_string(),
+        64,
+    );
+    let sql_interface = SqlInterface::new(config.sql_interface)
+        .expect("Initialization of SQL interface for test failed.");
+    let mut test_conn = sql_interface.get_connection().unwrap();
+
+    // Retrieve connection ID for the test connection
+    let connection_id: u64 = test_conn
+        .query_first("SELECT CONNECTION_ID();")
+        .unwrap()
+        .unwrap();
+
+    // Create a temporary helper connection from the pool to kill the test connection
+    let mut helper_conn = sql_interface.get_connection().unwrap();
+    helper_conn
+        .query_drop(format!("KILL {};", connection_id))
+        .unwrap();
+
+    // Call ping_database on the killed connection -> expects DatabasePingFailure
+    let result = SqlInterface::ping_database(&mut test_conn);
+    assert!(
+        matches!(
+            result,
+            Err(SqlInterfaceError::DatabasePingFailure { .. })
+        ),
+        "Expected DatabasePingFailure on killed connection, got {:?}",
+        result.as_ref().err()
+    );
+}
+
+#[test]
+// This test case checks get_duration_from_naive_timestamp_to_local_now
+// with valid, non-existent (DST spring-forward gap), and ambiguous (DST fall-back overlap) timestamps.
+pub fn test_get_duration_from_naive_timestamp_to_local_now() {
+    // 1. Valid timestamp (Single)
+    let valid_naive = Local::now().naive_local() - chrono::Duration::seconds(10);
+    let valid_duration =
+        SqlInterface::get_duration_from_naive_timestamp_to_local_now(valid_naive);
+    assert!(valid_duration.is_some());
+
+    // 2. DST spring-forward non-existent timestamp (None)
+    let spring_forward_gap = NaiveDate::from_ymd_opt(2025, 3, 30)
+        .unwrap()
+        .and_hms_opt(2, 30, 0)
+        .unwrap();
+    let gap_res =
+        SqlInterface::get_duration_from_naive_timestamp_to_local_now(spring_forward_gap);
+    assert!(gap_res.is_none());
+
+    // 3. DST fall-back ambiguous timestamp (Ambiguous)
+    let fall_back_overlap = NaiveDate::from_ymd_opt(2025, 10, 26)
+        .unwrap()
+        .and_hms_opt(2, 30, 0)
+        .unwrap();
+    let overlap_res =
+        SqlInterface::get_duration_from_naive_timestamp_to_local_now(fall_back_overlap);
+    assert!(overlap_res.is_none());
 }

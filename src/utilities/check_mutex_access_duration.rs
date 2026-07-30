@@ -590,3 +590,186 @@ impl CheckMutexAccessDurationTrait for AtlasScientificOem {
         "atlas_scientific_oem"
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::time::{Duration, Instant};
+
+    struct TestMutexMonitor {
+        warn_lock: bool,
+        max_duration: Duration,
+        violation_count: usize,
+    }
+
+    impl TestMutexMonitor {
+        fn new(max_duration_ms: u64) -> Self {
+            Self {
+                warn_lock: false,
+                max_duration: Duration::from_millis(max_duration_ms),
+                violation_count: 0,
+            }
+        }
+    }
+
+    impl CheckMutexAccessDurationTrait for TestMutexMonitor {
+        fn get_warn_lock(&self, _key_opt: &Option<&AquariumSignal>) -> bool {
+            self.warn_lock
+        }
+
+        fn set_warn_lock(&mut self, _key_opt: &Option<&AquariumSignal>, value: bool) {
+            self.warn_lock = value;
+        }
+
+        #[cfg(any(test, feature = "test-utils"))]
+        fn record_access_duration_violation(&mut self, _key_opt: &Option<&AquariumSignal>) {
+            self.violation_count += 1;
+        }
+
+        fn get_max_mutex_access_duration(&self) -> Duration {
+            self.max_duration
+        }
+
+        #[cfg(all(not(test), not(feature = "test-utils")))]
+        fn get_location(&self) -> &str {
+            "test_mutex_monitor"
+        }
+    }
+
+    #[test]
+    fn test_mutex_access_within_limit() {
+        let mut monitor = TestMutexMonitor::new(50);
+        let now = Instant::now();
+        let instant_after = now + Duration::from_millis(10);
+
+        monitor.check_mutex_access_duration(None, instant_after, now);
+
+        assert!(!monitor.warn_lock);
+        assert_eq!(monitor.violation_count, 0);
+    }
+
+    #[test]
+    fn test_mutex_access_exceeded_first_time() {
+        let mut monitor = TestMutexMonitor::new(10);
+        let now = Instant::now();
+        let instant_after = now + Duration::from_millis(50);
+
+        monitor.check_mutex_access_duration(None, instant_after, now);
+
+        assert!(monitor.warn_lock);
+        assert_eq!(monitor.violation_count, 1);
+    }
+
+    #[test]
+    fn test_mutex_access_exceeded_log_flood_prevention() {
+        let mut monitor = TestMutexMonitor::new(10);
+        let now = Instant::now();
+        let instant_after = now + Duration::from_millis(50);
+
+        // First violation
+        monitor.check_mutex_access_duration(None, instant_after, now);
+        assert!(monitor.warn_lock);
+        assert_eq!(monitor.violation_count, 1);
+
+        // Second consecutive violation while warn_lock is true
+        monitor.check_mutex_access_duration(None, instant_after, now);
+        assert!(monitor.warn_lock);
+        assert_eq!(monitor.violation_count, 1);
+    }
+
+    #[test]
+    fn test_mutex_access_recovery() {
+        let mut monitor = TestMutexMonitor::new(10);
+        let now = Instant::now();
+        let instant_after_long = now + Duration::from_millis(50);
+        let instant_after_short = now + Duration::from_millis(5);
+
+        // 1. First violation -> warn_lock = true
+        monitor.check_mutex_access_duration(None, instant_after_long, now);
+        assert!(monitor.warn_lock);
+        assert_eq!(monitor.violation_count, 1);
+
+        // 2. Access within limit -> warn_lock reset to false
+        monitor.check_mutex_access_duration(None, instant_after_short, now);
+        assert!(!monitor.warn_lock);
+        assert_eq!(monitor.violation_count, 1);
+
+        // 3. Second violation after recovery -> warn_lock = true, violation_count = 2
+        monitor.check_mutex_access_duration(None, instant_after_long, now);
+        assert!(monitor.warn_lock);
+        assert_eq!(monitor.violation_count, 2);
+    }
+
+    #[test]
+    fn test_atlas_scientific_ezo_signals() {
+        let mut ezo = AtlasScientificEzo::new(0x61, 100, 500);
+        let signal_temp = AquariumSignal::WaterTemperature;
+        let signal_ph = AquariumSignal::pH;
+        let signal_cond = AquariumSignal::Conductivity;
+        let signal_other = AquariumSignal::AmbientTemperature;
+
+        assert!(!ezo.get_warn_lock(&Some(&signal_temp)));
+        assert!(!ezo.get_warn_lock(&Some(&signal_ph)));
+        assert!(!ezo.get_warn_lock(&Some(&signal_cond)));
+        assert!(ezo.get_warn_lock(&None));
+
+        ezo.set_warn_lock(&Some(&signal_temp), true);
+        assert!(ezo.get_warn_lock(&Some(&signal_temp)));
+        assert!(!ezo.get_warn_lock(&Some(&signal_ph)));
+
+        ezo.set_warn_lock(&Some(&signal_ph), true);
+        assert!(ezo.get_warn_lock(&Some(&signal_ph)));
+
+        ezo.set_warn_lock(&Some(&signal_cond), true);
+        assert!(ezo.get_warn_lock(&Some(&signal_cond)));
+
+        ezo.record_access_duration_violation(&Some(&signal_temp));
+        assert!(ezo.mutex_temperature_access_duration_exceeded);
+
+        ezo.record_access_duration_violation(&Some(&signal_ph));
+        assert!(ezo.mutex_ph_access_duration_exceeded);
+
+        ezo.record_access_duration_violation(&Some(&signal_cond));
+        assert!(ezo.mutex_conductivity_access_duration_exceeded);
+
+        ezo.record_access_duration_violation(&Some(&signal_other));
+        ezo.set_warn_lock(&Some(&signal_other), true);
+        assert!(!ezo.get_warn_lock(&Some(&signal_other)));
+    }
+
+    #[test]
+    fn test_atlas_scientific_oem_signals() {
+        let mut oem = AtlasScientificOem::new(0x61, 1, 100, 500, 0x07, 1.0, 4);
+        let signal_temp = AquariumSignal::WaterTemperature;
+        let signal_ph = AquariumSignal::pH;
+        let signal_cond = AquariumSignal::Conductivity;
+        let signal_other = AquariumSignal::AmbientTemperature;
+
+        assert!(!oem.get_warn_lock(&Some(&signal_temp)));
+        assert!(!oem.get_warn_lock(&Some(&signal_ph)));
+        assert!(!oem.get_warn_lock(&Some(&signal_cond)));
+        assert!(oem.get_warn_lock(&None));
+
+        oem.set_warn_lock(&Some(&signal_temp), true);
+        assert!(oem.get_warn_lock(&Some(&signal_temp)));
+
+        oem.set_warn_lock(&Some(&signal_ph), true);
+        assert!(oem.get_warn_lock(&Some(&signal_ph)));
+
+        oem.set_warn_lock(&Some(&signal_cond), true);
+        assert!(oem.get_warn_lock(&Some(&signal_cond)));
+
+        oem.record_access_duration_violation(&Some(&signal_temp));
+        assert!(oem.mutex_temperature_access_duration_exceeded);
+
+        oem.record_access_duration_violation(&Some(&signal_ph));
+        assert!(oem.mutex_ph_access_duration_exceeded);
+
+        oem.record_access_duration_violation(&Some(&signal_cond));
+        assert!(oem.mutex_conductivity_access_duration_exceeded);
+
+        oem.record_access_duration_violation(&Some(&signal_other));
+        oem.set_warn_lock(&Some(&signal_other), true);
+        assert!(!oem.get_warn_lock(&Some(&signal_other)));
+    }
+}
