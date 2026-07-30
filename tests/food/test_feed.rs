@@ -8,7 +8,9 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 */
 use aquarium_control::database::database_interface_feed_trait::DatabaseInterfaceFeedTrait;
 use aquarium_control::database::sql_interface::SqlInterface;
-use aquarium_control::database::sql_interface_feed::{insert_feed_profiles, SqlInterfaceFeed};
+#[cfg(any(test, feature = "test-utils"))]
+use aquarium_control::database::sql_interface_feed::insert_feed_profiles;
+use aquarium_control::database::sql_interface_feed::SqlInterfaceFeed;
 use aquarium_control::database::sql_query_strings::SQL_TABLE_FEED_SCHEDULE;
 use aquarium_control::database::sql_test_query_strings::SQL_TABLE_FEED_LOG;
 use aquarium_control::food::feed::Feed;
@@ -73,6 +75,7 @@ fn execute_blocking(
 }
 
 #[test]
+#[cfg(any(test, feature = "test-utils"))]
 // "Happy" case executing a set of feed schedule entries. Additionally, it checks row limitation.
 // Test case uses test database #07.
 /// [itest->swreq~food_execute_schedule~1]
@@ -190,16 +193,16 @@ pub fn test_feed_schedule_execution() {
 }
 
 #[test]
+#[cfg(any(test, feature = "test-utils"))]
 // Test case runs feed control and triggers inhibition by sending the stop message via the channel.
 // After verification that feed is stopped,
 // The test case sends the start message via the channel and verifies if feed control
 // resumes operation. Afterward, the test case triggers execution of a specific feed profile
 // by sending the "execute" message via the channel.
 // Test case uses test database #08.
-/// [itest->swreq~food_execute_remote~1]
-///
-/// [itest->swreq~food_stop_indefinitely~1]
-/// [itest->swreq~food_restart~1]
+// [itest->swreq~food_execute_remote~1]
+// [itest->swreq~food_stop_indefinitely~1]
+// [itest->swreq~food_restart~1]
 pub fn test_messaging_stops_starts_execute_feed() {
     let sleep_duration_100_millis = Duration::from_millis(100);
     let sleep_duration_2_secs = Duration::from_secs(2);
@@ -398,8 +401,8 @@ pub fn test_messaging_stops_starts_execute_feed() {
 #[test]
 // Test case runs feed control and triggers inhibition by using a mock SQL interface which returns only errors.
 // This test case does not require any communication with the database.
-/// [itest->swreq~food_log_database~1]
-/// [itest->swreq~food_log_flood_protection~1]
+// [itest->swreq~food_log_database~1]
+// [itest->swreq~food_log_flood_protection~1]
 pub fn test_messaging_sql_error_inhibition_feed() {
     let sleep_duration_100_millis = Duration::from_millis(100);
     let sleep_duration_10_secs = Duration::from_secs(10);
@@ -487,7 +490,7 @@ pub fn test_messaging_sql_error_inhibition_feed() {
 // Test case test implementation with multiple feed schedule entries in the past.
 // The youngest feed schedule entry shall be selected.
 // Test case uses test database #09.
-/// [itest->swreq~food_read_schedule~1]
+// [itest->swreq~food_read_schedule~1]
 pub fn test_feed_schedule_execution_past_entries_select_youngest() {
     let sleep_duration_100_millis = Duration::from_millis(100);
     let sleep_duration_8_seconds = Duration::from_millis(10000);
@@ -599,7 +602,7 @@ pub fn test_feed_schedule_execution_past_entries_select_youngest() {
 // Test case test implementation with multiple feed schedule entries in the past.
 // The oldest feed schedule entry shall be selected.
 // Test case uses test database #10.
-/// [itest->swreq~food_read_schedule~1]
+// [itest->swreq~food_read_schedule~1]
 pub fn test_feed_schedule_execution_past_entries_select_oldest() {
     let sleep_duration_100_millis = Duration::from_millis(100);
     let sleep_duration_8_seconds = Duration::from_millis(10000);

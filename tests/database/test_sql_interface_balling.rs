@@ -134,6 +134,58 @@ fn test_sql_interface_balling_new() {
         result.err()
     );
     println!("* Succeeded: Initialization passes when row limit checks are deactivated.");
+
+    // --- Test Case 5: Failure when ballingsetvals contains NULL values ---
+    println!("* Testing new() with NULL values in ballingsetvals...");
+    SqlInterface::truncate_table(&mut sql_interface, SQL_TABLE_BALLING_SET_VALS.to_string())
+        .unwrap();
+    let mut conn = sql_interface.get_connection().unwrap();
+    conn.query_drop("ALTER TABLE balling_set_vals MODIFY COLUMN dosing_speed DOUBLE NULL;")
+        .unwrap();
+    conn.query_drop(
+        "INSERT INTO balling_set_vals (pump_id, dosing_volume, dosing_speed, label) VALUES (1, 1.0, NULL, 'test_null')",
+    )
+    .unwrap();
+    let result = SqlInterfaceBalling::new(conn, 10, 10);
+    assert!(
+        matches!(
+            result,
+            Err(SqlInterfaceError::DatabaseBallingSetValTableContainsNull(_, _))
+        ),
+        "Expected DatabaseBallingSetValTableContainsNull error, but got {:?}",
+        result
+    );
+    println!("* Succeeded: Initialization fails when ballingsetvals contains NULL values.");
+
+    // Restore table schema after test case 5
+    let mut conn = sql_interface.get_connection().unwrap();
+    SqlInterface::truncate_table(&mut sql_interface, SQL_TABLE_BALLING_SET_VALS.to_string())
+        .unwrap();
+    conn.query_drop("ALTER TABLE balling_set_vals MODIFY COLUMN dosing_speed DOUBLE NOT NULL;")
+        .unwrap();
+
+    // --- Test Case 6: Failure when connection is killed ---
+    println!("* Testing new() with killed database connection...");
+    let mut kill_conn = sql_interface.get_connection().unwrap();
+    let connection_id: u64 = kill_conn
+        .query_first("SELECT CONNECTION_ID();")
+        .unwrap()
+        .unwrap();
+    let mut helper_conn = sql_interface.get_connection().unwrap();
+    helper_conn
+        .query_drop(format!("KILL {};", connection_id))
+        .unwrap();
+
+    let result = SqlInterfaceBalling::new(kill_conn, 10, 10);
+    assert!(
+        matches!(
+            result,
+            Err(SqlInterfaceError::DatabaseCheckBallingSetValsFailure { .. })
+        ),
+        "Expected DatabaseCheckBallingSetValsFailure error on killed connection, but got {:?}",
+        result
+    );
+    println!("* Succeeded: Initialization fails when connection is killed.");
 }
 
 #[test]
@@ -236,6 +288,23 @@ pub fn test_sql_interface_balling_events() {
     assert_le!(duration_delta_seconds, 1);
     println!("* checking duration since last Balling dosing succeeded.");
     // *****************************************************************************************
+
+    // *** check error response when dosing event timestamp is in the future ******************
+    let future_timestamp = Local::now().naive_local() + chrono::Duration::hours(2);
+    sql_interface_balling
+        .insert_balling_event_for_test(future_timestamp, pump_id, 0.5)
+        .unwrap();
+    let duration_result = sql_interface_balling.get_duration_since_last_balling_dosing(pump_id);
+    assert!(
+        matches!(
+            duration_result,
+            Err(SqlInterfaceError::BallingDosingLogEntryInFuture(_, _, _))
+        ),
+        "Expected BallingDosingLogEntryInFuture error, got {:?}",
+        duration_result
+    );
+    println!("* checking future dosing event error response succeeded.");
+    // *****************************************************************************************
 }
 
 #[test]
@@ -315,8 +384,50 @@ pub fn test_sql_interface_balling_set_vals() {
         test_result,
         Err(SqlInterfaceError::DatabaseBallingSetValTableContainsTooManyRows(_, _, _))
     ));
-
     // **************************************************************************************
+
+    // *** check error response when multiple rows exist for the same pump_id *****************
+    add_balling_profile(
+        &mut sql_interface_balling.conn,
+        1,
+        4.0,
+        0.5,
+        "dup1".to_string(),
+    );
+    let multi_res = sql_interface_balling.get_single_balling_setval_from_database(1);
+    assert!(
+        matches!(
+            multi_res,
+            Err(SqlInterfaceError::SingleBallingSetValNoSingleResponse(
+                _, _, _
+            ))
+        ),
+        "Expected SingleBallingSetValNoSingleResponse, got {:?}",
+        multi_res.err()
+    );
+    println!("* checking multiple rows for same pump_id error response succeeded.");
+
+    // *** check error response when connection is killed **************************************
+    let connection_id: u64 = sql_interface_balling
+        .conn
+        .query_first("SELECT CONNECTION_ID();")
+        .unwrap()
+        .unwrap();
+    let mut helper_conn = sql_interface.get_connection().unwrap();
+    helper_conn
+        .query_drop(format!("KILL {};", connection_id))
+        .unwrap();
+
+    let killed_res = sql_interface_balling.get_single_balling_setval_from_database(1);
+    assert!(
+        matches!(
+            killed_res,
+            Err(SqlInterfaceError::SingleBallingSetValRequestFailure { .. })
+        ),
+        "Expected SingleBallingSetValRequestFailure on killed connection, got {:?}",
+        killed_res.err()
+    );
+    println!("* checking get_single_balling_setval_from_database error response on killed connection succeeded.");
 }
 
 #[test]
@@ -388,4 +499,26 @@ fn test_insert_balling_event() {
     assert_le!(duration_diff, 5, "Timestamp should be recent");
 
     println!("* checking insert_balling_event succeeded.");
+
+    // *** check error response when connection is killed **************************************
+    let connection_id: u64 = sql_interface_balling
+        .conn
+        .query_first("SELECT CONNECTION_ID();")
+        .unwrap()
+        .unwrap();
+    let mut helper_conn = sql_interface.get_connection().unwrap();
+    helper_conn
+        .query_drop(format!("KILL {};", connection_id))
+        .unwrap();
+
+    let err_result = sql_interface_balling.insert_balling_event(pump_id, dosing_volume);
+    assert!(
+        matches!(
+            err_result,
+            Err(SqlInterfaceError::InsertBallingEventFailure { .. })
+        ),
+        "Expected InsertBallingEventFailure on killed connection, got {:?}",
+        err_result
+    );
+    println!("* checking insert_balling_event error response on killed connection succeeded.");
 }

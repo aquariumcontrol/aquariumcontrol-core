@@ -172,6 +172,7 @@ pub fn test_temperature_gradient_calculation() {
 
 #[test]
 #[ignore]
+#[cfg(any(test, feature = "test-utils"))]
 // This test case retrieves data from the last 24 hours from the production database
 // and calculates the temperature gradient.
 // The test case does not assert anything.

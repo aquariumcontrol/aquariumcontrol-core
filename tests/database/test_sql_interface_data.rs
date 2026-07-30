@@ -114,6 +114,30 @@ fn test_sql_interface_data_new() {
         result.err()
     );
     println!("* Succeeded: Initialization passes when row limit check is deactivated.");
+
+    // --- Test Case 4: Failure when data connection is killed ---
+    println!("* Testing new() with killed data database connection...");
+    let conn_for_timestamp = sql_interface.get_connection().unwrap();
+    let mut kill_conn_for_data = sql_interface.get_connection().unwrap();
+    let connection_id: u64 = kill_conn_for_data
+        .query_first("SELECT CONNECTION_ID();")
+        .unwrap()
+        .unwrap();
+    let mut helper_conn = sql_interface.get_connection().unwrap();
+    helper_conn
+        .query_drop(format!("KILL {};", connection_id))
+        .unwrap();
+
+    let result = SqlInterfaceData::new(conn_for_timestamp, kill_conn_for_data, 10);
+    assert!(
+        matches!(
+            result,
+            Err(SqlInterfaceError::DatabaseCheckDataFailure { .. })
+        ),
+        "Expected DatabaseCheckDataFailure error on killed data connection, but got {:?}",
+        result
+    );
+    println!("* Succeeded: Initialization fails when data connection is killed.");
 }
 
 // This struct contains the first part of one row from table 'data'
@@ -508,5 +532,28 @@ pub fn test_sql_interface_data_write_data_frame() {
             _
         ))
     ));
+    // *****************************************************************************************
+
+    // *** check error response when connection is killed **************************************
+    let mut kill_conn = sql_interface.get_connection().unwrap();
+    let connection_id: u64 = kill_conn
+        .query_first("SELECT CONNECTION_ID();")
+        .unwrap()
+        .unwrap();
+    let mut helper_conn = sql_interface.get_connection().unwrap();
+    helper_conn
+        .query_drop(format!("KILL {};", connection_id))
+        .unwrap();
+
+    let err_result = SqlInterfaceData::write_data_frame_to_database(&mut kill_conn, &dataframe_reference_4);
+    assert!(
+        matches!(
+            err_result,
+            Err(SqlInterfaceError::InsertDataFrameFailure { .. })
+        ),
+        "Expected InsertDataFrameFailure on killed connection, got {:?}",
+        err_result
+    );
+    println!("* checking write_data_frame_to_database error response on killed connection succeeded.");
     // *****************************************************************************************
 }

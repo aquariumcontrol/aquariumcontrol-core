@@ -96,6 +96,7 @@ fn read_balling_config_with_database(db_number: u32) -> ConfigData {
     )
 }
 
+#[cfg(any(test, feature = "test-utils"))]
 // Helper function to prepare for test cases which require a filled dosing log.
 // This function inserts dosing events for each of the four pumps.
 //

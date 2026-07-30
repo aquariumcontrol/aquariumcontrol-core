@@ -129,6 +129,87 @@ fn test_sql_interface_feed_new() {
         result.err()
     );
     println!("* Succeeded: Initialization passes when row limit checks are deactivated.");
+
+    // --- Test Case 5: Failure when feed_profiles contains NULL values ---
+    println!("* Testing new() with NULL values in feed_profiles...");
+    SqlInterface::truncate_table(&mut sql_interface, SQL_TABLE_FEED_PROFILES.to_string())
+        .unwrap();
+    let mut conn = sql_interface.get_connection().unwrap();
+    conn.query_drop("ALTER TABLE feed_profiles MODIFY COLUMN profile_name VARCHAR(255) NULL;")
+        .unwrap();
+    conn.query_drop(
+        "INSERT INTO feed_profiles (profile_id, profile_name) VALUES (1, NULL)",
+    )
+    .unwrap();
+    let result = SqlInterfaceFeed::new(conn, 10, 10, 10);
+    assert!(
+        matches!(
+            result,
+            Err(SqlInterfaceError::DatabaseFeedSetValTableContainsNull(_, _, _))
+        ),
+        "Expected DatabaseFeedSetValTableContainsNull error for feed_profiles, but got {:?}",
+        result
+    );
+    println!("* Succeeded: Initialization fails when feed_profiles contains NULL values.");
+
+    // Restore feed_profiles schema
+    let mut conn = sql_interface.get_connection().unwrap();
+    SqlInterface::truncate_table(&mut sql_interface, SQL_TABLE_FEED_PROFILES.to_string())
+        .unwrap();
+    conn.query_drop("ALTER TABLE feed_profiles MODIFY COLUMN profile_name VARCHAR(255) NOT NULL;")
+        .unwrap();
+
+    // --- Test Case 6: Failure when feed_schedule contains NULL values ---
+    println!("* Testing new() with NULL values in feed_schedule...");
+    SqlInterface::truncate_table(&mut sql_interface, SQL_TABLE_FEED_SCHEDULE.to_string())
+        .unwrap();
+    let mut conn = sql_interface.get_connection().unwrap();
+    conn.query_drop("ALTER TABLE feed_schedule MODIFY COLUMN profile_id INT NULL;")
+        .unwrap();
+    conn.query_drop(
+        "INSERT INTO feed_schedule (timestamp, profile_id, is_weekly, is_daily) VALUES ('2024-01-01 12:00:00', NULL, 0, 1)",
+    )
+    .unwrap();
+    let result = SqlInterfaceFeed::new(conn, 10, 10, 10);
+    assert!(
+        matches!(
+            result,
+            Err(SqlInterfaceError::DatabaseFeedSetValTableContainsNull(_, _, _))
+        ),
+        "Expected DatabaseFeedSetValTableContainsNull error for feed_schedule, but got {:?}",
+        result
+    );
+    println!("* Succeeded: Initialization fails when feed_schedule contains NULL values.");
+
+    // Restore feed_schedule schema
+    let mut conn = sql_interface.get_connection().unwrap();
+    SqlInterface::truncate_table(&mut sql_interface, SQL_TABLE_FEED_SCHEDULE.to_string())
+        .unwrap();
+    conn.query_drop("ALTER TABLE feed_schedule MODIFY COLUMN profile_id INT NOT NULL;")
+        .unwrap();
+
+    // --- Test Case 7: Failure when connection is killed ---
+    println!("* Testing new() with killed database connection...");
+    let mut kill_conn = sql_interface.get_connection().unwrap();
+    let connection_id: u64 = kill_conn
+        .query_first("SELECT CONNECTION_ID();")
+        .unwrap()
+        .unwrap();
+    let mut helper_conn = sql_interface.get_connection().unwrap();
+    helper_conn
+        .query_drop(format!("KILL {};", connection_id))
+        .unwrap();
+
+    let result = SqlInterfaceFeed::new(kill_conn, 10, 10, 10);
+    assert!(
+        matches!(
+            result,
+            Err(SqlInterfaceError::DatabaseCheckFeedSetValsFailure { .. })
+        ),
+        "Expected DatabaseCheckFeedSetValsFailure error on killed connection, but got {:?}",
+        result
+    );
+    println!("* Succeeded: Initialization fails when connection is killed.");
 }
 
 /// [itest->swreq~food_read_profiles~1]
@@ -169,6 +250,16 @@ pub fn test_sql_interface_feed_profiles() {
         }
     }
     println!("* checking retrieving of Feed profile (FAIL) succeeded.");
+    let phase_empty_res = sql_interface_feed.get_feed_phase_from_database(1, 1);
+    assert!(
+        matches!(
+            phase_empty_res,
+            Err(SqlInterfaceError::SingleFeedProfileRequestEmptyResponse(_, _, _))
+        ),
+        "Expected SingleFeedProfileRequestEmptyResponse, got {:?}",
+        phase_empty_res.err()
+    );
+    println!("* checking get_feed_phase_from_database (empty table) succeeded.");
     // **************************************************************************************
 
     // *** check retrieving of existing feed profile ****************************************
@@ -348,8 +439,127 @@ pub fn test_sql_interface_feed_profiles() {
         ))
     ));
     println!("* checking of feed profile max rows limitation succeeded.");
-
     // *****************************************************************************************
+
+    // *** check error response when multiple rows exist for the same profile_id **************
+    let mut conn = sql_interface.get_connection().unwrap();
+    let _ = conn.query_drop("ALTER TABLE feed_profiles MODIFY COLUMN profile_id INT NOT NULL;");
+    let _ = conn.query_drop("ALTER TABLE feed_profiles DROP PRIMARY KEY;");
+    let sql_query_string = sql_test_query_strings::SQL_QUERY_WRITE_FEED_PROFILE_TEST.to_string();
+    conn.exec_drop::<_, _>(
+        sql_query_string,
+        params! { "profile_id" => 1, "profile_name" => "test_duplicate" },
+    )
+    .unwrap();
+    let multi_profile_res = sql_interface_feed.get_feed_profile_header_from_database(1);
+    assert!(
+        matches!(
+            multi_profile_res,
+            Err(SqlInterfaceError::SingleFeedProfileRequestNoSingleResponse(_, _, _))
+        ),
+        "Expected SingleFeedProfileRequestNoSingleResponse, got {:?}",
+        multi_profile_res.err()
+    );
+    println!("* checking multiple profiles for same profile_id error response succeeded.");
+    let phase_multi_res = sql_interface_feed.get_feed_phase_from_database(1, 1);
+    assert!(
+        matches!(
+            phase_multi_res,
+            Err(SqlInterfaceError::SingleFeedProfileRequestNoSingleResponse(_, _, _))
+        ),
+        "Expected SingleFeedProfileRequestNoSingleResponse, got {:?}",
+        phase_multi_res.err()
+    );
+    println!("* checking get_feed_phase_from_database (multiple profiles) succeeded.");
+
+    // *** check error response when feed phase duration is negative *************************
+    SqlInterface::truncate_table(&mut sql_interface, SQL_TABLE_FEED_PROFILES.to_string())
+        .unwrap();
+    let mut conn = sql_interface.get_connection().unwrap();
+    let sql_query_string = sql_test_query_strings::SQL_QUERY_WRITE_FEED_PROFILE_TEST.to_string();
+    conn.exec_drop::<_, _>(
+        sql_query_string,
+        params! { "profile_id" => 1, "profile_name" => "test_neg" },
+    )
+    .unwrap();
+    conn.query_drop("UPDATE feed_profiles SET pause_01_duration = -1 WHERE profile_id = 1;")
+        .unwrap();
+    let neg_dur_res = sql_interface_feed.get_feed_phase_from_database(1, 1);
+    assert!(
+        matches!(
+            neg_dur_res,
+            Err(SqlInterfaceError::DatabaseFeedPhaseDurationNegative(_, -1, _))
+        ),
+        "Expected DatabaseFeedPhaseDurationNegative, got {:?}",
+        neg_dur_res.err()
+    );
+    println!("* checking get_feed_phase_from_database (negative duration) succeeded.");
+
+    // Restore PRIMARY KEY and AUTO_INCREMENT on feed_profiles
+    let mut conn = sql_interface.get_connection().unwrap();
+    SqlInterface::truncate_table(&mut sql_interface, SQL_TABLE_FEED_PROFILES.to_string())
+        .unwrap();
+    let _ = conn.query_drop("ALTER TABLE feed_profiles ADD PRIMARY KEY (profile_id);");
+    let _ = conn.query_drop("ALTER TABLE feed_profiles MODIFY COLUMN profile_id INT NOT NULL AUTO_INCREMENT;");
+
+    // *** check error response when feed_schedule entry repeat_daily is out of range *********
+    SqlInterface::truncate_table(&mut sql_interface, SQL_TABLE_FEED_SCHEDULE.to_string())
+        .unwrap();
+    let mut conn = sql_interface.get_connection().unwrap();
+    conn.exec_drop(
+        sql_test_query_strings::SQL_QUERY_WRITE_FEED_SCHEDULE_ENTRY,
+        params! {
+            "timestamp" => "2030-01-01 12:00:00",
+            "profile_id" => 1,
+            "is_weekly" => false,
+            "is_daily" => 2
+        },
+    )
+    .unwrap();
+    let invalid_entry_res = sql_interface_feed.get_future_feed_schedule_entries_from_database();
+    assert!(
+        matches!(
+            invalid_entry_res,
+            Err(SqlInterfaceError::FeedScheduleEntryTimeStampProcessingFailure { .. })
+        ),
+        "Expected FeedScheduleEntryTimeStampProcessingFailure, got {:?}",
+        invalid_entry_res
+    );
+    println!("* checking out-of-range repeat_daily error response succeeded.");
+    SqlInterface::truncate_table(&mut sql_interface, SQL_TABLE_FEED_SCHEDULE.to_string())
+        .unwrap();
+
+    // *** check error response when connection is killed **************************************
+    let connection_id: u64 = sql_interface_feed
+        .conn
+        .query_first("SELECT CONNECTION_ID();")
+        .unwrap()
+        .unwrap();
+    let mut helper_conn = sql_interface.get_connection().unwrap();
+    helper_conn
+        .query_drop(format!("KILL {};", connection_id))
+        .unwrap();
+
+    let killed_profile_res = sql_interface_feed.get_feed_profile_header_from_database(1);
+    assert!(
+        matches!(
+            killed_profile_res,
+            Err(SqlInterfaceError::SingleFeedProfileRequestFailure { .. })
+        ),
+        "Expected SingleFeedProfileRequestFailure on killed connection, got {:?}",
+        killed_profile_res.err()
+    );
+    println!("* checking get_feed_profile_header_from_database error response on killed connection succeeded.");
+    let killed_phase_res = sql_interface_feed.get_feed_phase_from_database(1, 1);
+    assert!(
+        matches!(
+            killed_phase_res,
+            Err(SqlInterfaceError::SingleFeedProfileRequestFailure { .. })
+        ),
+        "Expected SingleFeedProfileRequestFailure on killed connection, got {:?}",
+        killed_phase_res.err()
+    );
+    println!("* checking get_feed_phase_from_database error response on killed connection succeeded.");
 }
 
 /// [itest->swreq~food_log_database~1]

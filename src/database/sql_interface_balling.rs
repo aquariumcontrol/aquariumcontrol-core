@@ -309,10 +309,8 @@ impl SqlInterfaceBalling {
                     "dosing_volume" => dosing_volume,
                 },
             )
-            .map_err(|e| SqlInterfaceError::InsertBallingEventFailure {
-                location: module_path!().to_string(),
-                source: e,
-            })
+            .unwrap();
+        Ok(())
     }
 
     /// Inserts a new Balling dosing event record into the SQL database using current timestamp of database.
