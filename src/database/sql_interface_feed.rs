@@ -47,6 +47,7 @@ use chrono::NaiveDateTime;
 use mysql::prelude::*;
 use mysql::*;
 
+#[cfg(feature = "test-utils")]
 use crate::database::database_interface_feed_trait::DatabaseInterfaceFeedTrait;
 use crate::database::sql_query_strings::SQL_TABLE_FEED_PROFILES;
 use crate::database::sql_test_query_strings::SQL_QUERY_READ_FUTURE_FEED_SCHEDULE_ENTRY;
@@ -610,6 +611,7 @@ pub fn insert_feed_profiles(
     };
 }
 
+#[cfg(feature = "test-utils")]
 /// This helper function prepares the database for feed-related test cases.
 /// It truncates the 'feed_schedule' table to ensure a clean state and then
 /// inserts one predefined test feed schedule entry.

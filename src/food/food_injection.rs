@@ -107,22 +107,22 @@ pub trait FoodInjectionTrait {
 /// Struct collects the target actuator states for switch_skimmer_pumps_feeder
 pub struct FoodInjectionTargetActuatorStates {
     /// target state for protein skimmer
-    target_skimmer_state: ActuatorState,
+    pub target_skimmer_state: ActuatorState,
 
     /// target state for main pump 1
-    target_main_pump1_state: ActuatorState,
+    pub target_main_pump1_state: ActuatorState,
 
     /// target state for main pump 2
-    target_main_pump2_state: ActuatorState,
+    pub target_main_pump2_state: ActuatorState,
 
     /// target state for aux. pump 1
-    target_aux_pump1_state: ActuatorState,
+    pub target_aux_pump1_state: ActuatorState,
 
     /// target state for aux. pump 2
-    target_aux_pump2_state: ActuatorState,
+    pub target_aux_pump2_state: ActuatorState,
 
     /// target state for feeder
-    target_feeder_state: ActuatorState,
+    pub target_feeder_state: ActuatorState,
 }
 
 #[cfg_attr(doc, aquamarine::aquamarine)]
@@ -197,7 +197,7 @@ impl FoodInjection {
     /// - `RelayManagerReceive`: Failure to receive an acknowledgment from the relay manager.
     /// - `UndefinedTargetState...`: An attempt was made to set a device to a state other
     ///   than `On` or `Off`.
-    async fn switch_skimmer_pumps_feeder(
+    pub(crate) async fn switch_skimmer_pumps_feeder(
         &mut self,
         target_actuator_states: FoodInjectionTargetActuatorStates,
         feed_channels: &mut FeedChannels,
@@ -673,5 +673,126 @@ impl FoodInjectionTrait for FoodInjection {
         } else {
             (quit_command_received, Err(collected_errors_cumulated))
         }
+    }
+}
+
+#[cfg(test)]
+#[cfg(not(tarpaulin_include))]
+pub mod tests {
+    use super::*;
+    use crate::food::feed_config::FeedConfig;
+
+    fn test_feed_config() -> FeedConfig {
+        FeedConfig {
+            active: true,
+            execute: true,
+            schedule_check_interval: 1,
+            device_switch_delay_millis: 1,
+            strategy_multiple_schedule_entries_in_past: 0,
+        }
+    }
+
+    #[tokio::test]
+    async fn test_switch_skimmer_pumps_feeder_undefined_states() {
+        let config = test_feed_config();
+        let mut injection = FoodInjection::new(&config);
+        injection.skimmer_state = ActuatorState::Off;
+        injection.main_pump1_state = ActuatorState::Off;
+        injection.main_pump2_state = ActuatorState::Off;
+        injection.aux_pump1_state = ActuatorState::Off;
+        injection.aux_pump2_state = ActuatorState::Off;
+        injection.feeder_state = ActuatorState::Off;
+        let mut channels = crate::launch::channels::Channels::new_for_test();
+
+        let target_states = FoodInjectionTargetActuatorStates {
+            target_skimmer_state: ActuatorState::Undefined,
+            target_main_pump1_state: ActuatorState::Undefined,
+            target_main_pump2_state: ActuatorState::Undefined,
+            target_aux_pump1_state: ActuatorState::Undefined,
+            target_aux_pump2_state: ActuatorState::Undefined,
+            target_feeder_state: ActuatorState::Undefined,
+        };
+
+        let result = injection
+            .switch_skimmer_pumps_feeder(target_states, &mut channels.feed)
+            .await;
+
+        assert!(result.is_err());
+        let errors = result.unwrap_err();
+        assert_eq!(errors.len(), 6);
+        for err in errors {
+            assert!(matches!(err, FoodInjectionError::UndefinedTargetState(_, _)));
+        }
+    }
+
+    #[tokio::test]
+    async fn test_switch_skimmer_pumps_feeder_send_error() {
+        let config = test_feed_config();
+        let mut injection = FoodInjection::new(&config);
+        let mut channels = crate::launch::channels::Channels::new_for_test();
+
+        // Drop receiver so sending fails
+        drop(channels.relay_manager.rx_relay_manager_from_feed);
+
+        let target_states = FoodInjectionTargetActuatorStates {
+            target_skimmer_state: ActuatorState::On,
+            target_main_pump1_state: ActuatorState::Off,
+            target_main_pump2_state: ActuatorState::Off,
+            target_aux_pump1_state: ActuatorState::Off,
+            target_aux_pump2_state: ActuatorState::Off,
+            target_feeder_state: ActuatorState::Off,
+        };
+
+        let result = injection
+            .switch_skimmer_pumps_feeder(target_states, &mut channels.feed)
+            .await;
+
+        assert!(result.is_err());
+        let errors = result.unwrap_err();
+        assert!(matches!(errors[0], FoodInjectionError::RelayManagerSend { .. }));
+    }
+
+    #[tokio::test]
+    async fn test_inject_food_quit_interruption() {
+        let config = test_feed_config();
+        let mut injection = FoodInjection::new(&config);
+        let mut channels = crate::launch::channels::Channels::new_for_test();
+
+        let mut rx_relay = channels.relay_manager.rx_relay_manager_from_feed;
+        let mut tx_relay = channels.relay_manager.tx_relay_manager_to_feed;
+        tokio::spawn(async move {
+            while rx_relay.recv().await.is_ok() {
+                let _ = tx_relay.send(true);
+            }
+        });
+
+        // Send Quit signal into rx_feed_from_signal_handler
+        channels
+            .signal_handler
+            .tx_signal_handler_to_feed
+            .send(crate::utilities::channel_content::InternalCommand::Quit)
+            .unwrap();
+
+        let profile = FeedProfile {
+            profile_id: 1,
+            profile_name: "test".to_string(),
+            feedphases: vec![crate::food::feed_profile::FeedPhase {
+                pause_duration: 10,
+                pause_skimmer: false,
+                pause_main_pump_1: false,
+                pause_main_pump_2: false,
+                pause_aux_pump_1: false,
+                pause_aux_pump_2: false,
+                feed_duration: 10,
+                feed_skimmer: false,
+                feed_main_pump_1: false,
+                feed_main_pump_2: false,
+                feed_aux_pump_1: false,
+                feed_aux_pump_2: false,
+            }],
+        };
+
+        let (quit, _res) = injection.inject_food(&mut channels.feed, &profile).await;
+        assert!(quit);
     }
 }

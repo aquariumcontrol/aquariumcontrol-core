@@ -20,7 +20,11 @@ use nix::unistd;
 /// # Panics
 /// This function may panic if the underlying system call `geteuid` fails,
 /// which is highly unlikely in normal operation.
+///
+/// This file is excluded from the code coverage measurement because there is no intrinsic
+/// logic in this function. It serves as wrapper only.
 #[cfg(any(target_os = "linux", target_os = "macos"))]
+#[cfg(not(tarpaulin_include))]
 pub fn is_running_as_root() -> bool {
     let euid = unistd::geteuid();
     euid.is_root()

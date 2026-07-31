@@ -85,6 +85,7 @@ pub mod tests {
             Err(SqlInterfaceError::MockError(module_path!().to_string()))
         }
 
+        #[cfg(feature = "test-utils")]
         /// Performs the `insert_feed_schedule_entry` operation.
         ///
         /// # Arguments

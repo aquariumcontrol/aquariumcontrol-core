@@ -14,7 +14,7 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 //! via POSIX message queues.
 
 /// Stores the content of the message and provides functionality for serialization and deserialization.
-#[derive(Debug, Default, Copy, Clone)]
+#[derive(Debug, Default, Copy, Clone, PartialEq, Eq)]
 pub struct Message {
     /// The domain (subsystem) the message is addressed to.
     pub domain: i32,
@@ -108,3 +108,66 @@ impl Message {
         Ok(msg)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_message_new_and_default() {
+        let msg = Message::new();
+        assert_eq!(msg.domain, 0);
+        assert_eq!(msg.command, 0);
+        assert_eq!(msg.command_param1, 0);
+        assert_eq!(msg.command_param2, 0);
+
+        let default_msg = Message::default();
+        assert_eq!(default_msg.domain, 0);
+        assert_eq!(default_msg.command, 0);
+        assert_eq!(default_msg.command_param1, 0);
+        assert_eq!(default_msg.command_param2, 0);
+    }
+
+    #[test]
+    fn test_message_to_from_bytes_roundtrip() {
+        let msg = Message {
+            domain: 1,
+            command: 2,
+            command_param1: -3,
+            command_param2: 400,
+        };
+
+        let bytes = msg.to_bytes();
+        assert_eq!(bytes.len(), 20);
+
+        let parsed_msg = Message::from_bytes(&bytes).expect("Failed to parse valid message bytes");
+        assert_eq!(parsed_msg.domain, 1);
+        assert_eq!(parsed_msg.command, 2);
+        assert_eq!(parsed_msg.command_param1, -3);
+        assert_eq!(parsed_msg.command_param2, 400);
+    }
+
+    #[test]
+    fn test_message_from_bytes_buffer_too_short() {
+        let short_buffer = vec![0u8; 19];
+        let result = Message::from_bytes(&short_buffer);
+        assert_eq!(result, Err("Message buffer too short"));
+    }
+
+    #[test]
+    fn test_message_copy_clone_debug() {
+        let msg = Message {
+            domain: 10,
+            command: 20,
+            command_param1: 30,
+            command_param2: 40,
+        };
+        #[allow(clippy::clone_on_copy)]
+        let msg_clone = msg.clone();
+        let msg_copy = msg;
+        assert_eq!(msg_clone.domain, 10);
+        assert_eq!(msg_copy.domain, 10);
+        assert!(format!("{:?}", msg).contains("Message"));
+    }
+}
+

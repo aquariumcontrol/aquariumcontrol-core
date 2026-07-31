@@ -738,9 +738,11 @@ impl Feed {
 }
 
 #[cfg(test)]
+#[cfg(not(tarpaulin_include))]
 pub mod tests {
     use std::time::Duration;
 
+    use crate::database::database_interface_feed_trait::DatabaseInterfaceFeedTrait;
     use crate::food::feed::Feed;
     use crate::mocks::mock_feed_schedule_entries::create_mock_feed_schedule_entries;
     use crate::utilities::config::{
@@ -920,4 +922,86 @@ pub mod tests {
 
         println!("* Test for Feed::new completed successfully.");
     }
+
+    struct MockSqlInterfaceFeedInsertError;
+    impl crate::database::pingable::Pingable for MockSqlInterfaceFeedInsertError {
+        fn ping(&mut self) {}
+    }
+    impl DatabaseInterfaceFeedTrait for MockSqlInterfaceFeedInsertError {
+        fn get_current_timestamp(&mut self) -> Result<chrono::NaiveDateTime, crate::database::sql_interface_error::SqlInterfaceError> {
+            Ok(chrono::NaiveDateTime::default())
+        }
+        fn get_past_feed_schedule_entries_from_database(&mut self) -> Result<Option<Vec<crate::food::feed_schedule_entry::FeedScheduleEntry>>, crate::database::sql_interface_error::SqlInterfaceError> {
+            Ok(None)
+        }
+        fn insert_feed_event(&mut self, _timestamp: chrono::NaiveDateTime, _feeder_run_time: f64, _profile_id: i32) -> Result<(), crate::database::sql_interface_error::SqlInterfaceError> {
+            Err(crate::database::sql_interface_error::SqlInterfaceError::MockError("insert_feed_event error".to_string()))
+        }
+        fn get_single_feed_profile_from_database(&mut self, _profile_id: i32) -> Result<crate::food::feed_profile::FeedProfile, crate::database::sql_interface_error::SqlInterfaceError> {
+            Err(crate::database::sql_interface_error::SqlInterfaceError::MockError("get_profile error".to_string()))
+        }
+        fn update_feed_schedule_entries_in_database(&mut self, _entries: &mut Vec<crate::food::feed_schedule_entry::FeedScheduleEntry>) -> Result<(), crate::database::sql_interface_error::SqlInterfaceError> {
+            Ok(())
+        }
+        #[cfg(feature = "test-utils")]
+        fn insert_feed_schedule_entry(&mut self, _timestamp: chrono::NaiveDateTime, _profile_id: i32, _is_weekly: bool, _is_daily: bool) -> Result<(), crate::database::sql_interface_error::SqlInterfaceError> {
+            Ok(())
+        }
+    }
+
+    struct MockFoodInjectionError;
+    impl crate::food::food_injection::FoodInjectionTrait for MockFoodInjectionError {
+        async fn inject_food(
+            &mut self,
+            _feed_channels: &mut crate::food::feed_channels::FeedChannels,
+            _feed_pattern: &crate::food::feed_profile::FeedProfile,
+        ) -> (bool, Result<(), Vec<crate::food::food_injection_error::FoodInjectionError>>) {
+            (false, Err(vec![crate::food::food_injection_error::FoodInjectionError::UndefinedTargetState("test".to_string(), crate::utilities::channel_content::AquariumDevice::RefillPump)]))
+        }
+    }
+
+    fn test_feed_profile() -> crate::food::feed_profile::FeedProfile {
+        crate::food::feed_profile::FeedProfile {
+            profile_id: 1,
+            profile_name: "test".to_string(),
+            feedphases: vec![],
+        }
+    }
+
+    #[test]
+    fn test_log_feed_operation_error_timestamp() {
+        let config: ConfigData = read_config_file("/config/aquarium_control_test_generic.toml".to_string()).unwrap();
+        let mut feed = Feed::new(config.feed, Duration::from_millis(1000));
+        let mut mock_sql: Box<dyn DatabaseInterfaceFeedTrait + Sync + Send> = Box::new(crate::mocks::mock_sql_interface_feed::tests::MockSqlInterfaceFeed::new());
+        let res = feed.log_feed_operation(test_feed_profile(), &mut mock_sql, false);
+        assert_eq!(res, Err(()));
+    }
+
+    #[test]
+    fn test_log_feed_operation_error_insert() {
+        let config: ConfigData = read_config_file("/config/aquarium_control_test_generic.toml".to_string()).unwrap();
+        let mut feed = Feed::new(config.feed, Duration::from_millis(1000));
+        let mut mock_sql: Box<dyn DatabaseInterfaceFeedTrait + Sync + Send> = Box::new(MockSqlInterfaceFeedInsertError);
+        let res = feed.log_feed_operation(test_feed_profile(), &mut mock_sql, false);
+        assert_eq!(res, Err(()));
+    }
+
+    #[tokio::test]
+    async fn test_execute_feed_injection_error() {
+        let config: ConfigData = read_config_file("/config/aquarium_control_test_generic.toml".to_string()).unwrap();
+        let mut feed = Feed::new(config.feed, Duration::from_millis(1000));
+        let mut mock_injection = MockFoodInjectionError;
+        let mut channels = crate::launch::channels::Channels::new_for_test();
+        let (res, quit) = feed.execute_feed(test_feed_profile(), &mut mock_injection, &mut channels.feed).await;
+        assert_eq!(res, Err(()));
+        assert!(!quit);
+    }
+
+    #[test]
+    fn test_select_feed_schedule_entry_empty_slice() {
+        let config: ConfigData = read_config_file("/config/aquarium_control_test_generic.toml".to_string()).unwrap();
+        let feed = Feed::new(config.feed, Duration::from_millis(1000));
+        assert_eq!(feed.select_feed_schedule_entry_for_execution(&[]), None);
+    }
 }
+

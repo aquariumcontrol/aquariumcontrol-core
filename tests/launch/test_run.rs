@@ -11,6 +11,7 @@ use aquarium_control::database::sql_interface::SqlInterface;
 /// The test of the main entry point of the Aquarium Control application.
 use aquarium_control::launch::run::run;
 use aquarium_control::utilities::config::read_config_file;
+use aquarium_control::launch::startup_error::StartupError;
 use aquarium_control::utilities::signal_handler::TEST_SHUTDOWN_TRIGGER;
 use std::sync::{atomic::Ordering, Mutex};
 use std::time::Duration;
@@ -22,17 +23,19 @@ mod common;
 
 use common::{add_balling_profile, insert_current_version_information, truncate_all_tables};
 
+#[cfg(feature = "test-utils")]
 use aquarium_control::database::database_interface_feed_trait::DatabaseInterfaceFeedTrait;
-#[cfg(any(test, feature = "test-utils"))]
+#[cfg(feature = "test-utils")]
 use aquarium_control::database::sql_interface_feed::insert_feed_profiles;
-use aquarium_control::database::sql_interface_feed::{
-    insert_feed_schedule_entry, SqlInterfaceFeed,
-};
+#[cfg(feature = "test-utils")]
+use aquarium_control::database::sql_interface_feed::insert_feed_schedule_entry;
+#[cfg(feature = "test-utils")]
+use aquarium_control::database::sql_interface_feed::SqlInterfaceFeed;
 
 #[test]
 // Verifies that run async runtime configuration.
 fn test_run_async_runtime_configuration() {
-    let _lock = TEST_RUN_MUTEX.lock().unwrap();
+    let _lock = TEST_RUN_MUTEX.lock().unwrap_or_else(|e| e.into_inner());
 
     // Path of the dedicated config file
     let config_path = "config/aquarium_control_test_runtime.toml".to_string();
@@ -75,11 +78,12 @@ fn test_run_async_runtime_configuration() {
 }
 
 #[test]
+#[cfg(feature = "test-utils")]
 // Verifies application behavior when a past feed schedule entry exists in the database
 // and feed profile execution starts at application startup.
-/// [itest->swreq~food_execute_schedule~1]
+// [itest->swreq~food_execute_schedule~1]
 fn test_run_with_past_feed_schedule_entry() {
-    let _lock = TEST_RUN_MUTEX.lock().unwrap();
+    let _lock = TEST_RUN_MUTEX.lock().unwrap_or_else(|e| e.into_inner());
 
     let config_path = "config/aquarium_control_test_runtime.toml".to_string();
 
@@ -133,6 +137,7 @@ fn test_run_with_past_feed_schedule_entry() {
 }
 
 #[test]
+#[cfg(feature = "test-utils")]
 // Test case uses test database #83.
 // Verifies that execution of a feed profile with a long duration (> 30s) blocks the Tokio worker thread
 // due to spin_sleeper.sleep, preventing the watchdog task from petting the watchdog timer.
@@ -167,7 +172,7 @@ fn test_run_feed_profile_blocks_watchdog() {
     // Asserting run_result.is_ok() verifies that all Tokio tasks (including feed, watchdog,
     // sensor_manager, and signal handler) join cleanly and exit without timing out or crashing.
 
-    let _lock = TEST_RUN_MUTEX.lock().unwrap();
+    let _lock = TEST_RUN_MUTEX.lock().unwrap_or_else(|e| e.into_inner());
 
     // configuration is derived from previous test case test_run_async_runtime_configuration
     let test_config_path = "config/aquarium_control_test_runtime_blocked.toml";
@@ -224,4 +229,30 @@ fn test_run_feed_profile_blocks_watchdog() {
     );
 
     let _ = std::fs::remove_file(watchdog_file_path);
+}
+
+#[test]
+// Verifies that run() returns StartupError::InvalidThermalConfig when heating and ventilation temperature settings clash.
+fn test_run_invalid_thermal_config() {
+    let _lock = TEST_RUN_MUTEX.lock().unwrap_or_else(|e| e.into_inner());
+
+    let _ = std::fs::remove_file("/tmp/aquarium-ctrl-test.pid");
+
+    let original_content = std::fs::read_to_string("config/aquarium_control_test_runtime.toml").unwrap();
+    let invalid_content = original_content.replace(
+        "switch_off_temperature = 28.0",
+        "switch_off_temperature = 30.0",
+    );
+    let temp_config_path = "config/aquarium_control_test_invalid_thermal.toml";
+    std::fs::write(temp_config_path, invalid_content).unwrap();
+
+    let run_result = run(Some(temp_config_path.to_string()), None);
+    let _ = std::fs::remove_file(temp_config_path);
+    let _ = std::fs::remove_file("/tmp/aquarium-ctrl-test.pid");
+
+    assert!(
+        matches!(run_result, Err(StartupError::InvalidThermalConfig)),
+        "Expected StartupError::InvalidThermalConfig, got {:?}",
+        run_result
+    );
 }

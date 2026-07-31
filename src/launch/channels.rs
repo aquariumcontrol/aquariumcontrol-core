@@ -815,3 +815,69 @@ impl Channels {
         }
     }
 }
+
+#[cfg(test)]
+#[cfg(not(tarpaulin_include))]
+mod tests {
+    use super::*;
+    use std::time::Duration;
+
+    /// Tests blocking_recv in standard thread outside Tokio runtime when message is sent.
+    #[test]
+    fn test_blocking_recv_outside_tokio_ok() {
+        let (mut tx, mut rx) = channel::<i32>(1, false);
+        tx.send(42).unwrap();
+        assert_eq!(rx.blocking_recv().unwrap(), 42);
+    }
+
+    /// Tests blocking_recv in standard thread outside Tokio runtime when sender is dropped.
+    #[test]
+    fn test_blocking_recv_outside_tokio_disconnected() {
+        let (tx, mut rx) = channel::<i32>(1, false);
+        drop(tx);
+        assert!(matches!(rx.blocking_recv(), Err(AquaChannelError::Disconnected)));
+    }
+
+    /// Tests blocking_recv in current_thread Tokio runtime when message is present.
+    #[tokio::test(flavor = "current_thread")]
+    async fn test_blocking_recv_current_thread_ok() {
+        let (mut tx, mut rx) = channel::<i32>(1, false);
+        tx.send(100).unwrap();
+        assert_eq!(rx.blocking_recv().unwrap(), 100);
+    }
+
+    /// Tests blocking_recv in current_thread Tokio runtime with delayed send (testing Empty sleep loop).
+    #[tokio::test(flavor = "current_thread")]
+    async fn test_blocking_recv_current_thread_delayed_send() {
+        let (mut tx, mut rx) = channel::<i32>(1, false);
+        std::thread::spawn(move || {
+            std::thread::sleep(Duration::from_millis(5));
+            tx.send(200).unwrap();
+        });
+        assert_eq!(rx.blocking_recv().unwrap(), 200);
+    }
+
+    /// Tests blocking_recv in current_thread Tokio runtime when sender is dropped.
+    #[tokio::test(flavor = "current_thread")]
+    async fn test_blocking_recv_current_thread_disconnected() {
+        let (tx, mut rx) = channel::<i32>(1, false);
+        drop(tx);
+        assert!(matches!(rx.blocking_recv(), Err(AquaChannelError::Disconnected)));
+    }
+
+    /// Tests blocking_recv in multi_thread Tokio runtime when message is sent.
+    #[tokio::test(flavor = "multi_thread")]
+    async fn test_blocking_recv_multi_thread_ok() {
+        let (mut tx, mut rx) = channel::<i32>(1, true);
+        tx.send(300).unwrap();
+        assert_eq!(rx.blocking_recv().unwrap(), 300);
+    }
+
+    /// Tests blocking_recv in multi_thread Tokio runtime when sender is dropped.
+    #[tokio::test(flavor = "multi_thread")]
+    async fn test_blocking_recv_multi_thread_disconnected() {
+        let (tx, mut rx) = channel::<i32>(1, true);
+        drop(tx);
+        assert!(matches!(rx.blocking_recv(), Err(AquaChannelError::Disconnected)));
+    }
+}

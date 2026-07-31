@@ -40,7 +40,7 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 
 use thiserror::Error;
 
-#[derive(Error, Debug)]
+#[derive(Error, Debug, PartialEq, Eq)]
 pub enum ConfigFileDefinitionError {
     /// The configuration file is not an existing file system entry.
     #[error("The configuration file ({0}) is not an existing file system entry.")]

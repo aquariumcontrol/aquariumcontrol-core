@@ -39,11 +39,13 @@ use crate::database::sql_interface::SqlInterface;
 use crate::database::sql_interface_error::SqlInterfaceError;
 use crate::database::sql_interface_feed::SqlInterfaceFeed;
 use crate::database::sql_query_strings;
+#[cfg(feature = "test-utils")]
 use crate::database::sql_test_query_strings;
 use crate::food::feed_profile::{FeedPhase, FeedProfile};
 use crate::food::feed_schedule_entry::FeedScheduleEntry;
 
 use chrono::NaiveDateTime;
+#[cfg(feature = "test-utils")]
 use log::error;
 use mysql::params;
 use mysql::prelude::Queryable;
@@ -91,6 +93,7 @@ pub trait DatabaseInterfaceFeedTrait: Pingable {
         feedschedule_entries: &mut Vec<FeedScheduleEntry>,
     ) -> mysql::Result<(), SqlInterfaceError>;
 
+    #[cfg(feature = "test-utils")]
     /// Inserts a feed schedule entry in the database - for testing only
     ///
     /// # Arguments
@@ -317,6 +320,7 @@ impl DatabaseInterfaceFeedTrait for SqlInterfaceFeed {
         result
     }
 
+    #[cfg(feature = "test-utils")]
     /// Inserts a single feed schedule entry into the database.
     ///
     /// This helper function is exclusively used in test environments to

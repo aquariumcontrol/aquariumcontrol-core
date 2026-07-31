@@ -7,28 +7,36 @@ The above copyright notice and this permission notice shall be included in all c
 THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 use aquarium_control::database::database_interface_feed_trait::DatabaseInterfaceFeedTrait;
+#[cfg(feature = "test-utils")]
 use aquarium_control::database::sql_interface::SqlInterface;
-#[cfg(any(test, feature = "test-utils"))]
+#[cfg(feature = "test-utils")]
 use aquarium_control::database::sql_interface_feed::insert_feed_profiles;
+#[cfg(feature = "test-utils")]
 use aquarium_control::database::sql_interface_feed::SqlInterfaceFeed;
+#[cfg(feature = "test-utils")]
 use aquarium_control::database::sql_query_strings::SQL_TABLE_FEED_SCHEDULE;
+#[cfg(feature = "test-utils")]
 use aquarium_control::database::sql_test_query_strings::SQL_TABLE_FEED_LOG;
 use aquarium_control::food::feed::Feed;
 use aquarium_control::food::feed_channels::FeedChannels;
 use aquarium_control::food::food_injection::FoodInjectionTrait;
 use aquarium_control::launch::channels::Channels;
 use aquarium_control::mocks::mock_food_injection::MockFoodInjection;
+#[cfg(feature = "test-utils")]
 use aquarium_control::mocks::mock_signal_handler::create_mock_signal_handler;
 use aquarium_control::mocks::mock_sql_interface_feed::tests::MockSqlInterfaceFeed;
 use aquarium_control::utilities::channel_content::InternalCommand;
 use aquarium_control::utilities::config::{
-    read_config_file, read_config_file_with_test_database, ConfigData,
+    read_config_file, ConfigData,
 };
+#[cfg(feature = "test-utils")]
+use aquarium_control::utilities::config::read_config_file_with_test_database;
 use aquarium_control::utilities::logger::setup_logger;
 use aquarium_control::utilities::logger_config::LoggerConfig;
 use spin_sleep::SpinSleeper;
 use std::sync::Arc;
 use std::thread;
+#[cfg(feature = "test-utils")]
 use std::thread::scope;
 use std::time::Duration;
 
@@ -75,7 +83,7 @@ fn execute_blocking(
 }
 
 #[test]
-#[cfg(any(test, feature = "test-utils"))]
+#[cfg(feature = "test-utils")]
 // "Happy" case executing a set of feed schedule entries. Additionally, it checks row limitation.
 // Test case uses test database #07.
 // [itest->swreq~food_execute_schedule~1]
@@ -193,7 +201,7 @@ pub fn test_feed_schedule_execution() {
 }
 
 #[test]
-#[cfg(any(test, feature = "test-utils"))]
+#[cfg(feature = "test-utils")]
 // Test case runs feed control and triggers inhibition by sending the stop message via the channel.
 // After verification that feed is stopped,
 // The test case sends the start message via the channel and verifies if feed control
@@ -487,6 +495,7 @@ pub fn test_messaging_sql_error_inhibition_feed() {
 }
 
 #[test]
+#[cfg(feature = "test-utils")]
 // Test case test implementation with multiple feed schedule entries in the past.
 // The youngest feed schedule entry shall be selected.
 // Test case uses test database #09.
@@ -599,6 +608,7 @@ pub fn test_feed_schedule_execution_past_entries_select_youngest() {
 }
 
 #[test]
+#[cfg(feature = "test-utils")]
 // Test case test implementation with multiple feed schedule entries in the past.
 // The oldest feed schedule entry shall be selected.
 // Test case uses test database #10.
@@ -713,6 +723,7 @@ pub fn test_feed_schedule_execution_past_entries_select_oldest() {
 }
 
 #[test]
+#[cfg(feature = "test-utils")]
 // Verifies that feed profile actuation is inhibited when device_scheduler mutex is blocked.
 // The test environment thread acquires and holds the device_scheduler mutex lock before feed profile actuation occurs.
 // While the lock is held, feed profile actuation is blocked. Once released, feed profile actuation proceeds normally.
