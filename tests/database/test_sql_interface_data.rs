@@ -545,7 +545,8 @@ pub fn test_sql_interface_data_write_data_frame() {
         .query_drop(format!("KILL {};", connection_id))
         .unwrap();
 
-    let err_result = SqlInterfaceData::write_data_frame_to_database(&mut kill_conn, &dataframe_reference_4);
+    let err_result =
+        SqlInterfaceData::write_data_frame_to_database(&mut kill_conn, &dataframe_reference_4);
     assert!(
         matches!(
             err_result,
@@ -554,6 +555,8 @@ pub fn test_sql_interface_data_write_data_frame() {
         "Expected InsertDataFrameFailure on killed connection, got {:?}",
         err_result
     );
-    println!("* checking write_data_frame_to_database error response on killed connection succeeded.");
+    println!(
+        "* checking write_data_frame_to_database error response on killed connection succeeded."
+    );
     // *****************************************************************************************
 }

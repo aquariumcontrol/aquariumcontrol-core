@@ -345,7 +345,7 @@ pub fn test_refill_trigger_water_injection() {
 #[test]
 // This test case executes multiple iterations of the loop inside the .execute function, including triggering a refill and simulation of the switch stuck low scenario.
 // Test case uses test database #47.
-/// [itest->swreq~water_error_detection~1]
+// [itest->swreq~water_error_detection~1]
 pub fn test_refill_trigger_water_injection_switch_stuck_high() {
     let sleep_duration_50_millis = Duration::from_millis(50);
     let spin_sleeper = SpinSleeper::default();
@@ -870,7 +870,7 @@ pub fn test_refill_conditions_historic_data_error_switch_stuck_low() {
 // This test case executes multiple iterations of the loop inside .execute function with error flag error_sql_update_failed
 // The refill control shall not initiate a refill operation.
 // Test case uses test database #23.
-/// [itest->swreq~water_db_failure_inhibition~1]
+// [itest->swreq~water_db_failure_inhibition~1]
 pub fn test_refill_conditions_error_sql_update_failed() {
     let sleep_duration_50_millis = Duration::from_millis(50);
     let spin_sleeper = SpinSleeper::default();
@@ -1732,7 +1732,7 @@ pub fn test_refill_conditions_error_get_historic_data_failed() {
 #[test]
 // This test case executes the check_volume_count_time_limits function of refill.
 // It also instantiates Monitor to capture the monitor view sent via the channel.
-/// [itest->swreq~water_faulty_switch_protection~1]
+// [itest->swreq~water_faulty_switch_protection~1]
 pub fn test_refill_check_volume_count_time_limits() {
     let mut mock_monitors = MockMonitors::new();
     let sleep_duration_200_millis = Duration::from_millis(200);

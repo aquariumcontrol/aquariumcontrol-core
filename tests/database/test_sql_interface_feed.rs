@@ -132,20 +132,21 @@ fn test_sql_interface_feed_new() {
 
     // --- Test Case 5: Failure when feed_profiles contains NULL values ---
     println!("* Testing new() with NULL values in feed_profiles...");
-    SqlInterface::truncate_table(&mut sql_interface, SQL_TABLE_FEED_PROFILES.to_string())
-        .unwrap();
+    SqlInterface::truncate_table(&mut sql_interface, SQL_TABLE_FEED_PROFILES.to_string()).unwrap();
     let mut conn = sql_interface.get_connection().unwrap();
     conn.query_drop("ALTER TABLE feed_profiles MODIFY COLUMN profile_name VARCHAR(255) NULL;")
         .unwrap();
-    conn.query_drop(
-        "INSERT INTO feed_profiles (profile_id, profile_name) VALUES (1, NULL)",
-    )
-    .unwrap();
+    conn.query_drop("INSERT INTO feed_profiles (profile_id, profile_name) VALUES (1, NULL)")
+        .unwrap();
     let result = SqlInterfaceFeed::new(conn, 10, 10, 10);
     assert!(
         matches!(
             result,
-            Err(SqlInterfaceError::DatabaseFeedSetValTableContainsNull(_, _, _))
+            Err(SqlInterfaceError::DatabaseFeedSetValTableContainsNull(
+                _,
+                _,
+                _
+            ))
         ),
         "Expected DatabaseFeedSetValTableContainsNull error for feed_profiles, but got {:?}",
         result
@@ -154,15 +155,13 @@ fn test_sql_interface_feed_new() {
 
     // Restore feed_profiles schema
     let mut conn = sql_interface.get_connection().unwrap();
-    SqlInterface::truncate_table(&mut sql_interface, SQL_TABLE_FEED_PROFILES.to_string())
-        .unwrap();
+    SqlInterface::truncate_table(&mut sql_interface, SQL_TABLE_FEED_PROFILES.to_string()).unwrap();
     conn.query_drop("ALTER TABLE feed_profiles MODIFY COLUMN profile_name VARCHAR(255) NOT NULL;")
         .unwrap();
 
     // --- Test Case 6: Failure when feed_schedule contains NULL values ---
     println!("* Testing new() with NULL values in feed_schedule...");
-    SqlInterface::truncate_table(&mut sql_interface, SQL_TABLE_FEED_SCHEDULE.to_string())
-        .unwrap();
+    SqlInterface::truncate_table(&mut sql_interface, SQL_TABLE_FEED_SCHEDULE.to_string()).unwrap();
     let mut conn = sql_interface.get_connection().unwrap();
     conn.query_drop("ALTER TABLE feed_schedule MODIFY COLUMN profile_id INT NULL;")
         .unwrap();
@@ -174,7 +173,11 @@ fn test_sql_interface_feed_new() {
     assert!(
         matches!(
             result,
-            Err(SqlInterfaceError::DatabaseFeedSetValTableContainsNull(_, _, _))
+            Err(SqlInterfaceError::DatabaseFeedSetValTableContainsNull(
+                _,
+                _,
+                _
+            ))
         ),
         "Expected DatabaseFeedSetValTableContainsNull error for feed_schedule, but got {:?}",
         result
@@ -183,8 +186,7 @@ fn test_sql_interface_feed_new() {
 
     // Restore feed_schedule schema
     let mut conn = sql_interface.get_connection().unwrap();
-    SqlInterface::truncate_table(&mut sql_interface, SQL_TABLE_FEED_SCHEDULE.to_string())
-        .unwrap();
+    SqlInterface::truncate_table(&mut sql_interface, SQL_TABLE_FEED_SCHEDULE.to_string()).unwrap();
     conn.query_drop("ALTER TABLE feed_schedule MODIFY COLUMN profile_id INT NOT NULL;")
         .unwrap();
 
@@ -254,7 +256,11 @@ pub fn test_sql_interface_feed_profiles() {
     assert!(
         matches!(
             phase_empty_res,
-            Err(SqlInterfaceError::SingleFeedProfileRequestEmptyResponse(_, _, _))
+            Err(SqlInterfaceError::SingleFeedProfileRequestEmptyResponse(
+                _,
+                _,
+                _
+            ))
         ),
         "Expected SingleFeedProfileRequestEmptyResponse, got {:?}",
         phase_empty_res.err()
@@ -455,7 +461,11 @@ pub fn test_sql_interface_feed_profiles() {
     assert!(
         matches!(
             multi_profile_res,
-            Err(SqlInterfaceError::SingleFeedProfileRequestNoSingleResponse(_, _, _))
+            Err(SqlInterfaceError::SingleFeedProfileRequestNoSingleResponse(
+                _,
+                _,
+                _
+            ))
         ),
         "Expected SingleFeedProfileRequestNoSingleResponse, got {:?}",
         multi_profile_res.err()
@@ -465,7 +475,11 @@ pub fn test_sql_interface_feed_profiles() {
     assert!(
         matches!(
             phase_multi_res,
-            Err(SqlInterfaceError::SingleFeedProfileRequestNoSingleResponse(_, _, _))
+            Err(SqlInterfaceError::SingleFeedProfileRequestNoSingleResponse(
+                _,
+                _,
+                _
+            ))
         ),
         "Expected SingleFeedProfileRequestNoSingleResponse, got {:?}",
         phase_multi_res.err()
@@ -473,8 +487,7 @@ pub fn test_sql_interface_feed_profiles() {
     println!("* checking get_feed_phase_from_database (multiple profiles) succeeded.");
 
     // *** check error response when feed phase duration is negative *************************
-    SqlInterface::truncate_table(&mut sql_interface, SQL_TABLE_FEED_PROFILES.to_string())
-        .unwrap();
+    SqlInterface::truncate_table(&mut sql_interface, SQL_TABLE_FEED_PROFILES.to_string()).unwrap();
     let mut conn = sql_interface.get_connection().unwrap();
     let sql_query_string = sql_test_query_strings::SQL_QUERY_WRITE_FEED_PROFILE_TEST.to_string();
     conn.exec_drop::<_, _>(
@@ -488,7 +501,11 @@ pub fn test_sql_interface_feed_profiles() {
     assert!(
         matches!(
             neg_dur_res,
-            Err(SqlInterfaceError::DatabaseFeedPhaseDurationNegative(_, -1, _))
+            Err(SqlInterfaceError::DatabaseFeedPhaseDurationNegative(
+                _,
+                -1,
+                _
+            ))
         ),
         "Expected DatabaseFeedPhaseDurationNegative, got {:?}",
         neg_dur_res.err()
@@ -497,14 +514,14 @@ pub fn test_sql_interface_feed_profiles() {
 
     // Restore PRIMARY KEY and AUTO_INCREMENT on feed_profiles
     let mut conn = sql_interface.get_connection().unwrap();
-    SqlInterface::truncate_table(&mut sql_interface, SQL_TABLE_FEED_PROFILES.to_string())
-        .unwrap();
+    SqlInterface::truncate_table(&mut sql_interface, SQL_TABLE_FEED_PROFILES.to_string()).unwrap();
     let _ = conn.query_drop("ALTER TABLE feed_profiles ADD PRIMARY KEY (profile_id);");
-    let _ = conn.query_drop("ALTER TABLE feed_profiles MODIFY COLUMN profile_id INT NOT NULL AUTO_INCREMENT;");
+    let _ = conn.query_drop(
+        "ALTER TABLE feed_profiles MODIFY COLUMN profile_id INT NOT NULL AUTO_INCREMENT;",
+    );
 
     // *** check error response when feed_schedule entry repeat_daily is out of range *********
-    SqlInterface::truncate_table(&mut sql_interface, SQL_TABLE_FEED_SCHEDULE.to_string())
-        .unwrap();
+    SqlInterface::truncate_table(&mut sql_interface, SQL_TABLE_FEED_SCHEDULE.to_string()).unwrap();
     let mut conn = sql_interface.get_connection().unwrap();
     conn.exec_drop(
         sql_test_query_strings::SQL_QUERY_WRITE_FEED_SCHEDULE_ENTRY,
@@ -526,8 +543,7 @@ pub fn test_sql_interface_feed_profiles() {
         invalid_entry_res
     );
     println!("* checking out-of-range repeat_daily error response succeeded.");
-    SqlInterface::truncate_table(&mut sql_interface, SQL_TABLE_FEED_SCHEDULE.to_string())
-        .unwrap();
+    SqlInterface::truncate_table(&mut sql_interface, SQL_TABLE_FEED_SCHEDULE.to_string()).unwrap();
 
     // *** check error response when connection is killed **************************************
     let connection_id: u64 = sql_interface_feed
@@ -559,7 +575,9 @@ pub fn test_sql_interface_feed_profiles() {
         "Expected SingleFeedProfileRequestFailure on killed connection, got {:?}",
         killed_phase_res.err()
     );
-    println!("* checking get_feed_phase_from_database error response on killed connection succeeded.");
+    println!(
+        "* checking get_feed_phase_from_database error response on killed connection succeeded."
+    );
 }
 
 /// [itest->swreq~food_log_database~1]
@@ -637,10 +655,16 @@ pub fn test_sql_interface_feedlog() {
     }
 
     // *** check error path of insert_feed_event when table is missing ***
-    sql_interface_feed.conn.query_drop("DROP TABLE feed_log").unwrap();
+    sql_interface_feed
+        .conn
+        .query_drop("DROP TABLE feed_log")
+        .unwrap();
     let invalid_result = sql_interface_feed.insert_feed_event(feed_timestamp, 5.5, 1);
     assert!(
-        matches!(invalid_result, Err(SqlInterfaceError::InsertFeedEventFailure { .. })),
+        matches!(
+            invalid_result,
+            Err(SqlInterfaceError::InsertFeedEventFailure { .. })
+        ),
         "Expected InsertFeedEventFailure when table is missing, but got {:?}",
         invalid_result
     );
@@ -650,8 +674,12 @@ pub fn test_sql_interface_feedlog() {
     sql_interface_feed.conn.query_drop(
         "CREATE TABLE IF NOT EXISTS feed_log (timestamp DATETIME NOT NULL, feeder_on_time DOUBLE NOT NULL, profile_id INT NOT NULL)"
     ).unwrap();
-    sql_interface_feed.insert_feed_event(feed_timestamp, 5.5, 1).unwrap();
-    sql_interface_feed.insert_feed_event(feed_timestamp, 5.5, 2).unwrap();
+    sql_interface_feed
+        .insert_feed_event(feed_timestamp, 5.5, 1)
+        .unwrap();
+    sql_interface_feed
+        .insert_feed_event(feed_timestamp, 5.5, 2)
+        .unwrap();
 
     let test_result = SqlInterfaceFeed::new(sql_interface.get_connection().unwrap(), 0, 0, 1);
     assert!(matches!(
@@ -844,26 +872,39 @@ pub fn test_sql_interface_feed_schedule() {
 
     // *** check error paths of update_feed_schedule_entries_in_database (table missing) ***
     let mut entries_repeat = vec![FeedScheduleEntry {
-        timestamp: NaiveDateTime::parse_from_str("2024-04-10 14:00:00", "%Y-%m-%d %H:%M:%S").unwrap(),
+        timestamp: NaiveDateTime::parse_from_str("2024-04-10 14:00:00", "%Y-%m-%d %H:%M:%S")
+            .unwrap(),
         profile_id: 1,
         repeat_daily: true,
     }];
-    sql_interface_feed.conn.query_drop("DROP TABLE feed_schedule").unwrap();
-    let err_update = sql_interface_feed.update_feed_schedule_entries_in_database(&mut entries_repeat);
+    sql_interface_feed
+        .conn
+        .query_drop("DROP TABLE feed_schedule")
+        .unwrap();
+    let err_update =
+        sql_interface_feed.update_feed_schedule_entries_in_database(&mut entries_repeat);
     assert!(
-        matches!(err_update, Err(SqlInterfaceError::FeedScheduleDropFailure { .. })),
+        matches!(
+            err_update,
+            Err(SqlInterfaceError::FeedScheduleDropFailure { .. })
+        ),
         "Expected FeedScheduleDropFailure when table is missing during update, but got {:?}",
         err_update
     );
 
     let mut entries_no_repeat = vec![FeedScheduleEntry {
-        timestamp: NaiveDateTime::parse_from_str("2024-04-10 14:00:00", "%Y-%m-%d %H:%M:%S").unwrap(),
+        timestamp: NaiveDateTime::parse_from_str("2024-04-10 14:00:00", "%Y-%m-%d %H:%M:%S")
+            .unwrap(),
         profile_id: 1,
         repeat_daily: false,
     }];
-    let err_delete = sql_interface_feed.update_feed_schedule_entries_in_database(&mut entries_no_repeat);
+    let err_delete =
+        sql_interface_feed.update_feed_schedule_entries_in_database(&mut entries_no_repeat);
     assert!(
-        matches!(err_delete, Err(SqlInterfaceError::FeedScheduleDropFailure { .. })),
+        matches!(
+            err_delete,
+            Err(SqlInterfaceError::FeedScheduleDropFailure { .. })
+        ),
         "Expected FeedScheduleDropFailure when table is missing during delete, but got {:?}",
         err_delete
     );
@@ -872,7 +913,9 @@ pub fn test_sql_interface_feed_schedule() {
     sql_interface_feed.conn.query_drop(
         "CREATE TABLE IF NOT EXISTS feed_schedule (timestamp DATETIME NOT NULL, profile_id INT NOT NULL, is_weekly BOOLEAN NOT NULL, is_daily BOOLEAN NOT NULL)"
     ).unwrap();
-    println!("* checking error handling for update_feed_schedule_entries_in_database (FAIL) succeeded.");
+    println!(
+        "* checking error handling for update_feed_schedule_entries_in_database (FAIL) succeeded."
+    );
     // *****************************************************************************************
 
     // *** check updating multiple feed schedule entries with repetition ***********************

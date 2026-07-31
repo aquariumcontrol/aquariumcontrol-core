@@ -150,7 +150,10 @@ fn test_sql_interface_balling_new() {
     assert!(
         matches!(
             result,
-            Err(SqlInterfaceError::DatabaseBallingSetValTableContainsNull(_, _))
+            Err(SqlInterfaceError::DatabaseBallingSetValTableContainsNull(
+                _,
+                _
+            ))
         ),
         "Expected DatabaseBallingSetValTableContainsNull error, but got {:?}",
         result
@@ -399,7 +402,9 @@ pub fn test_sql_interface_balling_set_vals() {
         matches!(
             multi_res,
             Err(SqlInterfaceError::SingleBallingSetValNoSingleResponse(
-                _, _, _
+                _,
+                _,
+                _
             ))
         ),
         "Expected SingleBallingSetValNoSingleResponse, got {:?}",

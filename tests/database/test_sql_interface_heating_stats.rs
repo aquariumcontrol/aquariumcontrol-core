@@ -9,6 +9,8 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 
 //! Test the aggregation and persistence of daily heating statistics.
 
+use mysql::prelude::Queryable;
+
 use all_asserts::{assert_ge, assert_le};
 use aquarium_control::database::sql_interface_heating_stats::{
     HeatingStatsEntry, SqlInterfaceHeatingStats,
@@ -28,9 +30,9 @@ use chrono::{Datelike, Local, NaiveDate, NaiveDateTime};
 // 2. Failure on Row Limit: Fails when `heatingstats` contains more rows than the configured limit.
 // 3. Deactivated Check: Succeeds even with excess rows if the limit is set to 0.
 // Test case uses test database #61.
-/// [itest->swreq~thermal_heater_heating~1]
-/// [itest->swreq~thermal_connect_heating_stats~1]
-/// [itest->swreq~thermal_midnight_calculator~1]
+// [itest->swreq~thermal_heater_heating~1]
+// [itest->swreq~thermal_connect_heating_stats~1]
+// [itest->swreq~thermal_midnight_calculator~1]
 fn test_sql_interface_heating_stats_new() {
     // --- Common Setup ---
     let config: ConfigData = read_config_file_with_test_database(
@@ -96,15 +98,94 @@ fn test_sql_interface_heating_stats_new() {
         result.err()
     );
     println!("* Succeeded: Initialization passes when row limit check is deactivated.");
+
+    // --- Test Case 4: HeatingStatsEntry::new fallback on date query error ---
+    println!("* Testing HeatingStatsEntry::new() date fallback on killed connection...");
+    let mut kill_conn = sql_interface.get_connection().unwrap();
+    let connection_id: u64 = kill_conn
+        .query_first("SELECT CONNECTION_ID();")
+        .unwrap()
+        .unwrap();
+    let mut helper_conn = sql_interface.get_connection().unwrap();
+    helper_conn
+        .query_drop(format!("KILL {};", connection_id))
+        .unwrap();
+
+    let entry_fallback = HeatingStatsEntry::new(&mut kill_conn);
+    assert_eq!(
+        entry_fallback.date,
+        Local::now().date_naive(),
+        "Expected fallback date to match Local::now()"
+    );
+    println!("* Succeeded: HeatingStatsEntry::new() date fallback works.");
+
+    // --- Test Case 5: Failure on NULL values in heating_stats ---
+    println!("* Testing new() with NULL values in heating_stats table...");
+    SqlInterface::truncate_table(&mut sql_interface, SQL_TABLE_HEATING_STATS.to_string())
+        .expect("Test setup failed: Could not truncate table.");
+    let mut conn = sql_interface.get_connection().unwrap();
+    conn.query_drop("ALTER TABLE heating_stats MODIFY COLUMN energy DOUBLE NULL;")
+        .unwrap();
+    conn.query_drop("INSERT INTO heating_stats (date, energy, ambient_temp_average, ambient_temp_counter, water_temp_average, water_temp_counter, heating_control_runtime) VALUES ('2024-01-01', NULL, 20.0, 1, 25.0, 1, 10.0);")
+        .unwrap();
+
+    let midnight_calc = Box::new(SqlInterfaceMidnightCalculator::new(
+        sql_interface.get_connection().unwrap(),
+    ));
+    let result = SqlInterfaceHeatingStats::new(conn, 10, midnight_calc);
+    assert!(
+        matches!(
+            result,
+            Err(SqlInterfaceError::DatabaseHeatingStatsTableContainsNull(
+                _,
+                _
+            ))
+        ),
+        "Expected DatabaseHeatingStatsTableContainsNull, but got {:?}",
+        result.err()
+    );
+    println!("* Succeeded: Initialization fails if heating_stats contains NULL values.");
+
+    // Restore heating_stats schema
+    let mut conn = sql_interface.get_connection().unwrap();
+    SqlInterface::truncate_table(&mut sql_interface, SQL_TABLE_HEATING_STATS.to_string()).unwrap();
+    conn.query_drop("ALTER TABLE heating_stats MODIFY COLUMN energy DOUBLE NOT NULL DEFAULT 0;")
+        .unwrap();
+
+    // --- Test Case 6: Failure on killed connection in new() ---
+    println!("* Testing new() with killed database connection...");
+    let mut kill_conn = sql_interface.get_connection().unwrap();
+    let connection_id: u64 = kill_conn
+        .query_first("SELECT CONNECTION_ID();")
+        .unwrap()
+        .unwrap();
+    let mut helper_conn = sql_interface.get_connection().unwrap();
+    helper_conn
+        .query_drop(format!("KILL {};", connection_id))
+        .unwrap();
+
+    let midnight_calc = Box::new(SqlInterfaceMidnightCalculator::new(
+        sql_interface.get_connection().unwrap(),
+    ));
+    let result = SqlInterfaceHeatingStats::new(kill_conn, 10, midnight_calc);
+    assert!(
+        matches!(
+            result,
+            Err(SqlInterfaceError::DatabaseCheckHeatingStatsFailure { .. })
+        ),
+        "Expected DatabaseCheckHeatingStatsFailure, but got {:?}",
+        result.err()
+    );
+    println!("* Succeeded: Initialization fails when connection is killed.");
 }
 
 #[test]
 // Test case includes all checks for this table combined in one function to limit the number of additional databases.
-// Test case uses test database #36.
+// Test case uses test database #65.
 pub fn test_sql_interface_heating() {
     let config: ConfigData = read_config_file_with_test_database(
         "config/aquarium_control_test_generic.toml".to_string(),
-        36,
+        65,
     );
     println!("Testing with database {}", config.sql_interface.db_name);
     let max_rows_heating_stats = config.sql_interface.max_rows_heating_stats;
@@ -256,5 +337,41 @@ pub fn test_sql_interface_heating() {
         test_result,
         Err(SqlInterfaceError::DatabaseHeatingStatsTableContainsTooManyRows(_, _, _))
     ));
+    println!("* detecting too many rows succeeded.");
+
+    // *** check error responses on killed connection ******************************************
+    let connection_id: u64 = sql_interface_heating
+        .conn
+        .query_first("SELECT CONNECTION_ID();")
+        .unwrap()
+        .unwrap();
+    let mut helper_conn = sql_interface.get_connection().unwrap();
+    helper_conn
+        .query_drop(format!("KILL {};", connection_id))
+        .unwrap();
+
+    let insert_err = sql_interface_heating.insert_heating_stats_entry(&heating_stats_entry);
+    assert!(
+        matches!(
+            insert_err,
+            Err(SqlInterfaceError::InsertHeatingStatsEntryFailure { .. })
+        ),
+        "Expected InsertHeatingStatsEntryFailure on killed connection, got {:?}",
+        insert_err
+    );
+    println!(
+        "* checking insert_heating_stats_entry error response on killed connection succeeded."
+    );
+
+    let get_err = sql_interface_heating.get_single_heating_stats_from_database();
+    assert!(
+        matches!(
+            get_err,
+            Err(SqlInterfaceError::SingleHeatingStatsRequestFailure { .. })
+        ),
+        "Expected SingleHeatingStatsRequestFailure on killed connection, got {:?}",
+        get_err.err()
+    );
+    println!("* checking get_single_heating_stats_from_database error response on killed connection succeeded.");
     // *****************************************************************************************
 }

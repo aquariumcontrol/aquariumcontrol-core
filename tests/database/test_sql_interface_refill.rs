@@ -136,12 +136,35 @@ fn test_sql_interface_refill_new() {
         result.err()
     );
     println!("* Succeeded: Initialization passes when row count is exactly the limit.");
+
+    // --- Test Case 5: Failure on killed connection ---
+    println!("* Testing new() with killed database connection...");
+    let mut kill_conn = sql_interface.get_connection().unwrap();
+    let connection_id: u64 = kill_conn
+        .query_first("SELECT CONNECTION_ID();")
+        .unwrap()
+        .unwrap();
+    let mut helper_conn = sql_interface.get_connection().unwrap();
+    helper_conn
+        .query_drop(format!("KILL {};", connection_id))
+        .unwrap();
+
+    let result = SqlInterfaceRefill::new(kill_conn, 10);
+    assert!(
+        matches!(
+            result,
+            Err(SqlInterfaceError::DatabaseCheckRefillFailure { .. })
+        ),
+        "Expected DatabaseCheckRefillFailure, but got {:?}",
+        result.err()
+    );
+    println!("* Succeeded: Initialization fails when connection is killed.");
 }
 
 #[test]
 // Test case includes all checks for this table combined in one function to limit the number of additional databases.
 // Test case uses test database #37.
-/// [itest->swreq~water_log_database~1]
+// [itest->swreq~water_log_database~1]
 pub fn test_sql_interface_refill() {
     let config: ConfigData = read_config_file_with_test_database(
         "config/aquarium_control_test_generic.toml".to_string(),
@@ -354,5 +377,101 @@ pub fn test_sql_interface_refill() {
             _
         ))
     ));
+    println!("* detecting too many rows succeeded.");
+
+    // *** check error response when last refill timestamp is in the future ********************
+    let future_timestamp = SqlInterface::get_naive_timestamp_from_past(-1, 0); // 1 hour in future
+    sql_interface_refill
+        .insert_refill_event(future_timestamp, 1.0, 1.0, DatabaseRefillErrorCode::Success)
+        .unwrap();
+    let duration_res = sql_interface_refill.get_duration_since_last_refill();
+    assert!(
+        matches!(
+            duration_res,
+            Err(SqlInterfaceError::NegativeTimeDeltaSeconds(_, _))
+        ),
+        "Expected NegativeTimeDeltaSeconds, got {:?}",
+        duration_res.err()
+    );
+    println!(
+        "* checking duration since last refill with future timestamp error response succeeded."
+    );
+
+    // *** check error response when get_positive_integer_value_from_database gets negative integer ***
+    let neg_int_res = sql_interface_refill.get_positive_integer_value_from_database("SELECT -5;");
+    assert!(
+        matches!(neg_int_res, Err(SqlInterfaceError::NegativeInteger(_, -5))),
+        "Expected NegativeInteger, got {:?}",
+        neg_int_res.err()
+    );
+    println!("* checking get_positive_integer_value_from_database negative integer error response succeeded.");
+
+    // *** check error responses on killed connection ******************************************
+    let connection_id: u64 = sql_interface_refill
+        .conn
+        .query_first("SELECT CONNECTION_ID();")
+        .unwrap()
+        .unwrap();
+    let mut helper_conn = sql_interface.get_connection().unwrap();
+    helper_conn
+        .query_drop(format!("KILL {};", connection_id))
+        .unwrap();
+
+    let insert_res = sql_interface_refill.insert_refill_event(
+        Local::now().naive_local(),
+        1.0,
+        1.0,
+        DatabaseRefillErrorCode::Success,
+    );
+    assert!(
+        matches!(
+            insert_res,
+            Err(SqlInterfaceError::InsertRefillEventFailure { .. })
+        ),
+        "Expected InsertRefillEventFailure on killed connection, got {:?}",
+        insert_res.err()
+    );
+    println!("* checking insert_refill_event error response on killed connection succeeded.");
+
+    let count_1h_res = sql_interface_refill.get_refill_count_of_last_hour();
+    assert!(
+        matches!(
+            count_1h_res,
+            Err(SqlInterfaceError::RefillPastDataRetrievalFailed { .. })
+        ),
+        "Expected RefillPastDataRetrievalFailed for count 1h, got {:?}",
+        count_1h_res.err()
+    );
+
+    let count_24h_res = sql_interface_refill.get_refill_count_of_last_24h();
+    assert!(
+        matches!(
+            count_24h_res,
+            Err(SqlInterfaceError::RefillPastDataRetrievalFailed { .. })
+        ),
+        "Expected RefillPastDataRetrievalFailed for count 24h, got {:?}",
+        count_24h_res.err()
+    );
+
+    let vol_1h_res = sql_interface_refill.get_refill_volume_of_last_hour();
+    assert!(
+        matches!(
+            vol_1h_res,
+            Err(SqlInterfaceError::RefillPastDataRetrievalFailed { .. })
+        ),
+        "Expected RefillPastDataRetrievalFailed for volume 1h, got {:?}",
+        vol_1h_res.err()
+    );
+
+    let vol_24h_res = sql_interface_refill.get_refill_volume_of_last_24h();
+    assert!(
+        matches!(
+            vol_24h_res,
+            Err(SqlInterfaceError::RefillPastDataRetrievalFailed { .. })
+        ),
+        "Expected RefillPastDataRetrievalFailed for volume 24h, got {:?}",
+        vol_24h_res.err()
+    );
+    println!("* checking refill statistics error responses on killed connection succeeded.");
     // **************************************************************************************
 }

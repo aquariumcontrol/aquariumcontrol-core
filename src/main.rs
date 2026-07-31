@@ -21,7 +21,7 @@ use aquarium_control::launch::run::run;
 #[cfg(all(not(test), not(feature = "test-utils")))]
 #[cfg(not(tarpaulin_include))]
 use aquarium_control::utilities::logger::log_error_chain;
-use aquarium_control::utilities::logger::{setup_logger};
+use aquarium_control::utilities::logger::setup_logger;
 use aquarium_control::utilities::logger_config::LoggerConfig;
 
 /// The main function is a simple error handler.

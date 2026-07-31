@@ -132,8 +132,11 @@ pub fn test_get_single_string_from_database() {
     let mut conn = sql_interface.get_connection().unwrap();
 
     let table_name = "test_single_string";
-    conn.query_drop(format!("CREATE TABLE IF NOT EXISTS {} (name VARCHAR(255));", table_name))
-        .unwrap();
+    conn.query_drop(format!(
+        "CREATE TABLE IF NOT EXISTS {} (name VARCHAR(255));",
+        table_name
+    ))
+    .unwrap();
     conn.query_drop(format!("TRUNCATE TABLE {}", table_name))
         .unwrap();
 
@@ -196,15 +199,17 @@ pub fn test_get_multiple_strings_from_database() {
     let mut conn = sql_interface.get_connection().unwrap();
 
     let table_name = "test_multiple_strings";
-    conn.query_drop(format!("CREATE TABLE IF NOT EXISTS {} (name VARCHAR(255));", table_name))
-        .unwrap();
+    conn.query_drop(format!(
+        "CREATE TABLE IF NOT EXISTS {} (name VARCHAR(255));",
+        table_name
+    ))
+    .unwrap();
     conn.query_drop(format!("TRUNCATE TABLE {}", table_name))
         .unwrap();
 
     // 1. Test empty table response (0 rows)
-    let res_empty = sql_interface.get_multiple_strings_from_database(
-        &format!("SELECT name FROM {}", table_name),
-    );
+    let res_empty = sql_interface
+        .get_multiple_strings_from_database(&format!("SELECT name FROM {}", table_name));
     assert!(matches!(
         res_empty,
         Err(SqlInterfaceError::MultipleStringRequestEmptyResponse(_, _))
@@ -216,9 +221,8 @@ pub fn test_get_multiple_strings_from_database() {
         params! { "name" => "item1" },
     )
     .unwrap();
-    let res_single = sql_interface.get_multiple_strings_from_database(
-        &format!("SELECT name FROM {}", table_name),
-    );
+    let res_single = sql_interface
+        .get_multiple_strings_from_database(&format!("SELECT name FROM {}", table_name));
     assert!(matches!(
         res_single,
         Err(SqlInterfaceError::MultipleStringRequestSingleResponse(_, _))
@@ -230,15 +234,18 @@ pub fn test_get_multiple_strings_from_database() {
         params! { "name" => "item2" },
     )
     .unwrap();
-    let res_multi = sql_interface.get_multiple_strings_from_database(
-        &format!("SELECT name FROM {} ORDER BY name ASC", table_name),
+    let res_multi = sql_interface.get_multiple_strings_from_database(&format!(
+        "SELECT name FROM {} ORDER BY name ASC",
+        table_name
+    ));
+    assert_eq!(
+        res_multi.unwrap(),
+        vec!["item1".to_string(), "item2".to_string()]
     );
-    assert_eq!(res_multi.unwrap(), vec!["item1".to_string(), "item2".to_string()]);
 
     // 4. Test invalid query syntax / missing table error
-    let res_invalid = sql_interface.get_multiple_strings_from_database(
-        "SELECT invalid_col FROM nonexistent_table_xyz_999",
-    );
+    let res_invalid = sql_interface
+        .get_multiple_strings_from_database("SELECT invalid_col FROM nonexistent_table_xyz_999");
     assert!(matches!(
         res_invalid,
         Err(SqlInterfaceError::SingleStringRequestFailure { .. })
@@ -266,8 +273,11 @@ pub fn test_get_single_integer_from_database() {
     let mut conn = sql_interface.get_connection().unwrap();
 
     let table_name = "test_single_integer";
-    conn.query_drop(format!("CREATE TABLE IF NOT EXISTS {} (val INT);", table_name))
-        .unwrap();
+    conn.query_drop(format!(
+        "CREATE TABLE IF NOT EXISTS {} (val INT);",
+        table_name
+    ))
+    .unwrap();
     conn.query_drop(format!("TRUNCATE TABLE {}", table_name))
         .unwrap();
 
@@ -278,7 +288,10 @@ pub fn test_get_single_integer_from_database() {
     );
     assert!(matches!(
         res_empty,
-        Err(SqlInterfaceError::SingleIntegerRequestNoSingleResponse(_, _))
+        Err(SqlInterfaceError::SingleIntegerRequestNoSingleResponse(
+            _,
+            _
+        ))
     ));
 
     // 2. Test single row response (1 row - Happy Path)
@@ -305,7 +318,10 @@ pub fn test_get_single_integer_from_database() {
     );
     assert!(matches!(
         res_multi,
-        Err(SqlInterfaceError::SingleIntegerRequestNoSingleResponse(_, _))
+        Err(SqlInterfaceError::SingleIntegerRequestNoSingleResponse(
+            _,
+            _
+        ))
     ));
 
     // 4. Test invalid query syntax / missing table error
@@ -340,8 +356,11 @@ pub fn test_get_single_float_from_database() {
     let mut conn = sql_interface.get_connection().unwrap();
 
     let table_name = "test_single_float";
-    conn.query_drop(format!("CREATE TABLE IF NOT EXISTS {} (val DOUBLE);", table_name))
-        .unwrap();
+    conn.query_drop(format!(
+        "CREATE TABLE IF NOT EXISTS {} (val DOUBLE);",
+        table_name
+    ))
+    .unwrap();
     conn.query_drop(format!("TRUNCATE TABLE {}", table_name))
         .unwrap();
 
@@ -841,13 +860,20 @@ pub fn test_sql_interface_new_connection_from_pool_failure() {
     );
     let mut sql_interface = SqlInterface::new(config.sql_interface.clone()).unwrap();
     // Temporarily lower max_connections to 1 so get_conn fails
-    if sql_interface.conn.query_drop("SET GLOBAL max_connections = 1;").is_ok() {
+    if sql_interface
+        .conn
+        .query_drop("SET GLOBAL max_connections = 1;")
+        .is_ok()
+    {
         let result = SqlInterface::new(config.sql_interface.clone());
         // Restore max_connections immediately
-        let _ = sql_interface.conn.query_drop("SET GLOBAL max_connections = 151;");
+        let _ = sql_interface
+            .conn
+            .query_drop("SET GLOBAL max_connections = 151;");
         assert!(matches!(
             result,
-            Err(SqlInterfaceError::ConnectionFromPool { .. }) | Err(SqlInterfaceError::ConnectionPoolFailure { .. })
+            Err(SqlInterfaceError::ConnectionFromPool { .. })
+                | Err(SqlInterfaceError::ConnectionPoolFailure { .. })
         ));
     }
 }
@@ -952,7 +978,11 @@ pub fn test_sql_interface_version() {
         matches!(
             multi_res,
             Err(SqlInterfaceError::SingleVersionRequestMultipleResults(
-                _, _, _, _, _
+                _,
+                _,
+                _,
+                _,
+                _
             ))
         ),
         "Expected SingleVersionRequestMultipleResults, got {:?}",
@@ -967,7 +997,11 @@ pub fn test_sql_interface_version() {
         matches!(
             fail_res,
             Err(SqlInterfaceError::SingleVersionRequestFailure(
-                _, _, _, _, _
+                _,
+                _,
+                _,
+                _,
+                _
             ))
         ),
         "Expected SingleVersionRequestFailure when version table is dropped, got {:?}",
@@ -1096,10 +1130,7 @@ pub fn test_sql_interface_ping_database_error() {
     // Call ping_database on the killed connection -> expects DatabasePingFailure
     let result = SqlInterface::ping_database(&mut test_conn);
     assert!(
-        matches!(
-            result,
-            Err(SqlInterfaceError::DatabasePingFailure { .. })
-        ),
+        matches!(result, Err(SqlInterfaceError::DatabasePingFailure { .. })),
         "Expected DatabasePingFailure on killed connection, got {:?}",
         result.as_ref().err()
     );
@@ -1111,8 +1142,7 @@ pub fn test_sql_interface_ping_database_error() {
 pub fn test_get_duration_from_naive_timestamp_to_local_now() {
     // 1. Valid timestamp (Single)
     let valid_naive = Local::now().naive_local() - chrono::Duration::seconds(10);
-    let valid_duration =
-        SqlInterface::get_duration_from_naive_timestamp_to_local_now(valid_naive);
+    let valid_duration = SqlInterface::get_duration_from_naive_timestamp_to_local_now(valid_naive);
     assert!(valid_duration.is_some());
 
     // 2. DST spring-forward non-existent timestamp (None)
@@ -1120,8 +1150,7 @@ pub fn test_get_duration_from_naive_timestamp_to_local_now() {
         .unwrap()
         .and_hms_opt(2, 30, 0)
         .unwrap();
-    let gap_res =
-        SqlInterface::get_duration_from_naive_timestamp_to_local_now(spring_forward_gap);
+    let gap_res = SqlInterface::get_duration_from_naive_timestamp_to_local_now(spring_forward_gap);
     assert!(gap_res.is_none());
 
     // 3. DST fall-back ambiguous timestamp (Ambiguous)

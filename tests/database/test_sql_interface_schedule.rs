@@ -28,8 +28,8 @@ use std::collections::HashMap;
 // 2. `read_schedule()`: Failure on invalid data (bad schedule type) and partial success.
 // Test case uses test database #63.
 // [itest->swreq~schedule_read_entries~1]
-/// [itest->swreq~schedule_read_entries~1]
-/// [itest->swreq~schedule_connect_database~1]
+// [itest->swreq~schedule_read_entries~1]
+// [itest->swreq~schedule_connect_database~1]
 fn test_sql_interface_schedule_new_and_read() {
     // --- Common Setup ---
     let config: ConfigData = read_config_file_with_test_database(
@@ -148,6 +148,49 @@ fn test_sql_interface_schedule_new_and_read() {
         ScheduleType::Balling
     );
     println!("* Succeeded: read_schedule correctly processes valid data while reporting errors for invalid data.");
+
+    // --- Test `new()`: Failure on killed connection ---
+    println!("* Testing new() with killed database connection...");
+    let mut kill_conn = sql_interface.get_connection().unwrap();
+    let connection_id: u64 = kill_conn
+        .query_first("SELECT CONNECTION_ID();")
+        .unwrap()
+        .unwrap();
+    let mut helper_conn = sql_interface.get_connection().unwrap();
+    helper_conn
+        .query_drop(format!("KILL {};", connection_id))
+        .unwrap();
+
+    let result = SqlInterfaceSchedule::new(kill_conn, 10);
+    assert!(
+        matches!(
+            result,
+            Err(SqlInterfaceError::DatabaseCheckScheduleFailure { .. })
+        ),
+        "Expected DatabaseCheckScheduleFailure, but got {:?}",
+        result.err()
+    );
+    println!("* Succeeded: Initialization fails when connection is killed.");
+
+    // --- Test `read_schedule()`: Failure on killed connection ---
+    println!("* Testing read_schedule() with killed database connection...");
+    let connection_id: u64 = schedule_db
+        .conn
+        .query_first("SELECT CONNECTION_ID();")
+        .unwrap()
+        .unwrap();
+    let mut helper_conn = sql_interface.get_connection().unwrap();
+    helper_conn
+        .query_drop(format!("KILL {};", connection_id))
+        .unwrap();
+
+    let read_err = schedule_db.read_schedule();
+    assert!(
+        matches!(read_err, Err(ref errors) if matches!(errors[0], SqlInterfaceError::ScheduleRequestFailure { .. })),
+        "Expected ScheduleRequestFailure on killed connection, got {:?}",
+        read_err.err()
+    );
+    println!("* Succeeded: read_schedule fails when connection is killed.");
 }
 
 #[test]
@@ -310,4 +353,18 @@ pub fn test_sql_interface_schedule_not_found() {
             requested, available
         );
     }
+
+    // Test find_schedule on empty schedules cache
+    let empty_schedule_db =
+        SqlInterfaceSchedule::new(sql_interface.get_connection().unwrap(), 10).unwrap();
+    let empty_find_res = empty_schedule_db.find_schedule(ScheduleType::Balling);
+    assert!(
+        matches!(
+            empty_find_res,
+            Err(SqlInterfaceError::ScheduleTypeNotFoundEmptyDatabase(_, _))
+        ),
+        "Expected ScheduleTypeNotFoundEmptyDatabase, got {:?}",
+        empty_find_res.err()
+    );
+    println!("* Correctly received ScheduleTypeNotFoundEmptyDatabase on empty schedules cache.");
 }

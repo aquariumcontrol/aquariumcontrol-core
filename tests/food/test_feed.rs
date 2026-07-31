@@ -78,7 +78,7 @@ fn execute_blocking(
 #[cfg(any(test, feature = "test-utils"))]
 // "Happy" case executing a set of feed schedule entries. Additionally, it checks row limitation.
 // Test case uses test database #07.
-/// [itest->swreq~food_execute_schedule~1]
+// [itest->swreq~food_execute_schedule~1]
 pub fn test_feed_schedule_execution() {
     let sleep_duration_100_millis = Duration::from_millis(100);
     let sleep_duration_8_seconds = Duration::from_millis(10000);
