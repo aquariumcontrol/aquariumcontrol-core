@@ -44,6 +44,8 @@ pub struct RelayManagerConfig {
     pub pause_between_retries_millis: u64,
 }
 
+#[cfg(not(tarpaulin_include))]
+#[cfg_attr(coverage_nightly, coverage(off))]
 impl fmt::Display for RelayManagerConfig {
     /// Formats the `RelayManagerConfig` for display purposes.
     ///

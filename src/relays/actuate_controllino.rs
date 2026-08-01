@@ -131,7 +131,7 @@ pub mod controllino_constants {
 /// # Returns
 /// - `true`: If both calculated checksums match the received checksums, indicating data integrity.
 /// - `false`: If the checksums do not match.
-fn check_controllino_checksums(data: &[u8]) -> bool {
+pub(crate) fn check_controllino_checksums(data: &[u8]) -> bool {
     let first_checksum = data[0] ^ data[1] ^ data[2];
     let second_checksum = data[4] ^ data[5] ^ data[6];
     let ok_result = (data[3] == first_checksum) && (data[7] == second_checksum);
@@ -241,7 +241,7 @@ pub fn create_command_message(
 ///
 /// # Returns
 /// A new `ControllinoMessage` configured for a heartbeat.
-fn create_heartbeat_message() -> ControllinoMessage {
+pub(crate) fn create_heartbeat_message() -> ControllinoMessage {
     let message_content =
         ControllinoMessageContent::new(controllino_constants::COMMAND_HEARTBEAT, 0, 0);
     ControllinoMessage::new(message_content)
@@ -707,5 +707,147 @@ impl ActuateControllino {
             controllino_processing_duration,
             serial_port_opt,
         })
+    }
+}
+
+#[cfg(test)]
+#[cfg(not(tarpaulin_include))]
+#[cfg_attr(coverage_nightly, coverage(off))]
+mod tests {
+    use super::*;
+    use crate::utilities::channel_content::AquariumDevice;
+    use crate::utilities::config::{read_config_file, ConfigData};
+
+    #[test]
+    /// [utest->swreq~relay_control_actuators~1]
+    fn test_check_controllino_checksums_valid_and_invalid() {
+        // Valid message content: 'S', relay 1, duration 0
+        let message = ControllinoMessage::new(ControllinoMessageContent::new('S', 1, 0));
+        assert!(check_controllino_checksums(&message.data));
+
+        // Invalid checksum array - corrupt first checksum
+        let mut corrupted_data_1 = message.data;
+        corrupted_data_1[3] ^= 0xFF;
+        assert!(!check_controllino_checksums(&corrupted_data_1));
+
+        // Invalid checksum array - corrupt second checksum
+        let mut corrupted_data_2 = message.data;
+        corrupted_data_2[7] ^= 0xFF;
+        assert!(!check_controllino_checksums(&corrupted_data_2));
+    }
+
+    #[test]
+    fn test_create_heartbeat_message() {
+        let msg = create_heartbeat_message();
+        assert_eq!(msg.data[0], b'H');
+        assert!(check_controllino_checksums(&msg.data));
+    }
+
+    #[test]
+    fn test_get_relay_command_error_cases() {
+        let config: ConfigData =
+            read_config_file("config/aquarium_control_test_generic.toml".to_string()).unwrap();
+        let controllino_config = config.controllino_relay;
+
+        // Beacon device returns DeviceNotConnected
+        let err_beacon = get_relay_command(
+            &InternalCommand::SwitchOn(AquariumDevice::Beacon),
+            AquariumDevice::Beacon,
+            &controllino_config,
+        );
+        assert!(matches!(
+            err_beacon,
+            Err(RelayError::DeviceNotConnected(_, AquariumDevice::Beacon))
+        ));
+
+        // Pulse on non-pulsable device (Skimmer) returns PulseNotAllowedForDevice
+        let err_pulse = get_relay_command(
+            &InternalCommand::Pulse(AquariumDevice::Skimmer, 500),
+            AquariumDevice::Skimmer,
+            &controllino_config,
+        );
+        assert!(matches!(
+            err_pulse,
+            Err(RelayError::PulseNotAllowedForDevice(_, AquariumDevice::Skimmer))
+        ));
+
+        // Irrelevant command returns IrrelevantCommand
+        let err_quit = get_relay_command(
+            &InternalCommand::Quit,
+            AquariumDevice::Skimmer,
+            &controllino_config,
+        );
+        assert!(matches!(err_quit, Err(RelayError::IrrelevantCommand(_, _))));
+    }
+
+    #[test]
+    fn test_create_command_message_error_cases() {
+        let config: ConfigData =
+            read_config_file("config/aquarium_control_test_generic.toml".to_string()).unwrap();
+        let controllino_config = config.controllino_relay;
+
+        // Irrelevant command
+        let err_cmd = create_command_message(InternalCommand::Quit, &controllino_config);
+        assert!(matches!(err_cmd, Err(RelayError::IrrelevantCommand(_, _))));
+
+        // Pulse on non-pulsable device
+        let err_pulse = create_command_message(
+            InternalCommand::Pulse(AquariumDevice::Skimmer, 500),
+            &controllino_config,
+        );
+        assert!(matches!(
+            err_pulse,
+            Err(RelayError::PulseNotAllowedForDevice(_, _))
+        ));
+    }
+
+    #[test]
+    fn test_actuate_controllino_inactive_and_error_paths() {
+        let mut config: ConfigData =
+            read_config_file("config/aquarium_control_test_generic.toml".to_string()).unwrap();
+
+        // Test EmptyPortName error
+        config.controllino_relay.port_name = "".to_string();
+        assert!(matches!(
+            ActuateControllino::new(config.controllino_relay.clone()),
+            Err(ActuateControllinoError::EmptyPortName)
+        ));
+
+        // Test SerialPortOpenFailed when active=true with invalid port name
+        config.controllino_relay.port_name = "invalid_non_existent_serial_port".to_string();
+        config.controllino_relay.active = true;
+        assert!(matches!(
+            ActuateControllino::new(config.controllino_relay.clone()),
+            Err(ActuateControllinoError::SerialPortOpenFailed { .. })
+        ));
+
+        // Test active=false instance (serial_port_opt is None)
+        config.controllino_relay.active = false;
+        let mut actuator = ActuateControllino::new(config.controllino_relay).unwrap();
+
+        assert_eq!(actuator.get_heartbeat_interval_seconds(), Some(60));
+        assert!(actuator.heartbeat().is_ok());
+        assert!(actuator.flush_buffer().is_ok());
+
+        // actuate when serial_port_opt is None -> SerialPortNotConfigured
+        let res_actuate = actuator.actuate(&InternalCommand::SwitchOn(AquariumDevice::Skimmer));
+        assert!(matches!(
+            res_actuate,
+            Err(RelayError::SerialPortNotConfigured(_))
+        ));
+
+        // actuate with irrelevant command -> IrrelevantCommand
+        let res_irrelevant = actuator.actuate(&InternalCommand::Quit);
+        assert!(matches!(
+            res_irrelevant,
+            Err(RelayError::IrrelevantCommand(_, _))
+        ));
+
+        // actuate when create_command_message fails -> FailureCommandMessageCreation
+        let res_fail_msg = actuator.actuate(&InternalCommand::Pulse(AquariumDevice::Skimmer, 500));
+        assert!(matches!(
+            res_fail_msg,
+            Err(RelayError::FailureCommandMessageCreation(_))
+        ));
     }
 }

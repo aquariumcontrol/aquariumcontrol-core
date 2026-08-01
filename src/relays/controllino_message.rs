@@ -128,6 +128,8 @@ impl ControllinoMessage {
     }
 }
 
+#[cfg(not(tarpaulin_include))]
+#[cfg_attr(coverage_nightly, coverage(off))]
 impl fmt::Display for ControllinoMessage {
     /// Provides output of the struct data for debugging purposes.
     /// # Arguments
@@ -149,6 +151,8 @@ impl fmt::Display for ControllinoMessage {
 }
 
 #[cfg(test)]
+#[cfg(not(tarpaulin_include))]
+#[cfg_attr(coverage_nightly, coverage(off))]
 mod tests {
     use super::*;
 

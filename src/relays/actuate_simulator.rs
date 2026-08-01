@@ -200,3 +200,100 @@ impl<'a> ActuateSimulator<'a> {
         }
     }
 }
+
+#[cfg(test)]
+#[cfg(not(tarpaulin_include))]
+#[cfg_attr(coverage_nightly, coverage(off))]
+mod tests {
+    use super::*;
+    use crate::launch::channels::channel;
+    use crate::utilities::channel_content::AquariumDevice;
+    use crate::utilities::config::{read_config_file, ConfigData};
+
+    #[test]
+    fn test_actuate_simulator_happy_path() {
+        let config_data: ConfigData =
+            read_config_file("config/aquarium_control_test_generic.toml".to_string()).unwrap();
+        let controllino_config = config_data.controllino_relay;
+
+        let (aqua_tx, mut rx) = channel(10, true);
+
+        let mut channels = ActuateSimulatorChannels {
+            tx_actuate_simulator_to_tcp_opt: Some(aqua_tx),
+        };
+
+        let mut simulator = ActuateSimulator::new(&mut channels, controllino_config.clone());
+
+        // Actuate SwitchOn(Skimmer)
+        let res = simulator.actuate(&InternalCommand::SwitchOn(AquariumDevice::Skimmer));
+        assert!(res.is_ok());
+
+        // Verify sent command received on rx
+        let received = rx.try_recv();
+        assert!(received.is_ok());
+        assert_eq!(
+            received.unwrap(),
+            InternalCommand::SetRelay(controllino_config.skimmer_id as u16)
+        );
+
+        // Verify trait methods
+        assert_eq!(simulator.get_heartbeat_interval_seconds(), None);
+        assert!(simulator.heartbeat().is_ok());
+        assert!(simulator.flush_buffer().is_ok());
+    }
+
+    #[test]
+    fn test_actuate_simulator_not_initialized() {
+        let config_data: ConfigData =
+            read_config_file("config/aquarium_control_test_generic.toml".to_string()).unwrap();
+
+        let mut channels = ActuateSimulatorChannels {
+            tx_actuate_simulator_to_tcp_opt: None,
+        };
+
+        let mut simulator = ActuateSimulator::new(&mut channels, config_data.controllino_relay);
+
+        let res = simulator.actuate(&InternalCommand::SwitchOn(AquariumDevice::Skimmer));
+        assert!(matches!(res, Err(RelayError::SimulatorNotInitialized(_))));
+    }
+
+    #[test]
+    fn test_actuate_simulator_send_failed() {
+        let config_data: ConfigData =
+            read_config_file("config/aquarium_control_test_generic.toml".to_string()).unwrap();
+
+        let (aqua_tx, rx) = channel(10, true);
+        drop(rx); // Drop receiver so send fails
+
+        let mut channels = ActuateSimulatorChannels {
+            tx_actuate_simulator_to_tcp_opt: Some(aqua_tx),
+        };
+
+        let mut simulator = ActuateSimulator::new(&mut channels, config_data.controllino_relay);
+
+        let res = simulator.actuate(&InternalCommand::SwitchOn(AquariumDevice::Skimmer));
+        assert!(matches!(res, Err(RelayError::SimulatorSendFailed(_))));
+    }
+
+    #[test]
+    fn test_actuate_simulator_irrelevant_commands() {
+        let config_data: ConfigData =
+            read_config_file("config/aquarium_control_test_generic.toml".to_string()).unwrap();
+
+        let (aqua_tx, _rx) = channel(10, true);
+
+        let mut channels = ActuateSimulatorChannels {
+            tx_actuate_simulator_to_tcp_opt: Some(aqua_tx),
+        };
+
+        let mut simulator = ActuateSimulator::new(&mut channels, config_data.controllino_relay);
+
+        // Command not matching SwitchOn/SwitchOff/Pulse (e.g. Quit)
+        let res_quit = simulator.actuate(&InternalCommand::Quit);
+        assert!(matches!(res_quit, Err(RelayError::IrrelevantCommand(_, _))));
+
+        // Pulse command passes outer guard but falls into inner wildcard branch
+        let res_pulse = simulator.actuate(&InternalCommand::Pulse(AquariumDevice::Skimmer, 500));
+        assert!(matches!(res_pulse, Err(RelayError::IrrelevantCommand(_, _))));
+    }
+}

@@ -266,7 +266,7 @@ impl RelayManager {
     /// - The total number of attempts made.
     /// - The specific error from the *last* attempt, providing the root cause of the final failure.
     /// * `"heater" sleep_duration` - A parameter representing `"heater" sleep_duration`.
-    async fn actuate_with_retries(
+    pub(crate) async fn actuate_with_retries(
         &mut self,
         actuator: &mut impl RelayActuationTrait,
         command: &InternalCommand,
@@ -807,4 +807,252 @@ pub mod tests { // unit tests shall not appear in code coverage measurement
             "lock_send should be reset to false on response send success"
         );
     }
+
+    struct RetrySuccessActuator {
+        attempts: u32,
+    }
+
+    impl RelayActuationTrait for RetrySuccessActuator {
+        fn actuate(&mut self, _command: &InternalCommand) -> Result<(), RelayError> {
+            self.attempts += 1;
+            if self.attempts == 1 {
+                Err(RelayError::WriteError("test error".to_string()))
+            } else {
+                Ok(())
+            }
+        }
+        fn get_heartbeat_interval_seconds(&self) -> Option<u64> {
+            None
+        }
+        fn heartbeat(&mut self) -> Result<(), RelayError> {
+            Ok(())
+        }
+        fn flush_buffer(&mut self) -> Result<(), RelayError> {
+            Ok(())
+        }
+    }
+
+    struct AlwaysFailActuator;
+
+    impl RelayActuationTrait for AlwaysFailActuator {
+        fn actuate(&mut self, _command: &InternalCommand) -> Result<(), RelayError> {
+            Err(RelayError::WriteError("permanent fail".to_string()))
+        }
+        fn get_heartbeat_interval_seconds(&self) -> Option<u64> {
+            None
+        }
+        fn heartbeat(&mut self) -> Result<(), RelayError> {
+            Ok(())
+        }
+        fn flush_buffer(&mut self) -> Result<(), RelayError> {
+            Ok(())
+        }
+    }
+
+    struct ChecksumFlushSuccessActuator {
+        attempts: u32,
+        flushed: bool,
+    }
+
+    impl RelayActuationTrait for ChecksumFlushSuccessActuator {
+        fn actuate(&mut self, _command: &InternalCommand) -> Result<(), RelayError> {
+            self.attempts += 1;
+            if self.attempts == 1 {
+                Err(RelayError::IncorrectChecksum("checksum mismatch".to_string()))
+            } else {
+                Ok(())
+            }
+        }
+        fn get_heartbeat_interval_seconds(&self) -> Option<u64> {
+            None
+        }
+        fn heartbeat(&mut self) -> Result<(), RelayError> {
+            Ok(())
+        }
+        fn flush_buffer(&mut self) -> Result<(), RelayError> {
+            self.flushed = true;
+            Ok(())
+        }
+    }
+
+    struct ChecksumFlushFailActuator;
+
+    impl RelayActuationTrait for ChecksumFlushFailActuator {
+        fn actuate(&mut self, _command: &InternalCommand) -> Result<(), RelayError> {
+            Err(RelayError::IncorrectChecksum("checksum mismatch".to_string()))
+        }
+        fn get_heartbeat_interval_seconds(&self) -> Option<u64> {
+            None
+        }
+        fn heartbeat(&mut self) -> Result<(), RelayError> {
+            Ok(())
+        }
+        fn flush_buffer(&mut self) -> Result<(), RelayError> {
+            Err(RelayError::WriteError("flush failed".to_string()))
+        }
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    async fn test_actuate_with_retries_retry_success() {
+        let config = RelayManagerConfig {
+            active: true,
+            execute: true,
+            use_simulator: true,
+            use_gpio: false,
+            actuation_retries: 2,
+            pause_between_retries_millis: 1,
+        };
+        let mut relay_manager = RelayManager::new(config, ExecutionConfig::default());
+        let mut actuator = RetrySuccessActuator { attempts: 0 };
+
+        let res = relay_manager
+            .actuate_with_retries(
+                &mut actuator,
+                &InternalCommand::SwitchOn(AquariumDevice::RefillPump),
+                "refill pump",
+                Duration::from_millis(1),
+            )
+            .await;
+
+        assert!(res.is_ok());
+        assert_eq!(actuator.attempts, 2);
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    async fn test_actuate_with_retries_all_attempts_fail() {
+        let config = RelayManagerConfig {
+            active: true,
+            execute: true,
+            use_simulator: true,
+            use_gpio: false,
+            actuation_retries: 2,
+            pause_between_retries_millis: 1,
+        };
+        let mut relay_manager = RelayManager::new(config, ExecutionConfig::default());
+        let mut actuator = AlwaysFailActuator;
+
+        let res = relay_manager
+            .actuate_with_retries(
+                &mut actuator,
+                &InternalCommand::SwitchOn(AquariumDevice::RefillPump),
+                "refill pump",
+                Duration::from_millis(1),
+            )
+            .await;
+
+        assert!(matches!(res, Err(RelayError::ActuationFailed { .. })));
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    async fn test_actuate_with_retries_checksum_flush_success() {
+        let config = RelayManagerConfig {
+            active: true,
+            execute: true,
+            use_simulator: true,
+            use_gpio: false,
+            actuation_retries: 2,
+            pause_between_retries_millis: 1,
+        };
+        let mut relay_manager = RelayManager::new(config, ExecutionConfig::default());
+        let mut actuator = ChecksumFlushSuccessActuator {
+            attempts: 0,
+            flushed: false,
+        };
+
+        let res = relay_manager
+            .actuate_with_retries(
+                &mut actuator,
+                &InternalCommand::SwitchOn(AquariumDevice::RefillPump),
+                "refill pump",
+                Duration::from_millis(1),
+            )
+            .await;
+
+        assert!(res.is_ok());
+        assert!(actuator.flushed);
+        assert_eq!(actuator.attempts, 2);
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    async fn test_actuate_with_retries_checksum_flush_fail() {
+        let config = RelayManagerConfig {
+            active: true,
+            execute: true,
+            use_simulator: true,
+            use_gpio: false,
+            actuation_retries: 2,
+            pause_between_retries_millis: 1,
+        };
+        let mut relay_manager = RelayManager::new(config, ExecutionConfig::default());
+        let mut actuator = ChecksumFlushFailActuator;
+
+        let res = relay_manager
+            .actuate_with_retries(
+                &mut actuator,
+                &InternalCommand::SwitchOn(AquariumDevice::RefillPump),
+                "refill pump",
+                Duration::from_millis(1),
+            )
+            .await;
+
+        assert!(matches!(res, Err(RelayError::ActuationFailed { .. })));
+    }
+
+    struct FailingHeartbeatActuator;
+
+    impl RelayActuationTrait for FailingHeartbeatActuator {
+        fn actuate(&mut self, _command: &InternalCommand) -> Result<(), RelayError> {
+            Ok(())
+        }
+        fn get_heartbeat_interval_seconds(&self) -> Option<u64> {
+            Some(0) // Trigger heartbeat immediately
+        }
+        fn heartbeat(&mut self) -> Result<(), RelayError> {
+            Err(RelayError::WriteError("heartbeat failed".to_string()))
+        }
+        fn flush_buffer(&mut self) -> Result<(), RelayError> {
+            Ok(())
+        }
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    async fn test_relay_manager_execute_heartbeat_and_shutdown_confirmation_failure() {
+        let config = RelayManagerConfig {
+            active: true,
+            execute: true,
+            use_simulator: true,
+            use_gpio: false,
+            actuation_retries: 1,
+            pause_between_retries_millis: 1,
+        };
+        let mut relay_manager = RelayManager::new(config, ExecutionConfig::default());
+
+        let (tx_sig, rx_sig) = channel::<bool>(10, false);
+        let (mut tx_quit, rx_quit) = channel::<InternalCommand>(10, false);
+
+        drop(rx_sig); // Disconnect signal handler response channel to test line 512 send error
+
+        tx_quit.send(InternalCommand::Quit).unwrap(); // Send quit command
+
+        let mut channels = RelayManagerChannels {
+            tx_relay_manager_to_refill: channel(10, false).0,
+            rx_relay_manager_from_refill: channel(10, false).1,
+            tx_relay_manager_to_heating: channel(10, false).0,
+            rx_relay_manager_from_heating: channel(10, false).1,
+            tx_relay_manager_to_ventilation: channel(10, false).0,
+            rx_relay_manager_from_ventilation: channel(10, false).1,
+            tx_relay_manager_to_balling: channel(10, false).0,
+            rx_relay_manager_from_balling: channel(10, false).1,
+            tx_relay_manager_to_feed: channel(10, false).0,
+            rx_relay_manager_from_feed: channel(10, false).1,
+            tx_relay_manager_to_signal_handler: tx_sig,
+            rx_relay_manager_from_signal_handler: rx_quit,
+        };
+
+        let mut actuator = FailingHeartbeatActuator;
+
+        // execute will process quit command and exit loop, attempting to send confirmation to dropped rx_sig
+        relay_manager.execute(&mut channels, &mut actuator).await;
+    }
 }
+

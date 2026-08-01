@@ -136,6 +136,8 @@ impl AtlasScientificResultData {
     }
 }
 
+#[cfg(not(tarpaulin_include))]
+#[cfg_attr(coverage_nightly, coverage(off))]
 impl fmt::Display for AtlasScientificResultData {
     /// Formats the value using the given formatter.
     ///
