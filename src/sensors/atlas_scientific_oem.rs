@@ -490,3 +490,340 @@ impl AtlasScientificDriver for AtlasScientificOem {
         }
     }
 }
+
+#[cfg(test)]
+#[cfg(not(tarpaulin_include))]
+#[cfg_attr(coverage_nightly, coverage(off))]
+pub mod tests {
+    use crate::launch::channels::channel;
+    use crate::sensors::atlas_scientific::AtlasScientificResultData;
+    use crate::sensors::atlas_scientific_channels::AtlasScientificChannels;
+    use crate::sensors::atlas_scientific_driver::AtlasScientificDriver;
+    use crate::sensors::atlas_scientific_error::AtlasScientificError;
+    use crate::sensors::atlas_scientific_monitor_view::AtlasScientificMonitorView;
+    use crate::sensors::atlas_scientific_oem::{
+        atlas_scientific_oem_constants, AtlasScientificOem,
+    };
+    use crate::sensors::i2c_error::I2cError;
+    use crate::sensors::i2c_interface::{I2cRequest, I2cResponse, I2cResult};
+    use crate::utilities::channel_content::AquariumSignal;
+    use std::sync::{Arc, Mutex};
+
+    #[test]
+    // Verifies parse_oem_response handles valid Big Endian u32 byte decoding and response length validation errors.
+    fn test_parse_oem_response() {
+        let oem = AtlasScientificOem::new(
+            0x66,
+            atlas_scientific_oem_constants::DEVICE_TYPE_TEMPERATURE,
+            10,
+            10,
+            atlas_scientific_oem_constants::REG_DATA_MSB_TEMPERATURE,
+            atlas_scientific_oem_constants::SCALE_FACTOR_TEMPERATURE,
+            atlas_scientific_oem_constants::RESPONSE_LENGTH_TEMPERATURE,
+        );
+
+        // 1. ResponseTooShort error
+        let short_data = [0u8; 2];
+        let err = oem.parse_oem_response(&AquariumSignal::WaterTemperature, &short_data);
+        assert!(matches!(
+            err,
+            Err(AtlasScientificError::ResponseTooShort { .. })
+        ));
+
+        // 2. Valid response parsing: 25000 / 1000.0 = 25.0
+        // 25000 in u32 Big Endian = [0, 0, 0x61, 0xA8]
+        let val_25000: u32 = 25000;
+        let valid_data = val_25000.to_be_bytes();
+        let res = oem
+            .parse_oem_response(&AquariumSignal::WaterTemperature, &valid_data)
+            .unwrap();
+        assert_eq!(res.value, 25.0);
+    }
+
+    #[test]
+    // Verifies send_request_to_i2c_interface sends request successfully and handles disconnected channel errors.
+    fn test_send_request_to_i2c_interface() {
+        let oem = AtlasScientificOem::new(
+            0x66,
+            atlas_scientific_oem_constants::DEVICE_TYPE_TEMPERATURE,
+            10,
+            10,
+            atlas_scientific_oem_constants::REG_DATA_MSB_TEMPERATURE,
+            atlas_scientific_oem_constants::SCALE_FACTOR_TEMPERATURE,
+            atlas_scientific_oem_constants::RESPONSE_LENGTH_TEMPERATURE,
+        );
+
+        let (tx_i2c, rx_i2c) = channel::<I2cRequest>(10, false);
+        let (_tx_i2c_res, rx_i2c_res) = channel(10, false);
+        let (_tx_sig, rx_sig) = channel(10, false);
+        let (tx_ack, _rx_ack) = channel(10, false);
+        let (tx_mon, _rx_mon) = channel::<AtlasScientificMonitorView>(10, false);
+
+        let mut channels = AtlasScientificChannels {
+            tx_atlas_scientific_to_i2c_interface: tx_i2c,
+            rx_atlas_scientific_from_i2c_interface: rx_i2c_res,
+            tx_atlas_scientific_to_signal_handler: tx_ack,
+            rx_atlas_scientific_from_signal_handler: rx_sig,
+            tx_atlas_scientific_to_monitors: tx_mon,
+        };
+
+        // 1. Success path
+        assert!(oem.send_request_to_i2c_interface(&mut channels).is_ok());
+
+        // 2. Disconnected channel error path
+        drop(rx_i2c);
+        let err = oem.send_request_to_i2c_interface(&mut channels);
+        assert!(matches!(
+            err,
+            Err(AtlasScientificError::SendingRequestToI2cInterfaceFailed { .. })
+        ));
+    }
+
+    #[test]
+    // Verifies receive_response_from_i2c_interface handles successful responses, disconnected channels, invalid signals, and I2C failures.
+    fn test_receive_response_from_i2c_interface() {
+        let mut oem = AtlasScientificOem::new(
+            0x66,
+            atlas_scientific_oem_constants::DEVICE_TYPE_TEMPERATURE,
+            10,
+            10,
+            atlas_scientific_oem_constants::REG_DATA_MSB_TEMPERATURE,
+            atlas_scientific_oem_constants::SCALE_FACTOR_TEMPERATURE,
+            atlas_scientific_oem_constants::RESPONSE_LENGTH_TEMPERATURE,
+        );
+
+        let (tx_i2c, _rx_i2c) = channel(10, false);
+        let (mut tx_i2c_res, rx_i2c_res) = channel::<I2cResult>(10, false);
+        let (_tx_sig, rx_sig) = channel(10, false);
+        let (tx_ack, _rx_ack) = channel(10, false);
+        let (tx_mon, _rx_mon) = channel::<AtlasScientificMonitorView>(10, false);
+
+        let mut channels = AtlasScientificChannels {
+            tx_atlas_scientific_to_i2c_interface: tx_i2c,
+            rx_atlas_scientific_from_i2c_interface: rx_i2c_res,
+            tx_atlas_scientific_to_signal_handler: tx_ack,
+            rx_atlas_scientific_from_signal_handler: rx_sig,
+            tx_atlas_scientific_to_monitors: tx_mon,
+        };
+
+        let mutex_temp = Arc::new(Mutex::new(AtlasScientificResultData::new(0.0)));
+        let mutex_ph = Arc::new(Mutex::new(AtlasScientificResultData::new(0.0)));
+        let mutex_cond = Arc::new(Mutex::new(AtlasScientificResultData::new(0.0)));
+
+        // 1. Success path for WaterTemperature
+        let val_25000: u32 = 25000;
+        let mut read_buf = [0u8; 64];
+        read_buf[..4].copy_from_slice(&val_25000.to_be_bytes());
+        let response_ok = I2cResponse { read_buf, length: 4 };
+        tx_i2c_res.send(Ok(response_ok)).unwrap();
+
+        let res = oem.receive_response_from_i2c_interface(
+            &AquariumSignal::WaterTemperature,
+            &mut channels,
+            &mutex_temp,
+            &mutex_ph,
+            &mutex_cond,
+        );
+        assert!(res.is_ok());
+        assert_eq!(res.unwrap().value, 25.0);
+
+        // 2. InvalidSignal error path
+        tx_i2c_res
+            .send(Ok(I2cResponse {
+                read_buf: [0u8; 64],
+                length: 4,
+            }))
+            .unwrap();
+        let res_invalid = oem.receive_response_from_i2c_interface(
+            &AquariumSignal::AmbientTemperature,
+            &mut channels,
+            &mutex_temp,
+            &mutex_ph,
+            &mutex_cond,
+        );
+        assert!(matches!(
+            res_invalid,
+            Err(AtlasScientificError::InvalidSignal(..))
+        ));
+
+        // 3. I2cCommunicationFailure error path
+        tx_i2c_res
+            .send(Err(I2cError::WriteFailure {
+                location: module_path!().to_string(),
+            }))
+            .unwrap();
+        let res_i2c_err = oem.receive_response_from_i2c_interface(
+            &AquariumSignal::WaterTemperature,
+            &mut channels,
+            &mutex_temp,
+            &mutex_ph,
+            &mutex_cond,
+        );
+        assert!(matches!(
+            res_i2c_err,
+            Err(AtlasScientificError::I2cCommunicationFailure { .. })
+        ));
+
+        // 4. ChannelIsDisconnected error path
+        drop(tx_i2c_res);
+        let res_disc = oem.receive_response_from_i2c_interface(
+            &AquariumSignal::WaterTemperature,
+            &mut channels,
+            &mutex_temp,
+            &mutex_ph,
+            &mutex_cond,
+        );
+        assert!(matches!(
+            res_disc,
+            Err(AtlasScientificError::ChannelIsDisconnected { .. })
+        ));
+    }
+
+    #[test]
+    // Verifies device_init wake-up, device type verification, and length/device-type error paths.
+    fn test_device_init() {
+        let oem = AtlasScientificOem::new(
+            0x66,
+            atlas_scientific_oem_constants::DEVICE_TYPE_TEMPERATURE,
+            10,
+            10,
+            atlas_scientific_oem_constants::REG_DATA_MSB_TEMPERATURE,
+            atlas_scientific_oem_constants::SCALE_FACTOR_TEMPERATURE,
+            atlas_scientific_oem_constants::RESPONSE_LENGTH_TEMPERATURE,
+        );
+
+        let (tx_i2c, _rx_i2c) = channel(10, false);
+        let (mut tx_i2c_res, rx_i2c_res) = channel::<I2cResult>(10, false);
+        let (_tx_sig, rx_sig) = channel(10, false);
+        let (tx_ack, _rx_ack) = channel(10, false);
+        let (tx_mon, _rx_mon) = channel::<AtlasScientificMonitorView>(10, false);
+
+        let mut channels = AtlasScientificChannels {
+            tx_atlas_scientific_to_i2c_interface: tx_i2c,
+            rx_atlas_scientific_from_i2c_interface: rx_i2c_res,
+            tx_atlas_scientific_to_signal_handler: tx_ack,
+            rx_atlas_scientific_from_signal_handler: rx_sig,
+            tx_atlas_scientific_to_monitors: tx_mon,
+        };
+
+        // 1. Success path: wake-up response OK, type check response OK
+        tx_i2c_res
+            .send(Ok(I2cResponse {
+                read_buf: [0u8; 64],
+                length: 0,
+            }))
+            .unwrap();
+        let mut type_buf = [0u8; 64];
+        type_buf[0] = atlas_scientific_oem_constants::DEVICE_TYPE_TEMPERATURE;
+        type_buf[1] = 1; // firmware version
+        tx_i2c_res
+            .send(Ok(I2cResponse {
+                read_buf: type_buf,
+                length: 2,
+            }))
+            .unwrap();
+
+        assert!(oem
+            .device_init(&mut channels, &AquariumSignal::WaterTemperature)
+            .is_ok());
+
+        // 2. ResponseTooLong error path (length = 3 > 2)
+        tx_i2c_res
+            .send(Ok(I2cResponse {
+                read_buf: [0u8; 64],
+                length: 0,
+            }))
+            .unwrap();
+        tx_i2c_res
+            .send(Ok(I2cResponse {
+                read_buf: [0u8; 64],
+                length: 3,
+            }))
+            .unwrap();
+        let res_long = oem.device_init(&mut channels, &AquariumSignal::WaterTemperature);
+        assert!(matches!(
+            res_long,
+            Err(AtlasScientificError::ResponseTooLong { .. })
+        ));
+
+        // 3. ResponseTooShort error path (length = 1 < 2)
+        tx_i2c_res
+            .send(Ok(I2cResponse {
+                read_buf: [0u8; 64],
+                length: 0,
+            }))
+            .unwrap();
+        tx_i2c_res
+            .send(Ok(I2cResponse {
+                read_buf: [0u8; 64],
+                length: 1,
+            }))
+            .unwrap();
+        let res_short = oem.device_init(&mut channels, &AquariumSignal::WaterTemperature);
+        assert!(matches!(
+            res_short,
+            Err(AtlasScientificError::ResponseTooShort { .. })
+        ));
+
+        // 4. InvalidDeviceType error path (read_buf[0] != device_type)
+        tx_i2c_res
+            .send(Ok(I2cResponse {
+                read_buf: [0u8; 64],
+                length: 0,
+            }))
+            .unwrap();
+        let mut wrong_type_buf = [0u8; 64];
+        wrong_type_buf[0] = 0x99; // Unexpected device type code
+        tx_i2c_res
+            .send(Ok(I2cResponse {
+                read_buf: wrong_type_buf,
+                length: 2,
+            }))
+            .unwrap();
+        let res_wrong = oem.device_init(&mut channels, &AquariumSignal::WaterTemperature);
+        assert!(matches!(
+            res_wrong,
+            Err(AtlasScientificError::InvalidDeviceType { .. })
+        ));
+
+        // 5. I2cCommunicationFailure error path
+        tx_i2c_res
+            .send(Ok(I2cResponse {
+                read_buf: [0u8; 64],
+                length: 0,
+            }))
+            .unwrap();
+        tx_i2c_res
+            .send(Err(I2cError::WriteFailure {
+                location: module_path!().to_string(),
+            }))
+            .unwrap();
+        let res_i2c_err = oem.device_init(&mut channels, &AquariumSignal::WaterTemperature);
+        assert!(matches!(
+            res_i2c_err,
+            Err(AtlasScientificError::I2cCommunicationFailure { .. })
+        ));
+    }
+
+    #[test]
+    // Verifies get_mutex_access_duration_exceeded reporting across temperature, pH, and conductivity signals.
+    fn test_get_mutex_access_duration_exceeded() {
+        let mut oem = AtlasScientificOem::new(
+            0x66,
+            atlas_scientific_oem_constants::DEVICE_TYPE_TEMPERATURE,
+            10,
+            10,
+            atlas_scientific_oem_constants::REG_DATA_MSB_TEMPERATURE,
+            atlas_scientific_oem_constants::SCALE_FACTOR_TEMPERATURE,
+            atlas_scientific_oem_constants::RESPONSE_LENGTH_TEMPERATURE,
+        );
+
+        oem.mutex_temperature_access_duration_exceeded = true;
+        oem.mutex_ph_access_duration_exceeded = true;
+        oem.mutex_conductivity_access_duration_exceeded = true;
+
+        assert!(oem.get_mutex_access_duration_exceeded(&AquariumSignal::WaterTemperature));
+        assert!(oem.get_mutex_access_duration_exceeded(&AquariumSignal::pH));
+        assert!(oem.get_mutex_access_duration_exceeded(&AquariumSignal::Conductivity));
+    }
+}

@@ -59,6 +59,8 @@ pub struct RefillStatsData {
     pub refill_count_last_hour: u64,
 }
 
+#[cfg(not(tarpaulin_include))]
+#[cfg_attr(coverage_nightly, coverage(off))]
 impl fmt::Display for RefillStatsData {
     /// Provides a multi-line, human-readable output of the struct's values for debugging purposes.
     ///

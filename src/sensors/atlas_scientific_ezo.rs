@@ -742,4 +742,190 @@ pub mod tests { // unit tests shall not appear in code coverage measurement
         assert!(!AtlasScientificEzo::is_numeric(b'\n', false));
         assert!(!AtlasScientificEzo::is_numeric(b'\n', true));
     }
+
+    #[test]
+    // Verifies that send_request_to_i2c_interface returns an error when the I2C channel is disconnected.
+    fn test_send_request_to_i2c_interface_send_failed() {
+        use crate::launch::channels::channel;
+        use crate::sensors::atlas_scientific_channels::AtlasScientificChannels;
+        use crate::sensors::atlas_scientific_driver::AtlasScientificDriver;
+        use crate::sensors::atlas_scientific_monitor_view::AtlasScientificMonitorView;
+        use crate::sensors::i2c_interface::I2cRequest;
+
+        let ezo = AtlasScientificEzo::new(0x66, 10, 10);
+
+        let (tx_i2c, rx_i2c) = channel::<I2cRequest>(10, false);
+        drop(rx_i2c); // Drop receiver so channel send fails
+
+        let (_tx_i2c_res, rx_i2c_res) = channel(10, false);
+        let (_tx_sig, rx_sig) = channel(10, false);
+        let (tx_ack, _rx_ack) = channel(10, false);
+        let (tx_mon, _rx_mon) = channel::<AtlasScientificMonitorView>(10, false);
+
+        let mut channels = AtlasScientificChannels {
+            tx_atlas_scientific_to_i2c_interface: tx_i2c,
+            rx_atlas_scientific_from_i2c_interface: rx_i2c_res,
+            tx_atlas_scientific_to_signal_handler: tx_ack,
+            rx_atlas_scientific_from_signal_handler: rx_sig,
+            tx_atlas_scientific_to_monitors: tx_mon,
+        };
+
+        let res = ezo.send_request_to_i2c_interface(&mut channels);
+        assert!(matches!(
+            res,
+            Err(AtlasScientificError::SendingRequestToI2cInterfaceFailed { .. })
+        ));
+    }
+
+    #[test]
+    // Verifies that receive_response_from_i2c_interface handles channel empty, length mismatch, check failure, I2C failure, and disconnection errors.
+    fn test_receive_response_from_i2c_interface_error_branches() {
+        use crate::launch::channels::channel;
+        use crate::sensors::atlas_scientific::AtlasScientificResultData;
+        use crate::sensors::atlas_scientific_channels::AtlasScientificChannels;
+        use crate::sensors::atlas_scientific_driver::AtlasScientificDriver;
+        use crate::sensors::atlas_scientific_monitor_view::AtlasScientificMonitorView;
+        use crate::sensors::i2c_error::I2cError;
+        use crate::sensors::i2c_interface::{I2cResponse, I2cResult};
+        use crate::utilities::channel_content::AquariumSignal;
+        use std::sync::{Arc, Mutex};
+
+        let mut ezo = AtlasScientificEzo::new(0x66, 10, 10);
+
+        let (tx_i2c, _rx_i2c) = channel(10, false);
+        let (mut tx_i2c_res, rx_i2c_res) = channel::<I2cResult>(10, false);
+        let (_tx_sig, rx_sig) = channel(10, false);
+        let (tx_ack, _rx_ack) = channel(10, false);
+        let (tx_mon, _rx_mon) = channel::<AtlasScientificMonitorView>(10, false);
+
+        let mut channels = AtlasScientificChannels {
+            tx_atlas_scientific_to_i2c_interface: tx_i2c,
+            rx_atlas_scientific_from_i2c_interface: rx_i2c_res,
+            tx_atlas_scientific_to_signal_handler: tx_ack,
+            rx_atlas_scientific_from_signal_handler: rx_sig,
+            tx_atlas_scientific_to_monitors: tx_mon,
+        };
+
+        let mutex_temp = Arc::new(Mutex::new(AtlasScientificResultData::new(25.0)));
+        let mutex_ph = Arc::new(Mutex::new(AtlasScientificResultData::new(7.0)));
+        let mutex_cond = Arc::new(Mutex::new(AtlasScientificResultData::new(50000.0)));
+
+        // 1. ChannelIsEmpty
+        let res_empty = ezo.receive_response_from_i2c_interface(
+            &AquariumSignal::WaterTemperature,
+            &mut channels,
+            &mutex_temp,
+            &mutex_ph,
+            &mutex_cond,
+        );
+        assert!(matches!(res_empty, Err(AtlasScientificError::ChannelIsEmpty(_))));
+
+        // 2. IncorrectBufferLength (length = 4 != 8)
+        let response_short = I2cResponse {
+            read_buf: [0u8; 64],
+            length: 4,
+        };
+        tx_i2c_res.send(Ok(response_short)).unwrap();
+        let res_short = ezo.receive_response_from_i2c_interface(
+            &AquariumSignal::WaterTemperature,
+            &mut channels,
+            &mutex_temp,
+            &mutex_ph,
+            &mutex_cond,
+        );
+        assert!(matches!(
+            res_short,
+            Err(AtlasScientificError::IncorrectBufferLength(_, _, 4))
+        ));
+
+        // 3. ResponseCheckFailed (non-numeric payload)
+        let mut bad_buf = [0u8; 64];
+        bad_buf[0] = 1; // start magic
+        bad_buf[1] = b'A'; // invalid character
+        bad_buf[7] = 0; // finish magic
+        let response_bad = I2cResponse {
+            read_buf: bad_buf,
+            length: 8,
+        };
+        tx_i2c_res.send(Ok(response_bad)).unwrap();
+        let res_bad = ezo.receive_response_from_i2c_interface(
+            &AquariumSignal::WaterTemperature,
+            &mut channels,
+            &mutex_temp,
+            &mutex_ph,
+            &mutex_cond,
+        );
+        assert!(matches!(
+            res_bad,
+            Err(AtlasScientificError::ResponseCheckFailed { .. })
+        ));
+
+        // 4. I2cCommunicationFailure
+        tx_i2c_res
+            .send(Err(I2cError::WriteFailure {
+                location: module_path!().to_string(),
+            }))
+            .unwrap();
+        let res_i2c_err = ezo.receive_response_from_i2c_interface(
+            &AquariumSignal::WaterTemperature,
+            &mut channels,
+            &mutex_temp,
+            &mutex_ph,
+            &mutex_cond,
+        );
+        assert!(matches!(
+            res_i2c_err,
+            Err(AtlasScientificError::I2cCommunicationFailure { .. })
+        ));
+
+        // 5. ChannelIsDisconnected
+        drop(tx_i2c_res);
+        let res_disc = ezo.receive_response_from_i2c_interface(
+            &AquariumSignal::WaterTemperature,
+            &mut channels,
+            &mutex_temp,
+            &mutex_ph,
+            &mutex_cond,
+        );
+        assert!(matches!(
+            res_disc,
+            Err(AtlasScientificError::ChannelIsDisconnected { .. })
+        ));
+    }
+
+    #[test]
+    // Verifies device_init execution and get_mutex_access_duration_exceeded reporting for pH and Conductivity signals.
+    fn test_device_init_and_mutex_duration_exceeded() {
+        use crate::launch::channels::channel;
+        use crate::sensors::atlas_scientific_channels::AtlasScientificChannels;
+        use crate::sensors::atlas_scientific_driver::AtlasScientificDriver;
+        use crate::sensors::atlas_scientific_monitor_view::AtlasScientificMonitorView;
+        use crate::utilities::channel_content::AquariumSignal;
+
+        let mut ezo = AtlasScientificEzo::new(0x66, 10, 10);
+
+        let (tx_i2c, _rx_i2c) = channel(10, false);
+        let (_tx_i2c_res, rx_i2c_res) = channel(10, false);
+        let (_tx_sig, rx_sig) = channel(10, false);
+        let (tx_ack, _rx_ack) = channel(10, false);
+        let (tx_mon, _rx_mon) = channel::<AtlasScientificMonitorView>(10, false);
+
+        let mut channels = AtlasScientificChannels {
+            tx_atlas_scientific_to_i2c_interface: tx_i2c,
+            rx_atlas_scientific_from_i2c_interface: rx_i2c_res,
+            tx_atlas_scientific_to_signal_handler: tx_ack,
+            rx_atlas_scientific_from_signal_handler: rx_sig,
+            tx_atlas_scientific_to_monitors: tx_mon,
+        };
+
+        // device_init returns Ok(())
+        assert!(ezo.device_init(&mut channels, &AquariumSignal::WaterTemperature).is_ok());
+
+        // get_mutex_access_duration_exceeded for pH and Conductivity
+        ezo.mutex_ph_access_duration_exceeded = true;
+        ezo.mutex_conductivity_access_duration_exceeded = true;
+
+        assert!(ezo.get_mutex_access_duration_exceeded(&AquariumSignal::pH));
+        assert!(ezo.get_mutex_access_duration_exceeded(&AquariumSignal::Conductivity));
+    }
 }

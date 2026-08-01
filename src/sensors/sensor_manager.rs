@@ -794,9 +794,8 @@ pub mod tests { // unit tests shall not appear in code coverage measurement
     use crate::sensors::sensor_manager_config::SensorManagerConfig;
 
     #[test]
-    /// Verifies that SensorManager initializes all mutex lock flags to false and handles log flood protection.
-    ///
-    /// [utest->swreq~sensors_log_flood_protection~1]
+    // Verifies that SensorManager initializes all mutex lock flags to false and handles log flood protection.
+    // [utest->swreq~sensors_log_flood_protection~1]
     fn test_sensor_manager_lock_flags_log_flood_protection() {
         let config = SensorManagerConfig {
             use_simulator: false,

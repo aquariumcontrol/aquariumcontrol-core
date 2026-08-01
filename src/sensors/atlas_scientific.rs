@@ -773,8 +773,10 @@ impl AtlasScientific {
 #[cfg_attr(coverage_nightly, coverage(off))]
 pub mod tests { // unit tests shall not appear in code coverage measurement
     use crate::sensors::atlas_scientific::{
-        AtlasScientific, AtlasScientificError, AtlasScientificResultData,
+        AtlasScientific, AtlasScientificError, AtlasScientificResult, AtlasScientificResultData,
     };
+    use crate::sensors::atlas_scientific_channels::AtlasScientificChannels;
+    use crate::sensors::atlas_scientific_driver::AtlasScientificDriver;
     use crate::utilities::channel_content::AquariumSignal;
     use std::sync::{Arc, Mutex};
     use std::thread;
@@ -1076,5 +1078,244 @@ pub mod tests { // unit tests shall not appear in code coverage measurement
             .get(&AquariumSignal::WaterTemperature)
             .copied()
             .unwrap_or(false));
+    }
+
+    #[test]
+    // Verifies AtlasScientificResultData::new_for_test creates default result data.
+    fn test_atlas_scientific_result_data_new_for_test() {
+        let res = AtlasScientificResultData::new_for_test();
+        assert_eq!(res.value, 0.0);
+    }
+
+    #[test]
+    // Verifies monitor view transmission, deduplication of unchanged views, and skipping invalid sensor data.
+    fn test_check_and_send_monitor_view_deduplication_and_invalid() {
+        use crate::launch::channels::channel;
+        use crate::sensors::atlas_scientific_channels::AtlasScientificChannels;
+        use crate::sensors::atlas_scientific_config::AtlasScientificConfig;
+        use crate::sensors::atlas_scientific_monitor_view::AtlasScientificMonitorView;
+        use std::collections::HashMap;
+
+        let config = AtlasScientificConfig {
+            active: true,
+            execute: true,
+            address_atlas_scientific_ph: 0x63,
+            address_atlas_scientific_conductivity: 0x64,
+            address_atlas_scientific_temperature: 0x66,
+            sleep_time_millis_ph: 10,
+            sleep_time_millis_conductivity: 10,
+            sleep_time_millis_temperature: 10,
+            max_val_atlas_scientific_ph: 8.5,
+            min_val_atlas_scientific_ph: 6.5,
+            max_val_atlas_scientific_temperature: 30.0,
+            min_val_atlas_scientific_temperature: 20.0,
+            max_val_atlas_scientific_conductivity: 60000.0,
+            min_val_atlas_scientific_conductivity: 40000.0,
+            measurement_interval_millis: 100,
+            sensor_type_temperature: "oem".to_string(),
+            sensor_type_ph: "oem".to_string(),
+            sensor_type_conductivity: "oem".to_string(),
+        };
+
+        let mut atlas = AtlasScientific::new(config, HashMap::new());
+
+        let (tx_mon, mut rx_mon) = channel::<AtlasScientificMonitorView>(10, false);
+        let (tx_i2c, _rx_i2c) = channel(10, false);
+        let (_tx_i2c_res, rx_i2c_res) = channel(10, false);
+        let (_tx_sig, rx_sig) = channel(10, false);
+        let (tx_ack, _rx_ack) = channel(10, false);
+
+        let mut channels = AtlasScientificChannels {
+            tx_atlas_scientific_to_i2c_interface: tx_i2c,
+            rx_atlas_scientific_from_i2c_interface: rx_i2c_res,
+            tx_atlas_scientific_to_signal_handler: tx_ack,
+            rx_atlas_scientific_from_signal_handler: rx_sig,
+            tx_atlas_scientific_to_monitors: tx_mon,
+        };
+
+        let mutex_temp = Arc::new(Mutex::new(AtlasScientificResultData::new(10.0))); // Out of range (< 20.0)
+        let mutex_ph = Arc::new(Mutex::new(AtlasScientificResultData::new(7.0)));
+        let mutex_cond = Arc::new(Mutex::new(AtlasScientificResultData::new(50000.0)));
+
+        // First call: successfully sends monitor view
+        atlas.check_and_send_monitor_view(&mut channels, &mutex_temp, &mutex_ph, &mutex_cond);
+        let rec = rx_mon.try_recv();
+        assert!(rec.is_ok());
+        assert!(rec.unwrap().temperature_out_of_range);
+
+        // Second call with same values: deduplicated (should_send = false), nothing sent
+        atlas.check_and_send_monitor_view(&mut channels, &mutex_temp, &mutex_ph, &mutex_cond);
+        assert!(rx_mon.try_recv().is_err());
+
+        // Skip sending if all sensors are invalid
+        let mut invalid_temp = AtlasScientificResultData::new(10.0);
+        invalid_temp.invalid = true;
+        let mut invalid_ph = AtlasScientificResultData::new(7.0);
+        invalid_ph.invalid = true;
+        let mut invalid_cond = AtlasScientificResultData::new(50000.0);
+        invalid_cond.invalid = true;
+
+        let mutex_temp_inv = Arc::new(Mutex::new(invalid_temp));
+        let mutex_ph_inv = Arc::new(Mutex::new(invalid_ph));
+        let mutex_cond_inv = Arc::new(Mutex::new(invalid_cond));
+
+        atlas.last_sent_monitor_view = None;
+        atlas.check_and_send_monitor_view(&mut channels, &mutex_temp_inv, &mutex_ph_inv, &mutex_cond_inv);
+        assert!(rx_mon.try_recv().is_err());
+    }
+
+    #[test]
+    // Verifies graceful early return in check_and_send_monitor_view when a mutex lock is poisoned.
+    fn test_check_and_send_monitor_view_poisoned_mutex() {
+        use crate::launch::channels::channel;
+        use crate::sensors::atlas_scientific_channels::AtlasScientificChannels;
+        use crate::sensors::atlas_scientific_config::AtlasScientificConfig;
+        use crate::sensors::atlas_scientific_monitor_view::AtlasScientificMonitorView;
+        use std::collections::HashMap;
+
+        let config = AtlasScientificConfig {
+            active: true,
+            execute: true,
+            address_atlas_scientific_ph: 0x63,
+            address_atlas_scientific_conductivity: 0x64,
+            address_atlas_scientific_temperature: 0x66,
+            sleep_time_millis_ph: 10,
+            sleep_time_millis_conductivity: 10,
+            sleep_time_millis_temperature: 10,
+            max_val_atlas_scientific_ph: 8.5,
+            min_val_atlas_scientific_ph: 6.5,
+            max_val_atlas_scientific_temperature: 30.0,
+            min_val_atlas_scientific_temperature: 20.0,
+            max_val_atlas_scientific_conductivity: 60000.0,
+            min_val_atlas_scientific_conductivity: 40000.0,
+            measurement_interval_millis: 100,
+            sensor_type_temperature: "oem".to_string(),
+            sensor_type_ph: "oem".to_string(),
+            sensor_type_conductivity: "oem".to_string(),
+        };
+
+        let mut atlas = AtlasScientific::new(config, HashMap::new());
+
+        let (tx_mon, _rx_mon) = channel::<AtlasScientificMonitorView>(10, false);
+        let (tx_i2c, _rx_i2c) = channel(10, false);
+        let (_tx_i2c_res, rx_i2c_res) = channel(10, false);
+        let (_tx_sig, rx_sig) = channel(10, false);
+        let (tx_ack, _rx_ack) = channel(10, false);
+
+        let mut channels = AtlasScientificChannels {
+            tx_atlas_scientific_to_i2c_interface: tx_i2c,
+            rx_atlas_scientific_from_i2c_interface: rx_i2c_res,
+            tx_atlas_scientific_to_signal_handler: tx_ack,
+            rx_atlas_scientific_from_signal_handler: rx_sig,
+            tx_atlas_scientific_to_monitors: tx_mon,
+        };
+
+        let mutex_temp = Arc::new(Mutex::new(AtlasScientificResultData::new(25.0)));
+        let mutex_ph = Arc::new(Mutex::new(AtlasScientificResultData::new(7.0)));
+        let mutex_cond = Arc::new(Mutex::new(AtlasScientificResultData::new(50000.0)));
+
+        let mutex_ph_clone = mutex_ph.clone();
+        let handle = std::thread::spawn(move || {
+            let _lock = mutex_ph_clone.lock().unwrap();
+            panic!("Poisoning mutex");
+        });
+        let _ = handle.join();
+
+        // Mutex lock error returns early without crashing
+        atlas.check_and_send_monitor_view(&mut channels, &mutex_temp, &mutex_ph, &mutex_cond);
+    }
+
+    #[derive(Debug)]
+    struct DummyDriver;
+
+    impl AtlasScientificDriver for DummyDriver {
+        fn send_request_to_i2c_interface(
+            &self,
+            _channels: &mut AtlasScientificChannels,
+        ) -> Result<(), AtlasScientificError> {
+            Ok(())
+        }
+        fn receive_response_from_i2c_interface(
+            &mut self,
+            _signal: &AquariumSignal,
+            _channels: &mut AtlasScientificChannels,
+            _mutex_temp: &Arc<Mutex<AtlasScientificResultData>>,
+            _mutex_ph: &Arc<Mutex<AtlasScientificResultData>>,
+            _mutex_cond: &Arc<Mutex<AtlasScientificResultData>>,
+        ) -> AtlasScientificResult {
+            Ok(AtlasScientificResultData::new(0.0))
+        }
+        fn device_init(
+            &self,
+            _channels: &mut AtlasScientificChannels,
+            _signal: &AquariumSignal,
+        ) -> Result<(), AtlasScientificError> {
+            Ok(())
+        }
+        #[cfg(any(test, feature = "test-utils"))]
+        fn get_mutex_access_duration_exceeded(&self, _signal: &AquariumSignal) -> bool {
+            false
+        }
+    }
+
+    #[test]
+    // Verifies driver lookup success/failure and init_devices execution across registered drivers.
+    fn test_get_driver_and_init_devices() {
+        use crate::launch::channels::channel;
+        use crate::sensors::atlas_scientific_channels::AtlasScientificChannels;
+        use crate::sensors::atlas_scientific_config::AtlasScientificConfig;
+        use crate::sensors::atlas_scientific_driver::AtlasScientificDriver;
+        use crate::sensors::atlas_scientific_monitor_view::AtlasScientificMonitorView;
+        use std::collections::HashMap;
+
+        let config = AtlasScientificConfig {
+            active: true,
+            execute: true,
+            address_atlas_scientific_ph: 0x63,
+            address_atlas_scientific_conductivity: 0x64,
+            address_atlas_scientific_temperature: 0x66,
+            sleep_time_millis_ph: 10,
+            sleep_time_millis_conductivity: 10,
+            sleep_time_millis_temperature: 10,
+            max_val_atlas_scientific_ph: 8.5,
+            min_val_atlas_scientific_ph: 6.5,
+            max_val_atlas_scientific_temperature: 30.0,
+            min_val_atlas_scientific_temperature: 20.0,
+            max_val_atlas_scientific_conductivity: 60000.0,
+            min_val_atlas_scientific_conductivity: 40000.0,
+            measurement_interval_millis: 100,
+            sensor_type_temperature: "oem".to_string(),
+            sensor_type_ph: "oem".to_string(),
+            sensor_type_conductivity: "oem".to_string(),
+        };
+
+        let mut drivers: HashMap<AquariumSignal, Box<dyn AtlasScientificDriver>> = HashMap::new();
+        drivers.insert(AquariumSignal::WaterTemperature, Box::new(DummyDriver));
+
+        let mut atlas = AtlasScientific::new(config, drivers);
+
+        // Get driver success for WaterTemperature
+        assert!(atlas.get_driver(&AquariumSignal::WaterTemperature).is_ok());
+
+        // Get driver error for pH (missing from drivers map)
+        let err = atlas.get_driver(&AquariumSignal::pH);
+        assert!(matches!(err, Err(AtlasScientificError::DriverNotFound { .. })));
+
+        let (tx_mon, _rx_mon) = channel::<AtlasScientificMonitorView>(10, false);
+        let (tx_i2c, _rx_i2c) = channel(10, false);
+        let (_tx_i2c_res, rx_i2c_res) = channel(10, false);
+        let (_tx_sig, rx_sig) = channel(10, false);
+        let (tx_ack, _rx_ack) = channel(10, false);
+
+        let mut channels = AtlasScientificChannels {
+            tx_atlas_scientific_to_i2c_interface: tx_i2c,
+            rx_atlas_scientific_from_i2c_interface: rx_i2c_res,
+            tx_atlas_scientific_to_signal_handler: tx_ack,
+            rx_atlas_scientific_from_signal_handler: rx_sig,
+            tx_atlas_scientific_to_monitors: tx_mon,
+        };
+
+        // init_devices invokes device_init on drivers
+        assert!(atlas.init_devices(&mut channels).is_ok());
     }
 }

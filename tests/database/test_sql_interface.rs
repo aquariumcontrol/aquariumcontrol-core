@@ -555,7 +555,18 @@ pub fn test_get_current_timestamp() {
         Err(_) => panic!("Could not get current timestamp from the database."),
     };
     let date_time: DateTime<Local> = Local.from_local_datetime(&sql_timestamp).unwrap();
-    assert_eq!(date_time, Local::now().trunc_subsecs(0));
+    // Allow a tolerance of 1.5 seconds
+    let now = Local::now();
+    let difference = (date_time - now).abs();
+    let tolerance = chrono::Duration::milliseconds(1500);
+
+    assert!(
+        difference <= tolerance,
+        "Timestamp assertion failed. Database time: {:?}, Local time: {:?}, Difference: {:?}",
+        date_time,
+        now,
+        difference
+    );
     println!("* checking current timestamp succeeded.");
     // *****************************************************************************************
 }

@@ -55,6 +55,8 @@ pub struct AtlasScientificMonitorView {
 }
 
 // Implement the Display trait for AtlasScientificMonitorView to provide a human-readable string representation.
+#[cfg(not(tarpaulin_include))]
+#[cfg_attr(coverage_nightly, coverage(off))]
 impl fmt::Display for AtlasScientificMonitorView {
     /// Formats the `AtlasScientificMonitorView` flags into a human-readable string.
     ///

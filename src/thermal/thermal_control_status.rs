@@ -24,7 +24,7 @@ pub struct ThermalControlStatus {
 }
 
 impl ThermalControlStatus {
-    /// Performs the `description` operation.
+    /// Translates the internal states into a humanly readable external state.
     pub fn description(&self) -> &'static str {
         if self.external_inhibition_request {
             "STOPPED"
