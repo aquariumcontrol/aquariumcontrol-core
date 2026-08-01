@@ -103,10 +103,10 @@ cfg_if::cfg_if! {
 #[cfg(target_os = "linux")]
 pub struct Messaging {
     // Message queue
-    mq: Option<PosixMq>,
+    pub mq: Option<PosixMq>,
 
     // maximum length of messages in the queue
-    mq_max_msg_len: usize,
+    pub mq_max_msg_len: usize,
 
     /// an inhibition flag to avoid flooding the log file with repeated messages about having received an inapplicable command
     pub lock_warn_inapplicable_command_signal_handler: bool,
@@ -115,7 +115,7 @@ pub struct Messaging {
     pub lock_error_channel_receive_termination: bool,
 
     /// configuration data indicating which threads are started
-    execution_config: ExecutionConfig,
+    pub execution_config: ExecutionConfig,
 }
 #[cfg(not(target_os = "linux"))]
 pub struct Messaging {
