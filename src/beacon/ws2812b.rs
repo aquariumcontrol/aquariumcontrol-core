@@ -189,7 +189,9 @@ impl Ws2812B {
 
 #[cfg(test)]
 #[cfg(all(target_os = "linux", feature = "target_hw"))]
-pub mod tests {
+#[cfg(not(tarpaulin_include))]
+#[cfg_attr(coverage_nightly, coverage(off))]
+pub mod tests { // unit tests shall not appear in code coverage measurement
     use crate::beacon::ws2812b::{RgbLedColor, Ws2812B};
     use crate::utilities::config::{read_config_file, ConfigData};
     use spin_sleep::SpinSleeper;

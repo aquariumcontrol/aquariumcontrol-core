@@ -106,7 +106,7 @@ impl MineralInjection {
     /// # Arguments
     /// * `balling_channels` - A mutable reference to the `BallingChannels` communication interface.
     /// * `action_description` - A parameter representing `action_description`.
-    async fn send_and_confirm(
+    pub(crate) async fn send_and_confirm(
         &self,
         balling_channels: &mut BallingChannels,
         command: InternalCommand,
@@ -217,5 +217,70 @@ impl MineralInjectionTrait for MineralInjection {
         .await;
 
         (quit_command_received, dosing_counter)
+    }
+}
+
+#[cfg(test)]
+#[cfg(not(tarpaulin_include))]
+#[cfg_attr(coverage_nightly, coverage(off))]
+pub mod tests { // unit tests shall not appear in code coverage measurement
+    use super::*;
+    use crate::launch::channels::Channels;
+
+    #[tokio::test]
+    // Test case checks that send_and_confirm returns gracefully when send_to_relay_manager fails.
+    pub async fn test_send_and_confirm_send_failure() {
+        let mut channels = Channels::new_for_test();
+
+        // Drop receiver so send_to_relay_manager fails
+        drop(channels.relay_manager.rx_relay_manager_from_balling);
+
+        let mineral_injection = MineralInjection::new();
+        mineral_injection
+            .send_and_confirm(
+                &mut channels.balling,
+                InternalCommand::SwitchOn(AquariumDevice::PeristalticPump1),
+                "testing send failure",
+            )
+            .await;
+    }
+
+    #[tokio::test]
+    // Test case checks that send_and_confirm handles receive failure gracefully when relay manager receiver is dropped.
+    pub async fn test_send_and_confirm_recv_failure() {
+        let mut channels = Channels::new_for_test();
+
+        // Drop tx_relay_manager_to_balling so receive_from_relay_manager fails
+        drop(channels.relay_manager.tx_relay_manager_to_balling);
+
+        let mineral_injection = MineralInjection::new();
+        mineral_injection
+            .send_and_confirm(
+                &mut channels.balling,
+                InternalCommand::SwitchOn(AquariumDevice::PeristalticPump1),
+                "testing receive failure",
+            )
+            .await;
+    }
+
+    #[tokio::test]
+    // Test case checks that send_and_confirm completes successfully when relay manager responds with confirmation.
+    pub async fn test_send_and_confirm_success() {
+        let mut channels = Channels::new_for_test();
+
+        let mut tx_confirm = channels.relay_manager.tx_relay_manager_to_balling;
+
+        tokio::spawn(async move {
+            let _ = tx_confirm.send(true);
+        });
+
+        let mineral_injection = MineralInjection::new();
+        mineral_injection
+            .send_and_confirm(
+                &mut channels.balling,
+                InternalCommand::SwitchOn(AquariumDevice::PeristalticPump1),
+                "testing success path",
+            )
+            .await;
     }
 }

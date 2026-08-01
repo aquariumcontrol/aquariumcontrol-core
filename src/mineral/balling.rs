@@ -148,6 +148,9 @@ pub struct Balling {
     pub execution_blocked: bool,
 }
 
+#[cfg(not(tarpaulin_include))]
+#[cfg_attr(coverage_nightly, coverage(off))]
+// Display trait is currently not being used by neither implementation nor test.
 impl fmt::Display for Balling {
     /// Formats the value using the given formatter.
     ///
@@ -352,7 +355,7 @@ impl Balling {
     /// # Errors
     /// Returns `BallingError::CountdownCalculationInvalidPumpId` if the provided `pump_id`
     /// is not one of the recognized values (1, 2, 3, or 4).
-    fn get_target_dosing_interval(
+    pub(crate) fn get_target_dosing_interval(
         config: &BallingConfig,
         pump_id: i64,
     ) -> Result<u32, BallingError> {
@@ -803,9 +806,11 @@ impl Balling {
 }
 
 #[cfg(test)]
-pub mod tests {
+#[cfg(not(tarpaulin_include))]
+#[cfg_attr(coverage_nightly, coverage(off))]
+pub mod tests { // unit tests shall not appear in code coverage measurement
+    use super::*;
     use crate::database::sql_interface_balling::BallingSetVal;
-    use crate::mineral::balling::Balling;
 
     #[test]
     // Test case checks if the target dosing duration is calculated correctly
@@ -965,5 +970,51 @@ pub mod tests {
         };
 
         assert_eq!(Balling::calc_actual_dosing_volume(&balling_setval, 0), 0.0);
+    }
+
+    #[test]
+    // Test case checks that get_target_dosing_interval returns the correct dosing interval for valid pump IDs 1..=4.
+    pub fn test_get_target_dosing_interval_valid_pumps() {
+        let config = crate::mineral::balling_config::BallingConfig {
+            active: true,
+            execute: true,
+            schedule_check_interval: 1,
+            dosing_interval_pump1: 100,
+            dosing_interval_pump2: 200,
+            dosing_interval_pump3: 300,
+            dosing_interval_pump4: 400,
+            pump_switch_delay_millis: 1,
+            pump1_active: true,
+            pump2_active: true,
+            pump3_active: true,
+            pump4_active: true,
+        };
+
+        assert_eq!(Balling::get_target_dosing_interval(&config, 1).unwrap(), 100);
+        assert_eq!(Balling::get_target_dosing_interval(&config, 2).unwrap(), 200);
+        assert_eq!(Balling::get_target_dosing_interval(&config, 3).unwrap(), 300);
+        assert_eq!(Balling::get_target_dosing_interval(&config, 4).unwrap(), 400);
+    }
+
+    #[test]
+    // Test case checks that get_target_dosing_interval returns CountdownCalculationInvalidPumpId for invalid pump IDs.
+    pub fn test_get_target_dosing_interval_invalid_pump_id() {
+        let config = crate::mineral::balling_config::BallingConfig {
+            active: true,
+            execute: true,
+            schedule_check_interval: 1,
+            dosing_interval_pump1: 100,
+            dosing_interval_pump2: 200,
+            dosing_interval_pump3: 300,
+            dosing_interval_pump4: 400,
+            pump_switch_delay_millis: 1,
+            pump1_active: true,
+            pump2_active: true,
+            pump3_active: true,
+            pump4_active: true,
+        };
+
+        let res = Balling::get_target_dosing_interval(&config, 5);
+        assert!(matches!(res, Err(crate::mineral::balling_error::BallingError::CountdownCalculationInvalidPumpId(_, 5))));
     }
 }

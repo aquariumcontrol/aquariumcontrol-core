@@ -755,7 +755,9 @@ impl TankLevelSwitch {
 }
 
 #[cfg(test)]
-pub mod tests {
+#[cfg(not(tarpaulin_include))]
+#[cfg_attr(coverage_nightly, coverage(off))]
+pub mod tests { // unit tests shall not appear in code coverage measurement
     use super::*;
     use crate::sensors::tank_level_switch_config::TankLevelSwitchConfig;
     use std::sync::{Arc, Mutex};

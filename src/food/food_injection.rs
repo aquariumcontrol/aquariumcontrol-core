@@ -678,7 +678,8 @@ impl FoodInjectionTrait for FoodInjection {
 
 #[cfg(test)]
 #[cfg(not(tarpaulin_include))]
-pub mod tests {
+#[cfg_attr(coverage_nightly, coverage(off))]
+pub mod tests { // unit tests shall not appear in code coverage measurement
     use super::*;
     use crate::food::feed_config::FeedConfig;
 

@@ -787,7 +787,9 @@ impl SensorManager {
 }
 
 #[cfg(test)]
-pub mod tests {
+#[cfg(not(tarpaulin_include))]
+#[cfg_attr(coverage_nightly, coverage(off))]
+pub mod tests { // unit tests shall not appear in code coverage measurement
     use super::*;
     use crate::sensors::sensor_manager_config::SensorManagerConfig;
 

@@ -739,7 +739,8 @@ impl Feed {
 
 #[cfg(test)]
 #[cfg(not(tarpaulin_include))]
-pub mod tests {
+#[cfg_attr(coverage_nightly, coverage(off))]
+pub mod tests { // unit tests shall not appear in code coverage measurement
     use std::time::Duration;
 
     use crate::database::database_interface_feed_trait::DatabaseInterfaceFeedTrait;

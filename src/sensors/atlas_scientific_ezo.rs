@@ -462,7 +462,9 @@ impl AtlasScientificDriver for AtlasScientificEzo {
 }
 
 #[cfg(test)]
-pub mod tests {
+#[cfg(not(tarpaulin_include))]
+#[cfg_attr(coverage_nightly, coverage(off))]
+pub mod tests { // unit tests shall not appear in code coverage measurement
     use crate::sensors::atlas_scientific_error::AtlasScientificError;
     use crate::sensors::atlas_scientific_ezo::{
         atlas_scientific_ezo_constants, AtlasScientificEzo,

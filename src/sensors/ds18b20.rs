@@ -410,7 +410,9 @@ impl Ds18b20 {
 }
 
 #[cfg(test)]
-pub mod tests {
+#[cfg(not(tarpaulin_include))]
+#[cfg_attr(coverage_nightly, coverage(off))]
+pub mod tests { // unit tests shall not appear in code coverage measurement
     use crate::sensors::ds18b20::{Ds18b20, Ds18b20Config, Ds18b20Error};
 
     #[test]

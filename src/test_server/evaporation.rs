@@ -78,7 +78,9 @@ impl Evaporation {
 }
 
 #[cfg(test)]
-pub mod tests {
+#[cfg(not(tarpaulin_include))]
+#[cfg_attr(coverage_nightly, coverage(off))]
+pub mod tests { // unit tests shall not appear in code coverage measurement
     use assert_float_eq::*;
 
     use crate::test_server::evaporation::{Evaporation, EvaporationConfig};

@@ -1,3 +1,5 @@
+#![cfg_attr(coverage_nightly, feature(coverage_attribute))]
+
 /// This container module features all functionality related to RGB LED.
 pub mod beacon;
 /// This is the container module for the database communication.

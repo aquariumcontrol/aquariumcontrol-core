@@ -102,7 +102,9 @@ impl TankGeometry {
 }
 
 #[cfg(test)]
-pub mod tests {
+#[cfg(not(tarpaulin_include))]
+#[cfg_attr(coverage_nightly, coverage(off))]
+pub mod tests { // unit tests shall not appear in code coverage measurement
     use crate::test_server::tank_geometry::TankGeometry;
     use crate::test_server::tank_geometry::TankGeometryConfig;
     use assert_float_eq::*;

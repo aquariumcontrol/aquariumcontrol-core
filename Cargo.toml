@@ -74,4 +74,4 @@ debug = ["debug_tokio", "debug_schedule_check", "debug_signal_handler", "debug_d
 commissioning_prep = []
 
 [lints.rust]
-unexpected_cfgs = { level = "warn", check-cfg = ['cfg(tarpaulin_include)'] }
+unexpected_cfgs = { level = "warn", check-cfg = ['cfg(tarpaulin_include)', 'cfg(coverage,coverage_nightly)']}
