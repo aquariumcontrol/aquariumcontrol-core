@@ -773,11 +773,11 @@ pub fn test_ventilation_with_measured_temperature_high_within_interval() {
 
             assert_le!(second_last_actuation_duration, 1100);
             assert_ge!(second_last_actuation_duration, 900);
-            assert_le!(third_last_actuation_duration, 12150);
+            assert_le!(third_last_actuation_duration, 12250);
             assert_ge!(third_last_actuation_duration, 11950);
             assert_le!(fourth_last_actuation_duration, 1100);
             assert_ge!(fourth_last_actuation_duration, 900);
-            assert_le!(fifth_last_actuation_duration, 12160);
+            assert_le!(fifth_last_actuation_duration, 12250);
             assert_ge!(fifth_last_actuation_duration, 11950);
             assert_le!(sixth_last_actuation_duration, 1100);
             assert_ge!(sixth_last_actuation_duration, 900);

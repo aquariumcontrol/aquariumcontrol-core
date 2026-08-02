@@ -841,4 +841,101 @@ pub mod tests { // unit tests shall not appear in code coverage measurement
             "lock_error_mutex_poisoned should reset to false on success"
         );
     }
+
+    #[test]
+    // Verifies calc_tank_level_switch_position_stabilized applies immediate high-water transitions, asymmetric low-water delay counters, and invalid signal overrides.
+    fn test_calc_tank_level_switch_position_stabilized_asymmetric_delay() {
+        let config = TankLevelSwitchConfig {
+            active: true,
+            execute: true,
+            use_simulator: false,
+            tank_level_switch_position_low_stabilization_count: 1, // threshold = 1 * 10 = 10
+        };
+
+        let mut tls = TankLevelSwitch::new(config, true).unwrap();
+
+        // 1. High water position -> immediate true, counter = 0
+        tls.tank_level_switch_position = true;
+        tls.calc_tank_level_switch_position_stabilized();
+        assert!(tls.tank_level_switch_position_stabilized);
+        assert_eq!(tls.tank_level_switch_position_low_stabilization_counter, 0);
+
+        // 2. Transition to low water position -> counter increments up to threshold 10
+        tls.tank_level_switch_position = false;
+        for i in 1..=10 {
+            tls.calc_tank_level_switch_position_stabilized();
+            assert!(
+                tls.tank_level_switch_position_stabilized,
+                "should remain true before reaching threshold"
+            );
+            assert_eq!(tls.tank_level_switch_position_low_stabilization_counter, i);
+        }
+
+        // 11th call reaches threshold
+        tls.calc_tank_level_switch_position_stabilized();
+        assert!(
+            !tls.tank_level_switch_position_stabilized,
+            "should become false after reaching threshold 10"
+        );
+
+        // 3. Invalid signal -> forces true and resets counter
+        tls.tank_level_switch_invalid = true;
+        tls.calc_tank_level_switch_position_stabilized();
+        assert!(
+            tls.tank_level_switch_position_stabilized,
+            "should force true on invalid signal"
+        );
+        assert_eq!(tls.tank_level_switch_position_low_stabilization_counter, 0);
+    }
+
+    #[test]
+    // Verifies update_tank_level_switch_signals returns SimulatorChannelNotProvided when simulator channels are missing.
+    fn test_update_tank_level_switch_signals_simulator_channel_not_provided() {
+        let config = TankLevelSwitchConfig {
+            active: true,
+            execute: true,
+            use_simulator: true,
+            tank_level_switch_position_low_stabilization_count: 3,
+        };
+
+        let mut tls = TankLevelSwitch::new(config, true).unwrap();
+        let res = tls.update_tank_level_switch_signals(&mut None, &mut None);
+
+        assert!(matches!(
+            res,
+            Err(TankLevelSwitchError::SimulatorChannelNotProvided(_))
+        ));
+    }
+
+    #[tokio::test]
+    // Verifies execute returns SimulatorChannelNotProvided when configured for simulator mode without TCP channels.
+    async fn test_execute_simulator_channel_not_provided() {
+        use crate::launch::channels::channel;
+
+        let config = TankLevelSwitchConfig {
+            active: true,
+            execute: true,
+            use_simulator: true,
+            tank_level_switch_position_low_stabilization_count: 3,
+        };
+
+        let mut tls = TankLevelSwitch::new(config, true).unwrap();
+
+        let (_tx_sig, rx_sig) = channel::<InternalCommand>(10, false);
+        let (tx_ack, _rx_ack) = channel::<bool>(10, false);
+        let mut channels = TankLevelSwitchChannels {
+            tx_tank_level_switch_to_tcp_opt: None,
+            rx_tank_level_switch_from_tcp_opt: None,
+            tx_tank_level_switch_to_signal_handler: tx_ack,
+            rx_tank_level_switch_from_signal_handler: rx_sig,
+        };
+        let mutex_signals = Arc::new(Mutex::new(TankLevelSwitchSignals::new(true, true, false)));
+
+        let res = tls.execute(&mut channels, mutex_signals).await;
+        assert!(matches!(
+            res,
+            Err(TankLevelSwitchError::SimulatorChannelNotProvided(_))
+        ));
+    }
 }
+

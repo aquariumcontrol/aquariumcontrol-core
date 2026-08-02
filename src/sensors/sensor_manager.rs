@@ -918,4 +918,136 @@ pub mod tests { // unit tests shall not appear in code coverage measurement
         assert!(!sensor_manager.lock_error_atlas_scientific_ph_mutex);
         assert!(!sensor_manager.lock_error_atlas_scientific_conductivity_mutex);
     }
+
+    #[test]
+    // Verifies SensorManagerSignals::new initializes signals with replacement values from configuration.
+    fn test_sensor_manager_signals_new() {
+        let config = SensorManagerConfig {
+            use_simulator: false,
+            execute: true,
+            replacement_value_ambient_temperature: 22.5,
+            replacement_value_ambient_humidity: 55.0,
+            replacement_value_water_temperature: 25.5,
+            replacement_value_ph: 8.1,
+            replacement_value_conductivity: 51000.0,
+            source_water_temperature: sensor_manager_constants::SOURCE_WATER_TEMPERATURE_DS18B20
+                .to_string(),
+            source_ambient_temperature: sensor_manager_constants::SOURCE_AMBIENT_TEMPERATURE_DHT
+                .to_string(),
+        };
+
+        let signals = SensorManagerSignals::new(&config);
+        assert_eq!(signals.ambient_temperature, 22.5);
+        assert_eq!(signals.ambient_humidity, 55.0);
+        assert_eq!(signals.water_temperature, 25.5);
+        assert_eq!(signals.ph, 8.1);
+        assert_eq!(signals.conductivity, 51000.0);
+    }
+
+    #[test]
+    // Verifies SensorManager::new returns correct error variants for invalid ambient or water temperature sensor sources.
+    fn test_sensor_manager_new_invalid_config_errors() {
+        let mut config = SensorManagerConfig {
+            use_simulator: false,
+            execute: true,
+            replacement_value_ambient_temperature: 20.0,
+            replacement_value_ambient_humidity: 50.0,
+            replacement_value_water_temperature: 25.0,
+            replacement_value_ph: 8.0,
+            replacement_value_conductivity: 50000.0,
+            source_water_temperature: sensor_manager_constants::SOURCE_WATER_TEMPERATURE_DS18B20
+                .to_string(),
+            source_ambient_temperature: sensor_manager_constants::SOURCE_AMBIENT_TEMPERATURE_DHT
+                .to_string(),
+        };
+
+        // 1. Invalid ambient temperature source
+        config.source_ambient_temperature = "invalid_amb".to_string();
+        assert!(matches!(
+            SensorManager::new(config.clone()),
+            Err(SensorManagerError::InvalidAmbientTemperatureConfiguration(
+                ..
+            ))
+        ));
+        config.source_ambient_temperature =
+            sensor_manager_constants::SOURCE_AMBIENT_TEMPERATURE_DHT.to_string();
+
+        // 2. Invalid water temperature source
+        config.source_water_temperature = "invalid_water".to_string();
+        assert!(matches!(
+            SensorManager::new(config.clone()),
+            Err(SensorManagerError::InvalidWaterTemperatureConfiguration(
+                ..
+            ))
+        ));
+    }
+
+    #[test]
+    // Verifies read_sensor_values_from_mutexes reads ambient temperature from DHT and water temperature from Atlas Scientific.
+    fn test_read_sensor_values_alternate_sources() {
+        let config = SensorManagerConfig {
+            use_simulator: false,
+            execute: true,
+            replacement_value_ambient_temperature: 20.0,
+            replacement_value_ambient_humidity: 50.0,
+            replacement_value_water_temperature: 25.0,
+            replacement_value_ph: 8.0,
+            replacement_value_conductivity: 50000.0,
+            source_water_temperature:
+                sensor_manager_constants::SOURCE_WATER_TEMPERATURE_ATLAS_SCIENTIFIC.to_string(),
+            source_ambient_temperature:
+                sensor_manager_constants::SOURCE_AMBIENT_TEMPERATURE_DHT.to_string(),
+        };
+
+        let mut sensor_manager = SensorManager::new(config).unwrap();
+        let mutexes = SensorManagerMutexes::new_for_test();
+
+        // Set test values in DHT and Atlas Scientific temperature mutexes
+        *mutexes.mutex_dht.lock().unwrap() = Ok((21.5, 58.0));
+        mutexes.mutex_atlas_scientific_temperature.lock().unwrap().value = 26.3;
+
+        sensor_manager.read_sensor_values_from_mutexes(&mutexes);
+
+        assert_eq!(sensor_manager.ambient_temperature, 21.5);
+        assert_eq!(sensor_manager.ambient_humidity, 58.0);
+        assert_eq!(sensor_manager.water_temperature, 26.3);
+    }
+
+    #[tokio::test]
+    #[should_panic(
+        expected = "configured to run with simulator, but no channel to TCP thread provided."
+    )]
+    // Verifies execute panics when configured to use simulator but no TCP channels are provided.
+    async fn test_execute_simulator_missing_channels_panics() {
+        use crate::launch::channels::channel;
+
+        let config = SensorManagerConfig {
+            use_simulator: true,
+            execute: true,
+            replacement_value_ambient_temperature: 20.0,
+            replacement_value_ambient_humidity: 50.0,
+            replacement_value_water_temperature: 25.0,
+            replacement_value_ph: 8.0,
+            replacement_value_conductivity: 50000.0,
+            source_water_temperature: sensor_manager_constants::SOURCE_WATER_TEMPERATURE_DS18B20
+                .to_string(),
+            source_ambient_temperature: sensor_manager_constants::SOURCE_AMBIENT_TEMPERATURE_DHT
+                .to_string(),
+        };
+
+        let mut sensor_manager = SensorManager::new(config).unwrap();
+
+        let (_tx_sig, rx_sig) = channel::<InternalCommand>(10, false);
+        let (tx_ack, _rx_ack) = channel::<bool>(10, false);
+        let mut channels = SensorManagerChannels {
+            tx_sensor_manager_to_tcp_opt: None,
+            rx_sensor_manager_from_tcp_opt: None,
+            tx_sensor_manager_to_signal_handler: tx_ack,
+            rx_sensor_manager_from_signal_handler: rx_sig,
+        };
+        let mutexes = SensorManagerMutexes::new_for_test();
+
+        sensor_manager.execute(&mut channels, mutexes).await;
+    }
 }
+
