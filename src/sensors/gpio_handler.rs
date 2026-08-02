@@ -214,3 +214,40 @@ impl GpioHandler {
         Ok(None)
     }
 }
+
+#[cfg(test)]
+#[cfg(not(tarpaulin_include))]
+#[cfg_attr(coverage_nightly, coverage(off))]
+pub mod tests {
+    use crate::sensors::gpio_handler::{GpioHandler, GpioHandlerError};
+    use crate::sensors::gpio_handler_config::GpioHandlerConfig;
+
+    #[test]
+    // Verifies that GpioHandler::new returns PlatformNotSupported when use_simulator is false on non-target platforms.
+    #[cfg(any(not(target_os = "linux"), not(feature = "target_hw")))]
+    fn test_new_platform_not_supported() {
+        let config = GpioHandlerConfig {
+            use_simulator: false,
+            tank_level_switch: 3,
+            dht22_io: 4,
+            dht22_vcc: 5,
+            skimmer: 6,
+            main_pump1: 7,
+            main_pump2: 8,
+            aux_pump1: 9,
+            aux_pump2: 10,
+            feeder: 11,
+            refill_pump: 12,
+            heater: 13,
+            ventilation: 14,
+            peristaltic_pump1: 15,
+            peristaltic_pump2: 16,
+            peristaltic_pump3: 17,
+            peristaltic_pump4: 18,
+        };
+
+        let result = GpioHandler::new(config);
+        assert!(matches!(result, Err(GpioHandlerError::PlatformNotSupported)));
+    }
+}
+

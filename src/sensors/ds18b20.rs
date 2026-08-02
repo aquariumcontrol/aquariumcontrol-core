@@ -442,4 +442,104 @@ pub mod tests { // unit tests shall not appear in code coverage measurement
         // is specifically `SensorIdsIdentical`.
         assert!(matches!(result, Err(Ds18b20Error::SensorIdsIdentical(_))));
     }
+
+    #[test]
+    // Verifies Ds18b20ResultData::new_for_test creates default result data.
+    fn test_ds18b20_result_data_new_for_test() {
+        use crate::sensors::ds18b20::Ds18b20ResultData;
+        let res = Ds18b20ResultData::new_for_test();
+        assert_eq!(res.value, 0.0);
+    }
+
+    #[test]
+    // Verifies Ds18b20::new returns correct errors for empty base path, empty sensor prefix, empty file name, and missing sensor IDs.
+    fn test_new_configuration_validation_errors() {
+        let mut config = Ds18b20Config {
+            active: true,
+            water_temperature_sensor_id: "28-000001".to_string(),
+            ambient_temperature_sensor_id: "28-000002".to_string(),
+            system_driver_base_path: "/sys/bus/w1/devices".to_string(),
+            system_driver_sensor_path_prefix: "28-".to_string(),
+            system_driver_file_name: "w1_slave".to_string(),
+            max_retries: 3,
+            retry_pause_duration_millis: 100,
+            measurement_pause_duration_millis: 1000,
+            execute: true,
+        };
+
+        // 1. SystemDriverBasePathEmpty
+        config.system_driver_base_path = "".to_string();
+        assert!(matches!(
+            Ds18b20::new(config.clone()),
+            Err(Ds18b20Error::SystemDriverBasePathEmpty(_))
+        ));
+        config.system_driver_base_path = "/sys/bus/w1/devices".to_string();
+
+        // 2. SystemDriverSensorPathEmpty
+        config.system_driver_sensor_path_prefix = "".to_string();
+        assert!(matches!(
+            Ds18b20::new(config.clone()),
+            Err(Ds18b20Error::SystemDriverSensorPathEmpty(_))
+        ));
+        config.system_driver_sensor_path_prefix = "28-".to_string();
+
+        // 3. SystemDriverFileNameEmpty
+        config.system_driver_file_name = "".to_string();
+        assert!(matches!(
+            Ds18b20::new(config.clone()),
+            Err(Ds18b20Error::SystemDriverFileNameEmpty(_))
+        ));
+        config.system_driver_file_name = "w1_slave".to_string();
+
+        // 4. NoSensorIdProvided
+        config.water_temperature_sensor_id = "".to_string();
+        config.ambient_temperature_sensor_id = "".to_string();
+        assert!(matches!(
+            Ds18b20::new(config.clone()),
+            Err(Ds18b20Error::NoSensorIdProvided(_))
+        ));
+    }
+
+    #[test]
+    // Verifies parse_contents returns TemperatureParseError for non-numeric input and TemperatureOutOfRange for values outside valid bounds.
+    fn test_parse_contents_error_branches() {
+        let config = Ds18b20Config {
+            active: true,
+            water_temperature_sensor_id: "28-000001".to_string(),
+            ambient_temperature_sensor_id: "28-000002".to_string(),
+            system_driver_base_path: "/sys/bus/w1/devices".to_string(),
+            system_driver_sensor_path_prefix: "28-".to_string(),
+            system_driver_file_name: "w1_slave".to_string(),
+            max_retries: 3,
+            retry_pause_duration_millis: 100,
+            measurement_pause_duration_millis: 1000,
+            execute: true,
+        };
+
+        let ds18b20 = Ds18b20::new(config).unwrap();
+
+        // 1. TemperatureParseError (non-numeric after t=)
+        let invalid_num_contents = "70 01 4b 46 7f ff 0c 10 b5 : crc=b5 YES\n70 01 4b 46 7f ff 0c 10 b5 t=invalid";
+        let res_parse_err = ds18b20.parse_contents(invalid_num_contents);
+        assert!(matches!(
+            res_parse_err,
+            Err(Ds18b20Error::TemperatureParseError(_))
+        ));
+
+        // 2. TemperatureOutOfRange (> 100°C)
+        let high_temp_contents = "70 01 4b 46 7f ff 0c 10 b5 : crc=b5 YES\n70 01 4b 46 7f ff 0c 10 b5 t=150000";
+        let res_high_err = ds18b20.parse_contents(high_temp_contents);
+        assert!(matches!(
+            res_high_err,
+            Err(Ds18b20Error::TemperatureOutOfRange(_))
+        ));
+
+        // 3. TemperatureOutOfRange (< 0°C)
+        let low_temp_contents = "70 01 4b 46 7f ff 0c 10 b5 : crc=b5 YES\n70 01 4b 46 7f ff 0c 10 b5 t=-10000";
+        let res_low_err = ds18b20.parse_contents(low_temp_contents);
+        assert!(matches!(
+            res_low_err,
+            Err(Ds18b20Error::TemperatureOutOfRange(_))
+        ));
+    }
 }

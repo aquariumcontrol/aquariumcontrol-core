@@ -496,3 +496,66 @@ impl I2cInterface {
         }
     }
 }
+
+#[cfg(test)]
+#[cfg(not(tarpaulin_include))]
+#[cfg_attr(coverage_nightly, coverage(off))]
+pub mod tests {
+    use crate::launch::channels::channel;
+    use crate::sensors::i2c_error::I2cError;
+    use crate::sensors::i2c_interface::{
+        I2cInterface, I2cRequest, I2cResponse, MAX_I2C_COMMAND_LENGTH,
+    };
+    use crate::sensors::i2c_interface_channels::I2cInterfaceChannels;
+    use crate::sensors::i2c_interface_config::I2cInterfaceConfig;
+    use crate::utilities::channel_content::InternalCommand;
+
+    #[test]
+    // Verifies that I2cRequest::new returns CommandTooLong when the input slice exceeds MAX_I2C_COMMAND_LENGTH.
+    fn test_i2c_request_new_command_too_long() {
+        let long_slice = [0u8; MAX_I2C_COMMAND_LENGTH + 1];
+        let res = I2cRequest::new(0x66, &long_slice, 10, 4);
+        assert!(matches!(res, Err(I2cError::CommandTooLong { .. })));
+    }
+
+    #[test]
+    // Verifies I2cResponse Display formatting for non-empty and empty buffers.
+    fn test_i2c_response_fmt() {
+        let data = [0x12, 0x34, 0xab];
+        let resp = I2cResponse::new(&data);
+        let formatted = format!("{resp}");
+        assert!(formatted.contains("12 34 ab"));
+
+        let empty_resp = I2cResponse::empty();
+        let formatted_empty = format!("{empty_resp}");
+        assert!(formatted_empty.contains("I2cResponse"));
+    }
+
+    #[tokio::test]
+    // Verifies execute loop handles disconnected channels gracefully.
+    async fn test_execute_channel_disconnections() {
+        use crate::sensors::i2c_interface::I2cRequest;
+
+        let config = I2cInterfaceConfig {
+            execute: true,
+            max_read_attempts: 3,
+            timeout_transaction: 100,
+        };
+        let mut interface = I2cInterface::new(config).unwrap();
+
+        let (mut tx_sig, rx_sig) = channel::<InternalCommand>(10, false);
+        let (_tx_atlas, rx_atlas) = channel::<I2cRequest>(10, false);
+        let (tx_res, _rx_res) = channel(10, false);
+
+        let mut channels = I2cInterfaceChannels {
+            tx_i2c_interface_to_atlas_scientific: tx_res,
+            rx_i2c_interface_from_atlas_scientific: rx_atlas,
+            rx_i2c_interface_from_signal_handler: rx_sig,
+        };
+
+        // Send quit command to cleanly exit execute loop
+        tx_sig.send(InternalCommand::Quit).unwrap();
+        interface.execute(&mut channels).await;
+    }
+}
+
