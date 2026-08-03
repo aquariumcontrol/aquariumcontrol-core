@@ -10,8 +10,8 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 use aquarium_control::database::sql_interface::SqlInterface;
 /// The test of the main entry point of the Aquarium Control application.
 use aquarium_control::launch::run::run;
-use aquarium_control::utilities::config::read_config_file;
 use aquarium_control::launch::startup_error::StartupError;
+use aquarium_control::utilities::config::read_config_file;
 use aquarium_control::utilities::signal_handler::TEST_SHUTDOWN_TRIGGER;
 use std::sync::{atomic::Ordering, Mutex};
 use std::time::Duration;
@@ -238,7 +238,8 @@ fn test_run_invalid_thermal_config() {
 
     let _ = std::fs::remove_file("/tmp/aquarium-ctrl-test.pid");
 
-    let original_content = std::fs::read_to_string("config/aquarium_control_test_runtime.toml").unwrap();
+    let original_content =
+        std::fs::read_to_string("config/aquarium_control_test_runtime.toml").unwrap();
     let invalid_content = original_content.replace(
         "switch_off_temperature = 28.0",
         "switch_off_temperature = 30.0",

@@ -148,7 +148,8 @@ impl pHTimeProfile {
 #[cfg(test)]
 #[cfg(not(tarpaulin_include))]
 #[cfg_attr(coverage_nightly, coverage(off))]
-pub mod tests { // unit tests shall not appear in code coverage measurement
+pub mod tests {
+    // unit tests shall not appear in code coverage measurement
     use crate::test_server::pH_time_profile::pHTimeProfile;
     use crate::test_server::pH_time_profile::pHTimeProfileConfig;
     use crate::utilities::iir_filter::IIRFilterConfig;

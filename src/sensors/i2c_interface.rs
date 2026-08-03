@@ -558,4 +558,3 @@ pub mod tests {
         interface.execute(&mut channels).await;
     }
 }
-

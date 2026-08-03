@@ -835,7 +835,10 @@ mod tests {
     fn test_blocking_recv_outside_tokio_disconnected() {
         let (tx, mut rx) = channel::<i32>(1, false);
         drop(tx);
-        assert!(matches!(rx.blocking_recv(), Err(AquaChannelError::Disconnected)));
+        assert!(matches!(
+            rx.blocking_recv(),
+            Err(AquaChannelError::Disconnected)
+        ));
     }
 
     /// Tests blocking_recv in current_thread Tokio runtime when message is present.
@@ -862,7 +865,10 @@ mod tests {
     async fn test_blocking_recv_current_thread_disconnected() {
         let (tx, mut rx) = channel::<i32>(1, false);
         drop(tx);
-        assert!(matches!(rx.blocking_recv(), Err(AquaChannelError::Disconnected)));
+        assert!(matches!(
+            rx.blocking_recv(),
+            Err(AquaChannelError::Disconnected)
+        ));
     }
 
     /// Tests blocking_recv in multi_thread Tokio runtime when message is sent.
@@ -878,6 +884,9 @@ mod tests {
     async fn test_blocking_recv_multi_thread_disconnected() {
         let (tx, mut rx) = channel::<i32>(1, true);
         drop(tx);
-        assert!(matches!(rx.blocking_recv(), Err(AquaChannelError::Disconnected)));
+        assert!(matches!(
+            rx.blocking_recv(),
+            Err(AquaChannelError::Disconnected)
+        ));
     }
 }

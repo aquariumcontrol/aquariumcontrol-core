@@ -170,4 +170,3 @@ mod tests {
         assert!(format!("{:?}", msg).contains("Message"));
     }
 }
-

@@ -412,7 +412,8 @@ impl Ds18b20 {
 #[cfg(test)]
 #[cfg(not(tarpaulin_include))]
 #[cfg_attr(coverage_nightly, coverage(off))]
-pub mod tests { // unit tests shall not appear in code coverage measurement
+pub mod tests {
+    // unit tests shall not appear in code coverage measurement
     use crate::sensors::ds18b20::{Ds18b20, Ds18b20Config, Ds18b20Error};
 
     #[test]
@@ -519,7 +520,8 @@ pub mod tests { // unit tests shall not appear in code coverage measurement
         let ds18b20 = Ds18b20::new(config).unwrap();
 
         // 1. TemperatureParseError (non-numeric after t=)
-        let invalid_num_contents = "70 01 4b 46 7f ff 0c 10 b5 : crc=b5 YES\n70 01 4b 46 7f ff 0c 10 b5 t=invalid";
+        let invalid_num_contents =
+            "70 01 4b 46 7f ff 0c 10 b5 : crc=b5 YES\n70 01 4b 46 7f ff 0c 10 b5 t=invalid";
         let res_parse_err = ds18b20.parse_contents(invalid_num_contents);
         assert!(matches!(
             res_parse_err,
@@ -527,7 +529,8 @@ pub mod tests { // unit tests shall not appear in code coverage measurement
         ));
 
         // 2. TemperatureOutOfRange (> 100°C)
-        let high_temp_contents = "70 01 4b 46 7f ff 0c 10 b5 : crc=b5 YES\n70 01 4b 46 7f ff 0c 10 b5 t=150000";
+        let high_temp_contents =
+            "70 01 4b 46 7f ff 0c 10 b5 : crc=b5 YES\n70 01 4b 46 7f ff 0c 10 b5 t=150000";
         let res_high_err = ds18b20.parse_contents(high_temp_contents);
         assert!(matches!(
             res_high_err,
@@ -535,7 +538,8 @@ pub mod tests { // unit tests shall not appear in code coverage measurement
         ));
 
         // 3. TemperatureOutOfRange (< 0°C)
-        let low_temp_contents = "70 01 4b 46 7f ff 0c 10 b5 : crc=b5 YES\n70 01 4b 46 7f ff 0c 10 b5 t=-10000";
+        let low_temp_contents =
+            "70 01 4b 46 7f ff 0c 10 b5 : crc=b5 YES\n70 01 4b 46 7f ff 0c 10 b5 t=-10000";
         let res_low_err = ds18b20.parse_contents(low_temp_contents);
         assert!(matches!(
             res_low_err,

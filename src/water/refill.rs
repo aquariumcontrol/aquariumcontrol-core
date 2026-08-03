@@ -1212,7 +1212,8 @@ pub fn prepare_refill_tests(
 #[cfg(test)]
 #[cfg(not(tarpaulin_include))]
 #[cfg_attr(coverage_nightly, coverage(off))]
-pub mod tests { // unit tests shall not appear in code coverage measurement
+pub mod tests {
+    // unit tests shall not appear in code coverage measurement
     use crate::database::sql_interface_error::SqlInterfaceError;
     use crate::water::refill::Refill;
 

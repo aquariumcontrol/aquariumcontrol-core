@@ -768,7 +768,10 @@ mod tests {
         );
         assert!(matches!(
             err_pulse,
-            Err(RelayError::PulseNotAllowedForDevice(_, AquariumDevice::Skimmer))
+            Err(RelayError::PulseNotAllowedForDevice(
+                _,
+                AquariumDevice::Skimmer
+            ))
         ));
 
         // Irrelevant command returns IrrelevantCommand

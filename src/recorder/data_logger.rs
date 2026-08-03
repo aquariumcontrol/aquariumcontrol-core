@@ -1492,7 +1492,8 @@ impl DataLogger {
 #[cfg(test)]
 #[cfg(not(tarpaulin_include))]
 #[cfg_attr(coverage_nightly, coverage(off))]
-pub mod tests { // unit tests shall not appear in code coverage measurement
+pub mod tests {
+    // unit tests shall not appear in code coverage measurement
     use crate::recorder::data_logger::DataLogger;
     use crate::recorder::data_logger_config::DataLoggerConfig;
     use crate::recorder::data_logger_error::DataLoggerError;

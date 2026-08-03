@@ -152,4 +152,8 @@ pub enum TcpCommunicationError {
         #[source]
         source: io::Error,
     },
+
+    /// Mock error used for testing error paths
+    #[error("[{location}] Mock error for testing purposes.")]
+    MockError { location: String },
 }

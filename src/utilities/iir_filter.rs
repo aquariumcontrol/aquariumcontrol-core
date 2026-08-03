@@ -133,7 +133,8 @@ impl IIRFilter {
 #[cfg(test)]
 #[cfg(not(tarpaulin_include))]
 #[cfg_attr(coverage_nightly, coverage(off))]
-pub mod tests { // unit tests shall not appear in code coverage measurement
+pub mod tests {
+    // unit tests shall not appear in code coverage measurement
     use crate::utilities::iir_filter::{IIRFilter, IIRFilterConfig};
     use assert_float_eq::*;
 

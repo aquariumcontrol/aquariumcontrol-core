@@ -294,6 +294,9 @@ mod tests {
 
         // Pulse command passes outer guard but falls into inner wildcard branch
         let res_pulse = simulator.actuate(&InternalCommand::Pulse(AquariumDevice::Skimmer, 500));
-        assert!(matches!(res_pulse, Err(RelayError::IrrelevantCommand(_, _))));
+        assert!(matches!(
+            res_pulse,
+            Err(RelayError::IrrelevantCommand(_, _))
+        ));
     }
 }

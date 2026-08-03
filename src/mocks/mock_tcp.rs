@@ -28,9 +28,9 @@ pub mod tests {
         mut rx_tcp_from_test_environment_opt: Option<&mut AquaReceiver<TestCommand>>,
         initial_mock_value_position: bool,
         initial_mock_value_invalid: bool,
+        waiting_time_opt: Option<Duration>,
     ) {
         let sleep_duration = Duration::from_millis(10);
-        let spin_sleeper = SpinSleeper::default();
         let mut mock_value_position = initial_mock_value_position;
         let mut mock_value_invalid = initial_mock_value_invalid;
 
@@ -43,6 +43,7 @@ pub mod tests {
         let mut rx_tcp_from_test_object = tcp_communication_channels
             .rx_tcp_communication_from_tank_level_switch_opt
             .unwrap();
+        let spin_sleeper = SpinSleeper::default();
 
         loop {
             match rx_tcp_from_test_object.try_recv() {
@@ -71,6 +72,10 @@ pub mod tests {
                             panic!("{}: invalid command to mock TCP handler", module_path!());
                         }
                     };
+                    // delay before sending to trigger cycle time monitoring
+                    if waiting_time_opt.is_some() {
+                        spin_sleeper.sleep(waiting_time_opt.unwrap());
+                    }
                     match tx_tcp_to_test_object.send(Ok(response_value)) {
                         Ok(()) => {
                             if let (Some(cmd), Some(sig)) = (command_received, signal_received) {

@@ -789,7 +789,8 @@ impl SensorManager {
 #[cfg(test)]
 #[cfg(not(tarpaulin_include))]
 #[cfg_attr(coverage_nightly, coverage(off))]
-pub mod tests { // unit tests shall not appear in code coverage measurement
+pub mod tests {
+    // unit tests shall not appear in code coverage measurement
     use super::*;
     use crate::sensors::sensor_manager_config::SensorManagerConfig;
 
@@ -976,9 +977,7 @@ pub mod tests { // unit tests shall not appear in code coverage measurement
         config.source_water_temperature = "invalid_water".to_string();
         assert!(matches!(
             SensorManager::new(config.clone()),
-            Err(SensorManagerError::InvalidWaterTemperatureConfiguration(
-                ..
-            ))
+            Err(SensorManagerError::InvalidWaterTemperatureConfiguration(..))
         ));
     }
 
@@ -995,8 +994,8 @@ pub mod tests { // unit tests shall not appear in code coverage measurement
             replacement_value_conductivity: 50000.0,
             source_water_temperature:
                 sensor_manager_constants::SOURCE_WATER_TEMPERATURE_ATLAS_SCIENTIFIC.to_string(),
-            source_ambient_temperature:
-                sensor_manager_constants::SOURCE_AMBIENT_TEMPERATURE_DHT.to_string(),
+            source_ambient_temperature: sensor_manager_constants::SOURCE_AMBIENT_TEMPERATURE_DHT
+                .to_string(),
         };
 
         let mut sensor_manager = SensorManager::new(config).unwrap();
@@ -1004,7 +1003,11 @@ pub mod tests { // unit tests shall not appear in code coverage measurement
 
         // Set test values in DHT and Atlas Scientific temperature mutexes
         *mutexes.mutex_dht.lock().unwrap() = Ok((21.5, 58.0));
-        mutexes.mutex_atlas_scientific_temperature.lock().unwrap().value = 26.3;
+        mutexes
+            .mutex_atlas_scientific_temperature
+            .lock()
+            .unwrap()
+            .value = 26.3;
 
         sensor_manager.read_sensor_values_from_mutexes(&mutexes);
 
@@ -1050,4 +1053,3 @@ pub mod tests { // unit tests shall not appear in code coverage measurement
         sensor_manager.execute(&mut channels, mutexes).await;
     }
 }
-

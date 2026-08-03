@@ -83,8 +83,8 @@ use crate::launch::channels::{AquaReceiver, AquaSender};
 use crate::sensors::tank_level_switch_channels::TankLevelSwitchChannels;
 use crate::sensors::tank_level_switch_config::TankLevelSwitchConfig;
 use crate::utilities::check_mutex_access_duration::CheckMutexAccessDurationTrait;
+pub use crate::sensors::tank_level_switch_error::TankLevelSwitchError;
 use std::time::{Duration, Instant};
-use thiserror::Error;
 
 cfg_if::cfg_if! {
     if #[cfg(all(target_os = "linux", feature = "target_hw"))] {
@@ -109,6 +109,10 @@ const CYCLE_TIME_TANK_LEVEL_SWITCH_MILLIS: u64 = 100;
 /// application is adapting the sleep time to achieve constant execution rate of 100 milliseconds.
 /// this is the threshold from which on the cycle time monitoring alerts.
 const PERMISSIBLE_CYCLE_TIME_DEVIATION_TANK_LEVEL_SWITCH_MILLIS: u128 = 5;
+
+/// application is adapting the sleep time to achieve constant execution rate of 100 milliseconds.
+/// this is the threshold from which on the cycle time monitoring alerts - when testing with simulator.
+const PERMISSIBLE_CYCLE_TIME_DEVIATION_TANK_LEVEL_SWITCH_MILLIS_SIMULATOR: u128 = 500;
 
 /// allow max. 10 milliseconds for mutex to be blocked by any other thread
 const MAX_MUTEX_ACCESS_DURATION_MILLIS: u64 = 10;
@@ -153,45 +157,6 @@ impl TankLevelSwitchSignals {
             tank_level_switch_invalid,
         }
     }
-}
-
-/// Contains error definitions for TankLevelSwitch
-#[derive(Error, Debug)]
-pub enum TankLevelSwitchError {
-    /// Application shall use real HW, but GPIO lib interface was not provided.
-    #[cfg(all(target_os = "linux", feature = "target_hw"))]
-    #[error("[{0}] Application shall use real HW, but GPIO lib interface was not provided.")]
-    GPIOInterfaceNotProvided(String),
-
-    /// Could not get pin from GPIO interface for tank level monitoring.
-    #[cfg(all(target_os = "linux", feature = "target_hw"))]
-    #[error("[{location}] Could not get pin {pin_number} from GPIO interface for tank level monitoring.")]
-    GpioPinRetrievalError {
-        location: String,
-        pin_number: u8,
-
-        #[source]
-        source: rppal::gpio::Error,
-    },
-
-    /// Application shall use simulator, but the channel to TCP thread was not provided.
-    #[error("[{0}] Configured to run with simulator, but no channel to TCP thread provided.")]
-    SimulatorChannelNotProvided(String),
-
-    /// Input pin has not been provided. This is a configuration error.
-    #[allow(unused)] // variant is constructed in platform-specific code and evaluated in generic code.
-    #[error("[{0}] Input pin has not been provided. This is a configuration error.")]
-    InputPinNotProvided(String),
-
-    /// Communication with the simulator failed.
-    #[error("[{location}] Communication with simulator for {signal} failed")]
-    SimulatorCommunicationError {
-        location: String,
-        signal: AquariumSignal,
-
-        #[source]
-        source: TcpCommunicationError,
-    },
 }
 
 /// Contains the measurement of tank level position and calculation of stabilized tank level position signal.
@@ -257,6 +222,9 @@ pub struct TankLevelSwitch {
 
     /// Maximum permissible access duration for Mutex
     pub max_mutex_access_duration: Duration,
+
+    /// inhibition flag to avoid flooding the log file with repeated messages about excessive cycle time
+    pub lock_warn_cycle_time_exceeded: bool,
 }
 
 impl ProcessExternalRequestTrait for TankLevelSwitch {}
@@ -307,6 +275,7 @@ impl TankLevelSwitch {
             lock_error_simulator_communication: false,
             lock_error_channel_not_provided: false,
             max_mutex_access_duration: Duration::from_millis(MAX_MUTEX_ACCESS_DURATION_MILLIS),
+            lock_warn_cycle_time_exceeded: false,
         })
     }
 
@@ -466,7 +435,7 @@ impl TankLevelSwitch {
                     ));
                 }
             }
-            #[cfg(all(not(feature = "target_hw"), test))]
+            #[cfg(all(not(feature = "target_hw"), any(test, feature = "test-utils")))]
             {
                 // testing async runtime: do nothing
             }
@@ -560,7 +529,6 @@ impl TankLevelSwitch {
         #[cfg(not(tarpaulin_include))]
         info!(target: module_path!(), "Thread started with TID: {}", gettid());
 
-        let mut lock_warn_cycle_time_exceeded: bool = false;
         let cycle_time_duration = Duration::from_millis(CYCLE_TIME_TANK_LEVEL_SWITCH_MILLIS);
 
         if (self.config.use_simulator)
@@ -616,12 +584,21 @@ impl TankLevelSwitch {
 
             let stop_time = Instant::now();
             let execution_duration = stop_time.duration_since(start_time);
+            println!(
+                "TankLevelSwitch: execution duration = {:#?}, cycle_time_duration = {:#?}",
+                execution_duration, cycle_time_duration
+            );
             if execution_duration > cycle_time_duration {
                 let delta_duration = execution_duration - cycle_time_duration;
-                if !self.config.use_simulator
-                    && delta_duration.as_millis()
-                        > PERMISSIBLE_CYCLE_TIME_DEVIATION_TANK_LEVEL_SWITCH_MILLIS
-                    && !lock_warn_cycle_time_exceeded
+                let permissible_cycle_time_deviation_tank_level_switch_millis =
+                    if self.config.use_simulator {
+                        PERMISSIBLE_CYCLE_TIME_DEVIATION_TANK_LEVEL_SWITCH_MILLIS_SIMULATOR
+                    } else {
+                        PERMISSIBLE_CYCLE_TIME_DEVIATION_TANK_LEVEL_SWITCH_MILLIS
+                    };
+                if delta_duration.as_millis()
+                    > permissible_cycle_time_deviation_tank_level_switch_millis
+                    && !self.lock_warn_cycle_time_exceeded
                 {
                     #[cfg(all(not(test), not(feature = "test-utils")))] // only required in real-life execution
                     #[cfg(not(tarpaulin_include))]
@@ -631,11 +608,11 @@ impl TankLevelSwitch {
                         CYCLE_TIME_TANK_LEVEL_SWITCH_MILLIS,
                         delta_duration.as_millis(),
                     );
-                    lock_warn_cycle_time_exceeded = true;
+                    self.lock_warn_cycle_time_exceeded = true;
                 }
             } else {
                 let remaining_sleep_time = cycle_time_duration - execution_duration;
-                lock_warn_cycle_time_exceeded = false;
+                self.lock_warn_cycle_time_exceeded = false;
                 // sleep time does not need to be split up because cycle time is 100 milliseconds only
                 tokio::time::sleep(remaining_sleep_time).await;
             }
@@ -714,7 +691,7 @@ impl TankLevelSwitch {
                 log_error_chain(
                     // not required during testing
                     module_path!(),
-                    "Failed to update tank level switch signals.",
+                    "Failed to update tank level switch signals - unknown error.",
                     e,
                 );
             }
@@ -757,15 +734,17 @@ impl TankLevelSwitch {
 #[cfg(test)]
 #[cfg(not(tarpaulin_include))]
 #[cfg_attr(coverage_nightly, coverage(off))]
-pub mod tests { // unit tests shall not appear in code coverage measurement
+pub mod tests {
+    // unit tests shall not appear in code coverage measurement
     use super::*;
+    use crate::launch::channels::channel;
+    use crate::mocks::mock_simulator::tests::mock_simulator;
     use crate::sensors::tank_level_switch_config::TankLevelSwitchConfig;
     use std::sync::{Arc, Mutex};
 
     #[test]
-    /// Verifies that TankLevelSwitch initializes lock flags to false and handles log flood protection.
-    ///
-    /// [utest->swreq~sensors_log_flood_protection~1]
+    // Verifies that TankLevelSwitch initializes lock flags to false and handles log flood protection.
+    // [utest->swreq~sensors_log_flood_protection~1]
     fn test_tank_level_switch_lock_flags_log_flood_protection() {
         let config = TankLevelSwitchConfig {
             active: true,
@@ -798,6 +777,20 @@ pub mod tests { // unit tests shall not appear in code coverage measurement
         );
 
         // 3. Test SimulatorCommunicationError log flood protection
+        let err_sim = TankLevelSwitchError::SimulatorCommunicationError {
+            location: "test_loc".to_string(),
+            signal: AquariumSignal::TankLevelSwitchPosition,
+            source: TcpCommunicationError::MockError {
+                location: module_path!().to_string(),
+            },
+        };
+        tls.handle_update_result_log_flood(&Err(err_sim));
+        assert!(
+            tls.lock_error_simulator_communication,
+            "lock_error_simulator_communication should be true"
+        );
+
+        // 4. Test SimulatorChannelNotProvided log flood protection
         let err_sim = TankLevelSwitchError::SimulatorChannelNotProvided("test_loc".to_string());
         tls.handle_update_result_log_flood(&Err(err_sim));
         assert!(
@@ -905,6 +898,78 @@ pub mod tests { // unit tests shall not appear in code coverage measurement
             res,
             Err(TankLevelSwitchError::SimulatorChannelNotProvided(_))
         ));
+
+        let (tx_sig, _rx_sig) = channel::<InternalCommand>(10, false);
+
+        let res = tls.update_tank_level_switch_signals(&mut Some(tx_sig), &mut None);
+
+        assert!(matches!(
+            res,
+            Err(TankLevelSwitchError::SimulatorChannelNotProvided(_))
+        ));
+    }
+
+    #[tokio::test]
+    // Verifies update_tank_level_switch_signals returns error when simulator responds with error.
+    async fn test_update_tank_level_switch_signals_simulator_responds_with_error() {
+        let config = TankLevelSwitchConfig {
+            active: true,
+            execute: true,
+            use_simulator: true,
+            tank_level_switch_position_low_stabilization_count: 3,
+        };
+
+        let mut tls1 = TankLevelSwitch::new(config.clone(), true).unwrap();
+        let mut tls2 = TankLevelSwitch::new(config, true).unwrap();
+
+        // test the error path of the first communication
+        let (tx_req, mut rx_req) = channel::<InternalCommand>(10, false);
+        let (mut tx_resp, rx_resp) = channel::<Result<f32, TcpCommunicationError>>(10, false);
+
+        let mock_simulator_task = tokio::spawn(async move {
+            mock_simulator(&mut tx_resp, &mut rx_req, None).await;
+        });
+
+        let test_object_task = tokio::task::spawn_blocking(move || {
+            tls1.update_tank_level_switch_signals(&mut Some(tx_req), &mut Some(rx_resp))
+        });
+
+        let (simulator_res, res) = tokio::join!(mock_simulator_task, test_object_task);
+        simulator_res.unwrap();
+        let res = res.unwrap();
+
+        assert!(matches!(
+            res,
+            Err(TankLevelSwitchError::SimulatorCommunicationError {
+                location: _,
+                signal: AquariumSignal::TankLevelSwitchPosition,
+                source: _
+            })
+        ));
+
+        // test the error path of the second communication
+        let (tx_req, mut rx_req) = channel::<InternalCommand>(10, false);
+        let (mut tx_resp, rx_resp) = channel::<Result<f32, TcpCommunicationError>>(10, false);
+
+        let mock_simulator_task = tokio::spawn(async move {
+            mock_simulator(&mut tx_resp, &mut rx_req, Some(3.14)).await;
+        });
+
+        let test_object_task = tokio::task::spawn_blocking(move || {
+            tls2.update_tank_level_switch_signals(&mut Some(tx_req), &mut Some(rx_resp))
+        });
+        let (simulator_res, res) = tokio::join!(mock_simulator_task, test_object_task);
+        simulator_res.unwrap();
+        let res = res.unwrap();
+
+        assert!(matches!(
+            res,
+            Err(TankLevelSwitchError::SimulatorCommunicationError {
+                location: _,
+                signal: AquariumSignal::TankLevelSwitchInvalid,
+                source: _
+            })
+        ));
     }
 
     #[tokio::test]
@@ -938,4 +1003,3 @@ pub mod tests { // unit tests shall not appear in code coverage measurement
         ));
     }
 }
-

@@ -247,7 +247,9 @@ pub mod tests {
         };
 
         let result = GpioHandler::new(config);
-        assert!(matches!(result, Err(GpioHandlerError::PlatformNotSupported)));
+        assert!(matches!(
+            result,
+            Err(GpioHandlerError::PlatformNotSupported)
+        ));
     }
 }
-

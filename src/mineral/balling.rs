@@ -808,7 +808,8 @@ impl Balling {
 #[cfg(test)]
 #[cfg(not(tarpaulin_include))]
 #[cfg_attr(coverage_nightly, coverage(off))]
-pub mod tests { // unit tests shall not appear in code coverage measurement
+pub mod tests {
+    // unit tests shall not appear in code coverage measurement
     use super::*;
     use crate::database::sql_interface_balling::BallingSetVal;
 
@@ -990,10 +991,22 @@ pub mod tests { // unit tests shall not appear in code coverage measurement
             pump4_active: true,
         };
 
-        assert_eq!(Balling::get_target_dosing_interval(&config, 1).unwrap(), 100);
-        assert_eq!(Balling::get_target_dosing_interval(&config, 2).unwrap(), 200);
-        assert_eq!(Balling::get_target_dosing_interval(&config, 3).unwrap(), 300);
-        assert_eq!(Balling::get_target_dosing_interval(&config, 4).unwrap(), 400);
+        assert_eq!(
+            Balling::get_target_dosing_interval(&config, 1).unwrap(),
+            100
+        );
+        assert_eq!(
+            Balling::get_target_dosing_interval(&config, 2).unwrap(),
+            200
+        );
+        assert_eq!(
+            Balling::get_target_dosing_interval(&config, 3).unwrap(),
+            300
+        );
+        assert_eq!(
+            Balling::get_target_dosing_interval(&config, 4).unwrap(),
+            400
+        );
     }
 
     #[test]
@@ -1015,6 +1028,14 @@ pub mod tests { // unit tests shall not appear in code coverage measurement
         };
 
         let res = Balling::get_target_dosing_interval(&config, 5);
-        assert!(matches!(res, Err(crate::mineral::balling_error::BallingError::CountdownCalculationInvalidPumpId(_, 5))));
+        assert!(matches!(
+            res,
+            Err(
+                crate::mineral::balling_error::BallingError::CountdownCalculationInvalidPumpId(
+                    _,
+                    5
+                )
+            )
+        ));
     }
 }

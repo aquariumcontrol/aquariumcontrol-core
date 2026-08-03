@@ -256,9 +256,9 @@ impl_wait_for_termination!(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::dispatch::messaging_config::MessagingConfig;
     use crate::launch::channels::channel;
     use crate::launch::execution_config::ExecutionConfig;
-    use crate::dispatch::messaging_config::MessagingConfig;
     use std::time::Duration;
 
     // [utest->swreq~water_log_flood_protection~1]

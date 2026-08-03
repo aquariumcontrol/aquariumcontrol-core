@@ -9,6 +9,7 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 
 //! Tests the main control logic for automated Balling mineral dosing.
 
+use all_asserts::assert_le;
 use aquarium_control::database::sql_interface::SqlInterface;
 use aquarium_control::database::sql_interface_balling::SqlInterfaceBalling;
 use aquarium_control::database::sql_interface_error::SqlInterfaceError;
@@ -29,7 +30,6 @@ use aquarium_control::utilities::channel_content::InternalCommand;
 use aquarium_control::utilities::config::{
     read_config_file, read_config_file_with_test_database, ConfigData,
 };
-use all_asserts::assert_le;
 use spin_sleep::SpinSleeper;
 use std::sync::Arc;
 use std::thread::scope;
@@ -369,7 +369,9 @@ pub fn test_balling_initialization_full_dosing_log() {
 
     // check if the countdown calculation was correct:
     // the countdown depends on the pump-specific dosing interval and the timing of the last dosing event.
-    let delta_seconds = balling.durations_until_next_dosing[0].as_secs().abs_diff(100);
+    let delta_seconds = balling.durations_until_next_dosing[0]
+        .as_secs()
+        .abs_diff(100);
     assert_le!(delta_seconds, 1);
     assert_eq!(balling.durations_until_next_dosing[1].as_secs(), 0);
     assert_eq!(balling.durations_until_next_dosing[2].as_secs(), 0);

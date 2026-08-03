@@ -26,11 +26,9 @@ use aquarium_control::mocks::mock_food_injection::MockFoodInjection;
 use aquarium_control::mocks::mock_signal_handler::create_mock_signal_handler;
 use aquarium_control::mocks::mock_sql_interface_feed::tests::MockSqlInterfaceFeed;
 use aquarium_control::utilities::channel_content::InternalCommand;
-use aquarium_control::utilities::config::{
-    read_config_file, ConfigData,
-};
 #[cfg(feature = "test-utils")]
 use aquarium_control::utilities::config::read_config_file_with_test_database;
+use aquarium_control::utilities::config::{read_config_file, ConfigData};
 use aquarium_control::utilities::logger::setup_logger;
 use aquarium_control::utilities::logger_config::LoggerConfig;
 use spin_sleep::SpinSleeper;

@@ -679,7 +679,8 @@ impl FoodInjectionTrait for FoodInjection {
 #[cfg(test)]
 #[cfg(not(tarpaulin_include))]
 #[cfg_attr(coverage_nightly, coverage(off))]
-pub mod tests { // unit tests shall not appear in code coverage measurement
+pub mod tests {
+    // unit tests shall not appear in code coverage measurement
     use super::*;
     use crate::food::feed_config::FeedConfig;
 
@@ -722,7 +723,10 @@ pub mod tests { // unit tests shall not appear in code coverage measurement
         let errors = result.unwrap_err();
         assert_eq!(errors.len(), 6);
         for err in errors {
-            assert!(matches!(err, FoodInjectionError::UndefinedTargetState(_, _)));
+            assert!(matches!(
+                err,
+                FoodInjectionError::UndefinedTargetState(_, _)
+            ));
         }
     }
 
@@ -750,7 +754,10 @@ pub mod tests { // unit tests shall not appear in code coverage measurement
 
         assert!(result.is_err());
         let errors = result.unwrap_err();
-        assert!(matches!(errors[0], FoodInjectionError::RelayManagerSend { .. }));
+        assert!(matches!(
+            errors[0],
+            FoodInjectionError::RelayManagerSend { .. }
+        ));
     }
 
     #[tokio::test]

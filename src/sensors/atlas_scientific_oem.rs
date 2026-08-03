@@ -614,7 +614,10 @@ pub mod tests {
         let val_25000: u32 = 25000;
         let mut read_buf = [0u8; 64];
         read_buf[..4].copy_from_slice(&val_25000.to_be_bytes());
-        let response_ok = I2cResponse { read_buf, length: 4 };
+        let response_ok = I2cResponse {
+            read_buf,
+            length: 4,
+        };
         tx_i2c_res.send(Ok(response_ok)).unwrap();
 
         let res = oem.receive_response_from_i2c_interface(

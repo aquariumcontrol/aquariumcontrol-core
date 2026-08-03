@@ -618,7 +618,8 @@ impl RelayManager {
 #[cfg(test)]
 #[cfg(not(tarpaulin_include))]
 #[cfg_attr(coverage_nightly, coverage(off))]
-pub mod tests { // unit tests shall not appear in code coverage measurement
+pub mod tests {
+    // unit tests shall not appear in code coverage measurement
     use super::*;
     use crate::launch::channels::channel;
     use crate::launch::execution_config::ExecutionConfig;
@@ -858,7 +859,9 @@ pub mod tests { // unit tests shall not appear in code coverage measurement
         fn actuate(&mut self, _command: &InternalCommand) -> Result<(), RelayError> {
             self.attempts += 1;
             if self.attempts == 1 {
-                Err(RelayError::IncorrectChecksum("checksum mismatch".to_string()))
+                Err(RelayError::IncorrectChecksum(
+                    "checksum mismatch".to_string(),
+                ))
             } else {
                 Ok(())
             }
@@ -879,7 +882,9 @@ pub mod tests { // unit tests shall not appear in code coverage measurement
 
     impl RelayActuationTrait for ChecksumFlushFailActuator {
         fn actuate(&mut self, _command: &InternalCommand) -> Result<(), RelayError> {
-            Err(RelayError::IncorrectChecksum("checksum mismatch".to_string()))
+            Err(RelayError::IncorrectChecksum(
+                "checksum mismatch".to_string(),
+            ))
         }
         fn get_heartbeat_interval_seconds(&self) -> Option<u64> {
             None
@@ -1055,4 +1060,3 @@ pub mod tests { // unit tests shall not appear in code coverage measurement
         relay_manager.execute(&mut channels, &mut actuator).await;
     }
 }
-

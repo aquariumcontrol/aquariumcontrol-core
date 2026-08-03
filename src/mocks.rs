@@ -25,6 +25,7 @@ pub mod mock_relay_manager;
 pub mod mock_schedule_check;
 pub mod mock_signal;
 pub mod mock_signal_handler;
+pub mod mock_simulator;
 pub mod mock_sql_interface_feed;
 pub mod mock_sql_interface_refill;
 pub mod mock_tcp;

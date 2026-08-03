@@ -464,7 +464,8 @@ impl AtlasScientificDriver for AtlasScientificEzo {
 #[cfg(test)]
 #[cfg(not(tarpaulin_include))]
 #[cfg_attr(coverage_nightly, coverage(off))]
-pub mod tests { // unit tests shall not appear in code coverage measurement
+pub mod tests {
+    // unit tests shall not appear in code coverage measurement
     use crate::sensors::atlas_scientific_error::AtlasScientificError;
     use crate::sensors::atlas_scientific_ezo::{
         atlas_scientific_ezo_constants, AtlasScientificEzo,
@@ -818,7 +819,10 @@ pub mod tests { // unit tests shall not appear in code coverage measurement
             &mutex_ph,
             &mutex_cond,
         );
-        assert!(matches!(res_empty, Err(AtlasScientificError::ChannelIsEmpty(_))));
+        assert!(matches!(
+            res_empty,
+            Err(AtlasScientificError::ChannelIsEmpty(_))
+        ));
 
         // 2. IncorrectBufferLength (length = 4 != 8)
         let response_short = I2cResponse {
@@ -919,7 +923,9 @@ pub mod tests { // unit tests shall not appear in code coverage measurement
         };
 
         // device_init returns Ok(())
-        assert!(ezo.device_init(&mut channels, &AquariumSignal::WaterTemperature).is_ok());
+        assert!(ezo
+            .device_init(&mut channels, &AquariumSignal::WaterTemperature)
+            .is_ok());
 
         // get_mutex_access_duration_exceeded for pH and Conductivity
         ezo.mutex_ph_access_duration_exceeded = true;

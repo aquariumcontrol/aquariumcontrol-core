@@ -33,7 +33,6 @@ use aquarium_control::sensors::tank_level_switch_channels::TankLevelSwitchChanne
 
 #[test]
 // test if position stabilized signal is updating when the invalid signal is true
-//
 // [itest->swreq~sensors_tank_level_switch_preprocessing~1]
 pub fn test_refill_calc_tank_level_switch_position_stabilized_false_when_invalid() {
     let mut channels = Channels::new(false, false, true, true);
@@ -70,6 +69,7 @@ pub fn test_refill_calc_tank_level_switch_position_stabilized_false_when_invalid
                 Some(&mut rx_tcp_from_test_environment),
                 false,
                 true,
+                None,
             );
         })
         .unwrap();
@@ -173,10 +173,12 @@ fn execute_blocking(
 /// * `tank_level_switch` - A parameter representing `tank_level_switch`.
 /// * `tank_level_switch_channels` - A parameter representing `tank_level_switch_channels`.
 /// * `mutex_tank_level_switch_signals` - A parameter representing `mutex_tank_level_switch_signals`.
+/// * `assert_cycle_time_warn_flag` - Reference value for assertion
 fn create_test_object(
     mut tank_level_switch: TankLevelSwitch,
     mut tank_level_switch_channels: TankLevelSwitchChannels,
     mutex_tank_level_switch_signals: Arc<Mutex<TankLevelSwitchSignals>>,
+    assert_cycle_time_warn_flag: bool,
 ) -> JoinHandle<()> {
     thread::Builder::new()
         .name("test_object".to_string())
@@ -185,6 +187,14 @@ fn create_test_object(
                 &mut tank_level_switch,
                 &mut tank_level_switch_channels,
                 mutex_tank_level_switch_signals,
+            );
+            println!(
+                "Asserting lock_warn_cycle_time_exceeded is {:?}",
+                assert_cycle_time_warn_flag
+            );
+            assert_eq!(
+                tank_level_switch.lock_warn_cycle_time_exceeded,
+                assert_cycle_time_warn_flag
             );
         })
         .unwrap()
@@ -228,6 +238,7 @@ pub fn test_refill_calc_tank_level_switch_position_stabilized_false_true() {
                 Some(&mut rx_tcp_from_test_environment),
                 false,
                 false,
+                None,
             );
         })
         .unwrap();
@@ -290,6 +301,7 @@ pub fn test_refill_calc_tank_level_switch_position_stabilized_false_true() {
         tank_level_switch,
         channels.tank_level_switch,
         mutex_tank_level_switch_signals,
+        false,
     );
 
     join_handle_test_object
@@ -338,6 +350,7 @@ pub fn test_refill_calc_tank_level_switch_position_stabilized_true_false() {
                 Some(&mut rx_tcp_from_test_environment),
                 true,
                 false,
+                None,
             );
         })
         .unwrap();
@@ -400,6 +413,7 @@ pub fn test_refill_calc_tank_level_switch_position_stabilized_true_false() {
         tank_level_switch,
         channels.tank_level_switch,
         mutex_tank_level_switch_signals,
+        false,
     );
 
     join_handle_test_object
@@ -447,6 +461,7 @@ pub fn test_refill_calc_tank_level_switch_position_stabilized_is_true_with_toggl
                 Some(&mut rx_tcp_from_test_environment),
                 true,
                 false,
+                None,
             );
         })
         .unwrap();
@@ -513,6 +528,7 @@ pub fn test_refill_calc_tank_level_switch_position_stabilized_is_true_with_toggl
         tank_level_switch,
         channels.tank_level_switch,
         mutex_tank_level_switch_signals,
+        false,
     );
 
     join_handle_test_object
@@ -526,6 +542,123 @@ pub fn test_refill_calc_tank_level_switch_position_stabilized_is_true_with_toggl
         .expect("Test environment thread did not finish.");
 
     println!("* [TankLevelSwitch] checking delayed change true -> false for stabilized tank level position when invalid bit is false succeeded.");
+}
+
+#[test]
+// test if the cycle time monitoring is triggered when a delay in communication is applied.
+// [itest->swreq~sensors_tank_level_switch_invalid~1]
+pub fn test_tank_level_switch_cycle_time_monitoring() {
+    let mut channels = Channels::new(false, false, true, true);
+
+    let (mut tx_test_environment_to_tcp, mut rx_tcp_from_test_environment) = channel(1, true);
+
+    let mut config: ConfigData =
+        read_config_file("config/aquarium_control_test_generic.toml".to_string()).unwrap();
+    config.refill.initial_wait_interval = 2;
+    config.refill.check_interval = 60;
+
+    let duration_test_case_part_1: u64 = 4; // three seconds with level switch in low position
+    let duration_test_case_part_2: u64 = 3; // two seconds with level switch in high position
+
+    #[cfg(all(target_os = "linux", feature = "target_hw"))]
+    let tank_level_switch = TankLevelSwitch::new(
+        config.tank_level_switch,
+        false,
+        None,
+        config.gpio_handler.tank_level_switch,
+    )
+    .unwrap();
+    #[cfg(any(not(target_os = "linux"), not(feature = "target_hw")))]
+    let tank_level_switch = TankLevelSwitch::new(config.tank_level_switch, false).unwrap();
+    let mutex_tank_level_switch_signals =
+        Arc::new(Mutex::new(TankLevelSwitchSignals::new(true, true, false)));
+
+    // thread for mock tcp
+    let join_handle_mock_tcp = thread::Builder::new()
+        .name("mock_tcp".to_string())
+        .spawn(move || {
+            mock_tcp_for_tank_level_switch(
+                channels.tcp_communication,
+                Some(&mut rx_tcp_from_test_environment),
+                false,
+                false,
+                Some(Duration::from_millis(1000)),
+            );
+        })
+        .unwrap();
+
+    let mut tx_test_environment_to_tcp_for_test_case_finish = channels
+        .tank_level_switch
+        .tx_tank_level_switch_to_tcp_opt
+        .clone()
+        .unwrap();
+
+    // thread for controlling duration of test run
+    let join_handle_test_environment = thread::Builder::new()
+        .name("test_environment".to_string())
+        .spawn(move || {
+            let sleep_duration_part_1 = Duration::from_secs(duration_test_case_part_1);
+            let sleep_duration_part_2 = Duration::from_secs(duration_test_case_part_2);
+            let sleep_duration_thread_processing = Duration::from_millis(50);
+            let spin_sleeper = SpinSleeper::default();
+            spin_sleeper.sleep(sleep_duration_part_1);
+            let _ = tx_test_environment_to_tcp.send(TestCommand::UpdateSignal(
+                MockSignal::TankLevelSwitchPosition(true),
+            ));
+            spin_sleeper.sleep(sleep_duration_part_2);
+            let _ = channels
+                .signal_handler
+                .tx_signal_handler_to_heating
+                .send(InternalCommand::Quit);
+            let _ = channels
+                .signal_handler
+                .tx_signal_handler_to_refill
+                .send(InternalCommand::Quit);
+            spin_sleeper.sleep(sleep_duration_thread_processing);
+            let _ = channels
+                .signal_handler
+                .tx_signal_handler_to_tank_level_switch
+                .send(InternalCommand::Quit);
+            channels
+                .signal_handler
+                .rx_signal_handler_from_tank_level_switch
+                .blocking_recv()
+                .unwrap();
+            let _ = channels
+                .signal_handler
+                .tx_signal_handler_to_heating
+                .send(InternalCommand::Terminate);
+            let _ = channels
+                .signal_handler
+                .tx_signal_handler_to_refill
+                .send(InternalCommand::Terminate);
+            let _ = tx_test_environment_to_tcp_for_test_case_finish.send(InternalCommand::Quit);
+            let _ = channels
+                .signal_handler
+                .tx_signal_handler_to_tank_level_switch
+                .send(InternalCommand::Terminate);
+        })
+        .unwrap();
+
+    // thread for the test object
+    let join_handle_test_object = create_test_object(
+        tank_level_switch,
+        channels.tank_level_switch,
+        mutex_tank_level_switch_signals,
+        true,
+    );
+
+    join_handle_test_object
+        .join()
+        .expect("Test object thread did not finish.");
+    join_handle_mock_tcp
+        .join()
+        .expect("Mock TCP thread did not finish.");
+    join_handle_test_environment
+        .join()
+        .expect("Test environment thread did not finish.");
+
+    println!("* [TankLevelSwitch] testing immediate change false -> true for stabilized tank level position when invalid bit is false succeeded");
 }
 
 #[cfg(all(target_os = "linux", feature = "target_hw"))]
@@ -705,6 +838,7 @@ pub fn test_refill_calc_tank_level_switch_position_stabilized_false_true_with_mu
                 Some(&mut rx_tcp_from_test_environment),
                 false,
                 false,
+                None,
             );
         })
         .unwrap();

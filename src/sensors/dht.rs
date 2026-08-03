@@ -891,7 +891,8 @@ impl Dht {
 #[cfg(test)]
 #[cfg(not(tarpaulin_include))]
 #[cfg_attr(coverage_nightly, coverage(off))]
-pub mod tests { // unit tests shall not appear in code coverage measurement
+pub mod tests {
+    // unit tests shall not appear in code coverage measurement
     use crate::sensors::dht::{dht22_constants, Dht, DhtError};
     use crate::utilities::logger::setup_logger;
     use crate::utilities::logger_config::LoggerConfig;

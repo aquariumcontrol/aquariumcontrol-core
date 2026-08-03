@@ -771,7 +771,8 @@ impl AtlasScientific {
 #[cfg(test)]
 #[cfg(not(tarpaulin_include))]
 #[cfg_attr(coverage_nightly, coverage(off))]
-pub mod tests { // unit tests shall not appear in code coverage measurement
+pub mod tests {
+    // unit tests shall not appear in code coverage measurement
     use crate::sensors::atlas_scientific::{
         AtlasScientific, AtlasScientificError, AtlasScientificResult, AtlasScientificResultData,
     };
@@ -1160,7 +1161,12 @@ pub mod tests { // unit tests shall not appear in code coverage measurement
         let mutex_cond_inv = Arc::new(Mutex::new(invalid_cond));
 
         atlas.last_sent_monitor_view = None;
-        atlas.check_and_send_monitor_view(&mut channels, &mutex_temp_inv, &mutex_ph_inv, &mutex_cond_inv);
+        atlas.check_and_send_monitor_view(
+            &mut channels,
+            &mutex_temp_inv,
+            &mutex_ph_inv,
+            &mutex_cond_inv,
+        );
         assert!(rx_mon.try_recv().is_err());
     }
 
@@ -1299,7 +1305,10 @@ pub mod tests { // unit tests shall not appear in code coverage measurement
 
         // Get driver error for pH (missing from drivers map)
         let err = atlas.get_driver(&AquariumSignal::pH);
-        assert!(matches!(err, Err(AtlasScientificError::DriverNotFound { .. })));
+        assert!(matches!(
+            err,
+            Err(AtlasScientificError::DriverNotFound { .. })
+        ));
 
         let (tx_mon, _rx_mon) = channel::<AtlasScientificMonitorView>(10, false);
         let (tx_i2c, _rx_i2c) = channel(10, false);
