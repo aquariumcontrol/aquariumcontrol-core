@@ -30,8 +30,7 @@ pub mod tests {
         first_resp_opt: Option<f32>,
     ) {
         // If caller provides valid argument, then return it on first communication
-        if first_resp_opt.is_some() {
-            let first_resp = first_resp_opt.unwrap();
+        if let Some(first_resp) = first_resp_opt {
             let request = rx_simulator_from_test_object.recv().await;
             tx_simulator_to_test_object.send(Ok(first_resp));
         }

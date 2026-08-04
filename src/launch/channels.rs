@@ -86,14 +86,14 @@ use tokio::sync::mpsc::{unbounded_channel, UnboundedReceiver, UnboundedSender};
 
 #[cfg(feature = "debug_channels")]
 pub struct AquaSender<T: Send> {
-    sender: UnboundedSender<T>,
+    sender: Option<UnboundedSender<T>>,
     pub count: u64,
 }
 
 #[cfg(not(feature = "debug_channels"))]
 #[derive(Debug, Clone)]
 pub struct AquaSender<T: Send> {
-    sender: UnboundedSender<T>,
+    sender: Option<UnboundedSender<T>>,
 }
 
 pub struct AquaReceiver<T> {
@@ -112,13 +112,21 @@ pub fn channel<T: Send>(_bound: usize, _is_multi_thread: bool) -> (AquaSender<T>
     #[cfg(feature = "debug_channels")]
     {
         (
-            AquaSender { sender, count: 0 },
+            AquaSender {
+                sender: Some(sender),
+                count: 0,
+            },
             AquaReceiver { receiver, count: 0 },
         )
     }
     #[cfg(not(feature = "debug_channels"))]
     {
-        (AquaSender { sender }, AquaReceiver { receiver })
+        (
+            AquaSender {
+                sender: Some(sender),
+            },
+            AquaReceiver { receiver },
+        )
     }
 }
 
@@ -145,9 +153,17 @@ impl<T: Send> AquaSender<T> {
         {
             self.count += 1;
         }
-        self.sender
+        let sender = self.sender.as_ref().ok_or(AquaChannelError::Disconnected)?;
+
+        sender
             .send(data)
             .map_err(|_| AquaChannelError::Disconnected)
+    }
+
+    /// Drop the channel for testing purposes
+    pub fn disconnect(&mut self) {
+        // Taking the sender out drops it, causing the receiver's `recv()` to fail/disconnect.
+        self.sender.take();
     }
 }
 

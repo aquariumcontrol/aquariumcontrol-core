@@ -73,8 +73,8 @@ pub mod tests {
                         }
                     };
                     // delay before sending to trigger cycle time monitoring
-                    if waiting_time_opt.is_some() {
-                        spin_sleeper.sleep(waiting_time_opt.unwrap());
+                    if let Some(waiting_time) = waiting_time_opt {
+                        spin_sleeper.sleep(waiting_time);
                     }
                     match tx_tcp_to_test_object.send(Ok(response_value)) {
                         Ok(()) => {

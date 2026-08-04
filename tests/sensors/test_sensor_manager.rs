@@ -10,16 +10,20 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 //! Testing the central sensor data aggregation and management thread.
 #![cfg(feature = "test-utils")]
 
-use aquarium_control::launch::channels::Channels;
+use aquarium_control::launch::channels::{channel, Channels};
 use aquarium_control::sensors::atlas_scientific::AtlasScientificResultData;
 use aquarium_control::sensors::ds18b20::Ds18b20ResultData;
 use aquarium_control::sensors::sensor_manager::{
     SensorManager, SensorManagerChannels, SensorManagerError, SensorManagerMutexes,
     SensorManagerSignals,
 };
+use aquarium_control::sensors::sensor_manager_config::SensorManagerConfig;
+use aquarium_control::sensors::sensor_manager_constants::sensor_manager_source_constants;
+use aquarium_control::simulator::tcp_communication_error::TcpCommunicationError;
 use aquarium_control::utilities::channel_content::InternalCommand;
 use aquarium_control::utilities::config::{read_config_file, ConfigData};
 use aquarium_control::utilities::signal_handler_channels::SignalHandlerChannels;
+use aquarium_control::utilities::channel_content::AquariumSignal;
 use spin_sleep::SpinSleeper;
 use std::sync::{Arc, Mutex};
 use std::thread::scope;
@@ -377,4 +381,145 @@ pub fn test_sensor_manager_interfaces_using_ds18b20_as_input_with_mutex_blocked(
             );
         });
     });
+}
+
+// helper function for test case test_sensor_manager_communicate_with_simulator
+async fn sensor_manager_communication_with_simulator(
+    config: SensorManagerConfig,
+    mut response_list: Vec<f32>
+) -> Result<(), SensorManagerError> {
+    let (mut tx_test_env_to_sensor_manager, rx_sensor_manager_from_test_env) =
+        channel::<Result<f32, TcpCommunicationError>>(10, false);
+    let (tx_sensor_manager_to_test_env, mut rx_test_env_from_sensor_manager) =
+        channel::<InternalCommand>(10, false);
+    let (tx_sensor_manager_to_signal_handler, _rx_signal_handler_from_sensor_manager) =
+        channel::<bool>(10, false);
+    let (_tx_signal_handler_to_sensor_manager, rx_sensor_manager_from_signal_handler) =
+        channel::<InternalCommand>(10, false);
+
+    let mut sensor_manager_channels = SensorManagerChannels {
+        tx_sensor_manager_to_tcp_opt: Some(tx_sensor_manager_to_test_env),
+        rx_sensor_manager_from_tcp_opt: Some(rx_sensor_manager_from_test_env),
+        tx_sensor_manager_to_signal_handler,
+        rx_sensor_manager_from_signal_handler,
+    };
+
+    let mut sensor_manager = SensorManager::new(config).unwrap();
+
+    // Spawn the helper task that waits for the command and induces the error
+    let helper_task = tokio::spawn(async move {
+        // send all the stimuli back to test object
+        while !response_list.is_empty() {
+            let _ = rx_test_env_from_sensor_manager.recv().await;
+            let _ = tx_test_env_to_sensor_manager.send(Ok(response_list.remove(0)));
+        }
+        let _ = rx_test_env_from_sensor_manager.recv().await;
+        tx_test_env_to_sensor_manager.disconnect();
+    });
+
+    // Run the simulator communication on a blocking thread because it uses SpinSleeper/blocking logic
+    let result = tokio::task::spawn_blocking(move || {
+        let initial_wait_duration = Duration::from_millis(100);
+        let spin_sleeper = SpinSleeper::default();
+        spin_sleeper.sleep(initial_wait_duration);
+        sensor_manager.communicate_with_simulator(&mut sensor_manager_channels)
+    })
+    .await
+    .unwrap();
+
+    let _ = helper_task.await;
+
+    result
+}
+#[tokio::test]
+// Verifies correct ok and error responses when communicating with simulator
+async fn test_sensor_manager_communicate_with_simulator() {
+    let config = SensorManagerConfig {
+        use_simulator: true,
+        execute: true,
+        replacement_value_ambient_temperature: 20.0,
+        replacement_value_ambient_humidity: 50.0,
+        replacement_value_water_temperature: 25.0,
+        replacement_value_ph: 8.0,
+        replacement_value_conductivity: 50000.0,
+        source_water_temperature:
+            sensor_manager_source_constants::SOURCE_WATER_TEMPERATURE_ATLAS_SCIENTIFIC.to_string(),
+        source_ambient_temperature: sensor_manager_source_constants::SOURCE_AMBIENT_TEMPERATURE_DHT
+            .to_string(),
+    };
+
+
+    // Iteration #1 with empty list to trigger error at first instance of map_error
+    let result = sensor_manager_communication_with_simulator(config.clone(), Vec::new()).await;
+
+    assert!(matches!(
+        result,
+        Err(SensorManagerError::SimulatorCommunicationError {
+            location: _,
+            signal: AquariumSignal::AmbientTemperature,
+            source: _
+        })
+    ));
+
+    // Iteration #2
+    let stimuli = vec![22.0];
+    let result = sensor_manager_communication_with_simulator(config.clone(), stimuli).await;
+
+    assert!(matches!(
+        result,
+        Err(SensorManagerError::SimulatorCommunicationError {
+            location: _,
+            signal: AquariumSignal::AmbientHumidity,
+            source: _
+        })
+    ));
+
+    // Iteration #3
+    let stimuli = vec![22.0, 60.0];
+    let result = sensor_manager_communication_with_simulator(config.clone(), stimuli).await;
+
+    assert!(matches!(
+        result,
+        Err(SensorManagerError::SimulatorCommunicationError {
+            location: _,
+            signal: AquariumSignal::WaterTemperature,
+            source: _
+        })
+    ));
+
+    // Iteration #4
+    let stimuli = vec![22.0, 60.0, 25.5];
+    let result = sensor_manager_communication_with_simulator(config.clone(), stimuli).await;
+
+    assert!(matches!(
+        result,
+        Err(SensorManagerError::SimulatorCommunicationError {
+            location: _,
+            signal: AquariumSignal::Conductivity,
+            source: _
+        })
+    ));
+
+    // Iteration #5
+    let stimuli = vec![22.0, 60.0, 25.5, 50.000];
+    let result = sensor_manager_communication_with_simulator(config.clone(), stimuli).await;
+
+    assert!(matches!(
+        result,
+        Err(SensorManagerError::SimulatorCommunicationError {
+            location: _,
+            signal: AquariumSignal::pH,
+            source: _
+        })
+    ));
+
+    // Iteration #6
+    let stimuli = vec![22.0, 60.0, 25.5, 50.000, 7.0];
+    let result = sensor_manager_communication_with_simulator(config, stimuli).await;
+
+    assert!(matches!(
+        result,
+        Ok(())
+    ));
+
 }

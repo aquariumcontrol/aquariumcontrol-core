@@ -82,8 +82,8 @@ use log::warn;
 use crate::launch::channels::{AquaReceiver, AquaSender};
 use crate::sensors::tank_level_switch_channels::TankLevelSwitchChannels;
 use crate::sensors::tank_level_switch_config::TankLevelSwitchConfig;
-use crate::utilities::check_mutex_access_duration::CheckMutexAccessDurationTrait;
 pub use crate::sensors::tank_level_switch_error::TankLevelSwitchError;
+use crate::utilities::check_mutex_access_duration::CheckMutexAccessDurationTrait;
 use std::time::{Duration, Instant};
 
 cfg_if::cfg_if! {
@@ -952,7 +952,7 @@ pub mod tests {
         let (mut tx_resp, rx_resp) = channel::<Result<f32, TcpCommunicationError>>(10, false);
 
         let mock_simulator_task = tokio::spawn(async move {
-            mock_simulator(&mut tx_resp, &mut rx_req, Some(3.14)).await;
+            mock_simulator(&mut tx_resp, &mut rx_req, Some(42.0)).await;
         });
 
         let test_object_task = tokio::task::spawn_blocking(move || {

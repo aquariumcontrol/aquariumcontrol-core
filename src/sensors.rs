@@ -93,3 +93,6 @@ pub mod atlas_scientific_monitor_view;
 
 // Error definitions for tank level switch
 pub mod tank_level_switch_error;
+
+// Constant definitions for sensors
+pub mod sensor_manager_constants;

@@ -80,6 +80,7 @@ use crate::sensors::ds18b20::Ds18b20ResultData;
 
 pub use crate::sensors::sensor_manager_channels::SensorManagerChannels;
 use crate::sensors::sensor_manager_config::SensorManagerConfig;
+use crate::sensors::sensor_manager_constants::sensor_manager_source_constants;
 use crate::simulator::get_resp_sim::GetResponseFromSimulatorTrait;
 use crate::simulator::tcp_communication_error::TcpCommunicationError;
 use crate::utilities::acknowledge_signal_handler::AcknowledgeSignalHandlerTrait;
@@ -94,45 +95,6 @@ use log::error;
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 use thiserror::Error;
-
-/// Centralizes constants used throughout the `SensorManager` module.
-///
-/// This private module consolidates "magic strings" and other hardcoded values
-/// to prevent them from being scattered throughout the `SensorManager`'s logic.
-/// By keeping them in one place, it improves maintainability and reduces the
-/// risk of typos when comparing against configuration values.
-///
-/// ### Constants
-///
-/// - **Sensor Source Identifiers**:
-///   - `SOURCE_*`: These string constants define the valid values for the
-///     `source_water_temperature` and `source_ambient_temperature` fields in the
-///     `[sensor_manager]` section of the TOML configuration file. They map a
-///     logical measurement to a physical sensor driver (e.g., "ds18b20", "dht").
-///
-/// - **Timing and Performance**:
-///   - `*_MEASUREMENT_INTERVAL_MILLIS`: Define the polling rate for the sensor
-///     manager, with different values for simulator and hardware modes.
-///   - `MAX_MUTEX_ACCESS_DURATION_MILLIS`: Sets a threshold for how long a mutex
-///     lock can be held before a warning is logged. This helps detect performance
-///     bottlenecks or potential deadlocks.
-mod sensor_manager_constants {
-    pub const SOURCE_WATER_TEMPERATURE_ATLAS_SCIENTIFIC: &str = "atlas_scientific";
-
-    pub const SOURCE_WATER_TEMPERATURE_DS18B20: &str = "ds18b20";
-
-    pub const SOURCE_AMBIENT_TEMPERATURE_DHT: &str = "dht";
-
-    pub const SOURCE_AMBIENT_TEMPERATURE_DS18B20: &str = "ds18b20";
-
-    pub const SIMULATOR_MEASUREMENT_INTERVAL_MILLIS: u64 = 500;
-
-    // time interval for updating measurement data
-    pub const HW_MEASUREMENT_INTERVAL_MILLIS: u64 = 500;
-
-    /// allow max. 10 milliseconds for mutex to be blocked by any other thread
-    pub const MAX_MUTEX_ACCESS_DURATION_MILLIS: u64 = 10;
-}
 
 /// Contains `Arc<Mutex>`-wrapped shared data points accessed by the sensor manager.
 ///
@@ -359,28 +321,28 @@ impl SensorManager {
     pub fn new(config: SensorManagerConfig) -> Result<SensorManager, SensorManagerError> {
         // Check if the configuration of the ambient temperature source is valid.
         if config.source_ambient_temperature
-            != sensor_manager_constants::SOURCE_AMBIENT_TEMPERATURE_DHT
+            != sensor_manager_source_constants::SOURCE_AMBIENT_TEMPERATURE_DHT
             && config.source_ambient_temperature
-                != sensor_manager_constants::SOURCE_AMBIENT_TEMPERATURE_DS18B20
+                != sensor_manager_source_constants::SOURCE_AMBIENT_TEMPERATURE_DS18B20
         {
             return Err(SensorManagerError::InvalidAmbientTemperatureConfiguration(
                 module_path!().to_string(),
-                sensor_manager_constants::SOURCE_AMBIENT_TEMPERATURE_DHT.to_string(),
-                sensor_manager_constants::SOURCE_AMBIENT_TEMPERATURE_DS18B20.to_string(),
+                sensor_manager_source_constants::SOURCE_AMBIENT_TEMPERATURE_DHT.to_string(),
+                sensor_manager_source_constants::SOURCE_AMBIENT_TEMPERATURE_DS18B20.to_string(),
                 config.source_ambient_temperature,
             ));
         }
 
         // Check if the configuration of the water temperature source is valid.
         if config.source_water_temperature
-            != sensor_manager_constants::SOURCE_WATER_TEMPERATURE_ATLAS_SCIENTIFIC
+            != sensor_manager_source_constants::SOURCE_WATER_TEMPERATURE_ATLAS_SCIENTIFIC
             && config.source_water_temperature
-                != sensor_manager_constants::SOURCE_WATER_TEMPERATURE_DS18B20
+                != sensor_manager_source_constants::SOURCE_WATER_TEMPERATURE_DS18B20
         {
             return Err(SensorManagerError::InvalidWaterTemperatureConfiguration(
                 module_path!().to_string(),
-                sensor_manager_constants::SOURCE_WATER_TEMPERATURE_ATLAS_SCIENTIFIC.to_string(),
-                sensor_manager_constants::SOURCE_WATER_TEMPERATURE_DS18B20.to_string(),
+                sensor_manager_source_constants::SOURCE_WATER_TEMPERATURE_ATLAS_SCIENTIFIC.to_string(),
+                sensor_manager_source_constants::SOURCE_WATER_TEMPERATURE_DS18B20.to_string(),
                 config.source_water_temperature,
             ));
         }
@@ -390,9 +352,9 @@ impl SensorManager {
 
         // define the measurement interval depending on if simulator or hardware shall be used
         let measurement_interval = if config.use_simulator {
-            Duration::from_millis(sensor_manager_constants::SIMULATOR_MEASUREMENT_INTERVAL_MILLIS)
+            Duration::from_millis(sensor_manager_source_constants::SIMULATOR_MEASUREMENT_INTERVAL_MILLIS)
         } else {
-            Duration::from_millis(sensor_manager_constants::HW_MEASUREMENT_INTERVAL_MILLIS)
+            Duration::from_millis(sensor_manager_source_constants::HW_MEASUREMENT_INTERVAL_MILLIS)
         };
 
         Ok(SensorManager {
@@ -416,7 +378,7 @@ impl SensorManager {
             #[cfg(any(test, feature = "test-utils"))]
             mutex_access_duration_exceeded: false,
             max_mutex_access_duration: Duration::from_millis(
-                sensor_manager_constants::MAX_MUTEX_ACCESS_DURATION_MILLIS,
+                sensor_manager_source_constants::MAX_MUTEX_ACCESS_DURATION_MILLIS,
             ),
         })
     }
@@ -446,7 +408,7 @@ impl SensorManager {
     /// are `None`. This case is not possible because the `SensorManager` module performs checks beforehand to ensure
     /// these channels are `Some` when running in simulator mode.
     /// * `sensor_manager_channels` - A mutable reference to the `SensorManagerChannels` communication interface.
-    fn communicate_with_simulator(
+    pub fn communicate_with_simulator(
         &mut self,
         sensor_manager_channels: &mut SensorManagerChannels,
     ) -> Result<(), SensorManagerError> {
@@ -666,7 +628,7 @@ impl SensorManager {
     pub(crate) fn read_sensor_values_from_mutexes(&mut self, mutexes: &SensorManagerMutexes) {
         //*** Ds18b20 ******************************************************************
         if self.config.source_water_temperature
-            == sensor_manager_constants::SOURCE_WATER_TEMPERATURE_DS18B20
+            == sensor_manager_source_constants::SOURCE_WATER_TEMPERATURE_DS18B20
         {
             match mutexes.mutex_ds18b20_water_temperature.lock() {
                 Ok(ds18b20_water_temperature_result) => {
@@ -687,7 +649,7 @@ impl SensorManager {
             }
         }
         if self.config.source_ambient_temperature
-            == sensor_manager_constants::SOURCE_WATER_TEMPERATURE_DS18B20
+            == sensor_manager_source_constants::SOURCE_WATER_TEMPERATURE_DS18B20
         {
             match mutexes.mutex_ds18b20_ambient_temperature.lock() {
                 Ok(ds18b20_ambient_temperature_result) => {
@@ -714,7 +676,7 @@ impl SensorManager {
                     self.lock_error_dht_mutex = false;
                     if let Ok(tuple) = *dht_result {
                         if self.config.source_ambient_temperature
-                            == sensor_manager_constants::SOURCE_AMBIENT_TEMPERATURE_DHT
+                            == sensor_manager_source_constants::SOURCE_AMBIENT_TEMPERATURE_DHT
                         {
                             self.ambient_temperature = tuple.0;
                         }
@@ -737,7 +699,7 @@ impl SensorManager {
                 Ok(atlas_scientific_temperature) => {
                     self.lock_error_atlas_scientific_temperature_mutex = false;
                     if self.config.source_water_temperature
-                        == sensor_manager_constants::SOURCE_WATER_TEMPERATURE_ATLAS_SCIENTIFIC
+                        == sensor_manager_source_constants::SOURCE_WATER_TEMPERATURE_ATLAS_SCIENTIFIC
                     {
                         self.water_temperature = atlas_scientific_temperature.value;
                     }
@@ -806,9 +768,9 @@ pub mod tests {
             replacement_value_water_temperature: 25.0,
             replacement_value_ph: 8.0,
             replacement_value_conductivity: 50000.0,
-            source_water_temperature: sensor_manager_constants::SOURCE_WATER_TEMPERATURE_DS18B20
+            source_water_temperature: sensor_manager_source_constants::SOURCE_WATER_TEMPERATURE_DS18B20
                 .to_string(),
-            source_ambient_temperature: sensor_manager_constants::SOURCE_WATER_TEMPERATURE_DS18B20
+            source_ambient_temperature: sensor_manager_source_constants::SOURCE_WATER_TEMPERATURE_DS18B20
                 .to_string(),
         };
 
@@ -931,9 +893,9 @@ pub mod tests {
             replacement_value_water_temperature: 25.5,
             replacement_value_ph: 8.1,
             replacement_value_conductivity: 51000.0,
-            source_water_temperature: sensor_manager_constants::SOURCE_WATER_TEMPERATURE_DS18B20
+            source_water_temperature: sensor_manager_source_constants::SOURCE_WATER_TEMPERATURE_DS18B20
                 .to_string(),
-            source_ambient_temperature: sensor_manager_constants::SOURCE_AMBIENT_TEMPERATURE_DHT
+            source_ambient_temperature: sensor_manager_source_constants::SOURCE_AMBIENT_TEMPERATURE_DHT
                 .to_string(),
         };
 
@@ -956,9 +918,9 @@ pub mod tests {
             replacement_value_water_temperature: 25.0,
             replacement_value_ph: 8.0,
             replacement_value_conductivity: 50000.0,
-            source_water_temperature: sensor_manager_constants::SOURCE_WATER_TEMPERATURE_DS18B20
+            source_water_temperature: sensor_manager_source_constants::SOURCE_WATER_TEMPERATURE_DS18B20
                 .to_string(),
-            source_ambient_temperature: sensor_manager_constants::SOURCE_AMBIENT_TEMPERATURE_DHT
+            source_ambient_temperature: sensor_manager_source_constants::SOURCE_AMBIENT_TEMPERATURE_DHT
                 .to_string(),
         };
 
@@ -971,7 +933,7 @@ pub mod tests {
             ))
         ));
         config.source_ambient_temperature =
-            sensor_manager_constants::SOURCE_AMBIENT_TEMPERATURE_DHT.to_string();
+            sensor_manager_source_constants::SOURCE_AMBIENT_TEMPERATURE_DHT.to_string();
 
         // 2. Invalid water temperature source
         config.source_water_temperature = "invalid_water".to_string();
@@ -993,8 +955,8 @@ pub mod tests {
             replacement_value_ph: 8.0,
             replacement_value_conductivity: 50000.0,
             source_water_temperature:
-                sensor_manager_constants::SOURCE_WATER_TEMPERATURE_ATLAS_SCIENTIFIC.to_string(),
-            source_ambient_temperature: sensor_manager_constants::SOURCE_AMBIENT_TEMPERATURE_DHT
+                sensor_manager_source_constants::SOURCE_WATER_TEMPERATURE_ATLAS_SCIENTIFIC.to_string(),
+            source_ambient_temperature: sensor_manager_source_constants::SOURCE_AMBIENT_TEMPERATURE_DHT
                 .to_string(),
         };
 
@@ -1032,9 +994,9 @@ pub mod tests {
             replacement_value_water_temperature: 25.0,
             replacement_value_ph: 8.0,
             replacement_value_conductivity: 50000.0,
-            source_water_temperature: sensor_manager_constants::SOURCE_WATER_TEMPERATURE_DS18B20
+            source_water_temperature: sensor_manager_source_constants::SOURCE_WATER_TEMPERATURE_DS18B20
                 .to_string(),
-            source_ambient_temperature: sensor_manager_constants::SOURCE_AMBIENT_TEMPERATURE_DHT
+            source_ambient_temperature: sensor_manager_source_constants::SOURCE_AMBIENT_TEMPERATURE_DHT
                 .to_string(),
         };
 
