@@ -155,3 +155,198 @@ pub trait GetResponseFromSimulatorTrait {
         }
     }
 }
+
+#[cfg(test)]
+#[cfg(not(tarpaulin_include))]
+#[cfg_attr(coverage_nightly, coverage(off))]
+pub mod tests {
+    use super::*;
+    use crate::launch::channels::channel;
+    use crate::utilities::channel_content::AquariumSignal;
+
+    struct TestRequester;
+    impl GetResponseFromSimulatorTrait for TestRequester {}
+
+    #[tokio::test]
+    // Verifies get_response_from_simulator async returns sensor value for RequestSignal and 0.0 for other commands.
+    // [utest->swreq~simulator_sensor_signals~1]
+    async fn test_get_response_from_simulator_async_happy_path_and_fallback() {
+        let (mut tx_cmd, mut rx_cmd) = channel::<InternalCommand>(10, false);
+        let (mut tx_resp, mut rx_resp) = channel::<Result<f32, TcpCommunicationError>>(10, false);
+
+        // Fallback branch: non-RequestSignal returns Ok(0.0)
+        let res_fallback = TestRequester::get_response_from_simulator(
+            "test_loc".to_string(),
+            &mut tx_cmd,
+            &mut rx_resp,
+            InternalCommand::Quit,
+        )
+        .await;
+        assert_eq!(res_fallback.unwrap(), 0.0);
+
+        // RequestSignal branch: sends signal request and receives response
+        let handle = tokio::spawn(async move {
+            let cmd = rx_cmd.recv().await.unwrap();
+            assert!(matches!(cmd, InternalCommand::RequestSignal(AquariumSignal::WaterTemperature)));
+            tx_resp.send(Ok(25.5)).unwrap();
+        });
+
+        let res = TestRequester::get_response_from_simulator(
+            "test_loc".to_string(),
+            &mut tx_cmd,
+            &mut rx_resp,
+            InternalCommand::RequestSignal(AquariumSignal::WaterTemperature),
+        )
+        .await;
+
+        assert_eq!(res.unwrap(), 25.5);
+        handle.await.unwrap();
+    }
+
+    #[tokio::test]
+    // Verifies get_response_from_simulator async returns SendingToTCPThreadFailed and ReceivingFromTCPThreadFailed on channel disconnections.
+    // [utest->swreq~simulator_sensor_signals~1]
+    async fn test_get_response_from_simulator_async_channel_errors() {
+        // 1. Send error: rx_cmd is dropped
+        let (mut tx_cmd, rx_cmd) = channel::<InternalCommand>(10, false);
+        let (_tx_resp, mut rx_resp) = channel::<Result<f32, TcpCommunicationError>>(10, false);
+        drop(rx_cmd);
+
+        let res_send_err = TestRequester::get_response_from_simulator(
+            "test_loc".to_string(),
+            &mut tx_cmd,
+            &mut rx_resp,
+            InternalCommand::RequestSignal(AquariumSignal::WaterTemperature),
+        )
+        .await;
+        assert!(matches!(
+            res_send_err,
+            Err(TcpCommunicationError::SendingToTCPThreadFailed { .. })
+        ));
+
+        // 2. Recv error: tx_resp is dropped after receiving command
+        let (mut tx_cmd, mut rx_cmd) = channel::<InternalCommand>(10, false);
+        let (tx_resp, mut rx_resp) = channel::<Result<f32, TcpCommunicationError>>(10, false);
+
+        let handle = tokio::spawn(async move {
+            let _ = rx_cmd.recv().await;
+            drop(tx_resp);
+        });
+
+        let res_recv_err = TestRequester::get_response_from_simulator(
+            "test_loc".to_string(),
+            &mut tx_cmd,
+            &mut rx_resp,
+            InternalCommand::RequestSignal(AquariumSignal::WaterTemperature),
+        )
+        .await;
+        assert!(matches!(
+            res_recv_err,
+            Err(TcpCommunicationError::ReceivingFromTCPThreadFailed { .. })
+        ));
+
+        handle.await.unwrap();
+    }
+
+    #[test]
+    // Verifies get_response_from_simulator_blocking returns sensor value for RequestSignal and 0.0 for other commands.
+    // [utest->swreq~simulator_sensor_signals~1]
+    fn test_get_response_from_simulator_blocking_happy_path_and_fallback() {
+        let (mut tx_cmd, mut rx_cmd) = channel::<InternalCommand>(10, false);
+        let (mut tx_resp, mut rx_resp) = channel::<Result<f32, TcpCommunicationError>>(10, false);
+
+        // Fallback branch: non-RequestSignal returns Ok(0.0)
+        let res_fallback = TestRequester::get_response_from_simulator_blocking(
+            "test_loc".to_string(),
+            &mut tx_cmd,
+            &mut rx_resp,
+            InternalCommand::Quit,
+        );
+        assert_eq!(res_fallback.unwrap(), 0.0);
+
+        // RequestSignal branch: sends signal request and receives response
+        let handle = std::thread::spawn(move || {
+            let cmd = rx_cmd.blocking_recv().unwrap();
+            assert!(matches!(cmd, InternalCommand::RequestSignal(AquariumSignal::pH)));
+            tx_resp.send(Ok(7.2)).unwrap();
+        });
+
+        let res = TestRequester::get_response_from_simulator_blocking(
+            "test_loc".to_string(),
+            &mut tx_cmd,
+            &mut rx_resp,
+            InternalCommand::RequestSignal(AquariumSignal::pH),
+        );
+
+        assert_eq!(res.unwrap(), 7.2);
+        handle.join().unwrap();
+    }
+
+    #[test]
+    // Verifies get_response_from_simulator_blocking handles channel send/recv errors and propagates simulator payload errors.
+    // [utest->swreq~simulator_sensor_signals~1]
+    fn test_get_response_from_simulator_blocking_channel_and_inner_errors() {
+        // 1. Send error: rx_cmd is dropped
+        let (mut tx_cmd, rx_cmd) = channel::<InternalCommand>(10, false);
+        let (_tx_resp, mut rx_resp) = channel::<Result<f32, TcpCommunicationError>>(10, false);
+        drop(rx_cmd);
+
+        let res_send_err = TestRequester::get_response_from_simulator_blocking(
+            "test_loc".to_string(),
+            &mut tx_cmd,
+            &mut rx_resp,
+            InternalCommand::RequestSignal(AquariumSignal::WaterTemperature),
+        );
+        assert!(matches!(
+            res_send_err,
+            Err(TcpCommunicationError::SendingToTCPThreadFailed { .. })
+        ));
+
+        // 2. Recv error: tx_resp is dropped
+        let (mut tx_cmd, mut rx_cmd) = channel::<InternalCommand>(10, false);
+        let (tx_resp, mut rx_resp) = channel::<Result<f32, TcpCommunicationError>>(10, false);
+
+        let handle = std::thread::spawn(move || {
+            let _ = rx_cmd.blocking_recv();
+            drop(tx_resp);
+        });
+
+        let res_recv_err = TestRequester::get_response_from_simulator_blocking(
+            "test_loc".to_string(),
+            &mut tx_cmd,
+            &mut rx_resp,
+            InternalCommand::RequestSignal(AquariumSignal::WaterTemperature),
+        );
+        assert!(matches!(
+            res_recv_err,
+            Err(TcpCommunicationError::ReceivingFromTCPThreadFailed { .. })
+        ));
+        handle.join().unwrap();
+
+        // 3. Inner payload error propagation
+        let (mut tx_cmd, mut rx_cmd) = channel::<InternalCommand>(10, false);
+        let (mut tx_resp, mut rx_resp) = channel::<Result<f32, TcpCommunicationError>>(10, false);
+
+        let handle = std::thread::spawn(move || {
+            let _ = rx_cmd.blocking_recv();
+            tx_resp
+                .send(Err(TcpCommunicationError::ResponseContainsNoWords(
+                    "mock_loc".to_string(),
+                )))
+                .unwrap();
+        });
+
+        let res_payload_err = TestRequester::get_response_from_simulator_blocking(
+            "test_loc".to_string(),
+            &mut tx_cmd,
+            &mut rx_resp,
+            InternalCommand::RequestSignal(AquariumSignal::WaterTemperature),
+        );
+        assert!(matches!(
+            res_payload_err,
+            Err(TcpCommunicationError::ResponseContainsNoWords(_))
+        ));
+        handle.join().unwrap();
+    }
+}
+

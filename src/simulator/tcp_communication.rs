@@ -224,6 +224,8 @@ impl TcpCommunication {
     /// - `TcpCommunicationError::ReadingFromStreamFailed`: If a response line cannot be
     ///   read from the simulator, which likely indicates the connection was dropped.
     /// - It will also propagate any errors from `write_stream_check_for_error`.
+    ///
+    /// [impl->swreq~simulator_relay_actuation~1]
     fn change_relay(&mut self, relay_id: u16, state: bool) -> Result<(), TcpCommunicationError> {
         let command = if state {
             debug!(target: module_path!(), "switching on relay #{relay_id}");
@@ -274,6 +276,8 @@ impl TcpCommunication {
     /// - `TcpCommunicationError::ResponseConversionError`: If the last word of the response
     ///   cannot be parsed into an `f32`.
     /// - It will also propagate any errors from `write_stream_check_for_error`.
+    ///
+    /// [impl->swreq~simulator_sensor_signals~1]
     fn get_signal(
         &mut self,
         aquarium_signal: AquariumSignal,
@@ -355,6 +359,8 @@ impl TcpCommunication {
     /// A `Result` which is:
     /// - `Ok(f32)`: In the case of success
     /// - `Err(TcpCommunicationError:)`: in case of failure
+    ///
+    /// [impl->swreq~simulator_sensor_signals~1]
     fn receive_and_answer(
         &mut self,
         rx: &mut AquaReceiver<InternalCommand>,
@@ -451,6 +457,9 @@ impl TcpCommunication {
     ///   channels for communication with other threads,
     ///   including senders/receivers for SensorManager, Tank Level Switch,
     ///   Relay Manager, and the Signal Handler.
+    ///
+    /// [impl->swreq~simulator_sensor_signals~1]
+    /// [impl->swreq~simulator_relay_actuation~1]
     pub fn execute(&mut self, tcp_communication_channels: &mut TcpCommunicationChannels) {
         #[cfg(all(target_os = "linux", not(test)))] // only required in real-life execution
         #[cfg(not(tarpaulin_include))]
@@ -549,3 +558,260 @@ impl TcpCommunication {
         tcp_communication_channels.acknowledge_signal_handler();
     }
 }
+
+#[cfg(test)]
+#[cfg(not(tarpaulin_include))]
+#[cfg_attr(coverage_nightly, coverage(off))]
+pub mod tests {
+    use super::*;
+    use std::io::Write;
+    use std::net::TcpListener;
+    use std::thread;
+
+    #[test]
+    // Verifies get_last_word extracts final space-separated token or returns None when empty.
+    // [utest->swreq~simulator_sensor_signals~1]
+    fn test_get_last_word() {
+        assert_eq!(TcpCommunication::get_last_word("CONTROLLINO READ 1 25.5\n"), Some("25.5"));
+        assert_eq!(TcpCommunication::get_last_word(""), None);
+        assert_eq!(TcpCommunication::get_last_word("   \t\n"), None);
+    }
+
+    #[test]
+    // Verifies TcpCommunication::new returns ConnectionFailed error when connecting to an invalid port.
+    // [utest->swreq~simulator_sensor_signals~1]
+    fn test_new_connection_failed() {
+        let config = TcpCommunicationConfig {
+            ip_address: "127.0.0.1".to_string(),
+            port: 1, // invalid port
+            execute: true,
+        };
+        let exec_config = ExecutionConfig::default();
+        let res = TcpCommunication::new(&config, exec_config);
+        assert!(matches!(res, Err(TcpCommunicationError::ConnectionFailed { .. })));
+    }
+
+    #[test]
+    // Verifies get_signal queries sensor values over TCP and handles illegal signals and response errors.
+    // [utest->swreq~simulator_sensor_signals~1]
+    fn test_get_signal_success_and_errors() {
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let port = listener.local_addr().unwrap().port();
+
+        let handle = thread::spawn(move || {
+            let (mut stream, _) = listener.accept().unwrap();
+            let mut reader = BufReader::new(stream.try_clone().unwrap());
+            let mut line = String::new();
+            // 1. WaterTemperature request
+            reader.read_line(&mut line).unwrap();
+            stream.write_all(b"ATLASSCIENTIFIC READ 1 25.5\n").unwrap();
+
+            // 2. Empty response test
+            line.clear();
+            reader.read_line(&mut line).unwrap();
+            stream.write_all(b"\n").unwrap();
+
+            // 3. Unparsable response test
+            line.clear();
+            reader.read_line(&mut line).unwrap();
+            stream.write_all(b"ATLASSCIENTIFIC READ 1 INVALID\n").unwrap();
+        });
+
+        let config = TcpCommunicationConfig {
+            ip_address: "127.0.0.1".to_string(),
+            port,
+            execute: true,
+        };
+        let exec_config = ExecutionConfig::default();
+        let mut tcp_comm = TcpCommunication::new(&config, exec_config).unwrap();
+
+        // Test 1: valid signal
+        let val = tcp_comm.get_signal(AquariumSignal::WaterTemperature).unwrap();
+        assert_eq!(val, 25.5);
+
+        // Test 2: illegal signal
+        let err_illegal = tcp_comm.get_signal(AquariumSignal::HeatingControlStatus);
+        assert!(matches!(err_illegal, Err(TcpCommunicationError::IllegalSignalRequestToSimulator(..))));
+
+        // Test 3: empty response
+        let err_empty = tcp_comm.get_signal(AquariumSignal::pH);
+        assert!(matches!(err_empty, Err(TcpCommunicationError::ResponseContainsNoWords(..))));
+
+        // Test 4: unparsable response
+        let err_parse = tcp_comm.get_signal(AquariumSignal::Conductivity);
+        assert!(matches!(err_parse, Err(TcpCommunicationError::ResponseConversionError { .. })));
+
+        handle.join().unwrap();
+    }
+
+    #[test]
+    // Verifies change_relay transmits SETSINGLE and UNSETSINGLE commands over TCP.
+    // [utest->swreq~simulator_relay_actuation~1]
+    fn test_change_relay_success() {
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let port = listener.local_addr().unwrap().port();
+
+        let handle = thread::spawn(move || {
+            let (mut stream, _) = listener.accept().unwrap();
+            let mut reader = BufReader::new(stream.try_clone().unwrap());
+            let mut line = String::new();
+
+            // 1. Relay ON
+            reader.read_line(&mut line).unwrap();
+            assert!(line.contains("SETSINGLE"));
+            stream.write_all(b"CONTROLLINO SETSINGLE 1 OK\n").unwrap();
+
+            // 2. Relay OFF
+            line.clear();
+            reader.read_line(&mut line).unwrap();
+            assert!(line.contains("UNSETSINGLE"));
+            stream.write_all(b"CONTROLLINO UNSETSINGLE 1 OK\n").unwrap();
+        });
+
+        let config = TcpCommunicationConfig {
+            ip_address: "127.0.0.1".to_string(),
+            port,
+            execute: true,
+        };
+        let exec_config = ExecutionConfig::default();
+        let mut tcp_comm = TcpCommunication::new(&config, exec_config).unwrap();
+
+        assert!(tcp_comm.change_relay(1, true).is_ok());
+        assert!(tcp_comm.change_relay(1, false).is_ok());
+
+        handle.join().unwrap();
+    }
+
+    #[test]
+    // Verifies receive_and_answer processes RequestSignal commands and returns sensor responses via channel.
+    // [utest->swreq~simulator_sensor_signals~1]
+    fn test_receive_and_answer() {
+        use crate::launch::channels::channel;
+
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let port = listener.local_addr().unwrap().port();
+
+        let handle = thread::spawn(move || {
+            let (mut stream, _) = listener.accept().unwrap();
+            let mut reader = BufReader::new(stream.try_clone().unwrap());
+            let mut line = String::new();
+            reader.read_line(&mut line).unwrap();
+            stream.write_all(b"DHT22 READ 1 22.5\n").unwrap();
+        });
+
+        let config = TcpCommunicationConfig {
+            ip_address: "127.0.0.1".to_string(),
+            port,
+            execute: true,
+        };
+        let exec_config = ExecutionConfig::default();
+        let mut tcp_comm = TcpCommunication::new(&config, exec_config).unwrap();
+
+        let (mut tx_req, mut rx_req) = channel::<InternalCommand>(10, false);
+        let (mut tx_resp, mut rx_resp) = channel::<Result<f32, TcpCommunicationError>>(10, false);
+
+        tx_req.send(InternalCommand::RequestSignal(AquariumSignal::AmbientTemperature)).unwrap();
+        let res = tcp_comm.receive_and_answer(&mut rx_req, &mut tx_resp);
+        assert!(res.is_ok());
+
+        let resp_val = rx_resp.try_recv().unwrap().unwrap();
+        assert_eq!(resp_val, 22.5);
+
+        handle.join().unwrap();
+    }
+
+    #[test]
+    // Verifies execute loop services sensor and relay channels and shuts down cleanly on Quit command.
+    // [utest->swreq~simulator_sensor_signals~1]
+    // [utest->swreq~simulator_relay_actuation~1]
+    fn test_execute_loop_success_and_shutdown() {
+        use crate::launch::channels::channel;
+
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let port = listener.local_addr().unwrap().port();
+
+        let mock_server_handle = thread::spawn(move || {
+            let (mut stream, _) = listener.accept().unwrap();
+            let mut reader = BufReader::new(stream.try_clone().unwrap());
+            let mut line = String::new();
+
+            // 1. Sensor manager request: WaterTemperature
+            reader.read_line(&mut line).unwrap();
+            stream.write_all(b"ATLASSCIENTIFIC READ 1 24.8\n").unwrap();
+
+            // 2. Tank level switch request: TankLevelSwitchPosition
+            line.clear();
+            reader.read_line(&mut line).unwrap();
+            stream.write_all(b"TANKLEVELSWITCH READ 1 1.0\n").unwrap();
+
+            // 3. Relay manager request: SetRelay(1)
+            line.clear();
+            reader.read_line(&mut line).unwrap();
+            stream.write_all(b"CONTROLLINO SETSINGLE 1 OK\n").unwrap();
+        });
+
+        let config = TcpCommunicationConfig {
+            ip_address: "127.0.0.1".to_string(),
+            port,
+            execute: true,
+        };
+        let exec_config = ExecutionConfig {
+            sensor_manager: true,
+            tank_level_switch: true,
+            relay_manager: true,
+            ..ExecutionConfig::default()
+        };
+        let mut tcp_comm = TcpCommunication::new(&config, exec_config).unwrap();
+
+        let (mut tx_sm_req, rx_sm_req) = channel::<InternalCommand>(10, false);
+        let (tx_sm_resp, mut rx_sm_resp) = channel::<Result<f32, TcpCommunicationError>>(10, false);
+
+        let (mut tx_tls_req, rx_tls_req) = channel::<InternalCommand>(10, false);
+        let (tx_tls_resp, mut rx_tls_resp) = channel::<Result<f32, TcpCommunicationError>>(10, false);
+
+        let (mut tx_rm_req, rx_rm_req) = channel::<InternalCommand>(10, false);
+
+        let (mut tx_sig_cmd, rx_sig_cmd) = channel::<InternalCommand>(10, false);
+        let (tx_sig_ack, mut rx_sig_ack) = channel::<bool>(10, false);
+
+        let mut channels = TcpCommunicationChannels {
+            tx_tcp_communication_to_sensor_manager_opt: Some(tx_sm_resp),
+            rx_tcp_communication_from_sensor_manager_opt: Some(rx_sm_req),
+            tx_tcp_communication_to_tank_level_switch_opt: Some(tx_tls_resp),
+            rx_tcp_communication_from_tank_level_switch_opt: Some(rx_tls_req),
+            rx_tcp_communication_from_relay_manager_opt: Some(rx_rm_req),
+            tx_tcp_communication_to_signal_handler: tx_sig_ack,
+            rx_tcp_communication_from_signal_handler: rx_sig_cmd,
+        };
+
+        // Spawn execute in thread
+        let tcp_comm_handle = thread::spawn(move || {
+            tcp_comm.execute(&mut channels);
+        });
+
+        // Send requests
+        tx_sm_req.send(InternalCommand::RequestSignal(AquariumSignal::WaterTemperature)).unwrap();
+        tx_tls_req.send(InternalCommand::RequestSignal(AquariumSignal::TankLevelSwitchPosition)).unwrap();
+        tx_rm_req.send(InternalCommand::SetRelay(1)).unwrap();
+
+        // Verify sensor responses
+        let sm_res = rx_sm_resp.blocking_recv().unwrap().unwrap();
+        assert_eq!(sm_res, 24.8);
+
+        let tls_res = rx_tls_resp.blocking_recv().unwrap().unwrap();
+        assert_eq!(tls_res, 1.0);
+
+        // Send Quit signal to terminate loop
+        tx_sig_cmd.send(InternalCommand::Quit).unwrap();
+
+        tcp_comm_handle.join().unwrap();
+        mock_server_handle.join().unwrap();
+
+        // Verify signal handler acknowledgment
+        let ack = rx_sig_ack.blocking_recv().unwrap();
+        assert!(ack);
+    }
+}
+
+
+

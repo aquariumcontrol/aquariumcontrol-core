@@ -557,4 +557,84 @@ pub mod tests {
         tx_sig.send(InternalCommand::Quit).unwrap();
         interface.execute(&mut channels).await;
     }
+
+    #[tokio::test]
+    // Verifies get_response_from_i2c executes transaction and returns I2cResult.
+    async fn test_get_response_from_i2c_direct() {
+        let config = I2cInterfaceConfig {
+            execute: true,
+            max_read_attempts: 3,
+            timeout_transaction: 100,
+        };
+        let mut interface = I2cInterface::new(config).unwrap();
+        let request = I2cRequest::new(0x63, b"R", 10, 5).unwrap();
+
+        let res = interface.get_response_from_i2c(request).await;
+        assert!(res.is_ok());
+    }
+
+    #[tokio::test]
+    // Verifies execute loop processes incoming I2cRequest and sends I2cResult response to channel.
+    async fn test_execute_processes_i2c_request_success() {
+        let config = I2cInterfaceConfig {
+            execute: true,
+            max_read_attempts: 3,
+            timeout_transaction: 100,
+        };
+        let mut interface = I2cInterface::new(config).unwrap();
+
+        let (mut tx_sig, rx_sig) = channel::<InternalCommand>(10, false);
+        let (mut tx_req, rx_req) = channel::<I2cRequest>(10, false);
+        let (tx_resp, mut rx_resp) = channel(10, false);
+
+        let mut channels = I2cInterfaceChannels {
+            tx_i2c_interface_to_atlas_scientific: tx_resp,
+            rx_i2c_interface_from_atlas_scientific: rx_req,
+            rx_i2c_interface_from_signal_handler: rx_sig,
+        };
+
+        let request = I2cRequest::new(0x63, b"R", 10, 5).unwrap();
+        tx_req.send(request).unwrap();
+
+        let handle = tokio::spawn(async move {
+            interface.execute(&mut channels).await;
+        });
+
+        let response = rx_resp.recv().await;
+        assert!(response.is_ok());
+
+        tx_sig.send(InternalCommand::Quit).unwrap();
+        let _ = handle.await;
+    }
+
+    #[tokio::test]
+    // Verifies execute loop handles disconnected response channel and disconnected request channel.
+    async fn test_execute_handles_send_failure_and_recv_disconnected() {
+        let config = I2cInterfaceConfig {
+            execute: true,
+            max_read_attempts: 3,
+            timeout_transaction: 100,
+        };
+        let mut interface = I2cInterface::new(config).unwrap();
+
+        let (mut tx_sig, rx_sig) = channel::<InternalCommand>(10, false);
+        let (mut tx_req, rx_req) = channel::<I2cRequest>(10, false);
+        let (tx_resp, rx_resp) = channel(10, false);
+
+        drop(rx_resp);
+
+        let mut channels = I2cInterfaceChannels {
+            tx_i2c_interface_to_atlas_scientific: tx_resp,
+            rx_i2c_interface_from_atlas_scientific: rx_req,
+            rx_i2c_interface_from_signal_handler: rx_sig,
+        };
+
+        let request = I2cRequest::new(0x63, b"R", 10, 5).unwrap();
+        tx_req.send(request).unwrap();
+        drop(tx_req);
+        tx_sig.send(InternalCommand::Quit).unwrap();
+
+        interface.execute(&mut channels).await;
+    }
 }
+
