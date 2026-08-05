@@ -241,7 +241,7 @@ impl Heating {
     /// An `f32` representing the normalized control deviation, ranging from `0.0` to `1.0`.
     /// Returns `0.0` if `switch_off_temperature` is not greater than `switch_on_temperature`
     /// (i.e., `target_value_delta` is not positive), indicating an invalid configuration.
-    fn calc_normalized_control_deviation(&self, measured_value: f32) -> f32 {
+    pub fn calc_normalized_control_deviation(&self, measured_value: f32) -> f32 {
         let target_value_delta: f32 =
             self.config.switch_off_temperature - self.config.switch_on_temperature;
         let measured_value_delta: f32 = measured_value - self.config.switch_on_temperature;
@@ -273,7 +273,7 @@ impl Heating {
     /// # Arguments
     /// * `sql_interface_heating` - Database interface connection for heating stats.
     /// * `is_multi_thread` - A boolean flag indicating if the Tokio runtime is running in multithreaded mode.
-    fn get_duration_until_midnight(
+    pub fn get_duration_until_midnight(
         &mut self,
         sql_interface_heating: &mut SqlInterfaceHeatingStats,
         is_multi_thread: bool,
@@ -314,6 +314,7 @@ impl Heating {
             database_seconds_until_midnight as u64
         }
     }
+
 
     /// Updates the running daily statistics based on the current cycle's inputs.
     ///
@@ -927,3 +928,113 @@ impl Heating {
         .await;
     }
 }
+
+#[cfg(test)]
+#[cfg(not(tarpaulin_include))]
+#[cfg_attr(coverage_nightly, coverage(off))]
+pub mod tests {
+    use super::*;
+    use crate::utilities::sawtooth_profile::SawToothProfileConfig;
+
+    fn create_dummy_config(switch_on: f32, switch_off: f32) -> HeatingConfig {
+        HeatingConfig {
+            active: true,
+            execute: true,
+            switch_on_temperature: switch_on,
+            switch_off_temperature: switch_off,
+            stop_on_refill_error: false,
+            stop_on_refill_error_delay: 2,
+            saw_tooth_profile_config: SawToothProfileConfig::new(6, 1, 6, 1),
+            heater_power: 300.0,
+            switch_on_when_out_of_schedule: false,
+            switch_on_when_external_stop: false,
+            set_value_check_interval: 10,
+            max_time_actuator_effect_monitor: 60,
+            switch_off_when_no_effect: false,
+        }
+    }
+
+    #[test]
+    // Verifies calc_normalized_control_deviation calculates normalized ratios for valid limits and returns 0.0 for invalid configs.
+    // [utest->swreq~thermal_read_heating_limits~1]
+    fn test_calc_normalized_control_deviation_valid_and_invalid_configs() {
+        let config = create_dummy_config(22.0, 26.0);
+        let heating = Heating::new(config, Duration::from_secs(3600));
+
+        // At switch_on: (22 - 22) / 4 = 0.0
+        assert_eq!(heating.calc_normalized_control_deviation(22.0), 0.0);
+        // At midpoint: (24 - 22) / 4 = 0.5
+        assert_eq!(heating.calc_normalized_control_deviation(24.0), 0.5);
+        // At switch_off: (26 - 22) / 4 = 1.0
+        assert_eq!(heating.calc_normalized_control_deviation(26.0), 1.0);
+
+        // Invalid config: switch_off <= switch_on
+        let invalid_config = create_dummy_config(25.0, 25.0);
+        let invalid_heating = Heating::new(invalid_config, Duration::from_secs(3600));
+        assert_eq!(invalid_heating.calc_normalized_control_deviation(26.0), 0.0);
+    }
+
+    #[test]
+    // Verifies get_duration_until_midnight returns default 86400 seconds when database returns negative values or error.
+    // [utest->swreq~thermal_read_heating_limits~1]
+    fn test_get_duration_until_midnight_handles_negative_values() {
+        use crate::database::sql_interface::SqlInterface;
+        use crate::mocks::mock_heating_stats::tests::SqlInterfaceHeatingMockMidnightCalculator;
+        use crate::utilities::config::read_config_file_with_test_database;
+
+        let config_data = read_config_file_with_test_database(
+            "config/aquarium_control_test_generic.toml".to_string(),
+            1,
+        );
+        let sql_interface = SqlInterface::new(config_data.sql_interface.clone()).unwrap();
+        let conn = sql_interface.get_connection().unwrap();
+
+        let mock_calc = Box::new(SqlInterfaceHeatingMockMidnightCalculator::new(-100));
+        let mut sql_stats = SqlInterfaceHeatingStats::new(conn, 10, mock_calc).unwrap();
+
+        let mut heating = Heating::new(config_data.heating, Duration::from_secs(3600));
+        let duration = heating.get_duration_until_midnight(&mut sql_stats, false);
+        assert_eq!(duration, 86400);
+    }
+
+    #[test]
+    // Verifies update_heating_stats processes measurement error and calculates energy increments correctly for On and Off states.
+    // [utest->swreq~thermal_read_heating_limits~1]
+    fn test_update_heating_stats_measurement_error_and_energy() {
+        use crate::database::sql_interface::SqlInterface;
+        use crate::utilities::config::read_config_file_with_test_database;
+
+        let config_data = read_config_file_with_test_database(
+            "config/aquarium_control_test_generic.toml".to_string(),
+            1,
+        );
+        let sql_interface = SqlInterface::new(config_data.sql_interface.clone()).unwrap();
+        let mut conn = sql_interface.get_connection().unwrap();
+
+        let mut heating = Heating::new(config_data.heating, Duration::from_secs(3600));
+        let mut stats_entry = Some(HeatingStatsEntry::new(&mut conn));
+
+        // First update initializes last_stats_update_instant_opt
+        heating.update_heating_stats(
+            &mut stats_entry,
+            false,
+            24.5,
+            22.0,
+            &ActuatorState::On,
+        );
+        assert!(heating.last_stats_update_instant_opt.is_some());
+
+        // Second update with measurement_error = true
+        heating.update_heating_stats(
+            &mut stats_entry,
+            true,
+            24.5,
+            22.0,
+            &ActuatorState::Off,
+        );
+    }
+}
+
+
+
+

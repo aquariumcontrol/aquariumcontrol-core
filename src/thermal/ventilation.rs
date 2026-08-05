@@ -309,7 +309,7 @@ impl Ventilation {
     /// An `f32` representing the normalized control deviation, ranging from `0.0` to `1.0`.
     /// Returns `0.0` if `switch_on_temperature` is not greater than `switch_off_temperature`
     /// (i.e., `target_value_delta` is not positive), indicating an invalid configuration.
-    fn calc_normalized_control_deviation(&self, measured_value: f32) -> f32 {
+    pub fn calc_normalized_control_deviation(&self, measured_value: f32) -> f32 {
         let target_value_delta: f32 =
             self.config.switch_on_temperature - self.config.switch_off_temperature;
         let measured_value_delta: f32 = measured_value - self.config.switch_off_temperature;
@@ -319,6 +319,7 @@ impl Ventilation {
             0.0 // default value when target values are not properly set up.
         }
     }
+
 
     /// Conditionally switches the ventilation device ON or OFF based on a boolean condition.
     ///
@@ -699,3 +700,61 @@ impl Ventilation {
         .await;
     }
 }
+
+#[cfg(test)]
+#[cfg(not(tarpaulin_include))]
+#[cfg_attr(coverage_nightly, coverage(off))]
+pub mod tests {
+    use super::*;
+    use crate::utilities::sawtooth_profile::SawToothProfileConfig;
+
+    fn create_dummy_config(switch_off: f32, switch_on: f32) -> VentilationConfig {
+        VentilationConfig {
+            active: true,
+            execute: true,
+            switch_off_temperature: switch_off,
+            switch_on_temperature: switch_on,
+            saw_tooth_profile_config: SawToothProfileConfig::new(6, 1, 6, 1),
+            switch_on_when_out_of_schedule: false,
+            switch_on_when_external_stop: false,
+            switch_on_when_terminating: false,
+            set_value_check_interval: 10,
+            max_time_actuator_effect_monitor: 60,
+            switch_off_when_no_effect: false,
+        }
+    }
+
+    #[test]
+    // Verifies calc_normalized_control_deviation calculates normalized ratios for valid ventilation limits and returns 0.0 for invalid configs.
+    // [utest->swreq~thermal_read_ventilation_limits~1]
+    fn test_calc_normalized_control_deviation_valid_and_invalid_configs() {
+        let config = create_dummy_config(25.0, 29.0);
+        let ventilation = Ventilation::new(config);
+
+        // At switch_off: 1.0 - (25 - 25)/4 = 1.0
+        assert_eq!(ventilation.calc_normalized_control_deviation(25.0), 1.0);
+        // At midpoint: 1.0 - (27 - 25)/4 = 0.5
+        assert_eq!(ventilation.calc_normalized_control_deviation(27.0), 0.5);
+        // At switch_on: 1.0 - (29 - 25)/4 = 0.0
+        assert_eq!(ventilation.calc_normalized_control_deviation(29.0), 0.0);
+
+        // Invalid config: switch_on <= switch_off
+        let invalid_config = create_dummy_config(25.0, 25.0);
+        let invalid_ventilation = Ventilation::new(invalid_config);
+        assert_eq!(invalid_ventilation.calc_normalized_control_deviation(27.0), 0.0);
+    }
+
+    #[test]
+    // Verifies Ventilation::new initializes struct fields and lock flags correctly.
+    // [utest->swreq~thermal_read_ventilation_limits~1]
+    fn test_ventilation_new_initialization() {
+        let config = create_dummy_config(25.0, 29.0);
+        let ventilation = Ventilation::new(config);
+
+        assert!(ventilation.config.active);
+        assert!(!ventilation.lock_warn_max_mutex_access_duration);
+        assert!(!ventilation.actuator_disabled);
+        assert!(ventilation.last_actuator_on_time.is_none());
+    }
+}
+

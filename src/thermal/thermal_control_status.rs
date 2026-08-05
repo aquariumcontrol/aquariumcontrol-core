@@ -35,3 +35,42 @@ impl ThermalControlStatus {
         }
     }
 }
+
+#[cfg(test)]
+#[cfg(not(tarpaulin_include))]
+#[cfg_attr(coverage_nightly, coverage(off))]
+pub mod tests {
+    use super::*;
+
+    #[test]
+    // Verifies description returns ACTIVE, STOPPED, or ERROR based on status flags and precedence.
+    // [utest->swreq~thermal_read_heating_limits~1]
+    fn test_thermal_control_status_description() {
+        let mut status = ThermalControlStatus::default();
+        assert_eq!(status.description(), "ACTIVE");
+
+        status.actuator_disabled = true;
+        assert_eq!(status.description(), "ERROR");
+
+        status.external_inhibition_request = true;
+        assert_eq!(status.description(), "STOPPED");
+
+        status.actuator_disabled = false;
+        assert_eq!(status.description(), "STOPPED");
+    }
+
+    #[test]
+    // Verifies Default initialization and Clone implementation of ThermalControlStatus.
+    // [utest->swreq~thermal_read_heating_limits~1]
+    fn test_thermal_control_status_default_and_clone() {
+        let status = ThermalControlStatus::default();
+        assert!(!status.actuator_switched_on);
+        assert!(!status.actuator_ineffective);
+        assert!(!status.actuator_disabled);
+        assert!(!status.external_inhibition_request);
+
+        let cloned_status = status.clone();
+        assert_eq!(cloned_status.description(), status.description());
+    }
+}
+

@@ -228,6 +228,8 @@ pub fn calculate_least_squares_gradient(samples: &VecDeque<(f64, f64)>) -> f64 {
 }
 
 #[cfg(test)]
+#[cfg(not(tarpaulin_include))]
+#[cfg_attr(coverage_nightly, coverage(off))]
 mod tests {
     use super::*;
     use crate::thermal::temperature_gradient_config::TemperatureGradientConfig;
