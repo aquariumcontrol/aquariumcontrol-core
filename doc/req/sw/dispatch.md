@@ -18,3 +18,14 @@ Covers:
 * sysreq~general1~1
 Needs: impl, utest
 
+### [dispatch] IPC Message Binary Encoding and Decoding
+`swreq~dispatch_ipc_message_encoding~1`
+
+The messaging module shall provide binary serialization (`to_bytes`) and deserialization (`from_bytes`) routines for POSIX IPC message payloads, converting between structured `Message` fields and fixed-length byte buffers.
+
+Covers:
+
+* sysreq~messaging~1
+Needs: impl, utest
+
+
