@@ -435,4 +435,105 @@ pub mod tests {
             "lock_error_receive_atlas_scientific should reset on Empty"
         );
     }
+
+    #[test]
+    // Verifies append_refill_monitor_view appends views and evicts oldest elements when exceeding max length.
+    // [utest->swreq~watchmen_self_monitoring~1]
+    fn test_append_refill_monitor_view_max_capacity_eviction() {
+        let config = MonitorsConfig {
+            active: true,
+            execute: true,
+            max_length_refill_monitor_views: 2,
+            max_length_atlas_scientific_monitor_views: 10,
+        };
+        let mut monitors = Monitors::new(config);
+
+        let view1 = RefillMonitorView {
+            refill_check_count_last_24h: false,
+            ..Default::default()
+        };
+        let view2 = RefillMonitorView {
+            refill_check_count_last_24h: true,
+            ..Default::default()
+        };
+        let view3 = RefillMonitorView {
+            refill_check_volume_last_24h: true,
+            ..Default::default()
+        };
+
+        monitors.append_refill_monitor_view(view1);
+        monitors.append_refill_monitor_view(view2);
+        assert_eq!(monitors.refill_monitor_views.len(), 2);
+
+        // Appending 3rd view should evict view1 (index 0)
+        monitors.append_refill_monitor_view(view3);
+        assert_eq!(monitors.refill_monitor_views.len(), 2);
+        assert!(monitors.refill_monitor_views[0].refill_check_count_last_24h);
+        assert!(!monitors.refill_monitor_views[0].refill_check_volume_last_24h);
+        assert!(monitors.refill_monitor_views[1].refill_check_volume_last_24h);
+    }
+
+    #[test]
+    // Verifies append_atlas_scientific_monitor_view appends views and evicts oldest elements when exceeding max length.
+    // [utest->swreq~watchmen_self_monitoring~1]
+    fn test_append_atlas_scientific_monitor_view_max_capacity_eviction() {
+        let config = MonitorsConfig {
+            active: true,
+            execute: true,
+            max_length_refill_monitor_views: 10,
+            max_length_atlas_scientific_monitor_views: 2,
+        };
+        let mut monitors = Monitors::new(config);
+
+        let view1 = AtlasScientificMonitorView {
+            ph_out_of_range: false,
+            temperature_out_of_range: false,
+            conductivity_out_of_range: false,
+        };
+        let view2 = AtlasScientificMonitorView {
+            ph_out_of_range: true,
+            temperature_out_of_range: false,
+            conductivity_out_of_range: false,
+        };
+        let view3 = AtlasScientificMonitorView {
+            ph_out_of_range: true,
+            temperature_out_of_range: true,
+            conductivity_out_of_range: true,
+        };
+
+        monitors.append_atlas_scientific_monitor_view(view1);
+        monitors.append_atlas_scientific_monitor_view(view2);
+        assert_eq!(monitors.atlas_scientific_monitor_views.len(), 2);
+
+        // Appending 3rd view should evict view1 (index 0)
+        monitors.append_atlas_scientific_monitor_view(view3);
+        assert_eq!(monitors.atlas_scientific_monitor_views.len(), 2);
+        assert!(monitors.atlas_scientific_monitor_views[0].ph_out_of_range);
+        assert!(!monitors.atlas_scientific_monitor_views[0].temperature_out_of_range);
+        assert!(monitors.atlas_scientific_monitor_views[1].temperature_out_of_range);
+    }
+
+    #[test]
+    // Verifies log flood protection error locks reset when receiving valid Ok results.
+    // [utest->swreq~watchmen_log_flood_protection~1]
+    fn test_log_flood_protection_reset_on_ok_result() {
+        let config = MonitorsConfig {
+            active: true,
+            execute: true,
+            max_length_refill_monitor_views: 10,
+            max_length_atlas_scientific_monitor_views: 10,
+        };
+        let mut monitors = Monitors::new(config);
+
+        monitors.handle_refill_receive_log_flood(&Err(AquaChannelError::Disconnected));
+        assert!(monitors.lock_error_receive_refill);
+        monitors.handle_refill_receive_log_flood(&Ok(RefillMonitorView::default()));
+        assert!(!monitors.lock_error_receive_refill);
+
+        monitors.handle_atlas_scientific_receive_log_flood(&Err(AquaChannelError::Disconnected));
+        assert!(monitors.lock_error_receive_atlas_scientific);
+        monitors
+            .handle_atlas_scientific_receive_log_flood(&Ok(AtlasScientificMonitorView::default()));
+        assert!(!monitors.lock_error_receive_atlas_scientific);
+    }
 }

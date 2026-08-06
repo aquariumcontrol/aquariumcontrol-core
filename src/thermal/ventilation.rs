@@ -320,7 +320,6 @@ impl Ventilation {
         }
     }
 
-
     /// Conditionally switches the ventilation device ON or OFF based on a boolean condition.
     ///
     /// This private helper function encapsulates the logic for changing the ventilation's
@@ -741,7 +740,10 @@ pub mod tests {
         // Invalid config: switch_on <= switch_off
         let invalid_config = create_dummy_config(25.0, 25.0);
         let invalid_ventilation = Ventilation::new(invalid_config);
-        assert_eq!(invalid_ventilation.calc_normalized_control_deviation(27.0), 0.0);
+        assert_eq!(
+            invalid_ventilation.calc_normalized_control_deviation(27.0),
+            0.0
+        );
     }
 
     #[test]
@@ -757,4 +759,3 @@ pub mod tests {
         assert!(ventilation.last_actuator_on_time.is_none());
     }
 }
-

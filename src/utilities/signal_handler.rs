@@ -672,7 +672,6 @@ pub mod tests {
         .await;
     }
 
-
     #[tokio::test]
     #[should_panic(expected = "inconsistent channel parameters")]
     // Verifies handle_signals panics when TCP communication channels are inconsistent.
@@ -685,8 +684,12 @@ pub mod tests {
         channels.signal_handler.rx_signal_handler_from_tcp_opt = None; // Inconsistent!
 
         let config = ExecutionConfig::default();
-        handle_signals(term, channels.signal_handler, config, Some(Duration::from_millis(50))).await;
+        handle_signals(
+            term,
+            channels.signal_handler,
+            config,
+            Some(Duration::from_millis(50)),
+        )
+        .await;
     }
 }
-
-

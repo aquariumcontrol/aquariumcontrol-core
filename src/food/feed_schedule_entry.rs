@@ -160,6 +160,8 @@ impl fmt::Display for FeedScheduleEntry {
 }
 
 #[cfg(test)]
+#[cfg(not(tarpaulin_include))]
+#[cfg_attr(coverage_nightly, coverage(off))]
 mod tests {
     use super::*;
     use chrono::NaiveDate;

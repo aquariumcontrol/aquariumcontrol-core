@@ -96,8 +96,6 @@ use crate::simulator::get_resp_sim::GetResponseFromSimulatorTrait;
 use crate::simulator::tcp_communication_error::TcpCommunicationError;
 use crate::utilities::acknowledge_signal_handler::AcknowledgeSignalHandlerTrait;
 use crate::utilities::channel_content::{AquariumSignal, InternalCommand};
-#[cfg(all(not(test), not(feature = "test-utils")))]
-#[cfg(not(tarpaulin_include))]
 use crate::utilities::logger::log_error_chain;
 use crate::utilities::proc_ext_req::ProcessExternalRequestTrait;
 use crate::utilities::wait_for_termination::WaitForTerminationTrait;
@@ -649,8 +647,6 @@ impl TankLevelSwitch {
             if matches!(e, TankLevelSwitchError::InputPinNotProvided(_)) {
                 // [impl->swreq~sensors_log_flood_protection~1]
                 if !self.lock_error_input_pin_none {
-                    #[cfg(all(not(test), not(feature = "test-utils")))]
-                    #[cfg(not(tarpaulin_include))]
                     log_error_chain(
                         // not required during testing
                         module_path!(),
@@ -662,8 +658,6 @@ impl TankLevelSwitch {
             } else if matches!(e, TankLevelSwitchError::SimulatorCommunicationError { .. }) {
                 // [impl->swreq~sensors_log_flood_protection~1]
                 if !self.lock_error_simulator_communication {
-                    #[cfg(all(not(test), not(feature = "test-utils")))]
-                    #[cfg(not(tarpaulin_include))]
                     log_error_chain(
                         // not required during testing
                         module_path!(),
@@ -675,8 +669,6 @@ impl TankLevelSwitch {
             } else if matches!(e, TankLevelSwitchError::SimulatorChannelNotProvided(_)) {
                 // [impl->swreq~sensors_log_flood_protection~1]
                 if !self.lock_error_channel_not_provided {
-                    #[cfg(all(not(test), not(feature = "test-utils")))]
-                    #[cfg(not(tarpaulin_include))]
                     log_error_chain(
                         // not required during testing
                         module_path!(),
@@ -686,8 +678,6 @@ impl TankLevelSwitch {
                     self.lock_error_channel_not_provided = true;
                 }
             } else {
-                #[cfg(all(not(test), not(feature = "test-utils")))]
-                #[cfg(not(tarpaulin_include))]
                 log_error_chain(
                     // not required during testing
                     module_path!(),

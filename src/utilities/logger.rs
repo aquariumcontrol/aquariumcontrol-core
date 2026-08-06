@@ -42,6 +42,7 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 //! 5. The application has the necessary permissions to create and write to the log file.
 
 use crate::utilities::logger_config::LoggerConfig;
+#[cfg(all(not(test), not(feature = "test-utils")))]
 use log::error;
 use std::error::Error;
 use std::path::Path;
@@ -174,12 +175,16 @@ pub fn setup_logger(logger_config: LoggerConfig) -> Result<(), LoggerSetupError>
 /// * `context` - additional description of error
 /// * `error` - Top level error
 ///
+#[allow(unused)]
 pub fn log_error_chain<E: Error>(module: &str, context: &str, error: E) {
-    error!(target: module,"{context} ({error})");
-    let mut source = error.source();
-    while let Some(cause) = source {
-        error!("  Caused by: {cause}");
-        source = cause.source();
+    #[cfg(all(not(test), not(feature = "test-utils")))]
+    {
+        error!(target: module,"{context} ({error})");
+        let mut source = error.source();
+        while let Some(cause) = source {
+            error!("  Caused by: {cause}");
+            source = cause.source();
+        }
     }
 }
 

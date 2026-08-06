@@ -187,7 +187,10 @@ pub mod tests {
         // RequestSignal branch: sends signal request and receives response
         let handle = tokio::spawn(async move {
             let cmd = rx_cmd.recv().await.unwrap();
-            assert!(matches!(cmd, InternalCommand::RequestSignal(AquariumSignal::WaterTemperature)));
+            assert!(matches!(
+                cmd,
+                InternalCommand::RequestSignal(AquariumSignal::WaterTemperature)
+            ));
             tx_resp.send(Ok(25.5)).unwrap();
         });
 
@@ -267,7 +270,10 @@ pub mod tests {
         // RequestSignal branch: sends signal request and receives response
         let handle = std::thread::spawn(move || {
             let cmd = rx_cmd.blocking_recv().unwrap();
-            assert!(matches!(cmd, InternalCommand::RequestSignal(AquariumSignal::pH)));
+            assert!(matches!(
+                cmd,
+                InternalCommand::RequestSignal(AquariumSignal::pH)
+            ));
             tx_resp.send(Ok(7.2)).unwrap();
         });
 
@@ -349,4 +355,3 @@ pub mod tests {
         handle.join().unwrap();
     }
 }
-

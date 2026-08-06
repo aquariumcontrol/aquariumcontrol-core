@@ -73,4 +73,3 @@ pub mod tests {
         assert_eq!(cloned_status.description(), status.description());
     }
 }
-

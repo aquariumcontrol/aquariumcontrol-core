@@ -37,3 +37,43 @@ impl RefillStatus {
         }
     }
 }
+
+#[cfg(test)]
+#[cfg(not(tarpaulin_include))]
+#[cfg_attr(coverage_nightly, coverage(off))]
+pub mod tests {
+    use super::*;
+
+    #[test]
+    // Verifies RefillStatus default trait initialization.
+    // [utest->swreq~water_determine_refill~1]
+    fn test_refill_status_default() {
+        let status = RefillStatus::default();
+        assert!(!status.refill_in_progress_live);
+        assert!(!status.refill_in_progress_for_database);
+        assert!(!status.critical_error_present);
+        assert!(!status.external_inhibition_request);
+    }
+
+    #[test]
+    // Verifies RefillStatus description output and flag precedence.
+    // [utest->swreq~water_determine_refill~1]
+    fn test_refill_status_description() {
+        let mut status = RefillStatus::default();
+
+        // 1. Default -> ACTIVE
+        assert_eq!(status.description(), "ACTIVE");
+
+        // 2. Critical error -> ERROR
+        status.critical_error_present = true;
+        assert_eq!(status.description(), "ERROR");
+
+        // 3. External inhibition request -> STOPPED (takes precedence over ERROR)
+        status.external_inhibition_request = true;
+        assert_eq!(status.description(), "STOPPED");
+
+        // 4. External inhibition request without error -> STOPPED
+        status.critical_error_present = false;
+        assert_eq!(status.description(), "STOPPED");
+    }
+}

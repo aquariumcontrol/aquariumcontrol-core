@@ -86,8 +86,6 @@ use crate::simulator::tcp_communication_error::TcpCommunicationError;
 use crate::utilities::acknowledge_signal_handler::AcknowledgeSignalHandlerTrait;
 use crate::utilities::channel_content::{AquariumSignal, InternalCommand};
 use crate::utilities::check_mutex_access_duration::CheckMutexAccessDurationTrait;
-#[cfg(all(not(test), not(feature = "test-utils")))]
-#[cfg(not(tarpaulin_include))]
 use crate::utilities::logger::log_error_chain;
 use crate::utilities::proc_ext_req::ProcessExternalRequestTrait;
 use crate::utilities::wait_for_termination::WaitForTerminationTrait;
@@ -341,7 +339,8 @@ impl SensorManager {
         {
             return Err(SensorManagerError::InvalidWaterTemperatureConfiguration(
                 module_path!().to_string(),
-                sensor_manager_source_constants::SOURCE_WATER_TEMPERATURE_ATLAS_SCIENTIFIC.to_string(),
+                sensor_manager_source_constants::SOURCE_WATER_TEMPERATURE_ATLAS_SCIENTIFIC
+                    .to_string(),
                 sensor_manager_source_constants::SOURCE_WATER_TEMPERATURE_DS18B20.to_string(),
                 config.source_water_temperature,
             ));
@@ -352,7 +351,9 @@ impl SensorManager {
 
         // define the measurement interval depending on if simulator or hardware shall be used
         let measurement_interval = if config.use_simulator {
-            Duration::from_millis(sensor_manager_source_constants::SIMULATOR_MEASUREMENT_INTERVAL_MILLIS)
+            Duration::from_millis(
+                sensor_manager_source_constants::SIMULATOR_MEASUREMENT_INTERVAL_MILLIS,
+            )
         } else {
             Duration::from_millis(sensor_manager_source_constants::HW_MEASUREMENT_INTERVAL_MILLIS)
         };
@@ -560,8 +561,6 @@ impl SensorManager {
                         self.communicate_with_simulator(sensor_manager_channels)
                     });
                     if result.is_err() {
-                        #[cfg(all(not(test), not(feature = "test-utils")))]
-                        #[cfg(not(tarpaulin_include))]
                         log_error_chain(
                             // not required during testing
                             module_path!(),
@@ -589,8 +588,6 @@ impl SensorManager {
                             sensor_manager_signals.instant_last_recording = Instant::now();
                         }
                         Err(_e) => {
-                            #[cfg(all(not(test), not(feature = "test-utils")))]
-                            #[cfg(not(tarpaulin_include))]
                             log_error_chain(
                                 // not required during testing
                                 module_path!(),
@@ -768,10 +765,10 @@ pub mod tests {
             replacement_value_water_temperature: 25.0,
             replacement_value_ph: 8.0,
             replacement_value_conductivity: 50000.0,
-            source_water_temperature: sensor_manager_source_constants::SOURCE_WATER_TEMPERATURE_DS18B20
-                .to_string(),
-            source_ambient_temperature: sensor_manager_source_constants::SOURCE_WATER_TEMPERATURE_DS18B20
-                .to_string(),
+            source_water_temperature:
+                sensor_manager_source_constants::SOURCE_WATER_TEMPERATURE_DS18B20.to_string(),
+            source_ambient_temperature:
+                sensor_manager_source_constants::SOURCE_WATER_TEMPERATURE_DS18B20.to_string(),
         };
 
         let mut sensor_manager = SensorManager::new(config).unwrap();
@@ -893,10 +890,10 @@ pub mod tests {
             replacement_value_water_temperature: 25.5,
             replacement_value_ph: 8.1,
             replacement_value_conductivity: 51000.0,
-            source_water_temperature: sensor_manager_source_constants::SOURCE_WATER_TEMPERATURE_DS18B20
-                .to_string(),
-            source_ambient_temperature: sensor_manager_source_constants::SOURCE_AMBIENT_TEMPERATURE_DHT
-                .to_string(),
+            source_water_temperature:
+                sensor_manager_source_constants::SOURCE_WATER_TEMPERATURE_DS18B20.to_string(),
+            source_ambient_temperature:
+                sensor_manager_source_constants::SOURCE_AMBIENT_TEMPERATURE_DHT.to_string(),
         };
 
         let signals = SensorManagerSignals::new(&config);
@@ -918,10 +915,10 @@ pub mod tests {
             replacement_value_water_temperature: 25.0,
             replacement_value_ph: 8.0,
             replacement_value_conductivity: 50000.0,
-            source_water_temperature: sensor_manager_source_constants::SOURCE_WATER_TEMPERATURE_DS18B20
-                .to_string(),
-            source_ambient_temperature: sensor_manager_source_constants::SOURCE_AMBIENT_TEMPERATURE_DHT
-                .to_string(),
+            source_water_temperature:
+                sensor_manager_source_constants::SOURCE_WATER_TEMPERATURE_DS18B20.to_string(),
+            source_ambient_temperature:
+                sensor_manager_source_constants::SOURCE_AMBIENT_TEMPERATURE_DHT.to_string(),
         };
 
         // 1. Invalid ambient temperature source
@@ -955,9 +952,10 @@ pub mod tests {
             replacement_value_ph: 8.0,
             replacement_value_conductivity: 50000.0,
             source_water_temperature:
-                sensor_manager_source_constants::SOURCE_WATER_TEMPERATURE_ATLAS_SCIENTIFIC.to_string(),
-            source_ambient_temperature: sensor_manager_source_constants::SOURCE_AMBIENT_TEMPERATURE_DHT
-                .to_string(),
+                sensor_manager_source_constants::SOURCE_WATER_TEMPERATURE_ATLAS_SCIENTIFIC
+                    .to_string(),
+            source_ambient_temperature:
+                sensor_manager_source_constants::SOURCE_AMBIENT_TEMPERATURE_DHT.to_string(),
         };
 
         let mut sensor_manager = SensorManager::new(config).unwrap();
@@ -994,10 +992,10 @@ pub mod tests {
             replacement_value_water_temperature: 25.0,
             replacement_value_ph: 8.0,
             replacement_value_conductivity: 50000.0,
-            source_water_temperature: sensor_manager_source_constants::SOURCE_WATER_TEMPERATURE_DS18B20
-                .to_string(),
-            source_ambient_temperature: sensor_manager_source_constants::SOURCE_AMBIENT_TEMPERATURE_DHT
-                .to_string(),
+            source_water_temperature:
+                sensor_manager_source_constants::SOURCE_WATER_TEMPERATURE_DS18B20.to_string(),
+            source_ambient_temperature:
+                sensor_manager_source_constants::SOURCE_AMBIENT_TEMPERATURE_DHT.to_string(),
         };
 
         let mut sensor_manager = SensorManager::new(config).unwrap();

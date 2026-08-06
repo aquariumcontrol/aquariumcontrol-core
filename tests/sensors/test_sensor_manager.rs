@@ -20,10 +20,10 @@ use aquarium_control::sensors::sensor_manager::{
 use aquarium_control::sensors::sensor_manager_config::SensorManagerConfig;
 use aquarium_control::sensors::sensor_manager_constants::sensor_manager_source_constants;
 use aquarium_control::simulator::tcp_communication_error::TcpCommunicationError;
+use aquarium_control::utilities::channel_content::AquariumSignal;
 use aquarium_control::utilities::channel_content::InternalCommand;
 use aquarium_control::utilities::config::{read_config_file, ConfigData};
 use aquarium_control::utilities::signal_handler_channels::SignalHandlerChannels;
-use aquarium_control::utilities::channel_content::AquariumSignal;
 use spin_sleep::SpinSleeper;
 use std::sync::{Arc, Mutex};
 use std::thread::scope;
@@ -386,7 +386,7 @@ pub fn test_sensor_manager_interfaces_using_ds18b20_as_input_with_mutex_blocked(
 // helper function for test case test_sensor_manager_communicate_with_simulator
 async fn sensor_manager_communication_with_simulator(
     config: SensorManagerConfig,
-    mut response_list: Vec<f32>
+    mut response_list: Vec<f32>,
 ) -> Result<(), SensorManagerError> {
     let (mut tx_test_env_to_sensor_manager, rx_sensor_manager_from_test_env) =
         channel::<Result<f32, TcpCommunicationError>>(10, false);
@@ -447,7 +447,6 @@ async fn test_sensor_manager_communicate_with_simulator() {
         source_ambient_temperature: sensor_manager_source_constants::SOURCE_AMBIENT_TEMPERATURE_DHT
             .to_string(),
     };
-
 
     // Iteration #1 with empty list to trigger error at first instance of map_error
     let result = sensor_manager_communication_with_simulator(config.clone(), Vec::new()).await;
@@ -517,9 +516,5 @@ async fn test_sensor_manager_communicate_with_simulator() {
     let stimuli = vec![22.0, 60.0, 25.5, 50.000, 7.0];
     let result = sensor_manager_communication_with_simulator(config, stimuli).await;
 
-    assert!(matches!(
-        result,
-        Ok(())
-    ));
-
+    assert!(matches!(result, Ok(())));
 }

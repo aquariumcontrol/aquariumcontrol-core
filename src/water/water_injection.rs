@@ -310,3 +310,49 @@ impl WaterInjectionTrait for WaterInjection {
         quit_command_received // return information if refill was aborted due to request from signal handler
     }
 }
+
+#[cfg(test)]
+#[cfg(not(tarpaulin_include))]
+#[cfg_attr(coverage_nightly, coverage(off))]
+pub mod tests {
+    use super::*;
+
+    #[test]
+    // Verifies WaterInjection constructor calculations for refill increment and limits.
+    // [utest->swreq~water_calibration_parameters~1]
+    fn test_water_injection_new() {
+        let (config_data, _, _, _) =
+            crate::water::refill::prepare_refill_tests(None, 1, 1, Some(20));
+        let mut config = config_data.refill;
+        config.refill_pump_flow = 120.0;
+        config.additional_refill_volume = 0.5;
+        config.max_refill_volume = 5.0;
+
+        let water_inj = WaterInjection::new(&config);
+
+        assert!((water_inj.sleep_interval_seconds - 0.1).abs() < f64::EPSILON);
+        assert!((water_inj.refill_increment - 12.0).abs() < f64::EPSILON);
+        assert!((water_inj.additional_refill_volume - 0.5).abs() < f64::EPSILON);
+        assert!((water_inj.max_refill_volume - 5.0).abs() < f64::EPSILON);
+        assert!(!water_inj.lock_warn_max_mutex_access_duration);
+    }
+
+    #[test]
+    // Verifies mutex access duration monitoring sets lock_warn_max_mutex_access_duration when limit exceeded.
+    // [utest->swreq~water_read_level_switch~1]
+    fn test_water_injection_mutex_access_duration_monitoring() {
+        let (config_data, _, _, _) =
+            crate::water::refill::prepare_refill_tests(None, 1, 1, Some(20));
+        let mut water_inj = WaterInjection::new(&config_data.refill);
+
+        let now = Instant::now();
+        let before = now;
+        let after = now + Duration::from_millis(100);
+
+        water_inj.check_mutex_access_duration(None, after, before);
+        assert!(water_inj.lock_warn_max_mutex_access_duration);
+
+        #[cfg(any(test, feature = "test-utils"))]
+        assert!(water_inj.mutex_access_duration_exceeded);
+    }
+}

@@ -68,8 +68,6 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 use log::debug;
 
 use log::warn;
-
-#[cfg(all(not(test), not(feature = "test-utils")))] // only required in real-life execution
 use log::info;
 
 #[cfg(all(not(test), target_os = "linux", not(feature = "test-utils")))]
@@ -84,8 +82,6 @@ use crate::sensors::tank_level_switch::TankLevelSwitchSignals;
 use crate::utilities::acknowledge_signal_handler::AcknowledgeSignalHandlerTrait;
 use crate::utilities::config::{read_config_file, read_config_file_with_test_database, ConfigData};
 use crate::utilities::database_ping_trait::DatabasePingTrait;
-#[cfg(all(not(test), not(feature = "test-utils")))]
-#[cfg(not(tarpaulin_include))]
 use crate::utilities::logger::log_error_chain;
 use crate::utilities::proc_ext_req::ProcessExternalRequestTrait;
 use crate::utilities::wait_for_termination::WaitForTerminationTrait;
@@ -323,8 +319,8 @@ impl Refill {
         database_result: Result<T, SqlInterfaceError>,
         stats_value: &mut T,
         lock_flag: &mut bool,
-        #[cfg(all(not(test), not(feature = "test-utils")))] check_type: &str, // only required in real-life execution
-        #[cfg(all(not(test), not(feature = "test-utils")))] duration: &str, // only required in real-life execution
+        check_type: &str,
+        duration: &str,
     ) -> bool {
         match database_result {
             Ok(value) => {
@@ -333,12 +329,10 @@ impl Refill {
                 false
             }
             Err(_e) => {
-                #[cfg(all(not(test), not(feature = "test-utils")))] // only required in real-life execution
-                #[cfg(not(tarpaulin_include))]
                 if !*lock_flag {
                     let context =
                         format!("Could not get refill {} of last {}.", check_type, duration);
-                    log_error_chain(module_path!(), &context, _e); // not required during testing
+                    log_error_chain(module_path!(), &context, _e);
                     *lock_flag = true;
                 }
                 true
@@ -385,9 +379,6 @@ impl Refill {
                         Err(_e) => {
                             // [impl->swreq~water_db_failure_inhibition~1]
                             self.refill_errors.error_sql_get_historic_data_failed = true;
-                            #[cfg(all(not(test), not(feature = "test-utils")))] // only required in real-life execution
-                            #[cfg(not(tarpaulin_include))]
-                            // [impl->swreq~water_log_flood_protection~1]
                             if !self.lock_error_read_duration_since_last_refill {
                                 log_error_chain(
                                     // no required during testing
@@ -402,12 +393,8 @@ impl Refill {
                 }
                 Err(_e) => {
                     self.refill_errors.error_sql_get_historic_data_failed = true;
-                    #[cfg(all(not(test), not(feature = "test-utils")))] // only required in real-life execution
-                    #[cfg(not(tarpaulin_include))]
-                    // [impl->swreq~water_log_flood_protection~1]
                     if !self.lock_error_check_empty {
                         log_error_chain(
-                            // not required during testing
                             module_path!(),
                             "could not check if refill table is empty or not",
                             _e,
@@ -421,11 +408,7 @@ impl Refill {
                 sql_interface_refill.get_refill_volume_of_last_24h(),
                 &mut refill_stats_data.refill_volume_last_24h,
                 &mut self.locks_error_read.volume_last_24h,
-                #[cfg(all(not(test), not(feature = "test-utils")))]
-                // only required in real-life execution
                 "volume",
-                #[cfg(all(not(test), not(feature = "test-utils")))]
-                // only required in real-life execution
                 "24h",
             );
 
@@ -433,11 +416,7 @@ impl Refill {
                 sql_interface_refill.get_refill_count_of_last_24h(),
                 &mut refill_stats_data.refill_count_last_24h,
                 &mut self.locks_error_read.count_last_24h,
-                #[cfg(all(not(test), not(feature = "test-utils")))]
-                // only required in real-life execution
                 "count",
-                #[cfg(all(not(test), not(feature = "test-utils")))]
-                // only required in real-life execution
                 "24h",
             );
 
@@ -445,11 +424,7 @@ impl Refill {
                 sql_interface_refill.get_refill_volume_of_last_hour(),
                 &mut refill_stats_data.refill_volume_last_hour,
                 &mut self.locks_error_read.volume_last_hour,
-                #[cfg(all(not(test), not(feature = "test-utils")))]
-                // only required in real-life execution
                 "volume",
-                #[cfg(all(not(test), not(feature = "test-utils")))]
-                // only required in real-life execution
                 "hour",
             );
 
@@ -457,14 +432,11 @@ impl Refill {
                 sql_interface_refill.get_refill_count_of_last_hour(),
                 &mut refill_stats_data.refill_count_last_hour,
                 &mut self.locks_error_read.count_last_hour,
-                #[cfg(all(not(test), not(feature = "test-utils")))]
-                // only required in real-life execution
                 "count",
-                #[cfg(all(not(test), not(feature = "test-utils")))]
-                // only required in real-life execution
                 "hour",
             );
         };
+
 
         if is_multi_thread {
             tokio::task::block_in_place(action);
@@ -484,7 +456,7 @@ impl Refill {
     /// * `duration_since_last_refill` - The duration (in seconds) that has passed since the last refill operation.
     ///
     /// [impl->swreq~water_error_detection~1]
-    fn check_error_condition_switch_stuck_high(&mut self, duration_since_last_refill: u64) {
+    pub fn check_error_condition_switch_stuck_high(&mut self, duration_since_last_refill: u64) {
         self.refill_errors.error_switch_stuck_high =
             duration_since_last_refill > self.config.max_duration_since_last_refill;
     }
@@ -583,13 +555,11 @@ impl Refill {
         actual_value: T,
         max_value: T,
         lock_flag: &mut bool,
-        #[cfg(all(not(test), not(feature = "test-utils")))] check_type: &str, // only required in real-life execution
-        #[cfg(all(not(test), not(feature = "test-utils")))] duration: &str, // only required in real-life execution
+        check_type: &str,
+        duration: &str,
     ) -> bool {
         if actual_value > max_value {
             if !*lock_flag {
-                #[cfg(all(not(test), not(feature = "test-utils")))] // only required in real-life execution
-                #[cfg(not(tarpaulin_include))]
                 info!(
                     target: module_path!(),
                     "refill {} of last {} exceeds permissible {} per {} of {} L",
@@ -641,11 +611,7 @@ impl Refill {
             sql_refill_data.refill_volume_last_24h,
             self.config.max_refill_volume_24h,
             &mut self.locks_info_check.volume_last_24h,
-            #[cfg(all(not(test), not(feature = "test-utils")))]
-            // only required in real-life execution
             "volume",
-            #[cfg(all(not(test), not(feature = "test-utils")))]
-            // only required in real-life execution
             "24h",
         );
 
@@ -653,11 +619,7 @@ impl Refill {
             sql_refill_data.refill_count_last_24h,
             self.config.max_refill_count_24h,
             &mut self.locks_info_check.count_last_24h,
-            #[cfg(all(not(test), not(feature = "test-utils")))]
-            // only required in real-life execution
             "count",
-            #[cfg(all(not(test), not(feature = "test-utils")))]
-            // only required in real-life execution
             "24h",
         );
 
@@ -665,11 +627,7 @@ impl Refill {
             sql_refill_data.refill_volume_last_hour,
             self.config.max_refill_volume_hour,
             &mut self.locks_info_check.volume_last_hour,
-            #[cfg(all(not(test), not(feature = "test-utils")))]
-            // only required in real-life execution
             "volume",
-            #[cfg(all(not(test), not(feature = "test-utils")))]
-            // only required in real-life execution
             "hour",
         );
 
@@ -677,13 +635,10 @@ impl Refill {
             sql_refill_data.refill_count_last_hour,
             self.config.max_refill_count_hour,
             &mut self.locks_info_check.count_last_hour,
-            #[cfg(all(not(test), not(feature = "test-utils")))]
-            // only required in real-life execution
             "count",
-            #[cfg(all(not(test), not(feature = "test-utils")))]
-            // only required in real-life execution
             "hour",
         );
+
 
         let refill_check_interval_last_refill =
             sql_refill_data.duration_since_last_refill < self.config.min_interval_last_refill;
@@ -856,10 +811,7 @@ impl Refill {
                             refill_status.external_inhibition_request = refill_inhibited;
                         }
                         Err(_e) => {
-                            #[cfg(all(not(test), not(feature = "test-utils")))]
-                            #[cfg(not(tarpaulin_include))]
                             log_error_chain(
-                                // not required during testing
                                 module_path!(),
                                 "error locking mutex for refill status",
                                 _e,
@@ -904,10 +856,7 @@ impl Refill {
                                 refill_status.critical_error_present = critical_error_present;
                             }
                             Err(_e) => {
-                                #[cfg(all(not(test), not(feature = "test-utils")))]
-                                #[cfg(not(tarpaulin_include))]
                                 log_error_chain(
-                                    // not required during testing
                                     module_path!(),
                                     "error locking mutex for refill status",
                                     _e,
@@ -940,10 +889,7 @@ impl Refill {
                                         refill_status.refill_in_progress_for_database = true;
                                     }
                                     Err(_e) => {
-                                        #[cfg(all(not(test), not(feature = "test-utils")))]
-                                        #[cfg(not(tarpaulin_include))]
                                         log_error_chain(
-                                            // not required during testing
                                             module_path!(),
                                             "error locking mutex for refill status",
                                             _e,
@@ -972,10 +918,7 @@ impl Refill {
                                         refill_status.refill_in_progress_live = false;
                                     }
                                     Err(_e) => {
-                                        #[cfg(all(not(test), not(feature = "test-utils")))]
-                                        #[cfg(not(tarpaulin_include))]
                                         log_error_chain(
-                                            // not required during testing
                                             module_path!(),
                                             "error locking mutex for refill status",
                                             _e,
@@ -1120,10 +1063,7 @@ impl Refill {
                 Err(_e) => {
                     // [impl->swreq~water_log_flood_protection~1]
                     if !self.lock_error_channel_send_monitors {
-                        #[cfg(all(not(test), not(feature = "test-utils")))]
-                        #[cfg(not(tarpaulin_include))]
                         log_error_chain(
-                            // not required during testing
                             module_path!(),
                             "sending view to monitor failed",
                             _e,
@@ -1231,11 +1171,7 @@ pub mod tests {
             db_result_ok_u64,
             &mut stats_value_u64,
             &mut lock_flag_u64,
-            #[cfg(all(not(test), not(feature = "test-utils")))]
-            // only required in real-life execution
             "dummy_value_type_not_used",
-            #[cfg(all(not(test), not(feature = "test-utils")))]
-            // only required in real-life execution
             "dummy_duration_not_used",
         );
 
@@ -1259,11 +1195,7 @@ pub mod tests {
             db_result_ok_f32,
             &mut stats_value_f32,
             &mut lock_flag_f32,
-            #[cfg(all(not(test), not(feature = "test-utils")))]
-            // only required in real-life execution
             "dummy_value_type_not_used",
-            #[cfg(all(not(test), not(feature = "test-utils")))]
-            // only required in real-life execution
             "dummy_duration_not_used",
         );
 
@@ -1288,11 +1220,7 @@ pub mod tests {
             db_result_err,
             &mut stats_value_fail,
             &mut lock_flag_fail,
-            #[cfg(all(not(test), not(feature = "test-utils")))]
-            // only required in real-life execution
             "dummy_value_type_not_used",
-            #[cfg(all(not(test), not(feature = "test-utils")))]
-            // only required in real-life execution
             "dummy_duration_not_used",
         );
 
@@ -1301,11 +1229,9 @@ pub mod tests {
             stats_value_fail, 999,
             "stats_value should NOT be changed on failure"
         );
-        // Because of #[cfg(all(not(test), not(feature = "test-utils")))], the logging and lock flag modification
-        // are compiled out in test builds. We verify the flag is unchanged.
         assert!(
-            !lock_flag_fail,
-            "lock_flag should NOT be changed on failure in test builds"
+            lock_flag_fail,
+            "lock_flag should be set to true on failure"
         );
     }
 
@@ -1322,11 +1248,7 @@ pub mod tests {
             50u64,
             100u64,
             &mut lock_flag,
-            #[cfg(all(not(test), not(feature = "test-utils")))]
-            // only required in real-life execution
             "dummy_value_type_not_used",
-            #[cfg(all(not(test), not(feature = "test-utils")))]
-            // only required in real-life execution
             "dummy_duration_not_used",
         );
         assert!(!result, "Should return false when value is below limit");
@@ -1339,11 +1261,7 @@ pub mod tests {
             100u64,
             100u64,
             &mut lock_flag,
-            #[cfg(all(not(test), not(feature = "test-utils")))]
-            // only required in real-life execution
             "dummy_value_type_not_used",
-            #[cfg(all(not(test), not(feature = "test-utils")))]
-            // only required in real-life execution
             "dummy_duration_not_used",
         );
         assert!(!result, "Should return false when value is equal to limit");
@@ -1356,11 +1274,7 @@ pub mod tests {
             101u64,
             100u64,
             &mut lock_flag,
-            #[cfg(all(not(test), not(feature = "test-utils")))]
-            // only required in real-life execution
             "dummy_value_type_not_used",
-            #[cfg(all(not(test), not(feature = "test-utils")))]
-            // only required in real-life execution
             "dummy_duration_not_used",
         );
         assert!(result, "Should return true when value exceeds limit");
@@ -1370,18 +1284,13 @@ pub mod tests {
         );
 
         // === Test Case 4: Value exceeds the limit again (the lock flag is already set) ===
-        // Should still return true. The logging logic (which is compiled out in tests)
-        // would be skipped. The lock flag should remain true.
+        // Should still return true. The logging logic would be skipped. The lock flag should remain true.
         let mut lock_flag = true;
         let result = Refill::check_volume_count_time_limit(
             102u64,
             100u64,
             &mut lock_flag,
-            #[cfg(all(not(test), not(feature = "test-utils")))]
-            // only required in real-life execution
             "dummy_value_type_not_used",
-            #[cfg(all(not(test), not(feature = "test-utils")))]
-            // only required in real-life execution
             "dummy_duration_not_used",
         );
         assert!(result, "Should return true on subsequent exceedance");
@@ -1395,11 +1304,7 @@ pub mod tests {
             99u64,
             100u64,
             &mut lock_flag,
-            #[cfg(all(not(test), not(feature = "test-utils")))]
-            // only required in real-life execution
             "dummy_value_type_not_used",
-            #[cfg(all(not(test), not(feature = "test-utils")))]
-            // only required in real-life execution
             "dummy_duration_not_used",
         );
         assert!(!result, "Should return false when value is back to normal");
@@ -1415,11 +1320,7 @@ pub mod tests {
             100.1f32,
             100.0f32,
             &mut lock_flag_f32,
-            #[cfg(all(not(test), not(feature = "test-utils")))]
-            // only required in real-life execution
             "dummy_value_type_not_used",
-            #[cfg(all(not(test), not(feature = "test-utils")))]
-            // only required in real-life execution
             "dummy_duration_not_used",
         );
         assert!(
@@ -1433,11 +1334,7 @@ pub mod tests {
             99.9f32,
             100.0f32,
             &mut lock_flag_f32_reset,
-            #[cfg(all(not(test), not(feature = "test-utils")))]
-            // only required in real-life execution
             "dummy_value_type_not_used",
-            #[cfg(all(not(test), not(feature = "test-utils")))]
-            // only required in real-life execution
             "dummy_duration_not_used",
         );
         assert!(
@@ -1567,5 +1464,93 @@ pub mod tests {
             refill.lock_error_channel_send_monitors,
             "lock_error_channel_send_monitors should remain true on repeated failure"
         );
+    }
+
+    #[test]
+    // Verifies check_error_condition_switch_stuck_high sets error_switch_stuck_high flag when threshold exceeded.
+    // [utest->swreq~water_error_detection~1]
+    fn test_check_error_condition_switch_stuck_high() {
+        let (config, _, _, _) = super::prepare_refill_tests(None, 1, 1, Some(20));
+        let mut refill = Refill::new(config.refill, std::time::Duration::from_millis(1000));
+        refill.config.max_duration_since_last_refill = 100;
+
+        // Within limit
+        refill.check_error_condition_switch_stuck_high(50);
+        assert!(!refill.refill_errors.error_switch_stuck_high);
+
+        // Equal to limit (not exceeding)
+        refill.check_error_condition_switch_stuck_high(100);
+        assert!(!refill.refill_errors.error_switch_stuck_high);
+
+        // Exceeding limit
+        refill.check_error_condition_switch_stuck_high(101);
+        assert!(refill.refill_errors.error_switch_stuck_high);
+    }
+
+    #[test]
+    // Verifies check_volume_count_time_limits detects limit exceedances and populates monitor view.
+    // [utest->swreq~water_faulty_switch_protection~1]
+    fn test_check_volume_count_time_limits_has_any_issue() {
+        let (config, _, _, _) = super::prepare_refill_tests(None, 1, 1, Some(20));
+        let mut refill = Refill::new(config.refill, std::time::Duration::from_millis(1000));
+        refill.config.max_refill_volume_24h = 10.0;
+        refill.config.max_refill_count_24h = 5;
+        refill.config.max_refill_volume_hour = 2.0;
+        refill.config.max_refill_count_hour = 2;
+        refill.config.min_interval_last_refill = 300;
+
+        let (tx_mon, _rx_mon) = crate::launch::channels::channel(1, false);
+        let (tx_relay, _rx_relay) = crate::launch::channels::channel::<
+            crate::utilities::channel_content::InternalCommand,
+        >(1, false);
+        let (_tx_relay_resp, rx_relay) = crate::launch::channels::channel::<bool>(1, false);
+        let (tx_sig, _rx_sig) = crate::launch::channels::channel::<bool>(1, false);
+        let (_tx_sig_resp, rx_sig) = crate::launch::channels::channel::<
+            crate::utilities::channel_content::InternalCommand,
+        >(1, false);
+        let (tx_sched, _rx_sched) = crate::launch::channels::channel::<
+            crate::utilities::channel_content::InternalCommand,
+        >(1, false);
+        let (_tx_sched_resp, rx_sched) = crate::launch::channels::channel::<bool>(1, false);
+        let (_tx_msg, rx_msg) = crate::launch::channels::channel::<
+            crate::utilities::channel_content::InternalCommand,
+        >(1, false);
+
+        let mut refill_channels = crate::water::refill_channels::RefillChannels {
+            tx_refill_to_relay_manager: tx_relay,
+            rx_refill_from_relay_manager: rx_relay,
+            tx_refill_to_signal_handler: tx_sig,
+            rx_refill_from_signal_handler: rx_sig,
+            tx_refill_to_schedule_check: tx_sched,
+            rx_refill_from_schedule_check: rx_sched,
+            rx_refill_from_messaging: rx_msg,
+            tx_refill_to_monitors: tx_mon,
+        };
+
+        // Stats within limits
+        let valid_stats = crate::water::refill_stats_data::RefillStatsData {
+            duration_since_last_refill: 500,
+            refill_volume_last_24h: 5.0,
+            refill_count_last_24h: 2,
+            refill_volume_last_hour: 1.0,
+            refill_count_last_hour: 1,
+        };
+
+        let has_issue_clean =
+            refill.check_volume_count_time_limits(&valid_stats, &mut refill_channels);
+        assert!(!has_issue_clean);
+
+        // Stats exceeding 24h volume limit
+        let invalid_stats = crate::water::refill_stats_data::RefillStatsData {
+            duration_since_last_refill: 500,
+            refill_volume_last_24h: 15.0,
+            refill_count_last_24h: 2,
+            refill_volume_last_hour: 1.0,
+            refill_count_last_hour: 1,
+        };
+
+        let has_issue_exceeded =
+            refill.check_volume_count_time_limits(&invalid_stats, &mut refill_channels);
+        assert!(has_issue_exceeded);
     }
 }

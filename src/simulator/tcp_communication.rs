@@ -572,7 +572,10 @@ pub mod tests {
     // Verifies get_last_word extracts final space-separated token or returns None when empty.
     // [utest->swreq~simulator_sensor_signals~1]
     fn test_get_last_word() {
-        assert_eq!(TcpCommunication::get_last_word("CONTROLLINO READ 1 25.5\n"), Some("25.5"));
+        assert_eq!(
+            TcpCommunication::get_last_word("CONTROLLINO READ 1 25.5\n"),
+            Some("25.5")
+        );
         assert_eq!(TcpCommunication::get_last_word(""), None);
         assert_eq!(TcpCommunication::get_last_word("   \t\n"), None);
     }
@@ -588,7 +591,10 @@ pub mod tests {
         };
         let exec_config = ExecutionConfig::default();
         let res = TcpCommunication::new(&config, exec_config);
-        assert!(matches!(res, Err(TcpCommunicationError::ConnectionFailed { .. })));
+        assert!(matches!(
+            res,
+            Err(TcpCommunicationError::ConnectionFailed { .. })
+        ));
     }
 
     #[test]
@@ -614,7 +620,9 @@ pub mod tests {
             // 3. Unparsable response test
             line.clear();
             reader.read_line(&mut line).unwrap();
-            stream.write_all(b"ATLASSCIENTIFIC READ 1 INVALID\n").unwrap();
+            stream
+                .write_all(b"ATLASSCIENTIFIC READ 1 INVALID\n")
+                .unwrap();
         });
 
         let config = TcpCommunicationConfig {
@@ -626,20 +634,31 @@ pub mod tests {
         let mut tcp_comm = TcpCommunication::new(&config, exec_config).unwrap();
 
         // Test 1: valid signal
-        let val = tcp_comm.get_signal(AquariumSignal::WaterTemperature).unwrap();
+        let val = tcp_comm
+            .get_signal(AquariumSignal::WaterTemperature)
+            .unwrap();
         assert_eq!(val, 25.5);
 
         // Test 2: illegal signal
         let err_illegal = tcp_comm.get_signal(AquariumSignal::HeatingControlStatus);
-        assert!(matches!(err_illegal, Err(TcpCommunicationError::IllegalSignalRequestToSimulator(..))));
+        assert!(matches!(
+            err_illegal,
+            Err(TcpCommunicationError::IllegalSignalRequestToSimulator(..))
+        ));
 
         // Test 3: empty response
         let err_empty = tcp_comm.get_signal(AquariumSignal::pH);
-        assert!(matches!(err_empty, Err(TcpCommunicationError::ResponseContainsNoWords(..))));
+        assert!(matches!(
+            err_empty,
+            Err(TcpCommunicationError::ResponseContainsNoWords(..))
+        ));
 
         // Test 4: unparsable response
         let err_parse = tcp_comm.get_signal(AquariumSignal::Conductivity);
-        assert!(matches!(err_parse, Err(TcpCommunicationError::ResponseConversionError { .. })));
+        assert!(matches!(
+            err_parse,
+            Err(TcpCommunicationError::ResponseConversionError { .. })
+        ));
 
         handle.join().unwrap();
     }
@@ -710,7 +729,11 @@ pub mod tests {
         let (mut tx_req, mut rx_req) = channel::<InternalCommand>(10, false);
         let (mut tx_resp, mut rx_resp) = channel::<Result<f32, TcpCommunicationError>>(10, false);
 
-        tx_req.send(InternalCommand::RequestSignal(AquariumSignal::AmbientTemperature)).unwrap();
+        tx_req
+            .send(InternalCommand::RequestSignal(
+                AquariumSignal::AmbientTemperature,
+            ))
+            .unwrap();
         let res = tcp_comm.receive_and_answer(&mut rx_req, &mut tx_resp);
         assert!(res.is_ok());
 
@@ -767,7 +790,8 @@ pub mod tests {
         let (tx_sm_resp, mut rx_sm_resp) = channel::<Result<f32, TcpCommunicationError>>(10, false);
 
         let (mut tx_tls_req, rx_tls_req) = channel::<InternalCommand>(10, false);
-        let (tx_tls_resp, mut rx_tls_resp) = channel::<Result<f32, TcpCommunicationError>>(10, false);
+        let (tx_tls_resp, mut rx_tls_resp) =
+            channel::<Result<f32, TcpCommunicationError>>(10, false);
 
         let (mut tx_rm_req, rx_rm_req) = channel::<InternalCommand>(10, false);
 
@@ -790,8 +814,16 @@ pub mod tests {
         });
 
         // Send requests
-        tx_sm_req.send(InternalCommand::RequestSignal(AquariumSignal::WaterTemperature)).unwrap();
-        tx_tls_req.send(InternalCommand::RequestSignal(AquariumSignal::TankLevelSwitchPosition)).unwrap();
+        tx_sm_req
+            .send(InternalCommand::RequestSignal(
+                AquariumSignal::WaterTemperature,
+            ))
+            .unwrap();
+        tx_tls_req
+            .send(InternalCommand::RequestSignal(
+                AquariumSignal::TankLevelSwitchPosition,
+            ))
+            .unwrap();
         tx_rm_req.send(InternalCommand::SetRelay(1)).unwrap();
 
         // Verify sensor responses
@@ -812,6 +844,3 @@ pub mod tests {
         assert!(ack);
     }
 }
-
-
-

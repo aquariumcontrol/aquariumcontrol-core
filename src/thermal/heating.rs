@@ -88,8 +88,6 @@ use crate::utilities::acknowledge_signal_handler::AcknowledgeSignalHandlerTrait;
 use crate::utilities::channel_content::ActuatorState;
 use crate::utilities::check_mutex_access_duration::CheckMutexAccessDurationTrait;
 use crate::utilities::database_ping_trait::DatabasePingTrait;
-#[cfg(all(not(test), not(feature = "test-utils")))]
-#[cfg(not(tarpaulin_include))]
 use crate::utilities::logger::log_error_chain;
 use crate::utilities::proc_ext_req::ProcessExternalRequestTrait;
 use crate::utilities::sawtooth_profile::SawToothProfile;
@@ -288,19 +286,15 @@ impl Heating {
 
         #[allow(clippy::unnecessary_lazy_evaluations)]
         let database_seconds_until_midnight = get_midnight_res.unwrap_or_else(|_e| {
-            #[cfg(all(not(test), not(feature = "test-utils")))]
-            #[cfg(not(tarpaulin_include))]
-            {
-                let context = format!(
-                    "Could not get duration until midnight from database - using default value ({}).",
-                    default_value
-                );
-                log_error_chain( // not required during testing
-                    module_path!(),
-                    &context,
-                                 _e
-                );
-            }
+            let context = format!(
+                "Could not get duration until midnight from database - using default value ({}).",
+                default_value
+            );
+            log_error_chain( // not required during testing
+                module_path!(),
+                &context,
+                             _e
+            );
             default_value as i64
         });
         if database_seconds_until_midnight < 0 {
@@ -314,7 +308,6 @@ impl Heating {
             database_seconds_until_midnight as u64
         }
     }
-
 
     /// Updates the running daily statistics based on the current cycle's inputs.
     ///
@@ -1015,26 +1008,10 @@ pub mod tests {
         let mut stats_entry = Some(HeatingStatsEntry::new(&mut conn));
 
         // First update initializes last_stats_update_instant_opt
-        heating.update_heating_stats(
-            &mut stats_entry,
-            false,
-            24.5,
-            22.0,
-            &ActuatorState::On,
-        );
+        heating.update_heating_stats(&mut stats_entry, false, 24.5, 22.0, &ActuatorState::On);
         assert!(heating.last_stats_update_instant_opt.is_some());
 
         // Second update with measurement_error = true
-        heating.update_heating_stats(
-            &mut stats_entry,
-            true,
-            24.5,
-            22.0,
-            &ActuatorState::Off,
-        );
+        heating.update_heating_stats(&mut stats_entry, true, 24.5, 22.0, &ActuatorState::Off);
     }
 }
-
-
-
-

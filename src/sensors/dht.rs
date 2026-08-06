@@ -88,7 +88,6 @@ use spin_sleep::SpinSleeper;
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
-#[cfg(all(not(test), not(feature = "test-utils")))] // only required in real-life execution
 use crate::utilities::logger::log_error_chain;
 
 cfg_if::cfg_if! {
@@ -834,8 +833,6 @@ impl Dht {
                 // [impl->swreq~sensors_log_flood_protection~1]
                 if !self.lock_error_failed_after_retries {
                     // avoid log flooding
-                    #[cfg(all(not(test), not(feature = "test-utils")))] // only required in real-life execution
-                    #[cfg(not(tarpaulin_include))]
                     log_error_chain(
                         // not required during testing
                         module_path!(),
@@ -847,8 +844,6 @@ impl Dht {
             } else {
                 self.lock_error_failed_after_retries = false;
                 // report directly
-                #[cfg(all(not(test), not(feature = "test-utils")))] // only required in real-life execution
-                #[cfg(not(tarpaulin_include))]
                 log_error_chain(
                     // not required during testing
                     module_path!(),
@@ -856,6 +851,7 @@ impl Dht {
                     dht_error,
                 );
             }
+
         } else {
             self.lock_error_failed_after_retries = false;
         }

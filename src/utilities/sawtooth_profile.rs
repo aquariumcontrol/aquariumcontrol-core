@@ -357,4 +357,3 @@ pub mod tests {
         assert!(formatted.contains("phase4_counter_limit=24"));
     }
 }
-

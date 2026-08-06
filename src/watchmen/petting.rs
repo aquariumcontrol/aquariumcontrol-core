@@ -68,3 +68,41 @@ impl PettingTrait for Petting {
         let _ = std::fs::write(watchdog_filename, watchdog_heartbeat);
     }
 }
+
+#[cfg(test)]
+#[cfg(not(tarpaulin_include))]
+#[cfg_attr(coverage_nightly, coverage(off))]
+pub mod tests {
+    use super::*;
+    use tempfile::NamedTempFile;
+
+    #[test]
+    // Verifies Petting constructor and Default trait implementation.
+    // [utest->swreq~watchmen_pet_watchdog~1]
+    fn test_petting_new_and_default() {
+        let _p1 = Petting::new();
+        let _p2 = Petting::default();
+    }
+
+    #[test]
+    // Verifies PettingTrait::pet writes heartbeat string to file.
+    // [utest->swreq~watchmen_pet_watchdog~1]
+    fn test_petting_pet_writes_heartbeat_file() {
+        let temp_file = NamedTempFile::new().unwrap();
+        let filepath = temp_file.path().to_str().unwrap();
+
+        let mut petting = Petting::new();
+        petting.pet(filepath, "HEARTBEAT_OK_123");
+
+        let content = std::fs::read_to_string(filepath).unwrap();
+        assert_eq!(content, "HEARTBEAT_OK_123");
+    }
+
+    #[test]
+    // Verifies PettingTrait::pet handles file write errors gracefully without panicking.
+    // [utest->swreq~watchmen_pet_watchdog~1]
+    fn test_petting_pet_handles_write_error_gracefully() {
+        let mut petting = Petting::new();
+        petting.pet("/non_existent_directory_12345/watchdog", "HEARTBEAT");
+    }
+}

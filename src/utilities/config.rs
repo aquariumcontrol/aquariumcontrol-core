@@ -377,4 +377,3 @@ pub mod tests {
         let _ = read_config_file("non_existent_file.toml".to_string());
     }
 }
-

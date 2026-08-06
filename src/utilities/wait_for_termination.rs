@@ -366,4 +366,3 @@ pub mod tests {
         assert!(!messaging.lock_warn_inapplicable_command_signal_handler);
     }
 }
-

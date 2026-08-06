@@ -84,8 +84,6 @@ use crate::sensors::atlas_scientific_oem::AtlasScientificOem;
 use crate::simulator::get_resp_sim::GetResponseFromSimulatorTrait;
 use crate::utilities::acknowledge_signal_handler::AcknowledgeSignalHandlerTrait;
 use crate::utilities::channel_content::AquariumSignal;
-#[cfg(all(not(test), not(feature = "test-utils")))]
-#[cfg(not(tarpaulin_include))]
 use crate::utilities::logger::log_error_chain;
 use crate::utilities::proc_ext_req::ProcessExternalRequestTrait;
 use crate::utilities::wait_for_termination::WaitForTerminationTrait;
@@ -505,8 +503,6 @@ impl AtlasScientific {
                 Err(_e) => {
                     // [impl->swreq~sensors_log_flood_protection~1]
                     if !self.lock_error_channel_send_monitors {
-                        #[cfg(all(not(test), not(feature = "test-utils")))]
-                        #[cfg(not(tarpaulin_include))]
                         log_error_chain(
                             // not required during testing
                             module_path!(),
@@ -625,8 +621,6 @@ impl AtlasScientific {
                                         AtlasScientificError::SendingRequestToI2cInterfaceFailed { .. }
                                     ) || !self.lock_error_channel_send_i2c_interface
                                     {
-                                        #[cfg(all(not(test), not(feature = "test-utils")))]
-                                        #[cfg(not(tarpaulin_include))]
                                         log_error_chain(
                                             // not required during testing
                                             module_path!(),
@@ -645,8 +639,6 @@ impl AtlasScientific {
                                 .get(&signal)
                                 .unwrap_or(&false)
                             {
-                                #[cfg(all(not(test), not(feature = "test-utils")))]
-                                #[cfg(not(tarpaulin_include))]
                                 log_error_chain(
                                     // not required during testing
                                     module_path!(),
@@ -694,8 +686,6 @@ impl AtlasScientific {
                                     ) {
                                         channel_is_disconnected = true;
                                     } else {
-                                        #[cfg(all(not(test), not(feature = "test-utils")))]
-                                        #[cfg(not(tarpaulin_include))]
                                         log_error_chain(
                                             // not required during testing
                                             module_path!(),
@@ -735,8 +725,6 @@ impl AtlasScientific {
                                 .get(&signal)
                                 .unwrap_or(&false)
                             {
-                                #[cfg(all(not(test), not(feature = "test-utils")))]
-                                #[cfg(not(tarpaulin_include))]
                                 log_error_chain(
                                     // not required during testing
                                     module_path!(),

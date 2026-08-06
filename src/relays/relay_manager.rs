@@ -82,8 +82,6 @@ pub use crate::relays::relay_error::RelayError;
 use crate::relays::relay_manager_channels::RelayManagerChannels;
 use crate::relays::relay_manager_config::RelayManagerConfig;
 use crate::utilities::channel_content::InternalCommand;
-#[cfg(all(not(test), not(feature = "test-utils")))]
-#[cfg(not(tarpaulin_include))]
 use crate::utilities::logger::log_error_chain;
 use crate::utilities::proc_ext_req::ProcessExternalRequestTrait;
 use std::time::{Duration, Instant};
@@ -484,10 +482,7 @@ impl RelayManager {
                 if Instant::now().duration_since(last_heartbeat_time).as_secs() >= interval_secs {
                     let hb_result = tokio::task::block_in_place(|| actuator.heartbeat());
                     if let Err(_e) = hb_result {
-                        #[cfg(all(not(test), not(feature = "test-utils")))]
-                        #[cfg(not(tarpaulin_include))]
                         log_error_chain(
-                            // not required during testing
                             module_path!(),
                             "Execution of heartbeat for relay control failed.",
                             _e,

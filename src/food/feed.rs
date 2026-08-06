@@ -95,8 +95,6 @@ use crate::food::feed_schedule_entry::FeedScheduleEntry;
 use crate::food::food_injection::FoodInjectionTrait;
 use crate::utilities::acknowledge_signal_handler::AcknowledgeSignalHandlerTrait;
 use crate::utilities::database_ping_trait::DatabasePingTrait;
-#[cfg(all(not(test), not(feature = "test-utils")))]
-#[cfg(not(tarpaulin_include))]
 use crate::utilities::logger::log_error_chain;
 use crate::utilities::proc_ext_req::ProcessExternalRequestTrait;
 use crate::utilities::wait_for_termination::WaitForTerminationTrait;
@@ -668,9 +666,7 @@ impl Feed {
                 let feed_profile_opt = match get_profile_res {
                     Ok(feed_profile_loaded) => Some(feed_profile_loaded),
                     Err(_e) => {
-                        #[cfg(all(not(test), not(feature = "test-utils")))]
-                        #[cfg(not(tarpaulin_include))]
-                        log_error_chain( // not required during testing
+                        log_error_chain(
                                          module_path!(),
                                          "Error occurred when trying to read feed profile {profile_id} from database.",
                                          _e,

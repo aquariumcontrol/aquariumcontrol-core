@@ -41,8 +41,6 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 
 use crate::database::sql_interface_data::SqlInterfaceData;
 use crate::recorder::recorder_data_frame::RecorderDataFrame;
-#[cfg(all(not(test), not(feature = "test-utils")))]
-#[cfg(not(tarpaulin_include))]
 use crate::utilities::logger::log_error_chain;
 use mysql::PooledConn;
 
@@ -81,10 +79,7 @@ impl DataInjectionTrait for DataInjection {
         match SqlInterfaceData::write_data_frame_to_database(&mut conn, &data_frame) {
             Ok(()) => { /* do nothing */ }
             Err(_e) => {
-                #[cfg(all(not(test), not(feature = "test-utils")))]
-                #[cfg(not(tarpaulin_include))]
                 log_error_chain(
-                    // not required during testing
                     module_path!(),
                     "Error occurred when injecting data into database.",
                     _e,
@@ -92,5 +87,36 @@ impl DataInjectionTrait for DataInjection {
             }
         };
         conn
+    }
+}
+
+#[cfg(test)]
+#[cfg(not(tarpaulin_include))]
+#[cfg_attr(coverage_nightly, coverage(off))]
+pub mod tests {
+    use super::*;
+    use crate::database::sql_interface::SqlInterface;
+    use crate::utilities::config::read_config_file_with_test_database;
+    use mysql::prelude::Queryable;
+
+    #[test]
+    // Verifies inject_data handles database error gracefully when connection is killed.
+    // [utest->swreq~recorder_store_measurements~1]
+    fn test_data_injection_inject_data_error_path() {
+        let config = read_config_file_with_test_database(
+            "/config/aquarium_control_test_generic.toml".to_string(),
+            20,
+        );
+        let sql_interface = SqlInterface::new(config.sql_interface).unwrap();
+        let mut conn = sql_interface.get_connection().unwrap();
+
+        // Kill connection on MySQL server so subsequent write_data_frame_to_database returns Err
+        let _ = conn.query_drop("KILL CONNECTION_ID();");
+
+        let mut injection = DataInjection;
+        let data_frame = RecorderDataFrame::default();
+
+        let returned_conn = injection.inject_data(data_frame, conn);
+        drop(returned_conn);
     }
 }
