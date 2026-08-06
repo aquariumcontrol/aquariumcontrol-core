@@ -695,6 +695,8 @@ pub mod tests {
     }
 
     #[tokio::test]
+    // Verifies switch_skimmer_pumps_feeder returns UndefinedTargetState error when actuators are set to Undefined.
+    // [utest->swreq~food_execute_schedule~1]
     async fn test_switch_skimmer_pumps_feeder_undefined_states() {
         let config = test_feed_config();
         let mut injection = FoodInjection::new(&config);
@@ -731,6 +733,8 @@ pub mod tests {
     }
 
     #[tokio::test]
+    // Verifies switch_skimmer_pumps_feeder returns RelayManagerSend error when channel send fails.
+    // [utest->swreq~food_execute_schedule~1]
     async fn test_switch_skimmer_pumps_feeder_send_error() {
         let config = test_feed_config();
         let mut injection = FoodInjection::new(&config);
@@ -761,6 +765,84 @@ pub mod tests {
     }
 
     #[tokio::test]
+    // Verifies switch_skimmer_pumps_feeder returns RelayManagerReceive error when relay manager response channel is closed.
+    // [utest->swreq~food_execute_schedule~1]
+    async fn test_switch_skimmer_pumps_feeder_receive_error() {
+        let config = test_feed_config();
+        let mut injection = FoodInjection::new(&config);
+        let mut channels = crate::launch::channels::Channels::new_for_test();
+
+        let mut rx_relay = channels.relay_manager.rx_relay_manager_from_feed;
+        let tx_relay = channels.relay_manager.tx_relay_manager_to_feed;
+        tokio::spawn(async move {
+            let _ = rx_relay.recv().await;
+            drop(tx_relay);
+        });
+
+        let target_states = FoodInjectionTargetActuatorStates {
+            target_skimmer_state: ActuatorState::On,
+            target_main_pump1_state: ActuatorState::Off,
+            target_main_pump2_state: ActuatorState::Off,
+            target_aux_pump1_state: ActuatorState::Off,
+            target_aux_pump2_state: ActuatorState::Off,
+            target_feeder_state: ActuatorState::Off,
+        };
+
+        let result = injection
+            .switch_skimmer_pumps_feeder(target_states, &mut channels.feed)
+            .await;
+
+        assert!(result.is_err());
+        let errors = result.unwrap_err();
+        assert!(matches!(
+            errors[0],
+            FoodInjectionError::RelayManagerReceive { .. }
+        ));
+    }
+
+    #[tokio::test]
+    // Verifies inject_food executes feed phases, switches actuator states, and performs final cleanup on success.
+    // [utest->swreq~food_execute_schedule~1]
+    async fn test_inject_food_happy_path() {
+        let config = test_feed_config();
+        let mut injection = FoodInjection::new(&config);
+        let mut channels = crate::launch::channels::Channels::new_for_test();
+
+        let mut rx_relay = channels.relay_manager.rx_relay_manager_from_feed;
+        let mut tx_relay = channels.relay_manager.tx_relay_manager_to_feed;
+        tokio::spawn(async move {
+            while rx_relay.recv().await.is_ok() {
+                let _ = tx_relay.send(true);
+            }
+        });
+
+        let profile = FeedProfile {
+            profile_id: 1,
+            profile_name: "test_happy".to_string(),
+            feedphases: vec![crate::food::feed_profile::FeedPhase {
+                pause_duration: 5,
+                pause_skimmer: true,
+                pause_main_pump_1: true,
+                pause_main_pump_2: false,
+                pause_aux_pump_1: false,
+                pause_aux_pump_2: false,
+                feed_duration: 5,
+                feed_skimmer: true,
+                feed_main_pump_1: true,
+                feed_main_pump_2: false,
+                feed_aux_pump_1: false,
+                feed_aux_pump_2: false,
+            }],
+        };
+
+        let (quit, res) = injection.inject_food(&mut channels.feed, &profile).await;
+        assert!(!quit);
+        assert!(res.is_ok());
+    }
+
+    #[tokio::test]
+    // Verifies inject_food returns quit flag true when Quit signal is present before starting phase.
+    // [utest->swreq~food_execute_schedule~1]
     async fn test_inject_food_quit_interruption() {
         let config = test_feed_config();
         let mut injection = FoodInjection::new(&config);
@@ -803,4 +885,91 @@ pub mod tests {
         let (quit, _res) = injection.inject_food(&mut channels.feed, &profile).await;
         assert!(quit);
     }
+
+    #[tokio::test]
+    // Verifies inject_food aborts immediately when Quit command is received during pause or feed sleep loops.
+    // [utest->swreq~food_execute_schedule~1]
+    async fn test_inject_food_mid_phase_quit_interruption() {
+        let config = test_feed_config();
+        let mut injection = FoodInjection::new(&config);
+        let mut channels = crate::launch::channels::Channels::new_for_test();
+
+        let mut rx_relay = channels.relay_manager.rx_relay_manager_from_feed;
+        let mut tx_relay = channels.relay_manager.tx_relay_manager_to_feed;
+        tokio::spawn(async move {
+            while rx_relay.recv().await.is_ok() {
+                let _ = tx_relay.send(true);
+            }
+        });
+
+        let mut tx_signal = channels.signal_handler.tx_signal_handler_to_feed.clone();
+        tokio::spawn(async move {
+            tokio::time::sleep(Duration::from_millis(10)).await;
+            let _ = tx_signal.send(crate::utilities::channel_content::InternalCommand::Quit);
+        });
+
+        let profile = FeedProfile {
+            profile_id: 1,
+            profile_name: "test_mid_quit".to_string(),
+            feedphases: vec![crate::food::feed_profile::FeedPhase {
+                pause_duration: 100,
+                pause_skimmer: true,
+                pause_main_pump_1: false,
+                pause_main_pump_2: false,
+                pause_aux_pump_1: false,
+                pause_aux_pump_2: false,
+                feed_duration: 100,
+                feed_skimmer: true,
+                feed_main_pump_1: false,
+                feed_main_pump_2: false,
+                feed_aux_pump_1: false,
+                feed_aux_pump_2: false,
+            }],
+        };
+
+        let (quit, _res) = injection.inject_food(&mut channels.feed, &profile).await;
+        assert!(quit);
+    }
+
+    #[tokio::test]
+    // Verifies inject_food aborts further feed phases on switching error while accumulating errors during cleanup.
+    // [utest->swreq~food_execute_schedule~1]
+    async fn test_inject_food_switch_error_aborts_and_cleans_up() {
+        let config = test_feed_config();
+        let mut injection = FoodInjection::new(&config);
+        let mut channels = crate::launch::channels::Channels::new_for_test();
+
+        let mut rx_relay = channels.relay_manager.rx_relay_manager_from_feed;
+        let tx_relay = channels.relay_manager.tx_relay_manager_to_feed;
+        tokio::spawn(async move {
+            let _ = rx_relay.recv().await;
+            drop(tx_relay);
+        });
+
+        let profile = FeedProfile {
+            profile_id: 1,
+            profile_name: "test_switch_error".to_string(),
+            feedphases: vec![crate::food::feed_profile::FeedPhase {
+                pause_duration: 5,
+                pause_skimmer: true,
+                pause_main_pump_1: true,
+                pause_main_pump_2: true,
+                pause_aux_pump_1: true,
+                pause_aux_pump_2: true,
+                feed_duration: 5,
+                feed_skimmer: true,
+                feed_main_pump_1: true,
+                feed_main_pump_2: true,
+                feed_aux_pump_1: true,
+                feed_aux_pump_2: true,
+            }],
+        };
+
+        let (quit, res) = injection.inject_food(&mut channels.feed, &profile).await;
+        assert!(!quit);
+        assert!(res.is_err());
+        let errors = res.unwrap_err();
+        assert!(!errors.is_empty());
+    }
 }
+

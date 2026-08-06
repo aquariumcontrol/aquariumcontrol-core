@@ -239,6 +239,7 @@ cfg_if::cfg_if! {
         // Test case checks if messages for heating control are triggering the corresponding channel communication
         #[test]
         // Verifies that messaging heating.
+        /// [itest->swreq~dispatch_process_posix_messages~1]
         pub fn test_messaging_heating() {
             let mut config: ConfigData =
                 read_config_file("config/aquarium_control_test_generic.toml".to_string()).unwrap();
@@ -293,6 +294,7 @@ cfg_if::cfg_if! {
         // Test case checks if messages for refill control are triggering the corresponding channel communication
         #[test]
         // Verifies that messaging refill.
+        /// [itest->swreq~dispatch_process_posix_messages~1]
         pub fn test_messaging_refill() {
             let mut config: ConfigData =
                 read_config_file("config/aquarium_control_test_generic.toml".to_string()).unwrap();
@@ -367,6 +369,7 @@ cfg_if::cfg_if! {
         // Test case checks if messages for feed control are triggering the corresponding channel communication
         #[test]
         // Verifies that messaging feed.
+        /// [itest->swreq~dispatch_process_posix_messages~1]
         pub fn test_messaging_feed() {
             let mut config: ConfigData =
                 read_config_file("config/aquarium_control_test_generic.toml".to_string()).unwrap();
@@ -441,6 +444,7 @@ cfg_if::cfg_if! {
         // Test case checks if messages for Balling control are triggering the corresponding channel communication
         #[test]
         // Verifies that messaging balling.
+        /// [itest->swreq~dispatch_process_posix_messages~1]
         pub fn test_messaging_balling() {
             let mut config: ConfigData =
                 read_config_file("config/aquarium_control_test_generic.toml".to_string()).unwrap();
@@ -497,6 +501,7 @@ cfg_if::cfg_if! {
         // Test case checks if messages for Watchdog control are triggering the corresponding channel communication
         #[test]
         // Verifies that messaging watchdog.
+        /// [itest->swreq~dispatch_process_posix_messages~1]
         pub fn test_messaging_watchdog() {
             let mut config: ConfigData =
                 read_config_file("config/aquarium_control_test_generic.toml".to_string()).unwrap();

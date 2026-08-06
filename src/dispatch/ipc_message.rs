@@ -14,6 +14,8 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 //! via POSIX message queues.
 
 /// Stores the content of the message and provides functionality for serialization and deserialization.
+///
+/// [impl->swreq~dispatch_ipc_message_encoding~1]
 #[derive(Debug, Default, Copy, Clone, PartialEq, Eq)]
 pub struct Message {
     /// The domain (subsystem) the message is addressed to.
@@ -30,6 +32,7 @@ impl Message {
     /// Creates a new `Message` instance with all its fields initialized to zero.
     ///
     /// [impl->swreq~dispatch_process_posix_messages~1]
+    /// [impl->swreq~dispatch_ipc_message_encoding~1]
     pub fn new() -> Message {
         Message {
             domain: 0,
@@ -43,6 +46,8 @@ impl Message {
     ///
     /// The format is a 20-byte buffer where bytes 4-19 contain the little-endian
     /// representation of the four `i32` fields. Bytes 0-3 are currently unused (padding).
+    ///
+    /// [impl->swreq~dispatch_ipc_message_encoding~1]
     pub fn to_bytes(&self) -> Vec<u8> {
         let mut buf = vec![0; 20];
         let domain_buf = self.domain.to_le_bytes();
@@ -82,6 +87,8 @@ impl Message {
     /// # Returns
     /// * `Ok(Message)` if parsing is successful.
     /// * `Err(&str)` if the buffer is too short.
+    ///
+    /// [impl->swreq~dispatch_ipc_message_encoding~1]
     pub fn from_bytes(msgbuf: &[u8]) -> Result<Message, &'static str> {
         if msgbuf.len() < 20 {
             return Err("Message buffer too short");
@@ -114,6 +121,8 @@ mod tests {
     use super::*;
 
     #[test]
+    // Verifies constructor and Default trait implementation for Message.
+    // [utest->swreq~dispatch_ipc_message_encoding~1]
     fn test_message_new_and_default() {
         let msg = Message::new();
         assert_eq!(msg.domain, 0);
@@ -129,7 +138,9 @@ mod tests {
     }
 
     #[test]
-    fn test_message_to_from_bytes_roundtrip() {
+    // Verifies round trip binary serialization and deserialization for Message.
+    // [utest->swreq~dispatch_ipc_message_encoding~1]
+    fn test_message_to_from_bytes_round_trip() {
         let msg = Message {
             domain: 1,
             command: 2,
@@ -148,6 +159,8 @@ mod tests {
     }
 
     #[test]
+    // Verifies error handling when deserializing a message buffer that is too short.
+    // [utest->swreq~dispatch_ipc_message_encoding~1]
     fn test_message_from_bytes_buffer_too_short() {
         let short_buffer = vec![0u8; 19];
         let result = Message::from_bytes(&short_buffer);
@@ -155,6 +168,8 @@ mod tests {
     }
 
     #[test]
+    // Verifies Copy, Clone, and Debug trait implementations for Message.
+    // [utest->swreq~dispatch_ipc_message_encoding~1]
     fn test_message_copy_clone_debug() {
         let msg = Message {
             domain: 10,
@@ -170,3 +185,4 @@ mod tests {
         assert!(format!("{:?}", msg).contains("Message"));
     }
 }
+

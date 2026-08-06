@@ -271,7 +271,7 @@ impl Balling {
     /// - `InvalidDosingInterval`: If an active pump's dosing interval is set to `0`.
     /// - `DosingIntervalShorterThanCheckInterval`: If an active pump's dosing interval is
     ///   shorter than the main `schedule_check_interval`, which would lead to illogical scheduling.
-    fn check_valid_dosing_intervals(config: &BallingConfig) -> Result<(), BallingError> {
+    pub(crate) fn check_valid_dosing_intervals(config: &BallingConfig) -> Result<(), BallingError> {
         let pumps = [
             (1, config.pump1_active, config.dosing_interval_pump1),
             (2, config.pump2_active, config.dosing_interval_pump2),
@@ -393,7 +393,7 @@ impl Balling {
     /// - The configured dosing interval for the pump is zero (`InvalidDosingInterval`).
     /// - The database query to get the duration since the last dosing fails (`ReadDurationSinceLastDosingFailure`).
     /// - The retrieved duration from the database is negative or cannot be converted to `u32` (`CalculateDurationSinceLastDosingFailure`).
-    fn calc_duration_until_next_dosing(
+    pub(crate) fn calc_duration_until_next_dosing(
         config: &BallingConfig,
         sql_interface_balling: &mut SqlInterfaceBalling,
         pump_id: i64,
@@ -514,7 +514,7 @@ impl Balling {
     /// A `bool` which is `true` if a `Quit` command was received from the signal handler
     /// during the dosing process, indicating that the application should shut down; otherwise `false`.
     #[allow(clippy::too_many_arguments)]
-    async fn execute_dosing(
+    pub(crate) async fn execute_dosing(
         &mut self,
         pump_id: u32,
         pump_device: AquariumDevice,
@@ -1038,4 +1038,156 @@ pub mod tests {
             )
         ));
     }
+
+    #[test]
+    // Verifies check_valid_dosing_intervals returns correct BallingError variants for invalid dosing intervals.
+    // [utest->swreq~mineral_read_profiles~1]
+    pub fn test_check_valid_dosing_intervals_validation_errors() {
+        let mut config = crate::mineral::balling_config::BallingConfig {
+            active: true,
+            execute: true,
+            schedule_check_interval: 60,
+            dosing_interval_pump1: 120,
+            dosing_interval_pump2: 120,
+            dosing_interval_pump3: 120,
+            dosing_interval_pump4: 120,
+            pump_switch_delay_millis: 1,
+            pump1_active: true,
+            pump2_active: false,
+            pump3_active: false,
+            pump4_active: false,
+        };
+
+        assert!(Balling::check_valid_dosing_intervals(&config).is_ok());
+
+        // Zero interval
+        config.dosing_interval_pump1 = 0;
+        let err1 = Balling::check_valid_dosing_intervals(&config);
+        assert!(matches!(err1, Err(BallingError::InvalidDosingInterval(_, 1))));
+
+        // Interval shorter than check interval
+        config.dosing_interval_pump1 = 30;
+        let err2 = Balling::check_valid_dosing_intervals(&config);
+        assert!(matches!(err2, Err(BallingError::DosingIntervalShorterThanCheckInterval(_, 1, 30, 60))));
+
+        // Test schedule_check_interval == 0 in Balling::new()
+        config.dosing_interval_pump1 = 120;
+        config.schedule_check_interval = 0;
+        let config_file_name = "/config/aquarium_control_test_generic.toml";
+        let config_data = crate::utilities::config::read_config_file_with_test_database(config_file_name.to_string(), 20);
+        let sql_interface = crate::database::sql_interface::SqlInterface::new(config_data.sql_interface).unwrap();
+        let conn = sql_interface.get_connection().unwrap();
+        let mut sql_interface_balling = crate::database::sql_interface_balling::SqlInterfaceBalling::new(conn, 100, 100).unwrap();
+        let new_err = Balling::new(config, Duration::from_secs(60), &mut sql_interface_balling);
+        assert!(matches!(new_err, Err(BallingError::ScheduleCheckIntervalZero(_))));
+    }
+
+    #[test]
+    // Verifies get_pump_from_id maps IDs 1..=4 to corresponding AquariumDevice variants and returns None for others.
+    // [utest->swreq~mineral_manual_dosing~1]
+    pub fn test_get_pump_from_id_valid_and_invalid() {
+        assert_eq!(Balling::get_pump_from_id(1), Some((1, AquariumDevice::PeristalticPump1)));
+        assert_eq!(Balling::get_pump_from_id(2), Some((2, AquariumDevice::PeristalticPump2)));
+        assert_eq!(Balling::get_pump_from_id(3), Some((3, AquariumDevice::PeristalticPump3)));
+        assert_eq!(Balling::get_pump_from_id(4), Some((4, AquariumDevice::PeristalticPump4)));
+        assert_eq!(Balling::get_pump_from_id(0), None);
+        assert_eq!(Balling::get_pump_from_id(5), None);
+    }
+
+    #[test]
+    // Verifies calc_duration_until_next_dosing calculates correct countdown for overdue, future, and zero-interval cases.
+    // [utest->swreq~mineral_compute_due~1]
+    pub fn test_calc_duration_until_next_dosing_overdue_and_future() {
+        let config_file_name = "/config/aquarium_control_test_generic.toml";
+        let config_data = crate::utilities::config::read_config_file_with_test_database(config_file_name.to_string(), 20);
+        let sql_interface = crate::database::sql_interface::SqlInterface::new(config_data.sql_interface).unwrap();
+        let conn = sql_interface.get_connection().unwrap();
+        let mut sql_interface_balling = crate::database::sql_interface_balling::SqlInterfaceBalling::new(conn, 100, 100).unwrap();
+
+        let mut config = config_data.balling;
+        config.dosing_interval_pump1 = 0;
+        let res_zero = Balling::calc_duration_until_next_dosing(&config, &mut sql_interface_balling, 1);
+        assert!(matches!(res_zero, Err(BallingError::InvalidDosingInterval(_, 1))));
+
+        config.dosing_interval_pump1 = 3600;
+        let res_valid = Balling::calc_duration_until_next_dosing(&config, &mut sql_interface_balling, 1);
+        assert!(res_valid.is_ok());
+    }
+
+    #[tokio::test]
+    // Verifies execute_dosing executes dosing pump actuation and logs database event.
+    // [utest->swreq~mineral_calc_duration~1]
+    async fn test_execute_dosing_happy_path() {
+        let config_file_name = "/config/aquarium_control_test_generic.toml";
+        let config_data = crate::utilities::config::read_config_file_with_test_database(config_file_name.to_string(), 20);
+        let sql_interface = crate::database::sql_interface::SqlInterface::new(config_data.sql_interface.clone()).unwrap();
+        let conn = sql_interface.get_connection().unwrap();
+        let mut sql_interface_balling = crate::database::sql_interface_balling::SqlInterfaceBalling::new(conn, 100, 100).unwrap();
+
+        let mut balling_config = config_data.balling;
+        balling_config.pump1_active = false;
+        balling_config.pump2_active = false;
+        balling_config.pump3_active = false;
+        balling_config.pump4_active = false;
+
+        let mut balling = Balling::new(balling_config, Duration::from_secs(60), &mut sql_interface_balling).unwrap();
+        let _ = sql_interface_balling.insert_pump_configuration(1, 5.0, 5.0, "Pump 1".to_string());
+
+        let mut channels = crate::launch::channels::Channels::new_for_test();
+        let mut rx_relay = channels.relay_manager.rx_relay_manager_from_balling;
+        let mut tx_relay = channels.relay_manager.tx_relay_manager_to_balling;
+        tokio::spawn(async move {
+            while rx_relay.recv().await.is_ok() {
+                let _ = tx_relay.send(true);
+            }
+        });
+
+        let mut mock_injection = crate::mineral::mineral_injection::MineralInjection;
+        let mutex_scheduler = Arc::new(tokio::sync::Mutex::new(0));
+
+        let quit = balling.execute_dosing(
+            1,
+            AquariumDevice::PeristalticPump1,
+            &mut mock_injection,
+            &mut channels.balling,
+            &mut sql_interface_balling,
+            &mutex_scheduler,
+            false,
+        ).await;
+        assert!(!quit);
+    }
+
+    #[tokio::test]
+    // Verifies execute_dosing handles setval retrieval failure gracefully when pump_id is invalid.
+    // [utest->swreq~mineral_log_database~1]
+    async fn test_execute_dosing_database_error_path() {
+        let config_file_name = "/config/aquarium_control_test_generic.toml";
+        let config_data = crate::utilities::config::read_config_file_with_test_database(config_file_name.to_string(), 20);
+        let sql_interface = crate::database::sql_interface::SqlInterface::new(config_data.sql_interface.clone()).unwrap();
+        let conn = sql_interface.get_connection().unwrap();
+        let mut sql_interface_balling = crate::database::sql_interface_balling::SqlInterfaceBalling::new(conn, 100, 100).unwrap();
+
+        let mut balling_config = config_data.balling;
+        balling_config.pump1_active = false;
+        balling_config.pump2_active = false;
+        balling_config.pump3_active = false;
+        balling_config.pump4_active = false;
+
+        let mut balling = Balling::new(balling_config, Duration::from_secs(60), &mut sql_interface_balling).unwrap();
+        let mut channels = crate::launch::channels::Channels::new_for_test();
+        let mut mock_injection = crate::mineral::mineral_injection::MineralInjection;
+        let mutex_scheduler = Arc::new(tokio::sync::Mutex::new(0));
+
+        let quit = balling.execute_dosing(
+            99,
+            AquariumDevice::PeristalticPump1,
+            &mut mock_injection,
+            &mut channels.balling,
+            &mut sql_interface_balling,
+            &mutex_scheduler,
+            false,
+        ).await;
+        assert!(!quit);
+    }
 }
+
