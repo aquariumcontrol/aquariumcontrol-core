@@ -605,6 +605,7 @@ mod tests {
 
     #[test]
     // Verifies that check request allowed by inactive schedule.
+    /// [utest->swreq~schedule_inhibit_heating~1]
     fn test_check_request_allowed_by_inactive_schedule() {
         // Arrange (fallback strategy is irrelevant)
         let config = default_test_config(true);
@@ -642,6 +643,7 @@ mod tests {
 
     #[test]
     // Verifies that check request no schedule fallback allow.
+    /// [utest->swreq~schedule_inhibit_heating~1]
     fn test_check_request_no_schedule_fallback_allow() {
         // Arrange with fallback strategy to allow
         let config = default_test_config(true);
@@ -675,6 +677,7 @@ mod tests {
 
     #[test]
     // Verifies that check request no schedule fallback disallow.
+    /// [utest->swreq~schedule_inhibit_heating~1]
     fn test_check_request_no_schedule_fallback_disallow() {
         // Arrange with fallback strategy to disallow
         let config = default_test_config(false);
@@ -708,6 +711,7 @@ mod tests {
 
     #[test]
     // Verifies that check request inapplicable command.
+    /// [utest->swreq~schedule_inhibit_heating~1]
     fn test_check_request_inapplicable_command() {
         // Arrange
         let config = default_test_config(false);
@@ -747,6 +751,7 @@ mod tests {
 
     #[test]
     // Verifies that check request no request on channel.
+    /// [utest->swreq~schedule_inhibit_heating~1]
     fn test_check_request_no_request_on_channel() {
         // Arrange
         let config = default_test_config(false);
@@ -781,6 +786,7 @@ mod tests {
 
     #[test]
     // Verifies that check request receive disconnected.
+    /// [utest->swreq~schedule_log_flood_protection~1]
     fn test_check_request_receive_disconnected() {
         // Arrange
         let config = default_test_config(false);
@@ -809,6 +815,7 @@ mod tests {
 
     #[test]
     // Verifies that check request send disconnected.
+    /// [utest->swreq~schedule_log_flood_protection~1]
     fn test_check_request_send_disconnected() {
         // Arrange
         let config = default_test_config(true);

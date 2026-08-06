@@ -6,7 +6,7 @@ The refill controller shall use the pre-processed tank level switch signals (`ta
 Covers:
 
 * sysreq~water1~1
-Needs: impl, itest
+Needs: impl, itest, utest
 
 ### [water] Connect to database
 `swreq~water_connect_database~1`
@@ -89,7 +89,7 @@ The controller shall identify and raise errors for:
 Covers:
 
 * sysreq~water5~1
-Needs: impl, itest
+Needs: impl, itest, utest
 
 ### [water] Faulty Sensor Protection (Volume & Count Limits)
 `swreq~water_faulty_switch_protection~1`
@@ -125,7 +125,7 @@ The system shall allow the user to define physical pump flow and volume limits i
 Covers:
 
 * sysreq~water9~1
-Needs: impl
+Needs: impl, utest
 
 ### [water] Log Flood Protection
 `swreq~water_log_flood_protection~1`

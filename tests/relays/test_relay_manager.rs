@@ -380,6 +380,7 @@ pub fn test_relay_manager_channel_communication() {
 #[test]
 // Test case tests if the relay manager is calling the flush functionality when the
 // actuator returns the IncorrectChecksum error.
+// [itest->swreq~relay_control_actuators~1]
 pub fn test_relay_manager_flush() {
     let config: ConfigData =
         read_config_file("config/aquarium_control_test_simulator.toml".to_string()).unwrap();
@@ -442,6 +443,7 @@ pub fn test_relay_manager_flush() {
 #[test]
 // Test case tests if the relay manager is calling the actuate function multiple times
 // in case actuator returns an error.
+// [itest->swreq~relay_control_actuators~1]
 pub fn test_relay_manager_repeat() {
     let config: ConfigData =
         read_config_file("config/aquarium_control_test_simulator.toml".to_string()).unwrap();

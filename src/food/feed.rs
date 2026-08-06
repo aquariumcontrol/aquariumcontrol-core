@@ -776,6 +776,7 @@ pub mod tests {
     // Test case test selection of feed schedule entry in case there are multiple entries in the past
     // This test case tests the strategy to select the first one.
     // This test case does not require any communication with the database.
+    /// [utest->swreq~food_read_schedule~1]
     pub fn test_select_feed_schedule_entry_for_execution_first() {
         setup_logger(LoggerConfig::default()).unwrap();
         let mut config: ConfigData =
@@ -800,6 +801,7 @@ pub mod tests {
     // Test case test selection of feed schedule entry in case there are multiple entries in the past
     // This test case tests the strategy to select a middle one.
     // This test case does not require any communication with the database.
+    /// [utest->swreq~food_read_schedule~1]
     pub fn test_select_feed_schedule_entry_for_execution_middle() {
         setup_logger(LoggerConfig::default()).unwrap();
         let mut config: ConfigData =
@@ -824,6 +826,7 @@ pub mod tests {
     // Test case tests selection of feed schedule entry in case there are multiple entries in the past.
     // This test case tests the strategy to select the last one.
     // This test case does not require any communication with the database.
+    /// [utest->swreq~food_read_schedule~1]
     pub fn test_select_feed_schedule_entry_for_execution_last() {
         let mut config: ConfigData =
             read_config_file("/config/aquarium_control_test_generic.toml".to_string()).unwrap();
@@ -1014,6 +1017,8 @@ pub mod tests {
     }
 
     #[test]
+    // Verifies log_feed_operation returns error when timestamp retrieval fails.
+    /// [utest->swreq~food_log_database~1]
     fn test_log_feed_operation_error_timestamp() {
         let config: ConfigData =
             read_config_file("/config/aquarium_control_test_generic.toml".to_string()).unwrap();
@@ -1025,6 +1030,8 @@ pub mod tests {
     }
 
     #[test]
+    // Verifies log_feed_operation returns error when database insertion fails.
+    /// [utest->swreq~food_log_database~1]
     fn test_log_feed_operation_error_insert() {
         let config: ConfigData =
             read_config_file("/config/aquarium_control_test_generic.toml".to_string()).unwrap();
@@ -1036,6 +1043,8 @@ pub mod tests {
     }
 
     #[tokio::test]
+    // Verifies execute_feed returns error when feed injection fails.
+    /// [utest->swreq~food_execute_schedule~1]
     async fn test_execute_feed_injection_error() {
         let config: ConfigData =
             read_config_file("/config/aquarium_control_test_generic.toml".to_string()).unwrap();
@@ -1050,6 +1059,8 @@ pub mod tests {
     }
 
     #[test]
+    // Verifies select_feed_schedule_entry_for_execution returns None for empty schedule entry slice.
+    /// [utest->swreq~food_read_schedule~1]
     fn test_select_feed_schedule_entry_empty_slice() {
         let config: ConfigData =
             read_config_file("/config/aquarium_control_test_generic.toml".to_string()).unwrap();

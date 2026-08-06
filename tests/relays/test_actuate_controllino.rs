@@ -51,6 +51,7 @@ pub fn test_invalid_relay_id_config_high() {
 
 #[test]
 // Verifies that invalid relay config duplicate.
+// [itest->swreq~relay_control_actuators~1]
 pub fn test_invalid_relay_config_duplicate() {
     let mut config: ConfigData =
         read_config_file("config/aquarium_control_test_generic.toml".to_string()).unwrap();
@@ -89,6 +90,7 @@ fn get_platform_specific_controllino_configuration() -> ActuateControllinoConfig
 #[test]
 // Test case actuates on real hardware.
 // Execution of this test case requires serial port connection to the Controllino device.
+// [itest->swreq~relay_control_actuators~1]
 pub fn test_controllino_switch_on_off_pulse() {
     let sleep_duration_500_millis = Duration::from_millis(500);
     let spin_sleeper = SpinSleeper::default();
@@ -242,6 +244,8 @@ pub fn test_controllino_switch_on_off_pulse() {
 
 #[test]
 /// Test case tests if an invalid command is rejected when preparing the message for Controllino.
+///
+/// [itest->swreq~relay_control_actuators~1]
 pub fn test_create_message_invalid_command() {
     let config: ConfigData =
         read_config_file("config/aquarium_control_test_simulator.toml".to_string()).unwrap();
@@ -261,6 +265,7 @@ pub fn test_create_message_invalid_command() {
 // Test case tests the implementation of the relay logic.
 // During the creation of the message to Controllino, the application considers
 // if relay needs to bet set or unset to switch on/off a device.
+// [itest->swreq~relay_control_actuators~1]
 pub fn test_controllino_create_message_switch_on_with_set_relay_switch_off_with_unset_relay() {
     let config: ConfigData =
         read_config_file("config/aquarium_control_test_simulator.toml".to_string()).unwrap();
@@ -553,6 +558,7 @@ pub fn test_controllino_create_message_switch_on_with_set_relay_switch_off_with_
 #[test]
 // Tests the message creation for pulse command.
 // Pulse command is only permitted for a subset of the devices (e.g., peristaltic pumps).
+// [itest->swreq~relay_control_actuators~1]
 pub fn test_create_message_pulse() {
     let config: ConfigData =
         read_config_file("config/aquarium_control_test_simulator.toml".to_string()).unwrap();
@@ -691,6 +697,7 @@ pub fn test_create_message_pulse() {
 #[test]
 // Test case actuates on real hardware.
 // Execution of this test case requires serial port connection to the Controllino device.
+// [itest->swreq~relay_control_actuators~1]
 pub fn test_controllino_simulate_feed_profile() {
     let sleep_duration_500_millis = Duration::from_millis(500);
     let sleep_duration_8_secs = Duration::from_secs(8);

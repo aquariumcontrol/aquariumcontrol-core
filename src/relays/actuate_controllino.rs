@@ -737,6 +737,8 @@ mod tests {
     }
 
     #[test]
+    // Verifies create heartbeat message.
+    /// [utest->swreq~relay_control_actuators~1]
     fn test_create_heartbeat_message() {
         let msg = create_heartbeat_message();
         assert_eq!(msg.data[0], b'H');
@@ -744,6 +746,8 @@ mod tests {
     }
 
     #[test]
+    // Verifies get relay command error cases.
+    /// [utest->swreq~relay_control_actuators~1]
     fn test_get_relay_command_error_cases() {
         let config: ConfigData =
             read_config_file("config/aquarium_control_test_generic.toml".to_string()).unwrap();
@@ -784,6 +788,8 @@ mod tests {
     }
 
     #[test]
+    // Verifies create command message error cases.
+    /// [utest->swreq~relay_control_actuators~1]
     fn test_create_command_message_error_cases() {
         let config: ConfigData =
             read_config_file("config/aquarium_control_test_generic.toml".to_string()).unwrap();
@@ -805,6 +811,8 @@ mod tests {
     }
 
     #[test]
+    // Verifies actuate controllino inactive and error paths.
+    /// [utest->swreq~relay_control_actuators~1]
     fn test_actuate_controllino_inactive_and_error_paths() {
         let mut config: ConfigData =
             read_config_file("config/aquarium_control_test_generic.toml".to_string()).unwrap();

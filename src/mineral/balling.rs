@@ -836,6 +836,7 @@ pub mod tests {
     // Test case checks if the target dosing duration is calculated correctly
     // using zero dosing speed as input.
     // The test case does not require any communication with the database.
+    /// [utest->swreq~mineral_calc_duration~1]
     pub fn test_calc_target_dosing_duration_millis_zero_dosing_speed() {
         let balling_setval = BallingSetVal {
             pump_id: 1,
@@ -854,6 +855,7 @@ pub mod tests {
     // Test case checks if the target dosing duration is calculated correctly
     // using negative dosing speed as input.
     // The test case does not require any communication with the database.
+    /// [utest->swreq~mineral_calc_duration~1]
     pub fn test_calc_target_dosing_duration_millis_negative_dosing_speed() {
         let balling_setval = BallingSetVal {
             pump_id: 1,
@@ -872,6 +874,7 @@ pub mod tests {
     // Test case checks if the target dosing duration is calculated correctly
     // using a zero dosing volume as input.
     // The test case does not require any communication with the database.
+    /// [utest->swreq~mineral_calc_duration~1]
     pub fn test_calc_target_dosing_duration_millis_zero_dosing_volume() {
         let balling_setval = BallingSetVal {
             pump_id: 1,
@@ -890,6 +893,7 @@ pub mod tests {
     // Test case checks if the target dosing duration is calculated correctly
     // using negative dosing volume as input.
     // The test case does not require any communication with the database.
+    /// [utest->swreq~mineral_calc_duration~1]
     pub fn test_calc_target_dosing_duration_millis_negative_dosing_volume() {
         let balling_setval = BallingSetVal {
             pump_id: 1,
@@ -908,6 +912,7 @@ pub mod tests {
     // Test case checks if the actual dosing duration is calculated correctly
     // considering only valid input values.
     // The test case does not require any communication with the database.
+    /// [utest->swreq~mineral_log_database~1]
     pub fn test_calc_actual_dosing_volume_happy_case() {
         let balling_setval = BallingSetVal {
             pump_id: 1,
@@ -926,6 +931,7 @@ pub mod tests {
     // Test case checks if the actual dosing duration is calculated correctly
     // using zero dosing speed as input.
     // The test case does not require any communication with the database.
+    /// [utest->swreq~mineral_log_database~1]
     pub fn test_calc_actual_dosing_volume_zero_dosing_speed() {
         let balling_setval = BallingSetVal {
             pump_id: 1,
@@ -944,6 +950,7 @@ pub mod tests {
     // Test case checks if the actual dosing duration is calculated correctly
     // using negative dosing speed as input.
     // The test case does not require any communication with the database.
+    /// [utest->swreq~mineral_log_database~1]
     pub fn test_calc_actual_dosing_volume_negative_dosing_speed() {
         let balling_setval = BallingSetVal {
             pump_id: 1,
@@ -962,6 +969,7 @@ pub mod tests {
     // Test case checks if the actual dosing duration is calculated correctly
     // using zero actual dosing duration as input.
     // The test case does not require any communication with the database.
+    /// [utest->swreq~mineral_log_database~1]
     pub fn test_calc_actual_dosing_volume_zero_actual_dosing_duration() {
         let balling_setval = BallingSetVal {
             pump_id: 1,
@@ -975,6 +983,7 @@ pub mod tests {
 
     #[test]
     // Test case checks that get_target_dosing_interval returns the correct dosing interval for valid pump IDs 1..=4.
+    /// [utest->swreq~mineral_read_profiles~1]
     pub fn test_get_target_dosing_interval_valid_pumps() {
         let config = crate::mineral::balling_config::BallingConfig {
             active: true,
@@ -1011,6 +1020,7 @@ pub mod tests {
 
     #[test]
     // Test case checks that get_target_dosing_interval returns CountdownCalculationInvalidPumpId for invalid pump IDs.
+    /// [utest->swreq~mineral_read_profiles~1]
     pub fn test_get_target_dosing_interval_invalid_pump_id() {
         let config = crate::mineral::balling_config::BallingConfig {
             active: true,

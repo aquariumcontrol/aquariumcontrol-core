@@ -6,7 +6,7 @@ The control system shall query the database at check intervals to retrieve dosin
 Covers:
 
 * sysreq~mineral1~1
-Needs: impl, itest
+Needs: impl, itest, utest
 
 ### [mineral] Compute Next Mineral Injection Due Time
 `swreq~mineral_compute_due~1`
@@ -16,7 +16,7 @@ The controller shall read the historic dosing logs and determine when the next d
 Covers:
 
 * sysreq~mineral2~1
-Needs: impl, itest
+Needs: impl, itest, utest
 
 ### [mineral] Calculate Dosing Injection Duration
 `swreq~mineral_calc_duration~1`
@@ -36,7 +36,7 @@ The control system shall write records to the database dosing log table containi
 Covers:
 
 * sysreq~mineral4~1
-Needs: impl, itest
+Needs: impl, itest, utest
 
 ### [mineral] Execute Manual Dosing
 `swreq~mineral_manual_dosing~1`
@@ -46,7 +46,7 @@ The controller shall parse manual dosing requests targeting specific pumps and a
 Covers:
 
 * sysreq~mineral5~1
-Needs: impl, itest
+Needs: impl, itest, utest
 
 ### [mineral] Stop Mineral Dosing Indefinitely
 `swreq~mineral_stop_indefinitely~1`

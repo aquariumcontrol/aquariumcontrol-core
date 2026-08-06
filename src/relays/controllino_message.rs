@@ -158,6 +158,7 @@ mod tests {
 
     #[test]
     // Verifies that new controllino message set relay.
+    /// [utest->swreq~relay_control_actuators~1]
     fn test_new_controllino_message_set_relay() {
         // Arrange: Create content for a simple "Set Relay" command with no duration.
         let command = 'S';
@@ -187,6 +188,7 @@ mod tests {
 
     #[test]
     // Verifies that new controllino message pulse relay.
+    /// [utest->swreq~relay_control_actuators~1]
     fn test_new_controllino_message_pulse_relay() {
         // Arrange: Create content for a "Pulse Relay" command with a duration.
         let command = 'P';
@@ -216,6 +218,7 @@ mod tests {
 
     #[test]
     // Verifies that new controllino message heartbeat zero values.
+    /// [utest->swreq~relay_control_actuators~1]
     fn test_new_controllino_message_heartbeat_zero_values() {
         // Arrange: Test with zero values for ID and duration (e.g., a heartbeat).
         let command = 'H';
@@ -245,6 +248,7 @@ mod tests {
 
     #[test]
     // Verifies that new controllino message max values.
+    /// [utest->swreq~relay_control_actuators~1]
     fn test_new_controllino_message_max_values() {
         // Arrange: Test with maximum values for ID and duration.
         let command = 'X';

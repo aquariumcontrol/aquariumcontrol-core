@@ -205,6 +205,7 @@ mod tests {
 
     #[test]
     // Tests the successful creation of a `FeedScheduleEntry` when `repeat_daily` is 1.
+    /// [utest->swreq~food_read_schedule~1]
     fn test_new_with_repeat_daily_one() {
         println!("* Testing FeedScheduleEntry::new with repeat_daily = 1...");
         // --- Setup ---
@@ -225,6 +226,7 @@ mod tests {
 
     #[test]
     // Tests that `new` returns an error when `repeat_daily` is greater than 1.
+    /// [utest->swreq~food_read_schedule~1]
     fn test_new_with_repeat_daily_out_of_range_positive() {
         println!("* Testing FeedScheduleEntry::new with repeat_daily > 1...");
         // --- Setup ---
@@ -252,6 +254,7 @@ mod tests {
 
     #[test]
     // Tests that `new` returns an error when `repeat_daily` is less than 0.
+    /// [utest->swreq~food_read_schedule~1]
     fn test_new_with_repeat_daily_out_of_range_negative() {
         println!("* Testing FeedScheduleEntry::new with repeat_daily < 0...");
         // --- Setup ---

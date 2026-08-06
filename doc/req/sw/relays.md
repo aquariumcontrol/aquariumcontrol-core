@@ -6,7 +6,7 @@ The RelayManager component shall receive state commands (`SwitchOn` / `SwitchOff
 Covers:
 
 * sysreq~relay1~1
-Needs: impl, itest
+Needs: impl, itest, utest
 
 ### [relays] Log Flood Protection
 `swreq~relays_log_flood_protection~1`

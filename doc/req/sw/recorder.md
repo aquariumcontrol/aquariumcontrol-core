@@ -16,7 +16,7 @@ The system shall filter raw sensor inputs using an Infinite Impulse Response (II
 Covers:
 
 * sysreq~recorder2~1
-Needs: impl, utest
+Needs: impl, utest, itest
 
 ### [recorder] Connect to database
 `swreq~recorder_connect_database~1`

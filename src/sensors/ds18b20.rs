@@ -418,6 +418,7 @@ pub mod tests {
 
     #[test]
     // Verifies that new fails with identical sensor ids.
+    /// [utest->swreq~sensors_read_data~1]
     fn test_new_fails_with_identical_sensor_ids() {
         // Arrange: Create a configuration where both water and ambient sensors
         // are assigned the exact same ID.
@@ -446,6 +447,7 @@ pub mod tests {
 
     #[test]
     // Verifies Ds18b20ResultData::new_for_test creates default result data.
+    /// [utest->swreq~sensors_read_data~1]
     fn test_ds18b20_result_data_new_for_test() {
         use crate::sensors::ds18b20::Ds18b20ResultData;
         let res = Ds18b20ResultData::new_for_test();
@@ -454,6 +456,7 @@ pub mod tests {
 
     #[test]
     // Verifies Ds18b20::new returns correct errors for empty base path, empty sensor prefix, empty file name, and missing sensor IDs.
+    /// [utest->swreq~sensors_read_data~1]
     fn test_new_configuration_validation_errors() {
         let mut config = Ds18b20Config {
             active: true,
@@ -503,6 +506,7 @@ pub mod tests {
 
     #[test]
     // Verifies parse_contents returns TemperatureParseError for non-numeric input and TemperatureOutOfRange for values outside valid bounds.
+    /// [utest->swreq~sensors_read_data~1]
     fn test_parse_contents_error_branches() {
         let config = Ds18b20Config {
             active: true,

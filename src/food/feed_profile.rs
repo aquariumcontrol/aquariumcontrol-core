@@ -204,6 +204,7 @@ mod tests {
     /// Tests that `calc_feeder_runtime` correctly calculates the runtime for a single feed phase.
     #[test]
     // Verifies that calc feeder runtime single phase.
+    /// [utest->swreq~food_log_database~1]
     fn test_calc_feeder_runtime_single_phase() {
         println!("* Testing calc_feeder_runtime with a single phase...");
         let phase = FeedPhase::new(
@@ -226,6 +227,7 @@ mod tests {
     /// Tests that `calc_feeder_runtime` correctly sums the durations from multiple feed phases.
     #[test]
     // Verifies that calc feeder runtime multiple phases.
+    /// [utest->swreq~food_log_database~1]
     fn test_calc_feeder_runtime_multiple_phases() {
         println!("* Testing calc_feeder_runtime with multiple phases...");
         let phase1 = FeedPhase::new(
@@ -256,6 +258,7 @@ mod tests {
     /// Tests that phases with a `feed_duration` of zero do not contribute to the total runtime.
     #[test]
     // Verifies that calc feeder runtime with zero duration.
+    /// [utest->swreq~food_log_database~1]
     fn test_calc_feeder_runtime_with_zero_duration() {
         println!("* Testing calc_feeder_runtime with zero-duration phases...");
         let phase1 = FeedPhase::new(
@@ -287,6 +290,7 @@ mod tests {
     /// Tests the edge case where a `feed_duration` is negative, which is possible with the `i16` type.
     #[test]
     // Verifies that calc feeder runtime with negative duration.
+    /// [utest->swreq~food_log_database~1]
     fn test_calc_feeder_runtime_with_negative_duration() {
         println!("* Testing calc_feeder_runtime with a negative duration (edge case)...");
         let phase1 = FeedPhase::new(

@@ -881,6 +881,7 @@ pub mod tests {
 
     #[test]
     // Verifies SensorManagerSignals::new initializes signals with replacement values from configuration.
+    /// [utest->swreq~sensors_read_data~1]
     fn test_sensor_manager_signals_new() {
         let config = SensorManagerConfig {
             use_simulator: false,
@@ -906,6 +907,7 @@ pub mod tests {
 
     #[test]
     // Verifies SensorManager::new returns correct error variants for invalid ambient or water temperature sensor sources.
+    /// [utest->swreq~sensors_read_data~1]
     fn test_sensor_manager_new_invalid_config_errors() {
         let mut config = SensorManagerConfig {
             use_simulator: false,
@@ -942,6 +944,7 @@ pub mod tests {
 
     #[test]
     // Verifies read_sensor_values_from_mutexes reads ambient temperature from DHT and water temperature from Atlas Scientific.
+    /// [utest->swreq~sensors_read_data~1]
     fn test_read_sensor_values_alternate_sources() {
         let config = SensorManagerConfig {
             use_simulator: false,
@@ -981,6 +984,7 @@ pub mod tests {
         expected = "configured to run with simulator, but no channel to TCP thread provided."
     )]
     // Verifies execute panics when configured to use simulator but no TCP channels are provided.
+    /// [utest->swreq~sensors_read_data~1]
     async fn test_execute_simulator_missing_channels_panics() {
         use crate::launch::channels::channel;
 

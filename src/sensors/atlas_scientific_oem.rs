@@ -511,6 +511,7 @@ pub mod tests {
 
     #[test]
     // Verifies parse_oem_response handles valid Big Endian u32 byte decoding and response length validation errors.
+    /// [utest->swreq~sensors_read_data~1]
     fn test_parse_oem_response() {
         let oem = AtlasScientificOem::new(
             0x66,
@@ -542,6 +543,7 @@ pub mod tests {
 
     #[test]
     // Verifies send_request_to_i2c_interface sends request successfully and handles disconnected channel errors.
+    /// [utest->swreq~sensors_read_data~1]
     fn test_send_request_to_i2c_interface() {
         let oem = AtlasScientificOem::new(
             0x66,
@@ -581,6 +583,7 @@ pub mod tests {
 
     #[test]
     // Verifies receive_response_from_i2c_interface handles successful responses, disconnected channels, invalid signals, and I2C failures.
+    /// [utest->swreq~sensors_read_data~1]
     fn test_receive_response_from_i2c_interface() {
         let mut oem = AtlasScientificOem::new(
             0x66,
@@ -684,6 +687,7 @@ pub mod tests {
 
     #[test]
     // Verifies device_init wake-up, device type verification, and length/device-type error paths.
+    /// [utest->swreq~sensors_read_data~1]
     fn test_device_init() {
         let oem = AtlasScientificOem::new(
             0x66,
@@ -810,6 +814,7 @@ pub mod tests {
 
     #[test]
     // Verifies get_mutex_access_duration_exceeded reporting across temperature, pH, and conductivity signals.
+    /// [utest->swreq~sensors_read_data~1]
     fn test_get_mutex_access_duration_exceeded() {
         let mut oem = AtlasScientificOem::new(
             0x66,

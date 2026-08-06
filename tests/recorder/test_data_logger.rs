@@ -155,6 +155,9 @@ fn test_new_success_with_file_creation() {
 #[test]
 /// Tests one full cycle of the `execute` loop, verifying that data is
 /// correctly acquired from mutexes, filtered, and injected.
+///
+/// [itest->swreq~recorder_store_measurements~1]
+/// [itest->swreq~recorder_apply_iir_filter~1]
 fn test_execute_data_aggregation_and_injection() {
     // 1. Setup
     let global_config =
@@ -244,6 +247,8 @@ fn test_execute_data_aggregation_and_injection() {
 #[test]
 /// Verifies that the `execute` loop correctly writes sensor and state
 /// data to files when `output_to_disk` is enabled.
+///
+/// [itest->swreq~recorder_store_measurements~1]
 fn test_execute_file_output() {
     // 1. Setup
     let global_config =

@@ -29,6 +29,7 @@ cfg_if::cfg_if! {
 #[cfg(feature = "test-utils")]
 #[test]
 // Test case checks if AtlasScientific::create_drivers returns an error if the configuration contains invalid data.
+// [itest->swreq~sensors_read_data~1]
 fn test_new_with_invalid_configuration() {
     let mut config: ConfigData =
         read_config_file("config/aquarium_control_test_generic.toml".to_string()).unwrap();

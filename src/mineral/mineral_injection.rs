@@ -230,6 +230,7 @@ pub mod tests {
 
     #[tokio::test]
     // Test case checks that send_and_confirm returns gracefully when send_to_relay_manager fails.
+    /// [utest->swreq~mineral_calc_duration~1]
     pub async fn test_send_and_confirm_send_failure() {
         let mut channels = Channels::new_for_test();
 
@@ -248,6 +249,7 @@ pub mod tests {
 
     #[tokio::test]
     // Test case checks that send_and_confirm handles receive failure gracefully when relay manager receiver is dropped.
+    /// [utest->swreq~mineral_calc_duration~1]
     pub async fn test_send_and_confirm_recv_failure() {
         let mut channels = Channels::new_for_test();
 
@@ -266,6 +268,7 @@ pub mod tests {
 
     #[tokio::test]
     // Test case checks that send_and_confirm completes successfully when relay manager responds with confirmation.
+    /// [utest->swreq~mineral_calc_duration~1]
     pub async fn test_send_and_confirm_success() {
         let mut channels = Channels::new_for_test();
 

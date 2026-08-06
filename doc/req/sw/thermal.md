@@ -16,7 +16,7 @@ The controller shall repeatedly read ventilation temperature setpoint windows an
 Covers:
 
 * sysreq~thermal2~1
-Needs: impl, itest
+Needs: impl, itest, utest
 
 ### [thermal] Stop Ventilation Control Remotely
 `swreq~thermal_remote_ventilation_stop~1`
@@ -56,7 +56,7 @@ The controller shall repeatedly read heating temperature setpoint windows and hy
 Covers:
 
 * sysreq~thermal6~1
-Needs: impl, itest
+Needs: impl, itest, utest
 
 ### [thermal] Stop Heating Control Remotely
 `swreq~thermal_remote_heating_stop~1`

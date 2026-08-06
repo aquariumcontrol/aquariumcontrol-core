@@ -229,6 +229,7 @@ fn insert_pump_configurations(
 #[test]
 // This test case checks if the configuration file contains a valid value for the dosing interval.
 // It does not operate on any data from SQL database.
+// [itest->swreq~mineral_read_profiles~1]
 pub fn test_balling_initialization_invalid_intervals() {
     let mut config: ConfigData = read_balling_config();
 
@@ -277,6 +278,7 @@ pub fn test_balling_initialization_invalid_intervals() {
 // When starting, the application checks when the last dosing events took place by analyzing
 // data from the database. As a prerequisite for this test case, an empty dosing log is required.
 // Test case uses test database #01.
+// [itest->swreq~mineral_compute_due~1]
 pub fn test_balling_initialization_empty_dosing_log() {
     let config: ConfigData = read_balling_config_with_database(1);
 
@@ -330,6 +332,7 @@ pub fn test_balling_initialization_empty_dosing_log() {
 // a dosing log in the database which has entries for all pumps.
 // Additionally, the test case checks the maximum row limitation for the dosing log.
 // Test case uses test database #02.
+// [itest->swreq~mineral_compute_due~1]
 pub fn test_balling_initialization_full_dosing_log() {
     let config: ConfigData = read_balling_config_with_database(2);
 
@@ -388,6 +391,7 @@ pub fn test_balling_initialization_full_dosing_log() {
 #[test]
 // This test case checks if the code checks the dosing interval against the check interval.
 // It does not operate on any data from SQL database.
+// [itest->swreq~mineral_read_profiles~1]
 pub fn test_balling_initialization_invalid_dosing_check_interval() {
     let mut config: ConfigData = read_balling_config();
 
@@ -445,6 +449,7 @@ pub fn test_balling_initialization_invalid_dosing_check_interval() {
 #[test]
 // This test case checks that `Balling::new` returns an error when the
 // schedule_check_interval is set to zero in the configuration.
+// [itest->swreq~mineral_read_profiles~1]
 pub fn test_balling_initialization_zero_check_interval() {
     let mut config: ConfigData = read_balling_config();
     config.balling.schedule_check_interval = 0;
@@ -888,6 +893,7 @@ pub fn test_messaging_stops_starts_balling_dosing() {
 // if there is a database entry for a pump that is configured as active.
 // The code shall return an error of type BallingError if there is no matching database entry.
 // Test case uses test database #48.
+// [itest->swreq~mineral_read_profiles~1]
 pub fn test_check_database_vs_config() {
     let mut config: ConfigData = read_balling_config_with_database(48);
 
@@ -1123,6 +1129,7 @@ pub fn test_balling_dosing_external_requests() {
 // - pump #1 is active
 // - the schedule checker is allowing operation
 // Test case uses test database #03.
+// [itest->swreq~mineral_calc_duration~1]
 pub fn test_balling_dosing_schedule_allows_single_dosing() {
     test_balling_dosing(
         3,                        // index for determining test the database
@@ -1165,6 +1172,7 @@ pub fn test_balling_dosing_schedule_forbids() {
 // - the schedule checker is allowing operation
 // - dosing intervals are short so that lots of dosing events are triggered
 // Test case uses test database #05.
+// [itest->swreq~mineral_calc_duration~1]
 pub fn test_balling_dosing_schedule_allows_multiple_dosings() {
     test_balling_dosing(
         5,                  // index for determining test database
@@ -1186,6 +1194,7 @@ pub fn test_balling_dosing_schedule_allows_multiple_dosings() {
 // During this period, dosing actuation must be blocked. Once the lock is released by the test environment,
 // dosing actuation proceeds and completes normally.
 // Test case uses test database #67.
+// [itest->swreq~mineral_calc_duration~1]
 pub fn test_balling_dosing_with_mutex_blocked() {
     let spin_sleeper = SpinSleeper::default();
     let test_db_number = 67;

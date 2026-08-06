@@ -211,6 +211,8 @@ mod tests {
     use crate::utilities::config::{read_config_file, ConfigData};
 
     #[test]
+    // Verifies actuate simulator happy path.
+    /// [utest->swreq~relay_control_actuators~1]
     fn test_actuate_simulator_happy_path() {
         let config_data: ConfigData =
             read_config_file("config/aquarium_control_test_generic.toml".to_string()).unwrap();
@@ -243,6 +245,8 @@ mod tests {
     }
 
     #[test]
+    // Verifies actuate simulator error handling when not initialized.
+    /// [utest->swreq~relay_control_actuators~1]
     fn test_actuate_simulator_not_initialized() {
         let config_data: ConfigData =
             read_config_file("config/aquarium_control_test_generic.toml".to_string()).unwrap();
@@ -258,6 +262,8 @@ mod tests {
     }
 
     #[test]
+    // Verifies actuate simulator error handling when sending fails.
+    /// [utest->swreq~relay_control_actuators~1]
     fn test_actuate_simulator_send_failed() {
         let config_data: ConfigData =
             read_config_file("config/aquarium_control_test_generic.toml".to_string()).unwrap();
@@ -276,6 +282,8 @@ mod tests {
     }
 
     #[test]
+    // Verifies actuate simulator error handling for irrelevant commands.
+    /// [utest->swreq~relay_control_actuators~1]
     fn test_actuate_simulator_irrelevant_commands() {
         let config_data: ConfigData =
             read_config_file("config/aquarium_control_test_generic.toml".to_string()).unwrap();

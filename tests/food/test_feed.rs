@@ -726,6 +726,7 @@ pub fn test_feed_schedule_execution_past_entries_select_oldest() {
 // The test environment thread acquires and holds the device_scheduler mutex lock before feed profile actuation occurs.
 // While the lock is held, feed profile actuation is blocked. Once released, feed profile actuation proceeds normally.
 // Test case uses test database #69.
+// [itest->swreq~food_execute_schedule~1]
 pub fn test_feed_schedule_execution_with_mutex_blocked() {
     let sleep_duration_100_millis = Duration::from_millis(100);
     let sleep_duration_6_seconds = Duration::from_millis(6000);

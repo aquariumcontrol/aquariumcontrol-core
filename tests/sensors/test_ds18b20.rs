@@ -88,6 +88,7 @@ fn test_read_ds18b20() {
 
 #[test]
 // This test case read sensor data provided by a file.
+// [itest->swreq~sensors_read_data~1]
 fn test_read_ds18b20_from_file() {
     let mut config =
         read_config_file("config/aquarium_control_test_generic.toml".to_string()).unwrap();
@@ -98,15 +99,16 @@ fn test_read_ds18b20_from_file() {
 
     config.ds18b20.system_driver_base_path = out_dir + "/tests/fixtures";
 
-    let water_temperature_sensor_id = config.ds18b20.water_temperature_sensor_id.clone();
+    let valid_temperature_sensor_id = config.ds18b20.water_temperature_sensor_id.clone();
 
     let ds18b20 = Ds18b20::new(config.ds18b20).unwrap();
-    match ds18b20.read(&water_temperature_sensor_id) {
+
+    match ds18b20.read(&valid_temperature_sensor_id) {
         Ok(temperature) => {
+            println!("Temperature: {:.2}°C ", temperature.value);
+            assert_eq!(temperature.value, 24.437);
             println!(
-                "{}: Temperature read from file: {:.2}°C ({} milliseconds ago)",
-                module_path!(),
-                temperature.value,
+                "Measurement instant was {:?} millis ago.",
                 temperature.measurement_instant.elapsed().as_millis()
             );
         }
@@ -118,6 +120,7 @@ fn test_read_ds18b20_from_file() {
 
 #[test]
 // Test case checks if invalid configuration of the system driver base path is recognized during startup.
+// [itest->swreq~sensors_read_data~1]
 fn test_dsb18b20_init_with_invalid_system_driver_base_path() {
     let mut config =
         read_config_file("config/aquarium_control_test_generic.toml".to_string()).unwrap();
@@ -131,6 +134,7 @@ fn test_dsb18b20_init_with_invalid_system_driver_base_path() {
 
 #[test]
 // Test case checks if invalid configuration of the system driver sensor path prefix is recognized during startup.
+// [itest->swreq~sensors_read_data~1]
 fn test_dsb18b20_init_with_invalid_system_driver_sensor_path_prefix() {
     let mut config =
         read_config_file("config/aquarium_control_test_generic.toml".to_string()).unwrap();
@@ -144,6 +148,7 @@ fn test_dsb18b20_init_with_invalid_system_driver_sensor_path_prefix() {
 
 #[test]
 // Test case checks if invalid configuration of the system driver sensor file name is recognized during startup.
+// [itest->swreq~sensors_read_data~1]
 fn test_dsb18b20_init_with_invalid_system_driver_file_name() {
     let mut config =
         read_config_file("config/aquarium_control_test_generic.toml".to_string()).unwrap();
@@ -157,6 +162,7 @@ fn test_dsb18b20_init_with_invalid_system_driver_file_name() {
 
 #[test]
 // Test case checks if invalid configuration of the sensor ids is recognized during startup.
+// [itest->swreq~sensors_read_data~1]
 fn test_dsb18b20_init_with_invalid_sensor_ids() {
     let mut config =
         read_config_file("config/aquarium_control_test_generic.toml".to_string()).unwrap();
@@ -169,6 +175,7 @@ fn test_dsb18b20_init_with_invalid_sensor_ids() {
 
 #[test]
 // Test case checks if function returns error for an incorrect sensor id
+// [itest->swreq~sensors_read_data~1]
 fn test_dsb18b20_read_from_invalid_sensor_id() {
     let mut config =
         read_config_file("config/aquarium_control_test_generic.toml".to_string()).unwrap();
@@ -194,6 +201,7 @@ fn test_dsb18b20_read_from_invalid_sensor_id() {
 
 #[test]
 // Test case checks if function returns error when not being able to read from the device file
+// [itest->swreq~sensors_read_data~1]
 fn test_dsb18b20_read_from_file_failed() {
     let mut config =
         read_config_file("config/aquarium_control_test_generic.toml".to_string()).unwrap();
@@ -216,6 +224,7 @@ fn test_dsb18b20_read_from_file_failed() {
 
 #[test]
 // Test case checks if function returns error when the device file does not provide enough lines
+// [itest->swreq~sensors_read_data~1]
 fn test_dsb18b20_file_with_one_line_only() {
     let mut config =
         read_config_file("config/aquarium_control_test_generic.toml".to_string()).unwrap();
@@ -238,6 +247,7 @@ fn test_dsb18b20_file_with_one_line_only() {
 
 #[test]
 // Test case checks if function returns error when the first line of device file content does not match "YES"
+// [itest->swreq~sensors_read_data~1]
 fn test_dsb18b20_file_with_line_not_ending_with_yes() {
     let mut config =
         read_config_file("config/aquarium_control_test_generic.toml".to_string()).unwrap();
@@ -260,6 +270,7 @@ fn test_dsb18b20_file_with_line_not_ending_with_yes() {
 
 #[test]
 // Test case checks if function returns error when file content does not contain temperature
+// [itest->swreq~sensors_read_data~1]
 fn test_dsb18b20_file_without_temperature() {
     let mut config =
         read_config_file("config/aquarium_control_test_generic.toml".to_string()).unwrap();
@@ -282,6 +293,7 @@ fn test_dsb18b20_file_without_temperature() {
 
 #[test]
 // Test case checks if function returns error when file content contains unparsable data
+// [itest->swreq~sensors_read_data~1]
 fn test_dsb18b20_unparsable() {
     let mut config =
         read_config_file("config/aquarium_control_test_generic.toml".to_string()).unwrap();
@@ -304,6 +316,7 @@ fn test_dsb18b20_unparsable() {
 
 #[test]
 // Test case checks if function returns error when the temperature is too hot
+// [itest->swreq~sensors_read_data~1]
 fn test_dsb18b20_temperature_too_hot() {
     let mut config =
         read_config_file("config/aquarium_control_test_generic.toml".to_string()).unwrap();
@@ -326,6 +339,7 @@ fn test_dsb18b20_temperature_too_hot() {
 
 #[test]
 // Test case checks if function returns error when the temperature is too cold
+// [itest->swreq~sensors_read_data~1]
 fn test_dsb18b20_temperature_too_cold() {
     let mut config =
         read_config_file("config/aquarium_control_test_generic.toml".to_string()).unwrap();
@@ -349,6 +363,7 @@ fn test_dsb18b20_temperature_too_cold() {
 #[cfg(feature = "test-utils")]
 #[test]
 // Verifies that dsb18b20 channel mutexes without locking mutexes.
+// [itest->swreq~sensors_read_data~1]
 fn test_dsb18b20_channel_mutexes_without_locking_mutexes() {
     let mut config =
         read_config_file("config/aquarium_control_test_generic.toml".to_string()).unwrap();
@@ -435,6 +450,7 @@ fn test_dsb18b20_channel_mutexes_without_locking_mutexes() {
 #[cfg(feature = "test-utils")]
 #[test]
 // Verifies that dsb18b20 channel mutexes with locking mutexes.
+// [itest->swreq~sensors_read_data~1]
 fn test_dsb18b20_channel_mutexes_with_locking_mutexes() {
     let mut config =
         read_config_file("config/aquarium_control_test_generic.toml".to_string()).unwrap();

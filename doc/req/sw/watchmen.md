@@ -6,7 +6,7 @@ The control system shall monitor thread loop execution times and track mutex loc
 Covers:
 
 * sysreq~watchmen~1
-Needs: impl, itest, utest
+Needs: impl, utest
 
 ### [watchmen] Pet Watchdog
 `swreq~watchmen_pet_watchdog~1`
@@ -16,7 +16,7 @@ The watchdog loop shall write the heartbeat signal to the configured watchdog fi
 Covers:
 
 * sysreq~watchmen2~1
-Needs: impl, itest
+Needs: impl, itest, utest
 
 ### [watchmen] Trigger Reboot on Stall
 `swreq~watchmen_reboot_on_stall~1`

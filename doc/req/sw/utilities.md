@@ -6,7 +6,7 @@ The signal handler shall capture operating system terminal signals (like SIGINT,
 Covers:
 
 * sysreq~utilities1~1
-Needs: impl, itest
+Needs: impl, itest, utest
 
 ### [utilities] Parse TOML Configuration
 `swreq~utilities_parse_toml_config~1`
@@ -38,4 +38,4 @@ Otherwise, the application shall abort the startup.
 Covers:
 
 * sysreq~utilities4~1
-Needs: impl, itest
+Needs: impl, itest, utest

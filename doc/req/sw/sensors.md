@@ -10,7 +10,7 @@ The control system shall read measurements from configured sensor hardware:
 Covers:
 
 * sysreq~sensors1~1
-Needs: impl, itest
+Needs: impl, itest, utest
 
 ### [sensors] Tank Level Switch Signal Preprocessing
 `swreq~sensors_tank_level_switch_preprocessing~1`
