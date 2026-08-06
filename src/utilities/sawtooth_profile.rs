@@ -250,7 +250,8 @@ pub mod tests {
     // - beginning/end of each phase
     // - middle of each phase
     #[test]
-    // Verifies that saw tooth profile.
+    // Verifies saw tooth profile calculation cycles through 4 phases correctly.
+    // [utest->swreq~thermal_read_heating_limits~1]
     pub fn test_saw_tooth_profile() {
         let saw_tooth_profile_config = SawToothProfileConfig {
             phase1_length: 10,
@@ -328,4 +329,32 @@ pub mod tests {
         assert_eq!(saw_tooth_profile.level_normalized, 0.3);
         assert_eq!(saw_tooth_profile.counter, 3.0);
     }
+
+    #[test]
+    // Verifies SawToothProfileConfig constructor and Clone implementation.
+    // [utest->swreq~thermal_read_heating_limits~1]
+    pub fn test_saw_tooth_profile_config_new_and_clone() {
+        let config = SawToothProfileConfig::new(10, 2, 10, 2);
+        let cloned_config = config.clone();
+        assert_eq!(cloned_config.phase1_length, 10);
+        assert_eq!(cloned_config.phase2_length, 2);
+        assert_eq!(cloned_config.phase3_length, 10);
+        assert_eq!(cloned_config.phase4_length, 2);
+    }
+
+    #[test]
+    // Verifies Display trait implementation for SawToothProfile formatting.
+    // [utest->swreq~thermal_read_heating_limits~1]
+    pub fn test_saw_tooth_profile_display_formatting() {
+        let config = SawToothProfileConfig::new(10, 2, 10, 2);
+        let profile = SawToothProfile::new(&config);
+        let formatted = format!("{}", profile);
+
+        assert!(formatted.contains("SawToothProfile:"));
+        assert!(formatted.contains("counter=0"));
+        assert!(formatted.contains("level_normalized=0"));
+        assert!(formatted.contains("phase1_counter_limit=10"));
+        assert!(formatted.contains("phase4_counter_limit=24"));
+    }
 }
+

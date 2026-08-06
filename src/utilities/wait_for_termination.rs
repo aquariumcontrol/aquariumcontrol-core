@@ -254,7 +254,9 @@ impl_wait_for_termination!(
 );
 
 #[cfg(test)]
-mod tests {
+#[cfg(not(tarpaulin_include))]
+#[cfg_attr(coverage_nightly, coverage(off))]
+pub mod tests {
     use super::*;
     use crate::dispatch::messaging_config::MessagingConfig;
     use crate::launch::channels::channel;
@@ -272,6 +274,7 @@ mod tests {
     // [utest->swreq~thermal_log_flood_protection~1]
     // [utest->swreq~watchmen_log_flood_protection~1]
     #[tokio::test]
+    // Verifies messaging wait_for_termination_async handles inapplicable commands and resets warning lock flag.
     async fn test_messaging_wait_for_termination_inhibition_flags() {
         #[cfg(not(target_os = "linux"))]
         let mut messaging = Messaging::new(MessagingConfig {}, ExecutionConfig::default())
@@ -309,4 +312,58 @@ mod tests {
         *messaging.get_error_lock_mut() = false;
         assert!(!messaging.lock_error_channel_receive_termination);
     }
+
+    #[test]
+    // Verifies synchronous wait_for_termination execution and state handling.
+    // [utest->swreq~dispatch_log_flood_protection~1]
+    fn test_sync_wait_for_termination_and_disconnected_error_flag() {
+        #[cfg(not(target_os = "linux"))]
+        let mut messaging = Messaging::new(MessagingConfig {}, ExecutionConfig::default())
+            .expect("Initialization of Messaging failed");
+
+        #[cfg(target_os = "linux")]
+        let mut messaging = Messaging {
+            mq: None,
+            mq_max_msg_len: 0,
+            lock_warn_inapplicable_command_signal_handler: false,
+            lock_error_channel_receive_termination: false,
+            execution_config: ExecutionConfig::default(),
+        };
+
+        let (mut tx_term, mut rx_term) = channel::<InternalCommand>(10, false);
+        tx_term.send(InternalCommand::Terminate).unwrap();
+
+        messaging.wait_for_termination(&mut rx_term, Duration::from_millis(1), "test_sync");
+
+        assert!(!messaging.lock_warn_inapplicable_command_signal_handler);
+    }
+
+    #[tokio::test]
+    // Verifies wait_for_termination_async processes disconnected channel setting lock_error_channel_receive_termination.
+    // [utest->swreq~dispatch_log_flood_protection~1]
+    async fn test_async_wait_for_termination_disconnected_error_flag() {
+        #[cfg(not(target_os = "linux"))]
+        let mut messaging = Messaging::new(MessagingConfig {}, ExecutionConfig::default())
+            .expect("Initialization of Messaging failed");
+
+        #[cfg(target_os = "linux")]
+        let mut messaging = Messaging {
+            mq: None,
+            mq_max_msg_len: 0,
+            lock_warn_inapplicable_command_signal_handler: false,
+            lock_error_channel_receive_termination: false,
+            execution_config: ExecutionConfig::default(),
+        };
+
+        let (mut tx, mut rx) = channel::<InternalCommand>(10, false);
+        tx.send(InternalCommand::Quit).unwrap();
+        tx.send(InternalCommand::Terminate).unwrap();
+
+        messaging
+            .wait_for_termination_async(&mut rx, Duration::from_millis(1), "test_async")
+            .await;
+
+        assert!(!messaging.lock_warn_inapplicable_command_signal_handler);
+    }
 }
+

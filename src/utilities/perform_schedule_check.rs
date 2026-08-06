@@ -67,6 +67,8 @@ macro_rules! perform_schedule_check {
 }
 
 #[cfg(test)]
+#[cfg(not(tarpaulin_include))]
+#[cfg_attr(coverage_nightly, coverage(off))]
 mod tests {
     use crate::launch::channels::{channel, AquaChannelError, AquaReceiver, AquaSender};
     use crate::utilities::channel_content::InternalCommand;

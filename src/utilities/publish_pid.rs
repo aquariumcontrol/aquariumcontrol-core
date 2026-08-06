@@ -201,3 +201,81 @@ impl PublishPid {
         })
     }
 }
+
+#[cfg(test)]
+#[cfg(not(tarpaulin_include))]
+#[cfg_attr(coverage_nightly, coverage(off))]
+pub mod tests {
+    use super::*;
+    use tempfile::NamedTempFile;
+
+    #[test]
+    // Verifies erase_pid writes 0 to the PID file.
+    // [utest->swreq~utilities_write_pid_file~1]
+    fn test_erase_pid_writes_zero() {
+        let temp_file = NamedTempFile::new().unwrap();
+        let pid_filename = temp_file.path().to_str().unwrap().to_string();
+
+        let config = PublishPidConfig {
+            pid_filename: pid_filename.clone(),
+        };
+
+        let publisher = PublishPid::new(config).unwrap();
+        assert!(publisher.erase_pid().is_ok());
+
+        let content = fs::read_to_string(pid_filename).unwrap();
+        assert_eq!(content, "0\n");
+    }
+
+    #[test]
+    // Verifies PublishPid::new overwrites an existing file containing 0 or whitespace.
+    // [utest->swreq~utilities_write_pid_file~1]
+    fn test_publish_pid_overwrites_zero_or_empty_file() {
+        let temp_file = NamedTempFile::new().unwrap();
+        let pid_filename = temp_file.path().to_str().unwrap().to_string();
+        fs::write(&pid_filename, "0\n").unwrap();
+
+        let config = PublishPidConfig {
+            pid_filename: pid_filename.clone(),
+        };
+
+        let publisher = PublishPid::new(config);
+        assert!(publisher.is_ok());
+
+        let content = fs::read_to_string(&pid_filename).unwrap();
+        let current_pid = process::id().to_string();
+        assert_eq!(content.trim(), current_pid);
+
+        // Clean up with erase_pid
+        assert!(publisher.unwrap().erase_pid().is_ok());
+    }
+
+    #[test]
+    // Verifies PublishPid error paths for unable to read or write file errors.
+    // [utest->swreq~utilities_write_pid_file~1]
+    fn test_publish_pid_unable_to_read_or_write_error() {
+        // Read error: directory path specified as pid filename
+        let temp_dir = tempfile::tempdir().unwrap();
+        let dir_path = temp_dir.path().to_str().unwrap().to_string();
+
+        let config_read_err = PublishPidConfig {
+            pid_filename: dir_path,
+        };
+        let res_read_err = PublishPid::new(config_read_err);
+        assert!(matches!(
+            res_read_err,
+            Err(PublishPidError::UnableToReadPidFile { .. })
+        ));
+
+        // Write error: non-existent directory path
+        let config_write_err = PublishPidConfig {
+            pid_filename: "/invalid_dir_path_12345/test.pid".to_string(),
+        };
+        let res_write_err = PublishPid::new(config_write_err);
+        assert!(matches!(
+            res_write_err,
+            Err(PublishPidError::UnableToWritePidFile { .. })
+        ));
+    }
+}
+

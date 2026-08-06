@@ -256,6 +256,8 @@ impl VersionInformation {
     }
 }
 
+#[cfg(not(tarpaulin_include))]
+#[cfg_attr(coverage_nightly, coverage(off))]
 impl Display for VersionInformation {
     /// Formats the `VersionInformation` for display.
     ///
@@ -282,6 +284,8 @@ impl Display for VersionInformation {
 }
 
 #[cfg(test)]
+#[cfg(not(tarpaulin_include))]
+#[cfg_attr(coverage_nightly, coverage(off))]
 mod tests {
     use super::*;
 

@@ -109,6 +109,8 @@ impl_database_ping_trait!(Balling);
 impl_database_ping_trait!(ScheduleCheck);
 
 #[cfg(test)]
+#[cfg(not(tarpaulin_include))]
+#[cfg_attr(coverage_nightly, coverage(off))]
 mod tests {
     use super::*;
 

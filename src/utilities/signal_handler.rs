@@ -613,3 +613,80 @@ pub async fn handle_signals(
     #[cfg(feature = "debug_channels")]
     debug!(target: module_path!(), "{signal_handler_channels}");
 }
+
+#[cfg(test)]
+#[cfg(not(tarpaulin_include))]
+#[cfg_attr(coverage_nightly, coverage(off))]
+pub mod tests {
+    use super::*;
+    use crate::launch::channels::{channel, Channels};
+
+    #[tokio::test]
+    // Verifies send_command handles None channel options gracefully.
+    // [utest->swreq~utilities_process_signals~1]
+    async fn test_send_command_none_channels() {
+        send_command(InternalCommand::Quit, None, None, "test_thread").await;
+    }
+
+    #[tokio::test]
+    // Verifies send_command sends command and receives acknowledgment successfully.
+    // [utest->swreq~utilities_process_signals~1]
+    async fn test_send_command_success_with_ack() {
+        let (mut tx_cmd, mut rx_cmd) = channel::<InternalCommand>(1, true);
+        let (mut tx_ack, mut rx_ack) = channel::<bool>(1, true);
+
+        let ack_handle = tokio::spawn(async move {
+            if let Ok(cmd) = rx_cmd.recv().await {
+                assert_eq!(cmd, InternalCommand::Quit);
+                let _ = tx_ack.send(true);
+            }
+        });
+
+        send_command(
+            InternalCommand::Quit,
+            Some(&mut tx_cmd),
+            Some(&mut rx_ack),
+            "test_thread",
+        )
+        .await;
+
+        let _ = ack_handle.await;
+    }
+
+    #[tokio::test]
+    // Verifies send_command handles acknowledgment channel disconnection gracefully without panicking.
+    // [utest->swreq~utilities_process_signals~1]
+    async fn test_send_command_ack_recv_error() {
+        let (mut tx_cmd, _rx_cmd) = channel::<InternalCommand>(1, true);
+        let (tx_ack, mut rx_ack) = channel::<bool>(1, true);
+
+        // drop tx_ack so rx_ack.recv() returns Err(Disconnected)
+        drop(tx_ack);
+
+        send_command(
+            InternalCommand::Quit,
+            Some(&mut tx_cmd),
+            Some(&mut rx_ack),
+            "test_thread",
+        )
+        .await;
+    }
+
+
+    #[tokio::test]
+    #[should_panic(expected = "inconsistent channel parameters")]
+    // Verifies handle_signals panics when TCP communication channels are inconsistent.
+    // [utest->swreq~utilities_process_signals~1]
+    async fn test_handle_signals_inconsistent_tcp_channels_panics() {
+        let term = Arc::new(AtomicBool::new(false));
+        let mut channels = Channels::new_for_test();
+        let (tx_tcp, _rx_tcp) = channel::<InternalCommand>(1, true);
+        channels.signal_handler.tx_signal_handler_to_tcp_opt = Some(tx_tcp);
+        channels.signal_handler.rx_signal_handler_from_tcp_opt = None; // Inconsistent!
+
+        let config = ExecutionConfig::default();
+        handle_signals(term, channels.signal_handler, config, Some(Duration::from_millis(50))).await;
+    }
+}
+
+

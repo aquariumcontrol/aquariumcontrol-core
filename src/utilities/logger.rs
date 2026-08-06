@@ -184,6 +184,8 @@ pub fn log_error_chain<E: Error>(module: &str, context: &str, error: E) {
 }
 
 #[cfg(test)]
+#[cfg(not(tarpaulin_include))]
+#[cfg_attr(coverage_nightly, coverage(off))]
 mod tests {
     use super::*;
 

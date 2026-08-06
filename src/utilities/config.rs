@@ -302,7 +302,9 @@ pub fn read_config_file_with_test_database(
 }
 
 #[cfg(test)]
-mod tests {
+#[cfg(not(tarpaulin_include))]
+#[cfg_attr(coverage_nightly, coverage(off))]
+pub mod tests {
     use crate::utilities::config::{
         read_config_file, read_config_file_with_test_database, ConfigData,
     };
@@ -344,4 +346,35 @@ mod tests {
 
         assert!(config.sql_interface.db_name.contains("42"));
     }
+
+    #[test]
+    #[should_panic(expected = "out of bounds")]
+    // Verifies read_config_file_with_test_database panics when test_db_number is 0.
+    // [utest->swreq~utilities_parse_toml_config~1]
+    pub fn test_read_config_file_with_test_db_out_of_bounds_zero() {
+        read_config_file_with_test_database(
+            "config/aquarium_control_test_generic.toml".to_string(),
+            0,
+        );
+    }
+
+    #[test]
+    #[should_panic(expected = "out of bounds")]
+    // Verifies read_config_file_with_test_database panics when test_db_number is greater than 99.
+    // [utest->swreq~utilities_parse_toml_config~1]
+    pub fn test_read_config_file_with_test_db_out_of_bounds_over_99() {
+        read_config_file_with_test_database(
+            "config/aquarium_control_test_generic.toml".to_string(),
+            100,
+        );
+    }
+
+    #[test]
+    #[should_panic(expected = "Could not read file")]
+    // Verifies read_config_file panics when reading a non-existent configuration file.
+    // [utest->swreq~utilities_parse_toml_config~1]
+    pub fn test_read_config_file_non_existent_file() {
+        let _ = read_config_file("non_existent_file.toml".to_string());
+    }
 }
+
