@@ -106,6 +106,8 @@ fn setup_execute_test() -> (
 
 #[test]
 /// Verifies that the `execute` loop terminates gracefully when a `Quit` command is received.
+///
+/// [itest->swreq~sensors_read_data~1]
 fn test_execute_handles_quit_command() {
     // Arrange
     let (mut dht, mut channels, mut tx, mutex) = setup_execute_test();
@@ -127,6 +129,8 @@ fn test_execute_handles_quit_command() {
 
 #[test]
 /// Verifies that the `execute` loop continues running after receiving an unrecognized command.
+///
+/// [itest->swreq~sensors_read_data~1]
 fn test_execute_handles_invalid_command() {
     // Arrange
     let (mut dht, mut channels, mut tx, mutex) = setup_execute_test();

@@ -15,6 +15,7 @@ use aquarium_control::utilities::config::{read_config_file, ConfigData};
 
 #[test]
 // Verifies that valid gpio config.
+// [itest->swreq~sensors_read_data~1]
 pub fn test_valid_gpio_config() {
     let config: ConfigData =
         read_config_file("config/aquarium_control_test_generic.toml".to_string()).unwrap();
@@ -24,6 +25,7 @@ pub fn test_valid_gpio_config() {
 
 #[test]
 // Verifies that invalid gpio config low.
+// [itest->swreq~sensors_read_data~1]
 pub fn test_invalid_gpio_config_low() {
     let mut config: ConfigData =
         read_config_file("config/aquarium_control_test_generic.toml".to_string()).unwrap();
@@ -37,6 +39,7 @@ pub fn test_invalid_gpio_config_low() {
 }
 #[test]
 // Verifies that invalid gpio config duplicate.
+// [itest->swreq~sensors_read_data~1]
 pub fn test_invalid_gpio_config_duplicate() {
     let mut config: ConfigData =
         read_config_file("config/aquarium_control_test_generic.toml".to_string()).unwrap();
@@ -55,6 +58,7 @@ pub fn test_invalid_gpio_config_duplicate() {
 
 #[test]
 // This check is platform-agnostic, so the cfg attribute isn't needed.
+// [itest->swreq~sensors_read_data~1]
 pub fn test_invalid_gpio_config_high() {
     let mut config: ConfigData =
         read_config_file("config/aquarium_control_test_generic.toml".to_string()).unwrap();
@@ -86,6 +90,7 @@ mod commissioning_prep {
         test
     ))]
     // for development purposes, visualize the tank level switch pin state with 2 Hz
+    // [itest->swreq~sensors_read_data~1]
     pub fn test_show_tank_level_switch() {
         let config: ConfigData = read_config_file("config/aquarium_control.toml".to_string());
         let (_, tank_level_switch_input_pin_opt, _dht_opt) =

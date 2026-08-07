@@ -111,6 +111,7 @@ fn run_receive_success_test(signal: AquariumSignal, value: f32) {
 
 #[test]
 // Test function receive_response_from_i2c_interface
+// [itest->swreq~sensors_read_data~1]
 pub fn test_receive_response_from_i2c_interface() {
     let mut stimuli_array_temperature = [0u8; 64];
 
@@ -277,6 +278,7 @@ pub fn test_receive_response_from_i2c_interface() {
 
 #[test]
 // Test case checks if send_request_to_i2c_interface correctly sends a request for pH.
+// [itest->swreq~sensors_read_data~1]
 fn test_send_request_to_i2c_interface_ph_success() {
     let config: ConfigData =
         read_config_file("config/aquarium_control_test_generic.toml".to_string()).unwrap();
@@ -351,6 +353,7 @@ fn test_send_request_to_i2c_interface_ph_success() {
 
 #[test]
 // Test case checks if send_request_to_i2c_interface correctly sends a request for conductivity.
+// [itest->swreq~sensors_read_data~1]
 fn test_send_request_to_i2c_interface_conductivity_success() {
     let config: ConfigData =
         read_config_file("config/aquarium_control_test_generic.toml".to_string()).unwrap();
@@ -393,6 +396,9 @@ fn test_send_request_to_i2c_interface_conductivity_success() {
         [atlas_scientific_ezo_constants::COMMAND_READ][0]
     );
     assert_eq!(
+        received_request.send_len, 1
+    );
+    assert_eq!(
         received_request.expected_response_length,
         atlas_scientific_ezo_constants::MESSAGE_SIZE
     );
@@ -400,6 +406,7 @@ fn test_send_request_to_i2c_interface_conductivity_success() {
 
 #[test]
 // Test case checks if send_request_to_i2c_interface correctly sends a request for water temperature.
+// [itest->swreq~sensors_read_data~1]
 fn test_send_request_to_i2c_interface_temperature_success() {
     let config: ConfigData =
         read_config_file("config/aquarium_control_test_generic.toml".to_string()).unwrap();
@@ -446,6 +453,7 @@ fn test_send_request_to_i2c_interface_temperature_success() {
 
 #[test]
 // Test case checks that send_request_to_i2c_interface handles a disconnected channel.
+// [itest->swreq~sensors_read_data~1]
 fn test_send_request_to_i2c_interface_channel_disconnected() {
     let config: ConfigData =
         read_config_file("config/aquarium_control_test_generic.toml".to_string()).unwrap();

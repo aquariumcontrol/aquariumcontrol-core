@@ -752,6 +752,7 @@ fn test_device_init_response_too_long() {
 #[cfg(all(target_os = "linux", feature = "target_hw"))]
 #[ignore]
 // Verifies that atlas scientific oem init.
+// [itest->swreq~sensors_read_data~1]
 pub fn test_atlas_scientific_oem_init() {
     use aquarium_control::sensors::i2c_interface::I2cInterface;
     use aquarium_control::utilities::channel_content::InternalCommand;
@@ -850,6 +851,7 @@ pub fn test_atlas_scientific_oem_init() {
 #[cfg(all(target_os = "linux", feature = "target_hw"))]
 #[ignore]
 // Verifies that atlas scientific oem read.
+// [itest->swreq~sensors_read_data~1]
 pub fn test_atlas_scientific_oem_read() {
     use aquarium_control::sensors::i2c_interface::I2cInterface;
     use aquarium_control::utilities::channel_content::InternalCommand;

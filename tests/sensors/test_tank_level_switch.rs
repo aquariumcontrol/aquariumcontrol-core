@@ -319,6 +319,7 @@ pub fn test_refill_calc_tank_level_switch_position_stabilized_false_true() {
 
 #[test]
 // test if the position signal is updating with delay when the invalid signal is false
+// [itest->swreq~sensors_tank_level_switch_preprocessing~1]
 pub fn test_refill_calc_tank_level_switch_position_stabilized_true_false() {
     let mut channels = Channels::new(false, false, true, true);
 
@@ -431,6 +432,7 @@ pub fn test_refill_calc_tank_level_switch_position_stabilized_true_false() {
 
 #[test]
 // test if position stabilized signal is not updating when the raw input signal is toggling
+// [itest->swreq~sensors_tank_level_switch_preprocessing~1]
 pub fn test_refill_calc_tank_level_switch_position_stabilized_is_true_with_toggling_input() {
     let mut channels = Channels::new(false, false, true, true);
     let (mut tx_test_environment_to_tcp, mut rx_tcp_from_test_environment) = channel(1, true);
@@ -700,6 +702,7 @@ fn test_transition_stabilized_true_false(
 #[ignore]
 #[cfg(all(target_os = "linux", feature = "target_hw"))]
 // test functionality on real hardware
+// [itest->swreq~sensors_tank_level_switch_preprocessing~1]
 pub fn test_tank_level_switch_position_on_hardware() {
     let mut config: ConfigData =
         read_config_file("config/aquarium_control_test_generic.toml".to_string()).unwrap();
@@ -800,6 +803,7 @@ pub fn test_tank_level_switch_position_on_hardware() {
 #[cfg(feature = "test-utils")]
 #[test]
 // test if mutex access duration is measured and monitored
+// [itest->swreq~sensors_tank_level_switch_preprocessing~1]
 pub fn test_refill_calc_tank_level_switch_position_stabilized_false_true_with_mutex_blocked_too_long(
 ) {
     let mut channels = Channels::new(false, false, true, true);
