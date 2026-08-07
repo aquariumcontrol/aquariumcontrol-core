@@ -64,9 +64,8 @@ fn execute_blocking(
 // This test case reads from a real DS18B20 sensor.
 // For this test case to succeed, the DS18B20 sensor needs to be connected,
 // and the 1-wire interface needs to be enabled (see rasp-config)
-///
-
-/// [itest->swreq~sensors_read_data~1]
+//
+// [itest->swreq~sensors_read_data~1]
 fn test_read_ds18b20() {
     let config = read_config_file("config/aquarium_control_test_generic.toml".to_string()).unwrap();
 

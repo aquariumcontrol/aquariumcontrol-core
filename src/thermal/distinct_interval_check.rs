@@ -59,8 +59,9 @@ mod tests {
     use super::*;
     use crate::utilities::config::read_config_file;
 
-    /// [utest->swreq~thermal_distinct_interval_check~1]
     #[test]
+    // Verifies that distinct interval check returns true when heating and ventilation target windows do not overlap.
+    // [utest->swreq~thermal_distinct_interval_check~1]
     fn test_distinct_interval_valid_non_overlapping() {
         let config =
             read_config_file("config/aquarium_control_test_generic.toml".to_string()).unwrap();
@@ -76,8 +77,9 @@ mod tests {
         ));
     }
 
-    /// [utest->swreq~thermal_distinct_interval_check~1]
     #[test]
+    // Verifies that distinct interval check returns false when heating and ventilation target windows overlap.
+    // [utest->swreq~thermal_distinct_interval_check~1]
     fn test_distinct_interval_invalid_overlapping() {
         let config =
             read_config_file("config/aquarium_control_test_generic.toml".to_string()).unwrap();
@@ -93,8 +95,9 @@ mod tests {
         ));
     }
 
-    /// [utest->swreq~thermal_distinct_interval_check~1]
     #[test]
+    // Verifies that distinct interval check returns true when heating is inactive.
+    // [utest->swreq~thermal_distinct_interval_check~1]
     fn test_distinct_interval_heating_inactive() {
         let config =
             read_config_file("config/aquarium_control_test_generic.toml".to_string()).unwrap();
@@ -110,8 +113,9 @@ mod tests {
         ));
     }
 
-    /// [utest->swreq~thermal_distinct_interval_check~1]
     #[test]
+    // Verifies that distinct interval check returns true when ventilation is inactive.
+    // [utest->swreq~thermal_distinct_interval_check~1]
     fn test_distinct_interval_ventilation_inactive() {
         let config =
             read_config_file("config/aquarium_control_test_generic.toml".to_string()).unwrap();

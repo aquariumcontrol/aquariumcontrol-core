@@ -246,6 +246,7 @@ mod tests {
 
     #[test]
     // Verifies that new invalid sampling interval.
+    // [utest->swreq~thermal_temperature_gradient~1]
     fn test_new_invalid_sampling_interval() {
         let mut config = create_default_config();
         config.sampling_interval = 0;
@@ -266,6 +267,7 @@ mod tests {
 
     #[test]
     // Verifies that new invalid sample size too small.
+    // [utest->swreq~thermal_temperature_gradient~1]
     fn test_new_invalid_sample_size_too_small() {
         let mut config = create_default_config();
         config.sample_size = 1;
@@ -286,6 +288,7 @@ mod tests {
 
     #[test]
     // Verifies that new invalid sample size too large.
+    // [utest->swreq~thermal_temperature_gradient~1]
     fn test_new_invalid_sample_size_too_large() {
         let mut config = create_default_config();
         config.sample_size = 101;
@@ -306,6 +309,7 @@ mod tests {
 
     #[test]
     // Verifies that new valid config.
+    // [utest->swreq~thermal_temperature_gradient~1]
     fn test_new_valid_config() {
         let config = create_default_config();
         let result = TemperatureGradient::new(config);
@@ -314,6 +318,7 @@ mod tests {
 
     #[test]
     // Verifies that calculate least squares gradient less than two samples.
+    // [utest->swreq~thermal_temperature_gradient~1]
     fn test_calculate_least_squares_gradient_less_than_two_samples() {
         let mut samples = VecDeque::new();
         samples.push_back((1.0, 10.0));

@@ -165,6 +165,7 @@ fn test_conductivity_reading() {
 }
 
 #[test]
+// [itest->swreq~sensors_read_data~1]
 // Verifies that ph reading.
 fn test_ph_reading() {
     let (
@@ -210,6 +211,7 @@ fn test_ph_reading() {
 }
 
 #[test]
+// [itest->swreq~sensors_read_data~1]
 // Verifies that temperature reading.
 fn test_temperature_reading() {
     let (
@@ -261,6 +263,7 @@ fn test_temperature_reading() {
 }
 
 #[test]
+// [itest->swreq~sensors_read_data~1]
 // Verifies that short response error.
 fn test_short_response_error() {
     let (
@@ -310,6 +313,7 @@ fn test_short_response_error() {
 }
 
 #[test]
+// [itest->swreq~sensors_read_data~1]
 // Verifies that send request.
 fn test_send_request() {
     let (mut drivers, mut atlas_scientific_channels, mut i2c_interface_channels, _, _, _, _) =
@@ -339,6 +343,7 @@ fn test_send_request() {
 
 #[cfg(feature = "test-utils")]
 #[test]
+// [itest->swreq~sensors_read_data~1]
 // Verifies that receive response i2c error.
 fn test_receive_response_i2c_error() {
     let (
@@ -386,6 +391,7 @@ fn test_receive_response_i2c_error() {
 }
 
 #[test]
+// [itest->swreq~sensors_read_data~1]
 // Verifies that receive response invalid signal.
 fn test_receive_response_invalid_signal() {
     let (
@@ -432,6 +438,7 @@ fn test_receive_response_invalid_signal() {
 
 /*
    #[test]
+// [itest->swreq~sensors_read_data~1]
    #[cfg(all(target_os = "linux", feature = "target_hw"))]
    #[ignore]
    // read from real Atlas Scientific hardware (OEM) combined in one test case to avoid race conditions:
@@ -534,6 +541,7 @@ fn test_receive_response_invalid_signal() {
 */
 
 #[test]
+// [itest->swreq~sensors_read_data~1]
 // Verifies that device init success.
 fn test_device_init_success() {
     let (mut drivers, mut atlas_scientific_channels, mut i2c_interface_channels, _, _, _, _) =
@@ -600,6 +608,7 @@ fn test_device_init_success() {
 }
 
 #[test]
+// [itest->swreq~sensors_read_data~1]
 // Verifies that device init invalid type.
 fn test_device_init_invalid_type() {
     let (mut drivers, mut atlas_scientific_channels, mut i2c_interface_channels, _, _, _, _) =
@@ -656,6 +665,7 @@ fn test_device_init_invalid_type() {
 }
 
 #[test]
+// [itest->swreq~sensors_read_data~1]
 // Verifies that device init response too short.
 fn test_device_init_response_too_short() {
     let (mut drivers, mut atlas_scientific_channels, mut i2c_interface_channels, _, _, _, _) =
@@ -705,6 +715,7 @@ fn test_device_init_response_too_short() {
 }
 
 #[test]
+// [itest->swreq~sensors_read_data~1]
 // Verifies that device init response too long.
 fn test_device_init_response_too_long() {
     let (mut drivers, mut atlas_scientific_channels, mut i2c_interface_channels, _, _, _, _) =

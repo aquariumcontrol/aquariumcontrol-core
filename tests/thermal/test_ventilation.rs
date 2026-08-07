@@ -143,14 +143,12 @@ fn create_test_environment(
                         spin_sleeper.sleep(sleep_duration_one_second);
                     } else {
                         // block mutex on purpose
-                        {
-                            match mutex_ventilation_status.lock() {
-                                Ok(_) => {
-                                    spin_sleeper.sleep(sleep_duration_one_second);
-                                }
-                                Err(_) => {
-                                    // Do nothing
-                                }
+                        match mutex_ventilation_status.lock() {
+                            Ok(_guard) => {
+                                spin_sleeper.sleep(sleep_duration_one_second);
+                            }
+                            Err(_) => {
+                                // Do nothing
                             }
                         }
                     }
@@ -177,6 +175,7 @@ fn create_test_environment(
 // Check if the ventilation is switched on when the temperature is high.
 // Also, implicitly test if the execute function terminates after receiving Quit and Terminate commands.
 #[test]
+// [itest->swreq~thermal_ventilation_cooling~1]
 // Verifies that ventilation with measured temperature high without blocking mutex.
 pub fn test_ventilation_with_measured_temperature_high_without_blocking_mutex() {
     let sleep_duration_100_millis = Duration::from_millis(100);
@@ -335,6 +334,7 @@ fn create_mock_relay_manager(
 // Check if the ventilation is switched off with low temperature and then switched on during application termination (if configured).
 // This test also implicitly verifies that the execute function terminates after receiving Quit and Terminate commands.
 #[test]
+// [itest->swreq~thermal_ventilation_cooling~1]
 // Verifies that ventilation with measured temperature low.
 pub fn test_ventilation_with_measured_temperature_low() {
     let sleep_duration_100_millis = Duration::from_millis(100);
@@ -438,6 +438,7 @@ pub fn test_ventilation_with_measured_temperature_low() {
 // Duration of ventilation switched on shall equal the duration of ventilation switched off (1% tolerance).
 // Also, implicitly test if the execute function terminates after receiving Quit and Terminate commands.
 #[test]
+// [itest->swreq~thermal_ventilation_cooling~1]
 // Verifies that ventilation with measured temperature 50 percent.
 pub fn test_ventilation_with_measured_temperature_50_percent() {
     let sleep_duration_100_millis = Duration::from_millis(100);
@@ -657,6 +658,7 @@ pub fn test_ventilation_with_measured_temperature_50_percent() {
 // Check if the ventilation is switched on for most of the time if the temperature is high within the interval.
 // Also, implicitly test if the execute function terminates after receiving Quit and Terminate commands.
 #[test]
+// [itest->swreq~thermal_ventilation_cooling~1]
 // Verifies that ventilation with measured temperature high within interval.
 pub fn test_ventilation_with_measured_temperature_high_within_interval() {
     let sleep_duration_100_millis = Duration::from_millis(100);
@@ -850,6 +852,7 @@ pub fn test_ventilation_with_measured_temperature_high_within_interval() {
 // Check if the ventilation is switched off for most of the time if the temperature is low within the interval.
 // Also, implicitly test if the execute function terminates after receiving Quit and Terminate commands.
 #[test]
+// [itest->swreq~thermal_ventilation_cooling~1]
 // Verifies that ventilation with measured temperature low within interval.
 pub fn test_ventilation_with_measured_temperature_low_within_interval() {
     let sleep_duration_100_millis = Duration::from_millis(100);
@@ -1390,6 +1393,7 @@ pub fn test_messaging_stops_starts_ventilation() {
 // Also, implicitly test if the execute function terminates after receiving Quit and Terminate commands.
 // Test case uses test database #52.
 #[test]
+// [itest->swreq~thermal_read_ventilation_limits~1]
 // Verifies that ventilation with decreased set values.
 pub fn test_ventilation_with_decreased_set_values() {
     let sleep_duration_100_millis = Duration::from_millis(100);
@@ -1547,6 +1551,7 @@ fn create_mock_relay_manager_for_ventilation_on(
 // Check if the ventilation is switched on when the temperature is high.
 // Also, implicitly test if the execute function terminates after receiving Quit and Terminate commands.
 #[test]
+// [itest->swreq~thermal_ventilation_cooling~1]
 // Verifies that ventilation with measured temperature high with blocking mutex.
 pub fn test_ventilation_with_measured_temperature_high_with_blocking_mutex() {
     let sleep_duration_100_millis = Duration::from_millis(100);
@@ -1823,6 +1828,7 @@ pub fn test_ventilation_gradient_monitoring_disables_actuator() {
 }
 
 #[test]
+// [itest->swreq~thermal_ventilation_cooling~1]
 // Verifies that ventilation reset errors enables actuator.
 pub fn test_ventilation_reset_errors_enables_actuator() {
     let sleep_duration_100_millis = Duration::from_millis(100);
@@ -1999,6 +2005,7 @@ pub fn test_ventilation_reset_errors_enables_actuator() {
 }
 
 #[test]
+// [itest->swreq~thermal_ventilation_cooling~1]
 // Verifies that ventilation actuation is inhibited when device_scheduler mutex is blocked.
 pub fn test_ventilation_actuation_with_device_scheduler_mutex_blocked() {
     let sleep_duration_100_millis = Duration::from_millis(100);

@@ -30,6 +30,7 @@ use std::thread::scope;
 use std::time::Duration;
 
 #[test]
+// [itest->swreq~sensors_read_data~1]
 // Verifies that sensor manager error water temperature source is invalid.
 pub fn test_sensor_manager_error_water_temperature_source_is_invalid() {
     let mut config: ConfigData =
@@ -48,6 +49,7 @@ pub fn test_sensor_manager_error_water_temperature_source_is_invalid() {
 }
 
 #[test]
+// [itest->swreq~sensors_read_data~1]
 // Verifies that sensor manager error ambient temperature source is invalid.
 pub fn test_sensor_manager_error_ambient_temperature_source_is_invalid() {
     let mut config: ConfigData =
@@ -177,6 +179,7 @@ fn execute_and_assert_sensor_manager(
 }
 
 #[test]
+// [itest->swreq~sensors_read_data~1]
 // Test case verifies if the test object is processing the interfaces correctly using input
 // from Ds18b20 sensors.
 pub fn test_sensor_manager_interfaces_using_ds18b20_as_input_without_mutex_blocked() {
@@ -244,6 +247,7 @@ pub fn test_sensor_manager_interfaces_using_ds18b20_as_input_without_mutex_block
 }
 
 #[test]
+// [itest->swreq~sensors_read_data~1]
 // Test case verifies if the test object is processing the interfaces correctly using input
 // from Ds18b20 sensors.
 pub fn test_sensor_manager_interfaces_using_atlas_scientific_and_dht_as_input() {
@@ -311,6 +315,7 @@ pub fn test_sensor_manager_interfaces_using_atlas_scientific_and_dht_as_input() 
 }
 
 #[test]
+// [itest->swreq~sensors_read_data~1]
 // Test case verifies if the test object is processing the interfaces correctly using input
 // from Ds18b20 sensors while having mutex blocked
 pub fn test_sensor_manager_interfaces_using_ds18b20_as_input_with_mutex_blocked() {

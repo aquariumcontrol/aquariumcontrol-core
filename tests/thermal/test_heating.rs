@@ -184,6 +184,7 @@ pub fn prepare_heating_tests_mock_midnight_calculator(
 }
 
 #[test]
+// [itest->swreq~thermal_heater_heating~1]
 // Check if the heater remains switched off with a high temperature.
 // Also, implicitly test if the execute function terminates after receiving Quit and Terminate commands.
 // Test case uses test database #11.
@@ -320,6 +321,7 @@ pub fn test_heating_with_measured_temperature_high() {
 }
 
 #[test]
+// [itest->swreq~thermal_heater_heating~1]
 // Check if the heater is switched on and is not switched off with low temperature.
 // Also, implicitly test if the execute function terminates after receiving Quit and Terminate commands.
 // Check if the heater is switched off after sending Quit command and before sending Terminate command.
@@ -462,6 +464,7 @@ pub fn test_heating_with_measured_temperature_low_without_mutex_blocked() {
 }
 
 #[test]
+// [itest->swreq~thermal_heater_heating~1]
 // Check if the heater is switched on and off during two cycles of the saw tooth profile.
 // The duration of the heater being switched on shall equal the duration of the heater switched off (1% tolerance).
 // Also, implicitly test if the execute function terminates after receiving Quit and Terminate commands.
@@ -696,6 +699,7 @@ pub fn test_heating_with_measured_temperature_50_percent() {
 }
 
 #[test]
+// [itest->swreq~thermal_heater_heating~1]
 // Check if the heater is switched on for most of the time when a measured temperature is low.
 // Also, implicitly test if the execute function terminates after receiving Quit and Terminate commands.
 // Test case uses test database #13.
@@ -907,6 +911,7 @@ pub fn test_heating_with_measured_temperature_low_inside_interval() {
 }
 
 #[test]
+// [itest->swreq~thermal_heater_heating~1]
 // Check if the heater is switched off most of the time when heater measured temperature is high.
 // Also, implicitly test if the execute function terminates after receiving Quit and Terminate commands.
 // Test case uses test database #13.
@@ -1120,6 +1125,7 @@ pub fn test_heating_with_measured_temperature_high_inside_interval() {
 }
 
 #[test]
+// [itest->swreq~thermal_heater_heating~1]
 // Test case checks if the Quit command is correctly processed
 // - application shall switch off the heater before exiting
 // The test case uses test database #14.
@@ -1263,6 +1269,8 @@ pub fn test_heating_with_pending_quit_terminate_command() {
 }
 
 #[test]
+// [itest->swreq~thermal_midnight_calculator~1]
+// [itest->swreq~thermal_connect_heating_stats~1]
 // Test case checks if waiting for midnight and statistical calculations are computed correctly.
 // Test case uses test database #15.
 pub fn test_heating_wait_for_midnight_calc_stats_heater_on() {
@@ -1482,6 +1490,8 @@ pub fn test_heating_wait_for_midnight_calc_stats_heater_on() {
 }
 
 #[test]
+// [itest->swreq~thermal_midnight_calculator~1]
+// [itest->swreq~thermal_connect_heating_stats~1]
 // Test case checks if waiting for midnight and statistical calculations are computed correctly.
 // Test case uses test database #16.
 pub fn test_heating_wait_for_midnight_calc_stats_heater_off() {
@@ -2369,6 +2379,7 @@ pub fn test_heating_with_increased_set_values() {
 }
 
 #[test]
+// [itest->swreq~thermal_heater_heating~1]
 // Check if the heater is switched on and is not switched off with low temperature.
 // Also, implicitly test if the execute function terminates after receiving Quit and Terminate commands.
 // Check if the heater is switched off after sending Quit command and before sending Terminate command.
@@ -2444,7 +2455,7 @@ pub fn test_heating_with_measured_temperature_low_with_mutex_blocked() {
                     // block mutex on purpose
                     {
                         match mutex_heating_status_clone_for_test_environment.lock() {
-                            Ok(_) => {
+                            Ok(_guard) => {
                                 spin_sleeper.sleep(sleep_duration_one_second);
                             }
                             Err(_) => {
@@ -2535,6 +2546,7 @@ pub fn test_heating_with_measured_temperature_low_with_mutex_blocked() {
 }
 
 #[test]
+// [itest->swreq~thermal_connect_heating_stats~1]
 // Test case uses test database #73.
 fn test_record_heating_stats_before_midnight() {
     // 1. Setup
@@ -2570,6 +2582,7 @@ fn test_record_heating_stats_before_midnight() {
 }
 
 #[test]
+// [itest->swreq~thermal_connect_heating_stats~1]
 // Test case uses test database #74.
 fn test_record_heating_stats_after_midnight_success() {
     // 1. Setup - mock midnight is one second away
@@ -2620,6 +2633,7 @@ fn test_record_heating_stats_after_midnight_success() {
 }
 
 #[test]
+// [itest->swreq~thermal_connect_heating_stats~1]
 // Test case uses test database #75.
 fn test_record_heating_stats_after_midnight_with_error() {
     // 1. Setup
@@ -2662,6 +2676,7 @@ fn test_record_heating_stats_after_midnight_with_error() {
 }
 
 #[test]
+// [itest->swreq~thermal_connect_heating_stats~1]
 // Test case uses test database #76.
 fn test_record_heating_stats_with_none_stats() {
     // 1. Setup
@@ -2697,6 +2712,7 @@ fn test_record_heating_stats_with_none_stats() {
 }
 
 #[test]
+// [itest->swreq~thermal_connect_heating_stats~1]
 // Test case uses test database #77.
 fn test_update_heating_stats_heater_on_valid_data() {
     // 1. Setup
@@ -2738,6 +2754,7 @@ fn test_update_heating_stats_heater_on_valid_data() {
 }
 
 #[test]
+// [itest->swreq~thermal_connect_heating_stats~1]
 // Test case uses test database #78.
 fn test_update_heating_stats_heater_off() {
     // 1. Setup
@@ -2769,6 +2786,7 @@ fn test_update_heating_stats_heater_off() {
 }
 
 #[test]
+// [itest->swreq~thermal_connect_heating_stats~1]
 // Test case uses test database #79.
 fn test_update_heating_stats_with_measurement_error() {
     // 1. Setup
@@ -2811,6 +2829,7 @@ fn test_update_heating_stats_with_measurement_error() {
 }
 
 #[test]
+// [itest->swreq~thermal_connect_heating_stats~1]
 // Verifies that the first call to update_heating_stats results in zero energy,
 // because `last_stats_update_instant_opt` is initially None.
 fn test_update_heating_stats_first_call_no_energy() {
@@ -2845,6 +2864,7 @@ fn test_update_heating_stats_first_call_no_energy() {
 }
 
 #[test]
+// [itest->swreq~thermal_connect_heating_stats~1]
 // Test case uses test database #80.
 fn test_update_heating_stats_with_none_stats_opt() {
     // 1. Setup
@@ -3044,6 +3064,7 @@ pub fn test_heating_gradient_monitoring_disables_actuator() {
 }
 
 #[test]
+// [itest->swreq~thermal_heater_heating~1]
 // Test case uses test database #82.
 pub fn test_heating_reset_errors_enables_actuator() {
     let sleep_duration_100_millis = Duration::from_millis(100);
@@ -3221,6 +3242,7 @@ pub fn test_heating_reset_errors_enables_actuator() {
 }
 
 #[test]
+// [itest->swreq~thermal_heater_heating~1]
 // Verifies that heater actuation is inhibited when device_scheduler mutex is blocked.
 // The test environment thread acquires and holds the device_scheduler mutex lock before heater actuation occurs.
 // While the lock is held, heater actuation is blocked. Once released, heater actuation proceeds normally.

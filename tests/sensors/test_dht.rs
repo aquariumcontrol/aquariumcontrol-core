@@ -29,9 +29,8 @@ cfg_if::cfg_if! {
 #[test]
 // Test case executes a read operation from real hardware.
 // Test case does not require any communication with the database.
-///
-
-/// [itest->swreq~sensors_read_data~1]
+//
+// [itest->swreq~sensors_read_data~1]
 pub fn test_dht_read() {
     setup_logger(LoggerConfig::default()).unwrap();
 
@@ -105,9 +104,9 @@ fn setup_execute_test() -> (
 }
 
 #[test]
-/// Verifies that the `execute` loop terminates gracefully when a `Quit` command is received.
-///
-/// [itest->swreq~sensors_read_data~1]
+// Verifies that the `execute` loop terminates gracefully when a `Quit` command is received.
+//
+// [itest->swreq~sensors_read_data~1]
 fn test_execute_handles_quit_command() {
     // Arrange
     let (mut dht, mut channels, mut tx, mutex) = setup_execute_test();
@@ -128,9 +127,9 @@ fn test_execute_handles_quit_command() {
 }
 
 #[test]
-/// Verifies that the `execute` loop continues running after receiving an unrecognized command.
-///
-/// [itest->swreq~sensors_read_data~1]
+// Verifies that the `execute` loop continues running after receiving an unrecognized command.
+//
+// [itest->swreq~sensors_read_data~1]
 fn test_execute_handles_invalid_command() {
     // Arrange
     let (mut dht, mut channels, mut tx, mutex) = setup_execute_test();

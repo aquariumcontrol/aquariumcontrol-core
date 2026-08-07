@@ -175,7 +175,7 @@ pub fn test_temperature_gradient_calculation() {
 #[cfg(any(test, feature = "test-utils"))]
 // This test case retrieves data from the last 24 hours from the production database
 // and calculates the temperature gradient.
-// The test case does not assert anything.
+// [itest->swreq~thermal_temperature_gradient~1]
 fn test_calculate_gradient_from_production_data() {
     use aquarium_control::database::sql_interface::SqlInterface;
     use aquarium_control::database::sql_interface_data::SqlInterfaceData;
