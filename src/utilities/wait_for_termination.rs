@@ -258,6 +258,7 @@ impl_wait_for_termination!(
 #[cfg_attr(coverage_nightly, coverage(off))]
 pub mod tests {
     use super::*;
+    #[cfg(not(target_os = "linux"))]
     use crate::dispatch::messaging_config::MessagingConfig;
     use crate::launch::channels::channel;
     use crate::launch::execution_config::ExecutionConfig;
