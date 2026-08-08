@@ -263,6 +263,8 @@ pub mod tests {
     use crate::launch::execution_config::ExecutionConfig;
     use std::time::Duration;
 
+    #[tokio::test]
+    // Verifies messaging wait_for_termination_async handles inapplicable commands and resets warning lock flag.
     // [utest->swreq~water_log_flood_protection~1]
     // [utest->swreq~food_log_flood_protection~1]
     // [utest->swreq~dispatch_log_flood_protection~1]
@@ -273,8 +275,6 @@ pub mod tests {
     // [utest->swreq~sensors_log_flood_protection~1]
     // [utest->swreq~thermal_log_flood_protection~1]
     // [utest->swreq~watchmen_log_flood_protection~1]
-    #[tokio::test]
-    // Verifies messaging wait_for_termination_async handles inapplicable commands and resets warning lock flag.
     async fn test_messaging_wait_for_termination_inhibition_flags() {
         #[cfg(not(target_os = "linux"))]
         let mut messaging = Messaging::new(MessagingConfig {}, ExecutionConfig::default())
