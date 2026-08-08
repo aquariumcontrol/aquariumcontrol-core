@@ -20,6 +20,7 @@ fn create_light_intensity_profile() -> LightIntensityTimeProfile {
 }
 
 #[test]
+// [itest->swreq~simulator_sensor_signals~1]
 // Verifies that light intensity before sunrise.
 fn test_light_intensity_before_sunrise() {
     let profile = create_light_intensity_profile();
@@ -28,6 +29,7 @@ fn test_light_intensity_before_sunrise() {
 }
 
 #[test]
+// [itest->swreq~simulator_sensor_signals~1]
 // Verifies that light intensity rising sun.
 fn test_light_intensity_rising_sun() {
     let profile = create_light_intensity_profile();
@@ -36,6 +38,7 @@ fn test_light_intensity_rising_sun() {
 }
 
 #[test]
+// [itest->swreq~simulator_sensor_signals~1]
 // Verifies that light intensity full sun.
 fn test_light_intensity_full_sun() {
     let profile = create_light_intensity_profile();
@@ -44,6 +47,7 @@ fn test_light_intensity_full_sun() {
 }
 
 #[test]
+// [itest->swreq~simulator_sensor_signals~1]
 // Verifies that light intensity setting sun.
 fn test_light_intensity_setting_sun() {
     let profile = create_light_intensity_profile();
@@ -52,6 +56,7 @@ fn test_light_intensity_setting_sun() {
 }
 
 #[test]
+// [itest->swreq~simulator_sensor_signals~1]
 // Verifies that light intensity after sunset.
 fn test_light_intensity_after_sunset() {
     let profile = create_light_intensity_profile();

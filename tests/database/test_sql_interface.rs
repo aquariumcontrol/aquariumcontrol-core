@@ -20,6 +20,7 @@ use aquarium_control::utilities::config::{read_config_file_with_test_database, C
 use aquarium_control::utilities::version_information::VersionInformation;
 
 #[test]
+// [itest->swreq~recorder_record_database~1]
 // This test case checks the functionality of get_string_array_from_database.
 // - response when querying an empty table (should be Ok with an empty Vec)
 // - response when querying a table with one entry (should be Ok with a Vec of 1)
@@ -117,6 +118,7 @@ fn test_get_string_array_from_database() {
 }
 
 #[test]
+// [itest->swreq~recorder_record_database~1]
 // This test case checks the functionality and error handling of get_single_string_from_database.
 // - response when querying an empty table (should be Err(SingleStringRequestEmptyResponse))
 // - response when querying a table with one entry (should be Ok(String))
@@ -183,6 +185,7 @@ pub fn test_get_single_string_from_database() {
 }
 
 #[test]
+// [itest->swreq~recorder_record_database~1]
 // This test case checks the functionality and error handling of get_multiple_strings_from_database.
 // - response when querying an empty table (should be Err(MultipleStringRequestEmptyResponse))
 // - response when querying a table with one entry (should be Err(MultipleStringRequestSingleResponse))
@@ -257,6 +260,7 @@ pub fn test_get_multiple_strings_from_database() {
 }
 
 #[test]
+// [itest->swreq~recorder_record_database~1]
 // This test case checks the functionality and error handling of get_single_integer_from_database.
 // - response when querying an empty table (should be Err(SingleIntegerRequestNoSingleResponse))
 // - response when querying a table with one entry (should be Ok(i64))
@@ -340,6 +344,7 @@ pub fn test_get_single_integer_from_database() {
 }
 
 #[test]
+// [itest->swreq~recorder_record_database~1]
 // This test case checks the functionality and error handling of get_single_float_from_database.
 // - response when querying an empty table (should be Err(SingleFloatRequestEmptyResponse))
 // - response when querying a table with one entry (should be Ok(f64))
@@ -417,6 +422,7 @@ pub fn test_get_single_float_from_database() {
 }
 
 #[test]
+// [itest->swreq~recorder_record_database~1]
 // This test case checks the functionality and error handling of get_timestamp.
 // - Happy Path: Returns Ok(NaiveDateTime) for valid timestamp query.
 // - 0 Rows: Returns Err(TimestampRequestFailure) when query returns no rows.
@@ -455,6 +461,7 @@ pub fn test_get_timestamp() {
 }
 
 #[test]
+// [itest->swreq~recorder_record_database~1]
 // This test case checks the functionality of get_optional_timestamp.
 // - response when querying an empty table (should be Ok(None))
 // - response when querying a table with one entry (should be Ok(Some(timestamp)))
@@ -538,6 +545,7 @@ fn test_get_optional_timestamp() {
 }
 
 #[test]
+// [itest->swreq~recorder_record_database~1]
 // This test case checks if current timestamp is local timestamp.
 // It does not modify any database.
 pub fn test_get_current_timestamp() {
@@ -572,6 +580,7 @@ pub fn test_get_current_timestamp() {
 }
 
 #[test]
+// [itest->swreq~recorder_record_database~1]
 // This test case checks the functionality of get_current_timestamp_offset_seconds.
 // It verifies that the function correctly returns timestamps in the future (positive offset),
 // in the past (negative offset), and at the present (zero offset).
@@ -638,6 +647,7 @@ fn test_get_current_timestamp_offset_seconds() {
 }
 
 #[test]
+// [itest->swreq~recorder_record_database~1]
 // This test case checks the functionality of the private `get_date` function
 // and its public wrappers.
 // - Verifies the error response when a query returns no rows.
@@ -725,6 +735,7 @@ fn test_get_date() {
 }
 
 #[test]
+// [itest->swreq~recorder_record_database~1]
 // This test case checks
 // - if required tables are existing
 // Test case uses test database #28.
@@ -781,6 +792,7 @@ pub fn test_sql_interface_required_tables_existing() {
 }
 
 #[test]
+// [itest->swreq~recorder_record_database~1]
 // This test case verifies that `check_wait_timeout` successfully validates
 // that the database's `wait_timeout` setting is greater than or equal to
 // the minimum value specified in the configuration file.
@@ -817,6 +829,7 @@ fn test_check_wait_timeout_success() {
 }
 
 #[test]
+// [itest->swreq~recorder_record_database~1]
 // This test case checks if a zero value for the minimum wait timeout allows instantiation.
 pub fn test_sql_interface_min_wait_timeout_check_deactivated() {
     let mut config: ConfigData = read_config_file_with_test_database(
@@ -830,6 +843,7 @@ pub fn test_sql_interface_min_wait_timeout_check_deactivated() {
 }
 
 #[test]
+// [itest->swreq~recorder_record_database~1]
 // This test case checks if an excessively high value for the minimum wait timeout triggers an error.
 pub fn test_sql_interface_min_wait_timeout_check() {
     let mut config: ConfigData = read_config_file_with_test_database(
@@ -848,6 +862,7 @@ pub fn test_sql_interface_min_wait_timeout_check() {
 }
 
 #[test]
+// [itest->swreq~recorder_record_database~1]
 // This test case checks error handling when the connection pool creation fails due to an invalid URL format.
 pub fn test_sql_interface_new_connection_pool_failure() {
     let mut config: ConfigData = read_config_file_with_test_database(
@@ -863,6 +878,7 @@ pub fn test_sql_interface_new_connection_pool_failure() {
 }
 
 #[test]
+// [itest->swreq~recorder_record_database~1]
 // This test case checks error handling when the connection pool fails to retrieve an initial connection.
 pub fn test_sql_interface_new_connection_from_pool_failure() {
     let config: ConfigData = read_config_file_with_test_database(
@@ -890,6 +906,7 @@ pub fn test_sql_interface_new_connection_from_pool_failure() {
 }
 
 #[test]
+// [itest->swreq~recorder_record_database~1]
 // This test case checks
 // - error response when querying empty table
 // - error response when version information does not match entry in database
@@ -1030,6 +1047,7 @@ pub fn test_sql_interface_version() {
 }
 
 #[test]
+// [itest->swreq~recorder_record_database~1]
 // This test case checks if the ping query can be executed
 pub fn test_sql_interface_ping() {
     let config: ConfigData = read_config_file_with_test_database(
@@ -1043,6 +1061,7 @@ pub fn test_sql_interface_ping() {
 }
 
 #[test]
+// [itest->swreq~recorder_record_database~1]
 // This test case checks error handling of get_database when the connection is killed.
 // Test case uses dedicated test database #61.
 pub fn test_sql_interface_get_database_error() {
@@ -1079,6 +1098,7 @@ pub fn test_sql_interface_get_database_error() {
 }
 
 #[test]
+// [itest->swreq~recorder_record_database~1]
 // This test case checks error handling of get_tables when the connection is killed.
 // Test case uses dedicated test database #63.
 pub fn test_sql_interface_get_tables_error() {
@@ -1115,6 +1135,7 @@ pub fn test_sql_interface_get_tables_error() {
 }
 
 #[test]
+// [itest->swreq~recorder_record_database~1]
 // This test case checks error handling of ping_database when the connection is killed.
 // Test case uses dedicated test database #64.
 pub fn test_sql_interface_ping_database_error() {
@@ -1148,6 +1169,7 @@ pub fn test_sql_interface_ping_database_error() {
 }
 
 #[test]
+// [itest->swreq~recorder_record_database~1]
 // This test case checks get_duration_from_naive_timestamp_to_local_now
 // with valid, non-existent (DST spring-forward gap), and ambiguous (DST fall-back overlap) timestamps.
 pub fn test_get_duration_from_naive_timestamp_to_local_now() {

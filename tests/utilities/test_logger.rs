@@ -17,6 +17,7 @@ use tempfile::tempdir;
 
 /// Tests that the function returns an error if the log file name is a directory.
 #[test]
+// [itest->swreq~utilities_parse_toml_config~1]
 // Verifies that path is a directory.
 fn test_path_is_a_directory() {
     let dir = tempdir().unwrap();
@@ -30,6 +31,7 @@ fn test_path_is_a_directory() {
 
 /// Tests that the function returns an error if the parent directory does not exist.
 #[test]
+// [itest->swreq~utilities_parse_toml_config~1]
 // Verifies that parent directory does not exist.
 fn test_parent_directory_does_not_exist() {
     let dir = tempdir().unwrap();
@@ -47,6 +49,7 @@ fn test_parent_directory_does_not_exist() {
 
 /// Tests that the function returns an error if the parent path is a file, not a directory.
 #[test]
+// [itest->swreq~utilities_parse_toml_config~1]
 // Verifies that parent is a file.
 fn test_parent_is_a_file() {
     let dir = tempdir().unwrap();
@@ -68,6 +71,7 @@ fn test_parent_is_a_file() {
 /// Tests that the function returns an error if it cannot create the log file,
 /// for example, due to permissions. This test is specific to Unix-like systems.
 #[test]
+// [itest->swreq~utilities_parse_toml_config~1]
 #[cfg(unix)]
 // Verifies that cannot open file in readonly directory.
 fn test_cannot_open_file_in_readonly_directory() {

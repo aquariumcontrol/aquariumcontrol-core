@@ -22,6 +22,7 @@ cfg_if::cfg_if! {
 
 #[cfg(feature = "test-utils")]
 #[test]
+// [itest->swreq~simulator_sensor_signals~1]
 // Verifies that static sump water level.
 fn test_static_sump_water_level() {
     let config = read_test_server_config_file(None);
@@ -72,6 +73,7 @@ fn test_static_sump_water_level() {
 
 #[cfg(feature = "test-utils")]
 #[test]
+// [itest->swreq~simulator_sensor_signals~1]
 // Verifies that dynamic sump water level.
 fn test_dynamic_sump_water_level() {
     let config = read_test_server_config_file(None);

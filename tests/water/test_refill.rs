@@ -180,6 +180,7 @@ pub fn test_refill_process_external_request_empty_channel() {
 }
 
 #[test]
+// [itest->swreq~water_observe_schedule~1]
 // This test case executes multiple iterations of the loop inside the .execute function, including the triggering of a refill.
 // Test case uses test database #20.
 pub fn test_refill_trigger_water_injection() {
@@ -505,6 +506,7 @@ pub fn test_refill_trigger_water_injection_switch_stuck_high() {
 }
 
 #[test]
+// [itest->swreq~water_observe_schedule~1]
 // This test case executes one iteration of the loop inside the .execute function with triggering a refill
 // It checks the timing of the initial wait period and main control interval.
 // Test case uses test database #21.
@@ -668,6 +670,7 @@ pub fn test_refill_initial_waiting_time() {
 }
 
 #[test]
+// [itest->swreq~water_observe_schedule~1]
 // This test case executes multiple iterations of the .execute function with the error flag error_switch_stuck_low set
 // during the execution of the test case, the error is reset.
 // Refill control shall resume operation upon having reset the error.
@@ -1032,6 +1035,7 @@ pub fn test_refill_conditions_error_sql_update_failed() {
 }
 
 #[test]
+// [itest->swreq~water_observe_schedule~1]
 // This test case checks the process_external_request implementation if it correctly
 // processes the ResetAllErrors command.
 // The test case checks the struct attribute after having executed the function.
@@ -1364,6 +1368,7 @@ pub fn test_refill_blocked_by_schedule() {
 }
 
 #[test]
+// [itest->swreq~water_observe_schedule~1]
 // Test case executes the loop of the .execute function manipulating the sensor signals only
 // and giving a positive schedule check.
 // Test case checks if the test object correctly processes the inhibition requested via the channel.
@@ -1575,6 +1580,7 @@ pub fn test_messaging_stops_starts_refill() {
 }
 
 #[test]
+// [itest->swreq~water_observe_schedule~1]
 // This test case executes multiple iterations of the loop inside .execute function
 // using a mock version of SQL interface which returns only errors.
 // The refill control shall not initiate a refill operation.

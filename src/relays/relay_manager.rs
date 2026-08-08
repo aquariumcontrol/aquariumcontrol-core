@@ -893,6 +893,7 @@ pub mod tests {
     }
 
     #[tokio::test(flavor = "multi_thread")]
+// [utest->swreq~relays_actuate_controllino~1]
     async fn test_actuate_with_retries_retry_success() {
         let config = RelayManagerConfig {
             active: true,
@@ -919,6 +920,7 @@ pub mod tests {
     }
 
     #[tokio::test(flavor = "multi_thread")]
+// [utest->swreq~relays_actuate_controllino~1]
     async fn test_actuate_with_retries_all_attempts_fail() {
         let config = RelayManagerConfig {
             active: true,
@@ -944,6 +946,7 @@ pub mod tests {
     }
 
     #[tokio::test(flavor = "multi_thread")]
+// [utest->swreq~relays_actuate_controllino~1]
     async fn test_actuate_with_retries_checksum_flush_success() {
         let config = RelayManagerConfig {
             active: true,
@@ -974,6 +977,7 @@ pub mod tests {
     }
 
     #[tokio::test(flavor = "multi_thread")]
+// [utest->swreq~relays_actuate_controllino~1]
     async fn test_actuate_with_retries_checksum_flush_fail() {
         let config = RelayManagerConfig {
             active: true,
@@ -1016,6 +1020,7 @@ pub mod tests {
     }
 
     #[tokio::test(flavor = "multi_thread")]
+// [utest->swreq~relays_actuate_controllino~1]
     async fn test_relay_manager_execute_heartbeat_and_shutdown_confirmation_failure() {
         let config = RelayManagerConfig {
             active: true,

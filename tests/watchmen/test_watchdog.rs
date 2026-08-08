@@ -78,6 +78,7 @@ fn test_new_fails_with_empty_heartbeat() {
 }
 
 #[test]
+// [itest->swreq~watchmen_self_monitoring~1]
 // test if Watchdog::new fails if the configuration contains an empty deactivation message
 fn test_new_fails_with_empty_deactivation_message() {
     // Arrange
@@ -96,6 +97,7 @@ fn test_new_fails_with_empty_deactivation_message() {
 }
 
 #[test]
+// [itest->swreq~watchmen_self_monitoring~1]
 // test if Watchdog::new fails if the configuration contains identical heartbeat and deactivation messages
 fn test_new_fails_with_identical_messages() {
     // Arrange
@@ -118,6 +120,7 @@ fn test_new_fails_with_identical_messages() {
 }
 
 #[test]
+// [itest->swreq~watchmen_pet_watchdog~1]
 // test if Watchdog::new fails if the configuration contains a zero-heartbeat duration
 fn test_new_fails_with_zero_heartbeat_duration() {
     // Arrange

@@ -180,6 +180,7 @@ fn test_sql_interface_heating_stats_new() {
 }
 
 #[test]
+// [itest->swreq~recorder_record_database~1]
 // Test case includes all checks for this table combined in one function to limit the number of additional databases.
 // Test case uses test database #65.
 pub fn test_sql_interface_heating() {

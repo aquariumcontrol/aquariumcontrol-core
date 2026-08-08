@@ -22,6 +22,7 @@ fn create_profile() -> AmbientTemperatureTimeProfile {
 }
 
 #[test]
+// [itest->swreq~simulator_sensor_signals~1]
 // Verifies that ambient temperature before ramp up.
 fn test_ambient_temperature_before_ramp_up() {
     let profile = create_profile();
@@ -30,6 +31,7 @@ fn test_ambient_temperature_before_ramp_up() {
 }
 
 #[test]
+// [itest->swreq~simulator_sensor_signals~1]
 // Verifies that ambient temperature ramp up.
 fn test_ambient_temperature_ramp_up() {
     let profile = create_profile();
@@ -38,6 +40,7 @@ fn test_ambient_temperature_ramp_up() {
 }
 
 #[test]
+// [itest->swreq~simulator_sensor_signals~1]
 // Verifies that ambient temperature constant high.
 fn test_ambient_temperature_constant_high() {
     let profile = create_profile();
@@ -46,6 +49,7 @@ fn test_ambient_temperature_constant_high() {
 }
 
 #[test]
+// [itest->swreq~simulator_sensor_signals~1]
 // Verifies that ambient temperature ramp down.
 fn test_ambient_temperature_ramp_down() {
     let profile = create_profile();
@@ -54,6 +58,7 @@ fn test_ambient_temperature_ramp_down() {
 }
 
 #[test]
+// [itest->swreq~simulator_sensor_signals~1]
 // Verifies that ambient temperature after ramp down.
 fn test_ambient_temperature_after_ramp_down() {
     let profile = create_profile();

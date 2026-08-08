@@ -129,10 +129,10 @@ fn prepare_data_logger_test_rig(
 }
 
 #[test]
-/// Verifies that `DataLogger::new()` successfully creates and resets all
-/// specified output files when `output_to_disk` is enabled.
-///
-/// [itest->swreq~recorder_store_measurements~1]
+// Verifies that `DataLogger::new()` successfully creates and resets all
+// specified output files when `output_to_disk` is enabled.
+//
+// [itest->swreq~recorder_store_measurements~1]
 fn test_new_success_with_file_creation() {
     // 1. Setup
     let global_config =
@@ -153,11 +153,11 @@ fn test_new_success_with_file_creation() {
     assert!(contents.is_empty(), "File should be created and empty");
 }
 #[test]
-/// Tests one full cycle of the `execute` loop, verifying that data is
-/// correctly acquired from mutexes, filtered, and injected.
-///
-/// [itest->swreq~recorder_store_measurements~1]
-/// [itest->swreq~recorder_apply_iir_filter~1]
+// Tests one full cycle of the `execute` loop, verifying that data is
+// correctly acquired from mutexes, filtered, and injected.
+//
+// [itest->swreq~recorder_store_measurements~1]
+// [itest->swreq~recorder_apply_iir_filter~1]
 fn test_execute_data_aggregation_and_injection() {
     // 1. Setup
     let global_config =
@@ -245,10 +245,10 @@ fn test_execute_data_aggregation_and_injection() {
 }
 
 #[test]
-/// Verifies that the `execute` loop correctly writes sensor and state
-/// data to files when `output_to_disk` is enabled.
-///
-/// [itest->swreq~recorder_store_measurements~1]
+// Verifies that the `execute` loop correctly writes sensor and state
+// data to files when `output_to_disk` is enabled.
+//
+// [itest->swreq~recorder_store_measurements~1]
 fn test_execute_file_output() {
     // 1. Setup
     let global_config =

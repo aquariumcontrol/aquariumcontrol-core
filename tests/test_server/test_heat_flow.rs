@@ -19,6 +19,7 @@ fn create_heat_flow_model() -> HeatFlow {
 }
 
 #[test]
+// [itest->swreq~simulator_sensor_signals~1]
 // Verifies that heat flow to environment.
 fn test_heat_flow_to_environment() {
     let heat_flow_model = create_heat_flow_model();
@@ -30,6 +31,7 @@ fn test_heat_flow_to_environment() {
 }
 
 #[test]
+// [itest->swreq~simulator_sensor_signals~1]
 // Verifies that heat flow from environment.
 fn test_heat_flow_from_environment() {
     let heat_flow_model = create_heat_flow_model();
@@ -41,6 +43,7 @@ fn test_heat_flow_from_environment() {
 }
 
 #[test]
+// [itest->swreq~simulator_sensor_signals~1]
 // Verifies that no heat flow to or from environment.
 fn test_no_heat_flow_to_or_from_environment() {
     let heat_flow_model = create_heat_flow_model();
@@ -52,6 +55,7 @@ fn test_no_heat_flow_to_or_from_environment() {
 }
 
 #[test]
+// [itest->swreq~simulator_sensor_signals~1]
 // Verifies that heat flow from heater when heater is on.
 fn test_heat_flow_from_heater_when_heater_is_on() {
     let mut heat_flow_model = create_heat_flow_model();
@@ -60,6 +64,7 @@ fn test_heat_flow_from_heater_when_heater_is_on() {
 }
 
 #[test]
+// [itest->swreq~simulator_sensor_signals~1]
 // Verifies that heat flow from heater when heater is off.
 fn test_heat_flow_from_heater_when_heater_is_off() {
     let mut heat_flow_model = create_heat_flow_model();
@@ -68,6 +73,7 @@ fn test_heat_flow_from_heater_when_heater_is_off() {
 }
 
 #[test]
+// [itest->swreq~simulator_sensor_signals~1]
 // Verifies that heat flow evaporation.
 fn test_heat_flow_evaporation() {
     let heat_flow_model = create_heat_flow_model();
@@ -79,6 +85,7 @@ fn test_heat_flow_evaporation() {
 }
 
 #[test]
+// [itest->swreq~simulator_sensor_signals~1]
 // Verifies that no heat flow evaporation.
 fn test_no_heat_flow_evaporation() {
     let heat_flow_model = create_heat_flow_model();
@@ -86,6 +93,7 @@ fn test_no_heat_flow_evaporation() {
 }
 
 #[test]
+// [itest->swreq~simulator_sensor_signals~1]
 // Verifies that no heat flow evaporation with negative evaporation.
 fn test_no_heat_flow_evaporation_with_negative_evaporation() {
     let heat_flow_model = create_heat_flow_model();
@@ -97,6 +105,7 @@ fn test_no_heat_flow_evaporation_with_negative_evaporation() {
 }
 
 #[test]
+// [itest->swreq~simulator_sensor_signals~1]
 // Verifies that heat flow lights.
 fn test_heat_flow_lights() {
     let heat_flow_model = create_heat_flow_model();
@@ -104,6 +113,7 @@ fn test_heat_flow_lights() {
 }
 
 #[test]
+// [itest->swreq~simulator_sensor_signals~1]
 // Verifies that no heat flow lights.
 fn test_no_heat_flow_lights() {
     let heat_flow_model = create_heat_flow_model();
@@ -111,6 +121,7 @@ fn test_no_heat_flow_lights() {
 }
 
 #[test]
+// [itest->swreq~simulator_sensor_signals~1]
 // Verifies that no heat flow lights with negative intensity.
 fn test_no_heat_flow_lights_with_negative_intensity() {
     let heat_flow_model = create_heat_flow_model();
@@ -118,6 +129,7 @@ fn test_no_heat_flow_lights_with_negative_intensity() {
 }
 
 #[test]
+// [itest->swreq~simulator_sensor_signals~1]
 // Verifies that heat flow total.
 fn test_heat_flow_total() {
     let mut heat_flow_model = create_heat_flow_model();

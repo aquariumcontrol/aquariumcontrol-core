@@ -538,6 +538,7 @@ fn setup_receive_test() -> (
 }
 
 #[test]
+// [itest->swreq~sensors_read_data~1]
 /// Tests the happy path for all three Atlas Scientific signals.
 fn test_receive_response_success_all_signals() {
     run_receive_success_test(AquariumSignal::WaterTemperature, 25.5);
@@ -547,6 +548,7 @@ fn test_receive_response_success_all_signals() {
 
 #[cfg(feature = "test-utils")]
 #[test]
+// [itest->swreq~sensors_read_data~1]
 /// Tests that the function correctly handles an I2C communication failure from the channel.
 fn test_receive_response_i2c_failure() {
     let (
@@ -601,6 +603,7 @@ fn test_receive_response_i2c_failure() {
 }
 
 #[test]
+// [itest->swreq~sensors_read_data~1]
 /// Tests that the function returns the correct error when the channel is empty.
 fn test_receive_response_channel_empty() {
     let (
@@ -629,6 +632,7 @@ fn test_receive_response_channel_empty() {
 }
 
 #[test]
+// [itest->swreq~sensors_read_data~1]
 /// Tests that the function returns the correct error when the channel is disconnected.
 fn test_receive_response_channel_disconnected() {
     let (
@@ -659,6 +663,7 @@ fn test_receive_response_channel_disconnected() {
 
 #[cfg(feature = "test-utils")]
 #[test]
+// [itest->swreq~sensors_read_data~1]
 /// Tests that a long wait for a mutex lock triggers the internal warning flag.
 fn test_receive_response_long_mutex_wait_triggers_warning() {
     let (

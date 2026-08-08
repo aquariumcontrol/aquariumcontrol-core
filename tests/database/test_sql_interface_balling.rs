@@ -311,6 +311,7 @@ pub fn test_sql_interface_balling_events() {
 }
 
 #[test]
+// [itest->swreq~mineral_read_profiles~1]
 // Test case verifies the behavior of all functions accessing the Balling set value table.
 // They are all combined in one function to limit the number of additional databases.
 // Test case uses test database #31.
@@ -436,6 +437,7 @@ pub fn test_sql_interface_balling_set_vals() {
 }
 
 #[test]
+// [itest->swreq~mineral_read_profiles~1]
 // This test case verifies the `insert_balling_event` function.
 // It ensures that a Balling dosing event is correctly inserted into the database
 // with the current database timestamp.

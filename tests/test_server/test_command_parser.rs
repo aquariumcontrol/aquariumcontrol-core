@@ -37,6 +37,7 @@ fn match_model_response(response: Result<Option<String>, ParseErr>) -> f32 {
 }
 
 #[test]
+// [itest->swreq~simulator_sensor_signals~1]
 // Verifies that request signals.
 pub fn test_request_signals() {
     let time_of_day = NaiveTime::from_hms_opt(9, 0, 0).unwrap();

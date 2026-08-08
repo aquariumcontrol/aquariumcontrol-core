@@ -18,6 +18,7 @@ use std::sync::mpsc;
 generate_sender_logger_group!(SenderLoggerTuple, A, B);
 
 #[test]
+// [itest->swreq~simulator_sensor_signals~1]
 // Verifies that model environment execution.
 fn test_model_environment_execution() {
     let config = read_test_server_config_file(None);

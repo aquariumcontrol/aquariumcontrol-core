@@ -10,6 +10,7 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 use aquarium_control::test_server::controllino_emulator::ControllinoEmulator;
 use aquarium_control::test_server::test_server_config::read_test_server_config_file;
 #[test]
+// [itest->swreq~simulator_relay_actuation~1]
 // Verifies that set unset relay.
 fn test_set_unset_relay() {
     let config = read_test_server_config_file(None);

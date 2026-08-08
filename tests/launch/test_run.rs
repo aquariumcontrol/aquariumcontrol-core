@@ -34,6 +34,9 @@ use aquarium_control::database::sql_interface_feed::SqlInterfaceFeed;
 
 #[test]
 // Verifies that run async runtime configuration.
+// [itest->swreq~utilities_parse_toml_config~1]
+// [itest->swreq~utilities_write_pid_file~1]
+// [itest->swreq~utilities_check_version_compatibility~1]
 fn test_run_async_runtime_configuration() {
     let _lock = TEST_RUN_MUTEX.lock().unwrap_or_else(|e| e.into_inner());
 
@@ -141,7 +144,7 @@ fn test_run_with_past_feed_schedule_entry() {
 // Test case uses test database #83.
 // Verifies that execution of a feed profile with a long duration (> 30s) blocks the Tokio worker thread
 // due to spin_sleeper.sleep, preventing the watchdog task from petting the watchdog timer.
-/// [itest->swreq~food_execute_schedule~1]
+// [itest->swreq~food_execute_schedule~1]
 fn test_run_feed_profile_blocks_watchdog() {
     // The test case asserts that the watchdog task was not blocked and operated continuously
     // through two key mechanisms:
@@ -233,6 +236,7 @@ fn test_run_feed_profile_blocks_watchdog() {
 
 #[test]
 // Verifies that run() returns StartupError::InvalidThermalConfig when heating and ventilation temperature settings clash.
+// [itest->swreq~thermal_distinct_interval_check~1]
 fn test_run_invalid_thermal_config() {
     let _lock = TEST_RUN_MUTEX.lock().unwrap_or_else(|e| e.into_inner());
 

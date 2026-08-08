@@ -194,6 +194,7 @@ fn test_sql_interface_schedule_new_and_read() {
 }
 
 #[test]
+// [itest->swreq~recorder_record_database~1]
 // Test case reads entries from the SQL database.
 // Since the application does not modify schedule data in the SQL database,
 // results are compared to fixed references.
@@ -280,6 +281,7 @@ pub fn test_sql_interface_schedule() {
 }
 
 #[test]
+// [itest->swreq~recorder_record_database~1]
 // Test case verifies that the correct error is returned when a schedule is not found.
 // Test case uses test database #53.
 pub fn test_sql_interface_schedule_not_found() {

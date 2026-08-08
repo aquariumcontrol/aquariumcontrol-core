@@ -408,6 +408,7 @@ pub fn test_water_injection_immediate_switch_high_with_invalid_true() {
 }
 
 #[test]
+// [itest->swreq~water_actuate_refill_pump~1]
 // This test case executes the inject_water function and sets the sensor signal
 // to high after some time has passed (the happy case).
 // Test case uses test database #42.
@@ -628,6 +629,7 @@ pub fn test_water_injection_switch_stuck_low() {
 }
 
 #[test]
+// [itest->swreq~water_remote_stop~1]
 // This test case executes inject_water function and sends Quit signal
 // after some time when the water level is still low.
 // Test case uses test database #44.

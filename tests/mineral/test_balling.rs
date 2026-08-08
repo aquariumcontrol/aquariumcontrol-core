@@ -98,23 +98,23 @@ fn read_balling_config_with_database(db_number: u32) -> ConfigData {
 }
 
 #[cfg(any(test, feature = "test-utils"))]
-// Helper function to prepare for test cases which require a filled dosing log.
-// This function inserts dosing events for each of the four pumps.
-//
-// Arguments:
-// - `sql_interface`: A mutable reference to the main `SqlInterface` for database operations,
-//                    used here specifically for truncating the dosing log table.
-// - `sql_interface_balling`: A mutable reference to the `SqlInterfaceBalling`,
-//                            used for inserting balling dosing events.
-//
-// The time of the dosing events is set to:
-// * 100 seconds in the past for pump #1
-// * 200 seconds in the past for pump #2
-// * 300 seconds in the past for pump #3
-// * 400 seconds in the past for pump #4
-//
-// All SQL operations are expected to succeed; any failure will cause a panic,
-// indicating a test setup issue.
+/// Helper function to prepare for test cases which require a filled dosing log.
+/// This function inserts dosing events for each of the four pumps.
+///
+/// Arguments:
+/// - `sql_interface`: A mutable reference to the main `SqlInterface` for database operations,
+///   used here specifically for truncating the dosing log table.
+/// - `sql_interface_balling`: A mutable reference to the `SqlInterfaceBalling`,
+///   used for inserting balling dosing events.
+///
+/// The time of the dosing events is set to:
+/// * 100 seconds in the past for pump #1
+/// * 200 seconds in the past for pump #2
+/// * 300 seconds in the past for pump #3
+/// * 400 seconds in the past for pump #4
+///
+/// All SQL operations are expected to succeed; any failure will cause a panic,
+/// indicating a test setup issue.
 fn insert_past_dosing_events(
     sql_interface: &mut SqlInterface,
     sql_interface_balling: &mut SqlInterfaceBalling,
@@ -149,22 +149,22 @@ fn insert_past_dosing_events(
         .expect("Could not insert Balling dosing event for pump #4 into database");
 }
 
-// Helper function to prepare for test cases which require balling pump configuration.
-// This function first truncates the pump configuration table and then
-// inserts a balling pump configuration into the database for each of the four pumps.
-//
-// Arguments:
-// - `sql_interface`: A mutable reference to the main `SqlInterface` for database operations,
-//                    used here specifically for truncating the balling set values table.
-// - `sql_interface_balling`: A mutable reference to the `SqlInterfaceBalling`,
-//                            used for inserting balling set values.
-// - `pump1`: flag indicating that a pump configuration for pump #1 should be inserted.
-// - `pump2`: flag indicating that a pump configuration for pump #2 should be inserted.
-// - `pump3`: flag indicating that a pump configuration for pump #3 should be inserted.
-// - `pump4`: flag indicating that a pump configuration for pump #4 should be inserted.
-//
-// All SQL operations are expected to succeed; any failure will cause a panic,
-// indicating a test setup issue.
+/// Helper function to prepare for test cases which require balling pump configuration.
+/// This function first truncates the pump configuration table and then
+/// inserts a balling pump configuration into the database for each of the four pumps.
+///
+/// Arguments:
+/// - `sql_interface`: A mutable reference to the main `SqlInterface` for database operations,
+///   used here specifically for truncating the balling set values table.
+/// - `sql_interface_balling`: A mutable reference to the `SqlInterfaceBalling`,
+///   used for inserting balling set values.
+/// - `pump1`: flag indicating that a pump configuration for pump #1 should be inserted.
+/// - `pump2`: flag indicating that a pump configuration for pump #2 should be inserted.
+/// - `pump3`: flag indicating that a pump configuration for pump #3 should be inserted.
+/// - `pump4`: flag indicating that a pump configuration for pump #4 should be inserted.
+///
+/// All SQL operations are expected to succeed; any failure will cause a panic,
+/// indicating a test setup issue.
 fn insert_pump_configurations(
     sql_interface: &mut SqlInterface,
     sql_interface_balling: &mut SqlInterfaceBalling,
@@ -664,9 +664,8 @@ pub fn test_balling_dosing(
 // The test case sends the start message and verifies if Balling dosing control
 // resumes operation.
 // Test case uses test database #06.
-/// [itest->swreq~mineral_stop_indefinitely~1]
-///
-/// [itest->swreq~mineral_restart~1]
+// [itest->swreq~mineral_stop_indefinitely~1]
+// [itest->swreq~mineral_restart~1]
 pub fn test_messaging_stops_starts_balling_dosing() {
     let sleep_duration_100_millis = Duration::from_millis(100);
     let sleep_duration_7_secs = Duration::from_secs(7);
@@ -952,7 +951,7 @@ pub fn test_check_database_vs_config() {
 
 #[test]
 // The test case executes the test object using dosing requests via the external interface.
-/// [itest->swreq~mineral_manual_dosing~1]
+// [itest->swreq~mineral_manual_dosing~1]
 pub fn test_balling_dosing_external_requests() {
     let test_db_number = 49;
     let schedule_allows = true;

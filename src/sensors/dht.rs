@@ -903,6 +903,7 @@ pub mod tests {
     }
 
     #[test]
+// [utest->swreq~sensors_read_data~1]
     // Test case checks if the implementation correctly processes the bit information into an array.
     // The test case does not require any communication with SQL database.
     pub fn test_dht_calc_byte_array() {
@@ -933,6 +934,7 @@ pub mod tests {
     }
 
     #[test]
+// [utest->swreq~sensors_read_data~1]
     // Test case checks if the implementation correctly calculates a valid checksum.
     // Test case does not require any communication with the database.
     pub fn test_dht_calc_checksum_valid() {
@@ -948,6 +950,7 @@ pub mod tests {
     }
 
     #[test]
+// [utest->swreq~sensors_read_data~1]
     // Test case checks if the implementation correctly calculates an invalid checksum.
     // Test case does not require any communication with the database.
     pub fn test_dht_calc_checksum_error() {
@@ -961,6 +964,7 @@ pub mod tests {
     }
 
     #[test]
+// [utest->swreq~sensors_read_data~1]
     // Test case checks if the implementation correctly calculates the signals from the byte array
     // given valid input data.
     // Test case does not require any communication with the database.
@@ -982,6 +986,7 @@ pub mod tests {
     }
 
     #[test]
+// [utest->swreq~sensors_read_data~1]
     // Test case checks if the implementation correctly calculates the signals from the byte array
     // given invalid input data for the humidity.
     // Test case does not require any communication with the database.
@@ -997,6 +1002,7 @@ pub mod tests {
     }
 
     #[test]
+// [utest->swreq~sensors_read_data~1]
     // Test case checks if the implementation correctly calculates the signals from the byte array
     // given invalid input data for the temperature.
     // Test case does not require any communication with the database.
@@ -1012,6 +1018,7 @@ pub mod tests {
     }
 
     #[test]
+// [utest->swreq~sensors_log_flood_protection~1]
     // Test case checks if the implementation correctly calculates the bit array from
     // a sample set of GPIO pin timings.
     // Test case does not require any communication with the database.

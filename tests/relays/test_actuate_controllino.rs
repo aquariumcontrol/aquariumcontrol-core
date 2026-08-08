@@ -35,7 +35,7 @@ use aquarium_control::utilities::config::{read_config_file, ConfigData};
 
 #[test]
 // Verifies that invalid relay id config high.
-/// [itest->swreq~relay_control_actuators~1]
+// [itest->swreq~relay_control_actuators~1]
 pub fn test_invalid_relay_id_config_high() {
     let mut config: ConfigData =
         read_config_file("config/aquarium_control_test_generic.toml".to_string()).unwrap();

@@ -511,6 +511,7 @@ pub mod tests {
     use crate::utilities::channel_content::InternalCommand;
 
     #[test]
+// [utest->swreq~sensors_read_data~1]
     // Verifies that I2cRequest::new returns CommandTooLong when the input slice exceeds MAX_I2C_COMMAND_LENGTH.
     fn test_i2c_request_new_command_too_long() {
         let long_slice = [0u8; MAX_I2C_COMMAND_LENGTH + 1];
@@ -519,6 +520,7 @@ pub mod tests {
     }
 
     #[test]
+// [utest->swreq~sensors_read_data~1]
     // Verifies I2cResponse Display formatting for non-empty and empty buffers.
     fn test_i2c_response_fmt() {
         let data = [0x12, 0x34, 0xab];
@@ -532,6 +534,7 @@ pub mod tests {
     }
 
     #[tokio::test]
+// [utest->swreq~sensors_read_data~1]
     // Verifies execute loop handles disconnected channels gracefully.
     async fn test_execute_channel_disconnections() {
         use crate::sensors::i2c_interface::I2cRequest;
@@ -559,6 +562,7 @@ pub mod tests {
     }
 
     #[tokio::test]
+// [utest->swreq~sensors_read_data~1]
     // Verifies get_response_from_i2c executes transaction and returns I2cResult.
     async fn test_get_response_from_i2c_direct() {
         let config = I2cInterfaceConfig {
@@ -574,6 +578,7 @@ pub mod tests {
     }
 
     #[tokio::test]
+// [utest->swreq~sensors_read_data~1]
     // Verifies execute loop processes incoming I2cRequest and sends I2cResult response to channel.
     async fn test_execute_processes_i2c_request_success() {
         let config = I2cInterfaceConfig {
@@ -608,6 +613,7 @@ pub mod tests {
     }
 
     #[tokio::test]
+// [utest->swreq~sensors_read_data~1]
     // Verifies execute loop handles disconnected response channel and disconnected request channel.
     async fn test_execute_handles_send_failure_and_recv_disconnected() {
         let config = I2cInterfaceConfig {

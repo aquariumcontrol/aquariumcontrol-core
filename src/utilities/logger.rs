@@ -196,6 +196,7 @@ mod tests {
 
     /// Tests that the function returns an error when the log file name is empty.
     #[test]
+// [utest->swreq~utilities_parse_toml_config~1]
     // Verifies that empty log file name.
     fn test_empty_log_file_name() {
         let config = LoggerConfig {
@@ -208,6 +209,7 @@ mod tests {
     /// Tests that the function returns an error if the path has no file name component,
     /// for example, if it ends in `..`.
     #[test]
+// [utest->swreq~utilities_parse_toml_config~1]
     // Verifies that path missing file name.
     fn test_path_missing_file_name() {
         // A path ending in `..` has no file name component according to `std::path::Path`.

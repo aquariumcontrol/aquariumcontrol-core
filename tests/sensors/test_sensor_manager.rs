@@ -437,6 +437,7 @@ async fn sensor_manager_communication_with_simulator(
     result
 }
 #[tokio::test]
+// [itest->swreq~sensors_read_data~1]
 // Verifies correct ok and error responses when communicating with simulator
 async fn test_sensor_manager_communicate_with_simulator() {
     let config = SensorManagerConfig {

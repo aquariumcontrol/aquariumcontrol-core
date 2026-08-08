@@ -223,6 +223,7 @@ pub mod tests {
     use crate::sensors::gpio_handler_config::GpioHandlerConfig;
 
     #[test]
+// [utest->swreq~sensors_read_data~1]
     // Verifies that GpioHandler::new returns PlatformNotSupported when use_simulator is false on non-target platforms.
     #[cfg(any(not(target_os = "linux"), not(feature = "target_hw")))]
     fn test_new_platform_not_supported() {

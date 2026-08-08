@@ -342,6 +342,7 @@ pub fn check_database_row_if_all_null(conn: &mut PooledConn, timestamp: NaiveDat
 }
 
 #[test]
+// [itest->swreq~recorder_record_database~1]
 // Test case includes all checks for writing to the data table combined in one function to
 // limit the number of additional databases.
 // Test case uses test database #32.
