@@ -67,8 +67,8 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 #[cfg(feature = "debug_refill")]
 use log::debug;
 
-use log::warn;
 use log::info;
+use log::warn;
 
 #[cfg(all(not(test), target_os = "linux", not(feature = "test-utils")))]
 // only required in real-life execution
@@ -437,7 +437,6 @@ impl Refill {
             );
         };
 
-
         if is_multi_thread {
             tokio::task::block_in_place(action);
         } else {
@@ -638,7 +637,6 @@ impl Refill {
             "count",
             "hour",
         );
-
 
         let refill_check_interval_last_refill =
             sql_refill_data.duration_since_last_refill < self.config.min_interval_last_refill;
@@ -1063,11 +1061,7 @@ impl Refill {
                 Err(_e) => {
                     // [impl->swreq~water_log_flood_protection~1]
                     if !self.lock_error_channel_send_monitors {
-                        log_error_chain(
-                            module_path!(),
-                            "sending view to monitor failed",
-                            _e,
-                        );
+                        log_error_chain(module_path!(), "sending view to monitor failed", _e);
                         self.lock_error_channel_send_monitors = true;
                     }
                 }
@@ -1229,10 +1223,7 @@ pub mod tests {
             stats_value_fail, 999,
             "stats_value should NOT be changed on failure"
         );
-        assert!(
-            lock_flag_fail,
-            "lock_flag should be set to true on failure"
-        );
+        assert!(lock_flag_fail, "lock_flag should be set to true on failure");
     }
 
     #[test]

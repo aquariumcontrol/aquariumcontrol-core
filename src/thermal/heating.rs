@@ -290,10 +290,11 @@ impl Heating {
                 "Could not get duration until midnight from database - using default value ({}).",
                 default_value
             );
-            log_error_chain( // not required during testing
+            log_error_chain(
+                // not required during testing
                 module_path!(),
                 &context,
-                             _e
+                _e,
             );
             default_value as i64
         });

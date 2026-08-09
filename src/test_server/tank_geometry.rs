@@ -111,7 +111,7 @@ pub mod tests {
     use assert_float_eq::*;
 
     #[test]
-// [utest->swreq~simulator_sensor_signals~1]
+    // [utest->swreq~simulator_sensor_signals~1]
     // Verifies that create tank geometry.
     fn test_create_tank_geometry() {
         let geometry_config = TankGeometryConfig {
@@ -127,7 +127,7 @@ pub mod tests {
     }
 
     #[test]
-// [utest->swreq~simulator_sensor_signals~1]
+    // [utest->swreq~simulator_sensor_signals~1]
     // Verifies that tank geometry set water volume.
     fn test_tank_geometry_set_water_volume() {
         let geometry_config = TankGeometryConfig {

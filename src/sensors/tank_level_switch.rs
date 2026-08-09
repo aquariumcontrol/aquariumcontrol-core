@@ -827,7 +827,7 @@ pub mod tests {
     }
 
     #[test]
-// [utest->swreq~sensors_tank_level_switch_preprocessing~1]
+    // [utest->swreq~sensors_tank_level_switch_preprocessing~1]
     // Verifies calc_tank_level_switch_position_stabilized applies immediate high-water transitions, asymmetric low-water delay counters, and invalid signal overrides.
     fn test_calc_tank_level_switch_position_stabilized_asymmetric_delay() {
         let config = TankLevelSwitchConfig {
@@ -874,7 +874,7 @@ pub mod tests {
     }
 
     #[test]
-// [utest->swreq~sensors_tank_level_switch_preprocessing~1]
+    // [utest->swreq~sensors_tank_level_switch_preprocessing~1]
     // Verifies update_tank_level_switch_signals returns SimulatorChannelNotProvided when simulator channels are missing.
     fn test_update_tank_level_switch_signals_simulator_channel_not_provided() {
         let config = TankLevelSwitchConfig {
@@ -903,7 +903,7 @@ pub mod tests {
     }
 
     #[tokio::test]
-// [utest->swreq~sensors_tank_level_switch_preprocessing~1]
+    // [utest->swreq~sensors_tank_level_switch_preprocessing~1]
     // Verifies update_tank_level_switch_signals returns error when simulator responds with error.
     async fn test_update_tank_level_switch_signals_simulator_responds_with_error() {
         let config = TankLevelSwitchConfig {
@@ -967,7 +967,7 @@ pub mod tests {
     }
 
     #[tokio::test]
-// [utest->swreq~sensors_tank_level_switch_preprocessing~1]
+    // [utest->swreq~sensors_tank_level_switch_preprocessing~1]
     // Verifies execute returns SimulatorChannelNotProvided when configured for simulator mode without TCP channels.
     async fn test_execute_simulator_channel_not_provided() {
         use crate::launch::channels::channel;

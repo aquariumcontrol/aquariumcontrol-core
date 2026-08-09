@@ -478,7 +478,7 @@ pub mod tests {
     use std::io;
 
     #[test]
-// [utest->swreq~sensors_read_data~1]
+    // [utest->swreq~sensors_read_data~1]
     // happy case for evaluating response from pH sensor unit
     pub fn test_atlas_scientific_ezo_check_response_valid_ph() {
         let stimuli: [u8; atlas_scientific_ezo_constants::MESSAGE_SIZE] = [
@@ -503,7 +503,7 @@ pub mod tests {
     }
 
     #[test]
-// [utest->swreq~sensors_read_data~1]
+    // [utest->swreq~sensors_read_data~1]
     // evaluating response from pH sensor unit
     // checking if negative values are correctly identified
     pub fn test_atlas_scientific_ezo_check_response_invalid_ph_negative() {
@@ -531,7 +531,7 @@ pub mod tests {
     }
 
     #[test]
-// [utest->swreq~sensors_read_data~1]
+    // [utest->swreq~sensors_read_data~1]
     // happy case for evaluating response from conductivity sensor
     pub fn test_atlas_scientific_ezo_check_response_valid_conductivity() {
         let stimuli: [u8; atlas_scientific_ezo_constants::MESSAGE_SIZE] = [
@@ -558,7 +558,7 @@ pub mod tests {
 
     // happy case for evaluating the response from the temperature sensor unit
     #[test]
-// [utest->swreq~sensors_read_data~1]
+    // [utest->swreq~sensors_read_data~1]
     // Verifies that atlas scientific ezo check response valid temperature.
     pub fn test_atlas_scientific_ezo_check_response_valid_temperature() {
         let stimuli: [u8; atlas_scientific_ezo_constants::MESSAGE_SIZE] = [
@@ -585,7 +585,7 @@ pub mod tests {
     }
 
     #[test]
-// [utest->swreq~sensors_read_data~1]
+    // [utest->swreq~sensors_read_data~1]
     // checking if an incorrect magic number in the front of the message is identified correctly
     pub fn test_atlas_scientific_ezo_check_response_invalid_magic_front() {
         let incorrect_magic_front = atlas_scientific_ezo_constants::MESSAGE_START_MAGIC - 1;
@@ -616,7 +616,7 @@ pub mod tests {
     }
 
     #[test]
-// [utest->swreq~sensors_read_data~1]
+    // [utest->swreq~sensors_read_data~1]
     // checking if an incorrect magic number in the rear part of the message is identified correctly
     pub fn test_atlas_scientific_check_response_invalid_magic_rear() {
         let incorrect_magic_rear = atlas_scientific_ezo_constants::MESSAGE_FINISH_MAGIC + 1;
@@ -647,7 +647,7 @@ pub mod tests {
     }
 
     #[test]
-// [utest->swreq~sensors_read_data~1]
+    // [utest->swreq~sensors_read_data~1]
     // checking if an incorrect sequence of numeric characters is identified correctly
     pub fn test_atlas_scientific_ezo_check_response_invalid_conversion() {
         let stimuli: [u8; atlas_scientific_ezo_constants::MESSAGE_SIZE] = [
@@ -670,7 +670,7 @@ pub mod tests {
     }
 
     #[test]
-// [utest->swreq~sensors_read_data~1]
+    // [utest->swreq~sensors_read_data~1]
     // Test case checks if the check_response function correctly identifies an
     // invalid non-numeric character (like an alphabet letter) in the data payload.
     fn test_atlas_scientific_ezo_check_response_invalid_character_in_payload() {
@@ -695,7 +695,7 @@ pub mod tests {
     }
 
     #[test]
-// [utest->swreq~sensors_read_data~1]
+    // [utest->swreq~sensors_read_data~1]
     // Test case checks if the is_numeric function correctly identifies valid digits.
     fn test_is_numeric_with_valid_digits() {
         // Test with '0'
@@ -712,7 +712,7 @@ pub mod tests {
     }
 
     #[test]
-// [utest->swreq~sensors_read_data~1]
+    // [utest->swreq~sensors_read_data~1]
     // Test case checks if the is_numeric function correctly identifies the decimal point.
     fn test_is_numeric_with_decimal_point() {
         assert!(AtlasScientificEzo::is_numeric(b'.', false));
@@ -720,7 +720,7 @@ pub mod tests {
     }
 
     #[test]
-// [utest->swreq~sensors_read_data~1]
+    // [utest->swreq~sensors_read_data~1]
     // Test case checks if the is_numeric function correctly handles the negative sign
     // when negative values are allowed.
     fn test_is_numeric_with_negative_sign_allowed() {
@@ -728,7 +728,7 @@ pub mod tests {
     }
 
     #[test]
-// [utest->swreq~sensors_read_data~1]
+    // [utest->swreq~sensors_read_data~1]
     // Test case checks if the is_numeric function correctly handles the negative sign
     // when negative values are not allowed (e.g., for pH values).
     fn test_is_numeric_with_negative_sign_not_allowed() {
@@ -736,7 +736,7 @@ pub mod tests {
     }
 
     #[test]
-// [utest->swreq~sensors_read_data~1]
+    // [utest->swreq~sensors_read_data~1]
     // Test case checks if the is_numeric function correctly identifies various
     // invalid characters that are not part of a number.
     fn test_is_numeric_with_invalid_characters() {
@@ -758,7 +758,7 @@ pub mod tests {
     }
 
     #[test]
-// [utest->swreq~sensors_read_data~1]
+    // [utest->swreq~sensors_read_data~1]
     // Verifies that send_request_to_i2c_interface returns an error when the I2C channel is disconnected.
     fn test_send_request_to_i2c_interface_send_failed() {
         use crate::launch::channels::channel;
@@ -793,7 +793,7 @@ pub mod tests {
     }
 
     #[test]
-// [utest->swreq~sensors_read_data~1]
+    // [utest->swreq~sensors_read_data~1]
     // Verifies that receive_response_from_i2c_interface handles channel empty, length mismatch, check failure, I2C failure, and disconnection errors.
     fn test_receive_response_from_i2c_interface_error_branches() {
         use crate::launch::channels::channel;
@@ -913,7 +913,7 @@ pub mod tests {
     }
 
     #[test]
-// [utest->swreq~sensors_read_data~1]
+    // [utest->swreq~sensors_read_data~1]
     // Verifies device_init execution and get_mutex_access_duration_exceeded reporting for pH and Conductivity signals.
     fn test_device_init_and_mutex_duration_exceeded() {
         use crate::launch::channels::channel;

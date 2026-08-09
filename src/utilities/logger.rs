@@ -144,7 +144,8 @@ pub fn setup_logger(logger_config: LoggerConfig) -> Result<(), LoggerSetupError>
     };
 
     // configure logger
-    let _ = fern::Dispatch::new()
+    #[allow(unused_mut)]
+    let mut dispatch = fern::Dispatch::new()
         .format(|out, message, record| {
             let local_time = chrono::Local::now(); // Get current local time
             out.finish(format_args!(
@@ -155,10 +156,16 @@ pub fn setup_logger(logger_config: LoggerConfig) -> Result<(), LoggerSetupError>
                 message
             ))
         })
-        .level(log::LevelFilter::Debug)
-        .chain(std::io::stdout()) // output to stdout
-        .chain(log_file) // output to file
-        .apply();
+        .level(log::LevelFilter::Debug);
+
+    // Only output to standard output in production runs (not during test / test-utils)
+    #[cfg(all(not(test), not(feature = "test-utils")))]
+    {
+        dispatch = dispatch.chain(std::io::stdout());
+    }
+
+    // File logging still takes place during testing
+    dispatch.chain(log_file).apply().ok();
 
     Ok(())
 }
@@ -196,7 +203,7 @@ mod tests {
 
     /// Tests that the function returns an error when the log file name is empty.
     #[test]
-// [utest->swreq~utilities_parse_toml_config~1]
+    // [utest->swreq~utilities_parse_toml_config~1]
     // Verifies that empty log file name.
     fn test_empty_log_file_name() {
         let config = LoggerConfig {
@@ -209,7 +216,7 @@ mod tests {
     /// Tests that the function returns an error if the path has no file name component,
     /// for example, if it ends in `..`.
     #[test]
-// [utest->swreq~utilities_parse_toml_config~1]
+    // [utest->swreq~utilities_parse_toml_config~1]
     // Verifies that path missing file name.
     fn test_path_missing_file_name() {
         // A path ending in `..` has no file name component according to `std::path::Path`.

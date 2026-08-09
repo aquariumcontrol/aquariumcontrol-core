@@ -772,7 +772,7 @@ pub mod tests {
     use std::time::Instant;
 
     #[test]
-// [utest->swreq~sensors_read_data~1]
+    // [utest->swreq~sensors_read_data~1]
     // Test case checks if write_result_to_mutex correctly writes a successful
     // temperature result to the correct mutex.
     fn test_write_result_to_mutex_temperature_success() {
@@ -814,7 +814,7 @@ pub mod tests {
     }
 
     #[test]
-// [utest->swreq~sensors_read_data~1]
+    // [utest->swreq~sensors_read_data~1]
     // Test case checks if write_result_to_mutex correctly writes a successful
     // pH result to the correct mutex.
     fn test_write_result_to_mutex_ph_success() {
@@ -846,7 +846,7 @@ pub mod tests {
     }
 
     #[test]
-// [utest->swreq~sensors_read_data~1]
+    // [utest->swreq~sensors_read_data~1]
     // Test case checks if write_result_to_mutex correctly writes a successful
     // conductivity result to the correct mutex.
     fn test_write_result_to_mutex_conductivity_success() {
@@ -878,7 +878,7 @@ pub mod tests {
     }
 
     #[test]
-// [utest->swreq~sensors_read_data~1]
+    // [utest->swreq~sensors_read_data~1]
     // Test case checks that write_result_to_mutex handles an invalid signal
     // by doing nothing and not changing any mutex values.
     fn test_write_result_to_mutex_invalid_signal() {
@@ -917,7 +917,7 @@ pub mod tests {
     }
 
     #[test]
-// [utest->swreq~sensors_read_data~1]
+    // [utest->swreq~sensors_read_data~1]
     // Test case checks that write_result_to_mutex correctly returns an error
     // when trying to write to a poisoned mutex.
     fn test_write_result_to_mutex_poisoned() {
@@ -960,7 +960,7 @@ pub mod tests {
     }
 
     #[test]
-// [utest->swreq~sensors_log_flood_protection~1]
+    // [utest->swreq~sensors_log_flood_protection~1]
     // Verifies that get next atlas scientific signal.
     fn test_get_next_atlas_scientific_signal() {
         // Test WaterTemperature branch
@@ -1076,7 +1076,7 @@ pub mod tests {
     }
 
     #[test]
-// [utest->swreq~sensors_read_data~1]
+    // [utest->swreq~sensors_read_data~1]
     // Verifies AtlasScientificResultData::new_for_test creates default result data.
     fn test_atlas_scientific_result_data_new_for_test() {
         let res = AtlasScientificResultData::new_for_test();
@@ -1084,7 +1084,7 @@ pub mod tests {
     }
 
     #[test]
-// [utest->swreq~sensors_read_data~1]
+    // [utest->swreq~sensors_read_data~1]
     // Verifies monitor view transmission, deduplication of unchanged views, and skipping invalid sensor data.
     fn test_check_and_send_monitor_view_deduplication_and_invalid() {
         use crate::launch::channels::channel;
@@ -1167,7 +1167,7 @@ pub mod tests {
     }
 
     #[test]
-// [utest->swreq~sensors_read_data~1]
+    // [utest->swreq~sensors_read_data~1]
     // Verifies graceful early return in check_and_send_monitor_view when a mutex lock is poisoned.
     fn test_check_and_send_monitor_view_poisoned_mutex() {
         use crate::launch::channels::channel;
@@ -1262,7 +1262,7 @@ pub mod tests {
     }
 
     #[test]
-// [utest->swreq~sensors_read_data~1]
+    // [utest->swreq~sensors_read_data~1]
     // Verifies driver lookup success/failure and init_devices execution across registered drivers.
     fn test_get_driver_and_init_devices() {
         use crate::launch::channels::channel;

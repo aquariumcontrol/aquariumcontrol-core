@@ -184,7 +184,7 @@ pub mod tests {
     }
 
     #[test]
-// [utest->swreq~recorder_iir_filter~1]
+    // [utest->swreq~recorder_iir_filter~1]
     /// Verifies the constructor sanitizes invalid coefficients from the config file.
     fn test_new_constructor_sanitizes_config_coefficient() {
         #[cfg(all(not(test), not(feature = "test-utils")))] // only required in real-life execution
@@ -224,7 +224,7 @@ pub mod tests {
     }
 
     #[test]
-// [utest->swreq~recorder_iir_filter~1]
+    // [utest->swreq~recorder_iir_filter~1]
     /// Verifies filter behavior when the coefficient is 0.0 (strongest filtering).
     fn test_filter_with_coefficient_zero() {
         let mut filter = IIRFilter {
@@ -239,7 +239,7 @@ pub mod tests {
     }
 
     #[test]
-// [utest->swreq~recorder_iir_filter~1]
+    // [utest->swreq~recorder_iir_filter~1]
     /// Verifies filter behavior when the coefficient is 1.0 (no filtering).
     fn test_filter_with_coefficient_one() {
         let mut filter = IIRFilter {
@@ -253,7 +253,7 @@ pub mod tests {
     }
 
     #[test]
-// [utest->swreq~recorder_iir_filter~1]
+    // [utest->swreq~recorder_iir_filter~1]
     // Verifies that zero to one with coefficient 0 5.
     fn test_zero_to_one_with_coefficient_0_5() {
         let mut filter = IIRFilter {

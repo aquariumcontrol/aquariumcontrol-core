@@ -71,7 +71,7 @@ mod tests {
     use super::*;
 
     #[test]
-// [utest->swreq~utilities_parse_toml_config~1]
+    // [utest->swreq~utilities_parse_toml_config~1]
     // Tests that a valid existing .toml configuration file path returns Ok with the path string.
     fn test_check_argument_valid_toml_file() {
         let path_str = "config/aquarium_control_test_generic.toml";
@@ -80,7 +80,7 @@ mod tests {
     }
 
     #[test]
-// [utest->swreq~utilities_parse_toml_config~1]
+    // [utest->swreq~utilities_parse_toml_config~1]
     // Tests that a non-existent file path returns Err(PathDoesNotExist).
     fn test_check_argument_path_does_not_exist() {
         let path_str = "non_existent_file.toml";
@@ -94,7 +94,7 @@ mod tests {
     }
 
     #[test]
-// [utest->swreq~utilities_parse_toml_config~1]
+    // [utest->swreq~utilities_parse_toml_config~1]
     // Tests that a path pointing to a directory instead of a regular file returns Err(IsNotAFile).
     fn test_check_argument_is_not_a_file() {
         let path_str = "config";
@@ -106,7 +106,7 @@ mod tests {
     }
 
     #[test]
-// [utest->swreq~utilities_parse_toml_config~1]
+    // [utest->swreq~utilities_parse_toml_config~1]
     // Tests that an existing file without a file extension returns Err(FileNameHasNoSuffix).
     fn test_check_argument_file_has_no_suffix() {
         let path_str = "target/temp_file_no_suffix";
@@ -122,7 +122,7 @@ mod tests {
     }
 
     #[test]
-// [utest->swreq~utilities_parse_toml_config~1]
+    // [utest->swreq~utilities_parse_toml_config~1]
     // Tests that an existing file with a non-toml extension returns Err(SuffixIsNotToml).
     fn test_check_argument_suffix_is_not_toml() {
         let path_str = "Cargo.lock";

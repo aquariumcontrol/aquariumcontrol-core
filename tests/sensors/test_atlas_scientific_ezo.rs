@@ -395,9 +395,7 @@ fn test_send_request_to_i2c_interface_conductivity_success() {
         received_request.send_buf[0],
         [atlas_scientific_ezo_constants::COMMAND_READ][0]
     );
-    assert_eq!(
-        received_request.send_len, 1
-    );
+    assert_eq!(received_request.send_len, 1);
     assert_eq!(
         received_request.expected_response_length,
         atlas_scientific_ezo_constants::MESSAGE_SIZE
