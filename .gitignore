@@ -1,9 +1,17 @@
-/target
-.DS_Store
-Cargo.lock
-aquarium.sql
+# Rust / Cargo build & coverage artifacts
+target/
 *.profraw
+*.profdata
+tarpaulin-report.html
+cobertura.xml
+
+# RustRover / JetBrains IDE
+.idea/
+*.iml
+
+# Logs & local database dumps
 *.log
-.idea/dictionaries/
-.idea/inspectionProfiles/
-.gitignore
+aquarium.sql
+
+# macOS
+.DS_Store
